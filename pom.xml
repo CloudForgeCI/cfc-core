@@ -1,0 +1,197 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <version>1.1.0</version>
+  <parent>
+    <groupId>com.cloudforgeci</groupId>
+    <artifactId>cloudforge</artifactId>
+    <version>1.1.1</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+  <artifactId>cfc-core</artifactId>
+  <name>CloudForge Core</name>
+  <packaging>pom</packaging>
+
+  <properties>
+    <build.plugins.plugin.version>3.4.2</build.plugins.plugin.version>
+    <maven.deploy.skip>true</maven.deploy.skip>
+    <cdk.version>2.152.0</cdk.version>
+    <constructs.version>10.3.0</constructs.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-api</artifactId>
+        <version>${project.version}</version>
+        <type>jar</type>
+      </dependency>
+      <dependency>
+        <groupId>software.amazon.awscdk</groupId>
+        <artifactId>aws-cdk-lib</artifactId>
+        <version>${cdk.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>software.constructs</groupId>
+        <artifactId>constructs</artifactId>
+        <version>${constructs.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <scm>
+    <connection>scm:git:https://github.com/CloudForgeCI/cloudforge-core.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/CloudForgeCI/cloudforge-core.git</developerConnection>
+    <url>https://maven.pkg.github.com/CloudForgeCI/cloudforge-core</url>
+  </scm>
+
+
+  <modules>
+    <module>cloudforge-api</module>
+    <module>cloudforge-core</module>
+  </modules>
+
+
+  <build>
+    <pluginManagement>
+      <plugins>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>3.7.0</version>
+          <configuration>
+            <doclint>none</doclint>
+            <failOnError>false</failOnError>
+          </configuration>
+          <executions>
+            <execution>
+              <id>attach-javadocs</id>
+              <goals><goal>jar</goal></goals>
+            </execution>
+          </executions>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-gpg-plugin</artifactId>
+          <version>3.2.4</version>
+          <executions>
+            <execution>
+              <id>sign-artifacts</id>
+              <phase>verify</phase>
+              <goals><goal>sign</goal></goals>
+            </execution>
+          </executions>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>3.1.1</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <!-- Central Portal publisher (replaces old OSSRH/staging) -->
+      <plugin>
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <version>0.8.0</version>
+        <extensions>true</extensions>
+        <configuration>
+          <publishingServerId>central</publishingServerId>
+          <autoPublish>true</autoPublish>        <!-- keep -->
+          <waitUntil>validated</waitUntil>
+          <ignorePublishedComponents>true</ignorePublishedComponents>
+          <!-- Optional if you push SNAPSHOTs -->
+          <centralSnapshotsUrl>https://central.sonatype.com/repository/maven-snapshots/</centralSnapshotsUrl>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>flatten-maven-plugin</artifactId>
+        <version>1.6.0</version>
+        <configuration>
+          <updatePomFile>true</updatePomFile> <!-- publish the flattened POM -->
+          <flattenMode>oss</flattenMode>      <!-- or resolveCiFriendliesOnly if you prefer -->
+          <flattenedPomFilename>${project.build.directory}/${project.artifactId}-${project.version}.pom</flattenedPomFilename>
+        </configuration>
+        <executions>
+          <execution>
+            <id>flatten</id>
+            <phase>process-resources</phase>  <!-- before package/verify -->
+            <goals><goal>flatten</goal></goals>
+          </execution>
+          <execution>
+            <id>flatten.clean</id>
+            <phase>clean</phase>
+            <goals><goal>clean</goal></goals>
+          </execution>
+        </executions>
+
+
+      </plugin>
+
+      <!-- Attach sources -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <phase>verify</phase>
+            <goals><goal>jar</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Attach javadocs -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <!--version>3.6.3</version-->
+        <executions>
+          <execution><id>attach-javadocs</id><goals><goal>jar</goal></goals></execution>
+        </executions>
+        <configuration><failOnError>false</failOnError></configuration>
+      </plugin>
+
+      <!-- ✅ GPG signing (Central requires .asc) -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <!--version>3.0.1</version-->
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>verify</phase>
+            <goals><goal>sign</goal></goals>
+          </execution>
+        </executions>
+        <configuration>
+          <!-- Works with gpg2 and CI -->
+          <!-- Use env vars: GPG_KEYNAME, GPG_PASSPHRASE, GPG_HOMEDIR (optional) -->
+          <gpgArguments>
+            <arg>--pinentry-mode</arg><arg>loopback</arg>
+          </gpgArguments>
+          <homedir>${env.GPG_HOMEDIR}</homedir>
+          <!-- uncomment to force gpg2
+          <executable>gpg2</executable>
+          -->
+        </configuration>
+      </plugin>
+
+      <!-- Keep legacy deploy plugin from poking at distributionManagement -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-deploy-plugin</artifactId>
+        <!--version>3.1.2</version-->
+        <configuration><skip>true</skip></configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

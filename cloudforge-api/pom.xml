@@ -1,0 +1,48 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <version>1.1.0</version>
+  <parent>
+    <groupId>com.cloudforgeci</groupId>
+    <artifactId>cfc-core</artifactId>
+    <version>1.1.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+  <groupId>com.cloudforgeci</groupId>
+  <artifactId>cloudforge-api</artifactId>
+  <packaging>jar</packaging>
+  <name>CloudForge API</name>
+
+  <scm>
+    <connection>scm:git:https://github.com/CloudForgeCI/cfc-core.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/CloudForgeCI/cfc-core.git</developerConnection>
+    <url>https://maven.pkg.github.com/CloudForgeCI/cfc-core</url>
+  </scm>
+
+
+  <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <build.plugins.plugin.version>3.4.2</build.plugins.plugin.version>
+  </properties>
+
+
+  <dependencies>
+    <dependency>
+      <groupId>software.amazon.awscdk</groupId>
+      <artifactId>aws-cdk-lib</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>software.constructs</groupId>
+      <artifactId>constructs</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
