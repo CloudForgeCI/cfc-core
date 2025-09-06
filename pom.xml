@@ -40,9 +40,9 @@
   </dependencyManagement>
 
   <scm>
-    <connection>scm:git:https://github.com/CloudForgeCI/cloudforge-core.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/CloudForgeCI/cloudforge-core.git</developerConnection>
-    <url>https://maven.pkg.github.com/CloudForgeCI/cloudforge-core</url>
+    <connection>scm:git:https://github.com/CloudForgeCI/cfc-core.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/CloudForgeCI/cfc-core.git</developerConnection>
+    <url>https://maven.pkg.github.com/CloudForgeCI/cfc-core</url>
   </scm>
 
 
