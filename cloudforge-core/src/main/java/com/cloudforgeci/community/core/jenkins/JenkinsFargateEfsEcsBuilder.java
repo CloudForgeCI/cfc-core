@@ -5,6 +5,7 @@ import com.cloudforgeci.core.api.JenkinsConfig;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
 import software.amazon.awscdk.services.ec2.Peer;
@@ -57,7 +58,6 @@ import software.amazon.awscdk.services.route53.HostedZoneProviderProps;
 import software.amazon.awscdk.services.route53.IHostedZone;
 import software.amazon.awscdk.services.route53.RecordTarget;
 import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
-import software.constructs.Construct;
 
 import java.util.Arrays;
 import java.util.List;
@@ -81,35 +81,35 @@ public class JenkinsFargateEfsEcsBuilder {
         }
     }
 
-    public static Result create(Construct scope, String id, JenkinsConfig cfg, DeploymentContext ctx) {
+    public static Result create(Stack stack, String id, JenkinsConfig cfg, DeploymentContext ctx) {
 
 
 
         // VPC
-        Vpc vpc = Vpc.Builder.create(scope, id + "Vpc")
+        Vpc vpc = Vpc.Builder.create(stack, id + "Vpc")
                 .maxAzs(2)
                 .natGateways(0)
                 .build();
 
         // Security groups
-        SecurityGroup albSg = SecurityGroup.Builder.create(scope, "AlbSg")
+        SecurityGroup albSg = SecurityGroup.Builder.create(stack, "AlbSg")
                 .vpc(vpc).allowAllOutbound(true).build();
         // short descriptions (<=255 chars) to avoid SG description limit
         albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(80),  null,  false);
         albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(443), null, false);
 
-        SecurityGroup svcSg = SecurityGroup.Builder.create(scope, id + "SvcSg")
+        SecurityGroup svcSg = SecurityGroup.Builder.create(stack, id + "SvcSg")
                 .vpc(vpc).allowAllOutbound(true).build();
 
-        SecurityGroup efsSg = SecurityGroup.Builder.create(scope, id + "EfsSg")
+        SecurityGroup efsSg = SecurityGroup.Builder.create(stack, id + "EfsSg")
                 .vpc(vpc).description("EFS SG").allowAllOutbound(true).build();
         efsSg.addIngressRule(svcSg, Port.tcp(2049), null, false);
 
         // ECS cluster
-        Cluster cluster = Cluster.Builder.create(scope, "Cluster").vpc(vpc).build();
+        Cluster cluster = Cluster.Builder.create(stack, "Cluster").vpc(vpc).build();
 
         // EFS (Jenkins home)
-        FileSystem fs = FileSystem.Builder.create(scope, id + "Fs")
+        FileSystem fs = FileSystem.Builder.create(stack, id + "Fs")
                 .vpc(vpc)
                 .securityGroup(efsSg)
                 .performanceMode(PerformanceMode.GENERAL_PURPOSE)
@@ -124,7 +124,7 @@ public class JenkinsFargateEfsEcsBuilder {
                 .build());
 
         // Create the execution role
-        Role executionRole = Role.Builder.create(scope, "TaskExecutionRole")
+        Role executionRole = Role.Builder.create(stack, "TaskExecutionRole")
                 .assumedBy(ServicePrincipal.Builder.create("ecs-tasks.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
@@ -132,7 +132,7 @@ public class JenkinsFargateEfsEcsBuilder {
                 .build();
 
         // Task & container
-        FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(scope, id + "TaskDef")
+        FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(stack, id + "TaskDef")
                 .cpu(1024)
                 .memoryLimitMiB(2048)
                 .executionRole(executionRole)
@@ -158,7 +158,7 @@ public class JenkinsFargateEfsEcsBuilder {
                         .build())
                 .build());
 
-        LogGroup logGroup = LogGroup.Builder.create(scope, "JenkinsLogs")
+        LogGroup logGroup = LogGroup.Builder.create(stack, "JenkinsLogs")
                 .retention(RetentionDays.ONE_MONTH)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
@@ -183,7 +183,7 @@ public class JenkinsFargateEfsEcsBuilder {
                 .build());
 
         // Fargate service
-        FargateService service = FargateService.Builder.create(scope, id + "Service")
+        FargateService service = FargateService.Builder.create(stack, id + "Service")
                 .cluster(cluster)
                 .taskDefinition(taskDef)
                 .assignPublicIp(true)
@@ -196,18 +196,18 @@ public class JenkinsFargateEfsEcsBuilder {
 
         if (cfg.enableDomainAndSsl) {
             // Route53 & ACM
-            IHostedZone zone = HostedZone.fromLookup(scope, id + "Zone",
+            IHostedZone zone = HostedZone.fromLookup(stack, id + "Zone",
                     HostedZoneProviderProps.builder().domainName(cfg.hostedZoneDomain).build());
 
             // Certificate
-            Certificate cert = Certificate.Builder.create(scope, id + "Cert")
+            Certificate cert = Certificate.Builder.create(stack, id + "Cert")
                     .domainName(cfg.fullDomainName)
                     .validation(CertificateValidation.fromDns(zone))
                     .build();
             IListenerCertificate Lcert = ListenerCertificate.fromCertificateManager(cert);
 
             // ALB + HTTPS listener
-            alb = ApplicationLoadBalancer.Builder.create(scope, id + "Alb")
+            alb = ApplicationLoadBalancer.Builder.create(stack, id + "Alb")
                     .vpc(vpc)
                     .internetFacing(true)
                     .securityGroup(albSg)
@@ -240,12 +240,12 @@ public class JenkinsFargateEfsEcsBuilder {
                                     .action(ListenerAction.redirect(RedirectOptions.builder().protocol("HTTPS").port("443").build()))
                                     .build());
 
-            CfnOutput.Builder.create(scope, "JenkinsUrl")
+            CfnOutput.Builder.create(stack, "JenkinsUrl")
                     .description("Jenkins URL (ALB DNS)")
                     .value("https://" + alb.getLoadBalancerDnsName())
                     .build();
             // DNS record
-            new ARecord(scope, id + "ARecord", ARecordProps.builder()
+            new ARecord(stack, id + "ARecord", ARecordProps.builder()
                     .zone(zone)
                     .recordName(cfg.fullDomainName.replace("." + cfg.hostedZoneDomain, ""))
                     .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
@@ -257,7 +257,7 @@ public class JenkinsFargateEfsEcsBuilder {
 
 
             // ALB + HTTPS listener
-            alb = ApplicationLoadBalancer.Builder.create(scope, id + "Alb")
+            alb = ApplicationLoadBalancer.Builder.create(stack, id + "Alb")
                     .vpc(vpc)
                     .internetFacing(true)
                     .securityGroup(albSg)
@@ -284,7 +284,7 @@ public class JenkinsFargateEfsEcsBuilder {
             // If no ALB, optionally expose port 8080 directly (dev/test)
             svcSg.addIngressRule(Peer.anyIpv4(), Port.tcp(8080), null, false);
 
-            CfnOutput.Builder.create(scope, "JenkinsUrl")
+            CfnOutput.Builder.create(stack, "JenkinsUrl")
                     .description("Jenkins URL (ALB DNS)")
                     .value("http://" + alb.getLoadBalancerDnsName())
                     .build();
