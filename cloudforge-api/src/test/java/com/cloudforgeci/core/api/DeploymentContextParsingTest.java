@@ -13,7 +13,7 @@ import java.util.Map;
 
 public class DeploymentContextParsingTest {
     private DeploymentContext fromMap(Map<String,Object> m) throws Exception {
-        var ctor = DeploymentContext.class.getDeclaredConstructor(Map.class);
+        Constructor<DeploymentContext> ctor = DeploymentContext.class.getDeclaredConstructor(Map.class);
         ctor.setAccessible(true);
         return ctor.newInstance(m);
     }
