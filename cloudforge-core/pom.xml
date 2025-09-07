@@ -3,11 +3,11 @@
   <parent>
     <groupId>com.cloudforgeci</groupId>
     <artifactId>cfc-core</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>cloudforge-core</artifactId>
-  <version>1.1.1</version>
+  <version>1.1.2</version>
   <packaging>jar</packaging>
   <name>CloudForge Community Core</name>
   <properties>
@@ -39,6 +39,11 @@
     <dependency>
       <groupId>software.constructs</groupId>
       <artifactId>constructs</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 

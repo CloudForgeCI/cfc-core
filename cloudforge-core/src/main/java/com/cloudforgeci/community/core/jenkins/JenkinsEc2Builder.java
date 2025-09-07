@@ -35,6 +35,7 @@ import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.route53.ARecord;
 import software.amazon.awscdk.services.route53.HostedZone;
+import software.amazon.awscdk.services.route53.IHostedZone;
 import software.amazon.awscdk.services.route53.RecordTarget;
 import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 
@@ -51,9 +52,11 @@ public class JenkinsEc2Builder {
         }
     }
 
-    public static Result create(Stack stack, String id, JenkinsConfig cfg) {
 
-        DeploymentContext ctx = DeploymentContext.from(stack);
+    public static Result create(Stack stack, String id, JenkinsConfig cfg, DeploymentContext ctx) {
+        if(ctx == null)
+            ctx = DeploymentContext.from(stack);
+
         CfnOutput.Builder.create(stack, "Context Loaded")
                 .description("Loaded Context Values")
                 .value(ctx.toString())
@@ -97,7 +100,7 @@ public class JenkinsEc2Builder {
 
         ApplicationLoadBalancer alb = null;
         if (cfg.enableDomainAndSsl) {
-            HostedZone zone = (HostedZone) HostedZone.fromLookup(stack, id + "Zone",
+            IHostedZone zone = HostedZone.fromLookup(stack, id + "Zone",
                     software.amazon.awscdk.services.route53.HostedZoneProviderProps.builder()
                             .domainName(cfg.hostedZoneDomain).build());
             Certificate cert = Certificate.Builder.create(stack, id + "Cert")
