@@ -1,10 +1,8 @@
-// Copyright (c) CloudForgeCI
-// SPDX-License-Identifier: Apache-2.0
-
 package com.cloudforgeci.community.core.jenkins;
 
-import com.cloudforgeci.core.api.DeploymentContext;
-import com.cloudforgeci.core.api.JenkinsConfig;
+import com.cloudforgeci.community.compute.jenkins.JenkinsFargateEfsEcsBuilder;
+import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.api.JenkinsConfig;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -19,9 +17,9 @@ public class JenkinsFargateEfsEcsBuilderTest {
         Stack stack = new Stack(app, "TestStack");
 
         JenkinsConfig cfg = new JenkinsConfig("JenkinsFargate", false, null, null, null);
-        DeploymentContext ctx = DeploymentContext.from(app);
+        DeploymentContext cfc = DeploymentContext.from(stack);
 
-        JenkinsFargateEfsEcsBuilder.Result result = JenkinsFargateEfsEcsBuilder.create(stack, "Unit", cfg, ctx);
+        JenkinsFargateEfsEcsBuilder.Result result = JenkinsFargateEfsEcsBuilder.create(stack, "Unit", cfg, cfc);
         assertNotNull(result.vpc);
         assertNotNull(result.cluster);
         assertNotNull(result.service);
