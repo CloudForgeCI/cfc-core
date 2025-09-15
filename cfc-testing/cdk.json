@@ -1,0 +1,15 @@
+{
+  "app": "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample",
+  "context": {
+    "cfc": {
+      "runtime": "fargate",
+      "topology": "service",
+      "subdomain": "jenkins",
+      "domain": null,
+      "enableSsl": false,
+      "enableFlowlogs": false
+    }
+
+
+  }
+}

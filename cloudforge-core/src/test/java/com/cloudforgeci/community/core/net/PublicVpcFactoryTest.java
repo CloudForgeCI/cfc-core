@@ -1,6 +1,3 @@
-// Copyright (c) CloudForgeCI
-// SPDX-License-Identifier: Apache-2.0
-
 package com.cloudforgeci.community.core.net;
 
 import org.junit.jupiter.api.Test;

@@ -1,17 +1,13 @@
-// Copyright (c) CloudForgeCI
-// SPDX-License-Identifier: Apache-2.0
-
 package com.cloudforgeci.community.core.jenkins;
 
-import com.cloudforgeci.core.api.DeploymentContext;
-import com.cloudforgeci.core.api.JenkinsConfig;
+import com.cloudforgeci.community.compute.jenkins.JenkinsEc2Builder;
+import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.api.JenkinsConfig;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.assertions.Template;
-import software.amazon.awscdk.services.ec2.InstanceType;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,9 +19,9 @@ public class JenkinsEc2BuilderTest {
         Stack stack = new Stack(app, "TestStack");
 
         JenkinsConfig cfg = new JenkinsConfig("JenkinsEc2", false, null, null, null);
-        DeploymentContext ctx = DeploymentContext.from(app);
+        DeploymentContext cfc = DeploymentContext.from(stack);
 
-        JenkinsEc2Builder.Result result = JenkinsEc2Builder.create(stack, "Unit", cfg, ctx);
+        JenkinsEc2Builder.Result result = JenkinsEc2Builder.create(stack, "Unit", cfg, cfc);
         assertNotNull(result.vpc);
         assertNotNull(result.instance);
 
