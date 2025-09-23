@@ -56,18 +56,24 @@ public class FargateFactory extends Construct {
             .cluster(cluster)
             .securityGroups(List.of(serviceSg))
             .taskDefinition(taskDef)
-            .desiredCount(1)
+            .desiredCount(ctx.cfc.minInstanceCapacity() != null ? ctx.cfc.minInstanceCapacity() : 1)
             .assignPublicIp(true).build();
-    ctx.fargateService.set(service);
-
+    
+    // Set task definition in context first (needed by ContainerFactory)
     taskDef.getTaskRole().addToPrincipalPolicy(PolicyStatement.Builder.create()
             .actions(List.of("elasticfilesystem:ClientMount","elasticfilesystem:ClientWrite","elasticfilesystem:ClientRootAccess"))
             .resources(List.of(ctx.efs.get().orElseThrow().getFileSystemArn(), ctx.ap.get().orElseThrow().getAccessPointArn()))
             .build());
     ctx.fargateTaskDef.set(taskDef);
-
+    
+    // Create container (now that task definition is available)
     new ContainerFactory(scope, id + "Container", ContainerImage.fromRegistry("jenkins/jenkins:lts"));
+    
+    // Now set the service in context after container is created
+    ctx.fargateService.set(service);
 
+    // Note: Auto-scaling is handled by JenkinsServiceTopologyConfiguration
+    // to avoid conflicts with duplicate auto-scaling configuration
 
   }
 

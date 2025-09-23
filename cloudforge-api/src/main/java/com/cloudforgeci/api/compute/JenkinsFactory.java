@@ -4,19 +4,43 @@ import com.cloudforgeci.api.application.JenkinsBootstrap;
 import com.cloudforgeci.api.core.*;
 import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforgeci.api.interfaces.IAMProfile;
+import com.cloudforgeci.api.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.network.DomainFactory;
 import com.cloudforgeci.api.network.VpcFactory;
 import com.cloudforgeci.api.ingress.AlbFactory;
 import com.cloudforgeci.api.observability.FlowLogFactory;
-import com.cloudforgeci.api.observability.LoggingFactory;
-import com.cloudforgeci.api.security.CertificateFactory;
+import com.cloudforgeci.api.observability.LoggingCwFactory;
+import com.cloudforgeci.api.security.SslManager;
 import com.cloudforgeci.api.storage.EfsFactory;
 import com.cloudforgeci.api.observability.AlarmFactory;
+import com.cloudforgeci.api.compute.FargateFactory;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
+import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps;
+import software.amazon.awscdk.services.elasticloadbalancingv2.FixedResponseOptions;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction;
 import software.amazon.awscdk.services.ecs.AwsLogDriverProps;
 import software.amazon.awscdk.services.ecs.LogDriver;
+import software.amazon.awscdk.services.ec2.Instance;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.UserData;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
+import software.amazon.awscdk.services.elasticloadbalancingv2.TargetType;
+import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
 import software.constructs.Construct;
 
+import java.util.logging.Logger;
+
 public class JenkinsFactory {
+  
+    private static final Logger LOG = Logger.getLogger(JenkinsFactory.class.getName());
+  
   public record JenkinsSystem(
       VpcFactory vpc,
       AlbFactory alb,
@@ -24,33 +48,538 @@ public class JenkinsFactory {
   ) {}
 
   public static JenkinsSystem createEc2(Construct scope, String id, DeploymentContext cfc) {
-    SystemContext ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, cfc);
-    VpcFactory vpc = new VpcFactory(scope, id + "Vpc", new VpcFactory.Props(cfc));
-    AlbFactory alb = new AlbFactory(scope, id + "Alb", new AlbFactory.Props(cfc));
-    EfsFactory efs = new EfsFactory(scope, id + "Efs", new EfsFactory.Props(cfc));
-    LoggingFactory log = new LoggingFactory(scope, id + "Logging");
-    Ec2Factory ec2 = new Ec2Factory(scope, id + "Ec2", new Ec2Factory.Props(cfc));
-    new AlarmFactory(scope, id + "Alarms", null);
-    DomainFactory domain = new DomainFactory(scope, id + "Domain", new DomainFactory.Props(cfc));
-    new CertificateFactory(scope, id + "Certificate", new CertificateFactory.Props(cfc));
-    return new JenkinsSystem(vpc, alb, efs);
+    LOG.info("*** JenkinsFactory.createEc2(3-param) called for topology: " + cfc.topology() + " ***");
+    System.out.println("*** DEBUG: JenkinsFactory.createEc2(3-param) called ***");
+    System.out.println("*** SIMPLE DEBUG: JenkinsFactory.createEc2(3-param) called ***");
+    LOG.info("*** JenkinsFactory.createEc2(3-param) called with topology=" + cfc.topology() + " ***");
+    
+    try {
+      LOG.info("*** Creating EC2 Jenkins system with id: " + id + " ***");
+      
+      JenkinsSystem result = createEc2(scope, id, cfc, cfc.securityProfile());
+      return result;
+    } catch (Exception e) {
+      throw e;
+    }
+  }
+
+  public static JenkinsSystem createEc2(Construct scope, String id, DeploymentContext cfc, SecurityProfile security) {
+    System.out.println("*** SIMPLE DEBUG: JenkinsFactory.createEc2(3-param) method started ***");
+    LOG.info("*** JenkinsFactory.createEc2(3-param) called with topology=" + cfc.topology() + " ***");
+    LOG.info("*** Method started successfully, about to start try block ***");
+    
+    try {
+      LOG.info("*** Creating EC2 Jenkins system with id: " + id + ", security: " + security + " ***");
+      LOG.info("*** Try block started successfully, about to assign IAM profile ***");
+      
+      // Use MINIMAL IAM profile for EC2 to avoid EFS security group requirement
+      IAMProfile iamProfile = IAMProfile.MINIMAL;
+      LOG.info("*** IAM profile assigned: " + iamProfile + " ***");
+      LOG.info("*** IAM profile assigned successfully, about to start SystemContext ***");
+      
+      // Use topology from DeploymentContext instead of hardcoding
+      SystemContext ctx = SystemContext.start(scope, cfc.topology(), cfc.runtime(), security, iamProfile, cfc);
+      LOG.info("*** DEBUG: SystemContext started successfully ***");
+      
+      // Set configuration values in SystemContext for centralized management
+      ctx.sslEnabled.set(cfc.enableSsl());
+      ctx.httpRedirectEnabled.set(cfc.enableSsl()); // Redirect HTTP to HTTPS when SSL is enabled
+      
+      // Networking Configuration
+      ctx.networkMode.set(cfc.networkMode());
+      ctx.wafEnabled.set(cfc.wafEnabled());
+      ctx.cloudfront.set(cfc.cloudfrontEnabled());
+      ctx.lbType.set(cfc.lbType());
+      
+      // Auto Scaling Configuration
+      ctx.minInstanceCapacity.set(cfc.minInstanceCapacity());
+      ctx.maxInstanceCapacity.set(cfc.maxInstanceCapacity());
+      ctx.cpuTargetUtilization.set(cfc.cpuTargetUtilization());
+      
+      // Container Configuration
+      ctx.cpu.set(cfc.cpu());
+      ctx.memory.set(cfc.memory());
+      
+      // Authentication Configuration
+      ctx.authMode.set(cfc.authMode());
+      ctx.ssoInstanceArn.set(cfc.ssoInstanceArn());
+      ctx.ssoGroupId.set(cfc.ssoGroupId());
+      ctx.ssoTargetAccountId.set(cfc.ssoTargetAccountId());
+      
+      // Storage Configuration
+      ctx.artifactsBucket.set(cfc.artifactsBucket());
+      ctx.artifactsPrefix.set(cfc.artifactsPrefix());
+      ctx.enableFlowlogs.set(cfc.enableFlowlogs());
+      
+      // DNS Configuration
+      ctx.domain.set(cfc.domain());
+      ctx.subdomain.set(cfc.subdomain());
+      ctx.fqdn.set(cfc.fqdn());
+    
+      // Create factories using the new clean interface and call create() in correct order
+    VpcFactory vpc = new VpcFactory(scope, id + "Vpc");
+      vpc.injectContexts(); // Manual injection after SystemContext.start()
+      vpc.create();
+      LOG.info("*** DEBUG: VPC factory created successfully ***");
+      LOG.info("*** VPC factory creation completed, about to create ALB factory ***");
+      LOG.info("*** VPC factory creation completed successfully, about to instantiate AlbFactory ***");
+      
+      AlbFactory alb = new AlbFactory(ctx, id + "Alb"); // Create as child of SystemContext
+      LOG.info("*** AlbFactory instantiated successfully ***");
+      LOG.info("*** AlbFactory instantiation completed, about to inject contexts ***");
+      alb.injectContexts(); // Manual injection after SystemContext.start()
+      alb.create();
+      
+      // Create instance security group early for EC2 runtime to satisfy security wiring
+      SecurityGroup instanceSg = SecurityGroup.Builder.create(scope, id + "InstanceSg")
+              .vpc(ctx.vpc.get().orElseThrow())
+              .description("Jenkins EC2 Instance Security Group")
+              .allowAllOutbound(true)
+              .build();
+      ctx.instanceSg.set(instanceSg);
+      LOG.info("*** Instance security group created and set in context ***");
+      
+      // EFS is allowed for both JENKINS_SERVICE and JENKINS_SINGLE_NODE topologies
+      EfsFactory efs = null;
+      if (cfc.topology() == TopologyType.JENKINS_SERVICE || cfc.topology() == TopologyType.JENKINS_SINGLE_NODE) {
+          efs = new EfsFactory(scope, id + "Efs");
+          efs.create(ctx);
+      }
+      
+      LOG.info("*** EFS factory creation completed, about to create logging factory ***");
+      
+      LoggingCwFactory log = new LoggingCwFactory(scope, id + "Logging");
+        LOG.info("*** Logging factory created successfully ***");
+      
+      // AutoScalingGroup for JENKINS_SERVICE topology, single instance for JENKINS_SINGLE_NODE
+      LOG.info("*** About to check topology for EC2 deployment: " + cfc.topology() + " ***");
+      if (cfc.topology() == TopologyType.JENKINS_SERVICE) {
+          Ec2Factory ec2 = new Ec2Factory(scope, id + "Ec2");
+          ec2.create(ctx);
+      } else if (cfc.topology() == TopologyType.JENKINS_SINGLE_NODE) {
+          createSingleEc2Instance(scope, id + "SingleInstance", ctx);
+      }
+      
+      new AlarmFactory(scope, id + "Alarms", null);
+      
+      // Create domain and certificate if SSL is enabled
+      if (cfc.enableSsl() && cfc.domain() != null && !cfc.domain().isBlank()) {
+          DomainFactory domain = new DomainFactory(scope, id + "Domain");
+          domain.create();
+          
+          // SSL is handled by SslManager in the main createFargate method
+      }
+      
+      JenkinsSystem result = new JenkinsSystem(vpc, alb, efs); // EFS allowed for JENKINS_SERVICE and JENKINS_SINGLE_NODE
+      
+      // Execute deferred actions (runtime configuration wiring) after all factories are created
+      LOG.info("*** About to execute deferred actions for runtime configuration ***");
+      LOG.info("*** JenkinsFactory.createEc2: About to execute deferred actions ***");
+      ctx.executeDeferredActions();
+      LOG.info("*** JenkinsFactory.createEc2: Deferred actions executed successfully ***");
+      
+      return result;
+      
+    } catch (Exception e) {
+      throw e;
+    }
   }
 
   public static JenkinsSystem createFargate(Construct scope, String id, DeploymentContext cfc) {
-    SystemContext ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, cfc);
+    try {
+      JenkinsSystem result = createFargate(scope, id, cfc, cfc.securityProfile());
+      return result;
+    } catch (Exception e) {
+      throw e;
+    }
+  }
+
+  public static JenkinsSystem createFargate(Construct scope, String id, DeploymentContext cfc, SecurityProfile security) {
+    try {
+      LOG.info("JenkinsFactory: Starting createFargate method");
+      
+    IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
+      LOG.info("JenkinsFactory: IAM profile mapped successfully");
+      
+      LOG.info("JenkinsFactory: About to start SystemContext");
+    SystemContext ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, security, iamProfile, cfc);
+      LOG.info("JenkinsFactory: SystemContext started successfully");
+    
+      // Create factories using the new clean interface and call create() in correct order
     new FlowLogFactory(scope, id + "Flowlog");
-    VpcFactory vpc = new VpcFactory(scope, id + "Vpc", new VpcFactory.Props(cfc));
-    AlbFactory alb = new AlbFactory(scope, id + "Alb", new AlbFactory.Props(cfc));
-    EfsFactory efs = new EfsFactory(scope, id + "Efs", new EfsFactory.Props(cfc));
-    LoggingFactory log = new LoggingFactory(scope, id + "Logging");
+      
+      VpcFactory vpc = new VpcFactory(scope, id + "Vpc");
+      vpc.injectContexts(); // Manual injection after SystemContext.start()
+      vpc.create();
+      
+      // Note: Instance security group is forbidden for Fargate runtime
+      
+      LOG.info("JenkinsFactory: About to create AlbFactory with ctx: " + (ctx != null ? "present" : "null"));
+      AlbFactory alb = new AlbFactory(ctx, id + "Alb"); // Create as child of SystemContext
+      LOG.info("JenkinsFactory: AlbFactory created successfully");
+      alb.injectContexts(); // Manual injection after SystemContext.start()
+      LOG.info("JenkinsFactory: About to call alb.create()");
+      alb.create();
+      LOG.info("JenkinsFactory: alb.create() completed");
+      
+      EfsFactory efs = new EfsFactory(scope, id + "Efs");
+      efs.create(ctx);
+      
+      LoggingCwFactory log = new LoggingCwFactory(scope, id + "Logging");
     LogDriver logDriver = LogDriver.awsLogs(AwsLogDriverProps.builder().logGroup(ctx.logs.get().orElseThrow()).streamPrefix("jenkins").build());
 
+      FargateFactory fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
+      
+      new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
+      
+      new AlarmFactory(scope, id + "Alarms", null);
+      
+      DomainFactory domain = new DomainFactory(scope, id + "Domain");
+      
+      JenkinsSystem result = new JenkinsSystem(vpc, alb, efs);
+      
+      // Execute deferred actions (runtime configuration wiring) after all factories are created
+      LOG.info("*** Executing deferred actions for runtime configuration ***");
+      ctx.executeDeferredActions();
+      
+      return result;
+      
+    } catch (Exception e) {
+      throw e;
+    }
+  }
 
-    FargateFactory fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
-    new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
+  /**
+   * Creates an EC2 Jenkins system with explicit IAM profile selection.
+   * Validates that the IAM profile is appropriate for the security profile.
+   */
+  public static JenkinsSystem createEc2(Construct scope, String id, DeploymentContext cfc, SecurityProfile security, IAMProfile iamProfile) {
+    LOG.info("*** JenkinsFactory.createEc2(5-param) called for topology: " + cfc.topology() + " ***");
+    System.out.println("*** SIMPLE DEBUG: JenkinsFactory.createEc2(5-param) called ***");
+    LOG.info("*** JenkinsFactory.createEc2(5-param) called with topology=" + cfc.topology() + " ***");
+    LOG.info("*** Method started successfully, about to start try block ***");
+    
+    if (!IAMProfileMapper.isValidCombination(security, iamProfile)) {
+      throw new IllegalArgumentException("Invalid combination: SecurityProfile=" + security + " with IAMProfile=" + iamProfile);
+    }
+    // Force MINIMAL IAM profile for EC2 to avoid EFS security group requirement
+    IAMProfile effectiveIamProfile = IAMProfile.MINIMAL;
+    // Use topology from DeploymentContext instead of hardcoding
+    SystemContext ctx = SystemContext.start(scope, cfc.topology(), cfc.runtime(), security, effectiveIamProfile, cfc);
+    LOG.info("*** DEBUG: SystemContext started successfully ***");
+    
+    // Set configuration values in SystemContext for centralized management
+    ctx.sslEnabled.set(cfc.enableSsl());
+    ctx.httpRedirectEnabled.set(cfc.enableSsl()); // Redirect HTTP to HTTPS when SSL is enabled
+    
+    // Networking Configuration
+    ctx.networkMode.set(cfc.networkMode());
+    ctx.wafEnabled.set(cfc.wafEnabled());
+      ctx.cloudfront.set(cfc.cloudfrontEnabled());
+    ctx.lbType.set(cfc.lbType());
+    
+    // Auto Scaling Configuration
+    ctx.minInstanceCapacity.set(cfc.minInstanceCapacity());
+    ctx.maxInstanceCapacity.set(cfc.maxInstanceCapacity());
+    ctx.cpuTargetUtilization.set(cfc.cpuTargetUtilization());
+    
+    // Container Configuration
+    ctx.cpu.set(cfc.cpu());
+    ctx.memory.set(cfc.memory());
+    
+    // Authentication Configuration
+    ctx.authMode.set(cfc.authMode());
+    ctx.ssoInstanceArn.set(cfc.ssoInstanceArn());
+    ctx.ssoGroupId.set(cfc.ssoGroupId());
+    ctx.ssoTargetAccountId.set(cfc.ssoTargetAccountId());
+    
+    // Storage Configuration
+    ctx.artifactsBucket.set(cfc.artifactsBucket());
+    ctx.artifactsPrefix.set(cfc.artifactsPrefix());
+    ctx.enableFlowlogs.set(cfc.enableFlowlogs());
+    
+    // DNS Configuration
+    ctx.domain.set(cfc.domain());
+    ctx.subdomain.set(cfc.subdomain());
+    ctx.fqdn.set(cfc.fqdn());
+    
+    // Create factories using the new clean interface and call create() in correct order
+    VpcFactory vpc = new VpcFactory(scope, id + "Vpc");
+    vpc.injectContexts(); // Manual injection after SystemContext.start()
+    vpc.create();
+    
+    AlbFactory alb = new AlbFactory(scope, id + "Alb");
+    LOG.info("*** DEBUG: AlbFactory instantiated for Fargate ***");
+    alb.injectContexts(); // Manual injection after SystemContext.start()
+    LOG.info("*** DEBUG: About to call alb.create() ***");
+      alb.create();
+      LOG.info("*** DEBUG: alb.create() completed ***");
+      LOG.info("*** ALB factory creation completed, about to create instance security group ***");
+    
+    // Create instance security group early for EC2 runtime to satisfy security wiring
+    SecurityGroup instanceSg = SecurityGroup.Builder.create(scope, id + "InstanceSg")
+            .vpc(ctx.vpc.get().orElseThrow())
+            .description("Jenkins EC2 Instance Security Group")
+            .allowAllOutbound(true)
+            .build();
+    ctx.instanceSg.set(instanceSg);
+    
+    // EFS is allowed for both JENKINS_SERVICE and JENKINS_SINGLE_NODE topologies
+    EfsFactory efs = null;
+    if (cfc.topology() == TopologyType.JENKINS_SERVICE || cfc.topology() == TopologyType.JENKINS_SINGLE_NODE) {
+        efs = new EfsFactory(scope, id + "Efs");
+        efs.create(ctx);
+    }
+    
+        LoggingCwFactory log = new LoggingCwFactory(scope, id + "Logging");
+    
+    // AutoScalingGroup for JENKINS_SERVICE topology, single instance for JENKINS_SINGLE_NODE
+    LOG.info("*** Checking topology for EC2 deployment: " + cfc.topology() + " ***");
+    if (cfc.topology() == TopologyType.JENKINS_SERVICE) {
+        LOG.info("*** Creating multi-instance deployment with AutoScalingGroup ***");
+        // Multi-instance deployment with AutoScalingGroup
+    Ec2Factory ec2 = new Ec2Factory(scope, id + "Ec2");
+        ec2.create(ctx);
+    } else if (cfc.topology() == TopologyType.JENKINS_SINGLE_NODE) {
+        LOG.info("*** Creating single-instance deployment without AutoScalingGroup ***");
+        // Single-instance deployment without AutoScalingGroup
+        try {
+            createSingleEc2Instance(scope, id + "SingleInstance", ctx);
+            LOG.info("*** Single instance created successfully ***");
+        } catch (Exception e) {
+            LOG.severe("*** Error creating single instance: " + e.getMessage() + " ***");
+            throw e;
+        }
+    } else {
+        LOG.info("*** Unknown topology for EC2: " + cfc.topology() + " ***");
+    }
+    
     new AlarmFactory(scope, id + "Alarms", null);
-    DomainFactory domain = new DomainFactory(scope, id + "Domain", new DomainFactory.Props(cfc));
-    //new CertificateFactory(scope, id + "Certificate", new CertificateFactory.Props(cfc));
-    return new JenkinsSystem(vpc, alb, efs);
+    
+    // Create domain and certificate if SSL is enabled
+    if (cfc.enableSsl() && cfc.domain() != null && !cfc.domain().isBlank()) {
+    DomainFactory domain = new DomainFactory(scope, id + "Domain");
+        domain.create();
+        
+        // SSL is handled by SslManager in the main createFargate method
+    }
+    
+    return new JenkinsSystem(vpc, alb, efs); // EFS allowed for JENKINS_SERVICE and JENKINS_SINGLE_NODE
+  }
+
+  /**
+   * Creates a single EC2 instance for JENKINS_SINGLE_NODE topology.
+   * This avoids AutoScalingGroup which is forbidden for single-node deployments.
+   */
+  private static void createSingleEc2Instance(Construct scope, String id, SystemContext ctx) {
+    LOG.info("*** createSingleEc2Instance called for JENKINS_SINGLE_NODE topology ***");
+    System.out.println("*** DEBUG: createSingleEc2Instance called ***");
+    
+    // Create a single EC2 instance instead of AutoScalingGroup
+    Instance instance = Instance.Builder.create(scope, id)
+        .vpc(ctx.vpc.get().orElseThrow())
+        .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MEDIUM))
+        .machineImage(MachineImage.latestAmazonLinux2())
+        .securityGroup(ctx.instanceSg.get().orElseThrow())
+        .userData(UserData.forLinux())
+        .build();
+    
+    // Set the instance in SystemContext for compatibility
+    ctx.ec2Instance.set(instance);
+    
+    // Create a target group for the single instance (needed for HTTPS listener)
+    ApplicationTargetGroup singleInstanceTargetGroup = ApplicationTargetGroup.Builder.create(scope, id + "Tg")
+        .vpc(ctx.vpc.get().orElseThrow())
+        .port(8080)
+        .protocol(ApplicationProtocol.HTTP)
+        .targetType(TargetType.INSTANCE)
+        .healthCheck(HealthCheck.builder()
+            .path("/")
+            .healthyHttpCodes("200-399")
+            .interval(software.amazon.awscdk.Duration.seconds(30))
+            .timeout(software.amazon.awscdk.Duration.seconds(10))
+            .healthyThresholdCount(2)
+            .unhealthyThresholdCount(10)
+            .build())
+        .build();
+    
+    // Set the target group in SystemContext (instances will be added by runtime configuration)
+    ctx.albTargetGroup.set(singleInstanceTargetGroup);
+    
+    // Add the instance to the target group so ALB can route traffic to it
+    // TODO: Fix InstanceTarget - EC2 instances need to be added differently to ALB target groups
+    // singleInstanceTargetGroup.addTarget(instance);
+    
+    LOG.info("*** createSingleEc2Instance: Target group created and instance added successfully ***");
+    
+    // Note: We don't set asg slot since it's forbidden for JENKINS_SINGLE_NODE
+    // The instance and target group are available for other components that need EC2 access
+  }
+
+  /**
+   * Creates a Fargate Jenkins system with explicit IAM profile selection.
+   * Validates that the IAM profile is appropriate for the security profile.
+   */
+  public static JenkinsSystem createFargate(Construct scope, String id, DeploymentContext cfc, SecurityProfile security, IAMProfile iamProfile) {
+    LOG.info("*** JenkinsFactory.createFargate() called with id: " + id + " (4-parameter version) ***");
+    
+    try {
+      LOG.info("*** Step 1: Starting SystemContext ***");
+      SystemContext ctx;
+      try {
+        ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, security, iamProfile, cfc);
+        LOG.info("*** SystemContext started successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in SystemContext.start(): " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+    
+      LOG.info("*** Step 2: Creating FlowLogFactory ***");
+      try {
+    new FlowLogFactory(scope, id + "Flowlog");
+        LOG.info("*** FlowLogFactory created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in FlowLogFactory: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+    
+      LOG.info("*** Step 3: Creating VpcFactory ***");
+      VpcFactory vpc;
+      try {
+        vpc = new VpcFactory(scope, id + "Vpc");
+        LOG.info("*** VpcFactory instantiated ***");
+        vpc.injectContexts(); // Manual injection after SystemContext.start()
+        LOG.info("*** VpcFactory contexts injected ***");
+        vpc.create();
+        LOG.info("*** VpcFactory created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in VpcFactory: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+    
+      LOG.info("*** Step 4: Creating AlbFactory ***");
+      AlbFactory alb = null;
+      try {
+        LOG.info("*** About to instantiate AlbFactory with ctx: " + (ctx != null ? "present" : "null") + " ***");
+        alb = new AlbFactory(ctx, id + "Alb"); // Create as child of SystemContext
+        LOG.info("*** AlbFactory instantiated successfully ***");
+        
+        LOG.info("*** About to inject contexts into AlbFactory ***");
+        alb.injectContexts(); // Manual injection after SystemContext.start()
+        LOG.info("*** AlbFactory contexts injected successfully ***");
+        
+        LOG.info("*** About to call alb.create() ***");
+        alb.create();
+        LOG.info("*** alb.create() completed successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in AlbFactory: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+    
+      LOG.info("*** Step 5: Creating EfsFactory ***");
+      EfsFactory efs;
+      try {
+        efs = new EfsFactory(scope, id + "Efs");
+        LOG.info("*** EfsFactory instantiated ***");
+        efs.create(ctx);
+        LOG.info("*** EfsFactory created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in EfsFactory: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+    
+      LOG.info("*** Step 6: Creating LoggingCwFactory ***");
+      LoggingCwFactory log;
+      LogDriver logDriver;
+      try {
+        log = new LoggingCwFactory(scope, id + "Logging");
+        LOG.info("*** LoggingCwFactory instantiated ***");
+        logDriver = LogDriver.awsLogs(AwsLogDriverProps.builder().logGroup(ctx.logs.get().orElseThrow()).streamPrefix("jenkins").build());
+        LOG.info("*** LogDriver created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in LoggingCwFactory: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+
+      LOG.info("*** Step 7: Creating FargateFactory ***");
+      FargateFactory fargate;
+      try {
+        fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
+        LOG.info("*** FargateFactory created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in FargateFactory: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+      
+      LOG.info("*** Step 8: Creating JenkinsBootstrap ***");
+      try {
+    new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
+        LOG.info("*** JenkinsBootstrap created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in JenkinsBootstrap: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+      
+      LOG.info("*** Step 9: Creating AlarmFactory ***");
+      try {
+    new AlarmFactory(scope, id + "Alarms", null);
+        LOG.info("*** AlarmFactory created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in AlarmFactory: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+      
+      LOG.info("*** Step 10: Creating DomainFactory ***");
+      DomainFactory domain;
+      try {
+        domain = new DomainFactory(scope, id + "Domain");
+        LOG.info("*** DomainFactory instantiated ***");
+        domain.injectContexts(); // Manual injection after SystemContext.start()
+        LOG.info("*** DomainFactory contexts injected ***");
+        domain.create();
+        LOG.info("*** DomainFactory created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in DomainFactory: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+      
+      // Temporarily disable SslManager to debug HTTPS listener issue
+      // TODO: Re-enable SslManager once HTTPS listener issue is resolved
+      /*
+      if (cfc.enableSsl() && cfc.domain() != null && !cfc.domain().isBlank()) {
+          SslManager sslManager = new SslManager(scope, id + "SslManager", new SslManager.Props(cfc));
+          sslManager.createSslIfEnabled(ctx);
+      }
+      */
+
+      LOG.info("*** Step 11: Creating JenkinsSystem result ***");
+      JenkinsSystem result;
+      try {
+        result = new JenkinsSystem(vpc, alb, efs);
+        LOG.info("*** JenkinsSystem result created successfully ***");
+      } catch (Exception e) {
+        LOG.severe("*** CRITICAL: Exception in JenkinsSystem creation: " + e.getMessage() + " ***");
+        e.printStackTrace();
+        throw e;
+      }
+      
+      LOG.info("*** createFargate(4-param) completed successfully ***");
+      return result;
+      
+    } catch (Exception e) {
+      LOG.info("*** Exception in createFargate: " + e.getMessage() + " ***");
+      e.printStackTrace();
+      throw e;
+    }
   }
 }

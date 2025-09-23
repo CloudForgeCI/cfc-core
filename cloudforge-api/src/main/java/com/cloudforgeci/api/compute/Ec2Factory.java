@@ -1,7 +1,8 @@
 package com.cloudforgeci.api.compute;
 
-
-import com.cloudforgeci.api.core.*;
+import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforgeci.api.scaling.ScalingFactory;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
 import software.amazon.awscdk.services.ec2.BlockDevice;
@@ -31,90 +32,50 @@ import java.util.List;
 
 public class Ec2Factory extends Construct {
   private AutoScalingGroup asg;
-  private final Props p;
 
-  public record Props(DeploymentContext cfc) {
-    }
-
-
-  public Ec2Factory(Construct scope, String id, Props p) {
+  public Ec2Factory(Construct scope, String id) {
     super(scope, id);
-    this.p = p;
     SystemContext ctx = SystemContext.of(this);
-    /*software.constructs.Node.of(this).addValidation(() -> {
-      var errs = new java.util.ArrayList<String>();
-      if (p == null || p.cfc == null) errs.add("JenkinsEc2Factory: cfc is required");
-      else {
-        String v = p.cfc.runtime();
-        if (v != null && !v.isBlank() && !v.equalsIgnoreCase("ec2")) errs.add("JenkinsEc2Factory: runtime must be 'ec2'");
-      }
-      if (p.vpc == null) errs.add("JenkinsEc2Factory: vpc is required");
-      if (p.alb.targetGroup() == null) errs.add("JenkinsEc2Factory: albTargetGroup is required");
-      if (p.efs == null) errs.add("JenkinsEc2Factory: efs is required");
-      return errs;
-    });*/
-/*
-    Role ec2Role = Role.Builder.create(this, "Ec2Role")
-            .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
-            .managedPolicies(java.util.List.of(
-                    ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
-            ))
-            .build();
+  }
 
-    SecurityGroup jenkinsSg = SecurityGroup.Builder.create(this, "JenkinsEc2Sg")
-            .vpc(p.vpc)
-            .allowAllOutbound(true)
-            .build();
+  public void create(final SystemContext ctx) {
+    // Create IAM role for EC2 instances
+    Role ec2Role = createInstanceRole(ctx);
+    ctx.ec2InstanceRole.set(ec2Role);
 
-    UserData ud = UserData.forLinux();
-    ud.addCommands(
-            "#!/bin/bash",
-    "set -euxo pipefail",
-    "DATA_DEV=\"/dev/xvdh\"",
-    "if [ ! -b \"$DATA_DEV\" ]; then",
-    "        DATA_DEV=\"$(readlink -f /dev/nvme1n1 || true)\"",
-    "fi",
-    "mkfs -t xfs -f \"$DATA_DEV\" || true",
-    "mkdir -p /var/lib/jenkins",
-    "echo \"$DATA_DEV /var/lib/jenkins xfs defaults,noatime 0 2\" >> /etc/fstab",
-    "mount -a",
-    "chown -R jenkins:jenkins /var/lib/jenkins || true"
-    );
+    // Use existing instance security group (created by JenkinsFactory)
+    SecurityGroup instanceSg = ctx.instanceSg.get().orElseThrow();
 
-    LaunchTemplate lt = LaunchTemplate.Builder.create(this, "JenkinsLt")
-            .machineImage(MachineImage.latestAmazonLinux2023())
-            .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.SMALL))
-            .securityGroup(jenkinsSg)
-            .userData(ud)
-            .role(ec2Role)
-            .blockDevices(java.util.List.of(
-                    BlockDevice.builder()
-                            .deviceName("/dev/xvda")
-                            .volume(BlockDeviceVolume.ebs(50, EbsDeviceOptions.builder().encrypted(true).build()))
-                            .build()
-            ))
-            .build();
+    // Create CloudWatch log group
+    LogGroup logs = createLogGroup(ctx);
+    ctx.logs.set(logs);
 
-    this.asg = AutoScalingGroup.Builder.create(this, "JenkinsAsg")
-        .vpc(p.vpc)
-        .desiredCapacity(1).minCapacity(1).maxCapacity(3)
-            .launchTemplate(lt)
-        .vpcSubnets(SubnetSelection.builder().subnetType(SubnetType.PUBLIC).build())
-        .build();
-    p.albTargetGroup.addTarget(asg);
-    //asg.addUserData("yum install -y amazon-efs-utils","mkdir -p /var/lib/jenkins","mount -t efs -o tls " + p.efs.getFileSystemId() + ":/ /var/lib/jenkins");
-*/
-    boolean useEfs = false;
-    // ---- 1) Instance role (SSM + (optional) EFS IAM client perms)
-    Role ec2Role = Role.Builder.create(this, "JenkinsEc2Role")
+    // Create user data script
+    UserData userData = createUserData(ctx);
+
+    // Create launch template
+    LaunchTemplate launchTemplate = createLaunchTemplate(ctx, ec2Role, instanceSg, userData);
+
+    // Create Auto Scaling Group
+    this.asg = createAutoScalingGroup(ctx, launchTemplate);
+    ctx.asg.set(asg);
+    
+    // Configure Auto Scaling with CPU target utilization from DeploymentContext
+    new ScalingFactory(this, "Scaling").scale(asg, ctx);
+  }
+
+  private Role createInstanceRole(SystemContext ctx) {
+    Role.Builder roleBuilder = Role.Builder.create(this, "JenkinsEc2Role")
             .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
             .managedPolicies(List.of(
                     ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
-            ))
-            .build();
+            ));
 
-    if (useEfs) {
-      ec2Role.addToPolicy(PolicyStatement.Builder.create()
+    Role role = roleBuilder.build();
+    
+    // Add EFS permissions if EFS is available
+    if (ctx.efs.get().isPresent()) {
+      role.addToPolicy(PolicyStatement.Builder.create()
               .sid("EfsClientAccess")
               .actions(List.of(
                       "elasticfilesystem:ClientMount",
@@ -122,53 +83,54 @@ public class Ec2Factory extends Construct {
                       "elasticfilesystem:DescribeMountTargets",
                       "elasticfilesystem:DescribeFileSystems"
               ))
-              .resources(List.of("*")) // or the specific FS ARN
+              .resources(List.of(ctx.efs.get().orElseThrow().getFileSystemArn()))
               .build());
     }
+    
+    return role;
+  }
 
-    // ---- 2) Security groups
+  private SecurityGroup createInstanceSecurityGroup(SystemContext ctx) {
     SecurityGroup instanceSg = SecurityGroup.Builder.create(this, "JenkinsEc2Sg")
             .vpc(ctx.vpc.get().orElseThrow())
-            .description("InstanceSecurityGroup")
+            .description("Jenkins EC2 Instance Security Group")
             .allowAllOutbound(true)
             .build();
-    //if (p.alb.albSg != null) {
-      // ALB -> Jenkins on 8080
-    //  instanceSg.addIngressRule(p.albSg, Port.tcp(8080), "ALB -> Jenkins");
-    //}
 
+    // Add ingress rule from ALB security group
+    instanceSg.addIngressRule(ctx.albSg.get().orElseThrow(), Port.tcp(8080), "ALB_to_Jenkins");
 
+    return instanceSg;
+  }
 
-    // ---- 3) Optional CloudWatch LogGroup (handy for user-data diagnostics)
-    LogGroup logs = LogGroup.Builder.create(this, "JenkinsEc2Logs")
-            .retention(RetentionDays.ONE_WEEK).build();
-    ctx.logs.set(logs);
-    // ---- 4) User data (differs by storage)
+  private LogGroup createLogGroup(SystemContext ctx) {
+    return LogGroup.Builder.create(this, "JenkinsEc2Logs")
+            .retention(RetentionDays.ONE_WEEK)
+            .build();
+  }
+
+  private UserData createUserData(SystemContext ctx) {
     UserData ud = UserData.forLinux();
     ud.addCommands(
             "#!/bin/bash",
             "set -euxo pipefail",
             "command -v dnf >/dev/null && dnf -y update || yum -y update",
             "command -v dnf >/dev/null && dnf -y install java-17-amazon-corretto-headless || yum -y install java-17-amazon-corretto-headless",
-            "echo 'userdata start OK' > /var/log/jenkins-userdata.log"
+            "echo 'userdata start OK' > /var/log/jenkins-userdata.log",
+            "",
+            "# Install Jenkins",
+            "curl -fsSL https://pkg.jenkins.io/redhat-stable/jenkins.repo -o /etc/yum.repos.d/jenkins.repo",
+            "rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key",
+            "command -v dnf >/dev/null && dnf -y install jenkins || yum -y install jenkins",
+            "",
+            "# Configure Jenkins",
+            "systemctl enable jenkins",
+            "systemctl start jenkins",
+            "echo 'jenkins installed and started' >> /var/log/jenkins-userdata.log"
     );
 
-    LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, "JenkinsLt")
-            .machineImage(MachineImage.latestAmazonLinux2023())
-            .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.SMALL))
-            .securityGroup(instanceSg)
-            .role(ec2Role)
-            .userData(ud);
-
-    if (useEfs) {
-      // ---- 5A) EFS path
-      //efsSg = ctx.efsSg.get().orElseThrow();//SecurityGroup.Builder.create(this, "EfsSg")
-              //.vpc(p.vpc).allowAllOutbound(true).build();
-      //efsSg.addIngressRule(instanceSg, Port.tcp(2049), "Instances -> EFS (NFS)");
-
-
-
-      // EFS user-data (mount at /var/lib/jenkins)
+    // Add EFS mounting if EFS is available
+    if (ctx.efs.get().isPresent() && ctx.ap.get().isPresent()) {
       ud.addCommands(
               "command -v dnf >/dev/null && dnf -y install amazon-efs-utils || yum -y install amazon-efs-utils",
               "mkdir -p /var/lib/jenkins",
@@ -178,36 +140,9 @@ public class Ec2Factory extends Construct {
               "chown -R 1000:1000 /var/lib/jenkins || true",
               "echo 'efs mounted' >> /var/log/jenkins-userdata.log"
       );
-
-      // No extra EBS data disk; root volume is fine.
-
     } else {
-      // ---- 5B) EBS path (attach a dedicated data volume and mount it)
-      String dataDev = "/dev/xvdh"; // will appear as /dev/nvme1n1 on Nitro
-
-      ltBuilder.blockDevices(List.of(
-              BlockDevice.builder()
-                      .deviceName("/dev/xvda") // root override (optional)
-                      .volume(BlockDeviceVolume.ebs(20, EbsDeviceOptions.builder()
-                              .encrypted(true)
-                              .volumeType(EbsDeviceVolumeType.STANDARD)
-                              //.throughput(125)
-                              //.iops(3000)
-                              .deleteOnTermination(true)
-                              .build()))
-                      .build(),
-              BlockDevice.builder()
-                      .deviceName(dataDev)     // data volume
-                      .volume(BlockDeviceVolume.ebs(100, EbsDeviceOptions.builder()
-                              .encrypted(true)
-                              .volumeType(EbsDeviceVolumeType.STANDARD)
-                              //.throughput(125)
-                              //.iops(3000)
-                              .deleteOnTermination(true)
-                              .build()))
-                      .build()
-      ));
-      // EBS UserData
+      // Use EBS for storage
+      String dataDev = "/dev/xvdh";
       ud.addCommands(
               "DATA_DEV=\"" + dataDev + "\"",
               "if [ ! -b \"$DATA_DEV\" ]; then DATA_DEV=$(readlink -f /dev/nvme1n1 || true); fi",
@@ -220,18 +155,60 @@ public class Ec2Factory extends Construct {
       );
     }
 
-    LaunchTemplate lt = ltBuilder.build();
+    return ud;
+  }
 
-    AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "JenkinsAsg")
+  private LaunchTemplate createLaunchTemplate(SystemContext ctx, Role ec2Role, SecurityGroup instanceSg, UserData userData) {
+    LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, "JenkinsLt")
+            .machineImage(MachineImage.latestAmazonLinux2023())
+            .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.SMALL))
+            .securityGroup(instanceSg)
+            .role(ec2Role)
+            .userData(userData);
+
+    // Add block devices
+    ltBuilder.blockDevices(List.of(
+            BlockDevice.builder()
+                    .deviceName("/dev/xvda")
+                    .volume(BlockDeviceVolume.ebs(20, EbsDeviceOptions.builder()
+                            .encrypted(true)
+                            .volumeType(EbsDeviceVolumeType.STANDARD)
+                            .deleteOnTermination(true)
+                            .build()))
+                    .build()
+    ));
+
+    // Add data volume if not using EFS
+    if (ctx.efs.get().isEmpty()) {
+      ltBuilder.blockDevices(List.of(
+              BlockDevice.builder()
+                      .deviceName("/dev/xvdh")
+                      .volume(BlockDeviceVolume.ebs(100, EbsDeviceOptions.builder()
+                              .encrypted(true)
+                              .volumeType(EbsDeviceVolumeType.STANDARD)
+                              .deleteOnTermination(true)
+                              .build()))
+                      .build()
+      ));
+    }
+
+    return ltBuilder.build();
+  }
+
+  private AutoScalingGroup createAutoScalingGroup(SystemContext ctx, LaunchTemplate launchTemplate) {
+    // Use DeploymentContext values for AutoScaling Group configuration
+    int minCapacity = ctx.cfc.minInstanceCapacity() != null ? ctx.cfc.minInstanceCapacity() : 1;
+    int maxCapacity = ctx.cfc.maxInstanceCapacity() != null ? ctx.cfc.maxInstanceCapacity() : 3;
+    int desiredCapacity = Math.max(minCapacity, Math.min(maxCapacity, minCapacity)); // Start with minimum
+    
+    return AutoScalingGroup.Builder.create(this, "JenkinsAsg")
             .vpc(ctx.vpc.get().orElseThrow())
             .vpcSubnets(SubnetSelection.builder().subnetType(SubnetType.PUBLIC).build())
-            .minCapacity(1).desiredCapacity(1).maxCapacity(3)
-            .launchTemplate(lt) // << critical (no LaunchConfiguration)
-            //.healthCheck(HealthCheck.elb(Duration.minutes(5))) // if behind ALB; otherwise EC2 healthCheck()
+            .minCapacity(minCapacity)
+            .desiredCapacity(desiredCapacity)
+            .maxCapacity(maxCapacity)
+            .launchTemplate(launchTemplate)
             .build();
-    ctx.asg.set(asg);
-    instanceSg.addIngressRule(ctx.albSg.get().orElseThrow(), Port.tcp(8080), "ALB -> Jenkins");
-    //ctx.albTargetGroup.get().orElseThrow().addTarget(asg);
   }
 
 }

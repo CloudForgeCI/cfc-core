@@ -1,13 +1,13 @@
 package com.cloudforgeci.api.core;
 
-import com.cloudforgeci.api.interfaces.ISlot;
+import com.cloudforgeci.api.interfaces.BaseSlot;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-public final class Slot<T> implements ISlot<T> {
+public final class Slot<T> implements BaseSlot<T> {
     private T value;
     private final List<Consumer<T>> waiters = new ArrayList<>();
 

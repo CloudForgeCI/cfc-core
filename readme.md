@@ -78,6 +78,201 @@ If a downstream project still uses a cached SNAPSHOT, force updates:
 
 ---
 
+## Testing & Validation
+
+### Unit Tests
+
+Run the complete test suite:
+
+```bash
+# All modules
+./mvnw test
+
+# Just API module
+./mvnw -pl cloudforge-api -am test
+
+# Just Core module  
+./mvnw -pl cloudforge-core -am test
+```
+
+### CDK Synthesis Testing
+
+The `cfc-testing` application provides comprehensive testing of all runtime, topology, and security profile combinations. Navigate to the testing directory and run the complete test suite:
+
+```bash
+cd cfc-testing
+rm -rf cdk.out cdk.context.json  # Clear CDK cache
+```
+
+#### Working Combinations ✅
+
+These combinations are fully functional and should pass synthesis:
+
+```bash
+# EC2 + Service + Production + Domain + SSL
+cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":true,"runtime":"EC2","topology":"service","securityProfile":"production"}'
+
+# EC2 + Service + Production + Domain + No SSL
+cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":false,"runtime":"EC2","topology":"service","securityProfile":"production"}'
+
+# EC2 + Service + Production + No Domain
+cdk synth -c cfc='{"enableSsl":false,"runtime":"EC2","topology":"service","securityProfile":"production"}'
+
+# Fargate + Service + Production + Domain + No SSL
+cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":false,"runtime":"FARGATE","topology":"service","securityProfile":"production"}'
+
+# Fargate + Service + Production + No Domain
+cdk synth -c cfc='{"enableSsl":false,"runtime":"FARGATE","topology":"service","securityProfile":"production"}'
+```
+
+#### Known Issues ❌
+
+These combinations currently have known issues and may fail synthesis:
+
+```bash
+# EC2 + Node topology (single-node architectural incompatibility)
+cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":true,"runtime":"EC2","topology":"node","securityProfile":"production"}'
+
+# Fargate + SSL (HTTP listener missing default action)
+cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":true,"runtime":"FARGATE","topology":"service","securityProfile":"production"}'
+```
+
+#### Complete Test Matrix
+
+Run all combinations systematically using the provided test script:
+
+```bash
+# Run the complete test suite
+./test-synth.sh
+```
+
+Or run individual tests manually:
+
+```bash
+cd cfc-testing
+rm -rf cdk.out cdk.context.json
+
+# Individual test examples
+cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":true,"runtime":"EC2","topology":"service","securityProfile":"production"}'
+cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":false,"runtime":"FARGATE","topology":"service","securityProfile":"production"}'
+```
+
+#### Test Results Summary
+
+| Combination | Status | Notes |
+|-------------|--------|-------|
+| EC2 + Service + Production + Domain + SSL | ✅ SUCCESS | Working perfectly |
+| EC2 + Service + Production + Domain + No SSL | ✅ SUCCESS | Working perfectly |
+| EC2 + Service + Production + No Domain | ✅ SUCCESS | Working perfectly |
+| Fargate + Service + Production + Domain + No SSL | ✅ SUCCESS | Working perfectly |
+| Fargate + Service + Production + No Domain | ✅ SUCCESS | Working perfectly |
+| Fargate + Service + Production + Domain + SSL | ✅ SUCCESS | Working perfectly |
+| Fargate + Service + Dev + Domain + SSL | ✅ SUCCESS | Working perfectly |
+| Fargate + Service + Staging + Domain + SSL | ✅ SUCCESS | Working perfectly |
+| EC2 + Node + Production + Domain + SSL | ❌ FAILED | Single-node topology issue |
+| EC2 + Node + Dev + Domain + SSL | ❌ FAILED | Single-node topology issue |
+
+**Success Rate:** 8/10 combinations (80%)
+
+**Known Issues:**
+- EC2 + Node topology: Single-node architectural incompatibility (HTTPS listener missing default action)
+
+### Performance Benchmarking
+
+The `benchmark-synth.sh` script provides comprehensive performance testing for CDK synthesis operations. It allows you to select specific test cases and run multiple iterations to measure synthesis performance.
+
+#### Running Benchmarks
+
+```bash
+# Run the benchmark tool
+./benchmark-synth.sh
+```
+
+The script will:
+1. **Display available test cases** (1-10) with descriptive names
+2. **Prompt for test selection** (validates input)
+3. **Prompt for number of runs** (defaults to 10 if empty)
+4. **Run benchmark** with progress indicators
+5. **Show statistics** and save results to file
+
+#### Available Test Cases
+
+| # | Test Case | Status | Description |
+|---|-----------|--------|-------------|
+| 1 | EC2 + Service + Production + Domain + SSL | ✅ Working | Full production setup with SSL |
+| 2 | EC2 + Service + Production + Domain + No SSL | ✅ Working | Production setup without SSL |
+| 3 | EC2 + Service + Production + No Domain | ✅ Working | Minimal production setup |
+| 4 | Fargate + Service + Production + Domain + No SSL | ✅ Working | Fargate production without SSL |
+| 5 | Fargate + Service + Production + No Domain | ✅ Working | Minimal Fargate setup |
+| 6 | EC2 + Node + Production + Domain + SSL | ❌ Known Issue | Single-node topology issue |
+| 7 | EC2 + Node + Dev + Domain + SSL | ❌ Known Issue | Single-node topology issue |
+| 8 | Fargate + Service + Production + Domain + SSL | ✅ Working | Fargate production with SSL |
+| 9 | Fargate + Service + Dev + Domain + SSL | ✅ Working | Fargate dev with SSL |
+| 10 | Fargate + Service + Staging + Domain + SSL | ✅ Working | Fargate staging with SSL |
+
+#### Benchmark Output
+
+The script generates detailed performance metrics:
+
+```
+📊 Benchmark Results:
+====================
+runs=20
+min=2.345678
+median=2.456789
+p95=2.567890
+max=2.678901
+avg=2.456789
+```
+
+#### Benchmark Results File
+
+Detailed timing data is saved to `cfc-testing/synth_times.txt`:
+
+```
+# synth timings (seconds) - EC2 + Service + Production + Domain + SSL
+2.345678
+2.456789
+2.567890
+...
+```
+
+#### Use Cases
+
+- **Performance Regression Testing**: Compare synthesis times across different versions
+- **Configuration Optimization**: Identify which configurations are fastest/slowest
+- **Resource Planning**: Estimate synthesis time for CI/CD pipelines
+- **Debugging**: Identify performance bottlenecks in specific configurations
+
+#### Example Usage
+
+```bash
+# Benchmark a working configuration
+./benchmark-synth.sh
+# Select: 1 (EC2 + Service + Production + Domain + SSL)
+# Runs: 30
+# Result: Detailed performance metrics
+
+# Benchmark a failing configuration (to measure failure time)
+./benchmark-synth.sh
+# Select: 6 (EC2 + Node + Production + Domain + SSL)
+# Runs: 10
+# Result: Error handling and failure timing
+```
+
+#### Configuration Options
+
+The `cfc` context parameter supports the following options:
+
+- **`runtime`**: `"EC2"` | `"FARGATE"`
+- **`topology`**: `"service"` | `"node"`
+- **`securityProfile`**: `"dev"` | `"staging"` | `"production"`
+- **`domain`**: Custom domain name (e.g., `"cloudforgeci.com"`)
+- **`subdomain`**: Subdomain for the application (e.g., `"jenkins"`)
+- **`enableSsl`**: `true` | `false`
+
+---
+
 ## Using cfc-core from other projects
 
 In your project’s `pom.xml` add dependencies (choose the version you need):

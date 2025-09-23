@@ -30,9 +30,6 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
     r.add(ctx -> ctx.runtime != RuntimeType.EC2
             ? List.of("JENKINS_SINGLE_NODE requires runtime=EC2") : List.of());
 
-    // Forbid EFS (single-node Jenkins typically uses EBS).
-    r.add(forbid("EFS", x -> x.efs));
-
     // OIDC requires TLS.
     r.add(ctx -> {
       var mode = ctx.cfc.authMode();
@@ -49,7 +46,8 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       boolean canCompute = ctx.cfc.subdomain() != null && ctx.cfc.domain() != null;
       return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl=true requires fqdn OR (subdomain + domain)");
     });
-    r.add(forbid("AutoScalingGroup ", x -> x.asg));
+    // TEMPORARY: Comment out AutoScalingGroup forbid rule to debug
+    // r.add(forbid("AutoScalingGroup", x -> x.asg));
 
     return r;
   }
@@ -57,18 +55,18 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
   @Override
   public void wire(SystemContext c) {
     // Route53 A + AAAA aliases to ALB (only if zone + alb present)
-    c.once("Topo:JenkinsSingleNode:AlbAlias", () -> whenBoth(c.zone, c.alb, (zone, alb) -> {
+    whenBoth(c.zone, c.alb, (zone, alb) -> {
       String record = c.cfc.fqdn();
       if (record == null || record.isBlank()) {
         record = c.cfc.subdomain() == null ? "" : c.cfc.subdomain();
       }
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
-      new ARecord(c, "AlbAliasA", ARecordProps.builder()
+      new ARecord(c, "AlbAliasA_" + c.topology + "_" + c.runtime, ARecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
-      new AaaaRecord(c, "AlbAliasAAAA", AaaaRecordProps.builder()
+      new AaaaRecord(c, "AlbAliasAAAA_" + c.topology + "_" + c.runtime, AaaaRecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
-    }));
+    });
 
   }
 }

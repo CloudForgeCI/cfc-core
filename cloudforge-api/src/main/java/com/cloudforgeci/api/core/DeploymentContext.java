@@ -4,6 +4,7 @@ import com.cloudforgeci.api.core.utilities.DnsLabel;
 import com.cloudforgeci.api.core.utilities.DnsName;
 import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
@@ -23,6 +24,7 @@ import java.util.Map;
  *   runtime:         "ec2" | "fargate"                       (default: ec2)  // alias: variant, architecture
  *   topology:        "jenkins-single-node" | "jenkins-service" | "s3-website"
  *   env:             "dev" | "stage" | "prod"                (default: dev)
+ *   securityProfile: "dev" | "staging" | "production"       (default: dev) -> SecurityProfile enum
  *   region:          e.g. "us-east-1"                        (default: us-east-1)
  *   domain:          e.g. "example.com"
  *   subdomain:       e.g. "jenkins" (used to compute fqdn if not provided)
@@ -37,11 +39,16 @@ import java.util.Map;
  *   artifactsBucket: explicit bucket name (optional)
  *   artifactsPrefix: default "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}"
  *   lbType:          "alb" | "nlb"                            (default: alb)
- *   minInstanceCapacity: default 0
- *   maxInstanceCapacity: default 0
+ *   minInstanceCapacity: default 1
+ *   maxInstanceCapacity: default 3
  *   cpuTargetUtilization: default 0
  *   cpu:             integer vCPU units (Fargate taskDef)     (default: 1024)
  *   memory:          integer MiB                              (default: 2048)
+ *   deploymentId:    unique identifier for this deployment    (optional)
+ *   deploymentVersion: version tag for this deployment        (optional)
+ *   environment:     "dev" | "staging" | "prod"               (default: dev)
+ *   region:          AWS region override                       (optional)
+ *   tags:            JSON object of additional tags            (optional)
  *
  * Legacy one-field combos (still accepted, mapped to runtime+topology):
  *   runtime: "jenkins-fargate" -> topology=JENKINS_SERVICE, runtime=FARGATE
@@ -61,6 +68,7 @@ public final class DeploymentContext {
     // Required-ish high level knobs
     private final String tier;        // public | enterprise
     private final String env;         // dev | stage | prod
+    private final SecurityProfile securityProfile; // DEV | STAGING | PRODUCTION
     private final String region;      // default: us-east-1
 
     // Naming / DNS
@@ -109,11 +117,18 @@ public final class DeploymentContext {
     private final String runtimeRaw;      // may be "ec2"/"fargate" or a legacy combo like "jenkins-fargate"
     private final String topologyRaw;     // if user provided an explicit string topology
 
+    // Additional deployment tracking fields
+    private final String deploymentId;
+    private final String deploymentVersion;
+    private final String environment;
+    private final String tags;
+
     protected DeploymentContext(Map<String, Object> raw) {
         this.raw = Collections.unmodifiableMap(new LinkedHashMap<>(raw));
 
         this.tier   = str("tier", "public");
         this.env    = str("env", "dev");
+        this.securityProfile = parseSecurityProfile(str("securityProfile", "dev"));
         this.region = str("region", "us-east-1");
 
         this.domain = str("domain", null);
@@ -140,11 +155,17 @@ public final class DeploymentContext {
         this.cpu = intval("cpu", 1024);
         this.memory = intval("memory", 2048);
 
-        this.minInstanceCapacity = intval("minInstanceCapacity", 0);
-        this.maxInstanceCapacity = intval("maxInstanceCapacity", 0);
+        this.minInstanceCapacity = intval("minInstanceCapacity", 1);
+        this.maxInstanceCapacity = intval("maxInstanceCapacity", 3);
         this.cpuTargetUtilization = intval("cpuTargetUtilization", 60);
 
         this.enableFlowlogs = bool("enableFlowlogs", false);
+
+        // Additional deployment tracking fields
+        this.deploymentId = str("deploymentId", null);
+        this.deploymentVersion = str("deploymentVersion", null);
+        this.environment = str("environment", "dev");
+        this.tags = str("tags", null);
 
         // Legacy/alias inputs
         String runtimeAlias = str("runtime", "fargate");
@@ -176,6 +197,16 @@ public final class DeploymentContext {
 
     public String tier() { return tier; }
     public String env() { return env; }
+    
+    /**
+     * Gets the security profile enum.
+     * 
+     * @return SecurityProfile enum value
+     */
+    public SecurityProfile securityProfile() {
+        return securityProfile;
+    }
+    
     public String region() { return region; }
 
     public String domain() { return domain; }
@@ -187,9 +218,9 @@ public final class DeploymentContext {
     public boolean cloudfrontEnabled() { return cloudfront; }
     public String lbType() { return lbType; }
 
-    public int cpuTargetUtilization() { return cpuTargetUtilization; }
-    public int maxInstanceCapacity() { return maxInstanceCapacity; }
-    public int minInstanceCapacity() { return minInstanceCapacity; }
+    public Integer cpuTargetUtilization() { return cpuTargetUtilization; }
+    public Integer maxInstanceCapacity() { return maxInstanceCapacity; }
+    public Integer minInstanceCapacity() { return minInstanceCapacity; }
 
     public boolean enableFlowlogs() { return enableFlowlogs; }
 
@@ -197,6 +228,12 @@ public final class DeploymentContext {
     public String ssoInstanceArn() { return ssoInstanceArn; }
     public String ssoGroupId() { return ssoGroupId; }
     public String ssoTargetAccountId() { return ssoTargetAccountId; }
+
+    // Additional deployment tracking fields
+    public String deploymentId() { return deploymentId; }
+    public String deploymentVersion() { return deploymentVersion; }
+    public String environment() { return environment; }
+    public String tags() { return tags; }
 
     public String artifactsBucket() { return artifactsBucket; }
     public String artifactsPrefix() { return artifactsPrefix; }
@@ -224,6 +261,17 @@ public final class DeploymentContext {
 
     /** True if enterprise features should be enabled. */
     public boolean isEnterprise() { return "enterprise".equalsIgnoreCase(tier); }
+
+    /** Get the runtime type. */
+    public RuntimeType getRuntime() { return runtime; }
+
+    /** Get the topology type. */
+    public TopologyType getTopology() { return topology; }
+
+    /** Get a context value by key with default. */
+    public String getContextValue(String key, String defaultValue) {
+        return str(key, defaultValue);
+    }
 
     /** Tag a stack so you can see the config in the console. */
     public void tagStack(Stack stack) {
@@ -296,12 +344,22 @@ public final class DeploymentContext {
         return new DeploymentConfigurations(runtime, topology);
     }
 
+    private static SecurityProfile parseSecurityProfile(String val) {
+        String s = val.trim().toLowerCase(Locale.ROOT);
+        return switch (s) {
+            case "dev" -> SecurityProfile.DEV;
+            case "staging" -> SecurityProfile.STAGING;
+            case "production" -> SecurityProfile.PRODUCTION;
+            default -> SecurityProfile.DEV; // Default to DEV
+        };
+    }
+
     private static TopologyType parseTopology(String val) {
         String t = val.trim().toLowerCase(Locale.ROOT)
                 .replace('_', '-')
                 .replace(' ', '-');
         return switch (t) {
-            case "jenkins-single-node", "jenkins_single_node", "single-node", "single_node" -> TopologyType.JENKINS_SINGLE_NODE;
+            case "jenkins-single-node", "jenkins_single_node", "single-node", "single_node", "node" -> TopologyType.JENKINS_SINGLE_NODE;
             case "jenkins-service", "jenkins_service", "service" -> TopologyType.JENKINS_SERVICE;
             case "s3-website", "s3_website", "s3" -> TopologyType.S3_WEBSITE;
             default -> TopologyType.JENKINS_SINGLE_NODE;

@@ -1,7 +1,10 @@
 package com.cloudforgeci.samples.app;
 
-
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforgeci.api.interfaces.IAMProfile;
+import com.cloudforgeci.api.core.iam.IAMProfileMapper;
 import com.cloudforgeci.samples.launchers.JenkinsEc2Stack;
 import com.cloudforgeci.samples.launchers.JenkinsFargateStack;
 import io.github.cdklabs.cdknag.AwsSolutionsChecks;
@@ -14,7 +17,6 @@ import software.constructs.Construct;
 
 import java.util.Map;
 
-
 public class CloudForgeCommunitySample {
 
   public static void main(final String[] args) {
@@ -26,11 +28,21 @@ public class CloudForgeCommunitySample {
             .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
             .region(System.getenv("CDK_DEFAULT_REGION")).build()).build();
 
-    if("ec2".equalsIgnoreCase(cfc.runtime().name()) || "ec2-domain".equalsIgnoreCase(cfc.runtime().name()))
-      new JenkinsEc2Stack(app, "JenkinsEc2", props);
-    if("fargate".equalsIgnoreCase(cfc.runtime().name()) || "fargate-domain".equalsIgnoreCase(cfc.runtime().name()))
-      new JenkinsFargateStack(app,"JenkinsFargate", props);
+    // Get security profile from DeploymentContext
+    SecurityProfile security = cfc.securityProfile();
+    IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
+
+    // Create stacks based on runtime type
+    if (cfc.getRuntime() == RuntimeType.EC2) {
+      new JenkinsEc2Stack(app, "JenkinsEc2", props, security, iamProfile);
+    } else if (cfc.getRuntime() == RuntimeType.FARGATE) {
+      new JenkinsFargateStack(app, "JenkinsFargate", props, security, iamProfile);
+    } else {
+      throw new IllegalArgumentException("Unsupported runtime type: " + cfc.getRuntime());
+    }
+
     //Aspects.of(app).add(new AwsSolutionsChecks());
     app.synth();
   }
+
 }

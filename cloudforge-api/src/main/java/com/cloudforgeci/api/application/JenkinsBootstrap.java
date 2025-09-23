@@ -35,8 +35,8 @@ public class JenkinsBootstrap extends Construct {
                         .build())
                 .build());
 
-        ctx.efsSg.get().orElseThrow().addIngressRule(ctx.fargateServiceSg.get().orElseThrow(), Port.tcp(2049), null, false);
-        ctx.fargateServiceSg.get().orElseThrow().addIngressRule(ctx.albSg.get().orElseThrow(), Port.tcp(8080), null, false);
+        ctx.efsSg.get().orElseThrow().addIngressRule(ctx.fargateServiceSg.get().orElseThrow(), Port.tcp(2049), "NFS_from_Fargate_service", false);
+        ctx.fargateServiceSg.get().orElseThrow().addIngressRule(ctx.albSg.get().orElseThrow(), Port.tcp(8080), "HTTP_from_ALB", false);
 
         CfnOutput.Builder.create(this, "JenkinsUrl")
                 .description("Jenkins URL (ALB DNS) - Test")

@@ -4,6 +4,9 @@ import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforgeci.api.interfaces.IAMProfile;
+import com.cloudforgeci.api.core.iam.IAMProfileMapper;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
@@ -21,7 +24,8 @@ public class DeploymentContextBugReproTest {
     void fromAppReadsContextKeys() {
         App app = new App();
         Stack stack = new Stack(app, "Stack");
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, null);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, null);
         app.getNode().setContext("cfc.lbType", "alb");
         DeploymentContext cfc = DeploymentContext.from(stack);
         assertEquals("alb", cfc.lbType());

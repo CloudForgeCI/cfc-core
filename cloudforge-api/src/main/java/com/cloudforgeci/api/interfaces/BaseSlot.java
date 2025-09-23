@@ -2,7 +2,7 @@ package com.cloudforgeci.api.interfaces;
 
 import java.util.Optional;
 
-public interface ISlot<T> {
+public interface BaseSlot<T> {
 
     void set(T v);
     Optional<T> get();

@@ -27,9 +27,9 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
   public List<Rule> rules(SystemContext c) {
     var r = new ArrayList<Rule>();
 
-    // This topology is only valid with Fargate runtime.
-    r.add(ctx -> ctx.runtime != RuntimeType.FARGATE
-            ? List.of("JENKINS_SERVICE requires runtime=FARGATE") : List.of());
+    // This topology supports both Fargate and EC2 runtimes.
+    r.add(ctx -> (ctx.runtime != RuntimeType.FARGATE && ctx.runtime != RuntimeType.EC2)
+            ? List.of("JENKINS_SERVICE requires runtime=FARGATE or runtime=EC2") : List.of());
 
     // OIDC requires TLS at ALB. (Runtime profile handles cert wiring; we enforce semantics here.)
     r.add(ctx -> {
@@ -47,6 +47,7 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
       boolean canCompute = ctx.cfc.subdomain() != null && ctx.cfc.domain() != null;
       return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl=true requires fqdn OR (subdomain + domain)");
     });
+    // AutoScalingGroup is forbidden for Fargate runtime, but allowed for EC2 runtime
     boolean isFargate = c.cfc.runtime().equals(RuntimeType.FARGATE);
     r.add(when(isFargate , forbid("AutoScalingGroup", x -> x.asg)));
 
