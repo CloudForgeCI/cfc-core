@@ -5,6 +5,7 @@ Core libraries for CloudForgeCI. This repository contains foundational APIs and 
 **Organization:** cloudforgeci  
 **Company:** CloudForgeCI  
 **Repo:** https://github.com/CloudForgeCI/cfc-core
+**Sample:** https://github.com/CloudForgeCI/cloudforge-sample
 
 ```
 cfc-core/
