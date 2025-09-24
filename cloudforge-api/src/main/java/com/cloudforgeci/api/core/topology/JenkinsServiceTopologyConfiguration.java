@@ -9,6 +9,14 @@ import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.amazon.awscdk.services.ecs.CpuUtilizationScalingProps;
 import software.amazon.awscdk.services.ecs.ScalableTaskCount;
+import software.amazon.awscdk.services.route53.ARecord;
+import software.amazon.awscdk.services.route53.AaaaRecord;
+import software.amazon.awscdk.services.route53.ARecordProps;
+import software.amazon.awscdk.services.route53.AaaaRecordProps;
+import software.amazon.awscdk.services.route53.RecordTarget;
+import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
+
+import java.util.logging.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,6 +27,8 @@ import static com.cloudforgeci.api.core.rules.RuleKit.whenBoth;
 
 
 public final class JenkinsServiceTopologyConfiguration implements TopologyConfiguration {
+
+  private static final Logger LOG = Logger.getLogger(JenkinsServiceTopologyConfiguration.class.getName());
 
   @Override public TopologyType kind() { return TopologyType.JENKINS_SERVICE; }
   @Override public String id() { return "topology:JENKINS_SERVICE"; }
@@ -56,6 +66,11 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
 
   @Override
   public void wire(SystemContext c) {
+    LOG.info("*** DEBUG: JenkinsServiceTopologyConfiguration.wire() called ***");
+    LOG.info("*** DEBUG: Zone present: " + c.zone.get().isPresent() + " ***");
+    LOG.info("*** DEBUG: ALB present: " + c.alb.get().isPresent() + " ***");
+    
+    // Auto-scaling configuration for Fargate services
     boolean scale = c.cfc.minInstanceCapacity() > 0 && c.cfc.maxInstanceCapacity() > c.cfc.minInstanceCapacity();
     if(scale) {
       whenBoth(c.fargateService, c.albTargetGroup, (service, tg) -> {
@@ -64,5 +79,34 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
                 .scaleInCooldown(Duration.minutes(2)).scaleOutCooldown(Duration.minutes(2)).build());
       });
     }
+    
+    // DNS A/AAAA records for ALB (works with or without SSL) - use SystemContext slot to prevent duplicate execution
+    LOG.info("*** DEBUG: About to register DNS records callback ***");
+    whenBoth(c.zone, c.alb, (zone, alb) -> {
+      // Check if DNS records have already been created (inside the callback to prevent multiple executions)
+      if (c.dnsRecordsCreated.get().isPresent()) {
+        LOG.info("*** DEBUG: DNS records already created, skipping ***");
+        return;
+      }
+      
+      LOG.info("*** DEBUG: Creating DNS records for zone: " + zone.getZoneName() + " ***");
+      String record = c.cfc.fqdn();
+      if (record == null || record.isBlank()) {
+        record = c.cfc.subdomain() == null ? "" : c.cfc.subdomain();
+      }
+      LOG.info("*** DEBUG: DNS record name: " + record + " ***");
+
+      var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
+      new ARecord(c, "ServiceAlbAliasA_" + c.topology + "_" + c.runtime, ARecordProps.builder()
+              .zone(zone).recordName(record).target(target).build());
+      new AaaaRecord(c, "ServiceAlbAliasAAAA_" + c.topology + "_" + c.runtime, AaaaRecordProps.builder()
+              .zone(zone).recordName(record).target(target).build());
+      LOG.info("*** DEBUG: DNS records created successfully ***");
+      
+      // Set the DNS records created flag to prevent duplicate execution
+      c.dnsRecordsCreated.set(true);
+      LOG.info("*** DEBUG: dnsRecordsCreated set to true ***");
+    });
+    LOG.info("*** DEBUG: DNS records callback registered ***");
   }
 }

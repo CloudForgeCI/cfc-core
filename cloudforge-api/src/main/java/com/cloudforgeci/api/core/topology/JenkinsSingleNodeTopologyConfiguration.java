@@ -62,9 +62,9 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       }
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
-      new ARecord(c, "AlbAliasA_" + c.topology + "_" + c.runtime, ARecordProps.builder()
+      new ARecord(c, "SingleNodeAlbAliasA_" + c.topology + "_" + c.runtime, ARecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
-      new AaaaRecord(c, "AlbAliasAAAA_" + c.topology + "_" + c.runtime, AaaaRecordProps.builder()
+      new AaaaRecord(c, "SingleNodeAlbAliasAAAA_" + c.topology + "_" + c.runtime, AaaaRecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
     });
 

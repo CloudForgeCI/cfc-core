@@ -6,13 +6,14 @@ import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.efs.AccessPoint;
 import software.amazon.awscdk.services.efs.AccessPointOptions;
 import software.amazon.awscdk.services.efs.Acl;
 import software.amazon.awscdk.services.efs.PosixUser;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
-import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.constructs.Construct;
@@ -22,13 +23,68 @@ import java.util.List;
 
 import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
 
+/**
+ * Factory for creating Fargate-based Jenkins compute infrastructure.
+ * 
+ * <p>This factory creates and configures AWS Fargate services for Jenkins deployments,
+ * providing a serverless container-based approach. It respects network mode configuration
+ * to place tasks in appropriate subnets and handles EFS integration for persistent storage.</p>
+ * 
+ * <p><strong>Key Features:</strong></p>
+ * <ul>
+ *   <li>Fargate task definitions with Jenkins container</li>
+ *   <li>ECS cluster and service configuration</li>
+ *   <li>EFS access point integration for persistent storage</li>
+ *   <li>IAM roles for task execution and EFS access</li>
+ *   <li>Network mode awareness (public vs private subnets)</li>
+ *   <li>Security group configuration</li>
+ * </ul>
+ * 
+ * <p><strong>Network Configuration:</strong></p>
+ * <ul>
+ *   <li><strong>public-no-nat:</strong> Tasks get public IPs and use public subnets</li>
+ *   <li><strong>private-with-nat:</strong> Tasks use private subnets with NAT gateway</li>
+ * </ul>
+ * 
+ * <p><strong>Example Usage:</strong></p>
+ * <pre>{@code
+ * FargateFactory factory = new FargateFactory(scope, "JenkinsFargate", 
+ *     new FargateFactory.Props(cfc));
+ * 
+ * // Access created resources
+ * FargateService service = ctx.fargateService.get().orElseThrow();
+ * FargateTaskDefinition taskDef = ctx.fargateTaskDef.get().orElseThrow();
+ * }</pre>
+ * 
+ * @author CloudForgeCI
+ * @since 1.0.0
+ * @see DeploymentContext
+ * @see SystemContext
+ * @see ContainerFactory
+ * @see DeploymentContext#networkMode()
+ */
 public class FargateFactory extends Construct {
 
 
   private final Props p;
 
+  /**
+   * Configuration properties for FargateFactory.
+   * 
+   * @param cfc Deployment context containing configuration parameters
+   */
   public record Props(DeploymentContext cfc) {}
 
+  /**
+   * Creates a new FargateFactory instance.
+   * 
+   * <p>This constructor initializes the factory and creates the complete Fargate
+   * infrastructure including task definitions, services, and EFS integration.</p>
+   * 
+   * @param scope The CDK construct scope
+   * @param id Unique identifier for the Fargate factory
+   * @param p Configuration properties containing deployment context
+   */
   public FargateFactory(Construct scope, String id, Props p) {
     super(scope, id);
     this.p = p;
@@ -52,18 +108,21 @@ public class FargateFactory extends Construct {
             .vpc(ctx.vpc.get().orElseThrow())
             .allowAllOutbound(true).build();
     ctx.fargateServiceSg.set(serviceSg);
+    // Determine subnet type and public IP assignment based on network mode
+    boolean assignPublicIp = "public-no-nat".equals(ctx.cfc.networkMode());
+    SubnetType subnetType = assignPublicIp ? SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
+    
     FargateService service = FargateService.Builder.create(this, "Service")
             .cluster(cluster)
             .securityGroups(List.of(serviceSg))
             .taskDefinition(taskDef)
             .desiredCount(ctx.cfc.minInstanceCapacity() != null ? ctx.cfc.minInstanceCapacity() : 1)
-            .assignPublicIp(true).build();
+            .assignPublicIp(assignPublicIp)
+            .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
+            .build();
     
     // Set task definition in context first (needed by ContainerFactory)
-    taskDef.getTaskRole().addToPrincipalPolicy(PolicyStatement.Builder.create()
-            .actions(List.of("elasticfilesystem:ClientMount","elasticfilesystem:ClientWrite","elasticfilesystem:ClientRootAccess"))
-            .resources(List.of(ctx.efs.get().orElseThrow().getFileSystemArn(), ctx.ap.get().orElseThrow().getAccessPointArn()))
-            .build());
+    // Note: EFS permissions are handled by IAMRules based on security profile
     ctx.fargateTaskDef.set(taskDef);
     
     // Create container (now that task definition is available)

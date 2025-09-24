@@ -47,8 +47,9 @@ public class AlbFactory extends BaseFactory {
                 ApplicationListener http = createHttpListener(alb, targetGroup);
                 ctx.http.set(http);
             } else {
-                // For Fargate, create HTTP listener with appropriate default action
-                ApplicationListener http = createHttpListenerWithoutTargetGroup(alb, ctx.cfc != null && Boolean.TRUE.equals(ctx.cfc.enableSsl()));
+                // For Fargate, create HTTP listener with placeholder default action
+                // The default action will be updated by FargateRuntimeConfiguration when the service is ready
+                ApplicationListener http = createFargateHttpListener(alb, ctx.cfc != null && Boolean.TRUE.equals(ctx.cfc.enableSsl()));
                 ctx.http.set(http);
             }
             
@@ -97,9 +98,9 @@ public class AlbFactory extends BaseFactory {
                 .build());
     }
 
-    private ApplicationListener createFargateHttpListener(ApplicationLoadBalancer alb, SystemContext ctx) {
-        // HTTP listener configuration is now handled by SecurityProfile wiring
-        // SSL redirect logic is centralized in SecurityProfile.wire() method
+    private ApplicationListener createFargateHttpListener(ApplicationLoadBalancer alb, boolean sslEnabled) {
+        // Create HTTP listener with a temporary default action
+        // This will be updated by FargateRuntimeConfiguration when the Fargate service is ready
         return alb.addListener("Http", BaseApplicationListenerProps.builder()
                 .port(80)
                 .defaultAction(ListenerAction.fixedResponse(200, FixedResponseOptions.builder()

@@ -205,7 +205,7 @@ public class SystemContextTest {
     
     // Try to start with different topology
     assertThrows(IllegalStateException.class, () -> {
-      SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, iamProfile, cfc);
+      SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
     });
   }
 

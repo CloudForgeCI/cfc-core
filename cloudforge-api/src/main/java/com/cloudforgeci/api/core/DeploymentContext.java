@@ -2,6 +2,7 @@ package com.cloudforgeci.api.core;
 
 import com.cloudforgeci.api.core.utilities.DnsLabel;
 import com.cloudforgeci.api.core.utilities.DnsName;
+import com.cloudforgeci.api.core.utilities.OneOf;
 import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.TopologyType;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
@@ -66,8 +67,12 @@ public final class DeploymentContext {
     private final Map<String, Object> raw;
 
     // Required-ish high level knobs
+    @OneOf(value = {"public", "enterprise"}, message = "Tier must be 'public' or 'enterprise'")
     private final String tier;        // public | enterprise
+    
+    @OneOf(value = {"dev", "stage", "prod"}, message = "Environment must be 'dev', 'stage', or 'prod'")
     private final String env;         // dev | stage | prod
+    
     private final SecurityProfile securityProfile; // DEV | STAGING | PRODUCTION
     private final String region;      // default: us-east-1
 
@@ -80,12 +85,15 @@ public final class DeploymentContext {
     private final String fqdn;        // computed if not provided
 
     // Networking
+    @OneOf(value = {"public-no-nat", "private-with-nat"}, message = "Network mode must be 'public-no-nat' or 'private-with-nat'")
     private final String networkMode; // public-no-nat | private-with-nat
     private final boolean wafEnabled;
     private final boolean cloudfront;
+    @OneOf(value = {"alb", "nlb"}, message = "Load balancer type must be 'alb' or 'nlb'")
     private final String lbType;      // alb | nlb
 
     // Auth / SSO
+    @OneOf(value = {"none", "alb-oidc", "jenkins-oidc"}, message = "Auth mode must be 'none', 'alb-oidc', or 'jenkins-oidc'")
     private final String authMode;    // none | alb-oidc | jenkins-oidc
     private final String ssoInstanceArn;
     private final String ssoGroupId;

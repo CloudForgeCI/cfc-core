@@ -52,6 +52,9 @@ public final class SystemContext extends Construct {
 
   // ALB Properties
   public final Slot<ApplicationTargetGroup> albTargetGroup = new Slot<>();
+  public final Slot<Boolean> httpsTargetsAdded = new Slot<>();
+  public final Slot<Boolean> wired = new Slot<>();
+  public final Slot<Boolean> dnsRecordsCreated = new Slot<>();
   public final Slot<SecurityGroup> albSg = new Slot<>();
   public final Slot<ApplicationListener> http = new Slot<>();
 
@@ -222,7 +225,11 @@ public final class SystemContext extends Construct {
   public void executeDeferredActions() {
     LOG.info("*** SystemContext.executeDeferredActions(): Executing " + deferredActions.size() + " deferred actions ***");
     LOG.info("*** Deferred action keys: " + onceKeys + " ***");
-    for (Runnable action : deferredActions) {
+    // Create a copy to avoid ConcurrentModificationException
+    List<Runnable> actionsToExecute = new ArrayList<>(deferredActions);
+    // Clear the original list to prevent interference from new actions
+    deferredActions.clear();
+    for (Runnable action : actionsToExecute) {
       try {
         LOG.info("*** Executing deferred action ***");
         action.run();

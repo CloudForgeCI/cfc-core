@@ -4,6 +4,8 @@ import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.RemovalPolicy;
 
+// Note: TopologyType and RuntimeType are already imported via the interface package
+
 /**
  * Configuration interface for security profile settings.
  * Defines security best practices and compliance requirements for each environment.
@@ -94,6 +96,18 @@ public interface SecurityProfileConfiguration {
      * Whether NAT Gateway should be used for outbound internet access.
      */
     boolean isNatGatewayEnabled();
+    
+    /**
+     * Get the number of NAT gateways to create based on topology, runtime, and security profile.
+     * This method encapsulates all NAT gateway logic including network mode, security requirements,
+     * and topology-specific needs.
+     * 
+     * @param topology The deployment topology (JENKINS_SINGLE_NODE, JENKINS_SERVICE, etc.)
+     * @param runtime The runtime type (EC2, FARGATE)
+     * @param networkMode The network mode (public-no-nat, private-with-nat)
+     * @return The number of NAT gateways to create (0, 1, or 2)
+     */
+    int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode);
     
     /**
      * Whether WAF should be enabled for web application protection.

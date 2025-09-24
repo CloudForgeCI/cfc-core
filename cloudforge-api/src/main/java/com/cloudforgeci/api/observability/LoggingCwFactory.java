@@ -23,27 +23,51 @@ public class LoggingCwFactory extends BaseFactory {
     
     @Override
     public void create() {
-        // SecurityProfileConfiguration is now injected directly via annotation
-        LOG.info("LoggingCwFactory: Configuring CloudWatch logs for security profile: " + ctx.security);
+        try {
+            // SecurityProfileConfiguration is now injected directly via annotation
+            LOG.info("LoggingCwFactory: Starting create() method");
+            LOG.info("LoggingCwFactory: ctx is null: " + (ctx == null));
+            if (ctx != null) {
+                LOG.info("LoggingCwFactory: ctx.security is null: " + (ctx.security == null));
+                if (ctx.security != null) {
+                    LOG.info("LoggingCwFactory: ctx.security = " + ctx.security);
+                }
+            }
+            LOG.info("LoggingCwFactory: config is null: " + (config == null));
+            
+            if (config == null) {
+                LOG.severe("LoggingCwFactory: SecurityProfileConfiguration is null!");
+                throw new IllegalStateException("SecurityProfileConfiguration is null");
+            }
 
-        // Check if logs are already configured
-        if (ctx.logs.get().isPresent()) {
-            LOG.info("CloudWatch logs already configured, skipping");
-            return;
+            LOG.info("LoggingCwFactory: About to check if logs are already configured");
+            // Check if logs are already configured
+            if (ctx.logs.get().isPresent()) {
+                LOG.info("CloudWatch logs already configured, skipping");
+                return;
+            }
+
+            LOG.info("LoggingCwFactory: About to create LogGroup");
+            // Create log group with security profile-based settings
+            String securityProfileName = (ctx.security != null) ? ctx.security.name().toLowerCase() : "unknown";
+            LogGroup logGroup = LogGroup.Builder.create(this, "SecurityProfileLogs")
+                    .retention(config.getLogRetentionDays())
+                    .removalPolicy(config.getLogRemovalPolicy())
+                    .logGroupName("/aws/jenkins/" + securityProfileName)
+                    .build();
+
+            LOG.info("LoggingCwFactory: About to set logs in context");
+            ctx.logs.set(logGroup);
+            
+            LOG.info("CloudWatch logs configured for " + ctx.security + " profile: " +
+                    "retention=" + config.getLogRetentionDays() +
+                    ", removal=" + config.getLogRemovalPolicy());
+        } catch (Exception e) {
+            LOG.severe("LoggingCwFactory: Exception in create() method: " + e.getMessage());
+            LOG.severe("LoggingCwFactory: Exception type: " + e.getClass().getSimpleName());
+            e.printStackTrace();
+            throw e;
         }
-
-        // Create log group with security profile-based settings
-        LogGroup logGroup = LogGroup.Builder.create(this, "SecurityProfileLogs")
-                .retention(config.getLogRetentionDays())
-                .removalPolicy(config.getLogRemovalPolicy())
-                .logGroupName("/aws/jenkins/" + ctx.security.name().toLowerCase())
-                .build();
-
-        ctx.logs.set(logGroup);
-        
-        LOG.info("CloudWatch logs configured for " + ctx.security + " profile: " +
-                "retention=" + config.getLogRetentionDays() +
-                ", removal=" + config.getLogRemovalPolicy());
     }
 
 }

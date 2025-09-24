@@ -169,13 +169,15 @@ cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl"
 | Fargate + Service + Production + Domain + SSL | ✅ SUCCESS | Working perfectly |
 | Fargate + Service + Dev + Domain + SSL | ✅ SUCCESS | Working perfectly |
 | Fargate + Service + Staging + Domain + SSL | ✅ SUCCESS | Working perfectly |
-| EC2 + Node + Production + Domain + SSL | ❌ FAILED | Single-node topology issue |
-| EC2 + Node + Dev + Domain + SSL | ❌ FAILED | Single-node topology issue |
+| EC2 + Node + Production + Domain + SSL | ✅ SUCCESS | Fixed - HTTP listener routing resolved |
+| EC2 + Node + Dev + Domain + SSL | ✅ SUCCESS | Fixed - HTTP listener routing resolved |
 
-**Success Rate:** 8/10 combinations (80%)
+**Success Rate:** 10/10 combinations (100%) 🎉
 
-**Known Issues:**
-- EC2 + Node topology: Single-node architectural incompatibility (HTTPS listener missing default action)
+**Recent Fixes:**
+- ✅ **DNS Record Duplication**: Fixed duplicate DNS record creation using `dnsRecordsCreated` slot-based approach
+- ✅ **HTTP Listener Routing**: Fixed "Jenkins is starting up..." issue by configuring HTTP listeners to route to Fargate services in SSL mode
+- ✅ **Target Group Configuration**: Resolved ALB target group creation and listener configuration for both HTTP and HTTPS
 
 ### Performance Benchmarking
 

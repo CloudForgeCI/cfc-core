@@ -2,6 +2,8 @@ package com.cloudforgeci.api.core.security;
 
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
+import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforgeci.api.interfaces.RuntimeType;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -95,6 +97,15 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     @Override
     public boolean isNatGatewayEnabled() {
         return true; // Use private subnets for staging
+    }
+    
+    @Override
+    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
+        // Staging respects network mode for cost optimization
+        if ("private-with-nat".equals(networkMode)) {
+            return 2; // High availability for staging
+        }
+        return 0; // No NAT gateways for public subnets in staging
     }
     
     @Override

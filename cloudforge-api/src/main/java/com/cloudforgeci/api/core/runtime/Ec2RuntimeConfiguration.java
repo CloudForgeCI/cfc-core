@@ -61,6 +61,14 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
 
   @Override
   public void wire(SystemContext c) {
+    // Ensure this configuration only runs for EC2 runtime
+    if (c.runtime != RuntimeType.EC2) {
+      LOG.info("*** Ec2RuntimeConfiguration: Skipping wire() for runtime: " + c.runtime + " ***");
+      return;
+    }
+    
+    LOG.info("*** Ec2RuntimeConfiguration: Starting wire() for EC2 runtime ***");
+    
     // Inputs & flags
     final boolean ssl = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl());
     final String domain = norm(c.cfc != null ? c.cfc.domain() : null);

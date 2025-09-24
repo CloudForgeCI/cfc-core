@@ -2,6 +2,8 @@ package com.cloudforgeci.api.core.security;
 
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
+import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforgeci.api.interfaces.RuntimeType;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -95,6 +97,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     @Override
     public boolean isNatGatewayEnabled() {
         return true; // Always use private subnets for production
+    }
+    
+    @Override
+    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
+        // Production always requires NAT gateways for security
+        // Use 2 NAT gateways for high availability across AZs
+        return 2;
     }
     
     @Override

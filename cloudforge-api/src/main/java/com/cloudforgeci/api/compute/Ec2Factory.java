@@ -1,7 +1,7 @@
 package com.cloudforgeci.api.compute;
 
+import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -21,7 +21,6 @@ import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.UserData;
 
 import software.amazon.awscdk.services.iam.ManagedPolicy;
-import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.logs.LogGroup;
@@ -30,6 +29,45 @@ import software.constructs.Construct;
 
 import java.util.List;
 
+/**
+ * Factory for creating EC2-based Jenkins compute infrastructure.
+ * 
+ * <p>This factory creates and configures EC2 instances for Jenkins deployments,
+ * including auto-scaling groups, launch templates, and IAM roles. It respects
+ * the network mode configuration to place instances in appropriate subnets.</p>
+ * 
+ * <p><strong>Key Features:</strong></p>
+ * <ul>
+ *   <li>Auto-scaling groups with configurable min/max capacity</li>
+ *   <li>Launch templates with Jenkins pre-installed</li>
+ *   <li>EBS encryption and proper volume configuration</li>
+ *   <li>IAM roles with EFS access (when EFS is available)</li>
+ *   <li>CloudWatch logging integration</li>
+ *   <li>Network mode awareness (public vs private subnets)</li>
+ * </ul>
+ * 
+ * <p><strong>Storage Options:</strong></p>
+ * <ul>
+ *   <li><strong>EFS:</strong> When EFS is available, instances mount EFS for persistent storage</li>
+ *   <li><strong>EBS:</strong> When EFS is not available, instances use EBS volumes</li>
+ * </ul>
+ * 
+ * <p><strong>Example Usage:</strong></p>
+ * <pre>{@code
+ * Ec2Factory factory = new Ec2Factory(scope, "JenkinsEC2");
+ * factory.create(ctx);
+ * 
+ * // Access created resources
+ * AutoScalingGroup asg = ctx.asg.get().orElseThrow();
+ * Role instanceRole = ctx.ec2InstanceRole.get().orElseThrow();
+ * }</pre>
+ * 
+ * @author CloudForgeCI
+ * @since 1.0.0
+ * @see SystemContext
+ * @see ScalingFactory
+ * @see DeploymentContext#networkMode()
+ */
 public class Ec2Factory extends Construct {
   private AutoScalingGroup asg;
 
@@ -38,6 +76,30 @@ public class Ec2Factory extends Construct {
     SystemContext ctx = SystemContext.of(this);
   }
 
+  /**
+   * Creates the complete EC2-based Jenkins infrastructure.
+   * 
+   * <p>This method orchestrates the creation of all EC2-related resources:</p>
+   * <ul>
+   *   <li>IAM role for EC2 instances with appropriate permissions</li>
+   *   <li>CloudWatch log group for Jenkins logs</li>
+   *   <li>User data script for Jenkins installation and configuration</li>
+   *   <li>Launch template with Jenkins pre-installed</li>
+   *   <li>Auto-scaling group with configurable capacity</li>
+   *   <li>Auto-scaling policies and CloudWatch alarms</li>
+   * </ul>
+   * 
+   * <p>The method respects the network mode setting to place instances in
+   * appropriate subnets (public vs private) and configures storage based
+   * on EFS availability.</p>
+   * 
+   * @param ctx System context containing VPC, security groups, and other resources
+   * @throws IllegalStateException if required resources are not available in context
+   * @see SystemContext
+   * @see DeploymentContext#networkMode()
+   * @see DeploymentContext#minInstanceCapacity()
+   * @see DeploymentContext#maxInstanceCapacity()
+   */
   public void create(final SystemContext ctx) {
     // Create IAM role for EC2 instances
     Role ec2Role = createInstanceRole(ctx);
@@ -73,19 +135,7 @@ public class Ec2Factory extends Construct {
 
     Role role = roleBuilder.build();
     
-    // Add EFS permissions if EFS is available
-    if (ctx.efs.get().isPresent()) {
-      role.addToPolicy(PolicyStatement.Builder.create()
-              .sid("EfsClientAccess")
-              .actions(List.of(
-                      "elasticfilesystem:ClientMount",
-                      "elasticfilesystem:ClientWrite",
-                      "elasticfilesystem:DescribeMountTargets",
-                      "elasticfilesystem:DescribeFileSystems"
-              ))
-              .resources(List.of(ctx.efs.get().orElseThrow().getFileSystemArn()))
-              .build());
-    }
+    // Note: EFS permissions are handled by IAMRules based on security profile
     
     return role;
   }
@@ -201,9 +251,13 @@ public class Ec2Factory extends Construct {
     int maxCapacity = ctx.cfc.maxInstanceCapacity() != null ? ctx.cfc.maxInstanceCapacity() : 3;
     int desiredCapacity = Math.max(minCapacity, Math.min(maxCapacity, minCapacity)); // Start with minimum
     
+    // Determine subnet type based on network mode
+    SubnetType subnetType = "public-no-nat".equals(ctx.cfc.networkMode()) ? 
+            SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
+    
     return AutoScalingGroup.Builder.create(this, "JenkinsAsg")
             .vpc(ctx.vpc.get().orElseThrow())
-            .vpcSubnets(SubnetSelection.builder().subnetType(SubnetType.PUBLIC).build())
+            .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
             .minCapacity(minCapacity)
             .desiredCapacity(desiredCapacity)
             .maxCapacity(maxCapacity)

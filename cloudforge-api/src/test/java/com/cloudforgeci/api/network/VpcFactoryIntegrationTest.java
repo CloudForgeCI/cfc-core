@@ -32,14 +32,16 @@ public class VpcFactoryIntegrationTest {
     @Test
     void createsVpcWithAllSecurityProfiles() {
         SecurityProfile[] profiles = {SecurityProfile.DEV, SecurityProfile.STAGING, SecurityProfile.PRODUCTION};
+        int[] expectedNatGateways = {0, 0, 2}; // DEV=0, STAGING=0 (public-no-nat), PRODUCTION=2 (always)
         
-        for (SecurityProfile profile : profiles) {
+        for (int i = 0; i < profiles.length; i++) {
+            SecurityProfile profile = profiles[i];
             TestInfrastructureBuilder builder = new TestInfrastructureBuilder("VpcTest" + profile, profile, RuntimeType.FARGATE);
             builder.createCompleteInfrastructure();
             
             Template template = Template.fromStack(builder.getStack());
             template.resourceCountIs("AWS::EC2::VPC", 1);
-            template.resourceCountIs("AWS::EC2::NatGateway", 0);
+            template.resourceCountIs("AWS::EC2::NatGateway", expectedNatGateways[i]);
             template.resourceCountIs("AWS::EC2::Subnet", 4);
         }
     }

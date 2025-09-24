@@ -1,2 +1,48 @@
+# CDK artifacts (contains AWS account numbers and sensitive info)
 cdk.out/
 cdk.context.json
+cdk.json
+
+# CDK output and timing files
+cdk-output.log
+synth_times.txt
+cdktf.out/
+
+# AWS credentials and config files
+.aws/
+aws-credentials.json
+aws-config.json
+credentials
+config
+
+# Environment files with secrets
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+
+# Log files that might contain sensitive info
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*.orig

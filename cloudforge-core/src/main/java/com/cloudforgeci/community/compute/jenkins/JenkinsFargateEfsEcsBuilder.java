@@ -62,6 +62,7 @@ import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 import java.util.Arrays;
 import java.util.List;
 
+@Deprecated(forRemoval = true)
 public class JenkinsFargateEfsEcsBuilder {
 
     /** Result now exposes FargateService (not the ecs-patterns wrapper). */
@@ -186,14 +187,18 @@ public class JenkinsFargateEfsEcsBuilder {
                 .readOnly(false)
                 .build());
 
+        // Determine subnet type and public IP assignment based on network mode
+        boolean assignPublicIp = "public-no-nat".equals(cfc.networkMode());
+        SubnetType subnetType = assignPublicIp ? SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
+        
         // Fargate service
         FargateService service = FargateService.Builder.create(stack, id + "Service")
                 .cluster(cluster)
                 .taskDefinition(taskDef)
-                .assignPublicIp(true)
+                .assignPublicIp(assignPublicIp)
                 .securityGroups(Arrays.asList(svcSg))
                 .desiredCount(1)
-                .vpcSubnets(SubnetSelection.builder().subnetType(SubnetType.PUBLIC).build())
+                .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
                 .build();
 
         ApplicationLoadBalancer alb = null;

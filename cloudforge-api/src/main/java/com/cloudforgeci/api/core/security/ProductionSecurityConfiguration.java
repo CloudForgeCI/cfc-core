@@ -1,5 +1,6 @@
 package com.cloudforgeci.api.core.security;
 
+import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityConfiguration;
@@ -147,24 +148,12 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         });
 
         // SSL Configuration - centralized SSL handling for all topologies
-        // Create HTTPS listener when ALB, SSL enabled, and certificate are available
+        // HTTPS listener creation is handled by runtime configurations (Ec2RuntimeConfiguration, FargateRuntimeConfiguration)
+        // This ensures proper separation of concerns and avoids duplicate listener creation
         whenBoth(c.alb, c.sslEnabled, (alb, sslEnabled) -> {
             LOG.info("*** ProductionSecurityConfiguration: ALB and SSL enabled detected ***");
             if (sslEnabled) {
-                LOG.info("*** ProductionSecurityConfiguration: SSL is enabled, checking for certificate and target group ***");
-                whenBoth(c.cert, c.albTargetGroup, (cert, targetGroup) -> {
-                    LOG.info("*** ProductionSecurityConfiguration: Creating HTTPS listener with certificate and target group ***");
-                    // Create HTTPS listener with certificate and target group
-                    var https = alb.addListener("Https", 
-                        software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps.builder()
-                            .port(443)
-                            .certificates(java.util.List.of(software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate.fromCertificateManager(cert)))
-                            .defaultAction(software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction.forward(
-                                java.util.List.of(targetGroup)))
-                            .build());
-                    c.https.set(https);
-                    LOG.info("*** ProductionSecurityConfiguration: HTTPS listener created and set successfully ***");
-                });
+                LOG.info("*** ProductionSecurityConfiguration: SSL is enabled - HTTPS listener will be created by runtime configuration ***");
                 
                 // Configure HTTP listener to redirect to HTTPS when SSL is enabled
                 whenBoth(c.httpRedirectEnabled, c.http, (httpRedirectEnabled, httpListener) -> {

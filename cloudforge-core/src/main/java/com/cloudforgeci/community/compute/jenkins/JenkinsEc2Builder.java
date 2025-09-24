@@ -41,6 +41,7 @@ import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 
 import java.util.Arrays;
 
+@Deprecated(forRemoval = true)
 public class JenkinsEc2Builder {
 
     public static class Result {
@@ -78,12 +79,16 @@ public class JenkinsEc2Builder {
                         ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
                 )).build();
 
+        // Determine subnet type based on network mode
+        SubnetType subnetType = "public-no-nat".equals(cfc.networkMode()) ? 
+                SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
+
         Instance instance = Instance.Builder.create(stack, id + "Instance")
                 .vpc(vpc)
                 .instanceType(InstanceType.of(InstanceClass.T2, InstanceSize.MICRO))
                 .machineImage(MachineImage.latestAmazonLinux2023())
                 .securityGroup(sg).role(role).requireImdsv2(true)
-                .vpcSubnets(SubnetSelection.builder().subnetType(SubnetType.PUBLIC).build())
+                .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
                 .build();
 
         software.amazon.awscdk.Tags.of(instance).add("backup", "true");
