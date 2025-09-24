@@ -93,16 +93,12 @@ echo "# synth timings (seconds) - $test_name" > "$OUTFILE"
 for i in $(seq 1 $RUNS); do
     echo -n "Run $i/$RUNS... "
     
-    start=$(date +%s.%N)
+    start=$(python3 -c 'import time; print(time.perf_counter())')
     
     # Run the CDK synth command
     if cdk synth -c "cfc=$test_config" > /dev/null 2>&1; then
-        end=$(date +%s.%N)
-        elapsed=$(python3 - <<PY
-s=${end}; e=${start}
-print(float(s)-float(e))
-PY
-)
+        end=$(python3 -c 'import time; print(time.perf_counter())')
+        elapsed=$(python3 -c "print(${end} - ${start})")
         printf "%.6f\n" "$elapsed" | tee -a "$OUTFILE"
         echo "✅"
     else
