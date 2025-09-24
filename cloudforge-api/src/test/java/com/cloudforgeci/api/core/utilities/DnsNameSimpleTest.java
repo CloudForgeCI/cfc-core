@@ -115,7 +115,10 @@ class DnsNameSimpleTest {
         @Test
         @DisplayName("Should reject total length longer than 253 characters")
         void shouldRejectTotalLengthTooLong() {
-            String longDomain = "a".repeat(250) + ".com"; // 254 chars total
+            // Build 63.63.63.62 (with 3 dots) = 254 total characters
+            String l63 = "a".repeat(63);
+            String l62 = "a".repeat(62);
+            String longDomain = String.join(".", l63, l63, l63, l62); // 254 chars total
             assertFalse(validator.isValid(longDomain, null));
         }
     }
