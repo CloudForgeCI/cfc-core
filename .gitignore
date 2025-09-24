@@ -12,13 +12,11 @@ pom.xml.versionsBackup
 
 # OS files
 .DS_Store
-Thumbs.db
-
 # CDK artifacts (contains AWS account numbers and sensitive info)
 /**/cdk.out/
 /**/cdk.context.json
-/**/cdk.json
-
+## keep cdk.json tracked (CDK app config, not sensitive)
+## /**/cdk.json  <-- do NOT ignore
 # AWS credentials and config files
 .aws/
 aws-credentials.json
