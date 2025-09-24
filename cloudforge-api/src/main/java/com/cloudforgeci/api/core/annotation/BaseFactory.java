@@ -28,22 +28,13 @@ public abstract class BaseFactory extends Construct {
      */
     public BaseFactory(Construct scope, String id) {
         super(scope, id);
-        
-        System.out.println("BaseFactory: Constructor called for " + id);
-        System.out.println("BaseFactory: Constructor completed successfully for " + id);
-        
+
         // Automatically inject contexts if SystemContext is available
         try {
-            // Look for SystemContext in the parent hierarchy, not as a child
-            System.out.println("BaseFactory: About to call SystemContext.of() for " + id);
             SystemContext systemContext = SystemContext.of(this);
-            System.out.println("BaseFactory: SystemContext.of() successful for " + id);
             DeploymentContext deploymentContext = DeploymentContext.from(this);
-            System.out.println("BaseFactory: DeploymentContext.from() successful for " + id);
             ContextInjector.injectContexts(this, systemContext, deploymentContext);
-            System.out.println("BaseFactory: Context injection successful for " + id);
         } catch (IllegalStateException e) {
-            System.out.println("BaseFactory: Context injection failed for " + id + ": " + e.getMessage());
             // SystemContext not started yet - contexts will be injected later
             // This is normal for factories created before SystemContext.start()
         }
