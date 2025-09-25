@@ -60,6 +60,9 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // Configure observability based on security profile
         configureObservability(c);
         
+        // Create hosted zone if domain is provided
+        createHostedZone(c);
+        
         // Validate required dependencies before proceeding
         validateDependencies(c);
         
@@ -351,6 +354,52 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         tryRun.run();
     }
     
+    /**
+     * Create or lookup hosted zone if domain is provided.
+     */
+    private void createHostedZone(SystemContext c) {
+        // Create or lookup hosted zone if domain is provided
+        if (c.cfc.domain() != null && !c.cfc.domain().isBlank()) {
+            LOG.info("ProductionSecurityConfiguration: Setting up hosted zone for domain: " + c.cfc.domain());
+            if (c.zone.get().isPresent()) {
+                LOG.info("ProductionSecurityConfiguration: Hosted zone already exists");
+                return; // Already created
+            }
+            
+            if (c.cfc.createZone()) {
+                // Create a new hosted zone when createZone=true
+                LOG.info("ProductionSecurityConfiguration: Creating new hosted zone (createZone=true)");
+                software.amazon.awscdk.services.route53.HostedZone zone = 
+                    software.amazon.awscdk.services.route53.HostedZone.Builder.create((software.constructs.Construct)c.getNode().getScope(), "ProductionZone")
+                        .zoneName(c.cfc.domain())
+                        .build();
+                c.zone.set(zone);
+                LOG.info("ProductionSecurityConfiguration: New hosted zone created and set in context");
+            } else {
+                // Use existing hosted zone when createZone=false
+                LOG.info("ProductionSecurityConfiguration: Looking up existing hosted zone (createZone=false)");
+                software.amazon.awscdk.services.route53.IHostedZone zone = 
+                    software.amazon.awscdk.services.route53.HostedZone.fromLookup((software.constructs.Construct)c.getNode().getScope(), "ProductionZoneLookup", 
+                        software.amazon.awscdk.services.route53.HostedZoneProviderProps.builder()
+                            .domainName(c.cfc.domain())
+                            .build());
+                c.zone.set(zone);
+                LOG.info("ProductionSecurityConfiguration: Existing hosted zone looked up and set in context");
+            }
+        }
+    }
+    
+    /**
+     * Check if we're in a test environment.
+     */
+    private boolean isTestEnvironment() {
+        // Check if we're running in a test environment
+        String testEnv = System.getProperty("test.environment");
+        return "true".equalsIgnoreCase(testEnv) || 
+               System.getProperty("java.class.path").contains("junit") ||
+               System.getProperty("java.class.path").contains("test");
+    }
+
     @FunctionalInterface
     private interface Function4<A, B, C, D, R> {
         R apply(A a, B b, C c, D d);

@@ -27,7 +27,7 @@ package com.cloudforgeci.api.core.annotation;
  * 
  * AFTER (New Pattern):
  * ```java
- * public class VpcFactory extends AnnotatedFactory {
+ * public class VpcFactory extends BaseFactory {
  *   public VpcFactory(Construct scope, String id) {
  *     super(scope, id);
  *   }
@@ -57,9 +57,9 @@ package com.cloudforgeci.api.core.annotation;
  * 
  * USAGE PATTERNS:
  * 
- * 1. Basic Factory (extends AnnotatedFactory):
+ * 1. Basic Factory (extends BaseFactory):
  * ```java
- * public class MyFactory extends AnnotatedFactory {
+ * public class MyFactory extends BaseFactory {
  *   public MyFactory(Construct scope, String id) {
  *     super(scope, id);
  *   }

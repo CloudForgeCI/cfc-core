@@ -83,7 +83,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "logs:PutRetentionPolicy"
                 ))
                 .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/ec2/jenkins*"
+                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/jenkins*"
                 ))
                 .build());
 

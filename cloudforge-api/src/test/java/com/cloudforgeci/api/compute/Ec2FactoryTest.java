@@ -36,12 +36,14 @@ public class Ec2FactoryTest {
     alb.create();
     
     EfsFactory efs = new EfsFactory(stack, "Efs");
-    efs.create(ctx);
+    efs.injectContexts(); // Manual injection after SystemContext.start()
+    efs.create();
     
     new FargateFactory(stack, "Ecs", new FargateFactory.Props(cfc));
     
     Ec2Factory ec2 = new Ec2Factory(stack, "Ec2");
-    ec2.create(ctx);
+    ec2.injectContexts(); // Manual injection after SystemContext.start()
+    ec2.create();
     
     Template t = Template.fromStack(stack);
     t.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 1);

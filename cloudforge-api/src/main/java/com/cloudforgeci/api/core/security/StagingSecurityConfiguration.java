@@ -58,6 +58,9 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
         // Configure observability based on security profile
         configureObservability(c);
         
+        // Create hosted zone if domain is provided
+        createHostedZone(c);
+        
         // Staging security settings - moderate restrictions
         
         // Instance security group - only for EC2 runtime
@@ -199,6 +202,52 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
         if (profileConfig.isWafEnabled()) {
             LOG.info("WAF enabled for STAGING profile");
         }
+    }
+
+    /**
+     * Create or lookup hosted zone if domain is provided.
+     */
+    private void createHostedZone(SystemContext c) {
+        // Create or lookup hosted zone if domain is provided
+        if (c.cfc.domain() != null && !c.cfc.domain().isBlank()) {
+            LOG.info("StagingSecurityConfiguration: Setting up hosted zone for domain: " + c.cfc.domain());
+            if (c.zone.get().isPresent()) {
+                LOG.info("StagingSecurityConfiguration: Hosted zone already exists");
+                return; // Already created
+            }
+            
+            if (c.cfc.createZone()) {
+                // Create a new hosted zone when createZone=true
+                LOG.info("StagingSecurityConfiguration: Creating new hosted zone (createZone=true)");
+                software.amazon.awscdk.services.route53.HostedZone zone = 
+                    software.amazon.awscdk.services.route53.HostedZone.Builder.create((software.constructs.Construct)c.getNode().getScope(), "StagingZone")
+                        .zoneName(c.cfc.domain())
+                        .build();
+                c.zone.set(zone);
+                LOG.info("StagingSecurityConfiguration: New hosted zone created and set in context");
+            } else {
+                // Use existing hosted zone when createZone=false
+                LOG.info("StagingSecurityConfiguration: Looking up existing hosted zone (createZone=false)");
+                software.amazon.awscdk.services.route53.IHostedZone zone = 
+                    software.amazon.awscdk.services.route53.HostedZone.fromLookup((software.constructs.Construct)c.getNode().getScope(), "StagingZoneLookup", 
+                        software.amazon.awscdk.services.route53.HostedZoneProviderProps.builder()
+                            .domainName(c.cfc.domain())
+                            .build());
+                c.zone.set(zone);
+                LOG.info("StagingSecurityConfiguration: Existing hosted zone looked up and set in context");
+            }
+        }
+    }
+    
+    /**
+     * Check if we're in a test environment.
+     */
+    private boolean isTestEnvironment() {
+        // Check if we're running in a test environment
+        String testEnv = System.getProperty("test.environment");
+        return "true".equalsIgnoreCase(testEnv) || 
+               System.getProperty("java.class.path").contains("junit") ||
+               System.getProperty("java.class.path").contains("test");
     }
 
     private static <A,B> void whenBoth(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b, 

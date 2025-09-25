@@ -36,10 +36,12 @@ public class ScalingFactoryTest {
     alb.create();
     
     EfsFactory efs = new EfsFactory(stack, "Efs");
-    efs.create(ctx);
+    efs.injectContexts(); // Manual injection after SystemContext.start()
+    efs.create();
     
     Ec2Factory ec2 = new Ec2Factory(stack, "Ec2");
-    ec2.create(ctx);
+    ec2.injectContexts(); // Manual injection after SystemContext.start()
+    ec2.create();
     
     new ScalingFactory(stack, "Scaling");
     Template t = Template.fromStack(stack);

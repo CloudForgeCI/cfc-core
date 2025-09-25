@@ -101,8 +101,11 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     
     @Override
     public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
-        // Production always requires NAT gateways for security
-        // Use 2 NAT gateways for high availability across AZs
+        // Production respects network mode but defaults to NAT gateways for security
+        if ("public-no-nat".equals(networkMode)) {
+            return 0; // No NAT gateways for public subnets when explicitly requested
+        }
+        // Use 2 NAT gateways for high availability across AZs for private subnets
         return 2;
     }
     

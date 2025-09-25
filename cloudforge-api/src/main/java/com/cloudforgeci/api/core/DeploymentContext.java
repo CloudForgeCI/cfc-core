@@ -42,14 +42,24 @@ import java.util.Map;
  *   lbType:          "alb" | "nlb"                            (default: alb)
  *   minInstanceCapacity: default 1
  *   maxInstanceCapacity: default 3
- *   cpuTargetUtilization: default 0
+ *   cpuTargetUtilization: default 60
  *   cpu:             integer vCPU units (Fargate taskDef)     (default: 1024)
  *   memory:          integer MiB                              (default: 2048)
+ *   instanceType:    EC2 instance type (e.g., "t3.micro")    (default: t3.micro)
+ *   enableMonitoring: enable CloudWatch monitoring             (default: true)
+ *   enableEncryption: enable encryption at rest               (default: true)
+ *   logRetentionDays: CloudWatch log retention in days        (default: 7)
+ *   healthCheckGracePeriod: health check grace period (seconds) (default: 300)
+ *   healthCheckInterval: health check interval (seconds)       (default: 30)
+ *   healthCheckTimeout: health check timeout (seconds)         (default: 5)
+ *   healthyThreshold: healthy threshold count                  (default: 2)
+ *   unhealthyThreshold: unhealthy threshold count              (default: 3)
  *   deploymentId:    unique identifier for this deployment    (optional)
  *   deploymentVersion: version tag for this deployment        (optional)
  *   environment:     "dev" | "staging" | "prod"               (default: dev)
  *   region:          AWS region override                       (optional)
  *   tags:            JSON object of additional tags            (optional)
+ *   stackName:       CDK stack name                           (optional)
  *
  * Legacy one-field combos (still accepted, mapped to runtime+topology):
  *   runtime: "jenkins-fargate" -> topology=JENKINS_SERVICE, runtime=FARGATE
@@ -109,6 +119,19 @@ public final class DeploymentContext {
     private final Integer minInstanceCapacity;
 
     private final boolean enableFlowlogs;
+    
+    // Advanced Configuration
+    private final boolean enableMonitoring;
+    private final boolean enableEncryption;
+    private final Integer logRetentionDays;
+    private final String instanceType;
+    
+    // Health Check Configuration
+    private final Integer healthCheckGracePeriod;
+    private final Integer healthCheckInterval;
+    private final Integer healthCheckTimeout;
+    private final Integer healthyThreshold;
+    private final Integer unhealthyThreshold;
 
     // Jenkins container size
     private final int cpu;
@@ -116,6 +139,7 @@ public final class DeploymentContext {
 
     // Derived conveniences
     private final boolean enableSsl;
+    private final boolean createZone;
 
     // New canonical types
     private final RuntimeType runtime;
@@ -130,6 +154,7 @@ public final class DeploymentContext {
     private final String deploymentVersion;
     private final String environment;
     private final String tags;
+    private final String stackName;
 
     protected DeploymentContext(Map<String, Object> raw) {
         this.raw = Collections.unmodifiableMap(new LinkedHashMap<>(raw));
@@ -164,16 +189,30 @@ public final class DeploymentContext {
         this.memory = intval("memory", 2048);
 
         this.minInstanceCapacity = intval("minInstanceCapacity", 1);
-        this.maxInstanceCapacity = intval("maxInstanceCapacity", 3);
+        this.maxInstanceCapacity = intval("maxInstanceCapacity", 1);
         this.cpuTargetUtilization = intval("cpuTargetUtilization", 60);
 
         this.enableFlowlogs = bool("enableFlowlogs", false);
+        
+        // Advanced Configuration
+        this.enableMonitoring = bool("enableMonitoring", true);
+        this.enableEncryption = bool("enableEncryption", true);
+        this.logRetentionDays = intval("logRetentionDays", 7);
+        this.instanceType = str("instanceType", "t3.micro");
+        
+        // Health Check Configuration
+        this.healthCheckGracePeriod = intval("healthCheckGracePeriod", 300);
+        this.healthCheckInterval = intval("healthCheckInterval", 30);
+        this.healthCheckTimeout = intval("healthCheckTimeout", 5);
+        this.healthyThreshold = intval("healthyThreshold", 2);
+        this.unhealthyThreshold = intval("unhealthyThreshold", 3);
 
         // Additional deployment tracking fields
         this.deploymentId = str("deploymentId", null);
         this.deploymentVersion = str("deploymentVersion", null);
         this.environment = str("environment", "dev");
         this.tags = str("tags", null);
+        this.stackName = str("stackName", null);
 
         // Legacy/alias inputs
         String runtimeAlias = str("runtime", "fargate");
@@ -187,6 +226,9 @@ public final class DeploymentContext {
 
         // SSL default remains explicit; do not silently infer on domain unless asked to
         this.enableSsl = bool("enableSsl", false);
+        
+        // Zone creation flag - only create hosted zones when explicitly requested
+        this.createZone = bool("createZone", false);
 
         validateOrThrow();
     }
@@ -231,6 +273,19 @@ public final class DeploymentContext {
     public Integer minInstanceCapacity() { return minInstanceCapacity; }
 
     public boolean enableFlowlogs() { return enableFlowlogs; }
+    
+    // Advanced Configuration
+    public boolean enableMonitoring() { return enableMonitoring; }
+    public boolean enableEncryption() { return enableEncryption; }
+    public Integer logRetentionDays() { return logRetentionDays; }
+    public String instanceType() { return instanceType; }
+    
+    // Health Check Configuration
+    public Integer healthCheckGracePeriod() { return healthCheckGracePeriod; }
+    public Integer healthCheckInterval() { return healthCheckInterval; }
+    public Integer healthCheckTimeout() { return healthCheckTimeout; }
+    public Integer healthyThreshold() { return healthyThreshold; }
+    public Integer unhealthyThreshold() { return unhealthyThreshold; }
 
     public String authMode() { return authMode; }
     public String ssoInstanceArn() { return ssoInstanceArn; }
@@ -242,6 +297,7 @@ public final class DeploymentContext {
     public String deploymentVersion() { return deploymentVersion; }
     public String environment() { return environment; }
     public String tags() { return tags; }
+    public String stackName() { return stackName; }
 
     public String artifactsBucket() { return artifactsBucket; }
     public String artifactsPrefix() { return artifactsPrefix; }
@@ -250,6 +306,7 @@ public final class DeploymentContext {
     public int memory() { return memory; }
 
     public boolean enableSsl() { return enableSsl; }
+    public boolean createZone() { return createZone; }
 
     /** Raw immutable view of all context keys. */
     public Map<String, Object> raw() { return raw; }
@@ -404,6 +461,13 @@ public final class DeploymentContext {
     }
 
     private int intval(String key, int def) {
+        Object v = raw.get(key);
+        if (v == null) return def;
+        if (v instanceof Number) return ((Number) v).intValue();
+        try { return Integer.parseInt(v.toString().trim()); } catch (Exception e) { return def; }
+    }
+
+    private Integer intval(String key, Integer def) {
         Object v = raw.get(key);
         if (v == null) return def;
         if (v instanceof Number) return ((Number) v).intValue();

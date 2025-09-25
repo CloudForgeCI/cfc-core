@@ -99,13 +99,15 @@ public class TestInfrastructureBuilder {
     
     public TestInfrastructureBuilder createEfs() {
         EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.create(ctx);
+        efsFactory.injectContexts(); // Manual injection after SystemContext.start()
+        efsFactory.create();
         return this;
     }
     
     public TestInfrastructureBuilder createEc2() {
         Ec2Factory ec2Factory = new Ec2Factory(stack, "Ec2");
-        ec2Factory.create(ctx);
+        ec2Factory.injectContexts(); // Manual injection after SystemContext.start()
+        ec2Factory.create();
         return this;
     }
     
@@ -150,6 +152,8 @@ public class TestInfrastructureBuilder {
     public TestInfrastructureBuilder createFargate() {
         // Create Fargate factory (which will create the container internally)
         FargateFactory fargateFactory = new FargateFactory(stack, "Fargate", new FargateFactory.Props(cfc));
+        fargateFactory.injectContexts(); // Manual injection after SystemContext.start()
+        fargateFactory.create(); // Call create() to populate fargateTaskDef and fargateService slots
         return this;
     }
     

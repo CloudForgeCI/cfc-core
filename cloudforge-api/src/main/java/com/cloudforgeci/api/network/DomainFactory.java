@@ -6,6 +6,9 @@ import software.amazon.awscdk.services.route53.HostedZoneProviderProps;
 import software.amazon.awscdk.services.route53.IHostedZone;
 import software.constructs.Construct;
 
+import java.util.logging.Logger;
+
+
 /**
  * Domain Factory using annotation-based context injection.
  * This demonstrates how to use the injected DeploymentContext (cfc) variable.
@@ -16,28 +19,27 @@ public class DomainFactory extends BaseFactory {
         super(scope, id);
     }
 
+
     @Override
     public void create() {
         // Use the injected DeploymentContext (cfc) directly
         String domainName = cfc.domain();
         
         if (domainName != null && !domainName.isBlank()) {
-            // Create hosted zone lookup
             IHostedZone zone = createHostedZone(domainName);
             ctx.zone.set(zone);
         }
     }
 
     private IHostedZone createHostedZone(String domainName) {
-        // Check if we're in a test environment
-        if (isTestEnvironment()) {
-            // Create a real hosted zone resource for testing
+        if (cfc.createZone() || isTestEnvironment()) {
+            // Create a new hosted zone resource when createZone=true or in test environment
             return HostedZone.Builder.create(this, getNode().getId() + "Zone")
                     .zoneName(domainName)
                     .build();
         } else {
-            // Use real AWS lookup for production deployments
-            // This will find the existing hosted zone for the domain
+
+            // Use existing hosted zone lookup when createZone=false (normal behavior)
             return HostedZone.fromLookup(this, getNode().getId() + "Zone",
                     HostedZoneProviderProps.builder()
                             .privateZone(false)
@@ -47,8 +49,7 @@ public class DomainFactory extends BaseFactory {
     }
     
     private boolean isTestEnvironment() {
-        // Only create new hosted zones in actual test environments
-        // Check for Maven test execution or JUnit test context
+        // Check for test environment indicators
         return System.getProperty("java.class.path").contains("test") ||
                System.getProperty("maven.test.skip") != null ||
                System.getProperty("surefire.test.class.path") != null ||
@@ -57,4 +58,5 @@ public class DomainFactory extends BaseFactory {
                    .anyMatch(element -> element.getClassName().contains("junit") || 
                                        element.getClassName().contains("test"));
     }
+    
 }

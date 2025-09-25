@@ -54,18 +54,48 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
 
   @Override
   public void wire(SystemContext c) {
+    System.out.println("*** DEBUG: JenkinsSingleNodeTopologyConfiguration.wire() called ***");
+    System.out.println("*** DEBUG: Zone present: " + c.zone.get().isPresent() + " ***");
+    System.out.println("*** DEBUG: ALB present: " + c.alb.get().isPresent() + " ***");
+    System.out.println("*** DEBUG: Domain: " + c.cfc.domain() + " ***");
+    System.out.println("*** DEBUG: Subdomain: " + c.cfc.subdomain() + " ***");
+    
+    // Check if we have domain configuration
+    if (c.cfc.domain() == null || c.cfc.domain().isBlank()) {
+      System.out.println("*** DEBUG: No domain configured, skipping DNS record creation ***");
+      return;
+    }
+    
     // Route53 A + AAAA aliases to ALB (only if zone + alb present)
     whenBoth(c.zone, c.alb, (zone, alb) -> {
-      String record = c.cfc.fqdn();
-      if (record == null || record.isBlank()) {
-        record = c.cfc.subdomain() == null ? "" : c.cfc.subdomain();
+      // Check if DNS records have already been created (inside the callback to prevent multiple executions)
+      if (c.dnsRecordsCreated.get().isPresent()) {
+        System.out.println("*** DEBUG: DNS records already created, skipping ***");
+        return;
       }
+      
+      System.out.println("*** DEBUG: Creating DNS records for zone: " + zone.getZoneName() + " ***");
+      
+      // Use subdomain for DNS record name, not the full FQDN
+      String recordName = c.cfc.subdomain();
+      if (recordName == null || recordName.isBlank()) {
+        System.out.println("*** DEBUG: No subdomain provided, skipping DNS record creation ***");
+        return;
+      }
+      
+      System.out.println("*** DEBUG: DNS record name: " + recordName + " ***");
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
       new ARecord(c, "SingleNodeAlbAliasA_" + c.topology + "_" + c.runtime, ARecordProps.builder()
-              .zone(zone).recordName(record).target(target).build());
+              .zone(zone).recordName(recordName).target(target).build());
       new AaaaRecord(c, "SingleNodeAlbAliasAAAA_" + c.topology + "_" + c.runtime, AaaaRecordProps.builder()
-              .zone(zone).recordName(record).target(target).build());
+              .zone(zone).recordName(recordName).target(target).build());
+      
+      System.out.println("*** DEBUG: DNS records created successfully ***");
+      
+      // Set the DNS records created flag to prevent duplicate execution
+      c.dnsRecordsCreated.set(true);
+      System.out.println("*** DEBUG: dnsRecordsCreated set to true ***");
     });
 
   }

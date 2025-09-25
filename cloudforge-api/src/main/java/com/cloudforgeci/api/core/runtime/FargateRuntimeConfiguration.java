@@ -128,17 +128,22 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
         httpConfigured[0] = true;
         LOG.info("*** FargateRuntimeConfiguration: Configuring HTTP listener for Fargate service ***");
         
-        // Create a target group for the Fargate service
+        // Create a target group for the Fargate service with configurable health check settings
+        int interval = c.cfc.healthCheckInterval() != null ? c.cfc.healthCheckInterval() : 30;
+        int timeout = c.cfc.healthCheckTimeout() != null ? c.cfc.healthCheckTimeout() : 5;
+        int healthyThreshold = c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2;
+        int unhealthyThreshold = c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3;
+        
         ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "FargateHttpTargetGroup")
                 .vpc(c.vpc.get().orElseThrow())
                 .port(8080)
                 .protocol(ApplicationProtocol.HTTP)
                 .targets(java.util.List.of(svc))
                 .healthCheck(HealthCheck.builder()
-                        .path("/").healthyHttpCodes("200-399")
-                        .interval(software.amazon.awscdk.Duration.seconds(30))
-                        .timeout(software.amazon.awscdk.Duration.seconds(10))
-                        .healthyThresholdCount(2).unhealthyThresholdCount(10)
+                        .path("/login").healthyHttpCodes("200-299")
+                        .interval(software.amazon.awscdk.Duration.seconds(interval))
+                        .timeout(software.amazon.awscdk.Duration.seconds(timeout))
+                        .healthyThresholdCount(healthyThreshold).unhealthyThresholdCount(unhealthyThreshold)
                         .build())
                 .build();
         
@@ -205,18 +210,23 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       httpsConfigured[0] = true;
       LOG.info("*** FargateRuntimeConfiguration: Configuring HTTPS listener for Fargate service with certificate: " + cert.getCertificateArn() + " ***");
       
-      // Create a target group for the Fargate service
+      // Create a target group for the Fargate service with configurable health check settings
+      int interval = c.cfc.healthCheckInterval() != null ? c.cfc.healthCheckInterval() : 30;
+      int timeout = c.cfc.healthCheckTimeout() != null ? c.cfc.healthCheckTimeout() : 5;
+      int healthyThreshold = c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2;
+      int unhealthyThreshold = c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3;
+      
       ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "FargateHttpsTargetGroup")
               .vpc(c.vpc.get().orElseThrow())
               .port(8080)
               .protocol(ApplicationProtocol.HTTP)
               .targets(java.util.List.of(svc))
-              .healthCheck(HealthCheck.builder()
-                      .path("/").healthyHttpCodes("200-399")
-                      .interval(software.amazon.awscdk.Duration.seconds(30))
-                      .timeout(software.amazon.awscdk.Duration.seconds(10))
-                      .healthyThresholdCount(2).unhealthyThresholdCount(10)
-                      .build())
+                .healthCheck(HealthCheck.builder()
+                        .path("/login").healthyHttpCodes("200-299")
+                        .interval(software.amazon.awscdk.Duration.seconds(interval))
+                        .timeout(software.amazon.awscdk.Duration.seconds(timeout))
+                        .healthyThresholdCount(healthyThreshold).unhealthyThresholdCount(unhealthyThreshold)
+                        .build())
               .build();
       
       // Update the HTTPS listener's default action to forward to the target group
@@ -253,12 +263,12 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
               .port(8080)
               .protocol(ApplicationProtocol.HTTP)
               .targets(java.util.List.of(svc))
-              .healthCheck(HealthCheck.builder()
-                      .path("/").healthyHttpCodes("200-399")
-                      .interval(software.amazon.awscdk.Duration.seconds(30))
-                      .timeout(software.amazon.awscdk.Duration.seconds(10))
-                      .healthyThresholdCount(2).unhealthyThresholdCount(10)
-                      .build())
+                .healthCheck(HealthCheck.builder()
+                        .path("/login").healthyHttpCodes("200-299")
+                        .interval(software.amazon.awscdk.Duration.seconds(60))
+                        .timeout(software.amazon.awscdk.Duration.seconds(10))
+                        .healthyThresholdCount(2).unhealthyThresholdCount(5)
+                        .build())
               .build();
       
       // Update the HTTP listener's default action to forward to the target group

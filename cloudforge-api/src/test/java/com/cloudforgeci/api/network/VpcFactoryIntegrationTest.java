@@ -32,7 +32,7 @@ public class VpcFactoryIntegrationTest {
     @Test
     void createsVpcWithAllSecurityProfiles() {
         SecurityProfile[] profiles = {SecurityProfile.DEV, SecurityProfile.STAGING, SecurityProfile.PRODUCTION};
-        int[] expectedNatGateways = {0, 0, 2}; // DEV=0, STAGING=0 (public-no-nat), PRODUCTION=2 (always)
+        int[] expectedNatGateways = {0, 0, 0}; // All profiles respect public-no-nat network mode
         
         for (int i = 0; i < profiles.length; i++) {
             SecurityProfile profile = profiles[i];

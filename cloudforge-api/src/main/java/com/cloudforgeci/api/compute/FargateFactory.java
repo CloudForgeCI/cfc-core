@@ -4,6 +4,7 @@ package com.cloudforgeci.api.compute;
 import com.cloudforgeci.api.core.DeploymentContext;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
@@ -21,6 +22,7 @@ import software.constructs.Construct;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_HOME;
 import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
 
 /**
@@ -63,8 +65,13 @@ import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
  * @see ContainerFactory
  * @see DeploymentContext#networkMode()
  */
-public class FargateFactory extends Construct {
+public class FargateFactory extends BaseFactory {
 
+  @com.cloudforgeci.api.core.annotation.SystemContext
+  private SystemContext ctx;
+
+  @com.cloudforgeci.api.core.annotation.DeploymentContext
+  private DeploymentContext cfc;
 
   private final Props p;
 
@@ -78,9 +85,6 @@ public class FargateFactory extends Construct {
   /**
    * Creates a new FargateFactory instance.
    * 
-   * <p>This constructor initializes the factory and creates the complete Fargate
-   * infrastructure including task definitions, services, and EFS integration.</p>
-   * 
    * @param scope The CDK construct scope
    * @param id Unique identifier for the Fargate factory
    * @param p Configuration properties containing deployment context
@@ -88,15 +92,20 @@ public class FargateFactory extends Construct {
   public FargateFactory(Construct scope, String id, Props p) {
     super(scope, id);
     this.p = p;
-    SystemContext ctx = SystemContext.of(this);
+  }
 
+  @Override
+  public void create() {
+    System.out.println("*** DEBUG: FargateFactory.create() called ***");
     Role executionRole = Role.Builder.create(this, "TaskExecutionRole")
             .assumedBy(ServicePrincipal.Builder.create("ecs-tasks.amazonaws.com").build())
             .managedPolicies(Arrays.asList(
                     ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
             ))
             .build();
-    FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task").cpu(ctx.cfc.cpu()).memoryLimitMiB(ctx.cfc.memory()).taskRole(executionRole).build();
+    System.out.println("*** DEBUG: FargateFactory execution role created ***");
+    FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task").cpu(cfc.cpu()).memoryLimitMiB(cfc.memory()).taskRole(executionRole).build();
+    System.out.println("*** DEBUG: FargateFactory task definition created ***");
     AccessPoint ap = ctx.efs.get().orElseThrow().addAccessPoint("JenkinsAp", AccessPointOptions.builder()
             .path(JENKINS_PATH)
             .posixUser(PosixUser.builder().uid("1000").gid("1000").build())
@@ -104,19 +113,19 @@ public class FargateFactory extends Construct {
             .build());
     ctx.ap.set(ap);
     Cluster cluster = Cluster.Builder.create(this, "Cluster").vpc(ctx.vpc.get().orElseThrow()).build();
-    SecurityGroup serviceSg = SecurityGroup.Builder.create(this, id + "SvcSg")
+    SecurityGroup serviceSg = SecurityGroup.Builder.create(this, getNode().getId() + "SvcSg")
             .vpc(ctx.vpc.get().orElseThrow())
             .allowAllOutbound(true).build();
     ctx.fargateServiceSg.set(serviceSg);
     // Determine subnet type and public IP assignment based on network mode
-    boolean assignPublicIp = "public-no-nat".equals(ctx.cfc.networkMode());
+    boolean assignPublicIp = "public-no-nat".equals(cfc.networkMode());
     SubnetType subnetType = assignPublicIp ? SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
     
     FargateService service = FargateService.Builder.create(this, "Service")
             .cluster(cluster)
             .securityGroups(List.of(serviceSg))
             .taskDefinition(taskDef)
-            .desiredCount(ctx.cfc.minInstanceCapacity() != null ? ctx.cfc.minInstanceCapacity() : 1)
+            .desiredCount(cfc.minInstanceCapacity() != null ? cfc.minInstanceCapacity() : 1)
             .assignPublicIp(assignPublicIp)
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
             .build();
@@ -125,15 +134,33 @@ public class FargateFactory extends Construct {
     // Note: EFS permissions are handled by IAMRules based on security profile
     ctx.fargateTaskDef.set(taskDef);
     
-    // Create container (now that task definition is available)
-    new ContainerFactory(scope, id + "Container", ContainerImage.fromRegistry("jenkins/jenkins:lts"));
+    // Add EFS volume to task definition (needed by ContainerFactory)
+    ctx.fargateTaskDef.get().orElseThrow().addVolume(Volume.builder()
+            .name(JENKINS_HOME)
+            .efsVolumeConfiguration(EfsVolumeConfiguration.builder()
+                    .fileSystemId(ctx.efs.get().orElseThrow().getFileSystemId())
+                    .transitEncryption("ENABLED")
+                    .authorizationConfig(AuthorizationConfig.builder()
+                            .accessPointId(ctx.ap.get().orElseThrow().getAccessPointId())
+                            .iam("ENABLED")
+                            .build())
+                    .build())
+            .build());
+    
+    // Create container (now that task definition and volume are available)
+    System.out.println("*** DEBUG: About to create ContainerFactory ***");
+    ContainerFactory containerFactory = new ContainerFactory(this, getNode().getId() + "Container", ContainerImage.fromRegistry("jenkins/jenkins:lts"));
+    System.out.println("*** DEBUG: ContainerFactory instantiated ***");
+    containerFactory.injectContexts(); // Manual injection after SystemContext.start()
+    System.out.println("*** DEBUG: ContainerFactory contexts injected ***");
+    containerFactory.create();
+    System.out.println("*** DEBUG: ContainerFactory.create() completed ***");
     
     // Now set the service in context after container is created
     ctx.fargateService.set(service);
 
     // Note: Auto-scaling is handled by JenkinsServiceTopologyConfiguration
     // to avoid conflicts with duplicate auto-scaling configuration
-
   }
 
 }

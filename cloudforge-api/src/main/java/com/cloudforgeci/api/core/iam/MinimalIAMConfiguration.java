@@ -80,7 +80,7 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                         "logs:DescribeLogStreams"
                 ))
                 .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/ec2/jenkins*"
+                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/jenkins*"
                 ))
                 .build());
 

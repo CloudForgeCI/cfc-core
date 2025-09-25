@@ -26,6 +26,7 @@ public final class IAMRules {
       return errs;
     });
 
-    ctx.once("ProfileWiring:IAM:" + p.kind(), () -> p.wire(ctx));
+    // Create IAM roles immediately instead of deferring - runtime factories need them
+    p.wire(ctx);
   }
 }

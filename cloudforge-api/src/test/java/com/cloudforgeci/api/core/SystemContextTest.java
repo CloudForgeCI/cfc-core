@@ -188,14 +188,13 @@ public class SystemContextTest {
   }
 
   @Test
-  void systemContextThrowsExceptionForDifferentRuntime() {
+  void systemContextAllowsDifferentRuntime() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
     
-    // Try to start with different runtime
-    assertThrows(IllegalStateException.class, () -> {
-      SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
-    });
+    // Should allow different runtime types in the same stack
+    SystemContext ctx2 = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
+    assertSame(ctx, ctx2); // Should return the same SystemContext instance
   }
 
   @Test

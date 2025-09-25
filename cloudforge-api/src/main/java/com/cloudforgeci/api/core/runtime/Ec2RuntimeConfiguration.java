@@ -50,9 +50,10 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     rules.add(require("instanceSg", x -> x.instanceSg));
     rules.add(forbid("fargate", x -> x.fargateService));
     
-    // AutoScalingGroup is only required for JENKINS_SERVICE topology
+    // AutoScalingGroup is only required for JENKINS_SERVICE topology when maxInstanceCapacity > 1
+    // When maxInstanceCapacity <= 1, JenkinsFactory creates a single instance instead of ASG
     // JENKINS_SINGLE_NODE forbids AutoScalingGroup
-    if (c.topology == TopologyType.JENKINS_SERVICE) {
+    if (c.topology == TopologyType.JENKINS_SERVICE && c.cfc.maxInstanceCapacity() != null && c.cfc.maxInstanceCapacity() > 1) {
         rules.add(require("asg", x -> x.asg));
     }
     
@@ -98,9 +99,9 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     //   });
     // }
 
-    // ── 1) ASG -> TargetGroup wiring (only for multi-instance deployments) ─────
-    // For single-instance deployments, the instance is already added to target group in createSingleEc2Instance()
-    whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> tg.addTarget(asg));
+    // ── 1) ASG -> TargetGroup wiring is now handled by JenkinsServiceTopologyConfiguration ─────
+    // This prevents duplicate target group additions and centralizes the logic
+    // whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> tg.addTarget(asg)); // REMOVED - handled by topology configuration
 
     // ── 2) ALB SG -> Instance SG :8080 ──────────────────────────────────────────
     whenBoth(c.alb, c.instanceSg, (alb, isg) -> {

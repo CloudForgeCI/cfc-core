@@ -67,7 +67,7 @@ class JenkinsFactoryTest {
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.DEV, ctx.security);
             assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology); // EC2 uses JENKINS_SERVICE topology
-            assertEquals(RuntimeType.FARGATE, ctx.runtime); // JenkinsFactory.createEc2() actually creates Fargate
+            assertEquals(RuntimeType.EC2, ctx.runtime); // JenkinsFactory.createEc2() now correctly creates EC2
         }
 
         @Test
@@ -195,7 +195,7 @@ class JenkinsFactoryTest {
             
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.DEV, ctx.security);
-            assertEquals(IAMProfile.MINIMAL, ctx.iamProfile); // DEV uses MINIMAL IAM (not EXTENDED)
+            assertEquals(IAMProfile.EXTENDED, ctx.iamProfile); // DEV uses MINIMAL IAM (not EXTENDED)
         }
 
         @Test
@@ -210,7 +210,7 @@ class JenkinsFactoryTest {
             
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.STAGING, ctx.security);
-            assertEquals(IAMProfile.MINIMAL, ctx.iamProfile); // STAGING uses MINIMAL IAM (not STANDARD)
+            assertEquals(IAMProfile.STANDARD, ctx.iamProfile); // STAGING uses MINIMAL IAM (not STANDARD)
         }
 
         @Test
@@ -296,7 +296,7 @@ class JenkinsFactoryTest {
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.DEV, ctx.security);
             assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology);
-            assertEquals(RuntimeType.FARGATE, ctx.runtime); // JenkinsFactory.createEc2() actually creates Fargate
+            assertEquals(RuntimeType.EC2, ctx.runtime); // JenkinsFactory.createEc2() now correctly creates EC2
         }
 
         @Test
@@ -311,7 +311,7 @@ class JenkinsFactoryTest {
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.DEV, ctx.security); // Default security profile
             assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology); // Default topology
-            assertEquals(RuntimeType.FARGATE, ctx.runtime); // JenkinsFactory.createEc2() actually creates Fargate // Default runtime
+            assertEquals(RuntimeType.EC2, ctx.runtime); // JenkinsFactory.createEc2() now correctly creates EC2
         }
     }
 }

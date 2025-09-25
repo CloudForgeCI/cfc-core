@@ -70,17 +70,55 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
     LOG.info("*** DEBUG: Zone present: " + c.zone.get().isPresent() + " ***");
     LOG.info("*** DEBUG: ALB present: " + c.alb.get().isPresent() + " ***");
     
-    // Auto-scaling configuration for Fargate services
-    boolean scale = c.cfc.minInstanceCapacity() > 0 && c.cfc.maxInstanceCapacity() > c.cfc.minInstanceCapacity();
+    // Auto-scaling configuration for both Fargate and EC2 services (only when maxInstanceCapacity > 1)
+    boolean scale = c.cfc.maxInstanceCapacity() != null && c.cfc.minInstanceCapacity() > 0 && c.cfc.maxInstanceCapacity() > 1;
     if(scale) {
-      whenBoth(c.fargateService, c.albTargetGroup, (service, tg) -> {
-        ScalableTaskCount scalable = service.autoScaleTaskCount(EnableScalingProps.builder().minCapacity(c.cfc.minInstanceCapacity()).maxCapacity(c.cfc.maxInstanceCapacity()).build());
-        scalable.scaleOnCpuUtilization("CpuScaleSvc", CpuUtilizationScalingProps.builder().targetUtilizationPercent(c.cfc.cpuTargetUtilization())
-                .scaleInCooldown(Duration.minutes(2)).scaleOutCooldown(Duration.minutes(2)).build());
-      });
+      // Fargate autoscaling - use service.autoScaleTaskCount() directly
+      // Check if callback has already been registered to prevent multiple registrations
+      if (!c.fargateAutoscalingCallbackRegistered.get().isPresent()) {
+        whenBoth(c.fargateService, c.http, (service, http) -> {
+          // Check if Fargate autoscaling has already been configured (inside callback to prevent multiple executions)
+          if (c.fargateAutoscalingConfigured.get().isPresent()) {
+            LOG.info("*** JenkinsServiceTopologyConfiguration: Fargate autoscaling already configured, skipping ***");
+            return;
+          }
+          
+          LOG.info("*** JenkinsServiceTopologyConfiguration: Setting up Fargate autoscaling ***");
+          ScalableTaskCount scalable = service.autoScaleTaskCount(EnableScalingProps.builder().minCapacity(c.cfc.minInstanceCapacity()).maxCapacity(c.cfc.maxInstanceCapacity()).build());
+          scalable.scaleOnCpuUtilization("CpuScaleSvc", CpuUtilizationScalingProps.builder().targetUtilizationPercent(c.cfc.cpuTargetUtilization())
+                  .scaleInCooldown(Duration.minutes(2)).scaleOutCooldown(Duration.minutes(2)).build());
+          c.fargateAutoscalingConfigured.set(true);
+          LOG.info("*** JenkinsServiceTopologyConfiguration: Fargate autoscaling configured successfully ***");
+        });
+        c.fargateAutoscalingCallbackRegistered.set(true);
+        LOG.info("*** JenkinsServiceTopologyConfiguration: Fargate autoscaling callback registered ***");
+      } else {
+        LOG.info("*** JenkinsServiceTopologyConfiguration: Fargate autoscaling callback already registered, skipping ***");
+      }
+      
+      // EC2 autoscaling - add AutoScalingGroup to target group
+      // Check if callback has already been registered to prevent multiple registrations
+      if (!c.ec2AutoscalingCallbackRegistered.get().isPresent()) {
+        whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
+          // Check if AutoScalingGroup has already been added to target group (inside callback to prevent multiple executions)
+          if (c.asgAddedToTargetGroup.get().isPresent()) {
+            LOG.info("*** JenkinsServiceTopologyConfiguration: AutoScalingGroup already added to target group, skipping ***");
+            return;
+          }
+          
+          LOG.info("*** JenkinsServiceTopologyConfiguration: Adding AutoScalingGroup to target group for EC2 autoscaling ***");
+          tg.addTarget(asg);
+          c.asgAddedToTargetGroup.set(true);
+          LOG.info("*** JenkinsServiceTopologyConfiguration: AutoScalingGroup added to target group successfully ***");
+        });
+        c.ec2AutoscalingCallbackRegistered.set(true);
+        LOG.info("*** JenkinsServiceTopologyConfiguration: EC2 autoscaling callback registered ***");
+      } else {
+        LOG.info("*** JenkinsServiceTopologyConfiguration: EC2 autoscaling callback already registered, skipping ***");
+      }
     }
     
-    // DNS A/AAAA records for ALB (works with or without SSL) - use SystemContext slot to prevent duplicate execution
+    // DNS A/AAAA records for ALB (for both SSL and non-SSL deployments)
     LOG.info("*** DEBUG: About to register DNS records callback ***");
     whenBoth(c.zone, c.alb, (zone, alb) -> {
       // Check if DNS records have already been created (inside the callback to prevent multiple executions)
@@ -90,9 +128,11 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
       }
       
       LOG.info("*** DEBUG: Creating DNS records for zone: " + zone.getZoneName() + " ***");
-      String record = c.cfc.fqdn();
+      // Use subdomain for DNS record name, not the full FQDN
+      String record = c.cfc.subdomain();
       if (record == null || record.isBlank()) {
-        record = c.cfc.subdomain() == null ? "" : c.cfc.subdomain();
+        LOG.info("*** DEBUG: No subdomain provided, skipping DNS record creation ***");
+        return;
       }
       LOG.info("*** DEBUG: DNS record name: " + record + " ***");
 

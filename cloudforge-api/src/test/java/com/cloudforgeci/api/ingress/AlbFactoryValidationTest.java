@@ -37,7 +37,8 @@ public class AlbFactoryValidationTest {
     alb.create();
     
     EfsFactory efs = new EfsFactory(stack, "Efs");
-    efs.create(ctx);
+    efs.injectContexts(); // Manual injection after SystemContext.start()
+    efs.create();
     
     new FargateFactory(stack, "Ecs", new FargateFactory.Props(cfc));
     assertThrows(RuntimeException.class, () -> Template.fromStack(stack));

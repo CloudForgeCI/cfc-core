@@ -41,7 +41,7 @@ public class VpcFactorySecurityTest {
     
     Template t = Template.fromStack(builder.getStack());
     t.resourceCountIs("AWS::EC2::VPC", 1);
-    t.resourceCountIs("AWS::EC2::NatGateway", 2); // Production always creates 2 NAT gateways
+    t.resourceCountIs("AWS::EC2::NatGateway", 0); // Production respects public-no-nat network mode
     t.resourceCountIs("AWS::EC2::Subnet", 4); // 2 public + 2 private
   }
 

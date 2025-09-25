@@ -2,6 +2,7 @@ package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -25,6 +26,8 @@ import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
+
+import java.util.logging.Logger;
 import software.constructs.Construct;
 
 import java.util.List;
@@ -68,12 +71,20 @@ import java.util.List;
  * @see ScalingFactory
  * @see DeploymentContext#networkMode()
  */
-public class Ec2Factory extends Construct {
+public class Ec2Factory extends BaseFactory {
+  private static final Logger LOG = Logger.getLogger(Ec2Factory.class.getName());
   private AutoScalingGroup asg;
+
+  @com.cloudforgeci.api.core.annotation.SystemContext
+  private SystemContext ctx;
 
   public Ec2Factory(Construct scope, String id) {
     super(scope, id);
-    SystemContext ctx = SystemContext.of(this);
+  }
+
+  @Override
+  public void create() {
+    createEc2Infrastructure();
   }
 
   /**
@@ -93,54 +104,42 @@ public class Ec2Factory extends Construct {
    * appropriate subnets (public vs private) and configures storage based
    * on EFS availability.</p>
    * 
-   * @param ctx System context containing VPC, security groups, and other resources
    * @throws IllegalStateException if required resources are not available in context
    * @see SystemContext
    * @see DeploymentContext#networkMode()
    * @see DeploymentContext#minInstanceCapacity()
    * @see DeploymentContext#maxInstanceCapacity()
    */
-  public void create(final SystemContext ctx) {
-    // Create IAM role for EC2 instances
-    Role ec2Role = createInstanceRole(ctx);
-    ctx.ec2InstanceRole.set(ec2Role);
+  private void createEc2Infrastructure() {
+    // Use existing IAM role created by IAM configuration (has CloudWatch Logs permissions)
+    Role ec2Role = ctx.ec2InstanceRole.get().orElseThrow(() -> 
+        new IllegalStateException("EC2 instance role not found - IAM configuration should have created it"));
 
     // Use existing instance security group (created by JenkinsFactory)
     SecurityGroup instanceSg = ctx.instanceSg.get().orElseThrow();
 
     // Create CloudWatch log group
-    LogGroup logs = createLogGroup(ctx);
+    LogGroup logs = createLogGroup();
     ctx.logs.set(logs);
 
     // Create user data script
-    UserData userData = createUserData(ctx);
+    UserData userData = createUserData();
 
     // Create launch template
-    LaunchTemplate launchTemplate = createLaunchTemplate(ctx, ec2Role, instanceSg, userData);
+    LaunchTemplate launchTemplate = createLaunchTemplate(ec2Role, instanceSg, userData);
 
     // Create Auto Scaling Group
-    this.asg = createAutoScalingGroup(ctx, launchTemplate);
+    this.asg = createAutoScalingGroup(launchTemplate);
     ctx.asg.set(asg);
     
-    // Configure Auto Scaling with CPU target utilization from DeploymentContext
-    new ScalingFactory(this, "Scaling").scale(asg, ctx);
+    // Auto-scaling configuration is handled by the orchestration layer
+    // The JenkinsServiceTopologyConfiguration will add the ASG to the target group
   }
 
-  private Role createInstanceRole(SystemContext ctx) {
-    Role.Builder roleBuilder = Role.Builder.create(this, "JenkinsEc2Role")
-            .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
-            .managedPolicies(List.of(
-                    ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
-            ));
+  // Note: IAM role creation is now handled by IAM configuration (IAMRules)
+  // This ensures proper CloudWatch Logs permissions are included
 
-    Role role = roleBuilder.build();
-    
-    // Note: EFS permissions are handled by IAMRules based on security profile
-    
-    return role;
-  }
-
-  private SecurityGroup createInstanceSecurityGroup(SystemContext ctx) {
+  private SecurityGroup createInstanceSecurityGroup() {
     SecurityGroup instanceSg = SecurityGroup.Builder.create(this, "JenkinsEc2Sg")
             .vpc(ctx.vpc.get().orElseThrow())
             .description("Jenkins EC2 Instance Security Group")
@@ -153,13 +152,13 @@ public class Ec2Factory extends Construct {
     return instanceSg;
   }
 
-  private LogGroup createLogGroup(SystemContext ctx) {
+  private LogGroup createLogGroup() {
     return LogGroup.Builder.create(this, "JenkinsEc2Logs")
             .retention(RetentionDays.ONE_WEEK)
             .build();
   }
 
-  private UserData createUserData(SystemContext ctx) {
+  private UserData createUserData() {
     UserData ud = UserData.forLinux();
     ud.addCommands(
             "#!/bin/bash",
@@ -173,10 +172,72 @@ public class Ec2Factory extends Construct {
             "rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key",
             "command -v dnf >/dev/null && dnf -y install jenkins || yum -y install jenkins",
             "",
+            "# Install CloudWatch Agent",
+            "echo 'Installing CloudWatch Agent...' >> /var/log/jenkins-userdata.log",
+            "wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm",
+            "rpm -U ./amazon-cloudwatch-agent.rpm",
+            "rm -f ./amazon-cloudwatch-agent.rpm",
+            "",
+            "# Configure CloudWatch Agent",
+            "echo 'Configuring CloudWatch Agent...' >> /var/log/jenkins-userdata.log",
+            "mkdir -p /opt/aws/amazon-cloudwatch-agent/etc",
+            String.format("cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'%n" +
+                    "{%n" +
+                    "  \"agent\": {%n" +
+                    "    \"metrics_collection_interval\": 60,%n" +
+                    "    \"run_as_user\": \"root\"%n" +
+                    "  },%n" +
+                    "  \"logs\": {%n" +
+                    "    \"logs_collected\": {%n" +
+                    "      \"files\": {%n" +
+                    "        \"collect_list\": [%n" +
+                    "          {%n" +
+                    "            \"file_path\": \"/var/log/jenkins/jenkins.log\",%n" +
+                    "            \"log_group_name\": \"/aws/jenkins/%s/%s/%s\",%n" +
+                    "            \"log_stream_name\": \"{instance_id}/jenkins.log\",%n" +
+                    "            \"timezone\": \"UTC\"%n" +
+                    "          },%n" +
+                    "          {%n" +
+                    "            \"file_path\": \"/var/log/jenkins-userdata.log\",%n" +
+                    "            \"log_group_name\": \"/aws/jenkins/%s/%s/%s\",%n" +
+                    "            \"log_stream_name\": \"{instance_id}/userdata.log\",%n" +
+                    "            \"timezone\": \"UTC\"%n" +
+                    "          },%n" +
+                    "          {%n" +
+                    "            \"file_path\": \"/var/log/messages\",%n" +
+                    "            \"log_group_name\": \"/aws/jenkins/%s/%s/%s\",%n" +
+                    "            \"log_stream_name\": \"{instance_id}/messages\",%n" +
+                    "            \"timezone\": \"UTC\"%n" +
+                    "          }%n" +
+                    "        ]%n" +
+                    "      }%n" +
+                    "    }%n" +
+                    "  }%n" +
+                    "}%n" +
+                    "EOF", 
+                    ctx.stackName, ctx.runtime.name().toLowerCase(), ctx.security.name().toLowerCase(),
+                    ctx.stackName, ctx.runtime.name().toLowerCase(), ctx.security.name().toLowerCase(),
+                    ctx.stackName, ctx.runtime.name().toLowerCase(), ctx.security.name().toLowerCase()),
+            "",
+            "# Start CloudWatch Agent",
+            "echo 'Starting CloudWatch Agent...' >> /var/log/jenkins-userdata.log",
+            "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s",
+            "",
             "# Configure Jenkins",
             "systemctl enable jenkins",
             "systemctl start jenkins",
-            "echo 'jenkins installed and started' >> /var/log/jenkins-userdata.log"
+            "echo 'jenkins installed and started' >> /var/log/jenkins-userdata.log",
+            "",
+            "# Wait for Jenkins to generate admin password and log it",
+            "echo 'Waiting for Jenkins to generate admin password...' >> /var/log/jenkins-userdata.log",
+            "sleep 60",
+            "if [ -f /var/lib/jenkins/secrets/initialAdminPassword ]; then",
+            "  echo 'Jenkins Admin Password:' >> /var/log/jenkins-userdata.log",
+            "  cat /var/lib/jenkins/secrets/initialAdminPassword >> /var/log/jenkins-userdata.log",
+            "  echo 'Jenkins Admin Password logged to CloudWatch' >> /var/log/jenkins-userdata.log",
+            "else",
+            "  echo 'Jenkins admin password file not found yet' >> /var/log/jenkins-userdata.log",
+            "fi"
     );
 
     // Add EFS mounting if EFS is available
@@ -208,10 +269,10 @@ public class Ec2Factory extends Construct {
     return ud;
   }
 
-  private LaunchTemplate createLaunchTemplate(SystemContext ctx, Role ec2Role, SecurityGroup instanceSg, UserData userData) {
+  private LaunchTemplate createLaunchTemplate(Role ec2Role, SecurityGroup instanceSg, UserData userData) {
     LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, "JenkinsLt")
             .machineImage(MachineImage.latestAmazonLinux2023())
-            .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.SMALL))
+            .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
             .securityGroup(instanceSg)
             .role(ec2Role)
             .userData(userData);
@@ -245,10 +306,10 @@ public class Ec2Factory extends Construct {
     return ltBuilder.build();
   }
 
-  private AutoScalingGroup createAutoScalingGroup(SystemContext ctx, LaunchTemplate launchTemplate) {
+  private AutoScalingGroup createAutoScalingGroup(LaunchTemplate launchTemplate) {
     // Use DeploymentContext values for AutoScaling Group configuration
     int minCapacity = ctx.cfc.minInstanceCapacity() != null ? ctx.cfc.minInstanceCapacity() : 1;
-    int maxCapacity = ctx.cfc.maxInstanceCapacity() != null ? ctx.cfc.maxInstanceCapacity() : 3;
+    int maxCapacity = ctx.cfc.maxInstanceCapacity() != null ? ctx.cfc.maxInstanceCapacity() : 1;
     int desiredCapacity = Math.max(minCapacity, Math.min(maxCapacity, minCapacity)); // Start with minimum
     
     // Determine subnet type based on network mode

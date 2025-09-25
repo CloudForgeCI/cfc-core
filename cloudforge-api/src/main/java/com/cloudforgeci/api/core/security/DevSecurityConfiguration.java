@@ -129,38 +129,34 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
             );
         });
 
-        // Create hosted zone if domain is provided (needed for DNS records)
+        // Create or lookup hosted zone if domain is provided
         if (c.cfc.domain() != null && !c.cfc.domain().isBlank()) {
-            System.out.println("DevSecurityConfiguration: Creating hosted zone for domain: " + c.cfc.domain());
-            c.once("DEV-HostedZone", () -> {
-                if (c.zone.get().isPresent()) return; // Already created
-                
-                // Check if we're in a test environment
-                boolean isTest = System.getProperty("java.class.path").contains("test") ||
-                               System.getProperty("maven.test.skip") != null ||
-                               System.getProperty("surefire.test.class.path") != null ||
-                               java.util.Arrays.stream(Thread.currentThread().getStackTrace())
-                                   .anyMatch(element -> element.getClassName().contains("junit") || 
-                                                       element.getClassName().contains("test"));
-                
-                if (isTest) {
-                    // Create a real hosted zone resource for testing
-                    software.amazon.awscdk.services.route53.HostedZone zone = 
-                        software.amazon.awscdk.services.route53.HostedZone.Builder.create((software.constructs.Construct)c.getNode().getScope(), "DevZone")
-                            .zoneName(c.cfc.domain())
-                            .build();
-                    c.zone.set(zone);
-                } else {
-                    // Use real AWS lookup for production deployments
-                    software.amazon.awscdk.services.route53.IHostedZone zone = 
-                        software.amazon.awscdk.services.route53.HostedZone.fromLookup((software.constructs.Construct)c.getNode().getScope(), "DevZone",
-                            software.amazon.awscdk.services.route53.HostedZoneProviderProps.builder()
-                                .privateZone(false)
-                                .domainName(c.cfc.domain())
-                                .build());
-                    c.zone.set(zone);
-                }
-            });
+            System.out.println("DevSecurityConfiguration: Setting up hosted zone for domain: " + c.cfc.domain());
+            if (c.zone.get().isPresent()) {
+                System.out.println("DevSecurityConfiguration: Hosted zone already exists");
+                return; // Already created
+            }
+            
+            if (c.cfc.createZone()) {
+                // Create a new hosted zone when createZone=true
+                System.out.println("DevSecurityConfiguration: Creating new hosted zone (createZone=true)");
+                software.amazon.awscdk.services.route53.HostedZone zone = 
+                    software.amazon.awscdk.services.route53.HostedZone.Builder.create((software.constructs.Construct)c.getNode().getScope(), "DevZone")
+                        .zoneName(c.cfc.domain())
+                        .build();
+                c.zone.set(zone);
+                System.out.println("DevSecurityConfiguration: New hosted zone created and set in context");
+            } else {
+                // Use existing hosted zone when createZone=false
+                System.out.println("DevSecurityConfiguration: Looking up existing hosted zone (createZone=false)");
+                software.amazon.awscdk.services.route53.IHostedZone zone = 
+                    software.amazon.awscdk.services.route53.HostedZone.fromLookup((software.constructs.Construct)c.getNode().getScope(), "DevZoneLookup", 
+                        software.amazon.awscdk.services.route53.HostedZoneProviderProps.builder()
+                            .domainName(c.cfc.domain())
+                            .build());
+                c.zone.set(zone);
+                System.out.println("DevSecurityConfiguration: Existing hosted zone looked up and set in context");
+            }
         }
     }
 
@@ -216,5 +212,16 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
             if (ao.isPresent() && bo.isPresent()) fn.accept(ao.get(), bo.get());
         };
         a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run()); tryRun.run();
+    }
+    
+    private boolean isTestEnvironment() {
+        // Check for test environment indicators
+        return System.getProperty("java.class.path").contains("test") ||
+               System.getProperty("maven.test.skip") != null ||
+               System.getProperty("surefire.test.class.path") != null ||
+               // Check for JUnit test context in stack trace
+               java.util.Arrays.stream(Thread.currentThread().getStackTrace())
+                   .anyMatch(element -> element.getClassName().contains("junit") || 
+                                       element.getClassName().contains("test"));
     }
 }

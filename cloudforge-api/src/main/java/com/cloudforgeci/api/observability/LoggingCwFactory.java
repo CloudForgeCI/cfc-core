@@ -5,6 +5,7 @@ import com.cloudforgeci.api.core.annotation.SystemContext;
 import com.cloudforgeci.api.core.annotation.DeploymentContext;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.amazon.awscdk.services.logs.LogGroup;
+import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 
 import java.util.logging.Logger;
@@ -23,6 +24,7 @@ public class LoggingCwFactory extends BaseFactory {
     
     @Override
     public void create() {
+        System.out.println("*** DEBUG: LoggingCwFactory.create() method called ***");
         try {
             // SecurityProfileConfiguration is now injected directly via annotation
             LOG.info("LoggingCwFactory: Starting create() method");
@@ -50,11 +52,50 @@ public class LoggingCwFactory extends BaseFactory {
             LOG.info("LoggingCwFactory: About to create LogGroup");
             // Create log group with security profile-based settings
             String securityProfileName = (ctx.security != null) ? ctx.security.name().toLowerCase() : "unknown";
-            LogGroup logGroup = LogGroup.Builder.create(this, "SecurityProfileLogs")
-                    .retention(config.getLogRetentionDays())
-                    .removalPolicy(config.getLogRemovalPolicy())
-                    .logGroupName("/aws/jenkins/" + securityProfileName)
-                    .build();
+            String runtimeName = (ctx.runtime != null) ? ctx.runtime.name().toLowerCase() : "unknown";
+            String stackName = ctx.stackName;
+            String logGroupName = "/aws/jenkins/" + stackName + "/" + runtimeName + "/" + securityProfileName;
+            System.out.println("*** DEBUG: LoggingCwFactory creating log group with name: " + logGroupName + " ***");
+            LOG.info("LoggingCwFactory: Creating log group with name: " + logGroupName);
+        // Use configurable log retention from DeploymentContext if monitoring is enabled
+        RetentionDays retentionDays = config.getLogRetentionDays();
+        if (ctx.cfc.enableMonitoring() && ctx.cfc.logRetentionDays() != null) {
+            // Map integer days to RetentionDays enum
+            int days = ctx.cfc.logRetentionDays();
+            if (days <= 1) {
+                retentionDays = RetentionDays.ONE_DAY;
+            } else if (days <= 3) {
+                retentionDays = RetentionDays.THREE_DAYS;
+            } else if (days <= 5) {
+                retentionDays = RetentionDays.FIVE_DAYS;
+            } else if (days <= 7) {
+                retentionDays = RetentionDays.ONE_WEEK;
+            } else if (days <= 14) {
+                retentionDays = RetentionDays.TWO_WEEKS;
+            } else if (days <= 30) {
+                retentionDays = RetentionDays.ONE_MONTH;
+            } else if (days <= 60) {
+                retentionDays = RetentionDays.TWO_MONTHS;
+            } else if (days <= 90) {
+                retentionDays = RetentionDays.THREE_MONTHS;
+            } else if (days <= 120) {
+                retentionDays = RetentionDays.FOUR_MONTHS;
+            } else if (days <= 150) {
+                retentionDays = RetentionDays.FIVE_MONTHS;
+            } else if (days <= 180) {
+                retentionDays = RetentionDays.SIX_MONTHS;
+            } else if (days <= 365) {
+                retentionDays = RetentionDays.ONE_YEAR;
+            } else {
+                retentionDays = RetentionDays.TWO_YEARS;
+            }
+        }
+        
+        LogGroup logGroup = LogGroup.Builder.create(this, "SecurityProfileLogs")
+                .retention(retentionDays)
+                .removalPolicy(config.getLogRemovalPolicy())
+                .logGroupName(logGroupName)
+                .build();
 
             LOG.info("LoggingCwFactory: About to set logs in context");
             ctx.logs.set(logGroup);

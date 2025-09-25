@@ -10,10 +10,11 @@ public final class Rules {
   
   public static void installAll(SystemContext ctx) {
     LOG.info("Installing all rules");
+    // Install IAM rules first so roles are available for runtime factories
+    IAMRules.install(ctx);
     RuntimeRules.install(ctx);
     TopologyRules.install(ctx);
     SecurityRules.install(ctx);
-    IAMRules.install(ctx);
     LOG.info("All rules installed successfully");
   }
 }

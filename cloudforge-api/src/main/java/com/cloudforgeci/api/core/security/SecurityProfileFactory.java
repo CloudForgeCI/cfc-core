@@ -1,14 +1,12 @@
 package com.cloudforgeci.api.core.security;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
 import software.amazon.awscdk.services.ec2.FlowLogOptions;
-import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.LogGroup;
-import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 
 import java.util.logging.Logger;
@@ -17,14 +15,19 @@ import java.util.logging.Logger;
  * Factory for creating security profile-based observability configurations.
  * Manages logging, flow logs, and security monitoring based on security profiles.
  */
-public class SecurityProfileFactory extends Construct {
+public class SecurityProfileFactory extends BaseFactory {
     
     private static final Logger LOG = Logger.getLogger(SecurityProfileFactory.class.getName());
     
+    @com.cloudforgeci.api.core.annotation.SystemContext
+    private SystemContext ctx;
+    
     public SecurityProfileFactory(Construct scope, String id) {
         super(scope, id);
-        SystemContext ctx = SystemContext.of(this);
-        
+    }
+    
+    @Override
+    public void create() {
         // Get the appropriate security profile configuration
         SecurityProfileConfiguration config = getSecurityProfileConfiguration(ctx.security);
         
@@ -65,7 +68,7 @@ public class SecurityProfileFactory extends Construct {
         LogGroup logGroup = LogGroup.Builder.create(this, "SecurityProfileLogs")
                 .retention(config.getLogRetentionDays())
                 .removalPolicy(config.getLogRemovalPolicy())
-                .logGroupName("/aws/jenkins/" + ctx.security.name().toLowerCase())
+                .logGroupName("/aws/jenkins/" + ctx.stackName + "/" + ctx.runtime.name().toLowerCase() + "/" + ctx.security.name().toLowerCase())
                 .build();
         
         ctx.logs.set(logGroup);

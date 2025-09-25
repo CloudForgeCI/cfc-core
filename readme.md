@@ -12,7 +12,30 @@ cfc-core/
   pom.xml                  # parent (packaging=pom)
   cloudforge-api/          # API: config models, types, shared contracts
   cloudforge-core/         # Core: CDK constructs & builders
+  cfc-testing/             # Testing framework & sample applications
+    deploy-interactive.sh  # Interactive deployment tool
+    README.md              # Testing & samples documentation
 ```
+
+---
+
+## Interactive Deployer
+
+The `cfc-testing` directory contains an **Interactive Deployer** that provides a user-friendly way to configure and deploy CloudForge Community infrastructure:
+
+```bash
+cd cfc-testing
+./deploy-interactive.sh
+```
+
+**Features:**
+- 🎯 **Modular Architecture**: Uses SystemContext orchestration layer
+- 🔧 **Strategy Pattern**: Easily extensible deployment types
+- 🚀 **Multiple Deployments**: Jenkins (Fargate/EC2), S3 websites (coming soon)
+- ⚡ **Interactive Configuration**: Guided setup with sensible defaults
+- 📋 **CDK Integration**: Generates proper CDK context and synthesizes stacks
+
+See `cfc-testing/README.md` for detailed documentation.
 
 ---
 
@@ -98,7 +121,7 @@ Run the complete test suite:
 
 ### CDK Synthesis Testing
 
-The `cfc-testing` application provides comprehensive testing of all runtime, topology, and security profile combinations. Navigate to the testing directory and run the complete test suite:
+The `cfc-testing` application provides extensive testing of all runtime, topology, and security profile combinations. Navigate to the testing directory and run the complete test suite:
 
 ```bash
 cd cfc-testing
@@ -182,7 +205,7 @@ cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl"
 
 ### Performance Benchmarking
 
-The `benchmark-synth.sh` script provides comprehensive performance testing for CDK synthesis operations. It allows you to select specific test cases and run multiple iterations to measure synthesis performance.
+The `benchmark-synth.sh` script provides extensive performance testing for CDK synthesis operations. It allows you to select specific test cases and run multiple iterations to measure synthesis performance.
 
 #### Running Benchmarks
 

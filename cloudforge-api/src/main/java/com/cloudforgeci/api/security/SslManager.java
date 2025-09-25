@@ -2,10 +2,13 @@ package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.annotation.BaseFactory;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
 import software.amazon.awscdk.services.route53.ARecord;
 import software.amazon.awscdk.services.route53.ARecordProps;
+import software.amazon.awscdk.services.route53.AaaaRecord;
+import software.amazon.awscdk.services.route53.AaaaRecordProps;
 import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 import software.amazon.awscdk.services.route53.RecordTarget;
 import software.constructs.Construct;
@@ -17,7 +20,13 @@ import java.util.Map;
  * Centralized SSL management system that creates SSL certificates and DNS records.
  * HTTPS listener creation is handled by runtime configurations to ensure proper target group setup.
  */
-public class SslManager extends Construct {
+public class SslManager extends BaseFactory {
+    
+    @com.cloudforgeci.api.core.annotation.SystemContext
+    private SystemContext ctx;
+
+    @com.cloudforgeci.api.core.annotation.DeploymentContext
+    private DeploymentContext cfc;
     
     private static final Map<String, Certificate> certificates = new ConcurrentHashMap<>();
     
@@ -30,6 +39,11 @@ public class SslManager extends Construct {
     public SslManager(Construct scope, String id, Props props) {
         super(scope, id);
         this.props = props;
+    }
+    
+    @Override
+    public void create() {
+        createSslIfEnabled(ctx);
     }
     
     /**
@@ -75,10 +89,20 @@ public class SslManager extends Construct {
     private void createDnsRecord(SystemContext ctx) {
         ctx.zone.get().ifPresent(zone -> {
             ctx.alb.get().ifPresent(alb -> {
+                String recordName = props.cfc.subdomain() == null ? "" : props.cfc.subdomain();
+                var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
+                
+                // Create both A and AAAA records for SSL deployments
                 new ARecord(this, "SslARecord", ARecordProps.builder()
                         .zone(zone)
-                        .recordName(props.cfc.subdomain() == null ? "" : props.cfc.subdomain())
-                        .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
+                        .recordName(recordName)
+                        .target(target)
+                        .build());
+                        
+                new AaaaRecord(this, "SslAaaaRecord", AaaaRecordProps.builder()
+                        .zone(zone)
+                        .recordName(recordName)
+                        .target(target)
                         .build());
             });
         });

@@ -38,13 +38,11 @@ public class AlbFactory extends BaseFactory {
             ApplicationLoadBalancer alb = createLoadBalancer(albSg);
             ctx.alb.set(alb);
 
-            // Create target group only for EC2 runtime (Fargate uses listener-driven targets)
+            // Create HTTP listener (target groups are created by orchestration layer)
             if (ctx.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
-                ApplicationTargetGroup targetGroup = createTargetGroup(alb);
-                ctx.albTargetGroup.set(targetGroup);
-                
-                // Create HTTP listener with target group
-                ApplicationListener http = createHttpListener(alb, targetGroup);
+                // For EC2, create HTTP listener with placeholder default action
+                // The target group will be created by orchestration layer and added to listener later
+                ApplicationListener http = createFargateHttpListener(alb, ctx.cfc != null && Boolean.TRUE.equals(ctx.cfc.enableSsl()));
                 ctx.http.set(http);
             } else {
                 // For Fargate, create HTTP listener with placeholder default action
@@ -75,18 +73,24 @@ public class AlbFactory extends BaseFactory {
     }
 
     private ApplicationTargetGroup createTargetGroup(ApplicationLoadBalancer alb) {
+        // Use configurable health check settings from DeploymentContext
+        int interval = ctx.cfc.healthCheckInterval() != null ? ctx.cfc.healthCheckInterval() : 30;
+        int timeout = ctx.cfc.healthCheckTimeout() != null ? ctx.cfc.healthCheckTimeout() : 5;
+        int healthyThreshold = ctx.cfc.healthyThreshold() != null ? ctx.cfc.healthyThreshold() : 2;
+        int unhealthyThreshold = ctx.cfc.unhealthyThreshold() != null ? ctx.cfc.unhealthyThreshold() : 3;
+        
         return ApplicationTargetGroup.Builder.create(this, "JenkinsTg")
                 .vpc(ctx.vpc.get().orElseThrow())
                 .port(8080)
                 .protocol(ApplicationProtocol.HTTP)
                 .targetType(TargetType.INSTANCE)
                 .healthCheck(HealthCheck.builder()
-                        .path("/")
-                        .healthyHttpCodes("200-399")
-                        .interval(software.amazon.awscdk.Duration.seconds(30))
-                        .timeout(software.amazon.awscdk.Duration.seconds(10))
-                        .healthyThresholdCount(2)
-                        .unhealthyThresholdCount(10)
+                        .path("/login")
+                        .healthyHttpCodes("200-299")
+                        .interval(software.amazon.awscdk.Duration.seconds(interval))
+                        .timeout(software.amazon.awscdk.Duration.seconds(timeout))
+                        .healthyThresholdCount(healthyThreshold)
+                        .unhealthyThresholdCount(unhealthyThreshold)
                         .build())
                 .build();
     }

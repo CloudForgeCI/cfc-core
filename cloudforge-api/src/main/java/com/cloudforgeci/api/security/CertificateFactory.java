@@ -2,11 +2,18 @@ package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.annotation.BaseFactory;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
 import software.constructs.Construct;
 
-public class CertificateFactory extends Construct {
+public class CertificateFactory extends BaseFactory {
+
+    @com.cloudforgeci.api.core.annotation.SystemContext
+    private SystemContext ctx;
+
+    @com.cloudforgeci.api.core.annotation.DeploymentContext
+    private DeploymentContext cfc;
 
     private final Props p;
 
@@ -17,7 +24,15 @@ public class CertificateFactory extends Construct {
     public CertificateFactory(Construct scope, String id, Props props) {
         super(scope, id);
         this.p = props;
-        SystemContext ctx = SystemContext.of(this);
+    }
+
+    @Override
+    public void create() {
+        if (p.cfc.enableSsl() && p.cfc.domain() != null && !p.cfc.domain().isBlank()) {
+            createSslCertificate(ctx);
+            // Note: ARecord creation is handled by runtime configuration (Ec2RuntimeConfiguration, FargateRuntimeConfiguration)
+            // to avoid duplicate record creation
+        }
     }
 
     public void create(final SystemContext ctx) {
