@@ -86,7 +86,7 @@ public class InteractiveDeployer {
             String contextFile = "deployment-context.json";
             if (Files.exists(Paths.get(contextFile))) {
                 System.out.println("📁 Found saved deployment context, using it...");
-                loadContextFromFileAndDeploy(contextFile, deploymentOption);
+                loadContextFromFileAndDeploy(contextFile, deploymentOption, customStackName);
             } else {
                 // No saved context, collect configuration interactively
                 DeploymentConfig config = collectConfiguration(customStackName);
@@ -142,6 +142,11 @@ public class InteractiveDeployer {
         System.out.println("\n🔧 Building CDK Context...");
         
         Map<String, Object> cfcContext = buildCfcContext(config);
+        
+        System.out.println("\n🔍 DEBUG: CDK Context being set:");
+        System.out.println("  - runtime: " + cfcContext.get("runtime"));
+        System.out.println("  - topology: " + cfcContext.get("topology"));
+        System.out.println("  - stackName: " + cfcContext.get("stackName"));
         
         System.out.println("\n📋 Deployment Configuration:");
         System.out.println("============================");
@@ -204,6 +209,10 @@ public class InteractiveDeployer {
         saveContextToFile(cfcContext, config.stackName);
         
         DeploymentContext cfc = DeploymentContext.from(app);
+        System.out.println("🔍 DEBUG: DeploymentContext.from(app) returned:");
+        System.out.println("  - runtime: " + cfc.runtime());
+        System.out.println("  - topology: " + cfc.topology());
+        System.out.println("  - stackName: " + cfc.stackName());
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(config.securityProfile);
         
         StackProps props = StackProps.builder()
@@ -214,9 +223,12 @@ public class InteractiveDeployer {
             .build();
         
         // Create stacks based on runtime type (like CloudForgeCommunitySample)
+        System.out.println("🔍 DEBUG: Creating stack for runtime: " + config.runtime + " with name: " + config.stackName);
         if (config.runtime == RuntimeType.EC2) {
+            System.out.println("🔍 DEBUG: Creating JenkinsEc2Stack");
             new JenkinsEc2Stack(app, config.stackName, props, config.securityProfile, iamProfile);
         } else if (config.runtime == RuntimeType.FARGATE) {
+            System.out.println("🔍 DEBUG: Creating JenkinsFargateStack");
             new JenkinsFargateStack(app, config.stackName, props, config.securityProfile, iamProfile);
         } else {
             throw new IllegalArgumentException("Unsupported runtime type: " + config.runtime);
@@ -400,7 +412,7 @@ public class InteractiveDeployer {
         }
     }
     
-    private static void loadContextFromFileAndDeploy(String contextFile, String deploymentOption) throws Exception {
+    private static void loadContextFromFileAndDeploy(String contextFile, String deploymentOption, String customStackName) throws Exception {
         // Read the context file and create a DeploymentConfig from it
         String content = Files.readString(Paths.get(contextFile));
         
@@ -410,9 +422,22 @@ public class InteractiveDeployer {
         String topology = extractValue(content, "topology");
         String securityProfile = extractValue(content, "securityProfile");
         
+        System.out.println("🔍 DEBUG: Extracted values from context:");
+        System.out.println("  - stackName: " + stackName);
+        System.out.println("  - runtime: " + runtime);
+        System.out.println("  - topology: " + topology);
+        System.out.println("  - securityProfile: " + securityProfile);
+        
             // Create DeploymentConfig from saved context
             DeploymentConfig config = new DeploymentConfig();
-            config.stackName = stackName;
+            // Use custom stack name from command line if provided, otherwise use saved context
+            if (customStackName != null && !customStackName.trim().isEmpty()) {
+                config.stackName = customStackName;
+                System.out.println("✅ Overriding stack name with custom value: " + customStackName);
+            } else {
+                config.stackName = stackName;
+                System.out.println("✅ Using stack name from saved context: " + stackName);
+            }
             config.runtime = RuntimeType.valueOf(runtime);
             
             // Read topology from saved context
@@ -421,7 +446,7 @@ public class InteractiveDeployer {
             } else {
                 // Default fallback based on runtime if topology not found in context
                 if (config.runtime == RuntimeType.EC2) {
-                    config.topology = TopologyType.JENKINS_SINGLE_NODE;
+                    config.topology = TopologyType.JENKINS_SERVICE;
                 } else {
                     config.topology = TopologyType.JENKINS_SERVICE;
                 }
@@ -850,7 +875,7 @@ public class InteractiveDeployer {
             
             // Topology Selection
             config.topology = TopologyType.valueOf(
-                promptChoice("Topology", new String[]{"JENKINS_SINGLE_NODE", "JENKINS_SERVICE"}, "JENKINS_SINGLE_NODE").toUpperCase());
+                promptChoice("Topology", new String[]{"JENKINS_SINGLE_NODE", "JENKINS_SERVICE"}, "JENKINS_SERVICE").toUpperCase());
             
             // Security Profile Selection
             config.securityProfile = SecurityProfile.valueOf(

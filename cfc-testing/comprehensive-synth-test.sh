@@ -95,7 +95,7 @@ run_synthesis() {
     local synth_output="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-synth.log"
     local synth_error="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-error.log"
     
-    if cdk synth --quiet > "$synth_output" 2> "$synth_error"; then
+    if cdk synth --quiet --context cfc.runtime="$runtime" --context cfc.topology="JENKINS_SERVICE" --context cfc.subdomain="$subdomain" --context cfc.domain="$DOMAIN" --context cfc.enableSsl="true" --context cfc.securityProfile="$security_profile" --context cfc.stackName="$stack_name" > "$synth_output" 2> "$synth_error"; then
         echo -e "  ${GREEN}✅ Synthesis successful${NC}"
         
         # Copy synthesized template

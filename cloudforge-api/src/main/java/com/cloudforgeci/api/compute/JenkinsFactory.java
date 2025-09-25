@@ -12,7 +12,6 @@ import com.cloudforgeci.api.network.VpcFactory;
 import com.cloudforgeci.api.ingress.AlbFactory;
 import com.cloudforgeci.api.observability.FlowLogFactory;
 import com.cloudforgeci.api.observability.LoggingCwFactory;
-import com.cloudforgeci.api.security.SslManager;
 import com.cloudforgeci.api.storage.EfsFactory;
 import com.cloudforgeci.api.observability.AlarmFactory;
 import com.cloudforgeci.api.compute.FargateFactory;
@@ -462,7 +461,7 @@ public class JenkinsFactory {
     DomainFactory domain = new DomainFactory(scope, id + "Domain");
         domain.create();
         
-        // SSL is handled by SslManager in the main createFargate method
+        // SSL is handled by FargateRuntimeConfiguration
     }
     
     // Execute deferred actions (runtime configuration wiring) after all factories are created
@@ -823,8 +822,7 @@ public class JenkinsFactory {
         throw e;
       }
       
-      // SSL certificate and DNS records are handled by SystemContext to avoid duplicates
-      // SslManager is already instantiated in SystemContext.createSslManager()
+      // SSL certificate and DNS records are handled by runtime configurations
 
       LOG.info("*** Step 7: Creating JenkinsSystem result ***");
       JenkinsSystem result;

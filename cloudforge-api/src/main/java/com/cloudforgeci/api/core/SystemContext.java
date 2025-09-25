@@ -17,7 +17,6 @@ import com.cloudforgeci.api.observability.AlarmFactory;
 import com.cloudforgeci.api.compute.Ec2Factory;
 // Note: S3BucketFactory, CloudFrontFactory, and Ec2InstanceFactory will be created later
 import com.cloudforgeci.api.network.DomainFactory;
-import com.cloudforgeci.api.security.SslManager;
 
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.ec2.FlowLogOptions;
@@ -595,7 +594,6 @@ public final class SystemContext extends Construct {
     LOG.info("*** SystemContext: Creating domain and SSL factories ***");
     
     DomainFactory domain = null;
-    SslManager ssl = null;
     
     // Create domain factory if domain is provided
     if (cfc.domain() != null && !cfc.domain().isBlank()) {
@@ -604,15 +602,9 @@ public final class SystemContext extends Construct {
       domain.create();
     }
     
-    // SSL manager temporarily disabled to fix duplicate DNS records
-    // SSL certificate creation is handled by runtime configurations
-    // if (cfc.enableSsl() && cfc.domain() != null && !cfc.domain().isBlank()) {
-    //   ssl = new SslManager(scope, id + "SslManager", new SslManager.Props(cfc));
-    //   ssl.injectContexts();
-    //   ssl.create();
-    // }
+    // SSL certificate creation is handled by runtime configurations (FargateRuntimeConfiguration)
     
-    return new DomainAndSslFactories(domain, ssl);
+    return new DomainAndSslFactories(domain, null);
   }
   
   // ============================================================================
@@ -655,7 +647,7 @@ public final class SystemContext extends Construct {
    */
   public record DomainAndSslFactories(
       DomainFactory domain,
-      SslManager ssl
+      Object ssl  // SSL is handled by runtime configurations
   ) {}
   
   /**

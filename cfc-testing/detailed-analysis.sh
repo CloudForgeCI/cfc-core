@@ -140,9 +140,9 @@ echo ""
 
 if [ "$ec2_route53" != "$fargate_route53" ]; then
     echo -e "${RED}🚨 CRITICAL: Fix duplicate DNS record creation in Fargate${NC}"
-    echo "   - Both topology configuration and SslManager are creating DNS records"
-    echo "   - Need to prevent SslManager from creating records when topology already does"
-    echo "   - Check JenkinsServiceTopologyConfiguration vs SslManager coordination"
+    echo "   - Both topology configuration and runtime configuration are creating DNS records"
+    echo "   - Need to prevent duplicate DNS record creation"
+    echo "   - Check JenkinsServiceTopologyConfiguration vs FargateRuntimeConfiguration coordination"
     echo ""
 fi
 
