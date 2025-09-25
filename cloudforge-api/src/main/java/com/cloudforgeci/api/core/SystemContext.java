@@ -73,6 +73,7 @@ public final class SystemContext extends Construct {
   public final Slot<Boolean> httpsTargetsAdded = new Slot<>();
   public final Slot<Boolean> wired = new Slot<>();
   public final Slot<Boolean> dnsRecordsCreated = new Slot<>();
+  public final Slot<Boolean> dnsRecordsCallbackRegistered = new Slot<>();
   public final Slot<Boolean> asgAddedToTargetGroup = new Slot<>();
   public final Slot<Boolean> fargateAutoscalingConfigured = new Slot<>();
   public final Slot<Boolean> fargateAutoscalingCallbackRegistered = new Slot<>();
@@ -603,12 +604,13 @@ public final class SystemContext extends Construct {
       domain.create();
     }
     
-    // Create SSL manager if SSL is enabled and domain is provided
-    if (cfc.enableSsl() && cfc.domain() != null && !cfc.domain().isBlank()) {
-      ssl = new SslManager(scope, id + "SslManager", new SslManager.Props(cfc));
-      ssl.injectContexts();
-      ssl.create();
-    }
+    // SSL manager temporarily disabled to fix duplicate DNS records
+    // SSL certificate creation is handled by runtime configurations
+    // if (cfc.enableSsl() && cfc.domain() != null && !cfc.domain().isBlank()) {
+    //   ssl = new SslManager(scope, id + "SslManager", new SslManager.Props(cfc));
+    //   ssl.injectContexts();
+    //   ssl.create();
+    // }
     
     return new DomainAndSslFactories(domain, ssl);
   }

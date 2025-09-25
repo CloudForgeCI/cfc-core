@@ -119,9 +119,15 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
     }
     
     // DNS A/AAAA records for ALB (for both SSL and non-SSL deployments)
+    // Check if DNS records callback has already been registered to prevent multiple registrations
+    if (c.dnsRecordsCallbackRegistered.get().isPresent()) {
+      LOG.info("*** DEBUG: DNS records callback already registered, skipping ***");
+      return;
+    }
+    
     LOG.info("*** DEBUG: About to register DNS records callback ***");
     whenBoth(c.zone, c.alb, (zone, alb) -> {
-      // Check if DNS records have already been created (inside the callback to prevent multiple executions)
+      // Check if DNS records have already been created (inside callback to prevent multiple executions)
       if (c.dnsRecordsCreated.get().isPresent()) {
         LOG.info("*** DEBUG: DNS records already created, skipping ***");
         return;
@@ -137,9 +143,11 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
       LOG.info("*** DEBUG: DNS record name: " + record + " ***");
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
-      new ARecord(c, "ServiceAlbAliasA_" + c.topology + "_" + c.runtime, ARecordProps.builder()
+      // Include stack name in construct ID to ensure uniqueness across different deployments
+      String constructIdPrefix = "ServiceAlbAlias_" + c.stackName + "_" + c.topology + "_" + c.runtime;
+      new ARecord(c, constructIdPrefix + "A", ARecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
-      new AaaaRecord(c, "ServiceAlbAliasAAAA_" + c.topology + "_" + c.runtime, AaaaRecordProps.builder()
+      new AaaaRecord(c, constructIdPrefix + "AAAA", AaaaRecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
       LOG.info("*** DEBUG: DNS records created successfully ***");
       
@@ -147,6 +155,9 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
       c.dnsRecordsCreated.set(true);
       LOG.info("*** DEBUG: dnsRecordsCreated set to true ***");
     });
+    
+    // Mark that the DNS records callback has been registered
+    c.dnsRecordsCallbackRegistered.set(true);
     LOG.info("*** DEBUG: DNS records callback registered ***");
   }
 }

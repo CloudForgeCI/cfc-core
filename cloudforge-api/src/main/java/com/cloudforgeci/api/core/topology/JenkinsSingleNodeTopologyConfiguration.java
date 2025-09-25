@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.cloudforgeci.api.core.rules.RuleKit.*;
-import static java.util.List.of;
 
 public final class JenkinsSingleNodeTopologyConfiguration implements TopologyConfiguration {
   @Override public TopologyType kind() { return TopologyType.JENKINS_SINGLE_NODE; }
@@ -66,9 +65,15 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       return;
     }
     
+    // Check if DNS records callback has already been registered to prevent multiple registrations
+    if (c.dnsRecordsCallbackRegistered.get().isPresent()) {
+      System.out.println("*** DEBUG: DNS records callback already registered, skipping ***");
+      return;
+    }
+    
     // Route53 A + AAAA aliases to ALB (only if zone + alb present)
     whenBoth(c.zone, c.alb, (zone, alb) -> {
-      // Check if DNS records have already been created (inside the callback to prevent multiple executions)
+      // Check if DNS records have already been created (inside callback to prevent multiple executions)
       if (c.dnsRecordsCreated.get().isPresent()) {
         System.out.println("*** DEBUG: DNS records already created, skipping ***");
         return;
@@ -86,9 +91,11 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       System.out.println("*** DEBUG: DNS record name: " + recordName + " ***");
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
-      new ARecord(c, "SingleNodeAlbAliasA_" + c.topology + "_" + c.runtime, ARecordProps.builder()
+      // Include stack name in construct ID to ensure uniqueness across different deployments
+      String constructIdPrefix = "SingleNodeAlbAlias_" + c.stackName + "_" + c.topology + "_" + c.runtime;
+      new ARecord(c, constructIdPrefix + "A", ARecordProps.builder()
               .zone(zone).recordName(recordName).target(target).build());
-      new AaaaRecord(c, "SingleNodeAlbAliasAAAA_" + c.topology + "_" + c.runtime, AaaaRecordProps.builder()
+      new AaaaRecord(c, constructIdPrefix + "AAAA", AaaaRecordProps.builder()
               .zone(zone).recordName(recordName).target(target).build());
       
       System.out.println("*** DEBUG: DNS records created successfully ***");
@@ -97,6 +104,10 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       c.dnsRecordsCreated.set(true);
       System.out.println("*** DEBUG: dnsRecordsCreated set to true ***");
     });
+    
+    // Mark that the DNS records callback has been registered
+    c.dnsRecordsCallbackRegistered.set(true);
+    System.out.println("*** DEBUG: DNS records callback registered ***");
 
   }
 }

@@ -823,12 +823,8 @@ public class JenkinsFactory {
         throw e;
       }
       
-      // Create SSL certificate and DNS records if SSL is enabled
-      if (cfc.enableSsl() && cfc.domain() != null && !cfc.domain().isBlank()) {
-          SslManager sslManager = new SslManager(scope, id + "SslManager", new SslManager.Props(cfc));
-          sslManager.injectContexts(); // Manual injection after SystemContext.start()
-          sslManager.create();
-      }
+      // SSL certificate and DNS records are handled by SystemContext to avoid duplicates
+      // SslManager is already instantiated in SystemContext.createSslManager()
 
       LOG.info("*** Step 7: Creating JenkinsSystem result ***");
       JenkinsSystem result;

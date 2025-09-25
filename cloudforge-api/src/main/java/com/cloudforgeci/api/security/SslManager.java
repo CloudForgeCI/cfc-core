@@ -15,12 +15,15 @@ import software.constructs.Construct;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 
 /**
  * Centralized SSL management system that creates SSL certificates and DNS records.
  * HTTPS listener creation is handled by runtime configurations to ensure proper target group setup.
  */
 public class SslManager extends BaseFactory {
+    
+    private static final Logger LOG = Logger.getLogger(SslManager.class.getName());
     
     @com.cloudforgeci.api.core.annotation.SystemContext
     private SystemContext ctx;
@@ -62,8 +65,8 @@ public class SslManager extends BaseFactory {
             createCertificate(ctx, albId);
         }
         
-        // Create DNS record if not already created
-        createDnsRecord(ctx);
+        // DNS record creation is handled by topology configurations to avoid conflicts
+        // DNS records are created by JenkinsServiceTopologyConfiguration and JenkinsSingleNodeTopologyConfiguration
         
         // Note: HTTPS listener creation is handled by FargateRuntimeConfiguration
         // to ensure proper target group configuration
@@ -87,25 +90,9 @@ public class SslManager extends BaseFactory {
     }
     
     private void createDnsRecord(SystemContext ctx) {
-        ctx.zone.get().ifPresent(zone -> {
-            ctx.alb.get().ifPresent(alb -> {
-                String recordName = props.cfc.subdomain() == null ? "" : props.cfc.subdomain();
-                var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
-                
-                // Create both A and AAAA records for SSL deployments
-                new ARecord(this, "SslARecord", ARecordProps.builder()
-                        .zone(zone)
-                        .recordName(recordName)
-                        .target(target)
-                        .build());
-                        
-                new AaaaRecord(this, "SslAaaaRecord", AaaaRecordProps.builder()
-                        .zone(zone)
-                        .recordName(recordName)
-                        .target(target)
-                        .build());
-            });
-        });
+        // Skip DNS record creation - topology configurations handle this to avoid conflicts
+        // DNS records are created by JenkinsServiceTopologyConfiguration and JenkinsSingleNodeTopologyConfiguration
+        LOG.info("*** SslManager: Skipping DNS record creation - handled by topology configuration ***");
     }
     
     private String getAlbId(SystemContext ctx) {
