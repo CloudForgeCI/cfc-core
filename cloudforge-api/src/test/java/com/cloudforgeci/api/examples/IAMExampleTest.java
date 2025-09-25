@@ -95,7 +95,14 @@ class IAMExampleTest {
                 try {
                     App testApp = new App();
                     testApp.getNode().setContext("cfc", createTestConfig());
-                    Stack testStack = new Stack(testApp, "TestAutoStack");
+                    // Specify AWS environment to avoid context provider errors
+                    Stack testStack = new Stack(testApp, "TestAutoStack",
+                        software.amazon.awscdk.StackProps.builder()
+                            .env(software.amazon.awscdk.Environment.builder()
+                                .account("123456789012")
+                                .region("us-east-1")
+                                .build())
+                            .build());
                     DeploymentContext testCfc = DeploymentContext.from(testApp);
                     IAMExample.createWithAutomaticIAM(testStack, "TestAuto", testCfc);
                 } catch (IllegalStateException e) {
@@ -134,7 +141,14 @@ class IAMExampleTest {
                 try {
                     App testApp = new App();
                     testApp.getNode().setContext("cfc", createTestConfig());
-                    Stack testStack = new Stack(testApp, "TestExplicitStack");
+                    // Specify AWS environment to avoid context provider errors
+                    Stack testStack = new Stack(testApp, "TestExplicitStack", 
+                        software.amazon.awscdk.StackProps.builder()
+                            .env(software.amazon.awscdk.Environment.builder()
+                                .account("123456789012")
+                                .region("us-east-1")
+                                .build())
+                            .build());
                     DeploymentContext testCfc = DeploymentContext.from(testApp);
                     IAMExample.createWithExplicitIAM(testStack, "TestExplicit", testCfc);
                 } catch (IllegalStateException e) {
@@ -239,7 +253,14 @@ class IAMExampleTest {
                 try {
                     App testApp = new App();
                     testApp.getNode().setContext("cfc", createTestConfig());
-                    Stack testStack = new Stack(testApp, "TestCompleteStack");
+                    // Specify AWS environment to avoid context provider errors
+                    Stack testStack = new Stack(testApp, "TestCompleteStack",
+                        software.amazon.awscdk.StackProps.builder()
+                            .env(software.amazon.awscdk.Environment.builder()
+                                .account("123456789012")
+                                .region("us-east-1")
+                                .build())
+                            .build());
                     DeploymentContext testCfc = DeploymentContext.from(testApp);
                     IAMExample.demonstrateAllFeatures(testStack, "TestComplete", testCfc);
                 } catch (IllegalStateException e) {
@@ -257,7 +278,14 @@ class IAMExampleTest {
                 try {
                     App testApp = new App();
                     testApp.getNode().setContext("cfc", createTestConfig());
-                    Stack testStack = new Stack(testApp, "TestCompleteEdgeStack");
+                    // Specify AWS environment to avoid context provider errors
+                    Stack testStack = new Stack(testApp, "TestCompleteEdgeStack",
+                        software.amazon.awscdk.StackProps.builder()
+                            .env(software.amazon.awscdk.Environment.builder()
+                                .account("123456789012")
+                                .region("us-east-1")
+                                .build())
+                            .build());
                     DeploymentContext testCfc = DeploymentContext.from(testApp);
                     IAMExample.demonstrateAllFeatures(testStack, "TestCompleteEdge", testCfc);
                 } catch (IllegalStateException e) {
@@ -353,7 +381,14 @@ class IAMExampleTest {
                 try {
                     App testApp = new App();
                     testApp.getNode().setContext("cfc", createTestConfig());
-                    Stack testStack = new Stack(testApp, "TestCombinationsStack");
+                    // Specify AWS environment to avoid context provider errors
+                    Stack testStack = new Stack(testApp, "TestCombinationsStack",
+                        software.amazon.awscdk.StackProps.builder()
+                            .env(software.amazon.awscdk.Environment.builder()
+                                .account("123456789012")
+                                .region("us-east-1")
+                                .build())
+                            .build());
                     DeploymentContext testCfc = DeploymentContext.from(testApp);
                     IAMExample.createWithAutomaticIAM(testStack, "TestCombinations", testCfc);
                 } catch (IllegalStateException e) {
