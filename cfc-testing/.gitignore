@@ -1,6 +1,7 @@
 # CDK artifacts (contains AWS account numbers and sensitive info)
 cdk.out/
 cdk.context.json
+deployment-context.json
 cdk.json
 
 # CDK output and timing files

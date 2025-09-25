@@ -53,21 +53,14 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
 
   @Override
   public void wire(SystemContext c) {
-    System.out.println("*** DEBUG: JenkinsSingleNodeTopologyConfiguration.wire() called ***");
-    System.out.println("*** DEBUG: Zone present: " + c.zone.get().isPresent() + " ***");
-    System.out.println("*** DEBUG: ALB present: " + c.alb.get().isPresent() + " ***");
-    System.out.println("*** DEBUG: Domain: " + c.cfc.domain() + " ***");
-    System.out.println("*** DEBUG: Subdomain: " + c.cfc.subdomain() + " ***");
     
     // Check if we have domain configuration
     if (c.cfc.domain() == null || c.cfc.domain().isBlank()) {
-      System.out.println("*** DEBUG: No domain configured, skipping DNS record creation ***");
       return;
     }
     
     // Check if DNS records callback has already been registered to prevent multiple registrations
     if (c.dnsRecordsCallbackRegistered.get().isPresent()) {
-      System.out.println("*** DEBUG: DNS records callback already registered, skipping ***");
       return;
     }
     
@@ -75,20 +68,16 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
     whenBoth(c.zone, c.alb, (zone, alb) -> {
       // Check if DNS records have already been created (inside callback to prevent multiple executions)
       if (c.dnsRecordsCreated.get().isPresent()) {
-        System.out.println("*** DEBUG: DNS records already created, skipping ***");
         return;
       }
       
-      System.out.println("*** DEBUG: Creating DNS records for zone: " + zone.getZoneName() + " ***");
       
       // Use subdomain for DNS record name, not the full FQDN
       String recordName = c.cfc.subdomain();
       if (recordName == null || recordName.isBlank()) {
-        System.out.println("*** DEBUG: No subdomain provided, skipping DNS record creation ***");
         return;
       }
       
-      System.out.println("*** DEBUG: DNS record name: " + recordName + " ***");
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
       // Include stack name in construct ID to ensure uniqueness across different deployments
@@ -98,16 +87,13 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       new AaaaRecord(c, constructIdPrefix + "AAAA", AaaaRecordProps.builder()
               .zone(zone).recordName(recordName).target(target).build());
       
-      System.out.println("*** DEBUG: DNS records created successfully ***");
       
       // Set the DNS records created flag to prevent duplicate execution
       c.dnsRecordsCreated.set(true);
-      System.out.println("*** DEBUG: dnsRecordsCreated set to true ***");
     });
     
     // Mark that the DNS records callback has been registered
     c.dnsRecordsCallbackRegistered.set(true);
-    System.out.println("*** DEBUG: DNS records callback registered ***");
 
   }
 }

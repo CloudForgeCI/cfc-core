@@ -15,6 +15,8 @@ import java.util.logging.Logger;
  */
 public class DomainFactory extends BaseFactory {
 
+    private static final Logger LOG = Logger.getLogger(DomainFactory.class.getName());
+
     public DomainFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -28,6 +30,8 @@ public class DomainFactory extends BaseFactory {
         if (domainName != null && !domainName.isBlank()) {
             IHostedZone zone = createHostedZone(domainName);
             ctx.zone.set(zone);
+            ctx.domain.set(domainName);
+            ctx.subdomain.set(cfc.subdomain());
         }
     }
 

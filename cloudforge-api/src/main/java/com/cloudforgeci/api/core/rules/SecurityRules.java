@@ -21,8 +21,6 @@ public final class SecurityRules {
   private SecurityRules() {}
 
   public static void install(SystemContext ctx) {
-    System.out.println("*** DEBUG: SecurityRules.install() called ***");
-    LOG.info("*** SecurityRules.install() called for security: " + ctx.security + " ***");
     
     // Create and set the SecurityProfileConfiguration in SystemContext
     final SecurityProfileConfiguration profileConfig = switch (ctx.security) {
@@ -32,7 +30,6 @@ public final class SecurityRules {
     };
     
     ctx.securityProfileConfig.set(profileConfig);
-    LOG.info("*** SecurityProfileConfiguration set in SystemContext: " + profileConfig.getClass().getSimpleName() + " ***");
     
     final SecurityConfiguration p = switch (ctx.security) {
       case DEV        -> new DevSecurityConfiguration();
@@ -40,8 +37,6 @@ public final class SecurityRules {
       case PRODUCTION -> new ProductionSecurityConfiguration();
     };
 
-    System.out.println("*** DEBUG: SecurityConfiguration created: " + p.getClass().getSimpleName() + " ***");
-    LOG.info("*** SecurityConfiguration created: " + p.getClass().getSimpleName() + " ***");
 
     ctx.getNode().addValidation(() -> {
       List<String> errs = new ArrayList<>();
@@ -49,15 +44,8 @@ public final class SecurityRules {
       return errs;
     });
 
-    System.out.println("*** DEBUG: About to call ctx.once() for SecurityProfile wiring ***");
-    LOG.info("*** About to call ctx.once() for SecurityProfile wiring ***");
     ctx.once("ProfileWiring:Security:" + p.kind(), () -> {
-      System.out.println("*** DEBUG: SecurityProfile wiring callback executed ***");
-      LOG.info("*** SecurityProfile wiring callback executed ***");
       p.wire(ctx);
-      LOG.info("*** SecurityProfile wiring completed successfully ***");
     });
-    System.out.println("*** DEBUG: SecurityRules.install() completed ***");
-    LOG.info("*** SecurityRules.install() completed ***");
   }
 }

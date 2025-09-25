@@ -64,11 +64,9 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
   public void wire(SystemContext c) {
     // Ensure this configuration only runs for EC2 runtime
     if (c.runtime != RuntimeType.EC2) {
-      LOG.info("*** Ec2RuntimeConfiguration: Skipping wire() for runtime: " + c.runtime + " ***");
       return;
     }
     
-    LOG.info("*** Ec2RuntimeConfiguration: Starting wire() for EC2 runtime ***");
     
     // Inputs & flags
     final boolean ssl = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl());
@@ -136,12 +134,10 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     // 4b) HTTPS listener - create only when cert and alb are ready
     whenBoth(c.cert, c.alb, (cert, alb) -> {
       if (c.https.get().isPresent()) return; // Avoid duplicate creation
-      LOG.info("*** Ec2RuntimeConfiguration: Creating HTTPS listener ***");
       
       ApplicationListener https;
       if (c.albTargetGroup.get().isPresent()) {
         // Target group is available, create listener with target group
-        LOG.info("*** Ec2RuntimeConfiguration: Creating HTTPS listener with target group ***");
         https = alb.addListener("Https",
                 BaseApplicationListenerProps.builder()
                         .port(443)
@@ -150,7 +146,6 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                         .build());
       } else {
         // Target group is not available, create listener with fixed response
-        LOG.info("*** Ec2RuntimeConfiguration: Creating HTTPS listener with fixed response ***");
         https = alb.addListener("Https",
                 BaseApplicationListenerProps.builder()
                         .port(443)
@@ -162,18 +157,15 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                         .build());
       }
       c.https.set(https);
-      LOG.info("*** Ec2RuntimeConfiguration: HTTPS listener created and set in SystemContext ***");
     });
 
     // 4c) Service behind HTTPS - wait for all components to be ready
     // Handle both AutoScalingGroup (multi-instance) and single EC2 instance cases
     whenBoth(c.https, c.albTargetGroup, (https, tg) -> {
-      LOG.info("*** Ec2RuntimeConfiguration: Adding target group to HTTPS listener ***");
       https.addTargetGroups("SvcHttps",
               AddApplicationTargetGroupsProps.builder()
                       .targetGroups(List.of(tg))
                       .build());
-      LOG.info("*** Ec2RuntimeConfiguration: Target group added to HTTPS listener successfully ***");
     });
 
     // 4d) Make HTTP's DEFAULT action a redirect to HTTPS (don't leave any TG on HTTP)

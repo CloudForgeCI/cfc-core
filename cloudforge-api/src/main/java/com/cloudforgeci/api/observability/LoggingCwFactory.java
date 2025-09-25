@@ -24,7 +24,6 @@ public class LoggingCwFactory extends BaseFactory {
     
     @Override
     public void create() {
-        System.out.println("*** DEBUG: LoggingCwFactory.create() method called ***");
         try {
             // SecurityProfileConfiguration is now injected directly via annotation
             LOG.info("LoggingCwFactory: Starting create() method");
@@ -55,7 +54,6 @@ public class LoggingCwFactory extends BaseFactory {
             String runtimeName = (ctx.runtime != null) ? ctx.runtime.name().toLowerCase() : "unknown";
             String stackName = ctx.stackName;
             String logGroupName = "/aws/jenkins/" + stackName + "/" + runtimeName + "/" + securityProfileName;
-            System.out.println("*** DEBUG: LoggingCwFactory creating log group with name: " + logGroupName + " ***");
             LOG.info("LoggingCwFactory: Creating log group with name: " + logGroupName);
         // Use configurable log retention from DeploymentContext if monitoring is enabled
         RetentionDays retentionDays = config.getLogRetentionDays();

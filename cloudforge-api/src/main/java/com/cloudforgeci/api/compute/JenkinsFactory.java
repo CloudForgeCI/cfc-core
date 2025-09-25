@@ -132,13 +132,8 @@ public class JenkinsFactory {
    * @see #createEc2(Construct, String, DeploymentContext, SecurityProfile)
    */
   public static JenkinsSystem createEc2(Construct scope, String id, DeploymentContext cfc) {
-    LOG.info("*** JenkinsFactory.createEc2(3-param) called for topology: " + cfc.topology() + " ***");
-    LOG.info("*** DEBUG: JenkinsFactory.createEc2(3-param) called ***");
-    LOG.info("*** SIMPLE DEBUG: JenkinsFactory.createEc2(3-param) called ***");
-    LOG.info("*** JenkinsFactory.createEc2(3-param) called with topology=" + cfc.topology() + " ***");
     
     try {
-      LOG.info("*** Creating EC2 Jenkins system with id: " + id + " ***");
       
       JenkinsSystem result = createEc2(scope, id, cfc, cfc.securityProfile());
       return result;
@@ -171,22 +166,12 @@ public class JenkinsFactory {
    * @see DeploymentContext#networkMode()
    */
   public static JenkinsSystem createEc2(Construct scope, String id, DeploymentContext cfc, SecurityProfile security) {
-    LOG.info("*** SIMPLE DEBUG: JenkinsFactory.createEc2(3-param) method started ***");
-    LOG.info("*** JenkinsFactory.createEc2(3-param) called with topology=" + cfc.topology() + " ***");
-    LOG.info("*** Method started successfully, about to start try block ***");
-    
     try {
-      LOG.info("*** Creating EC2 Jenkins system with id: " + id + ", security: " + security + " ***");
-      LOG.info("*** Try block started successfully, about to assign IAM profile ***");
-      
       // Map security profile to appropriate IAM profile
       IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
-      LOG.info("*** IAM profile assigned: " + iamProfile + " ***");
-      LOG.info("*** IAM profile assigned successfully, about to start SystemContext ***");
       
       // Force EC2 runtime for EC2 deployments
       SystemContext ctx = SystemContext.start(scope, cfc.topology(), RuntimeType.EC2, security, iamProfile, cfc);
-      LOG.info("*** DEBUG: SystemContext started successfully ***");
       
       // Set configuration values in SystemContext for centralized management
       ctx.sslEnabled.set(cfc.enableSsl());
@@ -224,27 +209,18 @@ public class JenkinsFactory {
       ctx.fqdn.set(cfc.fqdn());
     
       // Use orchestration layer to create infrastructure factories
-      LOG.info("*** Using orchestration layer to create infrastructure factories ***");
       SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
-      LOG.info("*** Infrastructure factories created successfully via orchestration layer ***");
-      
-      // Create instance security group for EC2 runtime (handled by orchestration layer)
-      LOG.info("*** Instance security group already created by orchestration layer ***");
       
       // AutoScalingGroup for JENKINS_SERVICE topology only if maxInstanceCapacity > 1
       // Otherwise, create single instance for JENKINS_SERVICE topology
-      LOG.info("*** About to check topology for EC2 deployment: " + cfc.topology() + " ***");
       if (cfc.topology() == TopologyType.JENKINS_SERVICE) {
           if (cfc.maxInstanceCapacity() != null && cfc.maxInstanceCapacity() > 1) {
-              LOG.info("*** Creating Auto Scaling Group for JENKINS_SERVICE topology with maxInstanceCapacity: " + cfc.maxInstanceCapacity() + " ***");
               Ec2Factory ec2 = new Ec2Factory(scope, id + "Ec2");
               ec2.create();
           } else {
-              LOG.info("*** Creating single instance for JENKINS_SERVICE topology (maxInstanceCapacity <= 1) ***");
               createSingleEc2Instance(scope, id + "SingleInstance", ctx);
           }
       } else if (cfc.topology() == TopologyType.JENKINS_SINGLE_NODE) {
-          LOG.info("*** Creating single instance for JENKINS_SINGLE_NODE topology ***");
           createSingleEc2Instance(scope, id + "SingleInstance", ctx);
       }
       
@@ -259,10 +235,7 @@ public class JenkinsFactory {
       JenkinsSystem result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
       
       // Execute deferred actions (runtime configuration wiring) after all factories are created
-      LOG.info("*** About to execute deferred actions for runtime configuration ***");
-      LOG.info("*** JenkinsFactory.createEc2: About to execute deferred actions ***");
       ctx.executeDeferredActions();
-      LOG.info("*** JenkinsFactory.createEc2: Deferred actions executed successfully ***");
       
       return result;
       
@@ -281,78 +254,33 @@ public class JenkinsFactory {
   }
 
   public static JenkinsSystem createFargate(Construct scope, String id, DeploymentContext cfc, SecurityProfile security) {
-    LOG.info("*** ===== 4-PARAMETER createFargate METHOD CALLED ===== ***");
     try {
-      LOG.info("JenkinsFactory: Starting createFargate method");
-      
-    IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
-      LOG.info("JenkinsFactory: IAM profile mapped successfully");
-      
-      LOG.info("JenkinsFactory: About to start SystemContext");
-    SystemContext ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, security, iamProfile, cfc);
-      LOG.info("JenkinsFactory: SystemContext started successfully");
+      IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
+      SystemContext ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, security, iamProfile, cfc);
+    
+      // Set DNS configuration early to ensure domain context is available for SSL certificate creation
+      ctx.domain.set(cfc.domain());
+      ctx.subdomain.set(cfc.subdomain());
+      ctx.fqdn.set(cfc.fqdn());
     
       // Use orchestration layer to create infrastructure factories
-      LOG.info("*** Using orchestration layer to create infrastructure factories ***");
       SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
-      LOG.info("*** Infrastructure factories created successfully via orchestration layer ***");
       
       // Create Jenkins-specific factories
-      LOG.info("*** Creating Jenkins-specific factories ***");
+      FargateFactory fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
+      fargate.injectContexts(); // Manual injection after SystemContext.start()
+      fargate.create(); // Call create() to populate fargateTaskDef slot
       
-      try {
-        FargateFactory fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
-        fargate.injectContexts(); // Manual injection after SystemContext.start()
-        fargate.create(); // Call create() to populate fargateTaskDef slot
-        LOG.info("*** DEBUG: FargateFactory created successfully ***");
-      } catch (Exception e) {
-        LOG.severe("*** DEBUG: Exception in FargateFactory: " + e.getMessage() + " ***");
-        e.printStackTrace();
-        throw e;
-      }
-      
-      try {
-        new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
-        LOG.info("*** DEBUG: JenkinsBootstrap created successfully ***");
-      } catch (Exception e) {
-        LOG.severe("*** DEBUG: Exception in JenkinsBootstrap: " + e.getMessage() + " ***");
-        e.printStackTrace();
-        throw e;
-      }
-      
-      try {
-        new AlarmFactory(scope, id + "Alarms", null);
-        LOG.info("*** DEBUG: AlarmFactory created successfully ***");
-      } catch (Exception e) {
-        LOG.severe("*** DEBUG: Exception in AlarmFactory: " + e.getMessage() + " ***");
-        e.printStackTrace();
-        throw e;
-      }
+      new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
+      new AlarmFactory(scope, id + "Alarms", null);
       
       DomainFactory domain = new DomainFactory(scope, id + "Domain");
-      try {
-        domain.create();
-        LOG.info("*** DEBUG: DomainFactory.create() completed successfully ***");
-      } catch (Exception e) {
-        LOG.severe("*** DEBUG: Exception in DomainFactory.create(): " + e.getMessage() + " ***");
-        e.printStackTrace();
-        throw e;
-      }
+      domain.create();
       
-      JenkinsSystem result;
-      try {
-        result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
-        LOG.info("*** DEBUG: JenkinsSystem created successfully ***");
-      } catch (Exception e) {
-        LOG.severe("*** DEBUG: Exception in JenkinsSystem constructor: " + e.getMessage() + " ***");
-        e.printStackTrace();
-        throw e;
-      }
+      JenkinsSystem result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
       
       // Execute deferred actions (runtime configuration wiring) after all factories are created
-      LOG.info("*** Executing deferred actions for runtime configuration ***");
       ctx.executeDeferredActions();
-      LOG.info("*** DEBUG: executeDeferredActions() completed ***");
       
       return result;
       
@@ -366,11 +294,6 @@ public class JenkinsFactory {
    * Validates that the IAM profile is appropriate for the security profile.
    */
   public static JenkinsSystem createEc2(Construct scope, String id, DeploymentContext cfc, SecurityProfile security, IAMProfile iamProfile) {
-    LOG.info("*** JenkinsFactory.createEc2(5-param) called for topology: " + cfc.topology() + " ***");
-    LOG.info("*** SIMPLE DEBUG: JenkinsFactory.createEc2(5-param) called ***");
-    LOG.info("*** JenkinsFactory.createEc2(5-param) called with topology=" + cfc.topology() + " ***");
-    LOG.info("*** Method started successfully, about to start try block ***");
-    
     if (!IAMProfileMapper.isValidCombination(security, iamProfile)) {
       throw new IllegalArgumentException("Invalid combination: SecurityProfile=" + security + " with IAMProfile=" + iamProfile);
     }
@@ -378,7 +301,6 @@ public class JenkinsFactory {
     IAMProfile effectiveIamProfile = iamProfile;
     // Force EC2 runtime for EC2 deployments
     SystemContext ctx = SystemContext.start(scope, cfc.topology(), RuntimeType.EC2, security, effectiveIamProfile, cfc);
-    LOG.info("*** DEBUG: SystemContext started successfully ***");
     
     // Set configuration values in SystemContext for centralized management
     ctx.sslEnabled.set(cfc.enableSsl());
@@ -416,42 +338,19 @@ public class JenkinsFactory {
     ctx.fqdn.set(cfc.fqdn());
     
     // Use orchestration layer to create infrastructure factories
-    LOG.info("*** Using orchestration layer to create infrastructure factories ***");
     SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
-    LOG.info("*** Infrastructure factories created successfully via orchestration layer ***");
-    
-    // Create instance security group for EC2 runtime (handled by orchestration layer)
-    LOG.info("*** Instance security group already created by orchestration layer ***");
     
     // AutoScalingGroup for JENKINS_SERVICE topology only if maxInstanceCapacity > 1
     // Otherwise, create single instance for JENKINS_SERVICE topology
-    LOG.info("*** Checking topology for EC2 deployment: " + cfc.topology() + " ***");
     if (cfc.topology() == TopologyType.JENKINS_SERVICE) {
         if (cfc.maxInstanceCapacity() != null && cfc.maxInstanceCapacity() > 1) {
-            LOG.info("*** Creating multi-instance deployment with AutoScalingGroup (maxInstanceCapacity: " + cfc.maxInstanceCapacity() + ") ***");
             Ec2Factory ec2 = new Ec2Factory(scope, id + "Ec2");
             ec2.create();
         } else {
-            LOG.info("*** Creating single-instance deployment for JENKINS_SERVICE topology (maxInstanceCapacity <= 1) ***");
-            try {
-                createSingleEc2Instance(scope, id + "SingleInstance", ctx);
-                LOG.info("*** Single instance created successfully ***");
-            } catch (Exception e) {
-                LOG.severe("*** Error creating single instance: " + e.getMessage() + " ***");
-                throw e;
-            }
+            createSingleEc2Instance(scope, id + "SingleInstance", ctx);
         }
     } else if (cfc.topology() == TopologyType.JENKINS_SINGLE_NODE) {
-        LOG.info("*** Creating single-instance deployment for JENKINS_SINGLE_NODE topology ***");
-        try {
-            createSingleEc2Instance(scope, id + "SingleInstance", ctx);
-            LOG.info("*** Single instance created successfully ***");
-        } catch (Exception e) {
-            LOG.severe("*** Error creating single instance: " + e.getMessage() + " ***");
-            throw e;
-        }
-    } else {
-        LOG.info("*** Unknown topology for EC2: " + cfc.topology() + " ***");
+        createSingleEc2Instance(scope, id + "SingleInstance", ctx);
     }
     
     new AlarmFactory(scope, id + "Alarms", null);
@@ -465,10 +364,7 @@ public class JenkinsFactory {
     }
     
     // Execute deferred actions (runtime configuration wiring) after all factories are created
-    LOG.info("*** About to execute deferred actions for runtime configuration ***");
-    LOG.info("*** JenkinsFactory.createEc2: About to execute deferred actions ***");
     ctx.executeDeferredActions();
-    LOG.info("*** JenkinsFactory.createEc2: Deferred actions executed successfully ***");
     
     return new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
   }
@@ -480,9 +376,6 @@ public class JenkinsFactory {
    * Uses the existing target group from the orchestration layer instead of creating a new one.
    */
   private static void createSingleEc2Instance(Construct scope, String id, SystemContext ctx) {
-    LOG.info("*** createSingleEc2Instance called for JENKINS_SINGLE_NODE topology ***");
-    LOG.info("*** DEBUG: createSingleEc2Instance called ***");
-    
     // Create EFS Access Point for Jenkins persistent storage (same as Fargate)
     AccessPoint jenkinsAp = null;
     if (ctx.efs.get().isPresent()) {
@@ -493,7 +386,6 @@ public class JenkinsFactory {
           .createAcl(Acl.builder().ownerUid("1000").ownerGid("1000").permissions("750").build())
           .build());
       ctx.ap.set(jenkinsAp);
-      LOG.info("*** DEBUG: EFS Access Point created for Jenkins persistent storage ***");
     }
     
     // Create Jenkins installation user data script with EFS mounting
@@ -533,17 +425,14 @@ public class JenkinsFactory {
     // Use the existing target group from the orchestration layer instead of creating a new one
     if (ctx.albTargetGroup.get().isPresent()) {
       ApplicationTargetGroup existingTargetGroup = ctx.albTargetGroup.get().orElseThrow();
-      LOG.info("*** Using existing target group: " + existingTargetGroup.getNode().getId() + " ***");
       
       // Add the instance to the existing target group so ALB can route traffic to it
       existingTargetGroup.addTarget(new InstanceTarget(instance));
-      LOG.info("*** Instance added to existing target group successfully ***");
     } else {
       LOG.severe("*** ERROR: No target group found! Target groups should be created by orchestration layer ***");
       throw new IllegalStateException("Target group not found - orchestration layer should have created it");
     }
     
-    LOG.info("*** createSingleEc2Instance: Instance created and added to target group successfully ***");
     
     // Note: We don't set asg slot since it's forbidden for JENKINS_SINGLE_NODE
     // The instance is now properly connected to the ALB via the target group
@@ -739,83 +628,66 @@ public class JenkinsFactory {
    * Validates that the IAM profile is appropriate for the security profile.
    */
   public static JenkinsSystem createFargate(Construct scope, String id, DeploymentContext cfc, SecurityProfile security, IAMProfile iamProfile) {
-    LOG.info("*** ===== 5-PARAMETER createFargate METHOD CALLED ===== ***");
-    LOG.info("*** JenkinsFactory.createFargate() called with id: " + id + " (4-parameter version) ***");
     
     try {
-      LOG.info("*** Step 1: Starting SystemContext ***");
       SystemContext ctx;
       try {
         ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, security, iamProfile, cfc);
-        LOG.info("*** SystemContext started successfully ***");
       } catch (Exception e) {
         LOG.severe("*** CRITICAL: Exception in SystemContext.start(): " + e.getMessage() + " ***");
         e.printStackTrace();
         throw e;
       }
     
+      // Set DNS configuration early to ensure domain context is available for SSL certificate creation
+      ctx.domain.set(cfc.domain());
+      ctx.subdomain.set(cfc.subdomain());
+      ctx.fqdn.set(cfc.fqdn());
+    
       // Use orchestration layer to create infrastructure factories
-      LOG.info("*** Using orchestration layer to create infrastructure factories ***");
       SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
-      LOG.info("*** Infrastructure factories created successfully via orchestration layer ***");
       
       // Create FlowLogFactory
-      LOG.info("*** Step 2: Creating FlowLogFactory ***");
       try {
         new FlowLogFactory(scope, id + "Flowlog");
-        LOG.info("*** FlowLogFactory created successfully ***");
       } catch (Exception e) {
         LOG.severe("*** CRITICAL: Exception in FlowLogFactory: " + e.getMessage() + " ***");
         e.printStackTrace();
         throw e;
       }
 
-      LOG.info("*** Step 3: Creating FargateFactory ***");
-      LOG.info("*** VERY SPECIFIC LOG FOR DEBUGGING: About to create FargateFactory in 5-param method ***");
       FargateFactory fargate;
       try {
-        LOG.info("*** About to instantiate FargateFactory ***");
         fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
-        LOG.info("*** FargateFactory instantiated successfully ***");
         fargate.injectContexts(); // Manual injection after SystemContext.start()
-        LOG.info("*** FargateFactory contexts injected successfully ***");
         fargate.create();
-        LOG.info("*** FargateFactory.create() completed successfully ***");
       } catch (Exception e) {
         LOG.severe("*** CRITICAL: Exception in FargateFactory instantiation/creation: " + e.getClass().getSimpleName() + ": " + e.getMessage() + " ***");
         e.printStackTrace();
         throw e;
       }
       
-      LOG.info("*** Step 4: Creating JenkinsBootstrap ***");
       try {
     new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
-        LOG.info("*** JenkinsBootstrap created successfully ***");
       } catch (Exception e) {
         LOG.severe("*** CRITICAL: Exception in JenkinsBootstrap: " + e.getMessage() + " ***");
         e.printStackTrace();
         throw e;
       }
       
-      LOG.info("*** Step 5: Creating AlarmFactory ***");
       try {
     new AlarmFactory(scope, id + "Alarms", null);
-        LOG.info("*** AlarmFactory created successfully ***");
       } catch (Exception e) {
         LOG.severe("*** CRITICAL: Exception in AlarmFactory: " + e.getMessage() + " ***");
         e.printStackTrace();
         throw e;
       }
       
-      LOG.info("*** Step 6: Creating DomainFactory ***");
       DomainFactory domain;
       try {
         domain = new DomainFactory(scope, id + "Domain");
-        LOG.info("*** DomainFactory instantiated ***");
         domain.injectContexts(); // Manual injection after SystemContext.start()
-        LOG.info("*** DomainFactory contexts injected ***");
         domain.create();
-        LOG.info("*** DomainFactory created successfully ***");
       } catch (Exception e) {
         LOG.severe("*** CRITICAL: Exception in DomainFactory: " + e.getMessage() + " ***");
         e.printStackTrace();
@@ -824,13 +696,9 @@ public class JenkinsFactory {
       
       // SSL certificate and DNS records are handled by runtime configurations
 
-      LOG.info("*** Step 7: Creating JenkinsSystem result ***");
       JenkinsSystem result;
       try {
-        LOG.info("*** About to create JenkinsSystem with infra factories ***");
         result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
-        LOG.info("*** JenkinsSystem result created successfully ***");
-        LOG.info("*** About to proceed to executeDeferredActions() ***");
       } catch (Exception e) {
         LOG.severe("*** CRITICAL: Exception in JenkinsSystem creation: " + e.getMessage() + " ***");
         e.printStackTrace();
@@ -838,21 +706,17 @@ public class JenkinsFactory {
       }
       
       // Execute deferred actions (runtime configuration wiring) after all factories are created
-      LOG.info("*** Executing deferred actions for runtime configuration ***");
       try {
         ctx.executeDeferredActions();
-        LOG.info("*** DEBUG: executeDeferredActions() completed ***");
       } catch (Exception e) {
         LOG.severe("*** CRITICAL: Exception in executeDeferredActions(): " + e.getMessage() + " ***");
         e.printStackTrace();
         throw e;
       }
       
-      LOG.info("*** createFargate(4-param) completed successfully ***");
       return result;
       
     } catch (Exception e) {
-      LOG.info("*** Exception in createFargate: " + e.getMessage() + " ***");
       e.printStackTrace();
       throw e;
     }

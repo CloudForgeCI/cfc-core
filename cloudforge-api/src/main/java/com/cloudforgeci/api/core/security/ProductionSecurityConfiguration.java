@@ -54,8 +54,6 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
     @Override
     public void wire(SystemContext c) {
-        System.out.println("*** DEBUG: ProductionSecurityConfiguration.wire() called ***");
-        LOG.info("*** ProductionSecurityConfiguration.wire() called ***");
         
         // Configure observability based on security profile
         configureObservability(c);
@@ -67,7 +65,6 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         validateDependencies(c);
         
         // Debug: Check what slots are available
-        LOG.info("*** ProductionSecurityConfiguration.wire(): Available slots - " + c.presentSlots() + " ***");
         
         // Production security settings - maximum restrictions
         
@@ -154,9 +151,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // HTTPS listener creation is handled by runtime configurations (Ec2RuntimeConfiguration, FargateRuntimeConfiguration)
         // This ensures proper separation of concerns and avoids duplicate listener creation
         whenBoth(c.alb, c.sslEnabled, (alb, sslEnabled) -> {
-            LOG.info("*** ProductionSecurityConfiguration: ALB and SSL enabled detected ***");
             if (sslEnabled) {
-                LOG.info("*** ProductionSecurityConfiguration: SSL is enabled - HTTPS listener will be created by runtime configuration ***");
                 
                 // Configure HTTP listener to redirect to HTTPS when SSL is enabled
                 whenBoth(c.httpRedirectEnabled, c.http, (httpRedirectEnabled, httpListener) -> {

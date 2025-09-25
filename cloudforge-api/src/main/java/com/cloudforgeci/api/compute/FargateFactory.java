@@ -96,16 +96,13 @@ public class FargateFactory extends BaseFactory {
 
   @Override
   public void create() {
-    System.out.println("*** DEBUG: FargateFactory.create() called ***");
     Role executionRole = Role.Builder.create(this, "TaskExecutionRole")
             .assumedBy(ServicePrincipal.Builder.create("ecs-tasks.amazonaws.com").build())
             .managedPolicies(Arrays.asList(
                     ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
             ))
             .build();
-    System.out.println("*** DEBUG: FargateFactory execution role created ***");
     FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task").cpu(cfc.cpu()).memoryLimitMiB(cfc.memory()).taskRole(executionRole).build();
-    System.out.println("*** DEBUG: FargateFactory task definition created ***");
     AccessPoint ap = ctx.efs.get().orElseThrow().addAccessPoint("JenkinsAp", AccessPointOptions.builder()
             .path(JENKINS_PATH)
             .posixUser(PosixUser.builder().uid("1000").gid("1000").build())
@@ -148,13 +145,9 @@ public class FargateFactory extends BaseFactory {
             .build());
     
     // Create container (now that task definition and volume are available)
-    System.out.println("*** DEBUG: About to create ContainerFactory ***");
     ContainerFactory containerFactory = new ContainerFactory(this, getNode().getId() + "Container", ContainerImage.fromRegistry("jenkins/jenkins:lts"));
-    System.out.println("*** DEBUG: ContainerFactory instantiated ***");
     containerFactory.injectContexts(); // Manual injection after SystemContext.start()
-    System.out.println("*** DEBUG: ContainerFactory contexts injected ***");
     containerFactory.create();
-    System.out.println("*** DEBUG: ContainerFactory.create() completed ***");
     
     // Now set the service in context after container is created
     ctx.fargateService.set(service);

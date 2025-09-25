@@ -66,9 +66,6 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
 
   @Override
   public void wire(SystemContext c) {
-    LOG.info("*** DEBUG: JenkinsServiceTopologyConfiguration.wire() called ***");
-    LOG.info("*** DEBUG: Zone present: " + c.zone.get().isPresent() + " ***");
-    LOG.info("*** DEBUG: ALB present: " + c.alb.get().isPresent() + " ***");
     
     // Auto-scaling configuration for both Fargate and EC2 services (only when maxInstanceCapacity > 1)
     boolean scale = c.cfc.maxInstanceCapacity() != null && c.cfc.minInstanceCapacity() > 0 && c.cfc.maxInstanceCapacity() > 1;
@@ -79,21 +76,16 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
         whenBoth(c.fargateService, c.http, (service, http) -> {
           // Check if Fargate autoscaling has already been configured (inside callback to prevent multiple executions)
           if (c.fargateAutoscalingConfigured.get().isPresent()) {
-            LOG.info("*** JenkinsServiceTopologyConfiguration: Fargate autoscaling already configured, skipping ***");
             return;
           }
           
-          LOG.info("*** JenkinsServiceTopologyConfiguration: Setting up Fargate autoscaling ***");
           ScalableTaskCount scalable = service.autoScaleTaskCount(EnableScalingProps.builder().minCapacity(c.cfc.minInstanceCapacity()).maxCapacity(c.cfc.maxInstanceCapacity()).build());
           scalable.scaleOnCpuUtilization("CpuScaleSvc", CpuUtilizationScalingProps.builder().targetUtilizationPercent(c.cfc.cpuTargetUtilization())
                   .scaleInCooldown(Duration.minutes(2)).scaleOutCooldown(Duration.minutes(2)).build());
           c.fargateAutoscalingConfigured.set(true);
-          LOG.info("*** JenkinsServiceTopologyConfiguration: Fargate autoscaling configured successfully ***");
         });
         c.fargateAutoscalingCallbackRegistered.set(true);
-        LOG.info("*** JenkinsServiceTopologyConfiguration: Fargate autoscaling callback registered ***");
       } else {
-        LOG.info("*** JenkinsServiceTopologyConfiguration: Fargate autoscaling callback already registered, skipping ***");
       }
       
       // EC2 autoscaling - add AutoScalingGroup to target group
@@ -102,45 +94,34 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
         whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
           // Check if AutoScalingGroup has already been added to target group (inside callback to prevent multiple executions)
           if (c.asgAddedToTargetGroup.get().isPresent()) {
-            LOG.info("*** JenkinsServiceTopologyConfiguration: AutoScalingGroup already added to target group, skipping ***");
             return;
           }
           
-          LOG.info("*** JenkinsServiceTopologyConfiguration: Adding AutoScalingGroup to target group for EC2 autoscaling ***");
           tg.addTarget(asg);
           c.asgAddedToTargetGroup.set(true);
-          LOG.info("*** JenkinsServiceTopologyConfiguration: AutoScalingGroup added to target group successfully ***");
         });
         c.ec2AutoscalingCallbackRegistered.set(true);
-        LOG.info("*** JenkinsServiceTopologyConfiguration: EC2 autoscaling callback registered ***");
       } else {
-        LOG.info("*** JenkinsServiceTopologyConfiguration: EC2 autoscaling callback already registered, skipping ***");
       }
     }
     
     // DNS A/AAAA records for ALB (for both SSL and non-SSL deployments)
     // Check if DNS records callback has already been registered to prevent multiple registrations
     if (c.dnsRecordsCallbackRegistered.get().isPresent()) {
-      LOG.info("*** DEBUG: DNS records callback already registered, skipping ***");
       return;
     }
     
-    LOG.info("*** DEBUG: About to register DNS records callback ***");
     whenBoth(c.zone, c.alb, (zone, alb) -> {
       // Check if DNS records have already been created (inside callback to prevent multiple executions)
       if (c.dnsRecordsCreated.get().isPresent()) {
-        LOG.info("*** DEBUG: DNS records already created, skipping ***");
         return;
       }
       
-      LOG.info("*** DEBUG: Creating DNS records for zone: " + zone.getZoneName() + " ***");
       // Use subdomain for DNS record name, not the full FQDN
       String record = c.cfc.subdomain();
       if (record == null || record.isBlank()) {
-        LOG.info("*** DEBUG: No subdomain provided, skipping DNS record creation ***");
         return;
       }
-      LOG.info("*** DEBUG: DNS record name: " + record + " ***");
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
       // Include stack name in construct ID to ensure uniqueness across different deployments
@@ -149,15 +130,12 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
               .zone(zone).recordName(record).target(target).build());
       new AaaaRecord(c, constructIdPrefix + "AAAA", AaaaRecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
-      LOG.info("*** DEBUG: DNS records created successfully ***");
       
       // Set the DNS records created flag to prevent duplicate execution
       c.dnsRecordsCreated.set(true);
-      LOG.info("*** DEBUG: dnsRecordsCreated set to true ***");
     });
     
     // Mark that the DNS records callback has been registered
     c.dnsRecordsCallbackRegistered.set(true);
-    LOG.info("*** DEBUG: DNS records callback registered ***");
   }
 }

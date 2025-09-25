@@ -152,7 +152,6 @@ public final class SystemContext extends Construct {
 
   private SystemContext(Stack stack, TopologyType topology, RuntimeType runtime, SecurityProfile security, IAMProfile iamProfile, DeploymentContext cfc) {
     super(stack, NODE_ID);
-    LOG.info("*** SystemContext constructor started ***");
     this.topology = topology;
     this.runtime = runtime;
     this.security = security;
@@ -163,17 +162,12 @@ public final class SystemContext extends Construct {
 
   /** Start once at the entry point; installs runtime + topology + security + iam rules and wiring. */
   public static SystemContext start(Construct scope, TopologyType topology, RuntimeType runtime, SecurityProfile security, IAMProfile iamProfile, DeploymentContext cfc) {
-    LOG.info("*** SystemContext.start() called with topology=" + topology + ", runtime=" + runtime + ", security=" + security + ", iamProfile=" + iamProfile + " ***");
-    System.out.println("*** DEBUG: SystemContext.start() called ***");
     
     try {
       Stack stack = Stack.of(scope);
-      LOG.info("*** Stack resolved: " + stack.getStackName() + " ***");
       
       SystemContext existing = (SystemContext) stack.getNode().tryFindChild(NODE_ID);
       if (existing != null) {
-        LOG.info("*** Existing SystemContext found, checking compatibility ***");
-        System.out.println("*** DEBUG: Existing SystemContext found ***");
         // Allow multiple runtime types in the same stack for testing purposes
         // Runtime type check removed to allow EC2 and Fargate in same stack
         if (existing.topology != topology) {
@@ -186,39 +180,27 @@ public final class SystemContext extends Construct {
           throw new IllegalStateException("SystemContext already started with iamProfile=" + existing.iamProfile);
         }
         
-        LOG.info("*** Returning existing SystemContext ***");
-        System.out.println("*** DEBUG: Returning existing SystemContext ***");
         return existing;
       }
       
       var ctx = new SystemContext(stack, topology, runtime, security, iamProfile, cfc);
-      LOG.info("*** SystemContext constructor completed successfully ***");
       
-      LOG.info("*** ctx.installed = " + ctx.installed + " ***");
       if (!ctx.installed) {
-        LOG.info("*** About to call Rules.installAll() ***");
-        System.out.println("*** DEBUG: About to call Rules.installAll() ***");
         try {
           Rules.installAll(ctx);   // installs RuntimeRules, TopologyRules, SecurityRules, and IAMRules
-          LOG.info("*** Rules installation completed successfully ***");
-          System.out.println("*** DEBUG: Rules installation completed successfully ***");
         } catch (Exception e) {
           LOG.severe("*** ERROR in Rules.installAll(): " + e.getMessage() + " ***");
-          System.out.println("*** DEBUG: ERROR in Rules.installAll(): " + e.getMessage() + " ***");
           e.printStackTrace();
           throw e;
         }
         ctx.installed = true;
       } else {
-        LOG.info("*** Rules already installed, skipping ***");
-        System.out.println("*** DEBUG: Rules already installed, skipping ***");
       }
       
       return ctx;
       
     } catch (Exception e) {
       LOG.severe("*** ERROR in SystemContext.start(): " + e.getMessage() + " ***");
-      System.out.println("*** DEBUG: ERROR in SystemContext.start(): " + e.getMessage() + " ***");
       e.printStackTrace();
       throw e;
     }
@@ -238,31 +220,25 @@ public final class SystemContext extends Construct {
   /** Guard to register a wiring block only once per Stack. */
   public boolean once(String key, Runnable r) {
     if (!onceKeys.add(key)) return false;
-    LOG.info("*** SystemContext.once(): Deferring execution of " + key + " ***");
     deferredActions.add(r);
     return true;
   }
 
   /** Execute all deferred actions. Call this after all factories are created. */
   public void executeDeferredActions() {
-    LOG.info("*** SystemContext.executeDeferredActions(): Executing " + deferredActions.size() + " deferred actions ***");
-    LOG.info("*** Deferred action keys: " + onceKeys + " ***");
     // Create a copy to avoid ConcurrentModificationException
     List<Runnable> actionsToExecute = new ArrayList<>(deferredActions);
     // Clear the original list to prevent interference from new actions
     deferredActions.clear();
     for (Runnable action : actionsToExecute) {
       try {
-        LOG.info("*** Executing deferred action ***");
         action.run();
-        LOG.info("*** Deferred action executed successfully ***");
       } catch (Exception e) {
         LOG.severe("*** Error executing deferred action: " + e.getMessage() + " ***");
         e.printStackTrace();
         throw e;
       }
     }
-    LOG.info("*** All deferred actions executed successfully ***");
   }
 
   public String debugPath(Construct scope) {
@@ -297,7 +273,6 @@ public final class SystemContext extends Construct {
    * @return InfrastructureFactories containing references to created factories
    */
   public InfrastructureFactories createInfrastructureFactories(Construct scope, String idPrefix) {
-    LOG.info("*** SystemContext: Creating infrastructure factories with prefix: " + idPrefix + " ***");
     
     // Create infrastructure factories in dependency order
     VpcFactory vpcFactory = createVpcFactory(scope, idPrefix);
@@ -313,7 +288,6 @@ public final class SystemContext extends Construct {
     // Create target groups (orchestrated by SystemContext)
     createTargetGroups(scope, idPrefix);
     
-    LOG.info("*** SystemContext: Infrastructure factories created successfully ***");
     
     return new InfrastructureFactories(vpcFactory, albFactory, efsFactory, loggingFactory);
   }
@@ -322,11 +296,9 @@ public final class SystemContext extends Construct {
    * Creates a VPC factory with proper context injection.
    */
   public VpcFactory createVpcFactory(Construct scope, String idPrefix) {
-    LOG.info("*** SystemContext: Creating VpcFactory ***");
     VpcFactory vpcFactory = new VpcFactory(scope, idPrefix + "Vpc");
     vpcFactory.injectContexts();
     vpcFactory.create();
-    LOG.info("*** SystemContext: VpcFactory created successfully ***");
     return vpcFactory;
   }
   
@@ -334,11 +306,9 @@ public final class SystemContext extends Construct {
    * Creates an ALB factory with proper context injection.
    */
   public AlbFactory createAlbFactory(Construct scope, String idPrefix) {
-    LOG.info("*** SystemContext: Creating AlbFactory ***");
     AlbFactory albFactory = new AlbFactory(scope, idPrefix + "Alb");
     albFactory.injectContexts();
     albFactory.create();
-    LOG.info("*** SystemContext: AlbFactory created successfully ***");
     return albFactory;
   }
   
@@ -346,11 +316,9 @@ public final class SystemContext extends Construct {
    * Creates an EFS factory with proper context injection.
    */
   public EfsFactory createEfsFactory(Construct scope, String idPrefix) {
-    LOG.info("*** SystemContext: Creating EfsFactory ***");
     EfsFactory efsFactory = new EfsFactory(scope, idPrefix + "Efs");
     efsFactory.injectContexts();
     efsFactory.create();
-    LOG.info("*** SystemContext: EfsFactory created successfully ***");
     return efsFactory;
   }
   
@@ -358,11 +326,9 @@ public final class SystemContext extends Construct {
    * Creates a logging factory with proper context injection.
    */
   public LoggingCwFactory createLoggingFactory(Construct scope, String idPrefix) {
-    LOG.info("*** SystemContext: Creating LoggingCwFactory ***");
     LoggingCwFactory loggingFactory = new LoggingCwFactory(scope, idPrefix + "Logging");
     loggingFactory.injectContexts();
     loggingFactory.create();
-    LOG.info("*** SystemContext: LoggingCwFactory created successfully ***");
     return loggingFactory;
   }
   
@@ -371,7 +337,6 @@ public final class SystemContext extends Construct {
    * This centralizes target group management and prevents duplicates.
    */
   public void createTargetGroups(Construct scope, String idPrefix) {
-    LOG.info("*** SystemContext: Creating target groups for runtime: " + this.runtime + " ***");
     
     if (this.runtime == RuntimeType.EC2) {
       // Create target group for EC2 runtime
@@ -398,7 +363,6 @@ public final class SystemContext extends Construct {
           .build();
       
       this.albTargetGroup.set(targetGroup);
-      LOG.info("*** SystemContext: Target group created for EC2 runtime ***");
       
       // Update HTTP listener to use the target group
       ApplicationListener http = this.http.get().orElseThrow(() -> 
@@ -408,11 +372,12 @@ public final class SystemContext extends Construct {
           .targetGroups(List.of(targetGroup))
           .build());
       
-      LOG.info("*** SystemContext: HTTP listener updated with target group ***");
       
-    } else {
+    } else if (this.runtime == RuntimeType.FARGATE) {
       // For Fargate, target groups are created by FargateRuntimeConfiguration
-      LOG.info("*** SystemContext: Target groups for Fargate will be created by FargateRuntimeConfiguration ***");
+      // We should not create target groups here to avoid conflicts
+    } else {
+      LOG.warning("*** SystemContext: Unknown runtime type: " + this.runtime + " ***");
     }
   }
   
@@ -421,11 +386,9 @@ public final class SystemContext extends Construct {
    * This is infrastructure-specific but not a full factory.
    */
   public SecurityGroup createInstanceSecurityGroup(Construct scope, String idPrefix) {
-    LOG.info("*** SystemContext: Creating instance security group ***");
     
     // Check if instance security group already exists
     if (this.instanceSg.get().isPresent()) {
-      LOG.info("*** SystemContext: Instance security group already exists, returning existing one ***");
       return this.instanceSg.get().orElseThrow();
     }
     
@@ -435,7 +398,6 @@ public final class SystemContext extends Construct {
             .allowAllOutbound(true)
             .build();
     this.instanceSg.set(instanceSg);
-    LOG.info("*** SystemContext: Instance security group created successfully ***");
     return instanceSg;
   }
   
@@ -452,7 +414,6 @@ public final class SystemContext extends Construct {
    * @return JenkinsDeployment containing all created resources
    */
   public JenkinsDeployment createJenkinsDeployment(Construct scope, String id) {
-    LOG.info("*** SystemContext: Creating Jenkins deployment with id: " + id + " ***");
     
     // Create infrastructure factories
     InfrastructureFactories infra = createInfrastructureFactories(scope, id);
@@ -463,7 +424,6 @@ public final class SystemContext extends Construct {
     // Create domain and SSL if configured
     DomainAndSslFactories domainSsl = createDomainAndSslFactories(scope, id);
     
-    LOG.info("*** SystemContext: Jenkins deployment created successfully ***");
     
     return new JenkinsDeployment(infra, jenkins, domainSsl);
   }
@@ -477,7 +437,6 @@ public final class SystemContext extends Construct {
    * @return S3CloudFrontDeployment containing all created resources
    */
   public S3CloudFrontDeployment createS3CloudFrontDeployment(Construct scope, String id) {
-    LOG.info("*** SystemContext: Creating S3 + CloudFront deployment with id: " + id + " ***");
     
     // Create S3 and CloudFront factories
     S3CloudFrontFactories s3cf = createS3CloudFrontFactories(scope, id);
@@ -485,7 +444,6 @@ public final class SystemContext extends Construct {
     // Create domain if configured
     DomainAndSslFactories domainSsl = createDomainAndSslFactories(scope, id);
     
-    LOG.info("*** SystemContext: S3 + CloudFront deployment created successfully ***");
     
     return new S3CloudFrontDeployment(s3cf, domainSsl);
   }
@@ -494,7 +452,6 @@ public final class SystemContext extends Construct {
    * Creates Jenkins-specific factories based on the current runtime configuration.
    */
   private JenkinsSpecificFactories createJenkinsSpecificFactories(Construct scope, String id) {
-    LOG.info("*** SystemContext: Creating Jenkins-specific factories for runtime: " + runtime + " ***");
     
     if (runtime == RuntimeType.FARGATE) {
       return createFargateJenkinsFactories(scope, id);
@@ -509,7 +466,6 @@ public final class SystemContext extends Construct {
    * Creates Fargate-specific Jenkins factories.
    */
   private JenkinsSpecificFactories createFargateJenkinsFactories(Construct scope, String id) {
-    LOG.info("*** SystemContext: Creating Fargate Jenkins factories ***");
     
     // Create Fargate factory
     FargateFactory fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
@@ -539,7 +495,6 @@ public final class SystemContext extends Construct {
    * Creates EC2-specific Jenkins factories.
    */
   private JenkinsSpecificFactories createEc2JenkinsFactories(Construct scope, String id) {
-    LOG.info("*** SystemContext: Creating EC2 Jenkins factories ***");
     
     // Instance security group is already created by createInfrastructureFactories()
     // No need to create it again here
@@ -557,7 +512,6 @@ public final class SystemContext extends Construct {
     Object singleInstance = null;
     if (cfc.maxInstanceCapacity() == null) {
       // TODO: Create Ec2InstanceFactory for single instances
-      LOG.info("*** SystemContext: Single EC2 instance creation not yet implemented ***");
     }
     
     // Create alarms
@@ -572,17 +526,14 @@ public final class SystemContext extends Construct {
    * Creates S3 and CloudFront factories for static web applications.
    */
   private S3CloudFrontFactories createS3CloudFrontFactories(Construct scope, String id) {
-    LOG.info("*** SystemContext: Creating S3 + CloudFront factories ***");
     
     // Create S3 bucket factory
     // TODO: Create S3BucketFactory
     Object s3 = null;
-    LOG.info("*** SystemContext: S3BucketFactory not yet implemented ***");
     
     // Create CloudFront distribution factory
     // TODO: Create CloudFrontFactory
     Object cloudfront = null;
-    LOG.info("*** SystemContext: CloudFrontFactory not yet implemented ***");
     
     return new S3CloudFrontFactories(s3, cloudfront);
   }
@@ -591,7 +542,6 @@ public final class SystemContext extends Construct {
    * Creates domain and SSL factories if configured in the deployment context.
    */
   private DomainAndSslFactories createDomainAndSslFactories(Construct scope, String id) {
-    LOG.info("*** SystemContext: Creating domain and SSL factories ***");
     
     DomainFactory domain = null;
     
