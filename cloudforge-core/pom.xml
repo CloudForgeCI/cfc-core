@@ -3,18 +3,17 @@
   <parent>
     <groupId>com.cloudforgeci</groupId>
     <artifactId>cfc-core</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.5</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>cloudforge-core</artifactId>
-  <version>2.0.0</version>
+  <version>2.0.5</version>
   <packaging>jar</packaging>
   <name>CloudForge Community Core</name>
   <properties>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <build.plugins.plugin.version>3.4.2</build.plugins.plugin.version>
-    <maven.deploy.skip>true</maven.deploy.skip>
     <java.version>21</java.version>
     <cdk.version>2.152.0</cdk.version>
     <constructs.version>10.3.0</constructs.version>

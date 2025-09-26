@@ -22,7 +22,8 @@ public @interface Arn {
     class Validator implements ConstraintValidator<Arn, String> {
         private boolean optional;
         // Basic arn:partition:service:region:account:resource
-        private static final String RX = "^arn:aws[a-zA-Z-]*:[a-z0-9-]+:[a-z0-9-]*:\\d{12}:.+";
+        // Account can be empty (for global services) or exactly 12 digits
+        private static final String RX = "^arn:aws[a-zA-Z-]*:[a-z0-9-]+:[a-z0-9-]*:(?:|\\d{12}):.+";
         public void initialize(Arn a){ optional = a.optional(); }
         public boolean isValid(String v, ConstraintValidatorContext c){
             if (v == null || v.isBlank()) return optional;

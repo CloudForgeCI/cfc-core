@@ -21,8 +21,8 @@ public class DeploymentContextDefaultsTest {
         assertEquals("public", cfc.tier());
         assertEquals("FARGATE", cfc.runtime().name());
         assertEquals("dev", cfc.env());
-        assertEquals(0, cfc.minInstanceCapacity());
-        assertEquals(0, cfc.maxInstanceCapacity());
+        assertEquals(1, cfc.minInstanceCapacity());
+        assertEquals(1, cfc.maxInstanceCapacity());
         assertEquals(60, cfc.cpuTargetUtilization());
         assertEquals(null, cfc.subdomain());
         assertNull(cfc.domain());

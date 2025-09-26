@@ -2,8 +2,10 @@ package com.cloudforgeci.api.core;
 
 import com.cloudforgeci.api.core.utilities.DnsLabel;
 import com.cloudforgeci.api.core.utilities.DnsName;
+import com.cloudforgeci.api.core.utilities.OneOf;
 import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
@@ -23,6 +25,7 @@ import java.util.Map;
  *   runtime:         "ec2" | "fargate"                       (default: ec2)  // alias: variant, architecture
  *   topology:        "jenkins-single-node" | "jenkins-service" | "s3-website"
  *   env:             "dev" | "stage" | "prod"                (default: dev)
+ *   securityProfile: "dev" | "staging" | "production"       (default: dev) -> SecurityProfile enum
  *   region:          e.g. "us-east-1"                        (default: us-east-1)
  *   domain:          e.g. "example.com"
  *   subdomain:       e.g. "jenkins" (used to compute fqdn if not provided)
@@ -37,11 +40,26 @@ import java.util.Map;
  *   artifactsBucket: explicit bucket name (optional)
  *   artifactsPrefix: default "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}"
  *   lbType:          "alb" | "nlb"                            (default: alb)
- *   minInstanceCapacity: default 0
- *   maxInstanceCapacity: default 0
- *   cpuTargetUtilization: default 0
+ *   minInstanceCapacity: default 1
+ *   maxInstanceCapacity: default 3
+ *   cpuTargetUtilization: default 60
  *   cpu:             integer vCPU units (Fargate taskDef)     (default: 1024)
  *   memory:          integer MiB                              (default: 2048)
+ *   instanceType:    EC2 instance type (e.g., "t3.micro")    (default: t3.micro)
+ *   enableMonitoring: enable CloudWatch monitoring             (default: true)
+ *   enableEncryption: enable encryption at rest               (default: true)
+ *   logRetentionDays: CloudWatch log retention in days        (default: 7)
+ *   healthCheckGracePeriod: health check grace period (seconds) (default: 300)
+ *   healthCheckInterval: health check interval (seconds)       (default: 30)
+ *   healthCheckTimeout: health check timeout (seconds)         (default: 5)
+ *   healthyThreshold: healthy threshold count                  (default: 2)
+ *   unhealthyThreshold: unhealthy threshold count              (default: 3)
+ *   deploymentId:    unique identifier for this deployment    (optional)
+ *   deploymentVersion: version tag for this deployment        (optional)
+ *   environment:     "dev" | "staging" | "prod"               (default: dev)
+ *   region:          AWS region override                       (optional)
+ *   tags:            JSON object of additional tags            (optional)
+ *   stackName:       CDK stack name                           (optional)
  *
  * Legacy one-field combos (still accepted, mapped to runtime+topology):
  *   runtime: "jenkins-fargate" -> topology=JENKINS_SERVICE, runtime=FARGATE
@@ -59,8 +77,13 @@ public final class DeploymentContext {
     private final Map<String, Object> raw;
 
     // Required-ish high level knobs
+    @OneOf(value = {"public", "enterprise"}, message = "Tier must be 'public' or 'enterprise'")
     private final String tier;        // public | enterprise
+    
+    @OneOf(value = {"dev", "stage", "prod"}, message = "Environment must be 'dev', 'stage', or 'prod'")
     private final String env;         // dev | stage | prod
+    
+    private final SecurityProfile securityProfile; // DEV | STAGING | PRODUCTION
     private final String region;      // default: us-east-1
 
     // Naming / DNS
@@ -72,12 +95,15 @@ public final class DeploymentContext {
     private final String fqdn;        // computed if not provided
 
     // Networking
+    @OneOf(value = {"public-no-nat", "private-with-nat"}, message = "Network mode must be 'public-no-nat' or 'private-with-nat'")
     private final String networkMode; // public-no-nat | private-with-nat
     private final boolean wafEnabled;
     private final boolean cloudfront;
+    @OneOf(value = {"alb", "nlb"}, message = "Load balancer type must be 'alb' or 'nlb'")
     private final String lbType;      // alb | nlb
 
     // Auth / SSO
+    @OneOf(value = {"none", "alb-oidc", "jenkins-oidc"}, message = "Auth mode must be 'none', 'alb-oidc', or 'jenkins-oidc'")
     private final String authMode;    // none | alb-oidc | jenkins-oidc
     private final String ssoInstanceArn;
     private final String ssoGroupId;
@@ -93,6 +119,19 @@ public final class DeploymentContext {
     private final Integer minInstanceCapacity;
 
     private final boolean enableFlowlogs;
+    
+    // Advanced Configuration
+    private final boolean enableMonitoring;
+    private final boolean enableEncryption;
+    private final Integer logRetentionDays;
+    private final String instanceType;
+    
+    // Health Check Configuration
+    private final Integer healthCheckGracePeriod;
+    private final Integer healthCheckInterval;
+    private final Integer healthCheckTimeout;
+    private final Integer healthyThreshold;
+    private final Integer unhealthyThreshold;
 
     // Jenkins container size
     private final int cpu;
@@ -100,6 +139,7 @@ public final class DeploymentContext {
 
     // Derived conveniences
     private final boolean enableSsl;
+    private final boolean createZone;
 
     // New canonical types
     private final RuntimeType runtime;
@@ -109,11 +149,19 @@ public final class DeploymentContext {
     private final String runtimeRaw;      // may be "ec2"/"fargate" or a legacy combo like "jenkins-fargate"
     private final String topologyRaw;     // if user provided an explicit string topology
 
+    // Additional deployment tracking fields
+    private final String deploymentId;
+    private final String deploymentVersion;
+    private final String environment;
+    private final String tags;
+    private final String stackName;
+
     protected DeploymentContext(Map<String, Object> raw) {
         this.raw = Collections.unmodifiableMap(new LinkedHashMap<>(raw));
 
         this.tier   = str("tier", "public");
         this.env    = str("env", "dev");
+        this.securityProfile = parseSecurityProfile(str("securityProfile", "dev"));
         this.region = str("region", "us-east-1");
 
         this.domain = str("domain", null);
@@ -140,11 +188,31 @@ public final class DeploymentContext {
         this.cpu = intval("cpu", 1024);
         this.memory = intval("memory", 2048);
 
-        this.minInstanceCapacity = intval("minInstanceCapacity", 0);
-        this.maxInstanceCapacity = intval("maxInstanceCapacity", 0);
+        this.minInstanceCapacity = intval("minInstanceCapacity", 1);
+        this.maxInstanceCapacity = intval("maxInstanceCapacity", 1);
         this.cpuTargetUtilization = intval("cpuTargetUtilization", 60);
 
         this.enableFlowlogs = bool("enableFlowlogs", false);
+        
+        // Advanced Configuration
+        this.enableMonitoring = bool("enableMonitoring", true);
+        this.enableEncryption = bool("enableEncryption", true);
+        this.logRetentionDays = intval("logRetentionDays", 7);
+        this.instanceType = str("instanceType", "t3.micro");
+        
+        // Health Check Configuration
+        this.healthCheckGracePeriod = intval("healthCheckGracePeriod", 300);
+        this.healthCheckInterval = intval("healthCheckInterval", 30);
+        this.healthCheckTimeout = intval("healthCheckTimeout", 5);
+        this.healthyThreshold = intval("healthyThreshold", 2);
+        this.unhealthyThreshold = intval("unhealthyThreshold", 3);
+
+        // Additional deployment tracking fields
+        this.deploymentId = str("deploymentId", null);
+        this.deploymentVersion = str("deploymentVersion", null);
+        this.environment = str("environment", "dev");
+        this.tags = str("tags", null);
+        this.stackName = str("stackName", null);
 
         // Legacy/alias inputs
         String runtimeAlias = str("runtime", "fargate");
@@ -158,6 +226,9 @@ public final class DeploymentContext {
 
         // SSL default remains explicit; do not silently infer on domain unless asked to
         this.enableSsl = bool("enableSsl", false);
+        
+        // Zone creation flag - only create hosted zones when explicitly requested
+        this.createZone = bool("createZone", false);
 
         validateOrThrow();
     }
@@ -176,6 +247,16 @@ public final class DeploymentContext {
 
     public String tier() { return tier; }
     public String env() { return env; }
+    
+    /**
+     * Gets the security profile enum.
+     * 
+     * @return SecurityProfile enum value
+     */
+    public SecurityProfile securityProfile() {
+        return securityProfile;
+    }
+    
     public String region() { return region; }
 
     public String domain() { return domain; }
@@ -187,16 +268,36 @@ public final class DeploymentContext {
     public boolean cloudfrontEnabled() { return cloudfront; }
     public String lbType() { return lbType; }
 
-    public int cpuTargetUtilization() { return cpuTargetUtilization; }
-    public int maxInstanceCapacity() { return maxInstanceCapacity; }
-    public int minInstanceCapacity() { return minInstanceCapacity; }
+    public Integer cpuTargetUtilization() { return cpuTargetUtilization; }
+    public Integer maxInstanceCapacity() { return maxInstanceCapacity; }
+    public Integer minInstanceCapacity() { return minInstanceCapacity; }
 
     public boolean enableFlowlogs() { return enableFlowlogs; }
+    
+    // Advanced Configuration
+    public boolean enableMonitoring() { return enableMonitoring; }
+    public boolean enableEncryption() { return enableEncryption; }
+    public Integer logRetentionDays() { return logRetentionDays; }
+    public String instanceType() { return instanceType; }
+    
+    // Health Check Configuration
+    public Integer healthCheckGracePeriod() { return healthCheckGracePeriod; }
+    public Integer healthCheckInterval() { return healthCheckInterval; }
+    public Integer healthCheckTimeout() { return healthCheckTimeout; }
+    public Integer healthyThreshold() { return healthyThreshold; }
+    public Integer unhealthyThreshold() { return unhealthyThreshold; }
 
     public String authMode() { return authMode; }
     public String ssoInstanceArn() { return ssoInstanceArn; }
     public String ssoGroupId() { return ssoGroupId; }
     public String ssoTargetAccountId() { return ssoTargetAccountId; }
+
+    // Additional deployment tracking fields
+    public String deploymentId() { return deploymentId; }
+    public String deploymentVersion() { return deploymentVersion; }
+    public String environment() { return environment; }
+    public String tags() { return tags; }
+    public String stackName() { return stackName; }
 
     public String artifactsBucket() { return artifactsBucket; }
     public String artifactsPrefix() { return artifactsPrefix; }
@@ -205,6 +306,7 @@ public final class DeploymentContext {
     public int memory() { return memory; }
 
     public boolean enableSsl() { return enableSsl; }
+    public boolean createZone() { return createZone; }
 
     /** Raw immutable view of all context keys. */
     public Map<String, Object> raw() { return raw; }
@@ -224,6 +326,17 @@ public final class DeploymentContext {
 
     /** True if enterprise features should be enabled. */
     public boolean isEnterprise() { return "enterprise".equalsIgnoreCase(tier); }
+
+    /** Get the runtime type. */
+    public RuntimeType getRuntime() { return runtime; }
+
+    /** Get the topology type. */
+    public TopologyType getTopology() { return topology; }
+
+    /** Get a context value by key with default. */
+    public String getContextValue(String key, String defaultValue) {
+        return str(key, defaultValue);
+    }
 
     /** Tag a stack so you can see the config in the console. */
     public void tagStack(Stack stack) {
@@ -296,12 +409,22 @@ public final class DeploymentContext {
         return new DeploymentConfigurations(runtime, topology);
     }
 
+    private static SecurityProfile parseSecurityProfile(String val) {
+        String s = val.trim().toLowerCase(Locale.ROOT);
+        return switch (s) {
+            case "dev" -> SecurityProfile.DEV;
+            case "staging" -> SecurityProfile.STAGING;
+            case "production" -> SecurityProfile.PRODUCTION;
+            default -> SecurityProfile.DEV; // Default to DEV
+        };
+    }
+
     private static TopologyType parseTopology(String val) {
         String t = val.trim().toLowerCase(Locale.ROOT)
                 .replace('_', '-')
                 .replace(' ', '-');
         return switch (t) {
-            case "jenkins-single-node", "jenkins_single_node", "single-node", "single_node" -> TopologyType.JENKINS_SINGLE_NODE;
+            case "jenkins-single-node", "jenkins_single_node", "single-node", "single_node", "node" -> TopologyType.JENKINS_SINGLE_NODE;
             case "jenkins-service", "jenkins_service", "service" -> TopologyType.JENKINS_SERVICE;
             case "s3-website", "s3_website", "s3" -> TopologyType.S3_WEBSITE;
             default -> TopologyType.JENKINS_SINGLE_NODE;
@@ -338,6 +461,13 @@ public final class DeploymentContext {
     }
 
     private int intval(String key, int def) {
+        Object v = raw.get(key);
+        if (v == null) return def;
+        if (v instanceof Number) return ((Number) v).intValue();
+        try { return Integer.parseInt(v.toString().trim()); } catch (Exception e) { return def; }
+    }
+
+    private Integer intval(String key, Integer def) {
         Object v = raw.get(key);
         if (v == null) return def;
         if (v instanceof Number) return ((Number) v).intValue();

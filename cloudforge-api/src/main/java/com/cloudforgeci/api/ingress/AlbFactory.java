@@ -1,52 +1,128 @@
 package com.cloudforgeci.api.ingress;
 
-import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.core.SystemContext;
-
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
-
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
-
 import software.constructs.Construct;
 
-public class AlbFactory extends Construct {
+import java.util.List;
+import java.util.logging.Logger;
 
-  private final Props p;
+/**
+ * ALB Factory using annotation-based context injection.
+ * This demonstrates the cleaner approach without passing SystemContext as parameters.
+ */
+public class AlbFactory extends BaseFactory {
 
-  public record Props(DeploymentContext cfc) {  }
+    private static final Logger LOG = Logger.getLogger(AlbFactory.class.getName());
 
+    public AlbFactory(Construct scope, String id) {
+        super(scope, id);
+    }
 
-  public AlbFactory(Construct scope, String id, Props props) {
-    super(scope, id);
-    this.p = props;
-    SystemContext ctx = SystemContext.of(this);
+    @Override
+    public void create() {
+        if (ctx == null) {
+            throw new IllegalStateException("SystemContext is null in AlbFactory.create()");
+        }
+        
+        try {
+            // Create security group
+            SecurityGroup albSg = createSecurityGroup();
+            ctx.albSg.set(albSg);
+            
+            // Create ALB
+            ApplicationLoadBalancer alb = createLoadBalancer(albSg);
+            ctx.alb.set(alb);
 
-    SecurityGroup albSg = SecurityGroup.Builder.create(this, "AlbSg")
-            .vpc(ctx.vpc.get().orElseThrow()).allowAllOutbound(true).build();
+            // Create HTTP listener (target groups are created by orchestration layer)
+            if (ctx.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+                // For EC2, create HTTP listener with placeholder default action
+                // The target group will be created by orchestration layer and added to listener later
+                ApplicationListener http = createFargateHttpListener(alb, ctx.cfc != null && Boolean.TRUE.equals(ctx.cfc.enableSsl()));
+                ctx.http.set(http);
+            } else {
+                // For Fargate, create HTTP listener with placeholder default action
+                // The default action will be updated by FargateRuntimeConfiguration when the service is ready
+                ApplicationListener http = createFargateHttpListener(alb, ctx.cfc != null && Boolean.TRUE.equals(ctx.cfc.enableSsl()));
+                ctx.http.set(http);
+            }
+            
+        } catch (Exception e) {
+            LOG.severe("Exception in AlbFactory.create(): " + e.getMessage());
+            throw e;
+        }
+    }
 
-    albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(80),  "Enable Http to Load Balancer",  false);
-    ctx.albSg.set(albSg);
+    private SecurityGroup createSecurityGroup() {
+        return SecurityGroup.Builder.create(this, "AlbSg")
+                .vpc(ctx.vpc.get().orElseThrow())
+                .allowAllOutbound(true)
+                .build();
+    }
 
-    ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, "Alb")
-            .vpc(ctx.vpc.get().orElseThrow())
-            .securityGroup(albSg)
-            .internetFacing(true).build();
-    ctx.alb.set(alb);
+    private ApplicationLoadBalancer createLoadBalancer(SecurityGroup albSg) {
+        return ApplicationLoadBalancer.Builder.create(this, "JenkinsAlb")
+                .vpc(ctx.vpc.get().orElseThrow())
+                .securityGroup(albSg)
+                .internetFacing(true)
+                .build();
+    }
 
-   ApplicationListener http = alb.addListener("Http",
-            BaseApplicationListenerProps.builder()
-                    .port(80)
-                    .defaultAction(ListenerAction.redirect(
-                            RedirectOptions.builder().protocol("HTTPS").port("443").build()))
-                    .build());
-    ctx.http.set(http);
+    private ApplicationTargetGroup createTargetGroup(ApplicationLoadBalancer alb) {
+        // Use configurable health check settings from DeploymentContext
+        int interval = ctx.cfc.healthCheckInterval() != null ? ctx.cfc.healthCheckInterval() : 30;
+        int timeout = ctx.cfc.healthCheckTimeout() != null ? ctx.cfc.healthCheckTimeout() : 5;
+        int healthyThreshold = ctx.cfc.healthyThreshold() != null ? ctx.cfc.healthyThreshold() : 2;
+        int unhealthyThreshold = ctx.cfc.unhealthyThreshold() != null ? ctx.cfc.unhealthyThreshold() : 3;
+        
+        return ApplicationTargetGroup.Builder.create(this, "JenkinsTg")
+                .vpc(ctx.vpc.get().orElseThrow())
+                .port(8080)
+                .protocol(ApplicationProtocol.HTTP)
+                .targetType(TargetType.INSTANCE)
+                .healthCheck(HealthCheck.builder()
+                        .path("/login")
+                        .healthyHttpCodes("200-299")
+                        .interval(software.amazon.awscdk.Duration.seconds(interval))
+                        .timeout(software.amazon.awscdk.Duration.seconds(timeout))
+                        .healthyThresholdCount(healthyThreshold)
+                        .unhealthyThresholdCount(unhealthyThreshold)
+                        .build())
+                .build();
+    }
 
+    private ApplicationListener createHttpListener(ApplicationLoadBalancer alb, ApplicationTargetGroup targetGroup) {
+        return alb.addListener("Http", BaseApplicationListenerProps.builder()
+                .port(80)
+                .defaultAction(ListenerAction.forward(List.of(targetGroup)))
+                .build());
+    }
 
+    private ApplicationListener createFargateHttpListener(ApplicationLoadBalancer alb, boolean sslEnabled) {
+        // Create HTTP listener with a temporary default action
+        // This will be updated by FargateRuntimeConfiguration when the Fargate service is ready
+        return alb.addListener("Http", BaseApplicationListenerProps.builder()
+                .port(80)
+                .defaultAction(ListenerAction.fixedResponse(200, FixedResponseOptions.builder()
+                        .contentType("text/plain")
+                        .messageBody("Jenkins is starting up...")
+                        .build()))
+                .build());
+    }
 
-  }
-
-
-
+    private ApplicationListener createHttpListenerWithoutTargetGroup(ApplicationLoadBalancer alb, boolean sslEnabled) {
+        // HTTP listener configuration is now handled by SecurityProfile wiring
+        // SSL redirect logic is centralized in SecurityProfile.wire() method
+        return alb.addListener("Http", BaseApplicationListenerProps.builder()
+                .port(80)
+                .defaultAction(ListenerAction.fixedResponse(200, FixedResponseOptions.builder()
+                        .contentType("text/plain")
+                        .messageBody("Jenkins is starting up...")
+                        .build()))
+                .build());
+    }
 }

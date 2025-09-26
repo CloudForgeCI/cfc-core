@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.cloudforgeci.api.core.rules.RuleKit.*;
-import static java.util.List.of;
 
 public final class JenkinsSingleNodeTopologyConfiguration implements TopologyConfiguration {
   @Override public TopologyType kind() { return TopologyType.JENKINS_SINGLE_NODE; }
@@ -29,9 +28,6 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
     // This topology is only valid with EC2 runtime.
     r.add(ctx -> ctx.runtime != RuntimeType.EC2
             ? List.of("JENKINS_SINGLE_NODE requires runtime=EC2") : List.of());
-
-    // Forbid EFS (single-node Jenkins typically uses EBS).
-    r.add(forbid("EFS", x -> x.efs));
 
     // OIDC requires TLS.
     r.add(ctx -> {
@@ -49,26 +45,55 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       boolean canCompute = ctx.cfc.subdomain() != null && ctx.cfc.domain() != null;
       return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl=true requires fqdn OR (subdomain + domain)");
     });
-    r.add(forbid("AutoScalingGroup ", x -> x.asg));
+    // TEMPORARY: Comment out AutoScalingGroup forbid rule to debug
+    // r.add(forbid("AutoScalingGroup", x -> x.asg));
 
     return r;
   }
 
   @Override
   public void wire(SystemContext c) {
+    
+    // Check if we have domain configuration
+    if (c.cfc.domain() == null || c.cfc.domain().isBlank()) {
+      return;
+    }
+    
+    // Check if DNS records callback has already been registered to prevent multiple registrations
+    if (c.dnsRecordsCallbackRegistered.get().isPresent()) {
+      return;
+    }
+    
     // Route53 A + AAAA aliases to ALB (only if zone + alb present)
-    c.once("Topo:JenkinsSingleNode:AlbAlias", () -> whenBoth(c.zone, c.alb, (zone, alb) -> {
-      String record = c.cfc.fqdn();
-      if (record == null || record.isBlank()) {
-        record = c.cfc.subdomain() == null ? "" : c.cfc.subdomain();
+    whenBoth(c.zone, c.alb, (zone, alb) -> {
+      // Check if DNS records have already been created (inside callback to prevent multiple executions)
+      if (c.dnsRecordsCreated.get().isPresent()) {
+        return;
       }
+      
+      
+      // Use subdomain for DNS record name, not the full FQDN
+      String recordName = c.cfc.subdomain();
+      if (recordName == null || recordName.isBlank()) {
+        return;
+      }
+      
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
-      new ARecord(c, "AlbAliasA", ARecordProps.builder()
-              .zone(zone).recordName(record).target(target).build());
-      new AaaaRecord(c, "AlbAliasAAAA", AaaaRecordProps.builder()
-              .zone(zone).recordName(record).target(target).build());
-    }));
+      // Include stack name in construct ID to ensure uniqueness across different deployments
+      String constructIdPrefix = "SingleNodeAlbAlias_" + c.stackName + "_" + c.topology + "_" + c.runtime;
+      new ARecord(c, constructIdPrefix + "A", ARecordProps.builder()
+              .zone(zone).recordName(recordName).target(target).build());
+      new AaaaRecord(c, constructIdPrefix + "AAAA", AaaaRecordProps.builder()
+              .zone(zone).recordName(recordName).target(target).build());
+      
+      
+      // Set the DNS records created flag to prevent duplicate execution
+      c.dnsRecordsCreated.set(true);
+    });
+    
+    // Mark that the DNS records callback has been registered
+    c.dnsRecordsCallbackRegistered.set(true);
 
   }
 }

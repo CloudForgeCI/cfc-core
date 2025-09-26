@@ -2,29 +2,26 @@ package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforgeci.api.interfaces.TopologyType;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
-import software.amazon.awscdk.Stack;
-import software.amazon.awscdk.services.certificatemanager.DnsValidatedCertificate;
-import software.amazon.awscdk.services.certificatemanager.DnsValidatedCertificateProps;
-import software.amazon.awscdk.services.certificatemanager.ICertificate;
+import software.amazon.awscdk.services.certificatemanager.Certificate;
+import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
 import software.amazon.awscdk.services.ec2.ISecurityGroup;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
-import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationActionProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationTargetGroupsProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
-import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps;
+import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListener;
+import software.amazon.awscdk.services.elasticloadbalancingv2.FixedResponseOptions;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate;
-import software.amazon.awscdk.services.elasticloadbalancingv2.RedirectOptions;
-import software.amazon.awscdk.services.route53.ARecord;
-import software.amazon.awscdk.services.route53.ARecordProps;
-import software.amazon.awscdk.services.route53.RecordTarget;
-import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.logging.Logger;
 
 import static com.cloudforgeci.api.core.rules.RuleKit.forbid;
 import static com.cloudforgeci.api.core.rules.RuleKit.require;
@@ -34,6 +31,8 @@ import static com.cloudforgeci.api.core.rules.RuleKit.whenBoth;
 
 public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
 
+  private static final Logger LOG = Logger.getLogger(Ec2RuntimeConfiguration.class.getName());
+
   @Override
   public RuntimeType kind() { return RuntimeType.EC2; }
 
@@ -42,84 +41,159 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
 
   @Override
   public List<Rule> rules(SystemContext c) {
-    return List.of(
-            require("vpc", x -> x.vpc),
-            require("alb", x -> x.alb),
-            //require("targetGroup", x -> x.albTargetGroup),
-            require("asg", x -> x.asg),
-            //require("instanceSg", x -> x.instanceSg),
-            forbid("fargate", x -> x.fargateService)
-    );
+    var rules = new ArrayList<Rule>();
+    
+    // Always required
+    rules.add(require("vpc", x -> x.vpc));
+    rules.add(require("alb", x -> x.alb));
+    rules.add(require("targetGroup", x -> x.albTargetGroup));
+    rules.add(require("instanceSg", x -> x.instanceSg));
+    rules.add(forbid("fargate", x -> x.fargateService));
+    
+    // AutoScalingGroup is only required for JENKINS_SERVICE topology when maxInstanceCapacity > 1
+    // When maxInstanceCapacity <= 1, JenkinsFactory creates a single instance instead of ASG
+    // JENKINS_SINGLE_NODE forbids AutoScalingGroup
+    if (c.topology == TopologyType.JENKINS_SERVICE && c.cfc.maxInstanceCapacity() != null && c.cfc.maxInstanceCapacity() > 1) {
+        rules.add(require("asg", x -> x.asg));
+    }
+    
+    return rules;
   }
 
   @Override
   public void wire(SystemContext c) {
-    // ASG -> TargetGroup
-    whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> tg.addTarget(asg));
+    // Ensure this configuration only runs for EC2 runtime
+    if (c.runtime != RuntimeType.EC2) {
+      return;
+    }
+    
+    
+    // Inputs & flags
+    final boolean ssl = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl());
+    final String domain = norm(c.cfc != null ? c.cfc.domain() : null);
+    final String fqdn = norm(c.cfc != null ? c.cfc.fqdn() : null);
 
-    // ALB SG -> Instance SG :8080
+    final boolean haveHost = (domain != null && !domain.isBlank()) || (fqdn != null && !fqdn.isBlank());
+    final boolean wantSslDns = ssl && haveHost; // SSL mode with host → cert + HTTPS + redirect
+
+    // ── 0) DNS A record for ALB (works with or without SSL) ──────────────────────
+    // Note: DNS record creation is handled by topology configurations to avoid conflicts
+    // if (wantDns) {
+    //   whenBoth(c.zone, c.alb, (zone, alb) -> {
+    //     final String zoneName = norm(zone.getZoneName());
+    //     final String host = (fqdn != null && !fqdn.isBlank()) ? fqdn : (domain != null ? domain : zoneName);
+    //
+    //     if (!host.equals(zoneName) && !host.endsWith("." + zoneName)) {
+    //       throw new IllegalArgumentException("Host '" + host + "' is not within zone '" + zoneName + "'");
+    //     }
+    //     final String recordName = host.equals(zoneName) ? null
+    //             : host.substring(0, host.length() - (zoneName.length() + 1)); // "jenkins"
+    //
+    //     RecordTarget target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
+    //     ARecordProps.Builder aProps = ARecordProps.builder()
+    //             .zone(zone).target(target);
+    //     if (recordName != null && !recordName.isBlank()) aProps.recordName(recordName);
+    //     new ARecord(c, "AlbAliasA", aProps.build());
+    //   });
+    // }
+
+    // ── 1) ASG -> TargetGroup wiring is now handled by JenkinsServiceTopologyConfiguration ─────
+    // This prevents duplicate target group additions and centralizes the logic
+    // whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> tg.addTarget(asg)); // REMOVED - handled by topology configuration
+
+    // ── 2) ALB SG -> Instance SG :8080 ──────────────────────────────────────────
     whenBoth(c.alb, c.instanceSg, (alb, isg) -> {
-      ISecurityGroup albSg =  alb.getConnections().getSecurityGroups().get(0);
+      ISecurityGroup albSg = alb.getConnections().getSecurityGroups().get(0);
       isg.addIngressRule(Peer.securityGroupId(albSg.getSecurityGroupId()),
-              Port.tcp(8080), "ALB -> Jenkins 8080", false);
+              Port.tcp(8080), "ALB_to_Jenkins_8080", false);
     });
-    // ---- HTTPS (enableSsl) ----
-    boolean sslEnabled  = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl());
-    boolean haveDomain  = c.cfc != null && c.cfc.domain() != null && !c.cfc.domain().isBlank();
 
-    if (sslEnabled) {
-      // 1) Auto-create ACM cert if absent and we have a Hosted Zone + domain
-      c.once("EC2-AcmCert", () -> whenBoth(c.zone, c.alb, (zone, albIface) -> {
-        if (c.cert.get().isPresent()) return;
-        if (!haveDomain) return;
-        String fqdn = c.cfc.fqdn();
-        ICertificate cert = new DnsValidatedCertificate(c, "HttpsCert",
-                DnsValidatedCertificateProps.builder()
-                        .hostedZone(zone)
-                        .domainName(fqdn)
-                        .region(Stack.of(c).getRegion())   // cert in same region as ALB
-                        .build());
-        c.cert.set(cert);
-      }));
-
-      // 2) Create HTTPS listener when ALB + Certificate (+ TG) exist, and mirror HTTP default
-      whenAll(c.alb, c.cert, c.albTargetGroup, (albIface, cert, tg) -> {
-        ApplicationLoadBalancer alb = albIface;
-        ApplicationListener https = alb.addListener("Https",
-                BaseApplicationListenerProps.builder()
-                        .port(443)
-                        .certificates(java.util.List.of(ListenerCertificate.fromCertificateManager(cert)))
-                        .build());
-        c.https.set(https);
-
-        https.addTargetGroups("Forward",
-                AddApplicationTargetGroupsProps.builder()
-                        .targetGroups(List.of(c.albTargetGroup.get().orElseThrow()))
-                        .build());
-
-        c.http.get().orElseThrow().addAction("Redirect",
-                AddApplicationActionProps.builder()
-                        .action(ListenerAction.redirect(
-                                RedirectOptions.builder().protocol("HTTPS").port("443").build()))
-                        .build());
-
-        // same as HTTP: default forward -> TG
-        https.addTargetGroups("HttpsDefault",
-                AddApplicationTargetGroupsProps.builder()
-                        .targetGroups(java.util.List.of(tg))
-                        .build());
+    // ── 3) DOMAIN + NO SSL → HTTP only (single TG), NO cert/https/redirect ─────
+    if (!ssl) {
+      whenBoth(c.http, c.albTargetGroup, (http, tg) -> {
+        // HTTP listener already has the target group as default action from AlbFactory
+        // No additional wiring needed for HTTP-only mode
       });
+      return; // ← CRITICAL: prevents creating cert/https/redirect
     }
 
+    // ── 4) SSL + DOMAIN/FQDN → ACM + HTTPS + HTTP default redirect ─────────────
+    if (!wantSslDns) return; // SSL requested but no host → fall back to HTTP-only silently
 
-    // (Optional) A-record when Zone + ALB appear
-    c.once("EC2:ARecord", () -> whenBoth(c.zone, c.alb, (zone, alb) -> {
-      new ARecord(c, "AliasToAlb", ARecordProps.builder()
-              .zone(zone)
-              .recordName(c.cfc.subdomain() == null ? "" : c.cfc.subdomain())
-              .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
-              .build());
-    }));
+    // 4a) ACM cert (DNS validation)
+    whenBoth(c.zone, c.alb, (zone, alb) -> {
+      if (c.cert.get().isPresent()) return;
+      Certificate cert = Certificate.Builder
+              .create(c, "HttpsCert")
+              .domainName(fqdn != null ? fqdn : domain)
+              .validation(CertificateValidation.fromDns(zone))
+              .build();
+      c.cert.set(cert);
+    });
+
+    // 4b) HTTPS listener - create only when cert and alb are ready
+    whenBoth(c.cert, c.alb, (cert, alb) -> {
+      if (c.https.get().isPresent()) return; // Avoid duplicate creation
+      
+      ApplicationListener https;
+      if (c.albTargetGroup.get().isPresent()) {
+        // Target group is available, create listener with target group
+        https = alb.addListener("Https",
+                BaseApplicationListenerProps.builder()
+                        .port(443)
+                        .certificates(List.of(ListenerCertificate.fromCertificateManager(cert)))
+                        .defaultAction(ListenerAction.forward(List.of(c.albTargetGroup.get().orElseThrow())))
+                        .build());
+      } else {
+        // Target group is not available, create listener with fixed response
+        https = alb.addListener("Https",
+                BaseApplicationListenerProps.builder()
+                        .port(443)
+                        .certificates(List.of(ListenerCertificate.fromCertificateManager(cert)))
+                        .defaultAction(ListenerAction.fixedResponse(200, FixedResponseOptions.builder()
+                                .contentType("text/plain")
+                                .messageBody("Jenkins is starting up...")
+                                .build()))
+                        .build());
+      }
+      c.https.set(https);
+    });
+
+    // 4c) Service behind HTTPS - wait for all components to be ready
+    // Handle both AutoScalingGroup (multi-instance) and single EC2 instance cases
+    whenBoth(c.https, c.albTargetGroup, (https, tg) -> {
+      https.addTargetGroups("SvcHttps",
+              AddApplicationTargetGroupsProps.builder()
+                      .targetGroups(List.of(tg))
+                      .build());
+    });
+
+    // 4d) Make HTTP's DEFAULT action a redirect to HTTPS (don't leave any TG on HTTP)
+    whenBoth(c.http, c.https, (http, https) -> {
+      CfnListener cfnHttp = (CfnListener) http.getNode().getDefaultChild();
+      if (cfnHttp != null) {
+        cfnHttp.setDefaultActions(List.of(
+                CfnListener.ActionProperty.builder()
+                        .type("redirect")
+                        .redirectConfig(
+                                CfnListener.RedirectConfigProperty.builder()
+                                        .protocol("HTTPS").port("443").statusCode("HTTP_301").build())
+                        .build()
+        ));
+      }
+    });
+    
+    // Auto Scaling Configuration - EC2 runtime (when ASG is available)
+    whenAll(c.minInstanceCapacity, c.maxInstanceCapacity, c.cpuTargetUtilization, 
+            (minCapacity, maxCapacity, cpuTarget) -> {
+        // Configure EC2 Auto Scaling Group with all required parameters
+        // This ensures all scaling parameters are available before configuration
+        // ASG scaling configuration would go here
+        // Example: Configure auto scaling policies, target tracking, etc.
+    });
   }
 
+  private static String norm(String s) {
+    return s == null ? null : s.trim().replaceAll("\\.$", "").toLowerCase(Locale.ROOT);
+  }
 }
