@@ -296,6 +296,79 @@ The `cfc` context parameter supports the following options:
 - **`domain`**: Custom domain name (e.g., `"cloudforgeci.com"`)
 - **`subdomain`**: Subdomain for the application (e.g., `"jenkins"`)
 - **`enableSsl`**: `true` | `false`
+- **`bastionCidr`**: CIDR block for SSH access in production (default: `"10.0.1.0/24"`) - restricts SSH access to bastion host or VPN network
+
+---
+
+## Software Bill of Materials (SBOM)
+
+CloudForge Community Core provides comprehensive Software Bill of Materials (SBOM) files for supply chain transparency and security:
+
+```bash
+# Generate SBOMs for all modules
+mvn clean package -DskipTests
+
+# View aggregate SBOM
+cat target/cfc-core-sbom.json
+```
+
+SBOMs are generated in **CycloneDX format** (both JSON and XML) and include:
+- Complete dependency tree with versions
+- License information
+- Security hashes (SHA-256, SHA-512, etc.)
+- Package URLs (PURL) for vulnerability tracking
+
+See [SBOM.md](SBOM.md) for detailed documentation on using SBOMs for vulnerability scanning, license compliance, and supply chain security.
+
+### Vulnerability Scanning
+
+Automated dependency vulnerability scanning with OWASP Dependency-Check:
+
+```bash
+# Scan all dependencies for known vulnerabilities
+mvn dependency-check:check
+
+# View HTML report
+open target/dependency-check-report.html
+```
+
+The plugin automatically:
+- Scans all dependencies against the National Vulnerability Database (NVD)
+- Fails builds on High/Critical vulnerabilities (CVSS ≥ 7.0)
+- Generates HTML, JSON, and XML reports
+- Integrates with CI/CD pipelines
+
+See [DEPENDENCY_SCANNING.md](DEPENDENCY_SCANNING.md) for detailed configuration, usage, and best practices.
+
+### CI/CD Security Automation
+
+Automated security scanning with GitHub Actions:
+
+```yaml
+# Runs automatically on:
+# - Push to main/develop
+# - Pull requests
+# - Weekly schedule (Sundays 2 AM UTC)
+# - Manual trigger
+
+name: Security Scanning
+jobs:
+  - Generate SBOMs (CycloneDX format)
+  - Scan vulnerabilities (OWASP Dependency-Check)
+  - Additional scanning (Anchore Grype)
+  - Upload reports to GitHub Security tab
+  - Store artifacts for 90 days
+```
+
+**Features:**
+- ✅ Automated SBOM generation on every build
+- ✅ Vulnerability scanning with NVD database
+- ✅ GitHub Security integration (SARIF)
+- ✅ Fail builds on High/Critical vulnerabilities
+- ✅ Security summary in PR comments
+- ✅ Weekly scheduled scans for new CVEs
+
+See [CI_CD_SECURITY.md](CI_CD_SECURITY.md) for complete CI/CD configuration and usage guide.
 
 ---
 

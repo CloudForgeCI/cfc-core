@@ -27,6 +27,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.function.Function;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 /**
  * Interactive CDK Deployer that prompts users for configuration and deploys infrastructure.
@@ -37,7 +39,8 @@ import java.util.function.Function;
  * - S3 + CloudFront + SES + Lambda (Website + Mailer) - Coming Soon
  */
 public class InteractiveDeployer {
-    
+
+    private static final Logger LOG = Logger.getLogger(InteractiveDeployer.class.getName());
     private static final Scanner scanner = new Scanner(System.in);
     private static final Console console = System.console();
     
@@ -71,24 +74,37 @@ public class InteractiveDeployer {
         // Check for command line arguments
         String customStackName = null;
         String deploymentOption = null;
-        
-        if (args.length > 0) {
-            customStackName = args[0];
-            System.out.println("📝 Using custom stack name: " + customStackName);
+        boolean forceInteractive = false;
+
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("--interactive") || args[i].equals("-i")) {
+                forceInteractive = true;
+                System.out.println("🎯 Interactive mode enabled");
+            } else if (customStackName == null) {
+                customStackName = args[i];
+                System.out.println("📝 Using custom stack name: " + customStackName);
+            } else if (deploymentOption == null) {
+                deploymentOption = args[i];
+                System.out.println("📝 Using deployment option: " + deploymentOption);
+            }
         }
-        if (args.length > 1) {
-            deploymentOption = args[1];
-            System.out.println("📝 Using deployment option: " + deploymentOption);
-        }
-        
+
         try {
             // Check if we have a saved context file
             String contextFile = "deployment-context.json";
-            if (Files.exists(Paths.get(contextFile))) {
+
+            if (!forceInteractive && Files.exists(Paths.get(contextFile))) {
                 System.out.println("📁 Found saved deployment context, using it...");
+                System.out.println("   (Use --interactive flag to reconfigure)");
                 loadContextFromFileAndDeploy(contextFile, deploymentOption, customStackName);
             } else {
+                if (forceInteractive && Files.exists(Paths.get(contextFile))) {
+                    System.out.println("🔄 Ignoring saved context, starting fresh configuration...");
+                }
+
                 // No saved context, collect configuration interactively
+                System.out.println("📝 No saved configuration found, starting interactive setup...");
+                System.out.println("");
                 DeploymentConfig config = collectConfiguration(customStackName);
                 deployInfrastructure(config, deploymentOption);
             }
@@ -139,14 +155,13 @@ public class InteractiveDeployer {
     
     
     private static void deployInfrastructure(DeploymentConfig config, String deploymentOption) {
-        System.out.println("\n🔧 Building CDK Context...");
-        
+        LOG.info("Building CDK Context...");
+
         Map<String, Object> cfcContext = buildCfcContext(config);
-        
-        System.out.println("\n🔍 DEBUG: CDK Context being set:");
-        System.out.println("  - runtime: " + cfcContext.get("runtime"));
-        System.out.println("  - topology: " + cfcContext.get("topology"));
-        System.out.println("  - stackName: " + cfcContext.get("stackName"));
+
+        LOG.fine("CDK Context: runtime=" + cfcContext.get("runtime") +
+                 ", topology=" + cfcContext.get("topology") +
+                 ", stackName=" + cfcContext.get("stackName"));
         
         System.out.println("\n📋 Deployment Configuration:");
         System.out.println("============================");
@@ -209,10 +224,9 @@ public class InteractiveDeployer {
         saveContextToFile(cfcContext, config.stackName);
         
         DeploymentContext cfc = DeploymentContext.from(app);
-        System.out.println("🔍 DEBUG: DeploymentContext.from(app) returned:");
-        System.out.println("  - runtime: " + cfc.runtime());
-        System.out.println("  - topology: " + cfc.topology());
-        System.out.println("  - stackName: " + cfc.stackName());
+        LOG.fine("DeploymentContext loaded: runtime=" + cfc.runtime() +
+                 ", topology=" + cfc.topology() +
+                 ", stackName=" + cfc.stackName());
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(config.securityProfile);
         
         StackProps props = StackProps.builder()
@@ -223,12 +237,12 @@ public class InteractiveDeployer {
             .build();
         
         // Create stacks based on runtime type (like CloudForgeCommunitySample)
-        System.out.println("🔍 DEBUG: Creating stack for runtime: " + config.runtime + " with name: " + config.stackName);
+        LOG.info("Creating stack for runtime: " + config.runtime + " with name: " + config.stackName);
         if (config.runtime == RuntimeType.EC2) {
-            System.out.println("🔍 DEBUG: Creating JenkinsEc2Stack");
+            LOG.fine("Creating JenkinsEc2Stack");
             new JenkinsEc2Stack(app, config.stackName, props, config.securityProfile, iamProfile);
         } else if (config.runtime == RuntimeType.FARGATE) {
-            System.out.println("🔍 DEBUG: Creating JenkinsFargateStack");
+            LOG.fine("Creating JenkinsFargateStack");
             new JenkinsFargateStack(app, config.stackName, props, config.securityProfile, iamProfile);
         } else {
             throw new IllegalArgumentException("Unsupported runtime type: " + config.runtime);
@@ -279,9 +293,9 @@ public class InteractiveDeployer {
             writer.write("\n  }\n");
             writer.write("}\n");
             writer.close();
-            System.out.println("💾 Deployment context saved to deployment-context.json");
+            LOG.info("Deployment context saved to deployment-context.json");
         } catch (IOException e) {
-            System.err.println("⚠️  Warning: Could not save context file: " + e.getMessage());
+            LOG.warning("Could not save context file: " + e.getMessage());
         }
     }
     
@@ -421,12 +435,11 @@ public class InteractiveDeployer {
         String runtime = extractValue(content, "runtime");
         String topology = extractValue(content, "topology");
         String securityProfile = extractValue(content, "securityProfile");
-        
-        System.out.println("🔍 DEBUG: Extracted values from context:");
-        System.out.println("  - stackName: " + stackName);
-        System.out.println("  - runtime: " + runtime);
-        System.out.println("  - topology: " + topology);
-        System.out.println("  - securityProfile: " + securityProfile);
+
+        LOG.fine("Extracted context: stackName=" + stackName +
+                 ", runtime=" + runtime +
+                 ", topology=" + topology +
+                 ", securityProfile=" + securityProfile);
         
             // Create DeploymentConfig from saved context
             DeploymentConfig config = new DeploymentConfig();
@@ -454,41 +467,106 @@ public class InteractiveDeployer {
             
             config.securityProfile = SecurityProfile.valueOf(securityProfile);
         
-        // Set other required fields with defaults
-        config.environment = "dev";
+        // Set other required fields with defaults or from saved context
+        config.environment = extractValue(content, "env");
+        if (config.environment == null) config.environment = "dev";
+
+        config.tier = extractValue(content, "tier");
+        if (config.tier == null) config.tier = "public";
+
         config.deploymentType = "jenkins";
-        config.networkMode = "public-no-nat";
-        config.wafEnabled = false;
-        config.cloudfrontEnabled = false;
-        config.cpu = 1024;
-        config.memory = 2048;
-        config.authMode = "none";
-        
+
+        // Network configuration - read from saved context
+        config.networkMode = extractValue(content, "networkMode");
+        if (config.networkMode == null) config.networkMode = "public-no-nat";
+
+        String wafEnabledStr = extractValue(content, "wafEnabled");
+        config.wafEnabled = "true".equalsIgnoreCase(wafEnabledStr);
+
+        String cloudfrontEnabledStr = extractValue(content, "cloudfrontEnabled");
+        config.cloudfrontEnabled = "true".equalsIgnoreCase(cloudfrontEnabledStr);
+
+        config.authMode = extractValue(content, "authMode");
+        if (config.authMode == null) config.authMode = "none";
+
         // Extract domain configuration from saved context
         config.domain = extractValue(content, "domain");
         if (config.domain == null) config.domain = "";
-        
+
         config.subdomain = extractValue(content, "subdomain");
         if (config.subdomain == null) config.subdomain = "";
-        
+
         String enableSslStr = extractValue(content, "enableSsl");
         config.enableSsl = "true".equalsIgnoreCase(enableSslStr);
-        
-        // Instance capacity applies to both EC2 and Fargate - read from saved context
+
+        // CPU and Memory configuration - read from saved context
+        String cpuStr = extractValue(content, "cpu");
+        String memoryStr = extractValue(content, "memory");
+        config.cpu = cpuStr != null ? Integer.parseInt(cpuStr) : 1024;
+        config.memory = memoryStr != null ? Integer.parseInt(memoryStr) : 2048;
+
+        // Instance capacity and auto-scaling - read from saved context
         String minCapacityStr = extractValue(content, "minInstanceCapacity");
         String maxCapacityStr = extractValue(content, "maxInstanceCapacity");
         String cpuTargetStr = extractValue(content, "cpuTargetUtilization");
         String enableAutoScalingStr = extractValue(content, "enableAutoScaling");
-        
+
         config.minInstanceCapacity = minCapacityStr != null ? Integer.parseInt(minCapacityStr) : 1;
         config.maxInstanceCapacity = maxCapacityStr != null ? Integer.parseInt(maxCapacityStr) : 1;
         config.cpuTargetUtilization = cpuTargetStr != null ? Integer.parseInt(cpuTargetStr) : 60;
         config.enableAutoScaling = "true".equalsIgnoreCase(enableAutoScalingStr);
-        
+
+        // EC2 instance type - read from saved context
         if (config.runtime == RuntimeType.EC2) {
-            config.instanceType = "t3.micro";
+            config.instanceType = extractValue(content, "instanceType");
+            if (config.instanceType == null) config.instanceType = "t3.micro";
         }
-        
+
+        // Advanced configuration - read from saved context
+        String enableMonitoringStr = extractValue(content, "enableMonitoring");
+        config.enableMonitoring = enableMonitoringStr == null || "true".equalsIgnoreCase(enableMonitoringStr);
+
+        String enableEncryptionStr = extractValue(content, "enableEncryption");
+        config.enableEncryption = enableEncryptionStr == null || "true".equalsIgnoreCase(enableEncryptionStr);
+
+        config.logRetentionDays = extractValue(content, "logRetentionDays");
+        if (config.logRetentionDays == null) config.logRetentionDays = "7";
+
+        config.region = extractValue(content, "region");
+        if (config.region == null) config.region = "us-east-1";
+
+        // Health check configuration - read from saved context
+        String healthCheckGracePeriodStr = extractValue(content, "healthCheckGracePeriod");
+        config.healthCheckGracePeriod = healthCheckGracePeriodStr != null ? Integer.parseInt(healthCheckGracePeriodStr) : 300;
+
+        String healthCheckIntervalStr = extractValue(content, "healthCheckInterval");
+        config.healthCheckInterval = healthCheckIntervalStr != null ? Integer.parseInt(healthCheckIntervalStr) : 30;
+
+        String healthCheckTimeoutStr = extractValue(content, "healthCheckTimeout");
+        config.healthCheckTimeout = healthCheckTimeoutStr != null ? Integer.parseInt(healthCheckTimeoutStr) : 5;
+
+        String healthyThresholdStr = extractValue(content, "healthyThreshold");
+        config.healthyThreshold = healthyThresholdStr != null ? Integer.parseInt(healthyThresholdStr) : 2;
+
+        String unhealthyThresholdStr = extractValue(content, "unhealthyThreshold");
+        config.unhealthyThreshold = unhealthyThresholdStr != null ? Integer.parseInt(unhealthyThresholdStr) : 3;
+
+        // Infrastructure configuration - read from saved context
+        config.bastionCidr = extractValue(content, "bastionCidr");
+        if (config.bastionCidr == null) config.bastionCidr = "10.0.1.0/24";
+
+        config.lbType = extractValue(content, "lbType");
+        if (config.lbType == null) config.lbType = "alb";
+
+        String enableFlowlogsStr = extractValue(content, "enableFlowlogs");
+        config.enableFlowlogs = "true".equalsIgnoreCase(enableFlowlogsStr);
+
+        String createZoneStr = extractValue(content, "createZone");
+        config.createZone = "true".equalsIgnoreCase(createZoneStr);
+
+        config.artifactsPrefix = extractValue(content, "artifactsPrefix");
+        if (config.artifactsPrefix == null) config.artifactsPrefix = "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}";
+
         System.out.println("📋 Using saved configuration:");
         System.out.println("Stack Name: " + config.stackName);
         System.out.println("Runtime: " + config.runtime);
@@ -517,7 +595,7 @@ public class InteractiveDeployer {
         
         // Basic configuration
         context.put("env", config.environment);
-        context.put("tier", "public");
+        context.put("tier", config.tier);
         context.put("runtime", config.runtime.name());
         context.put("topology", config.topology.name());
         context.put("securityProfile", config.securityProfile.name());
@@ -559,29 +637,43 @@ public class InteractiveDeployer {
         context.put("healthCheckTimeout", config.healthCheckTimeout);
         context.put("healthyThreshold", config.healthyThreshold);
         context.put("unhealthyThreshold", config.unhealthyThreshold);
-        
+
+        // Security and network configuration
+        context.put("bastionCidr", config.bastionCidr);
+        context.put("lbType", config.lbType);
+        context.put("enableFlowlogs", config.enableFlowlogs);
+
+        // DNS configuration
+        context.put("createZone", config.createZone);
+
+        // Artifacts configuration
+        context.put("artifactsPrefix", config.artifactsPrefix);
+
         if (!config.authMode.equals("none")) {
             context.put("ssoInstanceArn", config.ssoInstanceArn);
             context.put("ssoGroupId", config.ssoGroupId);
             context.put("ssoTargetAccountId", config.ssoTargetAccountId);
         }
-        
+
         return context;
     }
     
     // Utility methods for user input
     private static String promptRequired(String prompt, String defaultValue) {
         System.out.print(prompt + " [" + defaultValue + "]: ");
-        
-        if (!hasConsole()) {
-            System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
-            return defaultValue;
-        }
-        
+        System.out.flush();
+
         try {
-            String input = scanner.nextLine().trim();
-            return input.isEmpty() ? defaultValue : input;
+            if (scanner.hasNextLine()) {
+                String input = scanner.nextLine().trim();
+                return input.isEmpty() ? defaultValue : input;
+            } else {
+                System.out.println();
+                System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
+                return defaultValue;
+            }
         } catch (Exception e) {
+            System.out.println();
             System.err.println("⚠️  Error reading input, using default: " + defaultValue);
             return defaultValue;
         }
@@ -589,16 +681,19 @@ public class InteractiveDeployer {
     
     private static String promptOptional(String prompt, String defaultValue) {
         System.out.print(prompt + " [" + defaultValue + "] (optional): ");
-        
-        if (!hasConsole()) {
-            System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
-            return defaultValue;
-        }
-        
+        System.out.flush();
+
         try {
-            String input = scanner.nextLine().trim();
-            return input.isEmpty() ? defaultValue : input;
+            if (scanner.hasNextLine()) {
+                String input = scanner.nextLine().trim();
+                return input.isEmpty() ? defaultValue : input;
+            } else {
+                System.out.println();
+                System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
+                return defaultValue;
+            }
         } catch (Exception e) {
+            System.out.println();
             System.err.println("⚠️  Error reading input, using default: " + defaultValue);
             return defaultValue;
         }
@@ -607,39 +702,42 @@ public class InteractiveDeployer {
     private static String promptChoice(String prompt, String[] choices, String defaultValue) {
         System.out.println(prompt + ":");
         for (int i = 0; i < choices.length; i++) {
-            System.out.println("  " + (i + 1) + ". " + choices[i] + 
+            System.out.println("  " + (i + 1) + ". " + choices[i] +
                 (choices[i].equals(defaultValue) ? " (default)" : ""));
         }
         System.out.print("Choose [" + defaultValue + "]: ");
-        
-        if (!hasConsole()) {
-            System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
-            return defaultValue;
-        }
-        
+        System.out.flush();
+
         try {
-            String input = scanner.nextLine().trim();
-            if (input.isEmpty()) {
-                return defaultValue;
-            }
-            
-            try {
-                int choice = Integer.parseInt(input);
-                if (choice >= 1 && choice <= choices.length) {
-                    return choices[choice - 1];
+            if (scanner.hasNextLine()) {
+                String input = scanner.nextLine().trim();
+                if (input.isEmpty()) {
+                    return defaultValue;
                 }
-            } catch (NumberFormatException e) {
-                // Try to match by name
-                for (String choice : choices) {
-                    if (choice.equalsIgnoreCase(input)) {
-                        return choice;
+
+                try {
+                    int choice = Integer.parseInt(input);
+                    if (choice >= 1 && choice <= choices.length) {
+                        return choices[choice - 1];
+                    }
+                } catch (NumberFormatException e) {
+                    // Try to match by name
+                    for (String choice : choices) {
+                        if (choice.equalsIgnoreCase(input)) {
+                            return choice;
+                        }
                     }
                 }
+
+                System.out.println("Invalid choice, using default: " + defaultValue);
+                return defaultValue;
+            } else {
+                System.out.println();
+                System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
+                return defaultValue;
             }
-            
-            System.out.println("Invalid choice, using default: " + defaultValue);
-            return defaultValue;
         } catch (Exception e) {
+            System.out.println();
             System.err.println("⚠️  Error reading input, using default: " + defaultValue);
             return defaultValue;
         }
@@ -647,19 +745,22 @@ public class InteractiveDeployer {
     
     private static boolean promptYesNo(String prompt, boolean defaultValue) {
         System.out.print(prompt + " [" + (defaultValue ? "Y/n" : "y/N") + "]: ");
-        
-        if (!hasConsole()) {
-            System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
-            return defaultValue;
-        }
-        
+        System.out.flush();
+
         try {
-            String input = scanner.nextLine().trim().toLowerCase();
-            if (input.isEmpty()) {
+            if (scanner.hasNextLine()) {
+                String input = scanner.nextLine().trim().toLowerCase();
+                if (input.isEmpty()) {
+                    return defaultValue;
+                }
+                return input.startsWith("y") || input.startsWith("t") || input.equals("1");
+            } else {
+                System.out.println();
+                System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
                 return defaultValue;
             }
-            return input.startsWith("y") || input.startsWith("t") || input.equals("1");
         } catch (Exception e) {
+            System.out.println();
             System.err.println("⚠️  Error reading input, using default: " + defaultValue);
             return defaultValue;
         }
@@ -667,25 +768,28 @@ public class InteractiveDeployer {
     
     private static int promptInt(String prompt, int defaultValue) {
         System.out.print(prompt + " [" + defaultValue + "]: ");
-        
-        if (!hasConsole()) {
-            System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
-            return defaultValue;
-        }
-        
+        System.out.flush();
+
         try {
-            String input = scanner.nextLine().trim();
-            if (input.isEmpty()) {
-                return defaultValue;
-            }
-            
-            try {
-                return Integer.parseInt(input);
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid number, using default: " + defaultValue);
+            if (scanner.hasNextLine()) {
+                String input = scanner.nextLine().trim();
+                if (input.isEmpty()) {
+                    return defaultValue;
+                }
+
+                try {
+                    return Integer.parseInt(input);
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid number, using default: " + defaultValue);
+                    return defaultValue;
+                }
+            } else {
+                System.out.println();
+                System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
                 return defaultValue;
             }
         } catch (Exception e) {
+            System.out.println();
             System.err.println("⚠️  Error reading input, using default: " + defaultValue);
             return defaultValue;
         }
@@ -694,16 +798,18 @@ public class InteractiveDeployer {
     private static int promptIntWithValidation(String prompt, int defaultValue, int min, int max) {
         while (true) {
             System.out.print(prompt + " [" + defaultValue + "] (range: " + min + "-" + max + "): ");
-            
-            if (!hasConsole()) {
-                System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
-                return defaultValue;
-            }
-            
+            System.out.flush();
+
             try {
+                if (!scanner.hasNextLine()) {
+                    System.out.println();
+                    System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
+                    return defaultValue;
+                }
+
                 String input = scanner.nextLine().trim();
                 if (input.isEmpty()) return defaultValue;
-                
+
                 int value = Integer.parseInt(input);
                 if (value < min || value > max) {
                     System.out.println("❌ Value must be between " + min + " and " + max + ". Please try again.");
@@ -713,6 +819,7 @@ public class InteractiveDeployer {
             } catch (NumberFormatException e) {
                 System.out.println("❌ Invalid number format. Please enter a valid integer.");
             } catch (Exception e) {
+                System.out.println();
                 System.err.println("⚠️  Error reading input, using default: " + defaultValue);
                 return defaultValue;
             }
@@ -722,24 +829,27 @@ public class InteractiveDeployer {
     private static String promptWithValidation(String prompt, String defaultValue, String[] validOptions) {
         while (true) {
             System.out.print(prompt + " [" + defaultValue + "]: ");
-            
-            if (!hasConsole()) {
-                System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
-                return defaultValue;
-            }
-            
+            System.out.flush();
+
             try {
+                if (!scanner.hasNextLine()) {
+                    System.out.println();
+                    System.err.println("⚠️  Warning: No interactive console available. Using default value: " + defaultValue);
+                    return defaultValue;
+                }
+
                 String input = scanner.nextLine().trim();
                 if (input.isEmpty()) return defaultValue;
-                
+
                 for (String option : validOptions) {
                     if (option.equalsIgnoreCase(input)) {
                         return option.toLowerCase();
                     }
                 }
-                
+
                 System.out.println("❌ Invalid option. Valid options: " + String.join(", ", validOptions));
             } catch (Exception e) {
+                System.out.println();
                 System.err.println("⚠️  Error reading input, using default: " + defaultValue);
                 return defaultValue;
             }
@@ -808,6 +918,7 @@ public class InteractiveDeployer {
         String stackName;
         String environment;
         String deploymentType;
+        String tier = "public";
         
         // Domain configuration
         String domain;
@@ -848,6 +959,13 @@ public class InteractiveDeployer {
         int healthCheckTimeout = 5;
         int healthyThreshold = 2;
         int unhealthyThreshold = 3;
+
+        // Infrastructure configuration
+        String bastionCidr = "10.0.1.0/24";
+        String lbType = "alb";
+        boolean enableFlowlogs = false;
+        boolean createZone = false;
+        String artifactsPrefix = "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}";
     }
     
     // ============================================================================

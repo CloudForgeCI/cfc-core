@@ -55,8 +55,8 @@ echo ""
 echo -e "${YELLOW}🚀 Starting interactive deployment...${NC}"
 echo ""
 
-# Run with proper input handling
-java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer
+# Run with proper input handling and force interactive mode
+java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer --interactive "$@"
 
 echo ""
 echo -e "${GREEN}✅ Interactive deployment completed!${NC}"

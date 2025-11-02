@@ -123,18 +123,29 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     // 4a) ACM cert (DNS validation)
     whenBoth(c.zone, c.alb, (zone, alb) -> {
       if (c.cert.get().isPresent()) return;
+
+      // Use domain name in construct ID to force replacement when domain changes
+      // This prevents "certificate in use" errors during subdomain updates
+      String certDomain = fqdn != null ? fqdn : domain;
+      String certId = "HttpsCert-" + certDomain.replace(".", "-");
+
       Certificate cert = Certificate.Builder
-              .create(c, "HttpsCert")
-              .domainName(fqdn != null ? fqdn : domain)
+              .create(c, certId)
+              .domainName(certDomain)
               .validation(CertificateValidation.fromDns(zone))
               .build();
+
+      // Set retention policy to RETAIN to prevent deletion errors during updates
+      // When subdomain changes, old cert will be orphaned instead of deleted
+      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.RETAIN);
+
       c.cert.set(cert);
     });
 
     // 4b) HTTPS listener - create only when cert and alb are ready
     whenBoth(c.cert, c.alb, (cert, alb) -> {
       if (c.https.get().isPresent()) return; // Avoid duplicate creation
-      
+
       ApplicationListener https;
       if (c.albTargetGroup.get().isPresent()) {
         // Target group is available, create listener with target group
@@ -156,6 +167,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                                 .build()))
                         .build());
       }
+
       c.https.set(https);
     });
 

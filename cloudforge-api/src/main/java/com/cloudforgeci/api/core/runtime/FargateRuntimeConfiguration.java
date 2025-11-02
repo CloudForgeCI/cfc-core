@@ -183,11 +183,21 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
         LOG.warning("*** FargateRuntimeConfiguration: Certificate creation skipped - no domain available ***");
         return;
       }
+
+      // Use domain name in construct ID to force replacement when domain changes
+      // This prevents "certificate in use" errors during subdomain updates
+      String certId = "HttpsCert-" + certDomain.replace(".", "-");
+
       Certificate cert = Certificate.Builder
-              .create(c, "HttpsCert")
+              .create(c, certId)
               .domainName(certDomain)
               .validation(CertificateValidation.fromDns(zone))
               .build();
+
+      // Set retention policy to RETAIN to prevent deletion errors during updates
+      // When subdomain changes, old cert will be orphaned instead of deleted
+      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.RETAIN);
+
       c.cert.set(cert);
     });
 
@@ -199,6 +209,7 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
                       .port(443)
                       .certificates(java.util.List.of(ListenerCertificate.fromCertificateManager(cert)))
                       .build());
+
       c.https.set(https);
     });
 
