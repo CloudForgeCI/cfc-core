@@ -348,16 +348,20 @@
           <assemblyAnalyzerEnabled>true</assemblyAnalyzerEnabled>
           <!-- Skip test dependencies -->
           <skipTestScope>true</skipTestScope>
-          <!-- Use NVD API with proper configuration -->
+          <!-- Use NVD API 2.0 with proper configuration -->
+          <!-- The old JSON data feeds were deprecated and shut down by NIST -->
           <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
 
-          <!-- CRITICAL: Use data feeds instead of API for bulk operations -->
-          <!-- This downloads a local database instead of making 300k+ API calls -->
-          <nvdDatafeedUrl>https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-%d.json.gz</nvdDatafeedUrl>
+          <!-- Enable NVD API usage -->
+          <nvdApiServerId>nvd</nvdApiServerId>
 
-          <!-- Rate limiting for initial download/updates -->
-          <nvdApiDelay>6000</nvdApiDelay>
-          <nvdMaxRetryCount>3</nvdMaxRetryCount>
+          <!-- Rate limiting for API calls (recommended: 2000ms with API key, 6000ms without) -->
+          <!-- With an API key, you get 50 requests per 30 seconds -->
+          <nvdApiDelay>2000</nvdApiDelay>
+          <nvdMaxRetryCount>5</nvdMaxRetryCount>
+
+          <!-- API endpoint (uses v2.0) -->
+          <nvdApiEndpoint>https://services.nvd.nist.gov/rest/json/cves/2.0</nvdApiEndpoint>
 
           <!-- Local cache directory -->
           <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
