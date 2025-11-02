@@ -34,7 +34,7 @@ jobs:
           cache: 'maven'
 
       - name: Cache Maven dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -42,7 +42,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Cache OWASP Dependency-Check data
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.m2/dependency-check-data
           key: ${{ runner.os }}-dependency-check-${{ hashFiles('**/pom.xml') }}
@@ -72,14 +72,14 @@ jobs:
           echo "✅ Dependency check complete"
 
       - name: Upload SBOM to GitHub Dependency Graph
-        uses: advanced-security/sbom-dependency-submission-action@v0.0.1
+        uses: actions/dependency-submission/maven@v3
         with:
-          sbom-file-path: target/cfc-core-sbom.json
-          sbom-file-format: cyclonedx
+          snapshot-include-file-name: true
+          snapshot-dependency-file-name: dependency-graph-reports.json
 
       - name: Upload SBOM artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sbom-reports
           path: |
@@ -95,7 +95,7 @@ jobs:
 
       - name: Upload Dependency-Check reports
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dependency-check-reports
           path: |
@@ -212,7 +212,7 @@ jobs:
 
       - name: Upload coverage reports
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-reports
           path: |
