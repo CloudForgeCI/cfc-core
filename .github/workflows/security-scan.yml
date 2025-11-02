@@ -60,8 +60,24 @@ jobs:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           echo "Initializing NVD CVE database..."
-          mvn dependency-check:update-only
-          echo "NVD database initialized"
+          if [ -n "$NVD_API_KEY" ]; then
+            echo "Using NVD API key for faster updates"
+          else
+            echo "Warning: No NVD API key configured - updates will be slower"
+          fi
+          # Retry up to 3 times with exponential backoff
+          for i in 1 2 3; do
+            if mvn dependency-check:update-only; then
+              echo "NVD database initialized successfully"
+              exit 0
+            fi
+            if [ $i -lt 3 ]; then
+              echo "Update failed, retrying in $((i * 30)) seconds..."
+              sleep $((i * 30))
+            fi
+          done
+          echo "Failed to initialize NVD database after 3 attempts"
+          exit 1
 
       - name: Run OWASP Dependency-Check
         env:

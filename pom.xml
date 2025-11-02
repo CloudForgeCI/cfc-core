@@ -328,7 +328,7 @@
       <plugin>
         <groupId>org.owasp</groupId>
         <artifactId>dependency-check-maven</artifactId>
-        <version>10.0.4</version>
+        <version>11.1.0</version>
         <configuration>
           <!-- Fail build if CVSS score is 7 or higher (High/Critical) -->
           <failBuildOnCVSS>7</failBuildOnCVSS>
