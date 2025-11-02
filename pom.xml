@@ -328,7 +328,7 @@
       <plugin>
         <groupId>org.owasp</groupId>
         <artifactId>dependency-check-maven</artifactId>
-        <version>11.1.0</version>
+        <version>12.1.0</version>
         <configuration>
           <!-- Fail build if CVSS score is 7 or higher (High/Critical) -->
           <failBuildOnCVSS>7</failBuildOnCVSS>
@@ -358,7 +358,7 @@
           <!-- Rate limiting for API calls (recommended: 2000ms with API key, 6000ms without) -->
           <!-- With an API key, you get 50 requests per 30 seconds -->
           <nvdApiDelay>2000</nvdApiDelay>
-          <nvdMaxRetryCount>5</nvdMaxRetryCount>
+          <nvdMaxRetryCount>10</nvdMaxRetryCount>
 
           <!-- API endpoint (uses v2.0) -->
           <nvdApiEndpoint>https://services.nvd.nist.gov/rest/json/cves/2.0</nvdApiEndpoint>
@@ -366,11 +366,15 @@
           <!-- Local cache directory -->
           <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
 
-          <!-- Only update database once per week (not on every build) -->
+          <!-- NVD Database Configuration -->
           <cveValidForHours>168</cveValidForHours>
-
-          <!-- Disable automatic updates - must explicitly request with -Dupdate-only -->
           <autoUpdate>false</autoUpdate>
+
+          <!-- WORKAROUND: Filter NVD data to avoid CVSS v4.0 parsing bugs -->
+          <!-- Only fetch CVEs from mid-2020 to mid-2024 (pre-CVSS 4.0 era) -->
+          <!-- This avoids the "SAFETY" enum parsing error -->
+          <nvdApiStartDate>2020-01-01T00:00:00:000 UTC</nvdApiStartDate>
+          <nvdApiEndDate>2024-06-01T00:00:00:000 UTC</nvdApiEndDate>
 
           <!-- Performance optimizations -->
           <centralAnalyzerUseCache>true</centralAnalyzerUseCache>
@@ -378,8 +382,10 @@
           <!-- ===== DISABLE ALL ANALYZERS THAT MAKE EXTERNAL API CALLS ===== -->
           <!-- Only use local file-based analysis to avoid 300k+ API requests -->
 
-          <!-- Disable OSS Index (Sonatype) - makes API calls per dependency -->
-          <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
+          <!-- Enable OSS Index (Sonatype) as alternative to NVD -->
+          <!-- OSS Index doesn't have the CVSS v4.0 parsing issues -->
+          <ossindexAnalyzerEnabled>true</ossindexAnalyzerEnabled>
+          <ossindexAnalyzerUseCache>true</ossindexAnalyzerUseCache>
 
           <!-- Disable Node.js analyzers - not needed for Java project -->
           <nodeAuditAnalyzerEnabled>false</nodeAuditAnalyzerEnabled>
