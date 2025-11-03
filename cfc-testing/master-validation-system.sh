@@ -230,6 +230,7 @@ EOF
         # Run synthesis
         cd "$BASE_DIR"
         if cdk synth --quiet "$stack_name" \
+            --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample" \
             --context cfc.runtime="$runtime" \
             --context cfc.topology="$topology" \
             --context cfc.securityProfile="$security" \

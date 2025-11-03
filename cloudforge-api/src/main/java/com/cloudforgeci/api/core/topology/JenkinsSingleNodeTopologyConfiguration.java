@@ -72,10 +72,14 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       }
       
       
-      // Use subdomain for DNS record name, not the full FQDN
+      // Use subdomain for DNS record name, or use the domain directly if no subdomain
       String recordName = c.cfc.subdomain();
       if (recordName == null || recordName.isBlank()) {
-        return;
+        // When no subdomain is specified, use the domain name itself
+        recordName = c.cfc.domain();
+        if (recordName == null || recordName.isBlank()) {
+          return; // No domain or subdomain specified, cannot create DNS records
+        }
       }
       
 

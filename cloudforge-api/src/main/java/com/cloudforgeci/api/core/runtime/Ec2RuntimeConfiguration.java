@@ -62,12 +62,16 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
 
   @Override
   public void wire(SystemContext c) {
+    LOG.info("=== Ec2RuntimeConfiguration.wire() called ===");
+
     // Ensure this configuration only runs for EC2 runtime
     if (c.runtime != RuntimeType.EC2) {
+      LOG.info("Skipping EC2 runtime configuration (runtime=" + c.runtime + ")");
       return;
     }
-    
-    
+
+    LOG.info("Configuring EC2 runtime for " + c.topology + " topology, " + c.security + " profile");
+
     // Inputs & flags
     final boolean ssl = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl());
     final String domain = norm(c.cfc != null ? c.cfc.domain() : null);
@@ -107,6 +111,34 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
       isg.addIngressRule(Peer.securityGroupId(albSg.getSecurityGroupId()),
               Port.tcp(8080), "ALB_to_Jenkins_8080", false);
     });
+
+    // ── 2a) Auto Scaling Configuration - EC2 runtime (when ASG is available) ────
+    // Apply scaling policies to Auto Scaling Group ONLY for PRODUCTION security profile
+    // DEV and STAGING profiles have auto-scaling disabled in their security configurations
+    boolean isProduction = c.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION;
+
+    if (isProduction) {
+      LOG.info("PRODUCTION profile - setting up scaling policy callback");
+
+      // Use whenBoth to wait for ASG to be created, with guard to prevent duplicate execution
+      whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
+        // Check if scaling policies have already been applied
+        if (c.scalingPoliciesApplied.get().isPresent()) {
+          return; // Already applied, skip
+        }
+
+        LOG.info("ASG and target group ready - applying scaling policies");
+
+        if (c.cfc.maxInstanceCapacity() != null && c.cfc.maxInstanceCapacity() > 1) {
+          // Apply scaling policies using ScalingFactory
+          com.cloudforgeci.api.scaling.ScalingFactory scalingFactory =
+              new com.cloudforgeci.api.scaling.ScalingFactory(c, "Ec2ScalingPolicy");
+          scalingFactory.scale(asg, c);
+          c.scalingPoliciesApplied.set(true);
+          LOG.info("Scaling policies applied successfully");
+        }
+      });
+    }
 
     // ── 3) DOMAIN + NO SSL → HTTP only (single TG), NO cert/https/redirect ─────
     if (!ssl) {
@@ -194,15 +226,8 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
         ));
       }
     });
-    
-    // Auto Scaling Configuration - EC2 runtime (when ASG is available)
-    whenAll(c.minInstanceCapacity, c.maxInstanceCapacity, c.cpuTargetUtilization, 
-            (minCapacity, maxCapacity, cpuTarget) -> {
-        // Configure EC2 Auto Scaling Group with all required parameters
-        // This ensures all scaling parameters are available before configuration
-        // ASG scaling configuration would go here
-        // Example: Configure auto scaling policies, target tracking, etc.
-    });
+
+    LOG.info("=== Ec2RuntimeConfiguration.wire() completed ===");
   }
 
   private static String norm(String s) {

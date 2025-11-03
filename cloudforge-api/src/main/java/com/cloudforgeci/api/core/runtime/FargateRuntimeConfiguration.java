@@ -256,8 +256,21 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       }
     });
 
-    // 2d) HTTP listener is configured to redirect to HTTPS when SSL is enabled
-    // No need to create HTTP target group since HTTP traffic will be redirected to HTTPS
+    // 2d) Make HTTP's DEFAULT action a redirect to HTTPS (don't leave any TG on HTTP)
+    whenBoth(c.http, c.https, (http, https) -> {
+      CfnListener cfnHttp = (CfnListener) http.getNode().getDefaultChild();
+      if (cfnHttp != null) {
+        cfnHttp.setDefaultActions(java.util.List.of(
+                CfnListener.ActionProperty.builder()
+                        .type("redirect")
+                        .redirectConfig(
+                                CfnListener.RedirectConfigProperty.builder()
+                                        .protocol("HTTPS").port("443").statusCode("HTTP_301").build())
+                        .build()
+        ));
+        LOG.info("HTTP → HTTPS redirect configured for Fargate");
+      }
+    });
 
     } catch (Exception e) {
       throw e;

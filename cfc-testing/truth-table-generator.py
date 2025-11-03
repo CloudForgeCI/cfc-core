@@ -54,11 +54,16 @@ class TestConfiguration:
         # SSL requires domain
         if self.ssl_config == SSLConfig.SSL_ENABLED and self.domain_config == DomainConfig.NO_DOMAIN:
             return False
-        
+
         # Subdomain requires domain
         if self.subdomain_config == SubdomainConfig.WITH_SUBDOMAIN and self.domain_config == DomainConfig.NO_DOMAIN:
             return False
-        
+
+        # JENKINS_SINGLE_NODE topology requires EC2 runtime (architectural constraint)
+        # Fargate doesn't support single-node topology - it uses ECS Services
+        if self.topology == Topology.JENKINS_SINGLE_NODE and self.runtime == Runtime.FARGATE:
+            return False
+
         return True
 
 class ResourceType(Enum):
