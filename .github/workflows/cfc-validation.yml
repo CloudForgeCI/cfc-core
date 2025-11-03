@@ -123,45 +123,16 @@ jobs:
           echo "Setting up validation environment..."
           cd cfc-testing
 
-          # Get the current absolute path
-          TESTING_DIR="$(pwd)"
-          echo "Testing directory: $TESTING_DIR"
-
-          # Update BASE_DIR in all validation scripts to use current directory
-          echo "Updating BASE_DIR paths in scripts..."
-
-          # Update master-validation-system.sh
-          sed -i.bak 's|BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"|BASE_DIR="'"$TESTING_DIR"'"|g' master-validation-system.sh
-
-          # Update comprehensive-resource-validator.sh
-          if [ -f comprehensive-resource-validator.sh ]; then
-            sed -i.bak 's|BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"|BASE_DIR="'"$TESTING_DIR"'"|g' comprehensive-resource-validator.sh
-          fi
-
-          # Update drift-detector.sh
-          if [ -f drift-detector.sh ]; then
-            sed -i.bak 's|BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"|BASE_DIR="'"$TESTING_DIR"'"|g' drift-detector.sh
-          fi
-
-          # Update truth-table-generator.py
-          if [ -f truth-table-generator.py ]; then
-            sed -i.bak 's|/Users/phillip/projects/cfc-core/cfc-testing|'"$TESTING_DIR"'|g' truth-table-generator.py
-          fi
-
-          # Remove backup files
-          rm -f *.bak
-
           # Make scripts executable
-          chmod +x master-validation-system.sh
-          chmod +x comprehensive-resource-validator.sh 2>/dev/null || true
-          chmod +x drift-detector.sh 2>/dev/null || true
-          chmod +x truth-table-generator.py 2>/dev/null || true
+          chmod +x *.sh 2>/dev/null || true
+          chmod +x *.py 2>/dev/null || true
 
-          # Create validation results directory
+          # Create necessary directories
           mkdir -p validation-results
+          mkdir -p synth-results
 
           echo "Validation environment ready"
-          echo "Scripts updated with BASE_DIR: $TESTING_DIR"
+          echo "Working directory: $(pwd)"
 
       - name: Determine validation mode
         id: mode

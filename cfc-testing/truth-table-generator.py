@@ -678,8 +678,10 @@ def main():
     if len(sys.argv) > 1:
         output_dir = sys.argv[1]
     else:
-        output_dir = "/Users/phillip/projects/cfc-core/cfc-testing/validation-results"
-    
+        # Dynamically determine script location
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.join(script_dir, "validation-results")
+
     generator = TruthTableGenerator(output_dir)
     generator.run()
 

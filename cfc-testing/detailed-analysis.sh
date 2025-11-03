@@ -12,7 +12,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-RESULTS_DIR="/Users/phillip/projects/cfc-core/cfc-testing/synth-results"
+# Configuration - dynamically determine script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESULTS_DIR="${RESULTS_DIR:-$SCRIPT_DIR/synth-results}"
 
 echo -e "${BLUE}🔍 Detailed Synthesis Analysis${NC}"
 echo -e "${BLUE}==============================${NC}"

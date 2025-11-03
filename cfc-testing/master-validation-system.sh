@@ -14,8 +14,9 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Configuration
-BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"
+# Configuration - dynamically determine script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="${BASE_DIR:-$SCRIPT_DIR}"
 VALIDATION_DIR="$BASE_DIR/validation-results"
 
 echo -e "${BLUE}🚀 CloudForge Core - Master Validation System${NC}"

@@ -15,9 +15,10 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Configuration
+# Configuration - dynamically determine script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="${BASE_DIR:-$SCRIPT_DIR}"
 DOMAIN="cloudforgeci.com"
-BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"
 VALIDATION_DIR="$BASE_DIR/validation-results"
 TRUTH_TABLE_FILE="$VALIDATION_DIR/truth-table.json"
 DRIFT_REPORT_FILE="$VALIDATION_DIR/drift-report.txt"
