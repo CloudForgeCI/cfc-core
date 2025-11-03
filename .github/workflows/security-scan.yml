@@ -45,9 +45,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/dependency-check-data
-          key: ${{ runner.os }}-dependency-check-v11-${{ github.run_number }}
+          key: ${{ runner.os }}-dependency-check-v12-filtered-${{ github.run_number }}
           restore-keys: |
-            ${{ runner.os }}-dependency-check-v11-
+            ${{ runner.os }}-dependency-check-v12-filtered-
 
       - name: Build project and generate SBOM
         run: |
@@ -128,37 +128,46 @@ jobs:
             target/dependency-check-report.xml
           retention-days: 90
 
-      - name: Scan SBOM with Grype (Optional)
-        if: always()
-        uses: anchore/scan-action@v3
-        id: grype-scan
-        with:
-          sbom: "target/cfc-core-sbom.json"
-          fail-build: false
-          severity-cutoff: high
+      # Grype scan disabled due to frequent hangs/timeouts
+      # Using OWASP Dependency-Check + OSS Index instead
+      # - name: Scan SBOM with Grype (Optional)
+      #   if: always()
+      #   continue-on-error: true
+      #   timeout-minutes: 10
+      #   uses: anchore/scan-action@v3
+      #   id: grype-scan
+      #   with:
+      #     sbom: "target/cfc-core-sbom.json"
+      #     fail-build: false
+      #     severity-cutoff: high
 
-      - name: Upload Grype SARIF report
-        if: always()
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: ${{ steps.grype-scan.outputs.sarif }}
+      # - name: Upload Grype SARIF report
+      #   if: always() && steps.grype-scan.outputs.sarif
+      #   continue-on-error: true
+      #   uses: github/codeql-action/upload-sarif@v2
+      #   with:
+      #     sarif_file: ${{ steps.grype-scan.outputs.sarif }}
 
       - name: Check for High/Critical vulnerabilities
         if: always()
         run: |
-          echo "Analyzing vulnerability scan results from Grype..."
-          echo "Note: Using Grype as primary scanner due to OWASP Dependency-Check NVD issues"
+          echo "Analyzing vulnerability scan results..."
 
-          # Grype scan results are uploaded to GitHub Security tab via SARIF
-          # For now, we'll make this non-blocking until NVD issues are resolved
-          echo "Vulnerability results available in GitHub Security tab"
-
-          # Optional: Check OWASP results if available
+          # Check OWASP Dependency-Check results (primary scanner)
           if [ -f target/dependency-check-report.json ]; then
             HIGH_COUNT=$(jq '[.dependencies[].vulnerabilities[] | select(.severity == "HIGH")] | length' target/dependency-check-report.json 2>/dev/null || echo "0")
             CRITICAL_COUNT=$(jq '[.dependencies[].vulnerabilities[] | select(.severity == "CRITICAL")] | length' target/dependency-check-report.json 2>/dev/null || echo "0")
             echo "OWASP Dependency-Check found: $CRITICAL_COUNT critical, $HIGH_COUNT high"
+
+            if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
+              echo "::warning::Found $CRITICAL_COUNT critical and $HIGH_COUNT high severity vulnerabilities"
+              echo "Review the dependency-check-report.html artifact for details"
+            fi
+          else
+            echo "OWASP Dependency-Check report not found"
           fi
+
+          echo "Vulnerability scanning complete using OWASP Dependency-Check + OSS Index"
 
       - name: Generate Security Summary
         if: always()
@@ -204,7 +213,10 @@ jobs:
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "- SBOM reports available in artifacts" >> $GITHUB_STEP_SUMMARY
           echo "- Dependency-Check reports available in artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- SARIF report uploaded to GitHub Security tab" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Vulnerability Scanners Used" >> $GITHUB_STEP_SUMMARY
+          echo "- OWASP Dependency-Check (NVD 2020-2024 + OSS Index)" >> $GITHUB_STEP_SUMMARY
+          echo "- CodeQL (code scanning)" >> $GITHUB_STEP_SUMMARY
 
   code-quality:
     name: Code Quality & Linting
