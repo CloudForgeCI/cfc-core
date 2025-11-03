@@ -68,6 +68,22 @@ jobs:
           cdk --version
           echo "AWS CDK installed"
 
+      - name: Configure AWS credentials (for CDK synth only)
+        run: |
+          echo "Configuring mock AWS credentials for CDK synthesis..."
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+          aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+          EOF
+          cat > ~/.aws/config << EOF
+          [default]
+          region = us-east-1
+          output = json
+          EOF
+          echo "Mock credentials configured (synth only, no deployment)"
+
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -82,13 +98,58 @@ jobs:
           mvn clean install -DskipTests -B -V
           echo "Build complete"
 
+      - name: Prepare CDK dependencies
+        run: |
+          echo "Preparing CDK dependencies for cfc-testing..."
+          cd cfc-testing
+
+          # Copy dependencies to target if not already there
+          if [ ! -d "target/dependency" ]; then
+            echo "Copying Maven dependencies..."
+            mvn dependency:copy-dependencies -DoutputDirectory=target/dependency
+          fi
+
+          # Verify the CDK app can be found
+          if [ ! -d "target/classes" ]; then
+            echo "ERROR: target/classes not found"
+            exit 1
+          fi
+
+          echo "CDK dependencies ready"
+          ls -la target/ || true
+
       - name: Set up validation environment
         run: |
           echo "Setting up validation environment..."
           cd cfc-testing
 
-          # Update BASE_DIR in validation script to use current directory
-          sed -i 's|BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"|BASE_DIR="$(pwd)"|g' master-validation-system.sh
+          # Get the current absolute path
+          TESTING_DIR="$(pwd)"
+          echo "Testing directory: $TESTING_DIR"
+
+          # Update BASE_DIR in all validation scripts to use current directory
+          echo "Updating BASE_DIR paths in scripts..."
+
+          # Update master-validation-system.sh
+          sed -i.bak 's|BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"|BASE_DIR="'"$TESTING_DIR"'"|g' master-validation-system.sh
+
+          # Update comprehensive-resource-validator.sh
+          if [ -f comprehensive-resource-validator.sh ]; then
+            sed -i.bak 's|BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"|BASE_DIR="'"$TESTING_DIR"'"|g' comprehensive-resource-validator.sh
+          fi
+
+          # Update drift-detector.sh
+          if [ -f drift-detector.sh ]; then
+            sed -i.bak 's|BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"|BASE_DIR="'"$TESTING_DIR"'"|g' drift-detector.sh
+          fi
+
+          # Update truth-table-generator.py
+          if [ -f truth-table-generator.py ]; then
+            sed -i.bak 's|/Users/phillip/projects/cfc-core/cfc-testing|'"$TESTING_DIR"'|g' truth-table-generator.py
+          fi
+
+          # Remove backup files
+          rm -f *.bak
 
           # Make scripts executable
           chmod +x master-validation-system.sh
@@ -100,6 +161,7 @@ jobs:
           mkdir -p validation-results
 
           echo "Validation environment ready"
+          echo "Scripts updated with BASE_DIR: $TESTING_DIR"
 
       - name: Determine validation mode
         id: mode
@@ -120,13 +182,38 @@ jobs:
         run: |
           cd cfc-testing
           echo "Running validation mode: ${{ steps.mode.outputs.mode }}"
+          echo "Current directory: $(pwd)"
+          echo "Checking prerequisites..."
+
+          # Verify dependencies
+          echo "Checking jq: $(which jq)"
+          echo "Checking python3: $(which python3)"
+          echo "Checking cdk: $(which cdk)"
+          echo "Checking mvn: $(which mvn)"
+
+          # Verify scripts exist
+          echo "Checking scripts..."
+          ls -la *.sh *.py 2>/dev/null || echo "Script listing failed"
+
+          # Verify CDK setup
+          echo "Verifying CDK setup..."
+          ls -la target/classes/ | head -5 || echo "target/classes not found"
+          ls -la target/dependency/ | head -5 || echo "target/dependency not found"
 
           # Run the appropriate validation mode
-          bash master-validation-system.sh ${{ steps.mode.outputs.mode }}
+          echo "Starting validation..."
+          bash -x master-validation-system.sh ${{ steps.mode.outputs.mode }} 2>&1 | tee validation-run.log
 
           # Capture exit code
-          EXIT_CODE=$?
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "Validation exit code: $EXIT_CODE"
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+          # Show last 50 lines of log if failed
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Validation failed. Last 50 lines of output:"
+            tail -50 validation-run.log
+          fi
 
           exit $EXIT_CODE
 
@@ -156,7 +243,9 @@ jobs:
             cfc-testing/validation-results/**/*.json
             cfc-testing/validation-results/**/*.html
             cfc-testing/validation-results/**/*.txt
+            cfc-testing/validation-results/**/*.log
             cfc-testing/testing-strategy.txt
+            cfc-testing/validation-run.log
           retention-days: 30
 
       - name: Upload drift reports
