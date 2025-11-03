@@ -1,0 +1,299 @@
+name: CFC Testing & Validation
+
+on:
+  push:
+    branches: [ develop ]
+    paths:
+      - 'cloudforge-core/**'
+      - 'cloudforge-api/**'
+      - 'cfc-testing/**'
+      - 'pom.xml'
+      - '**/pom.xml'
+  pull_request:
+    branches: [ develop ]
+    paths:
+      - 'cloudforge-core/**'
+      - 'cloudforge-api/**'
+      - 'cfc-testing/**'
+      - 'pom.xml'
+      - '**/pom.xml'
+  workflow_dispatch:
+    inputs:
+      validation_mode:
+        description: 'Validation mode to run'
+        required: true
+        type: choice
+        options:
+          - smoke
+          - validate
+          - full
+          - drift
+        default: 'smoke'
+
+jobs:
+  cfc-validation:
+    name: CFC Configuration Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for drift detection
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Install dependencies
+        run: |
+          echo "Installing required dependencies..."
+          sudo apt-get update
+          sudo apt-get install -y jq python3 python3-pip
+          pip3 install --upgrade pip
+          echo "Dependencies installed"
+
+      - name: Install AWS CDK
+        run: |
+          echo "Installing AWS CDK..."
+          npm install -g aws-cdk
+          cdk --version
+          echo "AWS CDK installed"
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build project
+        run: |
+          echo "Building CFC Core..."
+          mvn clean install -DskipTests -B -V
+          echo "Build complete"
+
+      - name: Set up validation environment
+        run: |
+          echo "Setting up validation environment..."
+          cd cfc-testing
+
+          # Update BASE_DIR in validation script to use current directory
+          sed -i 's|BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"|BASE_DIR="$(pwd)"|g' master-validation-system.sh
+
+          # Make scripts executable
+          chmod +x master-validation-system.sh
+          chmod +x comprehensive-resource-validator.sh 2>/dev/null || true
+          chmod +x drift-detector.sh 2>/dev/null || true
+          chmod +x truth-table-generator.py 2>/dev/null || true
+
+          # Create validation results directory
+          mkdir -p validation-results
+
+          echo "Validation environment ready"
+
+      - name: Determine validation mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MODE="${{ github.event.inputs.validation_mode }}"
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            MODE="smoke"
+          else
+            MODE="validate"
+          fi
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+          echo "Running validation mode: $MODE"
+
+      - name: Run CFC validation
+        id: validation
+        continue-on-error: true
+        run: |
+          cd cfc-testing
+          echo "Running validation mode: ${{ steps.mode.outputs.mode }}"
+
+          # Run the appropriate validation mode
+          bash master-validation-system.sh ${{ steps.mode.outputs.mode }}
+
+          # Capture exit code
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+          exit $EXIT_CODE
+
+      - name: Generate testing strategy for PR
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          cd cfc-testing
+
+          # Get list of changed files
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(java|ts|js)$' | tr '\n' ',' | sed 's/,$//')
+
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "Changed files: $CHANGED_FILES"
+            bash master-validation-system.sh strategy "$CHANGED_FILES" > testing-strategy.txt
+          else
+            echo "No relevant files changed"
+            echo "No Java/TypeScript files changed in this PR" > testing-strategy.txt
+          fi
+
+      - name: Upload validation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfc-validation-results
+          path: |
+            cfc-testing/validation-results/**/*.json
+            cfc-testing/validation-results/**/*.html
+            cfc-testing/validation-results/**/*.txt
+            cfc-testing/testing-strategy.txt
+          retention-days: 30
+
+      - name: Upload drift reports
+        if: always() && steps.mode.outputs.mode != 'smoke'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfc-drift-reports
+          path: |
+            cfc-testing/validation-results/drift-reports/**/*
+          retention-days: 90
+
+      - name: Generate validation summary
+        if: always()
+        run: |
+          cd cfc-testing
+
+          echo "## CFC Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Validation Mode:** \`${{ steps.mode.outputs.mode }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Validation Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check for truth table results
+          if [ -f validation-results/truth-table.json ]; then
+            echo "### Configuration Analysis" >> $GITHUB_STEP_SUMMARY
+            TOTAL=$(jq -r '.metadata.total_configurations // 0' validation-results/truth-table.json)
+            VALID=$(jq -r '.metadata.valid_configurations // 0' validation-results/truth-table.json)
+            INVALID=$(jq -r '.metadata.invalid_configurations // 0' validation-results/truth-table.json)
+
+            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Total Configurations | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| Valid Configurations | $VALID |" >> $GITHUB_STEP_SUMMARY
+            echo "| Invalid Combinations | $INVALID |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Check for validation results
+          if [ -d validation-results/current ] && [ "$(ls -A validation-results/current/*.json 2>/dev/null)" ]; then
+            echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
+            PASSED=0
+            FAILED=0
+
+            for file in validation-results/current/*-validation.json; do
+              if [ -f "$file" ]; then
+                STATUS=$(jq -r '.summary.status // "UNKNOWN"' "$file")
+                if [ "$STATUS" == "PASS" ]; then
+                  PASSED=$((PASSED + 1))
+                else
+                  FAILED=$((FAILED + 1))
+                fi
+              fi
+            done
+
+            TOTAL=$((PASSED + FAILED))
+            echo "- **Total Tests:** $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "- **Passed:** $PASSED ✅" >> $GITHUB_STEP_SUMMARY
+            echo "- **Failed:** $FAILED ❌" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Check for drift detection
+          LATEST_DRIFT=$(ls -t validation-results/drift-reports/drift-summary-*.txt 2>/dev/null | head -1)
+          if [ -f "$LATEST_DRIFT" ]; then
+            echo "### Drift Detection" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -20 "$LATEST_DRIFT" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Add testing strategy for PRs
+          if [ -f testing-strategy.txt ]; then
+            echo "### Testing Strategy" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat testing-strategy.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Overall status
+          if [ "${{ steps.validation.outputs.exit_code }}" == "0" ]; then
+            echo "### ✅ Validation Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Validation Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please review the validation artifacts for detailed error information." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*Artifacts containing detailed validation results are available for download.*" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment validation results on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const exitCode = '${{ steps.validation.outputs.exit_code }}';
+            const mode = '${{ steps.mode.outputs.mode }}';
+
+            let comment = '## 🧪 CFC Validation Results\n\n';
+            comment += `**Mode:** \`${mode}\`\n`;
+            comment += `**Status:** ${exitCode === '0' ? '✅ Passed' : '❌ Failed'}\n\n`;
+
+            // Add testing strategy if available
+            try {
+              const strategy = fs.readFileSync('cfc-testing/testing-strategy.txt', 'utf8');
+              if (strategy && !strategy.includes('No Java/TypeScript files changed')) {
+                comment += '### 🎯 Testing Strategy\n\n';
+                comment += '```\n' + strategy + '\n```\n\n';
+              }
+            } catch (e) {
+              console.log('No testing strategy available');
+            }
+
+            comment += '### 📊 Details\n\n';
+            comment += 'Full validation results are available in the workflow artifacts.\n\n';
+
+            if (exitCode !== '0') {
+              comment += '⚠️ **Action Required:** Please review the validation failures and update your changes accordingly.\n\n';
+            }
+
+            comment += `[View Full Workflow Results](${context.payload.pull_request.html_url}/checks)\n`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Check validation status
+        if: steps.validation.outputs.exit_code != '0' && github.event_name != 'pull_request'
+        run: |
+          echo "Validation failed with exit code: ${{ steps.validation.outputs.exit_code }}"
+          echo "Please review the validation artifacts for details."
+          exit 1

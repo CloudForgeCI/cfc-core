@@ -192,7 +192,7 @@ run_smoke_tests() {
         local ssl="${CONFIG_PARTS[4]}"
         local subdomain="${CONFIG_PARTS[5]}"
         
-        local stack_name="smoke-$(echo "$config" | tr '[:upper:],' '[:lower:]-' | tr -d ',')"
+        local stack_name="smoke-$(echo "$config" | tr '[:upper:],' '[:lower:]-' | tr -d ',' | tr '_' '-')"
         
         echo -e "${CYAN}🧪 Testing: $runtime + $topology + $security${NC}"
         
@@ -225,10 +225,10 @@ run_smoke_tests() {
   }
 }
 EOF
-        
+
         # Run synthesis
         cd "$BASE_DIR"
-        if cdk synth --quiet \
+        if cdk synth --quiet "$stack_name" \
             --context cfc.runtime="$runtime" \
             --context cfc.topology="$topology" \
             --context cfc.securityProfile="$security" \
