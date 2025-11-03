@@ -17,6 +17,7 @@ import software.amazon.awscdk.services.route53.RecordTarget;
 import software.amazon.awscdk.services.route53.targets.CloudFrontTarget;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketAccessControl;
+import software.amazon.awscdk.services.s3.BucketEncryption;
 import software.amazon.awscdk.services.s3.BucketProps;
 
 import java.util.ArrayList;
@@ -66,11 +67,16 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
     // 1) Website bucket (simple static hosting; fine to keep private and serve via CF+OAC later)
     c.once("S3:WebsiteBucket", () -> {
       if (c.websiteBucket.get().isPresent()) return;
+
+      // Determine encryption based on security profile
+      BucketEncryption encryption = determineEncryption(c);
+
       Bucket bucket = new Bucket(c, "WebsiteBucket", BucketProps.builder()
               .publicReadAccess(false) // prefer CF rather than public bucket
               .accessControl(BucketAccessControl.PRIVATE)
               .websiteIndexDocument("index.html")
               .websiteErrorDocument("error.html")
+              .encryption(encryption)
               .build());
       c.websiteBucket.set(bucket);
     });
@@ -123,6 +129,21 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
       }
     }
     return (fqdn == null || fqdn.isBlank()) ? java.util.List.of() : java.util.List.of(fqdn);
+  }
+
+  /**
+   * Determine S3 bucket encryption based on security profile.
+   * - PRODUCTION: KMS encryption with AWS-managed keys (highest security)
+   * - STAGING: S3-managed encryption (AES-256)
+   * - DEV: S3-managed encryption (AES-256)
+   */
+  private static BucketEncryption determineEncryption(SystemContext c) {
+    if (c.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
+      // Production: Use KMS encryption for enhanced security and audit capabilities
+      return BucketEncryption.KMS_MANAGED;
+    }
+    // Dev and Staging: Use S3-managed encryption (simpler, still encrypted at rest)
+    return BucketEncryption.S3_MANAGED;
   }
 
 }

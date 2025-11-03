@@ -46,6 +46,7 @@ import software.amazon.awscdk.services.efs.Acl;
 import software.constructs.Construct;
 
 import java.util.List;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -634,8 +635,7 @@ public class JenkinsFactory {
       try {
         ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, security, iamProfile, cfc);
       } catch (Exception e) {
-        LOG.severe("*** CRITICAL: Exception in SystemContext.start(): " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in SystemContext.start() ***", e);
         throw e;
       }
     
@@ -651,8 +651,7 @@ public class JenkinsFactory {
       try {
         new FlowLogFactory(scope, id + "Flowlog");
       } catch (Exception e) {
-        LOG.severe("*** CRITICAL: Exception in FlowLogFactory: " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in FlowLogFactory ***", e);
         throw e;
       }
 
@@ -662,24 +661,21 @@ public class JenkinsFactory {
         fargate.injectContexts(); // Manual injection after SystemContext.start()
         fargate.create();
       } catch (Exception e) {
-        LOG.severe("*** CRITICAL: Exception in FargateFactory instantiation/creation: " + e.getClass().getSimpleName() + ": " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in FargateFactory instantiation/creation ***", e);
         throw e;
       }
       
       try {
     new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
       } catch (Exception e) {
-        LOG.severe("*** CRITICAL: Exception in JenkinsBootstrap: " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in JenkinsBootstrap ***", e);
         throw e;
       }
       
       try {
     new AlarmFactory(scope, id + "Alarms", null);
       } catch (Exception e) {
-        LOG.severe("*** CRITICAL: Exception in AlarmFactory: " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in AlarmFactory ***", e);
         throw e;
       }
       
@@ -689,8 +685,7 @@ public class JenkinsFactory {
         domain.injectContexts(); // Manual injection after SystemContext.start()
         domain.create();
       } catch (Exception e) {
-        LOG.severe("*** CRITICAL: Exception in DomainFactory: " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in DomainFactory ***", e);
         throw e;
       }
       
@@ -700,8 +695,7 @@ public class JenkinsFactory {
       try {
         result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
       } catch (Exception e) {
-        LOG.severe("*** CRITICAL: Exception in JenkinsSystem creation: " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in JenkinsSystem creation ***", e);
         throw e;
       }
       
@@ -709,15 +703,14 @@ public class JenkinsFactory {
       try {
         ctx.executeDeferredActions();
       } catch (Exception e) {
-        LOG.severe("*** CRITICAL: Exception in executeDeferredActions(): " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in executeDeferredActions() ***", e);
         throw e;
       }
       
       return result;
-      
+
     } catch (Exception e) {
-      e.printStackTrace();
+      LOG.log(Level.SEVERE, "*** CRITICAL: Exception in createFargate() ***", e);
       throw e;
     }
   }

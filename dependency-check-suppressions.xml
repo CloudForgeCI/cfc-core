@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!--
+    This file contains suppressions for false positives identified by OWASP Dependency-Check.
+
+    Each suppression should include:
+    - A clear comment explaining why it's a false positive
+    - The CVE or vulnerability ID
+    - The affected dependency (GAV coordinates)
+    - A notes field documenting the reason for suppression
+    - An expiration date (until) to force periodic review
+
+    Suppression format:
+    <suppress>
+       <notes><![CDATA[
+       Explanation of why this is suppressed
+       ]]></notes>
+       <packageUrl regex="true">^pkg:maven/group\.id/artifact\-id@.*$</packageUrl>
+       <cve>CVE-YYYY-NNNNN</cve>
+       <until>YYYY-MM-DD</until>
+    </suppress>
+
+    For more information, see:
+    https://jeremylong.github.io/DependencyCheck/general/suppression.html
+    -->
+
+    <!-- Example suppression (remove this when adding real suppressions):
+    <suppress>
+       <notes><![CDATA[
+       CVE-2023-12345 affects version 1.x but we use 2.x which has the fix.
+       This is a false positive due to incorrect version detection.
+       ]]></notes>
+       <packageUrl regex="true">^pkg:maven/com\.example/example\-lib@.*$</packageUrl>
+       <cve>CVE-2023-12345</cve>
+       <until>2026-01-01</until>
+    </suppress>
+    -->
+
+    <!--
+    AWS CDK and Constructs Library Suppressions
+
+    Note: The AWS CDK libraries are well-maintained by Amazon and receive regular security updates.
+    Any CVEs found should be carefully evaluated before suppression. Only suppress if:
+    1. The CVE affects a transitive dependency not used by CDK
+    2. The CVE is fixed in the version we're using (version detection error)
+    3. The CVE doesn't apply to our usage pattern
+    -->
+
+    <!--
+    If you identify false positives during scanning, add them here following the format above.
+    Always include:
+    - Clear explanation in notes
+    - Expiration date for periodic review
+    - Specific CVE or vulnerability ID
+    -->
+
+    <!--
+    AWS CDK Asset False Positives:
+
+    The cdk-asset-awscli-v1 package bundles the AWS CLI as a Lambda layer which includes
+    compressed JSON data files (endpoint-rule-set-1.json.gz, service-2.json.gz, etc.).
+    The dependency scanner is incorrectly flagging these JSON data files as if they were
+    vulnerable Ruby JSON gems or JavaScript packages.
+
+    These are NOT actual code dependencies - they are data files used by the AWS CLI.
+    The vulnerabilities CVE-2020-10663 (Ruby JSON gem) and CVE-2021-23497 (JavaScript
+    @strikeentco/set package) do not apply to this project which is a Java/Maven project
+    that uses AWS CDK.
+
+    Verified: These are compressed JSON configuration files for AWS service endpoints,
+    not executable code or library dependencies.
+    -->
+
+    <suppress until="2026-11-01Z">
+       <notes><![CDATA[
+       FALSE POSITIVE: CVE-2020-10663 affects the Ruby JSON gem, but this detection is
+       from compressed JSON data files (endpoint-rule-set-1.json.gz, service-2.json.gz, etc.)
+       inside the AWS CLI layer bundled with cdk-asset-awscli-v1.
+       These are not Ruby gems or executable code - they are static configuration files.
+       This project does not use Ruby or the Ruby JSON gem.
+       ]]></notes>
+       <filePath regex="true">.*cdk-asset-awscli-v1.*\.json\.gz$</filePath>
+       <cve>CVE-2020-10663</cve>
+    </suppress>
+
+    <suppress until="2026-11-01Z">
+       <notes><![CDATA[
+       FALSE POSITIVE: CVE-2021-23497 affects the JavaScript package @strikeentco/set,
+       but this detection is from compressed JSON data files (endpoint-rule-set-1.json.gz)
+       inside the AWS CLI layer bundled with cdk-asset-awscli-v1.
+       These are not JavaScript packages or executable code - they are static AWS service
+       endpoint configuration files.
+       This project does not use the @strikeentco/set npm package.
+       ]]></notes>
+       <filePath regex="true">.*cdk-asset-awscli-v1.*\.json\.gz$</filePath>
+       <cve>CVE-2021-23497</cve>
+    </suppress>
+
+</suppressions>

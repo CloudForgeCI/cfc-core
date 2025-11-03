@@ -56,7 +56,6 @@ import java.util.Map;
  *   unhealthyThreshold: unhealthy threshold count              (default: 3)
  *   deploymentId:    unique identifier for this deployment    (optional)
  *   deploymentVersion: version tag for this deployment        (optional)
- *   environment:     "dev" | "staging" | "prod"               (default: dev)
  *   region:          AWS region override                       (optional)
  *   tags:            JSON object of additional tags            (optional)
  *   stackName:       CDK stack name                           (optional)
@@ -101,6 +100,9 @@ public final class DeploymentContext {
     private final boolean cloudfront;
     @OneOf(value = {"alb", "nlb"}, message = "Load balancer type must be 'alb' or 'nlb'")
     private final String lbType;      // alb | nlb
+
+    // Security - SSH Access Control
+    private final String bastionCidr;  // CIDR for bastion/VPN SSH access (PRODUCTION profile)
 
     // Auth / SSO
     @OneOf(value = {"none", "alb-oidc", "jenkins-oidc"}, message = "Auth mode must be 'none', 'alb-oidc', or 'jenkins-oidc'")
@@ -152,7 +154,6 @@ public final class DeploymentContext {
     // Additional deployment tracking fields
     private final String deploymentId;
     private final String deploymentVersion;
-    private final String environment;
     private final String tags;
     private final String stackName;
 
@@ -193,7 +194,10 @@ public final class DeploymentContext {
         this.cpuTargetUtilization = intval("cpuTargetUtilization", 60);
 
         this.enableFlowlogs = bool("enableFlowlogs", false);
-        
+
+        // Security - SSH Access Control
+        this.bastionCidr = str("bastionCidr", "10.0.1.0/24");
+
         // Advanced Configuration
         this.enableMonitoring = bool("enableMonitoring", true);
         this.enableEncryption = bool("enableEncryption", true);
@@ -210,7 +214,6 @@ public final class DeploymentContext {
         // Additional deployment tracking fields
         this.deploymentId = str("deploymentId", null);
         this.deploymentVersion = str("deploymentVersion", null);
-        this.environment = str("environment", "dev");
         this.tags = str("tags", null);
         this.stackName = str("stackName", null);
 
@@ -273,7 +276,10 @@ public final class DeploymentContext {
     public Integer minInstanceCapacity() { return minInstanceCapacity; }
 
     public boolean enableFlowlogs() { return enableFlowlogs; }
-    
+
+    // Security - SSH Access Control
+    public String bastionCidr() { return bastionCidr; }
+
     // Advanced Configuration
     public boolean enableMonitoring() { return enableMonitoring; }
     public boolean enableEncryption() { return enableEncryption; }
@@ -295,7 +301,6 @@ public final class DeploymentContext {
     // Additional deployment tracking fields
     public String deploymentId() { return deploymentId; }
     public String deploymentVersion() { return deploymentVersion; }
-    public String environment() { return environment; }
     public String tags() { return tags; }
     public String stackName() { return stackName; }
 

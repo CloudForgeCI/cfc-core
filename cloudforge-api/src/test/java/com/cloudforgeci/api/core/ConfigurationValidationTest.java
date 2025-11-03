@@ -236,7 +236,6 @@ class ConfigurationValidationTest {
         assertNotNull(context);
         assertNotNull(context.tier());
         assertNotNull(context.env());
-        assertNotNull(context.environment());
     }
 
     @Test

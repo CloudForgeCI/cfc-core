@@ -8,6 +8,7 @@ import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -88,12 +89,24 @@ public class LoggingCwFactory extends BaseFactory {
                 retentionDays = RetentionDays.TWO_YEARS;
             }
         }
-        
-        LogGroup logGroup = LogGroup.Builder.create(this, "SecurityProfileLogs")
+
+        // Create log group with explicit name and removal policy
+        // If RemovalPolicy is RETAIN, the log group will persist after stack deletion
+        // To avoid conflicts on redeployment, we only set the logGroupName if removal policy is DESTROY
+        software.amazon.awscdk.services.logs.LogGroup.Builder logGroupBuilder = LogGroup.Builder.create(this, "SecurityProfileLogs")
                 .retention(retentionDays)
-                .removalPolicy(config.getLogRemovalPolicy())
-                .logGroupName(logGroupName)
-                .build();
+                .removalPolicy(config.getLogRemovalPolicy());
+
+        // Only set explicit name if using DESTROY policy, otherwise let CDK generate unique name
+        if (config.getLogRemovalPolicy() == software.amazon.awscdk.RemovalPolicy.DESTROY) {
+            logGroupBuilder.logGroupName(logGroupName);
+        }
+
+        LogGroup logGroup = logGroupBuilder.build();
+
+        LOG.info("LoggingCwFactory: Configured log group: " + logGroupName +
+                 " with retention=" + retentionDays +
+                 ", removal=" + config.getLogRemovalPolicy());
 
             LOG.info("LoggingCwFactory: About to set logs in context");
             ctx.logs.set(logGroup);
@@ -102,9 +115,7 @@ public class LoggingCwFactory extends BaseFactory {
                     "retention=" + config.getLogRetentionDays() +
                     ", removal=" + config.getLogRemovalPolicy());
         } catch (Exception e) {
-            LOG.severe("LoggingCwFactory: Exception in create() method: " + e.getMessage());
-            LOG.severe("LoggingCwFactory: Exception type: " + e.getClass().getSimpleName());
-            e.printStackTrace();
+            LOG.log(Level.SEVERE, "LoggingCwFactory: Exception in create() method", e);
             throw e;
         }
     }

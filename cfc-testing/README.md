@@ -13,12 +13,11 @@ The Interactive Deployer is available here for testing purposes. It's a command-
 ### Quick Start
 
 ```bash
-# Run the interactive deployer
-./deploy-interactive.sh
+# Simply run CDK deploy (uses saved configuration from deployment-context.json)
+cdk deploy
 
-# Or manually
-mvn compile
-mvn exec:java -Dexec.mainClass="com.cloudforgeci.samples.app.InteractiveDeployer"
+# Or synthesize only
+cdk synth
 ```
 
 ### Features

@@ -1,6 +1,6 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <version>2.0.5</version>
+  <version>2.0.6</version>
   <parent>
     <groupId>com.cloudforgeci</groupId>
     <artifactId>cloudforge</artifactId>
@@ -11,7 +11,7 @@
   <packaging>pom</packaging>
 
   <properties>
-    <build.plugins.plugin.version>3.4.2</build.plugins.plugin.version>
+    <build.plugins.plugin.version>3.13.0</build.plugins.plugin.version>
     <cdk.version>2.152.0</cdk.version>
     <constructs.version>10.3.0</constructs.version>
     <jupiter.version>5.12.2</jupiter.version>
@@ -118,7 +118,7 @@
           <plugin>
             <groupId>org.sonatype.central</groupId>
             <artifactId>central-publishing-maven-plugin</artifactId>
-            <version>0.8.0</version>
+            <version>0.9.0</version>
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
@@ -133,7 +133,7 @@
           <plugin>
             <groupId>org.codehaus.mojo</groupId>
             <artifactId>flatten-maven-plugin</artifactId>
-            <version>1.6.0</version>
+            <version>1.7.3</version>
             <configuration>
               <updatePomFile>true</updatePomFile> <!-- publish the flattened POM -->
               <flattenMode>oss</flattenMode>      <!-- or resolveCiFriendliesOnly if you prefer -->
@@ -215,9 +215,66 @@
 
       </build>
     </profile>
+    <profile>
+      <id>security-scan</id>
+      <activation>
+        <property>
+          <name>security-scan</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <!-- OWASP Dependency-Check Plugin - only runs when security-scan profile is active -->
+          <plugin>
+            <groupId>org.owasp</groupId>
+            <artifactId>dependency-check-maven</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>check</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 
   <build>
+    <pluginManagement>
+      <plugins>
+        <!-- Maven Compiler Plugin -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${build.plugins.plugin.version}</version>
+          <configuration>
+            <source>21</source>
+            <target>21</target>
+          </configuration>
+        </plugin>
+        <!-- Maven Source Plugin -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-source-plugin</artifactId>
+          <version>3.3.0</version>
+        </plugin>
+        <!-- Maven Javadoc Plugin -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>3.7.0</version>
+        </plugin>
+        <!-- Maven GPG Plugin -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-gpg-plugin</artifactId>
+          <version>3.2.4</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
     <plugins>
       <plugin>
         <groupId>org.jacoco</groupId>
@@ -237,6 +294,142 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+      <!-- CycloneDX SBOM Plugin -->
+      <plugin>
+        <groupId>org.cyclonedx</groupId>
+        <artifactId>cyclonedx-maven-plugin</artifactId>
+        <version>2.8.2</version>
+        <executions>
+          <execution>
+            <id>generate-sbom</id>
+            <phase>package</phase>
+            <goals>
+              <goal>makeAggregateBom</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <projectType>library</projectType>
+          <schemaVersion>1.5</schemaVersion>
+          <includeBomSerialNumber>true</includeBomSerialNumber>
+          <includeCompileScope>true</includeCompileScope>
+          <includeProvidedScope>true</includeProvidedScope>
+          <includeRuntimeScope>true</includeRuntimeScope>
+          <includeTestScope>false</includeTestScope>
+          <includeSystemScope>true</includeSystemScope>
+          <includeLicenseText>false</includeLicenseText>
+          <outputReactorProjects>true</outputReactorProjects>
+          <outputFormat>all</outputFormat>
+          <outputName>cfc-core-sbom</outputName>
+        </configuration>
+      </plugin>
+      <!-- OWASP Dependency-Check Plugin - configuration only (execution in security-scan profile) -->
+      <plugin>
+        <groupId>org.owasp</groupId>
+        <artifactId>dependency-check-maven</artifactId>
+        <version>12.1.0</version>
+        <configuration>
+          <!-- Fail build if CVSS score is 7 or higher (High/Critical) -->
+          <failBuildOnCVSS>7</failBuildOnCVSS>
+          <!-- Aggregate results from all modules -->
+          <aggregate>true</aggregate>
+          <!-- Output formats: HTML, JSON, CSV, XML -->
+          <formats>
+            <format>HTML</format>
+            <format>JSON</format>
+            <format>XML</format>
+          </formats>
+          <!-- Suppress false positives -->
+          <suppressionFiles>
+            <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
+          </suppressionFiles>
+          <!-- Enable experimental analyzers for better detection -->
+          <assemblyAnalyzerEnabled>true</assemblyAnalyzerEnabled>
+          <!-- Skip test dependencies -->
+          <skipTestScope>true</skipTestScope>
+          <!-- Use NVD API 2.0 with proper configuration -->
+          <!-- The old JSON data feeds were deprecated and shut down by NIST -->
+          <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+
+          <!-- Enable NVD API usage -->
+          <nvdApiServerId>nvd</nvdApiServerId>
+
+          <!-- Rate limiting for API calls (recommended: 2000ms with API key, 6000ms without) -->
+          <!-- With an API key, you get 50 requests per 30 seconds -->
+          <nvdApiDelay>2000</nvdApiDelay>
+          <nvdMaxRetryCount>10</nvdMaxRetryCount>
+
+          <!-- API endpoint (uses v2.0) -->
+          <nvdApiEndpoint>https://services.nvd.nist.gov/rest/json/cves/2.0</nvdApiEndpoint>
+
+          <!-- Local cache directory -->
+          <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
+
+          <!-- NVD Database Configuration -->
+          <cveValidForHours>168</cveValidForHours>
+          <autoUpdate>false</autoUpdate>
+
+          <!-- WORKAROUND: Filter NVD data to avoid CVSS v4.0 parsing bugs -->
+          <!-- Only fetch CVEs from mid-2020 to mid-2024 (pre-CVSS 4.0 era) -->
+          <!-- This avoids the "SAFETY" enum parsing error -->
+          <nvdApiStartDate>2020-01-01T00:00:00:000 UTC</nvdApiStartDate>
+          <nvdApiEndDate>2024-06-01T00:00:00:000 UTC</nvdApiEndDate>
+
+          <!-- Performance optimizations -->
+          <centralAnalyzerUseCache>true</centralAnalyzerUseCache>
+
+          <!-- ===== DISABLE ALL ANALYZERS THAT MAKE EXTERNAL API CALLS ===== -->
+          <!-- Only use local file-based analysis to avoid 300k+ API requests -->
+
+          <!-- Enable OSS Index (Sonatype) as alternative to NVD -->
+          <!-- OSS Index doesn't have the CVSS v4.0 parsing issues -->
+          <ossindexAnalyzerEnabled>true</ossindexAnalyzerEnabled>
+          <ossindexAnalyzerUseCache>true</ossindexAnalyzerUseCache>
+
+          <!-- Disable Node.js analyzers - not needed for Java project -->
+          <nodeAuditAnalyzerEnabled>false</nodeAuditAnalyzerEnabled>
+          <yarnAuditAnalyzerEnabled>false</yarnAuditAnalyzerEnabled>
+          <pnpmAuditAnalyzerEnabled>false</pnpmAuditAnalyzerEnabled>
+          <retirejmentsAnalyzerEnabled>false</retirejmentsAnalyzerEnabled>
+          <nodePackageAnalyzerEnabled>false</nodePackageAnalyzerEnabled>
+
+          <!-- Disable Ruby/Python analyzers - not needed for Java project -->
+          <rubygemsAnalyzerEnabled>false</rubygemsAnalyzerEnabled>
+          <bundleAuditAnalyzerEnabled>false</bundleAuditAnalyzerEnabled>
+          <pyDistributionAnalyzerEnabled>false</pyDistributionAnalyzerEnabled>
+          <pyPackageAnalyzerEnabled>false</pyPackageAnalyzerEnabled>
+          <pipAnalyzerEnabled>false</pipAnalyzerEnabled>
+          <pipfileAnalyzerEnabled>false</pipfileAnalyzerEnabled>
+          <poetryAnalyzerEnabled>false</poetryAnalyzerEnabled>
+
+          <!-- Disable Go/PHP/.NET analyzers - not needed for Java project -->
+          <golangDepAnalyzerEnabled>false</golangDepAnalyzerEnabled>
+          <golangModAnalyzerEnabled>false</golangModAnalyzerEnabled>
+          <composerAnalyzerEnabled>false</composerAnalyzerEnabled>
+          <nuspecAnalyzerEnabled>false</nuspecAnalyzerEnabled>
+          <nugetconfAnalyzerEnabled>false</nugetconfAnalyzerEnabled>
+
+          <!-- Disable Cocoapods/Swift/Carthage - not needed for Java project -->
+          <cocoapodsAnalyzerEnabled>false</cocoapodsAnalyzerEnabled>
+          <swiftPackageManagerAnalyzerEnabled>false</swiftPackageManagerAnalyzerEnabled>
+          <carthageAnalyzerEnabled>false</carthageAnalyzerEnabled>
+
+          <!-- Disable autoconf/cmake/msbuild - not needed for Java/Maven project -->
+          <autoconfAnalyzerEnabled>false</autoconfAnalyzerEnabled>
+          <cmakeAnalyzerEnabled>false</cmakeAnalyzerEnabled>
+          <msbuildProjectAnalyzerEnabled>false</msbuildProjectAnalyzerEnabled>
+
+          <!-- Disable archive analyzers that extract and scan nested JARs -->
+          <!-- This dramatically reduces the number of files scanned -->
+          <zipExtensions></zipExtensions>
+
+          <!-- Enable ONLY the analyzers we actually need for Java/Maven -->
+          <jarAnalyzerEnabled>true</jarAnalyzerEnabled>
+          <centralAnalyzerEnabled>true</centralAnalyzerEnabled>
+          <nexusAnalyzerEnabled>false</nexusAnalyzerEnabled>  <!-- Disable: makes API calls -->
+          <artifactoryAnalyzerEnabled>false</artifactoryAnalyzerEnabled>  <!-- Disable: makes API calls -->
+        </configuration>
       </plugin>
     </plugins>
   </build>

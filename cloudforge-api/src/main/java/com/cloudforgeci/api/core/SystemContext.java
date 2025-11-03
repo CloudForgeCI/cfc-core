@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 
@@ -189,8 +190,7 @@ public final class SystemContext extends Construct {
         try {
           Rules.installAll(ctx);   // installs RuntimeRules, TopologyRules, SecurityRules, and IAMRules
         } catch (Exception e) {
-          LOG.severe("*** ERROR in Rules.installAll(): " + e.getMessage() + " ***");
-          e.printStackTrace();
+          LOG.log(Level.SEVERE, "*** ERROR in Rules.installAll() ***", e);
           throw e;
         }
         ctx.installed = true;
@@ -198,10 +198,9 @@ public final class SystemContext extends Construct {
       }
       
       return ctx;
-      
+
     } catch (Exception e) {
-      LOG.severe("*** ERROR in SystemContext.start(): " + e.getMessage() + " ***");
-      e.printStackTrace();
+      LOG.log(Level.SEVERE, "*** ERROR in SystemContext.start() ***", e);
       throw e;
     }
   }
@@ -234,8 +233,7 @@ public final class SystemContext extends Construct {
       try {
         action.run();
       } catch (Exception e) {
-        LOG.severe("*** Error executing deferred action: " + e.getMessage() + " ***");
-        e.printStackTrace();
+        LOG.log(Level.SEVERE, "*** Error executing deferred action ***", e);
         throw e;
       }
     }

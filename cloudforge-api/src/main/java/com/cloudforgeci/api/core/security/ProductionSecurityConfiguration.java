@@ -71,11 +71,11 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // Instance security group - only for EC2 runtime
         if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
             whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
-                // SSH only from specific bastion host or VPN CIDR (example: 10.0.1.0/24)
+                // SSH only from specific bastion host or VPN CIDR (configurable via bastionCidr)
                 instanceSg.addIngressRule(
-                    Peer.ipv4("10.0.1.0/24"), 
-                    Port.tcp(22), 
-                    "SSH_from_bastion/VPN_(PRODUCTION)", 
+                    Peer.ipv4(c.cfc.bastionCidr()),
+                    Port.tcp(22),
+                    "SSH_from_bastion/VPN_(PRODUCTION)",
                     false
                 );
                 
