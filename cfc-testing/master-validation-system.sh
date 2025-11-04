@@ -189,17 +189,53 @@ except Exception as e:
 run_smoke_tests() {
     echo -e "${PURPLE}💨 Running smoke tests...${NC}"
     echo ""
-    
+
+    # Verify CDK dependencies are available
+    echo -e "${CYAN}📦 Verifying CDK dependencies...${NC}"
+    if [[ ! -d "$BASE_DIR/target/classes" ]]; then
+        echo -e "${RED}❌ target/classes not found in $BASE_DIR${NC}"
+        echo "Please build the project first with: mvn clean install"
+        return 1
+    fi
+
+    if [[ ! -d "$BASE_DIR/target/dependency" ]]; then
+        echo -e "${YELLOW}⚠️  target/dependency not found, copying dependencies...${NC}"
+        cd "$BASE_DIR"
+        mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -q
+    fi
+
+    # Verify AWS credentials are configured (even if mock)
+    if [[ ! -f ~/.aws/credentials ]] && [[ -z "$AWS_ACCESS_KEY_ID" ]]; then
+        echo -e "${YELLOW}⚠️  AWS credentials not found. CDK requires credentials for synthesis.${NC}"
+        echo -e "${YELLOW}Setting up mock credentials for local testing...${NC}"
+        mkdir -p ~/.aws
+        cat > ~/.aws/credentials << EOF
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+EOF
+        cat > ~/.aws/config << EOF
+[default]
+region = us-east-1
+output = json
+EOF
+        echo -e "${GREEN}✅ Mock credentials configured${NC}"
+    fi
+
+    echo -e "${GREEN}✅ CDK dependencies verified${NC}"
+    echo ""
+
     # Define minimal test configurations
     local smoke_configs=(
         "FARGATE,JENKINS_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain"
         "EC2,JENKINS_SINGLE_NODE,DEV,no-domain,ssl-disabled,no-subdomain"
         "FARGATE,JENKINS_SERVICE,PRODUCTION,with-domain,ssl-enabled,with-subdomain"
     )
-    
+
     local passed=0
     local failed=0
-    
+    local failed_configs=()
+
     for config in "${smoke_configs[@]}"; do
         IFS=',' read -ra CONFIG_PARTS <<< "$config"
         local runtime="${CONFIG_PARTS[0]}"
@@ -208,16 +244,16 @@ run_smoke_tests() {
         local domain="${CONFIG_PARTS[3]}"
         local ssl="${CONFIG_PARTS[4]}"
         local subdomain="${CONFIG_PARTS[5]}"
-        
+
         local stack_name="smoke-$(echo "$config" | tr '[:upper:],' '[:lower:]-' | tr -d ',' | tr '_' '-')"
-        
+
         echo -e "${CYAN}🧪 Testing: $runtime + $topology + $security${NC}"
-        
+
         # Create deployment context
         local domain_value=""
         local subdomain_value=""
         local ssl_value="false"
-        
+
         if [[ "$domain" == "with-domain" ]]; then
             domain_value="cloudforgeci.com"
             if [[ "$subdomain" == "with-subdomain" ]]; then
@@ -227,7 +263,7 @@ run_smoke_tests() {
                 ssl_value="true"
             fi
         fi
-        
+
         cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
@@ -243,21 +279,31 @@ run_smoke_tests() {
 }
 EOF
 
-        # Run synthesis
+        # Run synthesis with error capture
         cd "$BASE_DIR"
+        local error_log="$VALIDATION_DIR/smoke-test-${stack_name}-error.log"
+
         if cdk synth --quiet "$stack_name" \
             --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample" \
             --context cfc.runtime="$runtime" \
             --context cfc.topology="$topology" \
             --context cfc.securityProfile="$security" \
             --context cfc.stackName="$stack_name" \
-            > /dev/null 2>&1; then
-            
+            > /dev/null 2>"$error_log"; then
+
             echo -e "  ${GREEN}✅ PASS${NC}"
             passed=$((passed + 1))
+            rm -f "$error_log"
         else
             echo -e "  ${RED}❌ FAIL${NC}"
             failed=$((failed + 1))
+            failed_configs+=("$config")
+
+            # Show last 10 lines of error for immediate feedback
+            if [[ -f "$error_log" ]] && [[ -s "$error_log" ]]; then
+                echo -e "  ${YELLOW}Error preview (last 10 lines):${NC}"
+                tail -10 "$error_log" | sed 's/^/    /'
+            fi
         fi
     done
     
@@ -266,12 +312,20 @@ EOF
     echo "Passed: $passed"
     echo "Failed: $failed"
     echo "Total:  $((passed + failed))"
-    
+    echo ""
+
     if [[ $failed -eq 0 ]]; then
         echo -e "${GREEN}🎉 All smoke tests passed${NC}"
         return 0
     else
         echo -e "${RED}💥 Some smoke tests failed${NC}"
+        echo ""
+        echo -e "${YELLOW}Failed configurations:${NC}"
+        for failed_config in "${failed_configs[@]}"; do
+            echo "  - $failed_config"
+        done
+        echo ""
+        echo -e "${CYAN}💡 Tip: Check error logs in $VALIDATION_DIR for details${NC}"
         return 1
     fi
 }

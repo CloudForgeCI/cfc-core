@@ -103,20 +103,33 @@ jobs:
           echo "Preparing CDK dependencies for cfc-testing..."
           cd cfc-testing
 
+          # Verify build artifacts exist
+          if [ ! -d "target/classes" ]; then
+            echo "ERROR: target/classes not found. Building cfc-testing module..."
+            mvn clean install -DskipTests -B
+          fi
+
           # Copy dependencies to target if not already there
           if [ ! -d "target/dependency" ]; then
             echo "Copying Maven dependencies..."
-            mvn dependency:copy-dependencies -DoutputDirectory=target/dependency
+            mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B
           fi
 
           # Verify the CDK app can be found
-          if [ ! -d "target/classes" ]; then
-            echo "ERROR: target/classes not found"
+          echo "Verifying CDK app class..."
+          if [ -f "target/classes/com/cloudforgeci/samples/app/CloudForgeCommunitySample.class" ]; then
+            echo "✅ CDK app class found"
+          else
+            echo "❌ ERROR: CDK app class not found"
+            echo "Contents of target/classes:"
+            find target/classes -type f -name "*.class" | head -10
             exit 1
           fi
 
           echo "CDK dependencies ready"
-          ls -la target/ || true
+          echo "Target directory contents:"
+          ls -la target/
+          echo "Dependency count: $(ls target/dependency/*.jar 2>/dev/null | wc -l)"
 
       - name: Set up validation environment
         run: |
@@ -140,7 +153,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             MODE="${{ github.event.inputs.validation_mode }}"
           elif [ "${{ github.event_name }}" == "pull_request" ]; then
-            MODE="smoke"
+            MODE="full"
           else
             MODE="validate"
           fi
@@ -173,17 +186,35 @@ jobs:
 
           # Run the appropriate validation mode
           echo "Starting validation..."
-          bash -x master-validation-system.sh ${{ steps.mode.outputs.mode }} 2>&1 | tee validation-run.log
+          bash master-validation-system.sh ${{ steps.mode.outputs.mode }} 2>&1 | tee validation-run.log
 
           # Capture exit code
           EXIT_CODE=${PIPESTATUS[0]}
           echo "Validation exit code: $EXIT_CODE"
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
 
-          # Show last 50 lines of log if failed
+          # Show validation output summary
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "Validation failed. Last 50 lines of output:"
-            tail -50 validation-run.log
+            echo ""
+            echo "=========================================="
+            echo "Validation failed. Error summary:"
+            echo "=========================================="
+
+            # Show smoke test error logs if they exist
+            if [ -d "validation-results" ]; then
+              echo "Error logs found:"
+              find validation-results -name "*-error.log" -type f | while read logfile; do
+                echo ""
+                echo "--- $(basename $logfile) ---"
+                cat "$logfile"
+              done
+            fi
+
+            echo ""
+            echo "Last 100 lines of validation output:"
+            tail -100 validation-run.log
+          else
+            echo "✅ Validation passed successfully"
           fi
 
           exit $EXIT_CODE
@@ -217,7 +248,9 @@ jobs:
             cfc-testing/validation-results/**/*.log
             cfc-testing/testing-strategy.txt
             cfc-testing/validation-run.log
+            cfc-testing/cdk.out/**/*.json
           retention-days: 30
+          if-no-files-found: warn
 
       - name: Upload drift reports
         if: always() && steps.mode.outputs.mode != 'smoke'
