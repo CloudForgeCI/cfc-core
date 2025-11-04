@@ -16,11 +16,27 @@ NC='\033[0m' # No Color
 
 # Configuration - dynamically determine script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="${BASE_DIR:-$SCRIPT_DIR}"
+
+# If BASE_DIR is not set, use SCRIPT_DIR as the base
+# This ensures the script works when called from any directory
+if [[ -z "$BASE_DIR" ]]; then
+    BASE_DIR="$SCRIPT_DIR"
+fi
+
+# Normalize BASE_DIR to absolute path
+BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 VALIDATION_DIR="$BASE_DIR/validation-results"
+
+# Ensure validation directory exists
+mkdir -p "$VALIDATION_DIR"
 
 echo -e "${BLUE}🚀 CloudForge Core - Master Validation System${NC}"
 echo -e "${BLUE}=============================================${NC}"
+echo ""
+echo -e "${CYAN}📁 Working Directory: $(pwd)${NC}"
+echo -e "${CYAN}📁 Script Directory:  $SCRIPT_DIR${NC}"
+echo -e "${CYAN}📁 Base Directory:    $BASE_DIR${NC}"
+echo -e "${CYAN}📁 Validation Dir:    $VALIDATION_DIR${NC}"
 echo ""
 
 # Function to check prerequisites
@@ -78,12 +94,12 @@ run_full_validation() {
     # Step 1: Generate truth table
     echo -e "${CYAN}📋 Step 1: Generating truth table and test matrix...${NC}"
     cd "$BASE_DIR"
-    python3 truth-table-generator.py "$VALIDATION_DIR"
+    python3 "$BASE_DIR/truth-table-generator.py" "$VALIDATION_DIR"
     echo ""
-    
+
     # Step 2: Run comprehensive resource validation
     echo -e "${CYAN}🔍 Step 2: Running comprehensive resource validation...${NC}"
-    bash comprehensive-resource-validator.sh
+    bash "$BASE_DIR/comprehensive-resource-validator.sh"
     echo ""
     
     # Step 3: Move results to current directory for drift detection
