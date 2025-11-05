@@ -11,23 +11,7 @@ Core libraries for CloudForgeCI. This repository contains foundational APIs and 
 
 ## Support This Project
 
-CloudForgeCI saves you thousands of dollars in DevOps engineering time by providing production-ready Jenkins deployments on AWS in minutes instead of weeks. If you or your company use CloudForgeCI, please consider [sponsoring the project](https://github.com/sponsors/CloudForgeCI).
-
-**[Become a Sponsor](https://github.com/sponsors/CloudForgeCI)** | **[View Sponsorship Tiers](SPONSORS.md)**
-
-### Current Sponsors
-
-**Platinum Sponsors**
-
-*Your company could be here! [Learn more](SPONSORS.md)*
-
-**Business Sponsors**
-
-*Your company could be here! [Learn more](SPONSORS.md)*
-
-**Startup Sponsors**
-
-*Your company could be here! [Learn more](SPONSORS.md)*
+If CloudForgeCI saved you time and money, consider [supporting its development](SPONSORS.md)!
 
 ```
 cfc-core/
