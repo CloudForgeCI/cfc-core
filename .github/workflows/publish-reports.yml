@@ -44,6 +44,10 @@ jobs:
           npm install -g aws-cdk
           cdk --version
 
+      - name: Get current date for cache key
+        id: date
+        run: echo "date=$(date +'%Y-%U')" >> $GITHUB_OUTPUT
+
       - name: Configure AWS credentials (for CDK synth only)
         env:
           MOCK_AWS_ACCESS_KEY_ID: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
@@ -68,6 +72,16 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-maven-
+
+      - name: Cache OWASP Dependency-Check NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/dependency-check-data
+          # Cache key based on year-week (YYYY-WW) - updates weekly for fresh CVE data
+          # This prevents re-downloading the ~1GB NVD database on every run
+          key: ${{ runner.os }}-dependency-check-v12-${{ steps.date.outputs.date }}
+          restore-keys: |
+            ${{ runner.os }}-dependency-check-v12-
 
       - name: Build and test with coverage
         run: |
@@ -245,17 +259,55 @@ jobs:
             </servers>
           </settings>
           EOF
+            echo "✅ Configured OSS Index credentials"
+          else
+            echo "⚠️  OSS Index credentials not available"
           fi
 
-          # Run dependency check
-          mvn dependency-check:check -Psecurity-scan || {
-            echo "⚠️  Dependency check completed with warnings"
+          # First, update the NVD database (required when autoUpdate=false in pom.xml)
+          echo "Updating NVD database..."
+          mvn dependency-check:update-only -Psecurity-scan || {
+            echo "⚠️  NVD database update had issues, proceeding anyway..."
           }
+
+          # Run dependency check with aggregate goal for multi-module project
+          EXIT_CODE=0
+          mvn dependency-check:aggregate -Psecurity-scan -e || EXIT_CODE=$?
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "⚠️  Dependency check exited with code $EXIT_CODE"
+            echo "Attempting to list any partial reports that may have been generated..."
+            find . -name "dependency-check-report.*" -type f 2>/dev/null || echo "No dependency-check files found"
+          fi
 
           # Clean up credentials file (extra safety, runner is ephemeral anyway)
           rm -f ~/.m2/settings.xml
 
-          echo "✅ Dependency-Check reports generated"
+          # Check what reports were actually generated
+          echo "Checking generated dependency-check reports:"
+          echo "Searching in all target directories..."
+          find . -name "dependency-check-report.*" -type f -ls 2>/dev/null || true
+
+          # Look for reports in root target (expected with aggregate=true)
+          if [ -f "target/dependency-check-report.html" ]; then
+            echo "✅ HTML report generated: $(ls -lh target/dependency-check-report.html | awk '{print $5}')"
+          else
+            echo "❌ HTML report NOT found in target/"
+          fi
+
+          if [ -f "target/dependency-check-report.json" ]; then
+            echo "✅ JSON report generated: $(ls -lh target/dependency-check-report.json | awk '{print $5}')"
+          else
+            echo "❌ JSON report NOT found in target/"
+          fi
+
+          if [ -f "target/dependency-check-report.xml" ]; then
+            echo "✅ XML report generated: $(ls -lh target/dependency-check-report.xml | awk '{print $5}')"
+          else
+            echo "❌ XML report NOT found in target/"
+          fi
+
+          echo "✅ Dependency-Check step completed"
 
       - name: Copy SBOM and security reports
         run: |
@@ -265,29 +317,44 @@ jobs:
           if [ -f "target/cfc-core-sbom.json" ]; then
             cp target/cfc-core-sbom.json github-pages-reports/sbom/
             echo "✅ Copied SBOM JSON"
+          else
+            echo "⚠️  SBOM JSON not found (expected at target/cfc-core-sbom.json)"
           fi
 
           if [ -f "target/cfc-core-sbom.xml" ]; then
             cp target/cfc-core-sbom.xml github-pages-reports/sbom/
             echo "✅ Copied SBOM XML"
+          else
+            echo "⚠️  SBOM XML not found (expected at target/cfc-core-sbom.xml)"
           fi
 
           # Copy dependency-check reports
           mkdir -p github-pages-reports/sbom/dependency-check
-          if [ -f "target/dependency-check-report.html" ]; then
-            cp target/dependency-check-report.html github-pages-reports/sbom/dependency-check/
-            echo "✅ Copied dependency-check HTML report"
-          fi
 
-          if [ -f "target/dependency-check-report.json" ]; then
-            cp target/dependency-check-report.json github-pages-reports/sbom/dependency-check/
-            echo "✅ Copied dependency-check JSON report"
-          fi
+          # Function to find and copy a report file
+          copy_dependency_report() {
+            local format=$1
+            local filename="dependency-check-report.${format}"
 
-          if [ -f "target/dependency-check-report.xml" ]; then
-            cp target/dependency-check-report.xml github-pages-reports/sbom/dependency-check/
-            echo "✅ Copied dependency-check XML report"
-          fi
+            # First try root target (expected with aggregate=true)
+            if [ -f "target/${filename}" ]; then
+              cp "target/${filename}" github-pages-reports/sbom/dependency-check/
+              echo "✅ Copied dependency-check ${format^^} report from target/"
+            else
+              # Search in all target directories
+              local found_file=$(find . -name "${filename}" -type f -print -quit 2>/dev/null)
+              if [ -n "$found_file" ]; then
+                cp "$found_file" github-pages-reports/sbom/dependency-check/
+                echo "✅ Copied dependency-check ${format^^} report from ${found_file}"
+              else
+                echo "⚠️  Dependency-check ${format^^} report not found - will not be available on GitHub Pages"
+              fi
+            fi
+          }
+
+          copy_dependency_report "html"
+          copy_dependency_report "json"
+          copy_dependency_report "xml"
 
       - name: Generate reports index page
         run: |
