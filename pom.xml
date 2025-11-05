@@ -54,6 +54,8 @@
   <modules>
     <module>cloudforge-api</module>
     <module>cloudforge-core</module>
+    <!-- cfc-testing is intentionally excluded - it's an independent consumer module -->
+    <!-- cfc-testing depends on cloudforge-core but is not part of the reactor build -->
   </modules>
 
   <profiles>
@@ -382,9 +384,7 @@
           <!-- Only use local file-based analysis to avoid 300k+ API requests -->
 
           <!-- Enable OSS Index (Sonatype) as alternative to NVD -->
-          <!-- Requires OSSINDEX_USERNAME and OSSINDEX_TOKEN environment variables -->
-          <!-- Requires -Dossindex.username and -Dossindex.token system properties -->
-          <!-- Pass via Maven: mvn ... -Dossindex.username=user -Dossindex.token=token -->
+          <!-- Uses Maven server credentials from settings.xml with id 'ossindex' -->
           <!-- See: https://jeremylong.github.io/DependencyCheck/dependency-check-maven/configuration.html -->
           <ossindexAnalyzerEnabled>true</ossindexAnalyzerEnabled>
           <ossindexAnalyzerUseCache>true</ossindexAnalyzerUseCache>
