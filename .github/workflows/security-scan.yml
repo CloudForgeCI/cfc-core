@@ -80,33 +80,31 @@ jobs:
           </settings>
           EOF
 
-      - name: Initialize NVD Database (filtered for CVSS v3.x only)
+      - name: Initialize NVD Database
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          echo "Initializing NVD database with date filter to avoid CVSS v4.0 bugs..."
+          echo "Checking NVD database cache status..."
           if [ -n "$NVD_API_KEY" ]; then
             echo "Using NVD API key for faster updates"
           else
             echo "Warning: No NVD API key - updates will be slower"
           fi
 
-          # Clean any corrupted cache first
-          rm -rf ~/.m2/dependency-check-data/* || true
+          # Check if cache exists and is valid
+          if [ -d ~/.m2/dependency-check-data ] && [ "$(ls -A ~/.m2/dependency-check-data)" ]; then
+            echo "Found existing NVD cache - will use incremental updates"
+          else
+            echo "No cache found - will perform initial download"
+          fi
 
-          # Retry with exponential backoff
-          for i in 1 2 3; do
-            if mvn dependency-check:update-only; then
-              echo "NVD database initialized successfully"
-              exit 0
-            fi
-            if [ $i -lt 3 ]; then
-              echo "Attempt $i failed, retrying in $((i * 30))s..."
-              sleep $((i * 30))
-            fi
-          done
-          echo "Warning: NVD initialization failed after 3 attempts"
-          exit 0  # Don't fail the build, continue with available data
+          # Run a lightweight check to update the database
+          # Use check goal with high CVSS threshold so it doesn't fail on vulnerabilities
+          # The date filters in pom.xml will apply here (2020-2024 to avoid CVSS v4.0 bugs)
+          echo "Updating NVD database..."
+          mvn dependency-check:update-only -Psecurity-scan || {
+            echo "Warning: NVD update failed, but continuing with available data"
+          }
 
       - name: Run OWASP Dependency-Check
         env:
@@ -115,7 +113,7 @@ jobs:
           OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
         run: |
           echo "Running OWASP Dependency-Check..."
-          echo "Using NVD (filtered 2020-2024) + OSS Index for vulnerability data"
+          echo "Using NVD (filtered 2020-2024 to avoid CVSS v4.0 bugs) + OSS Index for vulnerability data"
           cd ${{ github.workspace }}
           mvn dependency-check:check -Psecurity-scan || true
           echo "Dependency check complete"
