@@ -118,6 +118,9 @@ jobs:
           mvn dependency-check:check -Psecurity-scan || true
           echo "Dependency check complete"
 
+          # Clean up credentials file (extra safety, runner is ephemeral anyway)
+          rm -f ~/.m2/settings.xml
+
       - name: List generated SBOM files
         if: always()
         run: |

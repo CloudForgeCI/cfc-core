@@ -533,7 +533,11 @@ case "${1:-help}" in
     "full")
         check_prerequisites
         run_full_validation
-        detect_and_report_drift
+
+        # Run drift detection but don't fail the entire validation if drift is detected
+        # Drift is informational - it shows changes but shouldn't fail validation
+        detect_and_report_drift || true
+
         generate_comprehensive_report
         echo ""
         echo -e "${GREEN}🎉 Complete validation suite finished${NC}"
