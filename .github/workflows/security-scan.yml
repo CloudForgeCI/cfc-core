@@ -58,8 +58,8 @@ jobs:
       - name: Build project and generate SBOM
         run: |
           echo "Building project and generating SBOM..."
-          # Build only the modules needed for dependency-check (skip cfc-testing which may fail)
-          mvn clean install -DskipTests -pl cloudforge-api,cloudforge-core || mvn clean install -DskipTests
+          # Build modules + parent POM (for aggregate SBOM), skip cfc-testing
+          mvn clean install -DskipTests -pl .,cloudforge-api,cloudforge-core || mvn clean install -DskipTests
           echo "Build and SBOM generation complete"
 
       - name: Initialize NVD Database (filtered for CVSS v3.x only)
@@ -120,6 +120,15 @@ jobs:
           mvn dependency-check:check -Psecurity-scan || true
           echo "Dependency check complete"
 
+      - name: List generated SBOM files
+        if: always()
+        run: |
+          echo "Searching for SBOM files..."
+          find . -name "*bom*.json" -o -name "*bom*.xml" | while read file; do
+            echo "Found: $file"
+            ls -lh "$file"
+          done
+
       - name: Submit dependencies to GitHub
         if: github.event_name != 'pull_request'
         run: |
@@ -137,13 +146,8 @@ jobs:
           path: |
             target/cfc-core-sbom.json
             target/cfc-core-sbom.xml
-            cloudforge-api/target/*-cyclonedx.json
-            cloudforge-api/target/*-cyclonedx.xml
-            cloudforge-core/target/*-cyclonedx.json
-            cloudforge-core/target/*-cyclonedx.xml
-            cfc-testing/target/*-cyclonedx.json
-            cfc-testing/target/*-cyclonedx.xml
           retention-days: 90
+          if-no-files-found: warn
 
       - name: Upload Dependency-Check reports
         if: always()
