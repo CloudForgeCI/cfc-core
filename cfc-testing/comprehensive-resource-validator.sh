@@ -269,7 +269,9 @@ synthesize_and_validate() {
         if [[ "$subdomain_config" == "with-subdomain" ]]; then
             # Use a short subdomain to avoid ACM 64-character limit
             # Create a hash of the stack name to keep it unique but short
-            local subdomain="test-$(echo $stack_name | md5 | cut -c1-8)"
+            local subdomain_hash
+            subdomain_hash="$(printf '%s' "$stack_name" | md5sum | cut -c1-8)"
+            local subdomain="test-${subdomain_hash}"
             context_flags="$context_flags --context cfc.subdomain=$subdomain"
         fi
         if [[ "$ssl_config" == "ssl-enabled" ]]; then
