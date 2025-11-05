@@ -22,6 +22,39 @@ public class CloudForgeCommunitySample {
   public static void main(final String[] args) {
     App app = new App();
 
+    // Check if we have a pre-configured cfc context (from cdk.json)
+    // or if we need to build it from individual context parameters
+    Object cfcObj = app.getNode().tryGetContext("cfc");
+
+    if (cfcObj == null) {
+      // Build cfc context from individual --context cfc.* parameters
+      Map<String, Object> cfcContext = new java.util.HashMap<>();
+
+      // Read all cfc.* parameters and build the context map
+      String[] contextKeys = {
+        "runtime", "topology", "securityProfile", "stackName",
+        "domain", "subdomain", "enableSsl", "env", "tier",
+        "networkMode", "wafEnabled", "cloudfrontEnabled", "authMode",
+        "cpu", "memory", "instanceType", "minInstanceCapacity", "maxInstanceCapacity",
+        "cpuTargetUtilization", "enableMonitoring", "enableEncryption",
+        "logRetentionDays", "healthCheckGracePeriod", "healthCheckInterval",
+        "healthCheckTimeout", "healthyThreshold", "unhealthyThreshold",
+        "bastionCidr", "lbType", "enableFlowlogs", "createZone", "artifactsPrefix"
+      };
+
+      for (String key : contextKeys) {
+        Object value = app.getNode().tryGetContext("cfc." + key);
+        if (value != null) {
+          cfcContext.put(key, value);
+        }
+      }
+
+      // Set the cfc context on the app
+      if (!cfcContext.isEmpty()) {
+        app.getNode().setContext("cfc", cfcContext);
+      }
+    }
+
     DeploymentContext cfc = DeploymentContext.from(app);
 
     StackProps props = StackProps.builder().env(Environment.builder()
@@ -32,11 +65,17 @@ public class CloudForgeCommunitySample {
     SecurityProfile security = cfc.securityProfile();
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
 
+    // Use stack name from context or default to runtime-based name
+    String stackName = cfc.stackName();
+    if (stackName == null || stackName.isEmpty()) {
+      stackName = (cfc.getRuntime() == RuntimeType.EC2) ? "JenkinsEc2" : "JenkinsFargate";
+    }
+
     // Create stacks based on runtime type
     if (cfc.getRuntime() == RuntimeType.EC2) {
-      new JenkinsEc2Stack(app, "JenkinsEc2", props, security, iamProfile);
+      new JenkinsEc2Stack(app, stackName, props, security, iamProfile);
     } else if (cfc.getRuntime() == RuntimeType.FARGATE) {
-      new JenkinsFargateStack(app, "JenkinsFargate", props, security, iamProfile);
+      new JenkinsFargateStack(app, stackName, props, security, iamProfile);
     } else {
       throw new IllegalArgumentException("Unsupported runtime type: " + cfc.getRuntime());
     }

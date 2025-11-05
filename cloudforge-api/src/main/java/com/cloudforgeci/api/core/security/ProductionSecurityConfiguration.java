@@ -171,14 +171,20 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
      */
     private void configureObservability(SystemContext c) {
         LOG.info("Configuring PRODUCTION observability settings");
-        
+
         // Get security profile configuration from SystemContext
         if (!c.securityProfileConfig.get().isPresent()) {
             LOG.warning("SecurityProfileConfiguration not available in SystemContext");
             return;
         }
-        
+
         SecurityProfileConfiguration profileConfig = c.securityProfileConfig.get().orElseThrow();
+
+        // Create ComplianceFactory for CloudTrail and AWS Config
+        // This factory will check security profile configuration and create resources accordingly
+        com.cloudforgeci.api.observability.ComplianceFactory complianceFactory =
+            new com.cloudforgeci.api.observability.ComplianceFactory(c, "ProductionCompliance");
+        complianceFactory.create();
         
         // Configure logging retention (extended for compliance)
         if (profileConfig.getLogRetentionDays() != null) {
@@ -294,14 +300,10 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // This ensures scaling configuration is handled by the appropriate runtime profile
 
         // WAF Configuration - centralized WAF handling
-        whenBoth(c.wafEnabled, c.alb, (wafEnabled, alb) -> {
-            if (wafEnabled) {
-                // Configure WAF for ALB
-                // WAF WebACL creation would go here
-                // This ensures WAF is only configured when ALB is available
-                LOG.info("WAF configuration enabled for ALB");
-            }
-        });
+        // Create WafFactory to set up Web Application Firewall protection
+        com.cloudforgeci.api.observability.WafFactory wafFactory =
+            new com.cloudforgeci.api.observability.WafFactory(c, "ProductionWaf");
+        wafFactory.create();
         
         // CloudFront Configuration - centralized CDN handling
         whenBoth(c.cloudfront, c.domain, (cloudfront, domain) -> {

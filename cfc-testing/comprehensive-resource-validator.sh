@@ -15,9 +15,10 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Configuration
+# Configuration - dynamically determine script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="${BASE_DIR:-$SCRIPT_DIR}"
 DOMAIN="cloudforgeci.com"
-BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"
 VALIDATION_DIR="$BASE_DIR/validation-results"
 TRUTH_TABLE_FILE="$VALIDATION_DIR/truth-table.json"
 DRIFT_REPORT_FILE="$VALIDATION_DIR/drift-report.txt"
@@ -65,19 +66,28 @@ initialize_truth_table() {
                             if [[ "$runtime" == "FARGATE" ]]; then
                                 expected+=",ECSCluster,ECSService,FargateTaskDefinition"
                             else
-                                expected+=",EC2Instances"
+                                # EC2 runtime
                                 if [[ "$topology" == "JENKINS_SERVICE" ]]; then
+                                    # SERVICE topology uses AutoScalingGroup, not individual EC2Instances
                                     expected+=",AutoScalingGroup"
+                                else
+                                    # SINGLE_NODE topology uses individual EC2Instances
+                                    expected+=",EC2Instances"
                                 fi
                             fi
-                            
+
                             # Add topology-specific resources
                             if [[ "$topology" == "JENKINS_SERVICE" ]]; then
                                 expected+=",ApplicationLoadBalancer,TargetGroups"
                             fi
-                            
-                            # Add EFS for both runtimes (Jenkins persistent storage)
-                            expected+=",EFSFileSystem,EFSAccessPoint"
+
+                            # Add EFS for persistent storage
+                            # EFS is available for all configurations
+                            expected+=",EFSFileSystem"
+                            # EFSAccessPoint is only for FARGATE and EC2 SINGLE_NODE (not EC2 SERVICE with ASG)
+                            if [[ "$runtime" == "FARGATE" ]] || [[ "$topology" == "JENKINS_SINGLE_NODE" ]]; then
+                                expected+=",EFSAccessPoint"
+                            fi
                             
                             # Add domain-specific resources
                             if [[ "$domain_config" == "with-domain" ]]; then
@@ -105,7 +115,12 @@ initialize_truth_table() {
                                     expected+=",CloudTrail,ConfigRules"
                                     ;;
                                 "PRODUCTION")
-                                    expected+=",WAFWebACL,CloudTrail,ConfigRules,AutoScaling"
+                                    expected+=",WAFWebACL,CloudTrail,ConfigRules"
+                                    # AutoScaling only for EC2 + JENKINS_SERVICE topology
+                                    # Fargate uses ECS Service auto-scaling, not EC2 AutoScaling policies
+                                    if [[ "$runtime" == "EC2" && "$topology" == "JENKINS_SERVICE" ]]; then
+                                        expected+=",AutoScaling"
+                                    fi
                                     ;;
                             esac
                             
@@ -113,8 +128,13 @@ initialize_truth_table() {
                             if [[ "$ssl_config" == "ssl-enabled" && "$domain_config" == "no-domain" ]]; then
                                 expected="INVALID_COMBINATION"
                             fi
-                            
+
                             if [[ "$subdomain_config" == "with-subdomain" && "$domain_config" == "no-domain" ]]; then
+                                expected="INVALID_COMBINATION"
+                            fi
+
+                            # FARGATE + JENKINS_SINGLE_NODE is not a supported combination
+                            if [[ "$runtime" == "FARGATE" && "$topology" == "JENKINS_SINGLE_NODE" ]]; then
                                 expected="INVALID_COMBINATION"
                             fi
                             
@@ -140,9 +160,11 @@ create_deployment_context() {
     local domain_value=""
     local subdomain_value=""
     local ssl_value="false"
-    
+    local create_zone_value="false"
+
     if [[ "$domain_config" == "with-domain" ]]; then
         domain_value="$DOMAIN"
+        create_zone_value="true"  # Enable hosted zone creation when domain is configured
         if [[ "$subdomain_config" == "with-subdomain" ]]; then
             subdomain_value="test-$(echo $stack_name | tr '[:upper:]' '[:lower:]')"
         fi
@@ -181,6 +203,7 @@ create_deployment_context() {
     "authMode": "none",
     "domain": "$domain_value",
     "subdomain": "$subdomain_value",
+    "createZone": "$create_zone_value",
     "logRetentionDays": "7",
     "region": "us-east-1",
     "enableEncryption": "true"
@@ -226,11 +249,39 @@ synthesize_and_validate() {
     
     cd "$BASE_DIR"
     
+    # Build context flags based on configuration
+    local context_flags=""
+    context_flags="--context cfc.runtime=$runtime"
+    context_flags="$context_flags --context cfc.topology=$topology"
+    context_flags="$context_flags --context cfc.securityProfile=$security_profile"
+    context_flags="$context_flags --context cfc.stackName=$stack_name"
+
+    # Add scaling parameters for SERVICE topology (requires Auto Scaling Group)
+    if [[ "$topology" == "JENKINS_SERVICE" ]]; then
+        context_flags="$context_flags --context cfc.minInstanceCapacity=1"
+        context_flags="$context_flags --context cfc.maxInstanceCapacity=3"
+        context_flags="$context_flags --context cfc.cpuTargetUtilization=60"
+    fi
+
+    if [[ "$domain_config" == "with-domain" ]]; then
+        context_flags="$context_flags --context cfc.domain=$DOMAIN"
+        context_flags="$context_flags --context cfc.createZone=true"
+        if [[ "$subdomain_config" == "with-subdomain" ]]; then
+            # Use a short subdomain to avoid ACM 64-character limit
+            # Create a hash of the stack name to keep it unique but short
+            local subdomain_hash
+            subdomain_hash="$(printf '%s' "$stack_name" | md5sum | cut -c1-8)"
+            local subdomain="test-${subdomain_hash}"
+            context_flags="$context_flags --context cfc.subdomain=$subdomain"
+        fi
+        if [[ "$ssl_config" == "ssl-enabled" ]]; then
+            context_flags="$context_flags --context cfc.enableSsl=true"
+        fi
+    fi
+
     if cdk synth --quiet \
-        --context cfc.runtime="$runtime" \
-        --context cfc.topology="$topology" \
-        --context cfc.securityProfile="$security_profile" \
-        --context cfc.stackName="$stack_name" \
+        --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample" \
+        $context_flags \
         > "$synth_output" 2> "$synth_error"; then
         
         echo -e "  ${GREEN}✅ Synthesis successful${NC}"
@@ -299,10 +350,13 @@ EOF
                 if grep -q "AWS::ElasticLoadBalancingV2::TargetGroup" "$template_file"; then found=true; fi
                 ;;
             "HTTPListener")
-                if grep -q "Port: 80" "$template_file" && grep -q "Protocol: HTTP" "$template_file"; then found=true; fi
+                if grep -q '"Port": 80' "$template_file" && grep -q '"Protocol": "HTTP"' "$template_file"; then found=true; fi
                 ;;
             "HTTPSListener")
-                if grep -q "Port: 443" "$template_file" && grep -q "Protocol: HTTPS" "$template_file"; then found=true; fi
+                if grep -q '"Port": 443' "$template_file" && grep -q '"Protocol": "HTTPS"' "$template_file"; then found=true; fi
+                ;;
+            "HTTPRedirect")
+                if grep -q '"Type": "redirect"' "$template_file" && grep -q '"Protocol": "HTTPS"' "$template_file"; then found=true; fi
                 ;;
             "ACMCertificate")
                 if grep -q "AWS::CertificateManager::Certificate" "$template_file"; then found=true; fi
@@ -327,6 +381,9 @@ EOF
                 ;;
             "AutoScalingGroup")
                 if grep -q "AWS::AutoScaling::AutoScalingGroup" "$template_file"; then found=true; fi
+                ;;
+            "AutoScaling")
+                if grep -q "AWS::AutoScaling::ScalingPolicy" "$template_file"; then found=true; fi
                 ;;
             "EFSFileSystem")
                 if grep -q "AWS::EFS::FileSystem" "$template_file"; then found=true; fi

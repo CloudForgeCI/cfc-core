@@ -117,10 +117,14 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
         return;
       }
       
-      // Use subdomain for DNS record name, not the full FQDN
+      // Use subdomain for DNS record name, or use the domain directly if no subdomain
       String record = c.cfc.subdomain();
       if (record == null || record.isBlank()) {
-        return;
+        // When no subdomain is specified, use the domain name itself
+        record = c.cfc.domain();
+        if (record == null || record.isBlank()) {
+          return; // No domain or subdomain specified, cannot create DNS records
+        }
       }
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));

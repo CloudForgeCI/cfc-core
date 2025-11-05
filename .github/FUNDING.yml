@@ -1,0 +1,4 @@
+# GitHub Sponsors configuration for CloudForgeCI
+# This enables the "Sponsor" button on the repository
+
+github: [CloudForgeCI]

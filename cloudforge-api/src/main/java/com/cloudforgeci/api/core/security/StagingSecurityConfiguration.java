@@ -143,14 +143,20 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
      */
     private void configureObservability(SystemContext c) {
         LOG.info("Configuring STAGING observability settings");
-        
+
         // Get security profile configuration from SystemContext
         if (!c.securityProfileConfig.get().isPresent()) {
             LOG.warning("SecurityProfileConfiguration not available in SystemContext");
             return;
         }
-        
+
         SecurityProfileConfiguration profileConfig = c.securityProfileConfig.get().orElseThrow();
+
+        // Create ComplianceFactory for CloudTrail and AWS Config
+        // This factory will check security profile configuration and create resources accordingly
+        com.cloudforgeci.api.observability.ComplianceFactory complianceFactory =
+            new com.cloudforgeci.api.observability.ComplianceFactory(c, "StagingCompliance");
+        complianceFactory.create();
         
         // Configure logging retention (moderate for staging)
         if (profileConfig.getLogRetentionDays() != null) {

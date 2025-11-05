@@ -2,10 +2,16 @@
 
 Core libraries for CloudForgeCI. This repository contains foundational APIs and CDK constructs used by the community and enterprise stacks.
 
-**Organization:** cloudforgeci  
-**Company:** CloudForgeCI  
+**Organization:** cloudforgeci
+**Company:** CloudForgeCI
 **Repo:** https://github.com/CloudForgeCI/cfc-core
 **Sample:** https://github.com/CloudForgeCI/cloudforge-sample
+
+---
+
+## Support This Project
+
+If CloudForgeCI saved you time and money, consider [supporting its development](SPONSORS.md)!
 
 ```
 cfc-core/

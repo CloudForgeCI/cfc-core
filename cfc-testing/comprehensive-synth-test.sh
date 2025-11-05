@@ -12,9 +12,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
+# Configuration - dynamically determine script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="${BASE_DIR:-$SCRIPT_DIR}"
 DOMAIN="cloudforgeci.com"
-BASE_DIR="/Users/phillip/projects/cfc-core/cfc-testing"
 RESULTS_DIR="$BASE_DIR/synth-results"
 CDK_OUT_DIR="$BASE_DIR/cdk.out"
 
@@ -95,7 +96,7 @@ run_synthesis() {
     local synth_output="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-synth.log"
     local synth_error="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-error.log"
     
-    if cdk synth --quiet --context cfc.runtime="$runtime" --context cfc.topology="JENKINS_SERVICE" --context cfc.subdomain="$subdomain" --context cfc.domain="$DOMAIN" --context cfc.enableSsl="true" --context cfc.securityProfile="$security_profile" --context cfc.stackName="$stack_name" > "$synth_output" 2> "$synth_error"; then
+    if cdk synth --quiet --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample" --context cfc.runtime="$runtime" --context cfc.topology="JENKINS_SERVICE" --context cfc.subdomain="$subdomain" --context cfc.domain="$DOMAIN" --context cfc.enableSsl="true" --context cfc.securityProfile="$security_profile" --context cfc.stackName="$stack_name" > "$synth_output" 2> "$synth_error"; then
         echo -e "  ${GREEN}✅ Synthesis successful${NC}"
         
         # Copy synthesized template

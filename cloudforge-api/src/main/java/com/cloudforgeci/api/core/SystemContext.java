@@ -75,6 +75,7 @@ public final class SystemContext extends Construct {
   public final Slot<Boolean> dnsRecordsCreated = new Slot<>();
   public final Slot<Boolean> dnsRecordsCallbackRegistered = new Slot<>();
   public final Slot<Boolean> asgAddedToTargetGroup = new Slot<>();
+  public final Slot<Boolean> scalingPoliciesApplied = new Slot<>();
   public final Slot<Boolean> fargateAutoscalingConfigured = new Slot<>();
   public final Slot<Boolean> fargateAutoscalingCallbackRegistered = new Slot<>();
   public final Slot<Boolean> ec2AutoscalingCallbackRegistered = new Slot<>();

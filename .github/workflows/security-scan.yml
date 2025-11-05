@@ -33,6 +33,10 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      - name: Get current date for cache key
+        id: date
+        run: echo "date=$(date +'%Y-%U')" >> $GITHUB_OUTPUT
+
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -41,56 +45,87 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Cache OWASP Dependency-Check data
+      - name: Cache OWASP Dependency-Check NVD database
         uses: actions/cache@v4
         with:
           path: ~/.m2/dependency-check-data
-          key: ${{ runner.os }}-dependency-check-v12-filtered-${{ github.run_number }}
+          # Cache key based on year-week (YYYY-WW) - updates weekly for fresh CVE data 
+          # This prevents re-downloading the ~1GB NVD database on every run
+          key: ${{ runner.os }}-dependency-check-v12-${{ steps.date.outputs.date }}
           restore-keys: |
-            ${{ runner.os }}-dependency-check-v12-filtered-
+            ${{ runner.os }}-dependency-check-v12-
 
       - name: Build project and generate SBOM
         run: |
           echo "Building project and generating SBOM..."
-          mvn clean package -DskipTests
+          # Build modules + parent POM (for aggregate SBOM), skip cfc-testing
+          mvn clean install -DskipTests -pl .,cloudforge-api,cloudforge-core || mvn clean install -DskipTests
           echo "Build and SBOM generation complete"
+
+      - name: Configure OSS Index credentials
+        env:
+          OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
+          OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << EOF
+          <settings>
+            <servers>
+              <server>
+                <id>ossindex</id>
+                <username>${OSSINDEX_USERNAME}</username>
+                <password>${OSSINDEX_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
 
       - name: Initialize NVD Database (filtered for CVSS v3.x only)
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          echo "Initializing NVD database with date filter to avoid CVSS v4.0 bugs..."
+          echo "Checking NVD database cache status..."
           if [ -n "$NVD_API_KEY" ]; then
             echo "Using NVD API key for faster updates"
           else
             echo "Warning: No NVD API key - updates will be slower"
           fi
 
-          # Clean any corrupted cache first
-          rm -rf ~/.m2/dependency-check-data/* || true
+          # Check if cache exists and is valid
+          if [ -d ~/.m2/dependency-check-data ] && [ "$(ls -A ~/.m2/dependency-check-data)" ]; then
+            echo "Found existing NVD cache - will use incremental updates"
+          else
+            echo "No cache found - will perform initial download"
+          fi
 
-          # Retry with exponential backoff
-          for i in 1 2 3; do
-            if mvn dependency-check:update-only; then
-              echo "NVD database initialized successfully"
-              exit 0
-            fi
-            if [ $i -lt 3 ]; then
-              echo "Attempt $i failed, retrying in $((i * 30))s..."
-              sleep $((i * 30))
-            fi
-          done
-          echo "Warning: NVD initialization failed after 3 attempts"
-          exit 0  # Don't fail the build, use OSS Index fallback
+          # Run a lightweight check to update the database
+          # Use check goal with high CVSS threshold so it doesn't fail on vulnerabilities
+          # The date filters in pom.xml will apply here (2020-2024 to avoid CVSS v4.0 bugs)
+          echo "Updating NVD database..."
+          mvn dependency-check:update-only -Psecurity-scan || {
+            echo "Warning: NVD update failed, but continuing with available data"
+          }
 
       - name: Run OWASP Dependency-Check
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
+          OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
         run: |
           echo "Running OWASP Dependency-Check..."
-          echo "Using NVD (filtered 2020-2024) + OSS Index for vulnerability data"
+          echo "Using NVD (filtered 2020-2024 to avoid CVSS v4.0 bugs) + OSS Index for vulnerability data"
+          cd ${{ github.workspace }}
           mvn dependency-check:check -Psecurity-scan || true
           echo "Dependency check complete"
+
+      - name: List generated SBOM files
+        if: always()
+        run: |
+          echo "Searching for SBOM files..."
+          find . -name "*bom*.json" -o -name "*bom*.xml" | while read file; do
+            echo "Found: $file"
+            ls -lh "$file"
+          done
 
       - name: Submit dependencies to GitHub
         if: github.event_name != 'pull_request'
@@ -109,13 +144,8 @@ jobs:
           path: |
             target/cfc-core-sbom.json
             target/cfc-core-sbom.xml
-            cloudforge-api/target/*-cyclonedx.json
-            cloudforge-api/target/*-cyclonedx.xml
-            cloudforge-core/target/*-cyclonedx.json
-            cloudforge-core/target/*-cyclonedx.xml
-            cfc-testing/target/*-cyclonedx.json
-            cfc-testing/target/*-cyclonedx.xml
           retention-days: 90
+          if-no-files-found: warn
 
       - name: Upload Dependency-Check reports
         if: always()
@@ -236,8 +266,21 @@ jobs:
       - name: Run tests with coverage
         run: |
           echo "Running tests with coverage..."
-          mvn clean test
+          mvn clean verify
           echo "Tests complete"
+
+      - name: List generated coverage reports
+        if: always()
+        run: |
+          echo "Searching for JaCoCo reports..."
+          find . -name "jacoco.exec" -o -path "*/site/jacoco/index.html" | while read file; do
+            echo "Found: $file"
+          done
+          echo ""
+          echo "Module coverage report locations:"
+          ls -la cloudforge-api/target/site/jacoco/ 2>/dev/null || echo "cloudforge-api: No report found"
+          ls -la cloudforge-core/target/site/jacoco/ 2>/dev/null || echo "cloudforge-core: No report found"
+          ls -la cfc-testing/target/site/jacoco/ 2>/dev/null || echo "cfc-testing: No report found"
 
       - name: Upload coverage reports
         if: always()
@@ -245,6 +288,9 @@ jobs:
         with:
           name: coverage-reports
           path: |
-            target/site/jacoco/
-            */target/site/jacoco/
+            cloudforge-api/target/site/jacoco/
+            cloudforge-core/target/site/jacoco/
+            cloudforge-api/target/jacoco.exec
+            cloudforge-core/target/jacoco.exec
           retention-days: 30
+          if-no-files-found: warn
