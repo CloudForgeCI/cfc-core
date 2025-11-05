@@ -141,6 +141,122 @@ jobs:
             echo "✅ Copied drift reports"
           fi
 
+          # Also copy the drift-report.txt if it exists
+          if [ -f "cfc-testing/validation-results/drift-report.txt" ]; then
+            cp cfc-testing/validation-results/drift-report.txt github-pages-reports/drift/
+            echo "✅ Copied drift-report.txt"
+          fi
+
+      - name: Generate drift report index
+        run: |
+          cat > github-pages-reports/drift/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Drift Detection Reports</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      padding: 20px;
+                  }
+                  .container { max-width: 1200px; margin: 0 auto; }
+                  .header {
+                      text-align: center;
+                      color: white;
+                      padding: 40px 20px;
+                  }
+                  .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+                  .content {
+                      background: white;
+                      border-radius: 12px;
+                      padding: 30px;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                  }
+                  pre {
+                      background: #f6f8fa;
+                      padding: 20px;
+                      border-radius: 6px;
+                      overflow-x: auto;
+                      font-size: 0.9em;
+                      line-height: 1.6;
+                  }
+                  .back-link {
+                      display: inline-block;
+                      margin-bottom: 20px;
+                      color: #667eea;
+                      text-decoration: none;
+                      font-weight: 500;
+                  }
+                  .back-link:hover { text-decoration: underline; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>🔍 Drift Detection Reports</h1>
+                      <p>Infrastructure Validation Results</p>
+                  </div>
+                  <div class="content">
+                      <a href="../index.html" class="back-link">← Back to Dashboard</a>
+                      <h2>Drift Report</h2>
+                      <pre id="report-content">Loading...</pre>
+                  </div>
+              </div>
+              <script>
+                  fetch('drift-report.txt')
+                      .then(response => response.text())
+                      .then(text => {
+                          document.getElementById('report-content').textContent = text || 'No drift report available';
+                      })
+                      .catch(err => {
+                          document.getElementById('report-content').textContent = 'No drift report available';
+                      });
+              </script>
+          </body>
+          </html>
+          EOF
+          echo "✅ Generated drift report index"
+
+      - name: Generate dependency-check reports
+        continue-on-error: true
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
+          OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
+        run: |
+          echo "Generating OWASP Dependency-Check reports..."
+
+          # Configure OSS Index credentials if available
+          if [ -n "$OSSINDEX_USERNAME" ] && [ -n "$OSSINDEX_TOKEN" ]; then
+            mkdir -p ~/.m2
+            cat > ~/.m2/settings.xml << EOF
+          <settings>
+            <servers>
+              <server>
+                <id>ossindex</id>
+                <username>${OSSINDEX_USERNAME}</username>
+                <password>${OSSINDEX_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+          fi
+
+          # Run dependency check
+          mvn dependency-check:check -Psecurity-scan || {
+            echo "⚠️  Dependency check completed with warnings"
+          }
+
+          # Clean up credentials file (extra safety, runner is ephemeral anyway)
+          rm -f ~/.m2/settings.xml
+
+          echo "✅ Dependency-Check reports generated"
+
       - name: Copy SBOM and security reports
         run: |
           echo "Copying SBOM and security reports..."
