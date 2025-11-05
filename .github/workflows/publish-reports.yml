@@ -141,6 +141,38 @@ jobs:
             echo "✅ Copied drift reports"
           fi
 
+      - name: Copy SBOM and security reports
+        run: |
+          echo "Copying SBOM and security reports..."
+
+          # Copy SBOM files
+          if [ -f "target/cfc-core-sbom.json" ]; then
+            cp target/cfc-core-sbom.json github-pages-reports/sbom/
+            echo "✅ Copied SBOM JSON"
+          fi
+
+          if [ -f "target/cfc-core-sbom.xml" ]; then
+            cp target/cfc-core-sbom.xml github-pages-reports/sbom/
+            echo "✅ Copied SBOM XML"
+          fi
+
+          # Copy dependency-check reports
+          mkdir -p github-pages-reports/sbom/dependency-check
+          if [ -f "target/dependency-check-report.html" ]; then
+            cp target/dependency-check-report.html github-pages-reports/sbom/dependency-check/
+            echo "✅ Copied dependency-check HTML report"
+          fi
+
+          if [ -f "target/dependency-check-report.json" ]; then
+            cp target/dependency-check-report.json github-pages-reports/sbom/dependency-check/
+            echo "✅ Copied dependency-check JSON report"
+          fi
+
+          if [ -f "target/dependency-check-report.xml" ]; then
+            cp target/dependency-check-report.xml github-pages-reports/sbom/dependency-check/
+            echo "✅ Copied dependency-check XML report"
+          fi
+
       - name: Generate reports index page
         run: |
           cat > github-pages-reports/index.html << 'EOF'
@@ -302,7 +334,7 @@ jobs:
                           <p>CFC configuration validation results and truth tables</p>
                           <ul>
                               <li><a href="validation/truth-table.json">Truth Table (JSON)</a></li>
-                              <li><a href="validation/truth-table.html">Truth Table (HTML)</a></li>
+                              <li><a href="validation/truth-table-report.html">Truth Table (HTML)</a></li>
                               <li><a href="validation/validation-run.log">Validation Log</a></li>
                           </ul>
                       </div>
@@ -314,6 +346,19 @@ jobs:
                           <p>Infrastructure drift detection reports</p>
                           <ul>
                               <li><a href="drift/">Browse Drift Reports</a> <span class="badge badge-info">Beta</span></li>
+                          </ul>
+                      </div>
+
+                      <!-- Security & SBOM Card -->
+                      <div class="card">
+                          <div class="card-icon">🔒</div>
+                          <h2>Security & SBOM</h2>
+                          <p>Software Bill of Materials and vulnerability scanning</p>
+                          <ul>
+                              <li><a href="sbom/cfc-core-sbom.json">SBOM (JSON)</a></li>
+                              <li><a href="sbom/cfc-core-sbom.xml">SBOM (XML)</a></li>
+                              <li><a href="sbom/dependency-check/dependency-check-report.html">Vulnerability Report (HTML)</a> <span class="badge badge-warning">Review</span></li>
+                              <li><a href="sbom/dependency-check/dependency-check-report.json">Vulnerability Report (JSON)</a></li>
                           </ul>
                       </div>
 
