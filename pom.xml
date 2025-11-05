@@ -54,7 +54,6 @@
   <modules>
     <module>cloudforge-api</module>
     <module>cloudforge-core</module>
-    <module>cfc-testing</module>
   </modules>
 
   <profiles>
