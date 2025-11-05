@@ -384,6 +384,8 @@
 
           <!-- Enable OSS Index (Sonatype) as alternative to NVD -->
           <!-- Requires OSSINDEX_USERNAME and OSSINDEX_TOKEN environment variables -->
+          <!-- Requires -Dossindex.username and -Dossindex.token system properties -->
+          <!-- Pass via Maven: mvn ... -Dossindex.username=user -Dossindex.token=token -->
           <!-- See: https://jeremylong.github.io/DependencyCheck/analyzers/oss-index.html -->
           <ossindexAnalyzerEnabled>true</ossindexAnalyzerEnabled>
           <ossindexAnalyzerUseCache>true</ossindexAnalyzerUseCache>
