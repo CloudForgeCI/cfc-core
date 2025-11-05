@@ -46,8 +46,8 @@ jobs:
 
       - name: Configure AWS credentials (for CDK synth only)
         env:
-          MOCK_AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
-          MOCK_AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+          MOCK_AWS_ACCESS_KEY_ID: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
+          MOCK_AWS_SECRET_ACCESS_KEY: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
         run: |
           mkdir -p ~/.aws
           cat > ~/.aws/credentials << EOF
