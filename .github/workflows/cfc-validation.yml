@@ -99,7 +99,7 @@ jobs:
       - name: Build and test project
         run: |
           echo "Building and testing CFC Core..."
-          mvn clean verify -B -V
+          mvn clean install -B -V
           echo "Build and tests complete"
 
       - name: Prepare CDK dependencies
@@ -109,7 +109,7 @@ jobs:
 
           # Verify build artifacts exist
           if [ ! -d "target/classes" ]; then
-            echo "ERROR: target/classes not found. Building cfc-testing module..."
+            echo "Building cfc-testing module..."
             mvn clean install -DskipTests -B
           fi
 

@@ -72,13 +72,14 @@ jobs:
       - name: Build and test with coverage
         run: |
           echo "Building project with tests and coverage..."
-          mvn clean verify -B -V
+          mvn clean install -B -V
           echo "Build complete"
 
       - name: Prepare CDK dependencies for validation
         run: |
           cd cfc-testing
           if [ ! -d "target/classes" ]; then
+            echo "Building cfc-testing module..."
             mvn clean install -DskipTests -B
           fi
           if [ ! -d "target/dependency" ]; then
