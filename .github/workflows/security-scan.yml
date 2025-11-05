@@ -33,6 +33,10 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      - name: Get current date for cache key
+        id: date
+        run: echo "date=$(date +'%Y-%U')" >> $GITHUB_OUTPUT
+
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -41,13 +45,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Cache OWASP Dependency-Check data
+      - name: Cache OWASP Dependency-Check NVD database
         uses: actions/cache@v4
         with:
           path: ~/.m2/dependency-check-data
-          key: ${{ runner.os }}-dependency-check-v12-filtered-${{ github.run_number }}
+          # Cache key based on year-week (YYYY-WW) - updates weekly for fresh CVE data
+          # This prevents re-downloading the ~1GB NVD database on every run
+          key: ${{ runner.os }}-dependency-check-v12-${{ steps.date.outputs.date }}
           restore-keys: |
-            ${{ runner.os }}-dependency-check-v12-filtered-
+            ${{ runner.os }}-dependency-check-v12-
 
       - name: Build project and generate SBOM
         run: |
