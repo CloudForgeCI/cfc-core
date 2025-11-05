@@ -86,12 +86,13 @@ jobs:
       - name: Run OWASP Dependency-Check
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-          OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
-          OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
         run: |
           echo "Running OWASP Dependency-Check..."
           echo "Using NVD (filtered 2020-2024) + OSS Index for vulnerability data"
-          mvn dependency-check:check -Psecurity-scan || true
+          mvn dependency-check:check -Psecurity-scan \
+            -Dossindex.username=${{ secrets.OSSINDEX_USERNAME }} \
+            -Dossindex.token=${{ secrets.OSSINDEX_TOKEN }} \
+            || true
           echo "Dependency check complete"
 
       - name: Submit dependencies to GitHub
