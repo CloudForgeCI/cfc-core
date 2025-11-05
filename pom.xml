@@ -335,11 +335,12 @@
           <failBuildOnCVSS>7</failBuildOnCVSS>
           <!-- Aggregate results from all modules -->
           <aggregate>true</aggregate>
-          <!-- Output formats: HTML, JSON, CSV, XML -->
+          <!-- Output formats: HTML, JSON, CSV, XML, SARIF -->
           <formats>
             <format>HTML</format>
             <format>JSON</format>
             <format>XML</format>
+            <format>SARIF</format>
           </formats>
           <!-- Suppress false positives -->
           <suppressionFiles>

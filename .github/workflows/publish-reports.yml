@@ -88,11 +88,12 @@ jobs:
           chmod +x *.sh 2>/dev/null || true
           mkdir -p validation-results synth-results
 
-      - name: Run CFC validation (smoke mode)
+      - name: Run CFC validation (full mode for GitHub Pages)
         continue-on-error: true
         run: |
           cd cfc-testing
-          bash master-validation-system.sh smoke 2>&1 | tee validation-run.log || true
+          echo "Running full validation to generate truth tables for GitHub Pages..."
+          bash master-validation-system.sh full 2>&1 | tee validation-run.log || true
 
       - name: Create reports directory structure
         run: |
