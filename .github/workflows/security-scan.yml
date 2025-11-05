@@ -81,11 +81,13 @@ jobs:
             fi
           done
           echo "Warning: NVD initialization failed after 3 attempts"
-          exit 0  # Don't fail the build, use OSS Index fallback
+          exit 0  # Don't fail the build, continue with available data
 
       - name: Run OWASP Dependency-Check
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
+          OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
         run: |
           echo "Running OWASP Dependency-Check..."
           echo "Using NVD (filtered 2020-2024) + OSS Index for vulnerability data"

@@ -383,7 +383,8 @@
           <!-- Only use local file-based analysis to avoid 300k+ API requests -->
 
           <!-- Enable OSS Index (Sonatype) as alternative to NVD -->
-          <!-- OSS Index doesn't have the CVSS v4.0 parsing issues -->
+          <!-- Requires OSSINDEX_USERNAME and OSSINDEX_TOKEN environment variables -->
+          <!-- See: https://jeremylong.github.io/DependencyCheck/analyzers/oss-index.html -->
           <ossindexAnalyzerEnabled>true</ossindexAnalyzerEnabled>
           <ossindexAnalyzerUseCache>true</ossindexAnalyzerUseCache>
 
