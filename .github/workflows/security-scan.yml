@@ -52,7 +52,7 @@ jobs:
       - name: Build project and generate SBOM
         run: |
           echo "Building project and generating SBOM..."
-          mvn clean package -DskipTests
+          mvn clean install -DskipTests
           echo "Build and SBOM generation complete"
 
       - name: Initialize NVD Database (filtered for CVSS v3.x only)
