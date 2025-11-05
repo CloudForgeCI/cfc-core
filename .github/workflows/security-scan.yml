@@ -52,7 +52,8 @@ jobs:
       - name: Build project and generate SBOM
         run: |
           echo "Building project and generating SBOM..."
-          mvn clean install -DskipTests
+          # Build only the modules needed for dependency-check (skip cfc-testing which may fail)
+          mvn clean install -DskipTests -pl cloudforge-api,cloudforge-core || mvn clean install -DskipTests
           echo "Build and SBOM generation complete"
 
       - name: Initialize NVD Database (filtered for CVSS v3.x only)
@@ -109,6 +110,7 @@ jobs:
         run: |
           echo "Running OWASP Dependency-Check..."
           echo "Using NVD (filtered 2020-2024) + OSS Index for vulnerability data"
+          cd ${{ github.workspace }}
           mvn dependency-check:check -Psecurity-scan || true
           echo "Dependency check complete"
 
