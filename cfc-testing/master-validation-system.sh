@@ -208,11 +208,16 @@ run_smoke_tests() {
     if [[ ! -f ~/.aws/credentials ]] && [[ -z "$AWS_ACCESS_KEY_ID" ]]; then
         echo -e "${YELLOW}⚠️  AWS credentials not found. CDK requires credentials for synthesis.${NC}"
         echo -e "${YELLOW}Setting up mock credentials for local testing...${NC}"
+
+        # Mock credentials for CDK synthesis only - not used for actual AWS operations
+        local MOCK_AWS_ACCESS_KEY_ID="${MOCK_AWS_ACCESS_KEY_ID:-AKIAIOSFODNN7EXAMPLE}"
+        local MOCK_AWS_SECRET_ACCESS_KEY="${MOCK_AWS_SECRET_ACCESS_KEY:-wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY}"
+
         mkdir -p ~/.aws
         cat > ~/.aws/credentials << EOF
 [default]
-aws_access_key_id = AKIAIOSFODNN7EXAMPLE
-aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+aws_access_key_id = ${MOCK_AWS_ACCESS_KEY_ID}
+aws_secret_access_key = ${MOCK_AWS_SECRET_ACCESS_KEY}
 EOF
         cat > ~/.aws/config << EOF
 [default]

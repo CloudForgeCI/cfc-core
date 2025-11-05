@@ -69,13 +69,17 @@ jobs:
           echo "AWS CDK installed"
 
       - name: Configure AWS credentials (for CDK synth only)
+        env:
+          # Mock credentials for CDK synthesis only - not used for actual AWS operations
+          MOCK_AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+          MOCK_AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
         run: |
           echo "Configuring mock AWS credentials for CDK synthesis..."
           mkdir -p ~/.aws
           cat > ~/.aws/credentials << EOF
           [default]
-          aws_access_key_id = AKIAIOSFODNN7EXAMPLE
-          aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+          aws_access_key_id = ${MOCK_AWS_ACCESS_KEY_ID}
+          aws_secret_access_key = ${MOCK_AWS_SECRET_ACCESS_KEY}
           EOF
           cat > ~/.aws/config << EOF
           [default]
