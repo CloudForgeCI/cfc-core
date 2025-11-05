@@ -96,11 +96,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Build project
+      - name: Build and test project
         run: |
-          echo "Building CFC Core..."
-          mvn clean install -DskipTests -B -V
-          echo "Build complete"
+          echo "Building and testing CFC Core..."
+          mvn clean install -B -V
+          echo "Build and tests complete"
 
       - name: Prepare CDK dependencies
         run: |
@@ -157,7 +157,14 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             MODE="${{ github.event.inputs.validation_mode }}"
           elif [ "${{ github.event_name }}" == "pull_request" ]; then
-            MODE="full"
+            # Use smoke for draft PRs, full for ready-to-merge PRs
+            if [ "${{ github.event.pull_request.draft }}" == "true" ]; then
+              MODE="smoke"
+              echo "Draft PR detected - using smoke tests for faster feedback"
+            else
+              MODE="full"
+              echo "Ready-to-merge PR - using full validation"
+            fi
           else
             MODE="validate"
           fi
@@ -240,6 +247,17 @@ jobs:
             echo "No Java/TypeScript files changed in this PR" > testing-strategy.txt
           fi
 
+      - name: Upload code coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-reports
+          path: |
+            **/target/site/jacoco/**/*
+            **/target/jacoco.exec
+          retention-days: 30
+          if-no-files-found: warn
+
       - name: Upload validation results
         if: always()
         uses: actions/upload-artifact@v4
@@ -264,6 +282,7 @@ jobs:
           path: |
             cfc-testing/validation-results/drift-reports/**/*
           retention-days: 90
+          if-no-files-found: ignore
 
       - name: Generate validation summary
         if: always()
@@ -275,6 +294,18 @@ jobs:
           echo "**Validation Mode:** \`${{ steps.mode.outputs.mode }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Validation Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Code Coverage Summary
+          echo "### Code Coverage" >> $GITHUB_STEP_SUMMARY
+          if [ -f ../cloudforge-api/target/site/jacoco/index.html ]; then
+            API_COVERAGE=$(grep "Total" ../cloudforge-api/target/site/jacoco/index.html | grep -o '[0-9][0-9]*%' | head -1 | tr -d '%' || echo "N/A")
+            echo "- **cloudforge-api:** ${API_COVERAGE}% instruction coverage" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f ../cloudforge-core/target/site/jacoco/index.html ]; then
+            CORE_COVERAGE=$(grep "Total" ../cloudforge-core/target/site/jacoco/index.html | grep -o '[0-9][0-9]*%' | head -1 | tr -d '%' || echo "N/A")
+            echo "- **cloudforge-core:** ${CORE_COVERAGE}% instruction coverage" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Check for truth table results
