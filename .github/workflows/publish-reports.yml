@@ -1,0 +1,412 @@
+name: Publish Reports to GitHub Pages
+
+on:
+  push:
+    branches: [ develop ]
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-reports:
+    name: Build and Aggregate Reports
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq python3 python3-pip
+          pip3 install --upgrade pip
+
+      - name: Install AWS CDK
+        run: |
+          npm install -g aws-cdk
+          cdk --version
+
+      - name: Configure AWS credentials (for CDK synth only)
+        env:
+          MOCK_AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+          MOCK_AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+        run: |
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id = ${MOCK_AWS_ACCESS_KEY_ID}
+          aws_secret_access_key = ${MOCK_AWS_SECRET_ACCESS_KEY}
+          EOF
+          cat > ~/.aws/config << EOF
+          [default]
+          region = us-east-1
+          output = json
+          EOF
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build and test with coverage
+        run: |
+          echo "Building project with tests and coverage..."
+          mvn clean verify -B -V
+          echo "Build complete"
+
+      - name: Prepare CDK dependencies for validation
+        run: |
+          cd cfc-testing
+          if [ ! -d "target/classes" ]; then
+            mvn clean install -DskipTests -B
+          fi
+          if [ ! -d "target/dependency" ]; then
+            mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B
+          fi
+          chmod +x *.sh 2>/dev/null || true
+          mkdir -p validation-results synth-results
+
+      - name: Run CFC validation (smoke mode)
+        continue-on-error: true
+        run: |
+          cd cfc-testing
+          bash master-validation-system.sh smoke 2>&1 | tee validation-run.log || true
+
+      - name: Create reports directory structure
+        run: |
+          mkdir -p github-pages-reports/{coverage,validation,drift,sbom}
+          echo "Reports directory created"
+
+      - name: Copy coverage reports
+        run: |
+          echo "Copying coverage reports..."
+
+          # Copy API coverage
+          if [ -d "cloudforge-api/target/site/jacoco" ]; then
+            mkdir -p github-pages-reports/coverage/cloudforge-api
+            cp -r cloudforge-api/target/site/jacoco/* github-pages-reports/coverage/cloudforge-api/
+            echo "✅ Copied cloudforge-api coverage"
+          fi
+
+          # Copy Core coverage
+          if [ -d "cloudforge-core/target/site/jacoco" ]; then
+            mkdir -p github-pages-reports/coverage/cloudforge-core
+            cp -r cloudforge-core/target/site/jacoco/* github-pages-reports/coverage/cloudforge-core/
+            echo "✅ Copied cloudforge-core coverage"
+          fi
+
+      - name: Copy validation reports
+        run: |
+          echo "Copying validation reports..."
+
+          if [ -d "cfc-testing/validation-results" ]; then
+            cp -r cfc-testing/validation-results/* github-pages-reports/validation/ 2>/dev/null || true
+            echo "✅ Copied validation results"
+          fi
+
+          if [ -f "cfc-testing/validation-run.log" ]; then
+            cp cfc-testing/validation-run.log github-pages-reports/validation/
+            echo "✅ Copied validation log"
+          fi
+
+      - name: Copy drift reports
+        run: |
+          echo "Copying drift reports..."
+
+          if [ -d "cfc-testing/validation-results/drift-reports" ]; then
+            cp -r cfc-testing/validation-results/drift-reports/* github-pages-reports/drift/ 2>/dev/null || true
+            echo "✅ Copied drift reports"
+          fi
+
+      - name: Generate reports index page
+        run: |
+          cat > github-pages-reports/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>CFC Core - Reports Dashboard</title>
+              <style>
+                  * {
+                      margin: 0;
+                      padding: 0;
+                      box-sizing: border-box;
+                  }
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                      line-height: 1.6;
+                      color: #24292e;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      padding: 20px;
+                  }
+                  .container {
+                      max-width: 1200px;
+                      margin: 0 auto;
+                  }
+                  .header {
+                      text-align: center;
+                      color: white;
+                      padding: 40px 20px;
+                  }
+                  .header h1 {
+                      font-size: 3em;
+                      margin-bottom: 10px;
+                      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+                  }
+                  .header p {
+                      font-size: 1.2em;
+                      opacity: 0.9;
+                  }
+                  .timestamp {
+                      text-align: center;
+                      color: white;
+                      margin: 20px 0;
+                      font-style: italic;
+                  }
+                  .grid {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                      gap: 30px;
+                      margin-top: 40px;
+                  }
+                  .card {
+                      background: white;
+                      border-radius: 12px;
+                      padding: 30px;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                      transition: transform 0.3s ease, box-shadow 0.3s ease;
+                  }
+                  .card:hover {
+                      transform: translateY(-5px);
+                      box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+                  }
+                  .card-icon {
+                      font-size: 3em;
+                      margin-bottom: 15px;
+                  }
+                  .card h2 {
+                      color: #667eea;
+                      margin-bottom: 15px;
+                      font-size: 1.8em;
+                  }
+                  .card p {
+                      color: #586069;
+                      margin-bottom: 20px;
+                  }
+                  .card ul {
+                      list-style: none;
+                      margin: 20px 0;
+                  }
+                  .card ul li {
+                      padding: 10px 0;
+                      border-bottom: 1px solid #e1e4e8;
+                  }
+                  .card ul li:last-child {
+                      border-bottom: none;
+                  }
+                  .card a {
+                      color: #667eea;
+                      text-decoration: none;
+                      font-weight: 500;
+                      transition: color 0.3s ease;
+                  }
+                  .card a:hover {
+                      color: #764ba2;
+                      text-decoration: underline;
+                  }
+                  .badge {
+                      display: inline-block;
+                      padding: 4px 12px;
+                      border-radius: 12px;
+                      font-size: 0.85em;
+                      font-weight: 600;
+                      margin-left: 10px;
+                  }
+                  .badge-success {
+                      background: #d4edda;
+                      color: #155724;
+                  }
+                  .badge-info {
+                      background: #d1ecf1;
+                      color: #0c5460;
+                  }
+                  .badge-warning {
+                      background: #fff3cd;
+                      color: #856404;
+                  }
+                  .footer {
+                      text-align: center;
+                      color: white;
+                      margin-top: 60px;
+                      padding: 20px;
+                      opacity: 0.8;
+                  }
+                  .footer a {
+                      color: white;
+                      text-decoration: underline;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>🚀 CFC Core</h1>
+                      <p>CloudForge CI - Reports Dashboard</p>
+                  </div>
+
+                  <div class="timestamp">
+                      Last updated: <span id="timestamp"></span>
+                  </div>
+
+                  <div class="grid">
+                      <!-- Code Coverage Card -->
+                      <div class="card">
+                          <div class="card-icon">📊</div>
+                          <h2>Code Coverage</h2>
+                          <p>JaCoCo test coverage reports for all modules</p>
+                          <ul>
+                              <li><a href="coverage/cloudforge-api/index.html">CloudForge API Coverage</a> <span class="badge badge-success">Latest</span></li>
+                              <li><a href="coverage/cloudforge-core/index.html">CloudForge Core Coverage</a> <span class="badge badge-success">Latest</span></li>
+                          </ul>
+                      </div>
+
+                      <!-- Validation Reports Card -->
+                      <div class="card">
+                          <div class="card-icon">✅</div>
+                          <h2>Validation Reports</h2>
+                          <p>CFC configuration validation results and truth tables</p>
+                          <ul>
+                              <li><a href="validation/truth-table.json">Truth Table (JSON)</a></li>
+                              <li><a href="validation/truth-table.html">Truth Table (HTML)</a></li>
+                              <li><a href="validation/validation-run.log">Validation Log</a></li>
+                          </ul>
+                      </div>
+
+                      <!-- Drift Detection Card -->
+                      <div class="card">
+                          <div class="card-icon">🔍</div>
+                          <h2>Drift Detection</h2>
+                          <p>Infrastructure drift detection reports</p>
+                          <ul>
+                              <li><a href="drift/">Browse Drift Reports</a> <span class="badge badge-info">Beta</span></li>
+                          </ul>
+                      </div>
+
+                      <!-- Documentation Card -->
+                      <div class="card">
+                          <div class="card-icon">📚</div>
+                          <h2>Documentation</h2>
+                          <p>Project documentation and resources</p>
+                          <ul>
+                              <li><a href="https://github.com/CloudForgeCI/cfc-core">GitHub Repository</a></li>
+                              <li><a href="https://github.com/CloudForgeCI/cfc-core/blob/develop/README.md">README</a></li>
+                              <li><a href="https://github.com/CloudForgeCI/cfc-core/blob/develop/CONTRIBUTING.md">Contributing Guide</a></li>
+                          </ul>
+                      </div>
+                  </div>
+
+                  <div class="footer">
+                      <p>
+                          Generated by GitHub Actions |
+                          <a href="https://github.com/CloudForgeCI/cfc-core/actions">View Workflow Runs</a>
+                      </p>
+                  </div>
+              </div>
+
+              <script>
+                  // Set current timestamp
+                  const now = new Date();
+                  document.getElementById('timestamp').textContent = now.toUTCString();
+              </script>
+          </body>
+          </html>
+          EOF
+
+          echo "✅ Generated index.html"
+
+      - name: Generate coverage summary JSON
+        run: |
+          cat > github-pages-reports/coverage-summary.json << EOF
+          {
+            "generated": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "branch": "${{ github.ref_name }}",
+            "commit": "${{ github.sha }}",
+            "modules": []
+          }
+          EOF
+
+          # Extract coverage percentages if available
+          if [ -f "cloudforge-api/target/site/jacoco/index.html" ]; then
+            API_COVERAGE=$(grep -o "Total[^%]*[0-9]\+%" cloudforge-api/target/site/jacoco/index.html | grep -o "[0-9]\+%" | head -1 || echo "N/A")
+            echo "API Coverage: $API_COVERAGE"
+          fi
+
+          if [ -f "cloudforge-core/target/site/jacoco/index.html" ]; then
+            CORE_COVERAGE=$(grep -o "Total[^%]*[0-9]\+%" cloudforge-core/target/site/jacoco/index.html | grep -o "[0-9]\+%" | head -1 || echo "N/A")
+            echo "Core Coverage: $CORE_COVERAGE"
+          fi
+
+      - name: List generated reports
+        run: |
+          echo "Generated reports structure:"
+          find github-pages-reports -type f | head -50
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'github-pages-reports'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  report-deployment:
+    name: Report Deployment Status
+    needs: build-reports
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Generate deployment summary
+        run: |
+          echo "## 📊 Reports Published to GitHub Pages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Status:** ${{ needs.build-reports.result == 'success' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Quick Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [Reports Dashboard](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [API Coverage Report](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/coverage/cloudforge-api/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Core Coverage Report](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/coverage/cloudforge-core/)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Available Reports" >> $GITHUB_STEP_SUMMARY
+          echo "- Code Coverage (JaCoCo)" >> $GITHUB_STEP_SUMMARY
+          echo "- Validation Reports" >> $GITHUB_STEP_SUMMARY
+          echo "- Drift Detection" >> $GITHUB_STEP_SUMMARY
