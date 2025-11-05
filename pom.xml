@@ -386,9 +386,10 @@
           <!-- Requires OSSINDEX_USERNAME and OSSINDEX_TOKEN environment variables -->
           <!-- Requires -Dossindex.username and -Dossindex.token system properties -->
           <!-- Pass via Maven: mvn ... -Dossindex.username=user -Dossindex.token=token -->
-          <!-- See: https://jeremylong.github.io/DependencyCheck/analyzers/oss-index.html -->
+          <!-- See: https://jeremylong.github.io/DependencyCheck/dependency-check-maven/configuration.html -->
           <ossindexAnalyzerEnabled>true</ossindexAnalyzerEnabled>
           <ossindexAnalyzerUseCache>true</ossindexAnalyzerUseCache>
+          <ossIndexServerId>ossindex</ossIndexServerId>
 
           <!-- Disable Node.js analyzers - not needed for Java project -->
           <nodeAuditAnalyzerEnabled>false</nodeAuditAnalyzerEnabled>

@@ -83,6 +83,24 @@ jobs:
           echo "Warning: NVD initialization failed after 3 attempts"
           exit 0  # Don't fail the build, continue with available data
 
+      - name: Configure OSS Index credentials
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>ossindex</id>
+                <username>${env.OSSINDEX_USERNAME}</username>
+                <password>${env.OSSINDEX_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+        env:
+          OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
+          OSSINDEX_TOKEN: ${{ secrets.OSSINDEX_TOKEN }}
+
       - name: Run OWASP Dependency-Check
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
@@ -91,10 +109,7 @@ jobs:
         run: |
           echo "Running OWASP Dependency-Check..."
           echo "Using NVD (filtered 2020-2024) + OSS Index for vulnerability data"
-          mvn dependency-check:check -Psecurity-scan \
-            -Dossindex.username="${OSSINDEX_USERNAME}" \
-            -Dossindex.token="${OSSINDEX_TOKEN}" \
-            || true
+          mvn dependency-check:check -Psecurity-scan || true
           echo "Dependency check complete"
 
       - name: Submit dependencies to GitHub
