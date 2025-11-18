@@ -145,8 +145,8 @@ jobs:
           chmod +x *.py 2>/dev/null || true
 
           # Create necessary directories
-          mkdir -p validation-results
-          mkdir -p synth-results
+          mkdir -p scripts/validation-results
+          mkdir -p scripts/synth-results
 
           echo "Validation environment ready"
           echo "Working directory: $(pwd)"
@@ -212,9 +212,9 @@ jobs:
             echo "=========================================="
 
             # Show smoke test error logs if they exist
-            if [ -d "validation-results" ]; then
+            if [ -d "scripts/validation-results" ]; then
               echo "Error logs found:"
-              find validation-results -name "*-error.log" -type f | while read logfile; do
+              find scripts/validation-results -name "*-error.log" -type f | while read logfile; do
                 echo ""
                 echo "--- $(basename $logfile) ---"
                 cat "$logfile"
@@ -279,10 +279,10 @@ jobs:
         with:
           name: cfc-validation-results
           path: |
-            cfc-testing/validation-results/**/*.json
-            cfc-testing/validation-results/**/*.html
-            cfc-testing/validation-results/**/*.txt
-            cfc-testing/validation-results/**/*.log
+            cfc-testing/scripts/validation-results/**/*.json
+            cfc-testing/scripts/validation-results/**/*.html
+            cfc-testing/scripts/validation-results/**/*.txt
+            cfc-testing/scripts/validation-results/**/*.log
             cfc-testing/testing-strategy.txt
             cfc-testing/validation-run.log
             cfc-testing/cdk.out/**/*.json
@@ -295,7 +295,7 @@ jobs:
         with:
           name: cfc-drift-reports
           path: |
-            cfc-testing/validation-results/drift-reports/**/*
+            cfc-testing/scripts/validation-results/drift-reports/**/*
           retention-days: 90
           if-no-files-found: ignore
 
@@ -324,11 +324,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Check for truth table results
-          if [ -f validation-results/truth-table.json ]; then
+          if [ -f scripts/validation-results/truth-table.json ]; then
             echo "### Configuration Analysis" >> $GITHUB_STEP_SUMMARY
-            TOTAL=$(jq -r '.metadata.total_configurations // 0' validation-results/truth-table.json)
-            VALID=$(jq -r '.metadata.valid_configurations // 0' validation-results/truth-table.json)
-            INVALID=$(jq -r '.metadata.invalid_configurations // 0' validation-results/truth-table.json)
+            TOTAL=$(jq -r '.metadata.total_configurations // 0' scripts/validation-results/truth-table.json)
+            VALID=$(jq -r '.metadata.valid_configurations // 0' scripts/validation-results/truth-table.json)
+            INVALID=$(jq -r '.metadata.invalid_configurations // 0' scripts/validation-results/truth-table.json)
 
             echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -339,12 +339,12 @@ jobs:
           fi
 
           # Check for validation results
-          if [ -d validation-results/current ] && [ "$(ls -A validation-results/current/*.json 2>/dev/null)" ]; then
+          if [ -d scripts/validation-results/current ] && [ "$(ls -A scripts/validation-results/current/*.json 2>/dev/null)" ]; then
             echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
             PASSED=0
             FAILED=0
 
-            for file in validation-results/current/*-validation.json; do
+            for file in scripts/validation-results/current/*-validation.json; do
               if [ -f "$file" ]; then
                 STATUS=$(jq -r '.summary.status // "UNKNOWN"' "$file")
                 if [ "$STATUS" == "PASS" ]; then
@@ -363,7 +363,7 @@ jobs:
           fi
 
           # Check for drift detection
-          LATEST_DRIFT=$(ls -t validation-results/drift-reports/drift-summary-*.txt 2>/dev/null | head -1)
+          LATEST_DRIFT=$(ls -t scripts/validation-results/drift-reports/drift-summary-*.txt 2>/dev/null | head -1)
           if [ -f "$LATEST_DRIFT" ]; then
             echo "### Drift Detection" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY

@@ -100,7 +100,7 @@ jobs:
             mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B
           fi
           chmod +x *.sh 2>/dev/null || true
-          mkdir -p validation-results synth-results
+          mkdir -p scripts/validation-results scripts/synth-results
 
       - name: Run CFC validation (full mode for GitHub Pages)
         continue-on-error: true
@@ -136,8 +136,8 @@ jobs:
         run: |
           echo "Copying validation reports..."
 
-          if [ -d "cfc-testing/validation-results" ]; then
-            cp -r cfc-testing/validation-results/* github-pages-reports/validation/ 2>/dev/null || true
+          if [ -d "cfc-testing/scripts/validation-results" ]; then
+            cp -r cfc-testing/scripts/validation-results/* github-pages-reports/validation/ 2>/dev/null || true
             echo "✅ Copied validation results"
           fi
 
@@ -150,14 +150,14 @@ jobs:
         run: |
           echo "Copying drift reports..."
 
-          if [ -d "cfc-testing/validation-results/drift-reports" ]; then
-            cp -r cfc-testing/validation-results/drift-reports/* github-pages-reports/drift/ 2>/dev/null || true
+          if [ -d "cfc-testing/scripts/validation-results/drift-reports" ]; then
+            cp -r cfc-testing/scripts/validation-results/drift-reports/* github-pages-reports/drift/ 2>/dev/null || true
             echo "✅ Copied drift reports"
           fi
 
           # Also copy the drift-report.txt if it exists
-          if [ -f "cfc-testing/validation-results/drift-report.txt" ]; then
-            cp cfc-testing/validation-results/drift-report.txt github-pages-reports/drift/
+          if [ -f "cfc-testing/scripts/validation-results/drift-report.txt" ]; then
+            cp cfc-testing/scripts/validation-results/drift-report.txt github-pages-reports/drift/
             echo "✅ Copied drift-report.txt"
           fi
 
