@@ -194,16 +194,16 @@ create_deployment_context() {
         domain_value="$DOMAIN"
         create_zone_value="true"  # Enable hosted zone creation when domain is configured
         if [[ "$subdomain_config" == "with-subdomain" ]]; then
-            # Generate subdomain that stays under 64-char Cognito domain limit
+# Generate subdomain that stays under 64-char Cognito domain limit
             # Use first 40 chars of stack name + 8-char hash for uniqueness
             local stack_lower=$(echo $stack_name | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-            local stack_prefix="${stack_lower:0:40}"
+            local stack_prefix="${stack_lower:0:33}"
             subdomain_value="test-${stack_prefix}-${stack_hash}"
 
-            # Ensure total length is under 64 chars (test- + 40 + - + 8 = 54 chars)
-            if [[ ${#subdomain_value} -gt 63 ]]; then
-                # Fallback: use shorter prefix if somehow still too long
-                stack_prefix="${stack_lower:0:30}"
+            # Verify FQDN length
+            local fqdn="${subdomain_value}.${domain_value}"
+            if [[ ${#fqdn} -gt 64 ]]; then
+                stack_prefix="${stack_lower:0:20}"
                 subdomain_value="test-${stack_prefix}-${stack_hash}"
             fi
         fi
