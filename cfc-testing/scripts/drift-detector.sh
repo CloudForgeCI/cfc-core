@@ -16,8 +16,9 @@ NC='\033[0m' # No Color
 
 # Configuration - dynamically determine script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="${BASE_DIR:-$SCRIPT_DIR}"
-VALIDATION_DIR="$BASE_DIR/validation-results"
+# BASE_DIR should be the cfc-testing directory (parent of scripts), not the scripts directory itself
+BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
+VALIDATION_DIR="$SCRIPT_DIR/validation-results"
 BASELINE_DIR="$VALIDATION_DIR/baseline"
 CURRENT_DIR="$VALIDATION_DIR/current"
 DRIFT_REPORT_DIR="$VALIDATION_DIR/drift-reports"

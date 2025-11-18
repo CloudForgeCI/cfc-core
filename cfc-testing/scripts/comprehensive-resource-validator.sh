@@ -17,9 +17,10 @@ NC='\033[0m' # No Color
 
 # Configuration - dynamically determine script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="${BASE_DIR:-$SCRIPT_DIR}"
+# BASE_DIR should be the cfc-testing directory (parent of scripts), not the scripts directory itself
+BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
 DOMAIN="cloudforgeci.com"
-VALIDATION_DIR="$BASE_DIR/validation-results"
+VALIDATION_DIR="$SCRIPT_DIR/validation-results"
 TRUTH_TABLE_FILE="$VALIDATION_DIR/truth-table.json"
 DRIFT_REPORT_FILE="$VALIDATION_DIR/drift-report.txt"
 CDK_OUT_DIR="$BASE_DIR/cdk.out"
@@ -40,6 +41,7 @@ SECURITY_PROFILES=("DEV" "STAGING" "PRODUCTION")
 DOMAIN_CONFIGS=("with-domain" "no-domain")
 SSL_CONFIGS=("ssl-enabled" "ssl-disabled")
 SUBDOMAIN_CONFIGS=("with-subdomain" "no-subdomain")
+
 
 # Expected resources truth table
 declare -A EXPECTED_RESOURCES
@@ -178,15 +180,55 @@ create_deployment_context() {
     local ssl_value="false"
     local create_zone_value="false"
 
+    # Compliance features - enable based on security profile and configuration
+    local waf_enabled="false"
+    local aws_config_enabled="false"
+    local create_config_infra="false"
+    local auth_mode="none"
+    local cognito_domain_prefix=""
+
+    # Pre-compute hash for various uses (subdomain, cognito domain prefix)
+    local stack_hash=$(echo -n "$stack_name" | md5sum | cut -c1-8)
+
     if [[ "$domain_config" == "with-domain" ]]; then
         domain_value="$DOMAIN"
         create_zone_value="true"  # Enable hosted zone creation when domain is configured
         if [[ "$subdomain_config" == "with-subdomain" ]]; then
-            subdomain_value="test-$(echo $stack_name | tr '[:upper:]' '[:lower:]')"
+            # Generate subdomain that stays under 64-char Cognito domain limit
+            # Use first 40 chars of stack name + 8-char hash for uniqueness
+            local stack_lower=$(echo $stack_name | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+            local stack_prefix="${stack_lower:0:40}"
+            subdomain_value="test-${stack_prefix}-${stack_hash}"
+
+            # Ensure total length is under 64 chars (test- + 40 + - + 8 = 54 chars)
+            if [[ ${#subdomain_value} -gt 63 ]]; then
+                # Fallback: use shorter prefix if somehow still too long
+                stack_prefix="${stack_lower:0:30}"
+                subdomain_value="test-${stack_prefix}-${stack_hash}"
+            fi
         fi
         if [[ "$ssl_config" == "ssl-enabled" ]]; then
             ssl_value="true"
+
+            # Enable Cognito auth for SSL-enabled configurations in STAGING/PRODUCTION
+            # Cognito uses "alb-oidc" authMode with cognitoAutoProvision=true
+            if [[ "$security_profile" == "STAGING" || "$security_profile" == "PRODUCTION" ]]; then
+                auth_mode="alb-oidc"
+                # Use hash to generate short, unique Cognito domain prefix (13 chars total)
+                cognito_domain_prefix="auth-${stack_hash}"
+            fi
         fi
+    fi
+
+    # Enable AWS Config for STAGING/PRODUCTION (compliance requirement)
+    if [[ "$security_profile" == "STAGING" || "$security_profile" == "PRODUCTION" ]]; then
+        aws_config_enabled="true"
+        create_config_infra="true"
+    fi
+
+    # Enable WAF for PRODUCTION (compliance requirement)
+    if [[ "$security_profile" == "PRODUCTION" ]]; then
+        waf_enabled="true"
     fi
     
     cat > "$BASE_DIR/deployment-context.json" << EOF
@@ -200,7 +242,7 @@ create_deployment_context() {
     "healthCheckInterval": "30",
     "enableSsl": "$ssl_value",
     "tier": "public",
-    "wafEnabled": "false",
+    "wafEnabled": "$waf_enabled",
     "securityProfile": "$security_profile",
     "cloudfrontEnabled": "false",
     "healthCheckGracePeriod": "300",
@@ -216,17 +258,19 @@ create_deployment_context() {
     "enableAutoScaling": "true",
     "env": "dev",
     "maxInstanceCapacity": "3",
-    "authMode": "none",
+    "authMode": "$auth_mode",
     "domain": "$domain_value",
     "subdomain": "$subdomain_value",
     "createZone": "$create_zone_value",
     "logRetentionDays": "7",
     "region": "us-east-1",
     "enableEncryption": "true",
-    "awsConfigEnabled": "false",
-    "createConfigInfrastructure": "false",
+    "awsConfigEnabled": "$aws_config_enabled",
+    "createConfigInfrastructure": "$create_config_infra",
     "guardDutyEnabled": "false",
-    "auditManagerEnabled": "false"
+    "auditManagerEnabled": "false",
+    "cognitoDomainPrefix": "$cognito_domain_prefix",
+    "cognitoAutoProvision": "$([[ -n "$cognito_domain_prefix" ]] && echo "true" || echo "false")"
   }
 }
 EOF
