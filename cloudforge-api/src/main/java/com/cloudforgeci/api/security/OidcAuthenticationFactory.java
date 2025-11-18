@@ -178,7 +178,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
         LOG.info("  Token: [REDACTED]");
         LOG.info("  UserInfo: [REDACTED]");
         LOG.info("  Client ID: [REDACTED]");
-        LOG.info("  Secret Name: " + secretName);
+        LOG.info("  Secret Name: [REDACTED]");
 
         // Only create secret if using manual OIDC endpoints (not IAM Identity Center)
         // IAM Identity Center path (ssoInstanceArn) has secret created by IdentityCenterFactory
@@ -187,7 +187,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
         if (!isIdentityCenterPath) {
             // Create placeholder secret as a CDK resource for proper lifecycle management
             // This ensures the secret can be deleted gracefully when the stack is destroyed
-            LOG.info("Creating placeholder secret in Secrets Manager: " + secretName);
+            LOG.info("Creating placeholder secret in Secrets Manager: [REDACTED]");
             Secret.Builder.create(this, "OidcClientSecret")
                     .secretName(secretName)
                     .description("OIDC Client Secret for " + stackName + " (External IdP)")
@@ -199,7 +199,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
             LOG.warning("  aws secretsmanager put-secret-value --secret-id [SECRET_NAME] --secret-string \"<your-client-secret>\"");
             LOG.info("Note: If secret already exists, deployment will fail. Delete the existing secret first or use a different secret name.");
         } else {
-            LOG.info("Using secret created by IdentityCenterFactory: " + secretName);
+            LOG.info("Using secret created by IdentityCenterFactory: [REDACTED]");
             LOG.info("Note: Update the secret with your IAM Identity Center client secret after deployment");
         }
 
