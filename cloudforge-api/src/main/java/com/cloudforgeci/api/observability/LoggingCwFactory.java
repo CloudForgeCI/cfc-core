@@ -45,11 +45,8 @@ public class LoggingCwFactory extends BaseFactory {
             // SecurityProfileConfiguration is now injected directly via annotation
             LOG.info("LoggingCwFactory: Starting create() method");
             LOG.info("LoggingCwFactory: ctx is null: " + (ctx == null));
-            if (ctx != null) {
-                LOG.info("LoggingCwFactory: security is null: " + (security == null));
-                if (security != null) {
-                    LOG.info("LoggingCwFactory: security = " + security);
-                }
+            if (ctx != null && security != null) {
+                LOG.info("LoggingCwFactory: security = " + security);
             }
             LOG.info("LoggingCwFactory: config is null: " + (config == null));
 

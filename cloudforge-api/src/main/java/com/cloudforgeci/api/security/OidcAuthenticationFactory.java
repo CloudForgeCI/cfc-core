@@ -174,10 +174,10 @@ public class OidcAuthenticationFactory extends BaseFactory {
 
         LOG.info("OIDC Endpoints:");
         LOG.info("  Issuer: " + issuer);
-        LOG.info("  Authorization: " + authorizationEndpoint);
-        LOG.info("  Token: " + tokenEndpoint);
-        LOG.info("  UserInfo: " + userInfoEndpoint);
-        LOG.info("  Client ID: " + clientId);
+        LOG.info("  Authorization: [REDACTED]");
+        LOG.info("  Token: [REDACTED]");
+        LOG.info("  UserInfo: [REDACTED]");
+        LOG.info("  Client ID: [REDACTED]");
         LOG.info("  Secret Name: " + secretName);
 
         // Only create secret if using manual OIDC endpoints (not IAM Identity Center)
@@ -196,7 +196,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
                     .build();
 
             LOG.warning("IMPORTANT: Placeholder secret created. Update with actual client secret:");
-            LOG.warning("  aws secretsmanager put-secret-value --secret-id " + secretName + " --secret-string \"<your-client-secret>\"");
+            LOG.warning("  aws secretsmanager put-secret-value --secret-id [SECRET_NAME] --secret-string \"<your-client-secret>\"");
             LOG.info("Note: If secret already exists, deployment will fail. Delete the existing secret first or use a different secret name.");
         } else {
             LOG.info("Using secret created by IdentityCenterFactory: " + secretName);
@@ -276,10 +276,10 @@ public class OidcAuthenticationFactory extends BaseFactory {
      * The account ID is typically in the ARN structure, but IAM Identity Center ARNs
      * don't include account IDs in the standard format.
      *
-     * @param instanceArnOrId Full ARN or just instance ID
      * @return The AWS account ID from CDK stack context
      */
-    private String extractAccountIdFromArn(String instanceArnOrId) {
+    @SuppressWarnings("unused")
+    private String extractAccountIdFromArn() {
         // IAM Identity Center ARNs don't contain account IDs
         // Use the account from the CDK stack instead
         return software.amazon.awscdk.Stack.of(this).getAccount();

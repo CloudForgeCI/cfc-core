@@ -571,11 +571,11 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         LOG.info("Exporting OIDC endpoints to DeploymentContext:");
         LOG.info("  Issuer: " + issuer);
-        LOG.info("  Authorization: " + authEndpoint);
-        LOG.info("  Token: " + tokenEndpoint);
-        LOG.info("  UserInfo: " + userInfoEndpoint);
-        LOG.info("  Client ID: " + clientId);
-        LOG.info("  Secret Name: " + secretName);
+        LOG.info("  Authorization: [REDACTED]");
+        LOG.info("  Token: [REDACTED]");
+        LOG.info("  UserInfo: [REDACTED]");
+        LOG.info("  Client ID: [REDACTED]");
+        LOG.info("  Secret Name: " + (secretName != null ? "[REDACTED]" : "null"));
 
         // Store in SystemContext slots for OidcAuthenticationFactory to use
         ctx.cognitoIssuer.set(issuer);
@@ -610,7 +610,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         LOG.info("Creating user groups: " + adminGroupName + ", " + userGroupName);
 
         // Create admin group
-        CfnUserPoolGroup adminGroup = CfnUserPoolGroup.Builder.create(this, "AdminGroup")
+        CfnUserPoolGroup.Builder.create(this, "AdminGroup")
                 .userPoolId(userPool.getUserPoolId())
                 .groupName(adminGroupName)
                 .description("Jenkins administrators with full access")
@@ -618,7 +618,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .build();
 
         // Create user group
-        CfnUserPoolGroup userGroup = CfnUserPoolGroup.Builder.create(this, "UserGroup")
+        CfnUserPoolGroup.Builder.create(this, "UserGroup")
                 .userPoolId(userPool.getUserPoolId())
                 .groupName(userGroupName)
                 .description("Jenkins users with standard access")

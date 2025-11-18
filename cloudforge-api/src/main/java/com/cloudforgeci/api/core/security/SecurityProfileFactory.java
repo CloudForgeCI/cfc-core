@@ -125,6 +125,14 @@ public class SecurityProfileFactory extends BaseFactory {
     
     /**
      * Configure security monitoring based on security profile.
+     *
+     * Note: Security monitoring components are implemented in dedicated factories:
+     * - CloudTrail: ComplianceFactory (deployment context: awsConfigEnabled)
+     * - AWS Config: ComplianceFactory (deployment context: awsConfigEnabled, createConfigInfrastructure)
+     * - GuardDuty: GuardDutyFactory (deployment context: guardDutyEnabled)
+     * - ALB Access Logging: AlbFactory (deployment context: albAccessLogging)
+     *
+     * This method logs the configuration but delegates actual setup to the specialized factories.
      */
     private void configureSecurityMonitoring(SecurityProfileConfiguration config) {
         if (!config.isSecurityMonitoringEnabled()) {
@@ -132,62 +140,24 @@ public class SecurityProfileFactory extends BaseFactory {
             return;
         }
 
-        LOG.info("Configuring security monitoring for profile: " + security);
+        LOG.info("Security monitoring enabled for profile: " + security);
 
-        // Configure CloudTrail if enabled
+        // Log which services are enabled (actual configuration happens in dedicated factories)
         if (config.isCloudTrailEnabled()) {
-            configureCloudTrail(config);
+            LOG.info("  - CloudTrail: ENABLED (configured by ComplianceFactory)");
         }
 
-        // Configure GuardDuty if enabled
         if (config.isGuardDutyEnabled()) {
-            configureGuardDuty(config);
+            LOG.info("  - GuardDuty: ENABLED (configured by GuardDutyFactory)");
         }
 
-        // Configure Config if enabled
         if (config.isAwsConfigEnabled()) {
-            configureConfig(config);
+            LOG.info("  - AWS Config: ENABLED (configured by ComplianceFactory)");
+            LOG.info("    Set awsConfigEnabled=true and createConfigInfrastructure=true in deployment context");
         }
 
-        // Configure ALB access logging if enabled
         if (config.isAlbAccessLoggingEnabled()) {
-            configureAlbAccessLogging(config);
+            LOG.info("  - ALB Access Logging: ENABLED (configured by AlbFactory)");
         }
-    }
-    
-    /**
-     * Configure CloudTrail for audit logging.
-     */
-    private void configureCloudTrail(SecurityProfileConfiguration config) {
-        LOG.info("Configuring CloudTrail for security profile: " + security);
-        // CloudTrail configuration would be implemented here
-        // This is a placeholder for future CloudTrail integration
-    }
-
-    /**
-     * Configure GuardDuty for threat detection.
-     */
-    private void configureGuardDuty(SecurityProfileConfiguration config) {
-        LOG.info("Configuring GuardDuty for security profile: " + security);
-        // GuardDuty configuration would be implemented here
-        // This is a placeholder for future GuardDuty integration
-    }
-
-    /**
-     * Configure Config for compliance monitoring.
-     */
-    private void configureConfig(SecurityProfileConfiguration config) {
-        LOG.info("Configuring Config for security profile: " + security);
-        // Config configuration would be implemented here
-        // This is a placeholder for future Config integration
-    }
-
-    /**
-     * Configure ALB access logging.
-     */
-    private void configureAlbAccessLogging(SecurityProfileConfiguration config) {
-        LOG.info("Configuring ALB access logging for security profile: " + security);
-        // ALB access logging configuration would be implemented here
-        // This is a placeholder for future ALB access logging integration
     }
 }

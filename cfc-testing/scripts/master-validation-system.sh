@@ -68,15 +68,15 @@ check_prerequisites() {
         missing_deps+=("maven")
     fi
     
-    # Check required scripts
+    # Check required scripts (all in scripts/ directory for consistency)
     local required_scripts=(
         "comprehensive-resource-validator.sh"
-        "truth-table-generator.py"
         "drift-detector.sh"
+        "truth-table-generator.py"
     )
-    
+
     for script in "${required_scripts[@]}"; do
-        if [[ ! -f "$BASE_DIR/$script" ]]; then
+        if [[ ! -f "$SCRIPT_DIR/$script" ]]; then
             missing_deps+=("$script")
         fi
     done
@@ -100,12 +100,12 @@ run_full_validation() {
     # Step 1: Generate truth table
     echo -e "${CYAN}📋 Step 1: Generating truth table and test matrix...${NC}"
     cd "$BASE_DIR"
-    python3 "$BASE_DIR/truth-table-generator.py" "$VALIDATION_DIR"
+    python3 "$SCRIPT_DIR/truth-table-generator.py" "$VALIDATION_DIR"
     echo ""
 
     # Step 2: Run comprehensive resource validation
     echo -e "${CYAN}🔍 Step 2: Running comprehensive resource validation...${NC}"
-    bash "$BASE_DIR/comprehensive-resource-validator.sh"
+    bash "$SCRIPT_DIR/comprehensive-resource-validator.sh"
     echo ""
     
     # Step 3: Move results to current directory for drift detection
@@ -127,7 +127,7 @@ detect_and_report_drift() {
     echo ""
     
     # Run drift detection
-    bash "$BASE_DIR/drift-detector.sh" detect
+    bash "$SCRIPT_DIR/drift-detector.sh" detect
     
     local drift_status=$?
     echo ""
@@ -139,7 +139,7 @@ detect_and_report_drift() {
         echo -e "${YELLOW}⚠️  Configuration drift detected ($drift_status changes)${NC}"
         
         # Generate drift history
-        bash "$BASE_DIR/drift-detector.sh" history
+        bash "$SCRIPT_DIR/drift-detector.sh" history
         
         return $drift_status
     fi
@@ -556,7 +556,7 @@ case "${1:-help}" in
         ;;
     "baseline")
         check_prerequisites
-        bash "$BASE_DIR/drift-detector.sh" baseline
+        bash "$SCRIPT_DIR/drift-detector.sh" baseline
         ;;
     "report")
         generate_comprehensive_report

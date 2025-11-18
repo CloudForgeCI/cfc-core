@@ -54,57 +54,6 @@ public class WafFactory extends BaseFactory {
         List<Object> rules = new ArrayList<>();
         int priority = 0;
 
-        // Define exclusions for Jenkins-specific endpoints that trigger false positives
-        // For Jenkins, we exclude most CommonRuleSet rules due to false positives
-        // We keep SQLi and Linux rules active for actual threat protection
-        List<String> commonRuleSetExclusions = new ArrayList<>();
-
-        // Size and content restrictions
-        commonRuleSetExclusions.add("SizeRestrictions_BODY");
-        commonRuleSetExclusions.add("SizeRestrictions_Cookie_HEADER");
-        commonRuleSetExclusions.add("SizeRestrictions_QUERYSTRING");
-        commonRuleSetExclusions.add("SizeRestrictions_URIPATH");
-
-        // Remote File Inclusion
-        commonRuleSetExclusions.add("GenericRFI_BODY");
-        commonRuleSetExclusions.add("GenericRFI_QUERYARGUMENTS");
-        commonRuleSetExclusions.add("GenericRFI_URIPATH");
-
-        // Cross-site scripting
-        commonRuleSetExclusions.add("CrossSiteScripting_BODY");
-        commonRuleSetExclusions.add("CrossSiteScripting_Cookie_HEADER");
-        commonRuleSetExclusions.add("CrossSiteScripting_QUERYARGUMENTS");
-        commonRuleSetExclusions.add("CrossSiteScripting_URIPATH");
-
-        // EC2 metadata SSRF protection
-        commonRuleSetExclusions.add("EC2MetaDataSSRF_BODY");
-        commonRuleSetExclusions.add("EC2MetaDataSSRF_Cookie_HEADER");
-        commonRuleSetExclusions.add("EC2MetaDataSSRF_QUERYARGUMENTS");
-        commonRuleSetExclusions.add("EC2MetaDataSSRF_URIPATH");
-
-        // Restricted extensions
-        commonRuleSetExclusions.add("RestrictedExtensions_URIPATH");
-        commonRuleSetExclusions.add("RestrictedExtensions_QUERYARGUMENTS");
-
-        // Generic attacks
-        commonRuleSetExclusions.add("GenericLFI_BODY");
-        commonRuleSetExclusions.add("GenericLFI_QUERYARGUMENTS");
-        commonRuleSetExclusions.add("GenericLFI_URIPATH");
-
-        // Bad request headers
-        commonRuleSetExclusions.add("NoUserAgent_HEADER");
-        commonRuleSetExclusions.add("UserAgent_BadBots_HEADER");
-
-        // Core rule set - catch-all for remaining rules
-        commonRuleSetExclusions.add("GenericRFI_HEADER");
-        commonRuleSetExclusions.add("GenericLFI_HEADER");
-        commonRuleSetExclusions.add("CrossSiteScripting_COOKIE");
-        commonRuleSetExclusions.add("SizeRestrictions_Cookie");
-
-        // Additional protections that may trigger on Jenkins
-        commonRuleSetExclusions.add("Core_RuleSet_Unix_RCE");
-        commonRuleSetExclusions.add("Core_RuleSet_Windows_RCE");
-
         List<String> knownBadInputsExclusions = new ArrayList<>();
         knownBadInputsExclusions.add("Host_localhost_HEADER");          // Jenkins may run on localhost in dev
         knownBadInputsExclusions.add("JavaDeserializationRCE_BODY");    // Jenkins serialization data

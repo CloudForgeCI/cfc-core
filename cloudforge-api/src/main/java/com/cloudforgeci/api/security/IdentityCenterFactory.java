@@ -89,7 +89,7 @@ public class IdentityCenterFactory extends BaseFactory {
         // Create secret with placeholder value
         // User must update this with actual client secret from Identity Center
         String secretName = stackName + "/jenkins/oidc/client-secret";
-        Secret clientSecret = Secret.Builder.create(this, "OidcClientSecret")
+        Secret.Builder.create(this, "OidcClientSecret")
                 .secretName(secretName)
                 .description("OIDC client secret for Jenkins ALB authentication (update with actual value from IAM Identity Center)")
                 .secretObjectValue(java.util.Map.of(
@@ -98,7 +98,7 @@ public class IdentityCenterFactory extends BaseFactory {
                 .removalPolicy(RemovalPolicy.DESTROY)  // Allow deletion when stack is deleted
                 .build();
 
-        LOG.info("Client secret created: " + secretName);
+        LOG.info("Client secret created: [REDACTED]");
         LOG.info("IMPORTANT: Update the secret with the actual client secret from your IAM Identity Center application:");
         LOG.info("  1. Register an application in IAM Identity Center console");
         LOG.info("  2. Copy the client secret from the application configuration");

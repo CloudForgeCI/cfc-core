@@ -275,7 +275,7 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("CloudTrail removal policy: " + (security == SecurityProfile.PRODUCTION ? "RETAIN (production)" : "DESTROY (non-production)"));
 
         // Configure S3 data event logging using CloudFormation escape hatch
-        configureCloudTrailS3DataEvents(trail, trailBucket);
+        configureCloudTrailS3DataEvents(trail);
     }
 
     /**
@@ -283,7 +283,7 @@ public class ComplianceFactory extends BaseFactory {
      * This adds AdvancedEventSelectors to the underlying CfnTrail resource for SOC2/PCI-DSS/HIPAA compliance.
      * Uses the newer Advanced Event Selectors API which properly supports wildcards.
      */
-    private void configureCloudTrailS3DataEvents(Trail trail, Bucket bucket) {
+    private void configureCloudTrailS3DataEvents(Trail trail) {
         // Get the underlying CfnTrail resource
         CfnTrail cfnTrail = (CfnTrail) trail.getNode().getDefaultChild();
 
@@ -2255,7 +2255,7 @@ public class ComplianceFactory extends BaseFactory {
         try {
             // Try to execute AWS CLI to list frameworks
             ProcessBuilder pb = new ProcessBuilder(
-                "aws", "auditmanager", "list-assessment-frameworks",
+                "/usr/local/bin/aws", "auditmanager", "list-assessment-frameworks",
                 "--framework-type", "Standard",
                 "--output", "json"
             );
@@ -2272,29 +2272,28 @@ public class ComplianceFactory extends BaseFactory {
             }
 
             if (process.exitValue() == 0) {
-                // Read output
-                java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getInputStream())
-                );
-
+                // Read output - use try-with-resources to ensure streams are closed
                 StringBuilder output = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line);
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line);
+                    }
                 }
 
                 // Parse JSON output to find matching framework
                 String json = output.toString();
                 String searchName = frameworkName.toUpperCase();
 
-                // Also check stderr for any warnings
-                java.io.BufferedReader errorReader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getErrorStream())
-                );
+                // Also check stderr for any warnings - use try-with-resources
                 StringBuilder errorOutput = new StringBuilder();
-                String errLine;
-                while ((errLine = errorReader.readLine()) != null) {
-                    errorOutput.append(errLine);
+                try (java.io.BufferedReader errorReader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getErrorStream()))) {
+                    String errLine;
+                    while ((errLine = errorReader.readLine()) != null) {
+                        errorOutput.append(errLine);
+                    }
                 }
                 if (errorOutput.length() > 0) {
                     LOG.warning("AWS CLI stderr: " + errorOutput.toString());

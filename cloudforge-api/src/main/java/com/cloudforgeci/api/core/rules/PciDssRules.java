@@ -515,10 +515,6 @@ public final class PciDssRules {
     private static List<ComplianceRule> validateVendorDefaults(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        var config = ctx.securityProfileConfig.get().orElseThrow(
-            () -> new IllegalStateException("SecurityProfileConfiguration not set")
-        );
-
         // Requirement 2.1: Default passwords must be changed
         // Check if using custom AMI or configuration
         boolean usesCustomConfiguration = getBooleanSetting(ctx, "customConfigurationApplied", false);
