@@ -27,14 +27,15 @@ class SecurityExampleTest {
     @BeforeEach
     void setUp() {
         app = new App();
-        
+
         // Create a minimal DeploymentContext for testing
         Map<String, Object> config = new HashMap<>();
         config.put("tier", "public");
         config.put("env", "dev");
         config.put("region", "us-east-1");
-        config.put("domain", "example.com");
-        config.put("subdomain", "test");
+        // Don't set domain to avoid hosted zone requirements in tests
+        // config.put("domain", "example.com");
+        // config.put("subdomain", "test");
         config.put("networkMode", "public-no-nat");
         config.put("lbType", "alb");
         config.put("authMode", "none");
@@ -51,7 +52,7 @@ class SecurityExampleTest {
         config.put("enableHealthCheck", true);
         config.put("enableBackup", false);
         config.put("backupRetentionDays", 7);
-        
+
         // Set context on the app BEFORE creating stack
         app.getNode().setContext("cfc", config);
         stack = new Stack(app, "TestStack");
@@ -63,8 +64,9 @@ class SecurityExampleTest {
         config.put("tier", "public");
         config.put("env", "dev");
         config.put("region", "us-east-1");
-        config.put("domain", "example.com");
-        config.put("subdomain", "test");
+        // Don't set domain to avoid hosted zone requirements in tests
+        // config.put("domain", "example.com");
+        // config.put("subdomain", "test");
         config.put("networkMode", "public-no-nat");
         config.put("lbType", "alb");
         config.put("authMode", "none");

@@ -29,18 +29,15 @@ public class AlbFactoryValidationTest {
     SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
     
     VpcFactory vpc = new VpcFactory(stack, "Vpc");
-    vpc.injectContexts(); // Manual injection after SystemContext.start()
     vpc.create();
-    
+
     AlbFactory alb = new AlbFactory(stack, "Alb");
-    alb.injectContexts(); // Manual injection after SystemContext.start()
     alb.create();
-    
+
     EfsFactory efs = new EfsFactory(stack, "Efs");
-    efs.injectContexts(); // Manual injection after SystemContext.start()
     efs.create();
     
-    new FargateFactory(stack, "Ecs", new FargateFactory.Props(cfc));
+    new FargateFactory(stack, "Ecs");
     assertThrows(RuntimeException.class, () -> Template.fromStack(stack));
   }
 }

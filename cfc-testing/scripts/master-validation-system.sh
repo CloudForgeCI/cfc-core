@@ -17,15 +17,21 @@ NC='\033[0m' # No Color
 # Configuration - dynamically determine script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# If BASE_DIR is not set, use SCRIPT_DIR as the base
-# This ensures the script works when called from any directory
+# If BASE_DIR is not set, check if we're being called from cfc-testing/
+# GitHub workflow calls: cd cfc-testing && bash scripts/master-validation-system.sh
 if [[ -z "$BASE_DIR" ]]; then
-    BASE_DIR="$SCRIPT_DIR"
+    # If called from cfc-testing/ (current dir has cdk.json), use current dir
+    if [[ -f "$(pwd)/cdk.json" ]]; then
+        BASE_DIR="$(pwd)"
+    # Otherwise assume we need parent of scripts/ dir
+    else
+        BASE_DIR="$(dirname "$SCRIPT_DIR")"
+    fi
 fi
 
 # Normalize BASE_DIR to absolute path
 BASE_DIR="$(cd "$BASE_DIR" && pwd)"
-VALIDATION_DIR="$BASE_DIR/validation-results"
+VALIDATION_DIR="$SCRIPT_DIR/validation-results"
 
 # Ensure validation directory exists
 mkdir -p "$VALIDATION_DIR"
@@ -288,13 +294,7 @@ EOF
         cd "$BASE_DIR"
         local error_log="$VALIDATION_DIR/smoke-test-${stack_name}-error.log"
 
-        if cdk synth --quiet "$stack_name" \
-            --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample" \
-            --context cfc.runtime="$runtime" \
-            --context cfc.topology="$topology" \
-            --context cfc.securityProfile="$security" \
-            --context cfc.stackName="$stack_name" \
-            > /dev/null 2>"$error_log"; then
+        if cdk synth --quiet "$stack_name" --context cfc=@deployment-context.json > /dev/null 2>"$error_log"; then
 
             echo -e "  ${GREEN}✅ PASS${NC}"
             passed=$((passed + 1))

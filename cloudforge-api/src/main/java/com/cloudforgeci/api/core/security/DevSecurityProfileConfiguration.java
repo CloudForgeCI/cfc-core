@@ -1,5 +1,6 @@
 package com.cloudforgeci.api.core.security;
 
+import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.TopologyType;
@@ -13,7 +14,25 @@ import software.amazon.awscdk.services.logs.RetentionDays;
  * Optimized for development productivity with basic security measures.
  */
 public class DevSecurityProfileConfiguration implements SecurityProfileConfiguration {
-    
+
+    private final DeploymentContext deploymentContext;
+
+    /**
+     * Create DevSecurityProfileConfiguration.
+     * @param deploymentContext Optional deployment context for overriding defaults
+     */
+    public DevSecurityProfileConfiguration(DeploymentContext deploymentContext) {
+        this.deploymentContext = deploymentContext;
+    }
+
+    /**
+     * Create DevSecurityProfileConfiguration with no deployment context.
+     * Uses only profile defaults.
+     */
+    public DevSecurityProfileConfiguration() {
+        this(null);
+    }
+
     @Override
     public SecurityProfile getSecurityProfile() {
         return SecurityProfile.DEV;
@@ -63,10 +82,15 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     }
     
     @Override
-    public boolean isConfigEnabled() {
+    public boolean isAwsConfigEnabled() {
         return false; // Disabled for dev
     }
-    
+
+    @Override
+    public boolean isAuditManagerEnabled() {
+        return false; // Disabled for dev to reduce costs
+    }
+
     // Encryption Configuration - Basic encryption
     @Override
     public boolean isEbsEncryptionEnabled() {
@@ -110,11 +134,19 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     
     @Override
     public boolean isWafEnabled() {
+        // Check deployment context first, then fall back to profile default
+        if (deploymentContext != null) {
+            return deploymentContext.wafEnabled();
+        }
         return false; // Not required for dev
     }
     
     @Override
     public boolean isCloudFrontEnabled() {
+        // Check deployment context first, then fall back to profile default
+        if (deploymentContext != null) {
+            return deploymentContext.cloudfrontEnabled();
+        }
         return false; // Not required for dev
     }
     

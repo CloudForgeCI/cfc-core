@@ -1,5 +1,6 @@
 package com.cloudforgeci.api.core.security;
 
+import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.TopologyType;
@@ -13,7 +14,25 @@ import software.amazon.awscdk.services.logs.RetentionDays;
  * Implements enterprise-grade security for SOC/HIPAA/PCI-DSS compliance.
  */
 public class ProductionSecurityProfileConfiguration implements SecurityProfileConfiguration {
-    
+
+    private final DeploymentContext deploymentContext;
+
+    /**
+     * Create ProductionSecurityProfileConfiguration.
+     * @param deploymentContext Optional deployment context for overriding defaults
+     */
+    public ProductionSecurityProfileConfiguration(DeploymentContext deploymentContext) {
+        this.deploymentContext = deploymentContext;
+    }
+
+    /**
+     * Create ProductionSecurityProfileConfiguration with no deployment context.
+     * Uses only profile defaults.
+     */
+    public ProductionSecurityProfileConfiguration() {
+        this(null);
+    }
+
     @Override
     public SecurityProfile getSecurityProfile() {
         return SecurityProfile.PRODUCTION;
@@ -63,10 +82,22 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     }
     
     @Override
-    public boolean isConfigEnabled() {
-        return true; // Always enabled for production compliance
+    public boolean isAwsConfigEnabled() {
+        // AWS Config enabled for production compliance monitoring
+        // NOTE: AWS Config requires Configuration Recorder (one per region per account)
+        // If you already have a Configuration Recorder in this region/account,
+        // this may cause conflicts. To disable: override this in a custom SecurityProfileConfiguration
+        return true;
     }
-    
+
+    @Override
+    public boolean isAuditManagerEnabled() {
+        // AWS Audit Manager enabled for production continuous auditing
+        // NOTE: Audit Manager must be enabled in the AWS account first
+        // This provides automated evidence collection for compliance frameworks
+        return true;
+    }
+
     // Encryption Configuration - Full encryption mandatory
     @Override
     public boolean isEbsEncryptionEnabled() {
@@ -111,12 +142,40 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     
     @Override
     public boolean isWafEnabled() {
-        return true; // Always enabled for production protection
+        // Use deployment context wafEnabled field, default to false if not set
+        // The WafFactory configuration for Jenkins:
+        // - CommonRuleSet: DISABLED (too many false positives on i18n, setup, config pages)
+        // - SQL Injection rules: ACTIVE (blocks SQLi attacks)
+        // - Linux OS rules: ACTIVE (blocks shell injection, path traversal)
+        // - Known Bad Inputs: ACTIVE (with Java deserialization exceptions)
+        //
+        // This provides core security protection (SQLi + OS exploits)
+        // while allowing Jenkins to function without 403 errors.
+        //
+        // To enable: set wafEnabled=true in deployment-context.json
+        return deploymentContext != null && deploymentContext.wafEnabled();
     }
     
     @Override
     public boolean isCloudFrontEnabled() {
-        return true; // Always enabled for production DDoS protection
+        // Check deployment context first, then fall back to profile default
+        if (deploymentContext != null) {
+            return deploymentContext.cloudfrontEnabled();
+        }
+
+        // CloudFront disabled by default for Jenkins deployments
+        // Jenkins is primarily dynamic content (build logs, real-time updates, WebSockets)
+        // that doesn't benefit from CDN caching and can cause issues with:
+        // - Session management and CSRF tokens
+        // - WebSocket connections for real-time build logs
+        // - Authentication flows (ALB OIDC, Jenkins OIDC)
+        // - POST-heavy workflows (form submissions, API calls)
+        //
+        // For DDoS protection, use WAF at the ALB level instead.
+        // CloudFront is better suited for static content delivery (e.g., S3 websites).
+        //
+        // To enable: set cloudfrontEnabled=true in deployment-context.json
+        return false;
     }
     
     // Backup and Recovery - Comprehensive for production

@@ -35,17 +35,25 @@ class SecurityMonitoringFactoryThresholdTest {
         // Create proper CDK context for testing
         app = new App();
         stack = new Stack(app, "TestStack");
-        
+
+        // Start SystemContext before creating factory
+        com.cloudforgeci.api.core.SystemContext.start(stack,
+            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
+            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+            SecurityProfile.DEV,
+            com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+            com.cloudforgeci.api.core.DeploymentContext.from(stack));
+
         // Create a factory instance for testing
         factory = new SecurityMonitoringFactory(stack, "TestFactory");
-        
+
         // Get private threshold methods using reflection
         getCpuThresholdMethod = SecurityMonitoringFactory.class.getDeclaredMethod("getHighCpuThreshold", SecurityProfile.class);
         getCpuThresholdMethod.setAccessible(true);
-        
+
         getMemoryThresholdMethod = SecurityMonitoringFactory.class.getDeclaredMethod("getHighMemoryThreshold", SecurityProfile.class);
         getMemoryThresholdMethod.setAccessible(true);
-        
+
         getNetworkThresholdMethod = SecurityMonitoringFactory.class.getDeclaredMethod("getHighNetworkThreshold", SecurityProfile.class);
         getNetworkThresholdMethod.setAccessible(true);
     }

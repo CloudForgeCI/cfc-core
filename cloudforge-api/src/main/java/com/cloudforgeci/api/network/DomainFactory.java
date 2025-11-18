@@ -1,6 +1,10 @@
 package com.cloudforgeci.api.network;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforgeci.api.core.annotation.SystemContext;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
+import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.route53.HostedZone;
 import software.amazon.awscdk.services.route53.HostedZoneProviderProps;
 import software.amazon.awscdk.services.route53.IHostedZone;
@@ -10,40 +14,61 @@ import java.util.logging.Logger;
 
 
 /**
- * Domain Factory using annotation-based context injection.
- * This demonstrates how to use the injected DeploymentContext (cfc) variable.
+ * Domain Factory using annotation-based context extraction.
+ * Fields annotated with @DeploymentContext automatically extract values from the context.
  */
 public class DomainFactory extends BaseFactory {
 
     private static final Logger LOG = Logger.getLogger(DomainFactory.class.getName());
 
+    @DeploymentContext("domain")
+    private String domain;
+
+    @DeploymentContext("subdomain")
+    private String subdomain;
+
+    @DeploymentContext("createZone")
+    private boolean createZone;
+
+    @SystemContext("security")
+    private SecurityProfile security;
+
     public DomainFactory(Construct scope, String id) {
         super(scope, id);
+        // Values are automatically injected by BaseFactory via annotations
     }
 
 
     @Override
     public void create() {
-        // Use the injected DeploymentContext (cfc) directly
-        String domainName = cfc.domain();
-        
-        if (domainName != null && !domainName.isBlank()) {
-            IHostedZone zone = createHostedZone(domainName);
+        if (domain != null && !domain.isBlank()) {
+            IHostedZone zone = createHostedZone(domain);
             ctx.zone.set(zone);
-            ctx.domain.set(domainName);
-            ctx.subdomain.set(cfc.subdomain());
+            ctx.domain.set(domain);
+            ctx.subdomain.set(subdomain);
         }
     }
 
     private IHostedZone createHostedZone(String domainName) {
-        if (cfc.createZone() || isTestEnvironment()) {
-            // Create a new hosted zone resource when createZone=true or in test environment
-            return HostedZone.Builder.create(this, getNode().getId() + "Zone")
+        if (createZone) {
+            // Create a new hosted zone resource when createZone=true
+            HostedZone zone = HostedZone.Builder.create(this, getNode().getId() + "Zone")
                     .zoneName(domainName)
                     .build();
-        } else {
 
+            // Set removal policy based on security profile
+            // PRODUCTION: RETAIN (keep DNS records for safety)
+            // DEV/STAGING: DESTROY (clean up test resources)
+            RemovalPolicy policy = (security == SecurityProfile.PRODUCTION)
+                ? RemovalPolicy.RETAIN
+                : RemovalPolicy.DESTROY;
+            zone.applyRemovalPolicy(policy);
+
+            LOG.info("Created hosted zone for " + domainName + " with removal policy: " + policy);
+            return zone;
+        } else {
             // Use existing hosted zone lookup when createZone=false (normal behavior)
+            LOG.info("Looking up existing hosted zone for " + domainName);
             return HostedZone.fromLookup(this, getNode().getId() + "Zone",
                     HostedZoneProviderProps.builder()
                             .privateZone(false)
@@ -51,16 +76,5 @@ public class DomainFactory extends BaseFactory {
                             .build());
         }
     }
-    
-    private boolean isTestEnvironment() {
-        // Check for test environment indicators
-        return System.getProperty("java.class.path").contains("test") ||
-               System.getProperty("maven.test.skip") != null ||
-               System.getProperty("surefire.test.class.path") != null ||
-               // Check for JUnit test context in stack trace
-               java.util.Arrays.stream(Thread.currentThread().getStackTrace())
-                   .anyMatch(element -> element.getClassName().contains("junit") || 
-                                       element.getClassName().contains("test"));
-    }
-    
+
 }

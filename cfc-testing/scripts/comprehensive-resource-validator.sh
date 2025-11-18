@@ -113,9 +113,25 @@ initialize_truth_table() {
                                     ;;
                                 "STAGING")
                                     expected+=",CloudTrail,ConfigRules"
+                                    # ALB access logging (creates S3 bucket)
+                                    if [[ "$topology" == "JENKINS_SERVICE" ]]; then
+                                        expected+=",S3Bucket"
+                                    fi
+                                    # OIDC authentication with Cognito
+                                    if [[ "$domain_config" == "with-domain" && "$ssl_config" == "ssl-enabled" ]]; then
+                                        expected+=",CognitoUserPool,CognitoUserPoolClient,CognitoUserPoolDomain"
+                                    fi
                                     ;;
                                 "PRODUCTION")
                                     expected+=",WAFWebACL,CloudTrail,ConfigRules"
+                                    # ALB access logging (creates S3 bucket)
+                                    if [[ "$topology" == "JENKINS_SERVICE" ]]; then
+                                        expected+=",S3Bucket"
+                                    fi
+                                    # OIDC authentication with Cognito
+                                    if [[ "$domain_config" == "with-domain" && "$ssl_config" == "ssl-enabled" ]]; then
+                                        expected+=",CognitoUserPool,CognitoUserPoolClient,CognitoUserPoolDomain"
+                                    fi
                                     # AutoScaling only for EC2 + JENKINS_SERVICE topology
                                     # Fargate uses ECS Service auto-scaling, not EC2 AutoScaling policies
                                     if [[ "$runtime" == "EC2" && "$topology" == "JENKINS_SERVICE" ]]; then
@@ -206,7 +222,11 @@ create_deployment_context() {
     "createZone": "$create_zone_value",
     "logRetentionDays": "7",
     "region": "us-east-1",
-    "enableEncryption": "true"
+    "enableEncryption": "true",
+    "awsConfigEnabled": "false",
+    "createConfigInfrastructure": "false",
+    "guardDutyEnabled": "false",
+    "auditManagerEnabled": "false"
   }
 }
 EOF
@@ -248,41 +268,8 @@ synthesize_and_validate() {
     local template_file="$CDK_OUT_DIR/$stack_name.template.json"
     
     cd "$BASE_DIR"
-    
-    # Build context flags based on configuration
-    local context_flags=""
-    context_flags="--context cfc.runtime=$runtime"
-    context_flags="$context_flags --context cfc.topology=$topology"
-    context_flags="$context_flags --context cfc.securityProfile=$security_profile"
-    context_flags="$context_flags --context cfc.stackName=$stack_name"
 
-    # Add scaling parameters for SERVICE topology (requires Auto Scaling Group)
-    if [[ "$topology" == "JENKINS_SERVICE" ]]; then
-        context_flags="$context_flags --context cfc.minInstanceCapacity=1"
-        context_flags="$context_flags --context cfc.maxInstanceCapacity=3"
-        context_flags="$context_flags --context cfc.cpuTargetUtilization=60"
-    fi
-
-    if [[ "$domain_config" == "with-domain" ]]; then
-        context_flags="$context_flags --context cfc.domain=$DOMAIN"
-        context_flags="$context_flags --context cfc.createZone=true"
-        if [[ "$subdomain_config" == "with-subdomain" ]]; then
-            # Use a short subdomain to avoid ACM 64-character limit
-            # Create a hash of the stack name to keep it unique but short
-            local subdomain_hash
-            subdomain_hash="$(printf '%s' "$stack_name" | md5sum | cut -c1-8)"
-            local subdomain="test-${subdomain_hash}"
-            context_flags="$context_flags --context cfc.subdomain=$subdomain"
-        fi
-        if [[ "$ssl_config" == "ssl-enabled" ]]; then
-            context_flags="$context_flags --context cfc.enableSsl=true"
-        fi
-    fi
-
-    if cdk synth --quiet \
-        --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample" \
-        $context_flags \
-        > "$synth_output" 2> "$synth_error"; then
+    if cdk synth --quiet --context cfc=@deployment-context.json > "$synth_output" 2> "$synth_error"; then
         
         echo -e "  ${GREEN}✅ Synthesis successful${NC}"
         
@@ -405,6 +392,18 @@ EOF
                 ;;
             "ConfigRules")
                 if grep -q "AWS::Config::ConfigRule" "$template_file"; then found=true; fi
+                ;;
+            "S3Bucket")
+                if grep -q "AWS::S3::Bucket" "$template_file"; then found=true; fi
+                ;;
+            "CognitoUserPool")
+                if grep -q "AWS::Cognito::UserPool\"" "$template_file"; then found=true; fi
+                ;;
+            "CognitoUserPoolClient")
+                if grep -q "AWS::Cognito::UserPoolClient" "$template_file"; then found=true; fi
+                ;;
+            "CognitoUserPoolDomain")
+                if grep -q "AWS::Cognito::UserPoolDomain" "$template_file"; then found=true; fi
                 ;;
         esac
         

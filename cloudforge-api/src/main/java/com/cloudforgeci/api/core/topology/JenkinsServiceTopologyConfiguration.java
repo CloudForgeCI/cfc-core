@@ -43,8 +43,9 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
 
     // OIDC requires TLS at ALB. (Runtime profile handles cert wiring; we enforce semantics here.)
     r.add(ctx -> {
-      var mode = ctx.cfc.authMode();
-      if ("alb-oidc".equalsIgnoreCase(String.valueOf(mode)) && !ctx.cfc.enableSsl()) {
+      String mode = ctx.authMode.get().orElse(null);
+      Boolean sslEnabled = ctx.sslEnabled.get().orElse(false);
+      if ("alb-oidc".equalsIgnoreCase(mode) && !sslEnabled) {
         return List.of("authMode=alb-oidc requires enableSsl=true");
       }
       return List.of();
@@ -52,13 +53,17 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
 
     // If enableSsl=true and caller expects DNS, they should also provide fqdn (either explicit or subdomain+domain).
     r.add(ctx -> {
-      if (!ctx.cfc.enableSsl()) return List.of();
-      boolean hasFqdn = ctx.cfc.fqdn() != null && !ctx.cfc.fqdn().isBlank();
-      boolean canCompute = ctx.cfc.subdomain() != null && ctx.cfc.domain() != null;
+      Boolean sslEnabled = ctx.sslEnabled.get().orElse(false);
+      if (!sslEnabled) return List.of();
+      String fqdn = ctx.fqdn.get().orElse(null);
+      boolean hasFqdn = fqdn != null && !fqdn.isBlank();
+      String subdomain = ctx.subdomain.get().orElse(null);
+      String domain = ctx.domain.get().orElse(null);
+      boolean canCompute = subdomain != null && domain != null;
       return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl=true requires fqdn OR (subdomain + domain)");
     });
     // AutoScalingGroup is forbidden for Fargate runtime, but allowed for EC2 runtime
-    boolean isFargate = c.cfc.runtime().equals(RuntimeType.FARGATE);
+    boolean isFargate = c.runtime.equals(RuntimeType.FARGATE);
     r.add(when(isFargate , forbid("AutoScalingGroup", x -> x.asg)));
 
     return r;
@@ -66,9 +71,11 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
 
   @Override
   public void wire(SystemContext c) {
-    
+
     // Auto-scaling configuration for both Fargate and EC2 services (only when maxInstanceCapacity > 1)
-    boolean scale = c.cfc.maxInstanceCapacity() != null && c.cfc.minInstanceCapacity() > 0 && c.cfc.maxInstanceCapacity() > 1;
+    Integer maxCap = c.maxInstanceCapacity.get().orElse(null);
+    Integer minCap = c.minInstanceCapacity.get().orElse(null);
+    boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1;
     if(scale) {
       // Fargate autoscaling - use service.autoScaleTaskCount() directly
       // Check if callback has already been registered to prevent multiple registrations
@@ -78,9 +85,12 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
           if (c.fargateAutoscalingConfigured.get().isPresent()) {
             return;
           }
-          
-          ScalableTaskCount scalable = service.autoScaleTaskCount(EnableScalingProps.builder().minCapacity(c.cfc.minInstanceCapacity()).maxCapacity(c.cfc.maxInstanceCapacity()).build());
-          scalable.scaleOnCpuUtilization("CpuScaleSvc", CpuUtilizationScalingProps.builder().targetUtilizationPercent(c.cfc.cpuTargetUtilization())
+
+          Integer min = c.minInstanceCapacity.get().orElse(1);
+          Integer max = c.maxInstanceCapacity.get().orElse(1);
+          Integer cpuTarget = c.cpuTargetUtilization.get().orElse(60);
+          ScalableTaskCount scalable = service.autoScaleTaskCount(EnableScalingProps.builder().minCapacity(min).maxCapacity(max).build());
+          scalable.scaleOnCpuUtilization("CpuScaleSvc", CpuUtilizationScalingProps.builder().targetUtilizationPercent(cpuTarget)
                   .scaleInCooldown(Duration.minutes(2)).scaleOutCooldown(Duration.minutes(2)).build());
           c.fargateAutoscalingConfigured.set(true);
         });
@@ -118,10 +128,10 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
       }
       
       // Use subdomain for DNS record name, or use the domain directly if no subdomain
-      String record = c.cfc.subdomain();
+      String record = c.subdomain.get().orElse(null);
       if (record == null || record.isBlank()) {
         // When no subdomain is specified, use the domain name itself
-        record = c.cfc.domain();
+        record = c.domain.get().orElse(null);
         if (record == null || record.isBlank()) {
           return; // No domain or subdomain specified, cannot create DNS records
         }

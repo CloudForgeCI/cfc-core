@@ -23,7 +23,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.function.Function;
@@ -226,13 +225,22 @@ public class InteractiveDeployer {
         DeploymentContext cfc = DeploymentContext.from(app);
         LOG.fine("DeploymentContext loaded: runtime=" + cfc.runtime() +
                  ", topology=" + cfc.topology() +
-                 ", stackName=" + cfc.stackName());
+                 ", stackName=" + cfc.stackName() +
+                 ", region=" + cfc.region());
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(config.securityProfile);
-        
+
+        // Use region from DeploymentContext (deployment-context.json) with fallback to environment variable
+        String region = cfc.region() != null ? cfc.region() :
+                        System.getenv("CDK_DEFAULT_REGION") != null ? System.getenv("CDK_DEFAULT_REGION") : "us-east-1";
+
+        String account = System.getenv("CDK_DEFAULT_ACCOUNT") != null ? System.getenv("CDK_DEFAULT_ACCOUNT") : "123456789012";
+
+        LOG.info("Using AWS environment: account=" + account + ", region=" + region);
+
         StackProps props = StackProps.builder()
             .env(Environment.builder()
-                .account(System.getenv("CDK_DEFAULT_ACCOUNT") != null ? System.getenv("CDK_DEFAULT_ACCOUNT") : "123456789012")
-                .region(System.getenv("CDK_DEFAULT_REGION") != null ? System.getenv("CDK_DEFAULT_REGION") : "us-east-1")
+                .account(account)
+                .region(region)
                 .build())
             .build();
         
@@ -287,7 +295,21 @@ public class InteractiveDeployer {
             boolean first = true;
             for (Map.Entry<String, Object> entry : context.entrySet()) {
                 if (!first) writer.write(",\n");
-                writer.write("    \"" + entry.getKey() + "\": \"" + entry.getValue() + "\"");
+
+                Object value = entry.getValue();
+                String formattedValue;
+
+                // Handle boolean and numeric types without quotes
+                if (value instanceof Boolean) {
+                    formattedValue = value.toString();  // true or false without quotes
+                } else if (value instanceof Number) {
+                    formattedValue = value.toString();  // numbers without quotes
+                } else {
+                    // String values with quotes
+                    formattedValue = "\"" + value + "\"";
+                }
+
+                writer.write("    \"" + entry.getKey() + "\": " + formattedValue);
                 first = false;
             }
             writer.write("\n  }\n");
@@ -489,6 +511,49 @@ public class InteractiveDeployer {
         config.authMode = extractValue(content, "authMode");
         if (config.authMode == null) config.authMode = "none";
 
+        // Extract Cognito configuration from saved context
+        String cognitoAutoProvisionStr = extractValue(content, "cognitoAutoProvision");
+        config.cognitoAutoProvision = "true".equalsIgnoreCase(cognitoAutoProvisionStr);
+        config.cognitoUserPoolName = extractValue(content, "cognitoUserPoolName");
+        config.cognitoDomainPrefix = extractValue(content, "cognitoDomainPrefix");
+        String cognitoMfaStr = extractValue(content, "cognitoMfaEnabled");
+        config.cognitoMfaEnabled = "true".equalsIgnoreCase(cognitoMfaStr);
+        String cognitoGroupsStr = extractValue(content, "cognitoCreateGroups");
+        config.cognitoCreateGroups = "true".equalsIgnoreCase(cognitoGroupsStr);
+        config.cognitoAdminGroupName = extractValue(content, "cognitoAdminGroupName");
+        if (config.cognitoAdminGroupName == null) config.cognitoAdminGroupName = "Jenkins-Admins";
+        config.cognitoUserGroupName = extractValue(content, "cognitoUserGroupName");
+        if (config.cognitoUserGroupName == null) config.cognitoUserGroupName = "Jenkins-Users";
+        config.cognitoInitialAdminEmail = extractValue(content, "cognitoInitialAdminEmail");
+        config.cognitoUserPoolId = extractValue(content, "cognitoUserPoolId");
+        config.cognitoAppClientId = extractValue(content, "cognitoAppClientId");
+
+        // Extract OIDC configuration from saved context
+        // Manual OIDC endpoints (for IAM Identity Center, Okta, Auth0, etc.)
+        config.oidcIssuer = extractValue(content, "oidcIssuer");
+        config.oidcAuthorizationEndpoint = extractValue(content, "oidcAuthorizationEndpoint");
+        config.oidcTokenEndpoint = extractValue(content, "oidcTokenEndpoint");
+        config.oidcUserInfoEndpoint = extractValue(content, "oidcUserInfoEndpoint");
+        config.oidcClientId = extractValue(content, "oidcClientId");
+        config.oidcClientSecretName = extractValue(content, "oidcClientSecretName");
+        if (config.oidcClientSecretName == null) config.oidcClientSecretName = "jenkins/oidc/client-secret";
+
+        // Legacy OIDC/Identity Center configuration
+        String autoProvisionStr = extractValue(content, "autoProvisionIdentityCenter");
+        config.autoProvisionIdentityCenter = "true".equalsIgnoreCase(autoProvisionStr);
+
+        config.ssoInstanceArn = extractValue(content, "ssoInstanceArn");
+        if (config.ssoInstanceArn == null) config.ssoInstanceArn = "";
+
+        config.ssoGroupId = extractValue(content, "ssoGroupId");
+        if (config.ssoGroupId == null) config.ssoGroupId = "";
+
+        config.ssoTargetAccountId = extractValue(content, "ssoTargetAccountId");
+        if (config.ssoTargetAccountId == null) config.ssoTargetAccountId = "";
+
+        config.identityCenterGroupName = extractValue(content, "identityCenterGroupName");
+        if (config.identityCenterGroupName == null) config.identityCenterGroupName = "Jenkins-Users";
+
         // Extract domain configuration from saved context
         config.domain = extractValue(content, "domain");
         if (config.domain == null) config.domain = "";
@@ -528,6 +593,23 @@ public class InteractiveDeployer {
 
         String enableEncryptionStr = extractValue(content, "enableEncryption");
         config.enableEncryption = enableEncryptionStr == null || "true".equalsIgnoreCase(enableEncryptionStr);
+
+        String awsConfigEnabledStr = extractValue(content, "awsConfigEnabled");
+        config.awsConfigEnabled = "true".equalsIgnoreCase(awsConfigEnabledStr);
+
+        String createConfigInfrastructureStr = extractValue(content, "createConfigInfrastructure");
+        config.createConfigInfrastructure = createConfigInfrastructureStr == null || "true".equalsIgnoreCase(createConfigInfrastructureStr);
+
+        String guardDutyEnabledStr = extractValue(content, "guardDutyEnabled");
+        config.guardDutyEnabled = "true".equalsIgnoreCase(guardDutyEnabledStr);
+
+        String auditManagerEnabledStr = extractValue(content, "auditManagerEnabled");
+        config.auditManagerEnabled = "true".equalsIgnoreCase(auditManagerEnabledStr);
+
+        config.auditManagerFrameworkId = extractValue(content, "auditManagerFrameworkId");
+
+        config.complianceFrameworks = extractValue(content, "complianceFrameworks");
+        if (config.complianceFrameworks == null) config.complianceFrameworks = "";
 
         config.logRetentionDays = extractValue(content, "logRetentionDays");
         if (config.logRetentionDays == null) config.logRetentionDays = "7";
@@ -581,78 +663,52 @@ public class InteractiveDeployer {
     }
     
     private static String extractValue(String json, String key) {
-        String pattern = "\"" + key + "\":\\s*\"([^\"]+)\"";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+        // Try quoted values first (strings) - use * instead of + to allow empty strings
+        String quotedPattern = "\"" + key + "\":\\s*\"([^\"]*)\"";
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(quotedPattern);
         java.util.regex.Matcher m = p.matcher(json);
         if (m.find()) {
             return m.group(1);
         }
+
+        // Try unquoted values (booleans and numbers)
+        String unquotedPattern = "\"" + key + "\":\\s*([^,}\\s]+)";
+        p = java.util.regex.Pattern.compile(unquotedPattern);
+        m = p.matcher(json);
+        if (m.find()) {
+            return m.group(1);
+        }
+
         return null;
     }
     
+    /**
+     * Builds the CFC context map from DeploymentConfig using Jackson.
+     * This eliminates manual field mapping and automatically includes all DeploymentConfig fields.
+     * Jackson introspection ensures we can't accidentally forget to include a field.
+     */
     private static Map<String, Object> buildCfcContext(DeploymentConfig config) {
-        Map<String, Object> context = new HashMap<>();
-        
-        // Basic configuration
-        context.put("env", config.environment);
-        context.put("tier", config.tier);
-        context.put("runtime", config.runtime.name());
-        context.put("topology", config.topology.name());
-        context.put("securityProfile", config.securityProfile.name());
-        context.put("stackName", config.stackName);
-        
-        // Domain configuration - always include these fields
-        context.put("domain", config.domain);
-        context.put("subdomain", config.subdomain);
-        context.put("enableSsl", config.enableSsl);
-        
-        // Network configuration
-        context.put("networkMode", config.networkMode);
-        context.put("wafEnabled", config.wafEnabled);
-        context.put("cloudfrontEnabled", config.cloudfrontEnabled);
-        
-        // Jenkins-specific configuration
-        // Instance capacity and auto-scaling apply to both EC2 and Fargate
-        context.put("minInstanceCapacity", config.minInstanceCapacity);
-        context.put("maxInstanceCapacity", config.maxInstanceCapacity);
-        context.put("cpuTargetUtilization", config.cpuTargetUtilization);
-        context.put("enableAutoScaling", config.enableAutoScaling);
-        
-        if (config.runtime == RuntimeType.EC2) {
-            context.put("instanceType", config.instanceType);
-        }
-        context.put("cpu", config.cpu);
-        context.put("memory", config.memory);
-        context.put("authMode", config.authMode);
-        
-        // Advanced configuration
-        context.put("enableMonitoring", config.enableMonitoring);
-        context.put("enableEncryption", config.enableEncryption);
-        context.put("logRetentionDays", config.logRetentionDays);
-        context.put("region", config.region);
-        
-        // Health check configuration
-        context.put("healthCheckGracePeriod", config.healthCheckGracePeriod);
-        context.put("healthCheckInterval", config.healthCheckInterval);
-        context.put("healthCheckTimeout", config.healthCheckTimeout);
-        context.put("healthyThreshold", config.healthyThreshold);
-        context.put("unhealthyThreshold", config.unhealthyThreshold);
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
-        // Security and network configuration
-        context.put("bastionCidr", config.bastionCidr);
-        context.put("lbType", config.lbType);
-        context.put("enableFlowlogs", config.enableFlowlogs);
+        // Configure mapper to use fields instead of getters (DeploymentConfig has public fields)
+        mapper.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.FIELD,
+                           com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY);
+        mapper.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.GETTER,
+                           com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE);
 
-        // DNS configuration
-        context.put("createZone", config.createZone);
+        // Configure mapper to handle enums as strings
+        mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
 
-        // Artifacts configuration
-        context.put("artifactsPrefix", config.artifactsPrefix);
+        // Configure mapper to exclude null values
+        mapper.setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
 
-        if (!config.authMode.equals("none")) {
-            context.put("ssoInstanceArn", config.ssoInstanceArn);
-            context.put("ssoGroupId", config.ssoGroupId);
-            context.put("ssoTargetAccountId", config.ssoTargetAccountId);
+        // Convert DeploymentConfig to Map - Jackson handles all fields automatically
+        @SuppressWarnings("unchecked")
+        Map<String, Object> context = mapper.convertValue(config, Map.class);
+
+        // Rename 'environment' field to 'env' to match DeploymentContext expectations
+        if (context.containsKey("environment")) {
+            context.put("env", context.remove("environment"));
         }
 
         return context;
@@ -855,6 +911,85 @@ public class InteractiveDeployer {
             }
         }
     }
+
+    /**
+     * Get availability zones for a region.
+     * Returns an array of AZ suffixes based on the region and count requested.
+     */
+    private static String[] getAvailabilityZonesForRegion(String region, int count) {
+        // Most regions have at least 3 AZs (a, b, c)
+        // Some regions have more (d, e, f)
+        String[] allAzs = {
+            region + "a",
+            region + "b",
+            region + "c",
+            region + "d",
+            region + "e",
+            region + "f"
+        };
+
+        // Return the requested number of AZs (up to what's available)
+        int actualCount = Math.min(count, allAzs.length);
+        String[] result = new String[actualCount];
+        System.arraycopy(allAzs, 0, result, 0, actualCount);
+        return result;
+    }
+
+    /**
+     * Display compliance requirements for selected frameworks.
+     */
+    private static void displayComplianceRequirements(String frameworks) {
+        String[] frameworkList = frameworks.split(",");
+
+        for (String framework : frameworkList) {
+            String fw = framework.trim();
+            System.out.println("\n  " + fw + " Requirements:");
+
+            switch (fw) {
+                case "PCI-DSS":
+                    System.out.println("    ✓ Encryption at rest (enableEncryption=true)");
+                    System.out.println("    ✓ WAF protection (wafEnabled=true)");
+                    System.out.println("    ✓ GuardDuty intrusion detection (guardDutyEnabled=true)");
+                    System.out.println("    ✓ CloudWatch monitoring (enableMonitoring=true)");
+                    System.out.println("    ✓ Vulnerability scanning with Inspector");
+                    System.out.println("    ⚠ Quarterly vulnerability scans required");
+                    System.out.println("    ⚠ File integrity monitoring recommended");
+                    break;
+
+                case "HIPAA":
+                    System.out.println("    ✓ Encryption at rest (enableEncryption=true)");
+                    System.out.println("    ✓ AWS Config compliance (awsConfigEnabled=true)");
+                    System.out.println("    ✓ CloudWatch monitoring (enableMonitoring=true)");
+                    System.out.println("    ✓ Macie for PHI discovery (macieEnabled=true)");
+                    System.out.println("    ⚠ AWS Business Associate Agreement (BAA) required");
+                    System.out.println("    ⚠ Breach notification procedures documented");
+                    System.out.println("    ⚠ Workforce authorization procedures in place");
+                    break;
+
+                case "SOC2":
+                    System.out.println("    ✓ Encryption at rest (enableEncryption=true)");
+                    System.out.println("    ✓ CloudWatch monitoring (enableMonitoring=true)");
+                    System.out.println("    ✓ AWS Config compliance (awsConfigEnabled=true)");
+                    System.out.println("    ✓ Change management documented");
+                    System.out.println("    ⚠ Incident response plan documented");
+                    System.out.println("    ⚠ Disaster recovery plan tested");
+                    break;
+
+                case "GDPR":
+                    System.out.println("    ✓ Encryption at rest (enableEncryption=true)");
+                    System.out.println("    ✓ CloudWatch monitoring (enableMonitoring=true)");
+                    System.out.println("    ⚠ Data Protection Agreement (DPA) required");
+                    System.out.println("    ⚠ Data Protection Impact Assessment (DPIA) completed");
+                    System.out.println("    ⚠ Data subject request procedures documented");
+                    System.out.println("    ⚠ Legal basis for data processing documented");
+                    System.out.println("    ⚠ International transfer safeguards if applicable");
+                    break;
+
+                default:
+                    System.out.println("    See docs/compliance/ for detailed requirements");
+            }
+        }
+    }
     
     private static void printConfiguration(DeploymentConfig config) {
         System.out.println("Stack Name: " + config.stackName);
@@ -895,6 +1030,21 @@ public class InteractiveDeployer {
         System.out.println("==========================");
         System.out.println("Monitoring Enabled: " + config.enableMonitoring);
         System.out.println("Encryption Enabled: " + config.enableEncryption);
+        System.out.println("AWS Config Enabled: " + config.awsConfigEnabled);
+        if (config.awsConfigEnabled) {
+            System.out.println("  Create Config Infrastructure: " + config.createConfigInfrastructure);
+            if (config.createConfigInfrastructure) {
+                System.out.println("    ⚠️  This stack will CREATE Config Recorder and Delivery Channel (account-level singletons)");
+                System.out.println("    ⚠️  Only ONE stack per region should have createConfigInfrastructure=true");
+            } else {
+                System.out.println("    ℹ️  This stack will USE existing Config Recorder and Delivery Channel");
+                System.out.println("    ℹ️  Ensure another stack has already created the Config infrastructure in this region");
+            }
+        }
+        System.out.println("Audit Manager Enabled: " + config.auditManagerEnabled);
+        if (config.auditManagerEnabled && config.auditManagerFrameworkId != null) {
+            System.out.println("  Framework ID: " + config.auditManagerFrameworkId);
+        }
         if (config.enableMonitoring) {
             System.out.println("Log Retention: " + config.logRetentionDays + " days");
         }
@@ -913,27 +1063,30 @@ public class InteractiveDeployer {
     }
     
     // Configuration data class
-    private static class DeploymentConfig {
+    static class DeploymentConfig {
         // Basic configuration
         String stackName;
         String environment;
         String deploymentType;
         String tier = "public";
-        
+
         // Domain configuration
         String domain;
         String subdomain;
         boolean enableSsl;
-        
+
         // Runtime configuration
         RuntimeType runtime;
         TopologyType topology;
         SecurityProfile securityProfile;
-        
+
         // Network configuration
         String networkMode;
         boolean wafEnabled;
         boolean cloudfrontEnabled;
+
+        // Region and Availability Zone configuration
+        String[] availabilityZones;
         
         // Jenkins configuration
         int minInstanceCapacity = 1;
@@ -943,16 +1096,46 @@ public class InteractiveDeployer {
         int memory = 2048;
         String instanceType = "t3.micro";  // EC2 instance type
         String authMode = "none";
+
+        // Cognito configuration (recommended for OIDC)
+        boolean cognitoAutoProvision = false;
+        String cognitoUserPoolName = null;
+        String cognitoDomainPrefix = null;
+        boolean cognitoMfaEnabled = false;
+        boolean cognitoCreateGroups = true;
+        String cognitoAdminGroupName = "Jenkins-Admins";
+        String cognitoUserGroupName = "Jenkins-Users";
+        String cognitoInitialAdminEmail = null;
+        String cognitoInitialAdminPhone = null;
+        String cognitoUserPoolId = null;
+        String cognitoAppClientId = null;
+
+        // OIDC configuration - manual endpoints (for IAM Identity Center, Okta, Auth0)
+        String oidcIssuer = null;
+        String oidcAuthorizationEndpoint = null;
+        String oidcTokenEndpoint = null;
+        String oidcUserInfoEndpoint = null;
+        String oidcClientId = null;
+        String oidcClientSecretName = "jenkins/oidc/client-secret";
+
+        // OIDC configuration - legacy auto-constructed
         String ssoInstanceArn = "";
         String ssoGroupId = "";
         String ssoTargetAccountId = "";
-        
+        boolean autoProvisionIdentityCenter = false;
+        String identityCenterGroupName = "Jenkins-Users";
+
         // Advanced configuration
         boolean enableMonitoring = true;
         boolean enableEncryption = true;
+        boolean awsConfigEnabled = false;
+        boolean createConfigInfrastructure = true;  // Only true for first stack per region
+        boolean guardDutyEnabled = false;
+        boolean auditManagerEnabled = false;
+        String auditManagerFrameworkId = null;
+        String complianceFrameworks = "";  // Comma-separated list: "PCI-DSS,HIPAA,SOC2,GDPR"
         String logRetentionDays = "7";
         String region = "us-east-1";
-        String availabilityZone = "us-east-1a";
         boolean enableAutoScaling = false;
         int healthCheckGracePeriod = 300;
         int healthCheckInterval = 30;
@@ -964,6 +1147,10 @@ public class InteractiveDeployer {
         String bastionCidr = "10.0.1.0/24";
         String lbType = "alb";
         boolean enableFlowlogs = false;
+
+        // Storage persistence configuration
+        boolean retainStorage = false;
+        String existingFileSystemId = null;
         boolean createZone = false;
         String artifactsPrefix = "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}";
     }
@@ -988,16 +1175,26 @@ public class InteractiveDeployer {
     private static class JenkinsDeploymentStrategy implements DeploymentStrategy {
         @Override
         public void collectConfiguration(DeploymentConfig config) {
+            // Security Profile Selection (moved to top - determines many downstream defaults)
+            System.out.println("\n🔒 Security Profile Selection:");
+            System.out.println("================================");
+            System.out.println("Security profiles determine compliance requirements and defaults:");
+            System.out.println("  • DEV: Relaxed security, minimal compliance, lower costs");
+            System.out.println("  • STAGING: Moderate security, recommended for pre-production testing");
+            System.out.println("  • PRODUCTION: Strict security, full compliance enforcement");
+            System.out.println("");
+            config.securityProfile = SecurityProfile.valueOf(
+                promptChoice("Security Profile", new String[]{"DEV", "STAGING", "PRODUCTION"}, "STAGING").toUpperCase());
+
+            // Runtime Selection
+            System.out.println("\n⚙️ Runtime Configuration:");
+            System.out.println("========================");
             config.runtime = RuntimeType.valueOf(
                 promptChoice("Runtime", new String[]{"FARGATE", "EC2"}, "FARGATE").toUpperCase());
-            
+
             // Topology Selection
             config.topology = TopologyType.valueOf(
                 promptChoice("Topology", new String[]{"JENKINS_SINGLE_NODE", "JENKINS_SERVICE"}, "JENKINS_SERVICE").toUpperCase());
-            
-            // Security Profile Selection
-            config.securityProfile = SecurityProfile.valueOf(
-                promptChoice("Security Profile", new String[]{"DEV", "STAGING", "PRODUCTION"}, "STAGING").toUpperCase());
             
             // Instance Capacity Configuration (applies to both EC2 and Fargate)
             config.minInstanceCapacity = promptIntWithValidation("Minimum Instance Capacity", 1, 1, 10);
@@ -1027,34 +1224,358 @@ public class InteractiveDeployer {
                 config.memory = promptIntWithValidation("Memory (MB)", 2048, 512, 8192);
             }
             
-            config.authMode = promptChoice("Authentication Mode", 
+            // Authentication Configuration
+            System.out.println("\n🔐 Authentication Configuration:");
+            System.out.println("=================================");
+            config.authMode = promptChoice("Authentication Mode",
                 new String[]{"none", "alb-oidc", "jenkins-oidc"}, "none");
-            
+
+            if (config.authMode.equals("alb-oidc") || config.authMode.equals("jenkins-oidc")) {
+                System.out.println("\n📋 OIDC Authentication Setup:");
+                System.out.println("=============================");
+                System.out.println("Choose OIDC provider:");
+                System.out.println("  1. Amazon Cognito (Recommended) - Auto-provision user pool with strong security");
+                System.out.println("  2. AWS IAM Identity Center - Manual configuration with Identity Center application");
+                System.out.println("  3. External IdP (Okta, Auth0, etc.) - Manual OIDC endpoints");
+                System.out.println("  4. Legacy SSO - Auto-constructed from SSO instance ARN (not recommended)");
+
+                String oidcProvider = promptChoice("OIDC Provider",
+                    new String[]{"cognito", "identity-center", "external-idp", "legacy-sso"}, "cognito");
+
+                if (oidcProvider.equals("cognito")) {
+                    System.out.println("\n🔐 Amazon Cognito Configuration:");
+                    System.out.println("=================================");
+
+                    boolean useCognito = promptYesNo("Auto-provision new Cognito User Pool", true);
+
+                    if (useCognito) {
+                        config.cognitoAutoProvision = true;
+
+                        // Domain prefix is required and must be globally unique
+                        System.out.println("\n⚠️  Domain prefix must be globally unique across ALL AWS accounts");
+                        System.out.println("   Example: jenkins-auth-mycompany-prod");
+                        config.cognitoDomainPrefix = promptRequired("Cognito Domain Prefix (globally unique)",
+                            config.stackName + "-auth");
+
+                        // Optional customization
+                        config.cognitoUserPoolName = promptOptional("User Pool Name", config.stackName + "-users");
+                        config.cognitoMfaEnabled = promptYesNo("Enable MFA (Multi-Factor Authentication)", false);
+
+                        // User Groups Configuration
+                        System.out.println("\n👥 User Groups Configuration:");
+                        config.cognitoCreateGroups = promptYesNo("Create admin and user groups", true);
+
+                        if (config.cognitoCreateGroups) {
+                            config.cognitoAdminGroupName = promptOptional("Admin Group Name", "Jenkins-Admins");
+                            config.cognitoUserGroupName = promptOptional("User Group Name", "Jenkins-Users");
+                        }
+
+                        // Initial Admin User - ALWAYS ask (independent of groups)
+                        System.out.println("\n👤 Initial Admin User:");
+                        System.out.println("Create an admin user automatically during deployment");
+                        boolean createInitialAdmin = promptYesNo("Create initial admin user", true);
+                        if (createInitialAdmin) {
+                            config.cognitoInitialAdminEmail = promptRequired("Admin email address", "");
+
+                            // If MFA is enabled and includes SMS, ask for phone number
+                            if (config.cognitoMfaEnabled) {
+                                System.out.println("\nℹ️  MFA is enabled - phone number required for SMS MFA");
+                                config.cognitoInitialAdminPhone = promptOptional("Admin phone number (E.164 format, e.g., +12025551234)", "");
+                            }
+
+                            System.out.println("   ✅ Admin user will be created with temporary password");
+                            System.out.println("   📧 User will receive email with password reset instructions");
+                            if (config.cognitoCreateGroups) {
+                                System.out.println("   🔑 User will be added to '" + config.cognitoAdminGroupName + "' group");
+                            }
+                        } else {
+                            config.cognitoInitialAdminEmail = null;
+                            config.cognitoInitialAdminPhone = null;
+                        }
+
+                        // Construct redirect URL for reference
+                        String redirectUrl;
+                        if (config.domain != null && !config.domain.isEmpty()) {
+                            if (config.subdomain != null && !config.subdomain.isEmpty()) {
+                                redirectUrl = "https://" + config.subdomain + "." + config.domain + "/oauth2/idpresponse";
+                            } else {
+                                redirectUrl = "https://" + config.domain + "/oauth2/idpresponse";
+                            }
+                        } else {
+                            redirectUrl = "https://<ALB-DNS-NAME>/oauth2/idpresponse";
+                        }
+
+                        System.out.println("\n✅ Cognito auto-provisioning configured");
+                        System.out.println("📋 After deployment:");
+                        System.out.println("   1. Get User Pool ID and Client ID from CloudFormation outputs");
+                        System.out.println("   2. Retrieve client secret:");
+                        System.out.println("      aws cognito-idp describe-user-pool-client --user-pool-id <POOL_ID> --client-id <CLIENT_ID>");
+                        System.out.println("   3. Store secret in Secrets Manager:");
+                        System.out.println("      aws secretsmanager put-secret-value --secret-id jenkins/oidc/client-secret --secret-string '<SECRET>'");
+                        System.out.println("   4. Create users:");
+                        System.out.println("      aws cognito-idp admin-create-user --user-pool-id <POOL_ID> --username admin@example.com");
+                        System.out.println("   Redirect URL will be: " + redirectUrl);
+                    } else {
+                        // Use existing Cognito User Pool
+                        System.out.println("\n📋 Existing Cognito User Pool Configuration:");
+                        config.cognitoUserPoolId = promptRequired("Cognito User Pool ID (e.g., us-east-1_abc123xyz)", "");
+                        config.cognitoAppClientId = promptOptional("App Client ID (leave empty to create new)", "");
+                        config.cognitoDomainPrefix = promptRequired("Cognito Domain Prefix", "");
+
+                        System.out.println("\n✅ Existing Cognito configuration captured");
+                    }
+
+                } else if (oidcProvider.equals("identity-center")) {
+                    System.out.println("\n📝 AWS IAM Identity Center Configuration:");
+                    System.out.println("==========================================");
+                    System.out.println("Prerequisites:");
+                    System.out.println("  1. Create an OIDC application in AWS IAM Identity Center console");
+                    System.out.println("  2. Select 'I have an application I want to set up' > 'OAuth 2.0'");
+
+                    // Construct redirect URL based on domain configuration
+                    String redirectUrl;
+                    if (config.domain != null && !config.domain.isEmpty()) {
+                        if (config.subdomain != null && !config.subdomain.isEmpty()) {
+                            redirectUrl = "https://" + config.subdomain + "." + config.domain + "/oauth2/idpresponse";
+                        } else {
+                            redirectUrl = "https://" + config.domain + "/oauth2/idpresponse";
+                        }
+                    } else {
+                        redirectUrl = "https://<ALB-DNS-NAME>/oauth2/idpresponse (ALB DNS name will be available after deployment)";
+                    }
+
+                    System.out.println("  3. Configure redirect URL: " + redirectUrl);
+                    System.out.println("  4. Copy the OIDC endpoints and client ID from the application");
+                    System.out.println("");
+
+                    config.oidcIssuer = promptRequired("OIDC Issuer URL", "");
+                    config.oidcAuthorizationEndpoint = promptRequired("Authorization Endpoint URL", "");
+                    config.oidcTokenEndpoint = promptRequired("Token Endpoint URL", "");
+                    config.oidcUserInfoEndpoint = promptRequired("UserInfo Endpoint URL", "");
+                    config.oidcClientId = promptRequired("Client ID", "");
+                    config.oidcClientSecretName = promptOptional("Client Secret Name in Secrets Manager", "jenkins/oidc/client-secret");
+
+                    System.out.println("\n✅ IAM Identity Center configuration captured");
+                    System.out.println("⚠️  IMPORTANT: After deployment, update the client secret in Secrets Manager:");
+                    System.out.println("   aws secretsmanager put-secret-value --secret-id " + config.oidcClientSecretName + " --secret-string 'YOUR_CLIENT_SECRET'");
+
+                } else if (oidcProvider.equals("external-idp")) {
+                    System.out.println("\n📝 External Identity Provider Configuration (Okta, Auth0, etc.):");
+                    System.out.println("==================================================================");
+                    System.out.println("Configure your IdP application with:");
+
+                    // Construct redirect URL based on domain configuration
+                    String redirectUrl;
+                    if (config.domain != null && !config.domain.isEmpty()) {
+                        if (config.subdomain != null && !config.subdomain.isEmpty()) {
+                            redirectUrl = "https://" + config.subdomain + "." + config.domain + "/oauth2/idpresponse";
+                        } else {
+                            redirectUrl = "https://" + config.domain + "/oauth2/idpresponse";
+                        }
+                    } else {
+                        redirectUrl = "https://<ALB-DNS-NAME>/oauth2/idpresponse";
+                    }
+
+                    System.out.println("  Redirect URL: " + redirectUrl);
+                    System.out.println("  Grant Type: Authorization Code");
+                    System.out.println("  Scopes: openid email profile");
+                    System.out.println("");
+
+                    config.oidcIssuer = promptRequired("OIDC Issuer URL", "");
+                    config.oidcAuthorizationEndpoint = promptRequired("Authorization Endpoint URL", "");
+                    config.oidcTokenEndpoint = promptRequired("Token Endpoint URL", "");
+                    config.oidcUserInfoEndpoint = promptRequired("UserInfo Endpoint URL", "");
+                    config.oidcClientId = promptRequired("Client ID", "");
+                    config.oidcClientSecretName = promptOptional("Client Secret Name in Secrets Manager", "jenkins/oidc/client-secret");
+
+                    System.out.println("\n✅ External IdP configuration captured");
+                    System.out.println("⚠️  Store client secret in Secrets Manager:");
+                    System.out.println("   aws secretsmanager create-secret --name " + config.oidcClientSecretName + " --secret-string 'YOUR_CLIENT_SECRET'");
+
+                } else {
+                    // Legacy SSO mode
+                    System.out.println("\n⚠️  Legacy Auto-Constructed OIDC Configuration:");
+                    System.out.println("===============================================");
+                    System.out.println("This mode auto-constructs OIDC endpoints from the SSO instance ARN.");
+                    System.out.println("This may not work with all IAM Identity Center configurations.");
+                    System.out.println("⚠️  RECOMMENDED: Use option 1 (Cognito) or 2 (Identity Center) instead");
+                    System.out.println("");
+
+                    config.ssoInstanceArn = promptRequired("SSO Instance ARN (e.g., ssoins-xxxxxxxxxxxx)", "");
+
+                    System.out.println("\n✅ Legacy configuration captured");
+                    System.out.println("⚠️  If this doesn't work, use Cognito or manual OIDC endpoints instead");
+                }
+            }
+
             // Network Configuration
             System.out.println("\n🌐 Network Configuration:");
             System.out.println("==========================");
-            config.networkMode = promptChoice("Network Mode", 
+            config.networkMode = promptChoice("Network Mode",
                 new String[]{"public-no-nat", "private-with-nat"}, "public-no-nat");
             config.wafEnabled = promptYesNo("Enable WAF Protection", false);
             config.cloudfrontEnabled = promptYesNo("Enable CloudFront CDN", false);
-            
-            if (!config.authMode.equals("none")) {
-                config.ssoInstanceArn = promptRequired("SSO Instance ARN", "");
-                config.ssoGroupId = promptRequired("SSO Group ID", "");
-                config.ssoTargetAccountId = promptRequired("SSO Target Account ID", "");
+
+            // Bastion/Remote Access Configuration
+            boolean enableRemoteAccess = promptYesNo("Enable Remote Shell Access (ECS Exec for Fargate)", false);
+            if (enableRemoteAccess) {
+                // Default CIDR varies by security profile: tighter for production, more permissive for dev
+                String defaultCidr = (config.securityProfile == SecurityProfile.PRODUCTION) ? "10.0.0.0/24" : "0.0.0.0/32";
+                config.bastionCidr = promptOptional("Bastion/Access CIDR (your IP/32 or VPN CIDR)", defaultCidr);
+            } else {
+                config.bastionCidr = null;  // Disable ECS Exec
             }
-            
-            
+
+            // Storage Persistence Configuration
+            System.out.println("\n💾 Storage Persistence Configuration:");
+            System.out.println("======================================");
+            System.out.println("ℹ️  Retain storage volumes (EFS/EBS) after stack deletion for disaster recovery.");
+            System.out.println("    This allows you to destroy and redeploy with all data intact.");
+            config.retainStorage = promptYesNo("Retain storage volumes on stack deletion", false);
+
+            if (config.retainStorage) {
+                System.out.println("⚠️  IMPORTANT: You must manually delete retained volumes from AWS Console.");
+                System.out.println("    Retained volumes will continue to incur storage costs.");
+            }
+
+            // Ask about reusing existing file system (for disaster recovery)
+            boolean reuseExisting = promptYesNo("Reuse existing file system from previous deployment", false);
+            if (reuseExisting) {
+                config.existingFileSystemId = promptOptional("Existing File System ID (fs-xxxxxx)", null);
+            } else {
+                config.existingFileSystemId = null;
+            }
+
             // Advanced Configuration Section
-            System.out.println("\n🔧 Advanced Configuration:");
-            System.out.println("==========================");
-            
-            config.enableMonitoring = promptYesNo("Enable CloudWatch Monitoring", true);
-            config.enableEncryption = promptYesNo("Enable Encryption at Rest", true);
-            
+            System.out.println("\n🔧 Advanced Monitoring & Security Configuration:");
+            System.out.println("=================================================");
+            System.out.println("📖 These settings are essential for compliance frameworks (PCI-DSS, HIPAA, SOC2, GDPR)");
+            System.out.println("   For compliance requirements, see: docs/compliance/QUICK_START_GUIDE.md");
+            System.out.println("");
+
+            config.enableMonitoring = promptYesNo("Enable CloudWatch Monitoring (required for most compliance frameworks)", true);
+            config.enableEncryption = promptYesNo("Enable Encryption at Rest (required for PCI-DSS, HIPAA, GDPR)", true);
+
+            // AWS Config - only ask about infrastructure if monitoring is enabled
+            config.awsConfigEnabled = promptYesNo("Enable AWS Config Compliance Monitoring (recommended for PRODUCTION)",
+                config.securityProfile == SecurityProfile.PRODUCTION);
+
+            // AWS Config infrastructure prompt (only if Config is enabled)
+            if (config.awsConfigEnabled) {
+                System.out.println("\n📋 AWS Config Infrastructure Setup:");
+                System.out.println("AWS Config has account-level singleton resources (Recorder + Delivery Channel).");
+                System.out.println("Only ONE stack per region should create these resources.");
+                System.out.println("  ✓ If this is your FIRST stack in this region: Answer YES");
+                System.out.println("  ✗ If another stack already created Config infrastructure: Answer NO");
+                config.createConfigInfrastructure = promptYesNo("Create Config Infrastructure (Recorder + Delivery Channel)", true);
+            } else {
+                config.createConfigInfrastructure = true; // Default to true if not prompted
+            }
+
+            // GuardDuty prompt (account-level threat detection) - only for PRODUCTION/STAGING
+            if (config.securityProfile == SecurityProfile.PRODUCTION || config.securityProfile == SecurityProfile.STAGING) {
+                System.out.println("\n🛡️ AWS GuardDuty - Threat Detection:");
+                System.out.println("====================================");
+                System.out.println("Continuous monitoring for malicious activity and unauthorized behavior");
+                System.out.println("  • Cost: ~$30-100/month (based on data volume)");
+                System.out.println("  • Compliance: Required for PCI-DSS Req 11.4 (intrusion detection)");
+                System.out.println("  • Recommended: PRODUCTION environments");
+                config.guardDutyEnabled = promptYesNo("Enable AWS GuardDuty",
+                    config.securityProfile == SecurityProfile.PRODUCTION);
+            } else {
+                config.guardDutyEnabled = false;
+            }
+
+            // Compliance Framework Selection - only for PRODUCTION/STAGING
+            if (config.securityProfile == SecurityProfile.PRODUCTION || config.securityProfile == SecurityProfile.STAGING) {
+                System.out.println("\n📜 Compliance Framework Validation:");
+                System.out.println("===================================");
+                System.out.println("Enable continuous compliance validation during CDK synthesis");
+                System.out.println("  • Validates infrastructure against compliance requirements");
+                System.out.println("  • Prevents deployment of non-compliant configurations");
+                System.out.println("  • Documentation: docs/compliance/QUICK_START_GUIDE.md");
+                System.out.println("");
+
+                config.auditManagerEnabled = promptYesNo("Enable Compliance Framework Validation",
+                    config.securityProfile == SecurityProfile.PRODUCTION);
+
+                // Only ask about frameworks if Audit Manager is enabled
+                if (config.auditManagerEnabled) {
+                    System.out.println("\n📋 Select Compliance Frameworks:");
+                    System.out.println("================================");
+                    System.out.println("Choose which compliance frameworks to validate against:");
+                    System.out.println("");
+                    System.out.println("  1. All Standard Frameworks (PCI-DSS, HIPAA, SOC2, GDPR)");
+                    System.out.println("     Coverage: 70% overall | Cost: ~$150-300/month");
+                    System.out.println("");
+                    System.out.println("  2. SOC 2 Only (Trust & Transparency)");
+                    System.out.println("     Coverage: 94% | Cost: Minimal | Best for: SaaS applications");
+                    System.out.println("");
+                    System.out.println("  3. HIPAA Only (Healthcare)");
+                    System.out.println("     Coverage: 68% | Requires: BAA, PHI discovery, breach notification");
+                    System.out.println("");
+                    System.out.println("  4. PCI-DSS Only (Payment Processing)");
+                    System.out.println("     Coverage: 73% | Requires: WAF, GuardDuty, vulnerability scanning");
+                    System.out.println("");
+                    System.out.println("  5. GDPR Only (Data Protection)");
+                    System.out.println("     Coverage: 65% | Requires: DPA, DPIA, data subject rights");
+                    System.out.println("");
+                    System.out.println("  6. Healthcare Focused (HIPAA + SOC2 + GDPR)");
+                    System.out.println("     Coverage: 68% | Best for: Healthcare applications with PHI");
+                    System.out.println("");
+                    System.out.println("  7. Payment Processing (PCI-DSS + SOC2)");
+                    System.out.println("     Coverage: 73% | Best for: E-commerce platforms");
+                    System.out.println("");
+                    System.out.println("  8. Custom (enter comma-separated list)");
+                    System.out.println("");
+
+                    String choice = promptWithValidation("Framework(s)", "1", new String[]{"1", "2", "3", "4", "5", "6", "7", "8"});
+
+                    config.complianceFrameworks = switch (choice) {
+                        case "1" -> "PCI-DSS,HIPAA,SOC2,GDPR";
+                        case "2" -> "SOC2";
+                        case "3" -> "HIPAA";
+                        case "4" -> "PCI-DSS";
+                        case "5" -> "GDPR";
+                        case "6" -> "HIPAA,SOC2,GDPR";
+                        case "7" -> "PCI-DSS,SOC2";
+                        case "8" -> {
+                            String custom = promptOptional("Frameworks (comma-separated, e.g., PCI-DSS,HIPAA)", "");
+                            yield (custom != null && !custom.trim().isEmpty()) ? custom : "PCI-DSS,HIPAA,SOC2,GDPR";
+                        }
+                        default -> "PCI-DSS,HIPAA,SOC2,GDPR";
+                    };
+
+                    // Set auditManagerFrameworkId to null (deprecated, using complianceFrameworks instead)
+                    config.auditManagerFrameworkId = null;
+
+                    System.out.println("\n✅ Selected frameworks: " + config.complianceFrameworks);
+                    System.out.println("");
+                    System.out.println("📖 Compliance Requirements:");
+                    displayComplianceRequirements(config.complianceFrameworks);
+                    System.out.println("");
+                    System.out.println("ℹ️ Prerequisites:");
+                    System.out.println("  1. AWS Audit Manager must be enabled in your AWS account");
+                    System.out.println("     (Go to AWS Console > Audit Manager > Get started)");
+                    System.out.println("  2. Standard frameworks are pre-installed by AWS");
+                    System.out.println("  3. Deployment will automatically query AWS for framework UUIDs");
+                    System.out.println("");
+                    System.out.println("📚 For detailed compliance guidance, see:");
+                    System.out.println("   docs/compliance/QUICK_START_GUIDE.md");
+                    System.out.println("   docs/compliance/MULTI_FRAMEWORK_COMPLIANCE.md");
+                }
+            } else {
+                config.auditManagerEnabled = false;
+            }
+
             if (config.enableMonitoring) {
-                config.logRetentionDays = promptWithValidation("Log Retention (days)", "7", 
-                    new String[]{"1", "3", "7", "14", "30", "60", "90", "120", "150", "180", "365"});
+                System.out.println("\n📋 Log Retention Guidelines:");
+                System.out.println("  • PCI-DSS: 365 days minimum");
+                System.out.println("  • SOC2: 730 days (2 years)");
+                System.out.println("  • HIPAA: 2190 days (6 years)");
+                System.out.println("  • Multi-framework: 2190-2555 days");
+                config.logRetentionDays = promptWithValidation("Log Retention (days)", "7",
+                    new String[]{"1", "3", "7", "14", "30", "60", "90", "120", "150", "180", "365", "730", "2190", "2555"});
             }
             
             // Health Check Configuration
@@ -1065,10 +1586,27 @@ public class InteractiveDeployer {
             config.healthCheckTimeout = promptIntWithValidation("Health Check Timeout (seconds)", 5, 2, 60);
             config.healthyThreshold = promptIntWithValidation("Healthy Threshold Count", 2, 1, 10);
             config.unhealthyThreshold = promptIntWithValidation("Unhealthy Threshold Count", 3, 1, 10);
-            
-            // Region Configuration
-            config.region = promptChoice("AWS Region", 
-                new String[]{"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"}, "us-east-1");
+
+            // Region and Availability Zone Configuration
+            System.out.println("\n🌍 Region and Availability Zone Configuration:");
+            System.out.println("==============================================");
+            config.region = promptChoice("AWS Region",
+                new String[]{"us-east-1", "us-west-2", "us-east-2", "us-west-1", "eu-west-1", "eu-central-1", "ap-southeast-1", "ap-northeast-1"}, "us-east-1");
+
+            // Multi-AZ configuration based on region
+            boolean enableMultiAz = promptYesNo("Enable Multi-AZ deployment (recommended for PRODUCTION)",
+                config.securityProfile == SecurityProfile.PRODUCTION);
+
+            if (!enableMultiAz) {
+                String defaultAz = config.region + "a";
+                String selectedAz = promptWithValidation("Availability Zone", defaultAz,
+                    getAvailabilityZonesForRegion(config.region, 3));
+                config.availabilityZones = new String[]{selectedAz};
+                System.out.println("⚠️ Single-AZ deployment: " + selectedAz + " (not recommended for production)");
+            } else {
+                config.availabilityZones = getAvailabilityZonesForRegion(config.region, 2);
+                System.out.println("✅ Multi-AZ enabled: " + String.join(", ", config.availabilityZones));
+            }
         }
         
         @Override

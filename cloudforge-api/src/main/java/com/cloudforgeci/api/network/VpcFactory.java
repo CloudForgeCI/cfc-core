@@ -1,8 +1,10 @@
 package com.cloudforgeci.api.network;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforgeci.api.core.annotation.SystemContext;
+import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforgeci.api.interfaces.TopologyType;
 import software.amazon.awscdk.services.ec2.*;
 import software.constructs.Construct;
 
@@ -55,6 +57,15 @@ import java.util.List;
  */
 public final class VpcFactory extends BaseFactory {
 
+    @SystemContext("topology")
+    private TopologyType topology;
+
+    @SystemContext("runtime")
+    private RuntimeType runtime;
+
+    @DeploymentContext("networkMode")
+    private String networkMode;
+
     public VpcFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -89,8 +100,8 @@ public final class VpcFactory extends BaseFactory {
     private Vpc createVpc() {
         // Get NAT gateway count from security profile configuration
         // This encapsulates all logic for topology, runtime, security, and network mode
-        int natGateways = config.getNatGatewayCount(ctx.topology, ctx.runtime, cfc.networkMode());
-        
+        int natGateways = config.getNatGatewayCount(topology, runtime, networkMode);
+
         return Vpc.Builder.create(this, "Vpc")
                 .maxAzs(2)
                 .vpcName(getNode().getId() + "Vpc")

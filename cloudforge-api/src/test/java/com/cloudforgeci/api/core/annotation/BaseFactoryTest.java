@@ -29,6 +29,13 @@ class BaseFactoryTest {
     void setUp() {
         app = new App();
         stack = new Stack(app, "TestStack");
+        // Start SystemContext before creating factory
+        SystemContext.start(stack,
+            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
+            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+            com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
+            com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+            DeploymentContext.from(stack));
         factory = new TestBaseFactory(stack, "TestFactory");
     }
 
@@ -65,21 +72,27 @@ class BaseFactoryTest {
         }
 
         @Test
-        @DisplayName("Should have annotated fields")
-        void shouldHaveAnnotatedFields() {
+        @DisplayName("Should have final protected context fields")
+        void shouldHaveFinalProtectedContextFields() {
             assertDoesNotThrow(() -> {
                 Field ctxField = BaseFactory.class.getDeclaredField("ctx");
-                assertNotNull(ctxField.getAnnotation(com.cloudforgeci.api.core.annotation.SystemContext.class), 
-                    "ctx field should have @SystemContext annotation");
-                
+                assertTrue(java.lang.reflect.Modifier.isFinal(ctxField.getModifiers()),
+                    "ctx field should be final");
+                assertTrue(java.lang.reflect.Modifier.isProtected(ctxField.getModifiers()),
+                    "ctx field should be protected");
+
                 Field cfcField = BaseFactory.class.getDeclaredField("cfc");
-                assertNotNull(cfcField.getAnnotation(com.cloudforgeci.api.core.annotation.DeploymentContext.class), 
-                    "cfc field should have @DeploymentContext annotation");
-                
+                assertTrue(java.lang.reflect.Modifier.isFinal(cfcField.getModifiers()),
+                    "cfc field should be final");
+                assertTrue(java.lang.reflect.Modifier.isProtected(cfcField.getModifiers()),
+                    "cfc field should be protected");
+
                 Field configField = BaseFactory.class.getDeclaredField("config");
-                assertNotNull(configField.getAnnotation(com.cloudforgeci.api.core.annotation.SecurityProfileConfiguration.class), 
-                    "config field should have @SecurityProfileConfiguration annotation");
-            }, "Should have properly annotated fields");
+                assertTrue(java.lang.reflect.Modifier.isFinal(configField.getModifiers()),
+                    "config field should be final");
+                assertTrue(java.lang.reflect.Modifier.isProtected(configField.getModifiers()),
+                    "config field should be protected");
+            }, "Should have final protected context fields");
         }
     }
 
@@ -88,44 +101,35 @@ class BaseFactoryTest {
     class GetterMethodTests {
 
         @Test
-        @DisplayName("getSystemContext should return injected ctx field")
-        void getSystemContextShouldReturnInjectedCtxField() {
-            // Manually inject a mock SystemContext for testing
+        @DisplayName("getSystemContext should return ctx field")
+        void getSystemContextShouldReturnCtxField() {
             assertDoesNotThrow(() -> {
-                Field ctxField = BaseFactory.class.getDeclaredField("ctx");
-                ctxField.setAccessible(true);
-                
-                // Create a mock SystemContext (we can't instantiate it directly due to private constructor)
-                // Instead, we'll test the getter method behavior
                 SystemContext result = factory.getSystemContext();
-                
-                // The getter should return whatever is in the ctx field
-                // Since ctx is null initially, this should return null
-                assertNull(result, "getSystemContext should return null when ctx is not injected");
+
+                // The getter should return the ctx field initialized in constructor
+                assertNotNull(result, "getSystemContext should return initialized SystemContext");
             }, "getSystemContext should work without throwing exceptions");
         }
 
         @Test
-        @DisplayName("getDeploymentContext should return injected cfc field")
-        void getDeploymentContextShouldReturnInjectedCfcField() {
+        @DisplayName("getDeploymentContext should return cfc field")
+        void getDeploymentContextShouldReturnCfcField() {
             assertDoesNotThrow(() -> {
                 DeploymentContext result = factory.getDeploymentContext();
-                
-                // The getter should return whatever is in the cfc field
-                // Since cfc is null initially, this should return null
-                assertNull(result, "getDeploymentContext should return null when cfc is not injected");
+
+                // The getter should return the cfc field initialized in constructor
+                assertNotNull(result, "getDeploymentContext should return initialized DeploymentContext");
             }, "getDeploymentContext should work without throwing exceptions");
         }
 
         @Test
-        @DisplayName("getSecurityProfileConfiguration should return injected config field")
-        void getSecurityProfileConfigurationShouldReturnInjectedConfigField() {
+        @DisplayName("getSecurityProfileConfiguration should return config field")
+        void getSecurityProfileConfigurationShouldReturnConfigField() {
             assertDoesNotThrow(() -> {
                 SecurityProfileConfiguration result = factory.getSecurityProfileConfiguration();
-                
-                // The getter should return whatever is in the config field
-                // Since config is null initially, this should return null
-                assertNull(result, "getSecurityProfileConfiguration should return null when config is not injected");
+
+                // The getter should return the config field initialized in constructor
+                assertNotNull(result, "getSecurityProfileConfiguration should return initialized SecurityProfileConfiguration");
             }, "getSecurityProfileConfiguration should work without throwing exceptions");
         }
 
@@ -155,39 +159,6 @@ class BaseFactoryTest {
                 assertEquals(SecurityProfileConfiguration.class, getSecurityProfileConfigurationMethod.getReturnType(), 
                     "getSecurityProfileConfiguration should return SecurityProfileConfiguration");
             }, "All getter methods should have correct return types");
-        }
-    }
-
-    @Nested
-    @DisplayName("Context Injection Tests")
-    class ContextInjectionTests {
-
-        @Test
-        @DisplayName("injectContexts method should exist and be callable")
-        void injectContextsMethodShouldExistAndBeCallable() {
-            assertDoesNotThrow(() -> {
-                BaseFactory.class.getMethod("injectContexts");
-            }, "injectContexts method should exist");
-        }
-
-        @Test
-        @DisplayName("injectContexts should handle SystemContext not started gracefully")
-        void injectContextsShouldHandleSystemContextNotStartedGracefully() {
-            // Since injectContexts now calls performContextInjection() which handles exceptions gracefully,
-            // it should not throw an exception even when SystemContext is not started
-            assertDoesNotThrow(() -> {
-                factory.injectContexts();
-            }, "injectContexts should handle SystemContext not started gracefully");
-        }
-
-        @Test
-        @DisplayName("injectContexts should be public")
-        void injectContextsShouldBePublic() {
-            assertDoesNotThrow(() -> {
-                var method = BaseFactory.class.getMethod("injectContexts");
-                assertTrue(java.lang.reflect.Modifier.isPublic(method.getModifiers()), 
-                    "injectContexts should be public");
-            }, "injectContexts should be public");
         }
     }
 
@@ -273,17 +244,17 @@ class BaseFactoryTest {
         }
 
         @Test
-        @DisplayName("BaseFactory should handle null SystemContext gracefully")
-        void baseFactoryShouldHandleNullSystemContextGracefully() {
+        @DisplayName("BaseFactory should initialize contexts in constructor")
+        void baseFactoryShouldInitializeContextsInConstructor() {
             assertDoesNotThrow(() -> {
-                // Create factory without SystemContext started
-                TestBaseFactory factory = new TestBaseFactory(stack, "NullSystemContextFactory");
-                
-                // Getters should return null when contexts are not injected
-                assertNull(factory.getSystemContext(), "getSystemContext should return null");
-                assertNull(factory.getDeploymentContext(), "getDeploymentContext should return null");
-                assertNull(factory.getSecurityProfileConfiguration(), "getSecurityProfileConfiguration should return null");
-            }, "BaseFactory should handle null SystemContext gracefully");
+                // Create factory - contexts are initialized in constructor
+                TestBaseFactory factory = new TestBaseFactory(stack, "ContextInitFactory");
+
+                // Getters should return initialized contexts
+                assertNotNull(factory.getSystemContext(), "getSystemContext should return initialized context");
+                assertNotNull(factory.getDeploymentContext(), "getDeploymentContext should return initialized context");
+                assertNotNull(factory.getSecurityProfileConfiguration(), "getSecurityProfileConfiguration should return initialized config");
+            }, "BaseFactory should initialize contexts in constructor");
         }
 
         @Test
@@ -327,20 +298,20 @@ class BaseFactoryTest {
         }
 
         @Test
-        @DisplayName("Getter methods should not throw exceptions when fields are null")
-        void getterMethodsShouldNotThrowExceptionsWhenFieldsAreNull() {
+        @DisplayName("Getter methods should return initialized contexts")
+        void getterMethodsShouldReturnInitializedContexts() {
             assertDoesNotThrow(() -> {
-                TestBaseFactory factory = new TestBaseFactory(stack, "NullFieldsFactory");
-                
-                // All getters should return null without throwing exceptions
+                TestBaseFactory factory = new TestBaseFactory(stack, "InitializedFactory");
+
+                // All getters should return initialized contexts
                 SystemContext ctx = factory.getSystemContext();
                 DeploymentContext cfc = factory.getDeploymentContext();
                 SecurityProfileConfiguration config = factory.getSecurityProfileConfiguration();
-                
-                assertNull(ctx, "SystemContext should be null");
-                assertNull(cfc, "DeploymentContext should be null");
-                assertNull(config, "SecurityProfileConfiguration should be null");
-            }, "Getter methods should not throw exceptions when fields are null");
+
+                assertNotNull(ctx, "SystemContext should be initialized");
+                assertNotNull(cfc, "DeploymentContext should be initialized");
+                assertNotNull(config, "SecurityProfileConfiguration should be initialized");
+            }, "Getter methods should return initialized contexts");
         }
     }
 }

@@ -197,7 +197,7 @@ jobs:
 
           # Run the appropriate validation mode
           echo "Starting validation..."
-          bash master-validation-system.sh ${{ steps.mode.outputs.mode }} 2>&1 | tee validation-run.log
+          bash scripts/master-validation-system.sh ${{ steps.mode.outputs.mode }} 2>&1 | tee validation-run.log
 
           # Capture exit code
           EXIT_CODE=${PIPESTATUS[0]}
@@ -241,7 +241,7 @@ jobs:
 
           if [ -n "$CHANGED_FILES" ]; then
             echo "Changed files: $CHANGED_FILES"
-            bash master-validation-system.sh strategy "$CHANGED_FILES" > testing-strategy.txt
+            bash scripts/master-validation-system.sh strategy "$CHANGED_FILES" > testing-strategy.txt
           else
             echo "No relevant files changed"
             echo "No Java/TypeScript files changed in this PR" > testing-strategy.txt

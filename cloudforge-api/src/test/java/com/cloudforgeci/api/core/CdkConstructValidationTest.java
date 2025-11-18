@@ -76,8 +76,8 @@ class CdkConstructValidationTest {
         var albFactory = new AlbFactory(stack, "AlbFactory");
         
         // Create FargateFactory with proper Props
-        var fargateProps = new FargateFactory.Props(cfc);
-        var fargateFactory = new FargateFactory(stack, "FargateFactory", fargateProps);
+        
+        var fargateFactory = new FargateFactory(stack, "FargateFactory");
         fargateFactory.create(); // Call create() to build the infrastructure
         
         // Then
@@ -193,8 +193,8 @@ class CdkConstructValidationTest {
             var efsFactory = new EfsFactory(stack, "EfsFactory");
             efsFactory.create(); // Populate EFS slot
             
-            var fargateProps = new FargateFactory.Props(cfc);
-            var fargateFactory = new FargateFactory(stack, "FargateFactory", fargateProps);
+            
+            var fargateFactory = new FargateFactory(stack, "FargateFactory");
             fargateFactory.create(); // Call create() to build the infrastructure
             assertNotNull(fargateFactory);
         });
@@ -310,8 +310,8 @@ class CdkConstructValidationTest {
             var efsFactory = new EfsFactory(stack, "EfsFactory");
             efsFactory.create(); // Populate EFS slot
             
-            var fargateProps = new FargateFactory.Props(cfc);
-            var fargateFactory = new FargateFactory(stack, "FargateFactory", fargateProps);
+            
+            var fargateFactory = new FargateFactory(stack, "FargateFactory");
             fargateFactory.create(); // Call create() to build the infrastructure
             assertNotNull(fargateFactory);
         });

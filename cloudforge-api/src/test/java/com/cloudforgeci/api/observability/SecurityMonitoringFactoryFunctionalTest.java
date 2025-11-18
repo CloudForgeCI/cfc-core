@@ -55,14 +55,13 @@ class SecurityMonitoringFactoryFunctionalTest {
         @DisplayName("Should inject contexts successfully")
         void shouldInjectContextsSuccessfully() {
             assertDoesNotThrow(() -> {
-                factory.injectContexts();
+                // Contexts are now injected automatically in constructor
             }, "Context injection should not throw exceptions");
         }
 
         @Test
         @DisplayName("Should handle create method without throwing exceptions")
         void shouldHandleCreateMethodWithoutThrowingExceptions() {
-            factory.injectContexts();
             assertDoesNotThrow(() -> {
                 factory.create();
             }, "Create method should not throw exceptions");
@@ -76,7 +75,6 @@ class SecurityMonitoringFactoryFunctionalTest {
         @Test
         @DisplayName("Should work with DEV profile")
         void shouldWorkWithDevProfile() {
-            factory.injectContexts();
             assertDoesNotThrow(() -> {
                 factory.create();
             }, "Should work with DEV profile");
@@ -93,8 +91,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             SystemContext stagingCtx = SystemContext.start(stagingStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, stagingIamProfile, stagingCfc);
             
             SecurityMonitoringFactory stagingFactory = new SecurityMonitoringFactory(stagingStack, "StagingSecurityMonitoring");
-            stagingFactory.injectContexts();
-            
+
             assertDoesNotThrow(() -> {
                 stagingFactory.create();
             }, "Should work with STAGING profile");
@@ -111,8 +108,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             SystemContext productionCtx = SystemContext.start(productionStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION, productionIamProfile, productionCfc);
             
             SecurityMonitoringFactory productionFactory = new SecurityMonitoringFactory(productionStack, "ProductionSecurityMonitoring");
-            productionFactory.injectContexts();
-            
+
             assertDoesNotThrow(() -> {
                 productionFactory.create();
             }, "Should work with PRODUCTION profile");
@@ -139,11 +135,7 @@ class SecurityMonitoringFactoryFunctionalTest {
         void shouldHandleMultipleFactoryInstances() {
             SecurityMonitoringFactory factory2 = new SecurityMonitoringFactory(stack, "TestSecurityMonitoring2");
             SecurityMonitoringFactory factory3 = new SecurityMonitoringFactory(stack, "TestSecurityMonitoring3");
-            
-            factory.injectContexts();
-            factory2.injectContexts();
-            factory3.injectContexts();
-            
+
             assertDoesNotThrow(() -> {
                 factory.create();
                 factory2.create();
@@ -179,8 +171,6 @@ class SecurityMonitoringFactoryFunctionalTest {
         @Test
         @DisplayName("Should handle repeated create calls")
         void shouldHandleRepeatedCreateCalls() {
-            factory.injectContexts();
-            
             assertDoesNotThrow(() -> {
                 factory.create();
                 factory.create(); // Second call should not fail
@@ -197,8 +187,7 @@ class SecurityMonitoringFactoryFunctionalTest {
         void shouldIntegrateWithSystemContextProperly() {
             assertNotNull(ctx, "SystemContext should be available");
             assertEquals(SecurityProfile.DEV, ctx.security, "SystemContext should have correct security profile");
-            
-            factory.injectContexts();
+
             assertDoesNotThrow(() -> {
                 factory.create();
             }, "Should integrate with SystemContext properly");
@@ -215,8 +204,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             SystemContext ec2Ctx = SystemContext.start(ec2Stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, ec2IamProfile, ec2Cfc);
             
             SecurityMonitoringFactory ec2Factory = new SecurityMonitoringFactory(ec2Stack, "EC2SecurityMonitoring");
-            ec2Factory.injectContexts();
-            
+
             assertDoesNotThrow(() -> {
                 ec2Factory.create();
             }, "Should work with EC2 runtime");
@@ -233,8 +221,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             SystemContext topologyCtx = SystemContext.start(topologyStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, topologyIamProfile, topologyCfc);
             
             SecurityMonitoringFactory topologyFactory = new SecurityMonitoringFactory(topologyStack, "TopologySecurityMonitoring");
-            topologyFactory.injectContexts();
-            
+
             assertDoesNotThrow(() -> {
                 topologyFactory.create();
             }, "Should work with different topology types");

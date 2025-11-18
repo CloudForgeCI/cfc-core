@@ -18,57 +18,148 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Typed façade over CDK context (cdk.json / -c flags).
+ * Typed configuration interface for CDK deployment context.
  *
- * Usable context keys (all optional unless noted):
- *   tier:            "public" | "enterprise"                 (default: public)
- *   runtime:         "ec2" | "fargate"                       (default: ec2)  // alias: variant, architecture
- *   topology:        "jenkins-single-node" | "jenkins-service" | "s3-website"
- *   env:             "dev" | "stage" | "prod"                (default: dev)
- *   securityProfile: "dev" | "staging" | "production"       (default: dev) -> SecurityProfile enum
- *   region:          e.g. "us-east-1"                        (default: us-east-1)
- *   domain:          e.g. "example.com"
- *   subdomain:       e.g. "jenkins" (used to compute fqdn if not provided)
- *   fqdn:            e.g. "jenkins.example.com" (wins over domain/subdomain)
- *   networkMode:     "public-no-nat" | "private-with-nat"    (default: public-no-nat)
- *   wafEnabled:      true/false                               (default: false)
- *   cloudfront:      true/false                               (default: false)
- *   authMode:        "none" | "alb-oidc" | "jenkins-oidc"    (default: none)
- *   ssoInstanceArn:  arn:aws:sso::...
- *   ssoGroupId:      UUID for a group
- *   ssoTargetAccountId: 12-digit account
- *   artifactsBucket: explicit bucket name (optional)
- *   artifactsPrefix: default "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}"
- *   lbType:          "alb" | "nlb"                            (default: alb)
- *   minInstanceCapacity: default 1
- *   maxInstanceCapacity: default 3
- *   cpuTargetUtilization: default 60
- *   cpu:             integer vCPU units (Fargate taskDef)     (default: 1024)
- *   memory:          integer MiB                              (default: 2048)
- *   instanceType:    EC2 instance type (e.g., "t3.micro")    (default: t3.micro)
- *   enableMonitoring: enable CloudWatch monitoring             (default: true)
- *   enableEncryption: enable encryption at rest               (default: true)
- *   logRetentionDays: CloudWatch log retention in days        (default: 7)
- *   healthCheckGracePeriod: health check grace period (seconds) (default: 300)
- *   healthCheckInterval: health check interval (seconds)       (default: 30)
- *   healthCheckTimeout: health check timeout (seconds)         (default: 5)
- *   healthyThreshold: healthy threshold count                  (default: 2)
- *   unhealthyThreshold: unhealthy threshold count              (default: 3)
- *   deploymentId:    unique identifier for this deployment    (optional)
- *   deploymentVersion: version tag for this deployment        (optional)
- *   region:          AWS region override                       (optional)
- *   tags:            JSON object of additional tags            (optional)
- *   stackName:       CDK stack name                           (optional)
+ * <p>Loads configuration from cdk.json "cfc" block or CLI flags (-c key=value).
+ * Provides type-safe access with validation and sensible defaults.</p>
  *
- * Legacy one-field combos (still accepted, mapped to runtime+topology):
- *   runtime: "jenkins-fargate" -> topology=JENKINS_SERVICE, runtime=FARGATE
- *   runtime: "jenkins-ec2"     -> topology=JENKINS_SINGLE_NODE, runtime=EC2
- *   runtime: "cf-alb-s3"       -> topology=S3_WEBSITE, runtime=EC2 (ignored by topology)
- *   runtime: "cf-alb-proxy"    -> topology=JENKINS_SERVICE, runtime=EC2
+ * <p><b>Quick Start Example (cdk.json):</b></p>
+ * <pre>
+ * {
+ *   "app": "...",
+ *   "context": {
+ *     "cfc": {
+ *       "runtime": "fargate",
+ *       "topology": "jenkins-service",
+ *       "env": "dev",
+ *       "domain": "example.com",
+ *       "subdomain": "jenkins",
+ *       "enableSsl": true,
+ *       "authMode": "alb-oidc",
+ *       "cognitoAutoProvision": true,
+ *       "cognitoDomainPrefix": "myapp-auth",
+ *       "cognitoMfaEnabled": true
+ *     }
+ *   }
+ * }
+ * </pre>
  *
- * Read via:
- *   DeploymentContext cfc = DeploymentContext.from(app);
- * or DeploymentContext.from(scope) inside a Stack/Construct.
+ * <p><b>Configuration Keys</b> (all optional unless noted):</p>
+ *
+ * <p><b>Core Settings:</b></p>
+ * <ul>
+ *   <li>tier: "public" | "enterprise" (default: public)</li>
+ *   <li>runtime: "ec2" | "fargate" (default: fargate)</li>
+ *   <li>topology: "jenkins-single-node" | "jenkins-service" | "s3-website"</li>
+ *   <li>env: "dev" | "stage" | "prod" (default: dev)</li>
+ *   <li>securityProfile: "dev" | "staging" | "production" (default: dev)</li>
+ *   <li>region: AWS region (default: us-east-1)</li>
+ * </ul>
+ *
+ * <p><b>DNS &amp; SSL:</b></p>
+ * <ul>
+ *   <li>domain: Base domain (e.g., "example.com")</li>
+ *   <li>subdomain: Subdomain prefix (e.g., "jenkins")</li>
+ *   <li>fqdn: Full domain (e.g., "jenkins.example.com") - overrides domain+subdomain</li>
+ *   <li>enableSsl: Enable HTTPS with ACM certificate (default: false)</li>
+ *   <li>createZone: Create Route53 hosted zone (default: false)</li>
+ * </ul>
+ *
+ * <p><b>Network &amp; Security:</b></p>
+ * <ul>
+ *   <li>networkMode: "public-no-nat" | "private-with-nat" (default: public-no-nat)</li>
+ *   <li>wafEnabled: Enable AWS WAF (default: false)</li>
+ *   <li>albAccessLogging: Enable ALB access logs to S3 (default: false)</li>
+ *   <li>cloudfront: Enable CloudFront distribution (default: false)</li>
+ *   <li>bastionCidr: CIDR for SSH bastion access (default: 10.0.1.0/24)</li>
+ * </ul>
+ *
+ * <p><b>Authentication:</b></p>
+ * <ul>
+ *   <li>authMode: "none" | "alb-oidc" | "jenkins-oidc" (default: none)</li>
+ * </ul>
+ *
+ * <p><b>Cognito (Auto-provision User Pool):</b></p>
+ * <ul>
+ *   <li>cognitoAutoProvision: Auto-create Cognito User Pool (default: false)</li>
+ *   <li>cognitoDomainPrefix: Globally unique domain prefix (required if auto-provisioning)</li>
+ *   <li>cognitoUserPoolName: User Pool name (optional)</li>
+ *   <li>cognitoMfaEnabled: Enable MFA (default: false)</li>
+ *   <li>cognitoMfaMethod: "totp" | "sms" | "both" (default: "both")</li>
+ *   <li>cognitoCreateGroups: Create admin/user groups (default: true)</li>
+ *   <li>cognitoAdminGroupName: Admin group name (default: "Jenkins-Admins")</li>
+ *   <li>cognitoUserGroupName: User group name (default: "Jenkins-Users")</li>
+ *   <li>cognitoUserPoolId: Existing User Pool ID (for reuse)</li>
+ *   <li>cognitoAppClientId: Existing App Client ID (for reuse)</li>
+ *   <li>cognitoInitialAdminEmail: Initial admin user email (optional)</li>
+ *   <li>cognitoInitialAdminPhone: Initial admin user phone in E.164 format, e.g., +12025551234 (optional, required for SMS MFA)</li>
+ * </ul>
+ *
+ * <p><b>Manual OIDC (Identity Center, Okta, Auth0):</b></p>
+ * <ul>
+ *   <li>oidcIssuer: OIDC issuer URL</li>
+ *   <li>oidcAuthorizationEndpoint: Authorization endpoint</li>
+ *   <li>oidcTokenEndpoint: Token endpoint</li>
+ *   <li>oidcUserInfoEndpoint: UserInfo endpoint</li>
+ *   <li>oidcClientId: OIDC client ID</li>
+ *   <li>oidcClientSecretName: Secrets Manager secret name (default: "jenkins/oidc/client-secret")</li>
+ * </ul>
+ *
+ * <p><b>Legacy IAM Identity Center:</b></p>
+ * <ul>
+ *   <li>ssoInstanceArn: IAM Identity Center instance ARN</li>
+ *   <li>ssoGroupId: Group UUID</li>
+ *   <li>ssoTargetAccountId: 12-digit account ID</li>
+ *   <li>autoProvisionIdentityCenter: Auto-provision (default: false)</li>
+ *   <li>identityCenterGroupName: Group name (default: "Jenkins-Users")</li>
+ * </ul>
+ *
+ * <p><b>Compute &amp; Scaling:</b></p>
+ * <ul>
+ *   <li>lbType: "alb" | "nlb" (default: alb)</li>
+ *   <li>instanceType: EC2 type (default: t3.micro)</li>
+ *   <li>cpu: Fargate vCPU units (default: 1024)</li>
+ *   <li>memory: Fargate memory MiB (default: 2048)</li>
+ *   <li>minInstanceCapacity: Min instances (default: 1)</li>
+ *   <li>maxInstanceCapacity: Max instances (default: 1)</li>
+ *   <li>cpuTargetUtilization: CPU target % (default: 60)</li>
+ * </ul>
+ *
+ * <p><b>Monitoring &amp; Compliance:</b></p>
+ * <ul>
+ *   <li>enableMonitoring: CloudWatch monitoring (default: true)</li>
+ *   <li>enableEncryption: Encryption at rest (default: true)</li>
+ *   <li>logRetentionDays: CloudWatch log retention (default: 7)</li>
+ *   <li>awsConfigEnabled: AWS Config compliance (default: false)</li>
+ *   <li>complianceMode: "enforce" | "advisory" (auto: enforce for PRODUCTION, advisory for DEV/STAGING)</li>
+ *   <li>complianceFrameworks: "PCI-DSS,HIPAA,SOC2,GDPR" (comma-separated)</li>
+ * </ul>
+ *
+ * <p><b>Health Checks:</b></p>
+ * <ul>
+ *   <li>healthCheckGracePeriod: Grace period seconds (default: 300)</li>
+ *   <li>healthCheckInterval: Interval seconds (default: 30)</li>
+ *   <li>healthCheckTimeout: Timeout seconds (default: 5)</li>
+ *   <li>healthyThreshold: Healthy count (default: 2)</li>
+ *   <li>unhealthyThreshold: Unhealthy count (default: 3)</li>
+ * </ul>
+ *
+ * <p><b>Storage:</b></p>
+ * <ul>
+ *   <li>artifactsBucket: S3 bucket name (optional)</li>
+ *   <li>artifactsPrefix: S3 prefix (default: "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}")</li>
+ *   <li>retainStorage: Retain EFS/EBS on deletion (default: false)</li>
+ *   <li>existingFileSystemId: Reuse existing EFS (disaster recovery)</li>
+ * </ul>
+ *
+ * <p><b>Usage:</b></p>
+ * <pre>
+ * // In CDK app
+ * DeploymentContext ctx = DeploymentContext.from(app);
+ *
+ * // In any Construct
+ * DeploymentContext ctx = DeploymentContext.from(scope);
+ * </pre>
  */
 public final class DeploymentContext {
 
@@ -97,19 +188,55 @@ public final class DeploymentContext {
     @OneOf(value = {"public-no-nat", "private-with-nat"}, message = "Network mode must be 'public-no-nat' or 'private-with-nat'")
     private final String networkMode; // public-no-nat | private-with-nat
     private final boolean wafEnabled;
+    private final Boolean albAccessLogging;  // Enable ALB access logs to S3
     private final boolean cloudfront;
     @OneOf(value = {"alb", "nlb"}, message = "Load balancer type must be 'alb' or 'nlb'")
     private final String lbType;      // alb | nlb
 
+    // Threat Detection
+    private final Boolean guardDutyEnabled;  // Enable GuardDuty for threat detection (PCI-DSS Req 11.4)
+    private final Boolean guardDutyAlertsConfigured;  // GuardDuty alerts configured (EventBridge to SNS/SIEM)
+    private final Boolean certificateExpirationMonitoring;  // Certificate expiration monitoring enabled (CloudWatch alarms)
+
     // Security - SSH Access Control
     private final String bastionCidr;  // CIDR for bastion/VPN SSH access (PRODUCTION profile)
+
+    // Storage Persistence Configuration
+    private final boolean retainStorage;  // Retain EFS/EBS volumes on stack deletion (agnostic - works for any workload)
+    private final String existingFileSystemId;  // Reuse existing EFS by ID (for disaster recovery workflows)
 
     // Auth / SSO
     @OneOf(value = {"none", "alb-oidc", "jenkins-oidc"}, message = "Auth mode must be 'none', 'alb-oidc', or 'jenkins-oidc'")
     private final String authMode;    // none | alb-oidc | jenkins-oidc
+
+    // Cognito Configuration (recommended for OIDC)
+    private final Boolean cognitoAutoProvision;         // Auto-provision Cognito User Pool
+    private final String cognitoDomainPrefix;           // Cognito domain prefix (globally unique)
+    private final String cognitoUserPoolName;           // User Pool name
+    private final Boolean cognitoMfaEnabled;            // Enable MFA
+    private final String cognitoMfaMethod;              // MFA method: "totp", "sms", or "both"
+    private final Boolean cognitoCreateGroups;          // Create admin and user groups
+    private final String cognitoAdminGroupName;         // Admin group name
+    private final String cognitoUserGroupName;          // User group name
+    private final String cognitoUserPoolId;             // Existing User Pool ID (if not auto-provisioning)
+    private final String cognitoAppClientId;            // Existing App Client ID (if not auto-provisioning)
+    private final String cognitoInitialAdminEmail;      // Initial admin user email address
+    private final String cognitoInitialAdminPhone;      // Initial admin user phone number (E.164 format, e.g., +12025551234)
+
+    // Manual OIDC Configuration (for IAM Identity Center, Okta, Auth0, etc.)
+    private final String oidcIssuer;                    // OIDC issuer URL
+    private final String oidcAuthorizationEndpoint;     // OIDC authorization endpoint
+    private final String oidcTokenEndpoint;             // OIDC token endpoint
+    private final String oidcUserInfoEndpoint;          // OIDC userinfo endpoint
+    private final String oidcClientId;                  // OIDC client ID
+    private final String oidcClientSecretName;          // Secrets Manager secret name for client secret
+
+    // Legacy IAM Identity Center Configuration
     private final String ssoInstanceArn;
     private final String ssoGroupId;
     private final String ssoTargetAccountId;
+    private final Boolean autoProvisionIdentityCenter;  // Auto-provision IAM Identity Center
+    private final String identityCenterGroupName;       // Group name for auto-provisioned Identity Center
 
     // Artifacts
     private final String artifactsBucket;
@@ -125,6 +252,11 @@ public final class DeploymentContext {
     // Advanced Configuration
     private final boolean enableMonitoring;
     private final boolean enableEncryption;
+    private final boolean awsConfigEnabled;
+    private final Boolean createConfigInfrastructure;  // Create AWS Config Recorder and Delivery Channel (account-level singletons)
+    private final boolean auditManagerEnabled;
+    private final String complianceFrameworks;  // Comma-separated list: "PCI-DSS,HIPAA,SOC2,GDPR"
+    private final String complianceMode;  // "enforce" | "advisory" (default based on securityProfile)
     private final Integer logRetentionDays;
     private final String instanceType;
     
@@ -173,15 +305,44 @@ public final class DeploymentContext {
         this.networkMode = oneOf("networkMode", "public-no-nat",
                 List.of("public-no-nat", "private-with-nat"));
         this.wafEnabled = bool("wafEnabled", false);
+        this.albAccessLogging = boolOrNull("albAccessLogging");
+        this.guardDutyEnabled = boolOrNull("guardDutyEnabled");
+        this.guardDutyAlertsConfigured = boolOrNull("guardDutyAlertsConfigured");
+        this.certificateExpirationMonitoring = boolOrNull("certificateExpirationMonitoring");
         this.cloudfront = bool("cloudfront", false);
         this.lbType = oneOf("lbType", "alb", List.of("alb", "nlb"));
 
         this.authMode = oneOf("authMode", "none",
                 List.of("none", "alb-oidc", "jenkins-oidc"));
 
+        // Cognito Configuration
+        this.cognitoAutoProvision = bool("cognitoAutoProvision", false);
+        this.cognitoDomainPrefix = str("cognitoDomainPrefix", null);
+        this.cognitoUserPoolName = str("cognitoUserPoolName", null);
+        this.cognitoMfaEnabled = bool("cognitoMfaEnabled", false);
+        this.cognitoMfaMethod = oneOf("cognitoMfaMethod", "both", List.of("totp", "sms", "both"));
+        this.cognitoCreateGroups = bool("cognitoCreateGroups", true);
+        this.cognitoAdminGroupName = str("cognitoAdminGroupName", "Jenkins-Admins");
+        this.cognitoUserGroupName = str("cognitoUserGroupName", "Jenkins-Users");
+        this.cognitoUserPoolId = str("cognitoUserPoolId", null);
+        this.cognitoAppClientId = str("cognitoAppClientId", null);
+        this.cognitoInitialAdminEmail = str("cognitoInitialAdminEmail", null);
+        this.cognitoInitialAdminPhone = str("cognitoInitialAdminPhone", null);
+
+        // Manual OIDC Configuration
+        this.oidcIssuer = str("oidcIssuer", null);
+        this.oidcAuthorizationEndpoint = str("oidcAuthorizationEndpoint", null);
+        this.oidcTokenEndpoint = str("oidcTokenEndpoint", null);
+        this.oidcUserInfoEndpoint = str("oidcUserInfoEndpoint", null);
+        this.oidcClientId = str("oidcClientId", null);
+        this.oidcClientSecretName = str("oidcClientSecretName", null);
+
+        // Legacy IAM Identity Center Configuration
         this.ssoInstanceArn = str("ssoInstanceArn", null);
         this.ssoGroupId = str("ssoGroupId", null);
         this.ssoTargetAccountId = str("ssoTargetAccountId", null);
+        this.autoProvisionIdentityCenter = bool("autoProvisionIdentityCenter", false);
+        this.identityCenterGroupName = str("identityCenterGroupName", "Jenkins-Users");
 
         this.artifactsBucket = str("artifactsBucket", null);
         this.artifactsPrefix = str("artifactsPrefix", "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}");
@@ -198,9 +359,18 @@ public final class DeploymentContext {
         // Security - SSH Access Control
         this.bastionCidr = str("bastionCidr", "10.0.1.0/24");
 
+        // Storage Persistence Configuration
+        this.retainStorage = bool("retainStorage", false);
+        this.existingFileSystemId = str("existingFileSystemId", null);
+
         // Advanced Configuration
         this.enableMonitoring = bool("enableMonitoring", true);
         this.enableEncryption = bool("enableEncryption", true);
+        this.awsConfigEnabled = bool("awsConfigEnabled", false);
+        this.createConfigInfrastructure = boolOrNull("createConfigInfrastructure");
+        this.auditManagerEnabled = bool("auditManagerEnabled", false);
+        this.complianceFrameworks = str("complianceFrameworks", "");
+        this.complianceMode = str("complianceMode", null);  // null = use default based on securityProfile
         this.logRetentionDays = intval("logRetentionDays", 7);
         this.instanceType = str("instanceType", "t3.micro");
         
@@ -268,6 +438,10 @@ public final class DeploymentContext {
 
     public String networkMode() { return networkMode; }
     public boolean wafEnabled() { return wafEnabled; }
+    public Boolean albAccessLogging() { return albAccessLogging; }
+    public Boolean guardDutyEnabled() { return guardDutyEnabled; }
+    public Boolean guardDutyAlertsConfigured() { return guardDutyAlertsConfigured; }
+    public Boolean certificateExpirationMonitoring() { return certificateExpirationMonitoring; }
     public boolean cloudfrontEnabled() { return cloudfront; }
     public String lbType() { return lbType; }
 
@@ -280,9 +454,18 @@ public final class DeploymentContext {
     // Security - SSH Access Control
     public String bastionCidr() { return bastionCidr; }
 
+    // Storage Persistence Configuration
+    public boolean retainStorage() { return retainStorage; }
+    public String existingFileSystemId() { return existingFileSystemId; }
+
     // Advanced Configuration
     public boolean enableMonitoring() { return enableMonitoring; }
     public boolean enableEncryption() { return enableEncryption; }
+    public boolean awsConfigEnabled() { return awsConfigEnabled; }
+    public Boolean createConfigInfrastructure() { return createConfigInfrastructure; }
+    public boolean auditManagerEnabled() { return auditManagerEnabled; }
+    public String complianceFrameworks() { return complianceFrameworks; }
+    public String complianceMode() { return complianceMode; }
     public Integer logRetentionDays() { return logRetentionDays; }
     public String instanceType() { return instanceType; }
     
@@ -294,9 +477,35 @@ public final class DeploymentContext {
     public Integer unhealthyThreshold() { return unhealthyThreshold; }
 
     public String authMode() { return authMode; }
+
+    // Cognito Configuration
+    public Boolean cognitoAutoProvision() { return cognitoAutoProvision; }
+    public String cognitoDomainPrefix() { return cognitoDomainPrefix; }
+    public String cognitoUserPoolName() { return cognitoUserPoolName; }
+    public Boolean cognitoMfaEnabled() { return cognitoMfaEnabled; }
+    public String cognitoMfaMethod() { return cognitoMfaMethod; }
+    public Boolean cognitoCreateGroups() { return cognitoCreateGroups; }
+    public String cognitoAdminGroupName() { return cognitoAdminGroupName; }
+    public String cognitoUserGroupName() { return cognitoUserGroupName; }
+    public String cognitoUserPoolId() { return cognitoUserPoolId; }
+    public String cognitoAppClientId() { return cognitoAppClientId; }
+    public String cognitoInitialAdminEmail() { return cognitoInitialAdminEmail; }
+    public String cognitoInitialAdminPhone() { return cognitoInitialAdminPhone; }
+
+    // Manual OIDC Configuration
+    public String oidcIssuer() { return oidcIssuer; }
+    public String oidcAuthorizationEndpoint() { return oidcAuthorizationEndpoint; }
+    public String oidcTokenEndpoint() { return oidcTokenEndpoint; }
+    public String oidcUserInfoEndpoint() { return oidcUserInfoEndpoint; }
+    public String oidcClientId() { return oidcClientId; }
+    public String oidcClientSecretName() { return oidcClientSecretName; }
+
+    // Legacy IAM Identity Center Configuration
     public String ssoInstanceArn() { return ssoInstanceArn; }
     public String ssoGroupId() { return ssoGroupId; }
     public String ssoTargetAccountId() { return ssoTargetAccountId; }
+    public Boolean autoProvisionIdentityCenter() { return autoProvisionIdentityCenter; }
+    public String identityCenterGroupName() { return identityCenterGroupName; }
 
     // Additional deployment tracking fields
     public String deploymentId() { return deploymentId; }
@@ -460,6 +669,14 @@ public final class DeploymentContext {
     private boolean bool(String key, boolean def) {
         Object v = raw.get(key);
         if (v == null) return def;
+        if (v instanceof Boolean) return (Boolean) v;
+        String s = v.toString().trim().toLowerCase(Locale.ROOT);
+        return s.equals("true") || s.equals("1") || s.equals("yes");
+    }
+
+    private Boolean boolOrNull(String key) {
+        Object v = raw.get(key);
+        if (v == null) return null;
         if (v instanceof Boolean) return (Boolean) v;
         String s = v.toString().trim().toLowerCase(Locale.ROOT);
         return s.equals("true") || s.equals("1") || s.equals("yes");

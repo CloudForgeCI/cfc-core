@@ -107,7 +107,7 @@ jobs:
         run: |
           cd cfc-testing
           echo "Running full validation to generate truth tables for GitHub Pages..."
-          bash master-validation-system.sh full 2>&1 | tee validation-run.log || true
+          bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log || true
 
       - name: Create reports directory structure
         run: |
@@ -542,6 +542,18 @@ jobs:
                               <li><a href="sbom/cfc-core-sbom.xml">SBOM (XML)</a></li>
                               <li><a href="sbom/dependency-check/dependency-check-report.html">Vulnerability Report (HTML)</a> <span class="badge badge-warning">Review</span></li>
                               <li><a href="sbom/dependency-check/dependency-check-report.json">Vulnerability Report (JSON)</a></li>
+                          </ul>
+                      </div>
+
+                      <!-- Deployment Metrics Card -->
+                      <div class="card">
+                          <div class="card-icon">🚀</div>
+                          <h2>Deployment Metrics</h2>
+                          <p>Continuous deployment testing and performance tracking</p>
+                          <ul>
+                              <li><a href="deployment-metrics/">Deployment Dashboard</a> <span class="badge badge-info">Live</span></li>
+                              <li><a href="deployment-metrics/data/deployment-metrics.csv">Metrics CSV</a></li>
+                              <li><a href="deployment-metrics/data/latest-trends.md">Trends Report</a></li>
                           </ul>
                       </div>
 

@@ -14,9 +14,10 @@ NC='\033[0m' # No Color
 
 # Configuration - dynamically determine script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="${BASE_DIR:-$SCRIPT_DIR}"
+# BASE_DIR should be cfc-testing/ (parent of scripts/) where cdk.json exists
+BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
 DOMAIN="cloudforgeci.com"
-RESULTS_DIR="$BASE_DIR/synth-results"
+RESULTS_DIR="$SCRIPT_DIR/synth-results"
 CDK_OUT_DIR="$BASE_DIR/cdk.out"
 
 # Create results directory
@@ -34,7 +35,44 @@ create_deployment_context() {
     local security_profile=$2
     local subdomain=$3
     local stack_name=$4
-    
+
+    # Configure security-profile-specific settings
+    local waf_enabled="false"
+    local alb_access_logging="false"
+    local guard_duty_enabled="false"
+    local auth_mode="none"
+    local cognito_auto_provision="false"
+    local audit_manager_enabled="false"
+    local compliance_frameworks=""
+    local aws_config_enabled="false"
+    local create_config_infrastructure="false"
+
+    case "$security_profile" in
+        "PRODUCTION")
+            waf_enabled="true"
+            alb_access_logging="true"
+            guard_duty_enabled="true"
+            auth_mode="alb-oidc"
+            cognito_auto_provision="true"
+            audit_manager_enabled="false"  # Disabled in tests (requires per-region setup)
+            compliance_frameworks="SOC2,HIPAA,PCI-DSS,GDPR"
+            aws_config_enabled="true"
+            create_config_infrastructure="false"  # Don't create in tests (account-level singleton)
+            ;;
+        "STAGING")
+            alb_access_logging="true"
+            auth_mode="alb-oidc"
+            cognito_auto_provision="true"
+            audit_manager_enabled="false"  # Disabled in tests
+            compliance_frameworks="SOC2"
+            aws_config_enabled="true"
+            create_config_infrastructure="false"
+            ;;
+        "DEV")
+            # Development uses minimal security
+            ;;
+    esac
+
     cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
@@ -46,7 +84,9 @@ create_deployment_context() {
     "healthCheckInterval": "30",
     "enableSsl": "true",
     "tier": "public",
-    "wafEnabled": "false",
+    "wafEnabled": "$waf_enabled",
+    "albAccessLogging": "$alb_access_logging",
+    "guardDutyEnabled": "$guard_duty_enabled",
     "securityProfile": "$security_profile",
     "cloudfrontEnabled": "false",
     "healthCheckGracePeriod": "300",
@@ -62,7 +102,16 @@ create_deployment_context() {
     "enableAutoScaling": "true",
     "env": "dev",
     "maxInstanceCapacity": "4",
-    "authMode": "none",
+    "authMode": "$auth_mode",
+    "cognitoAutoProvision": "$cognito_auto_provision",
+    "cognitoDomainPrefix": "${stack_name}-auth",
+    "cognitoUserPoolName": "${stack_name}-users",
+    "cognitoMfaEnabled": "false",
+    "cognitoCreateGroups": "true",
+    "auditManagerEnabled": "$audit_manager_enabled",
+    "complianceFrameworks": "$compliance_frameworks",
+    "awsConfigEnabled": "$aws_config_enabled",
+    "createConfigInfrastructure": "$create_config_infrastructure",
     "domain": "$DOMAIN",
     "subdomain": "$subdomain",
     "logRetentionDays": "7",
@@ -95,8 +144,9 @@ run_synthesis() {
     # Capture synthesis output
     local synth_output="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-synth.log"
     local synth_error="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-error.log"
-    
-    if cdk synth --quiet --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample" --context cfc.runtime="$runtime" --context cfc.topology="JENKINS_SERVICE" --context cfc.subdomain="$subdomain" --context cfc.domain="$DOMAIN" --context cfc.enableSsl="true" --context cfc.securityProfile="$security_profile" --context cfc.stackName="$stack_name" > "$synth_output" 2> "$synth_error"; then
+
+    # Use cdk synth with deployment-context.json (written by create_deployment_context)
+    if cdk synth --quiet --context cfc=@deployment-context.json > "$synth_output" 2> "$synth_error"; then
         echo -e "  ${GREEN}✅ Synthesis successful${NC}"
         
         # Copy synthesized template

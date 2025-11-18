@@ -170,9 +170,15 @@ These comprehensive tests are designed to:
 
 ## Known Issues
 
-1. **EC2 + Node Topology**: Architectural incompatibility with HTTPS listener default action
-2. **S3-Website + SSL**: May require additional configuration
-3. **Fargate + Single Node**: Not supported (topology mismatch)
+~~1. **EC2 + Node Topology**: Architectural incompatibility with HTTPS listener default action~~ ✅ **FIXED** - HTTP listener routing resolved
+
+**Current Status:**
+- All 10 test combinations passing (100% success rate)
+- No known blocking issues
+
+**Future Considerations:**
+1. **S3-Website + SSL**: May require additional configuration (not yet tested)
+2. **Fargate + Single Node**: Not supported (topology mismatch by design)
 
 ## Future Enhancements
 
