@@ -141,8 +141,8 @@ jobs:
           cd cfc-testing
 
           # Make scripts executable
-          chmod +x *.sh 2>/dev/null || true
-          chmod +x *.py 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
+          chmod +x scripts/*.py 2>/dev/null || true
 
           # Create necessary directories
           mkdir -p scripts/validation-results
@@ -188,7 +188,7 @@ jobs:
 
           # Verify scripts exist
           echo "Checking scripts..."
-          ls -la *.sh *.py 2>/dev/null || echo "Script listing failed"
+          ls -la scripts/*.sh scripts/*.py 2>/dev/null | head -5 || echo "Script listing failed"
 
           # Verify CDK setup
           echo "Verifying CDK setup..."
