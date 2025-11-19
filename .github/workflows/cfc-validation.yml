@@ -2,7 +2,7 @@ name: CFC Testing & Validation
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, compliance_integration_upgrade ]
     paths:
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
