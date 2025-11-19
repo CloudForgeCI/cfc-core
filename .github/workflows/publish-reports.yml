@@ -623,6 +623,121 @@ jobs:
           path: github-pages-reports/deployment-metrics/data/
         continue-on-error: true
 
+      - name: Download metrics dashboards artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: metrics-dashboards
+          path: github-pages-reports/
+        continue-on-error: true
+
+      - name: Create placeholder dashboards if missing
+        run: |
+          # Check if deployment metrics dashboard exists
+          if [ ! -f "github-pages-reports/deployment-metrics/index.html" ]; then
+            echo "Creating placeholder deployment metrics dashboard..."
+            mkdir -p github-pages-reports/deployment-metrics/data
+
+            # Create empty CSV with headers
+            cat > github-pages-reports/deployment-metrics/data/deployment-metrics.csv << 'EOF'
+          RunID,Timestamp,StackName,Runtime,SecurityProfile,AuthMode,NetworkMode,ComplianceFrameworks,SynthTime,AnalysisTime,ResourceCount,Status,ErrorMessage
+          EOF
+
+            # Create placeholder trends
+            echo "No deployment test data available yet. Dashboards will populate after the first deployment test run." > github-pages-reports/deployment-metrics/data/latest-trends.md
+
+            # Create simple placeholder HTML
+            cat > github-pages-reports/deployment-metrics/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Deployment Metrics - Coming Soon</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                      min-height: 100vh;
+                      margin: 0;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      text-align: center;
+                      padding: 20px;
+                  }
+                  .container { max-width: 600px; }
+                  h1 { font-size: 3em; margin-bottom: 20px; }
+                  p { font-size: 1.2em; line-height: 1.6; }
+                  a { color: white; text-decoration: underline; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>Deployment Metrics Dashboard</h1>
+                  <p>Deployment testing metrics will appear here after the first scheduled deployment test runs.</p>
+                  <p><a href="../index.html">← Back to Reports Dashboard</a></p>
+              </div>
+          </body>
+          </html>
+          EOF
+
+            echo "✅ Created placeholder deployment metrics dashboard"
+          fi
+
+          # Check if changeset validation dashboard exists
+          if [ ! -f "github-pages-reports/changeset-validation/index.html" ]; then
+            echo "Creating placeholder changeset validation dashboard..."
+            mkdir -p github-pages-reports/changeset-validation/data
+
+            # Create empty CSV with headers
+            cat > github-pages-reports/changeset-validation/data/changeset-metrics.csv << 'EOF'
+          RunID,Timestamp,StackName,Runtime,SecurityProfile,AuthMode,NetworkMode,ComplianceFrameworks,SynthTime,ChangesetTime,TotalChanges,ResourcesAdded,ResourcesModified,ResourcesRemoved,Status,ErrorMessage
+          EOF
+
+            # Create placeholder trends
+            echo "No changeset validation data available yet. Dashboards will populate after the first changeset validation run." > github-pages-reports/changeset-validation/data/latest-trends.md
+
+            # Create simple placeholder HTML
+            cat > github-pages-reports/changeset-validation/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Changeset Validation - Coming Soon</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                      min-height: 100vh;
+                      margin: 0;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      text-align: center;
+                      padding: 20px;
+                  }
+                  .container { max-width: 600px; }
+                  h1 { font-size: 3em; margin-bottom: 20px; }
+                  p { font-size: 1.2em; line-height: 1.6; }
+                  a { color: white; text-decoration: underline; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>Changeset Validation Dashboard</h1>
+                  <p>Changeset validation metrics will appear here after the first validation run with AWS credentials.</p>
+                  <p><a href="../index.html">← Back to Reports Dashboard</a></p>
+              </div>
+          </body>
+          </html>
+          EOF
+
+            echo "✅ Created placeholder changeset validation dashboard"
+          fi
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
