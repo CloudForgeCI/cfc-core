@@ -112,6 +112,8 @@ jobs:
 
       - name: Build project
         run: |
+          mvn clean install -DskipTests -f pom.xml
+          # Now build cfc-testing module
           cd cfc-testing
           mvn clean package -DskipTests
 
@@ -157,6 +159,9 @@ jobs:
 
       - name: Build project
         run: |
+          # First install parent project dependencies to local Maven repo
+          mvn clean install -DskipTests -f pom.xml
+          # Now build cfc-testing module
           cd cfc-testing
           mvn clean package -DskipTests
 
@@ -239,6 +244,9 @@ jobs:
 
       - name: Build project
         run: |
+          # First install parent project dependencies to local Maven repo
+          mvn clean install -DskipTests -f pom.xml
+          # Now build cfc-testing module
           cd cfc-testing
           mvn clean package -DskipTests
 
@@ -306,9 +314,9 @@ jobs:
               echo "- $profile: ${avg}s" >> trends.md
             done
 
-            # Average deployment times
+            # Average analysis times (deployment readiness analysis)
             echo "" >> trends.md
-            echo "## Average Deployment Times (Dry-Run)" >> trends.md
+            echo "## Average Analysis Times (Deployment Readiness)" >> trends.md
             for profile in "DEV" "STAGING" "PRODUCTION"; do
               avg=$(grep ",$profile," deployment-metrics.csv | grep ",DRY_RUN_SUCCESS," | awk -F',' '{if($10>0) {sum+=$10; count++}} END {if (count>0) printf "%.2f", sum/count}' || echo "N/A")
               echo "- $profile: ${avg}s" >> trends.md
@@ -356,6 +364,9 @@ jobs:
 
       - name: Build project
         run: |
+          # First install parent project dependencies to local Maven repo
+          mvn clean install -DskipTests -f pom.xml
+          # Now build cfc-testing module
           cd cfc-testing
           mvn clean package -DskipTests
 
@@ -464,6 +475,9 @@ jobs:
 
       - name: Build project
         run: |
+          # First install parent project dependencies to local Maven repo
+          mvn clean install -DskipTests -f pom.xml
+          # Now build cfc-testing module
           cd cfc-testing
           mvn clean package -DskipTests
 
@@ -503,28 +517,17 @@ jobs:
           fi
 
   publish-metrics:
-    name: Publish Metrics to GitHub Pages
+    name: Publish Metrics Dashboards
     runs-on: ubuntu-latest
     needs: [quick-synthesis-test, enhanced-synthesis-test, deployment-dry-run, changeset-validation, full-resource-validation]
     if: always() && (needs.deployment-dry-run.result == 'success' || needs.changeset-validation.result == 'success' || needs.enhanced-synthesis-test.result == 'success')
     permissions:
-      contents: write
+      contents: read
     steps:
-      - name: Checkout gh-pages branch
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages
-        continue-on-error: true
-
-      - name: Initialize gh-pages if needed
+      - name: Create metrics directories
         run: |
-          if [ ! -d "gh-pages" ] || [ ! -d "gh-pages/.git" ]; then
-            mkdir -p gh-pages/deployment-metrics
-            cd gh-pages
-            git init
-            git checkout -b gh-pages
-          fi
+          mkdir -p metrics-dashboards/deployment-metrics/data
+          mkdir -p metrics-dashboards/changeset-validation/data
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -532,52 +535,61 @@ jobs:
           path: artifacts
         continue-on-error: true
 
-      - name: Copy deployment metrics to gh-pages
+      - name: Copy deployment metrics data
         run: |
-          mkdir -p gh-pages/deployment-metrics/data
-          mkdir -p gh-pages/changeset-validation/data
-
           # Copy deployment metrics CSV if available
           if [ -f "artifacts/deployment-metrics-history/deployment-metrics.csv" ]; then
-            cp artifacts/deployment-metrics-history/deployment-metrics.csv gh-pages/deployment-metrics/data/
+            cp artifacts/deployment-metrics-history/deployment-metrics.csv metrics-dashboards/deployment-metrics/data/
             echo "✅ Copied deployment metrics CSV"
+          else
+            echo "⚠️  No deployment metrics CSV found"
+            # Create empty CSV with header
+            echo "RunID,Timestamp,StackName,Runtime,SecurityProfile,AuthMode,NetworkMode,ComplianceFrameworks,SynthTime,AnalysisTime,ResourceCount,Status,ErrorMessage" > metrics-dashboards/deployment-metrics/data/deployment-metrics.csv
           fi
 
           # Copy trends markdown if available
           if [ -f "artifacts/deployment-trends-${{ github.run_number }}/trends.md" ]; then
-            cp "artifacts/deployment-trends-${{ github.run_number }}/trends.md" gh-pages/deployment-metrics/data/latest-trends.md
+            cp "artifacts/deployment-trends-${{ github.run_number }}/trends.md" metrics-dashboards/deployment-metrics/data/latest-trends.md
             echo "✅ Copied trends report"
+          else
+            echo "No trends data available yet" > metrics-dashboards/deployment-metrics/data/latest-trends.md
           fi
 
           # Copy test reports
           if [ -d "artifacts/deployment-reports-${{ github.run_number }}" ]; then
-            mkdir -p gh-pages/deployment-metrics/reports
-            cp -r "artifacts/deployment-reports-${{ github.run_number }}"/* gh-pages/deployment-metrics/reports/ 2>/dev/null || true
+            mkdir -p metrics-dashboards/deployment-metrics/reports
+            cp -r "artifacts/deployment-reports-${{ github.run_number }}"/* metrics-dashboards/deployment-metrics/reports/ 2>/dev/null || true
             echo "✅ Copied deployment reports"
           fi
 
           # Copy changeset validation metrics
           if [ -f "artifacts/changeset-metrics-history/changeset-metrics.csv" ]; then
-            cp artifacts/changeset-metrics-history/changeset-metrics.csv gh-pages/changeset-validation/data/
+            cp artifacts/changeset-metrics-history/changeset-metrics.csv metrics-dashboards/changeset-validation/data/
             echo "✅ Copied changeset metrics CSV"
+          else
+            echo "⚠️  No changeset metrics CSV found"
+            # Create empty CSV with header
+            echo "RunID,Timestamp,StackName,Runtime,SecurityProfile,AuthMode,NetworkMode,ComplianceFrameworks,SynthTime,ChangesetTime,TotalChanges,ResourcesAdded,ResourcesModified,ResourcesRemoved,Status,ErrorMessage" > metrics-dashboards/changeset-validation/data/changeset-metrics.csv
           fi
 
           # Copy changeset trends
           if [ -f "artifacts/changeset-trends-${{ github.run_number }}/changeset-trends.md" ]; then
-            cp "artifacts/changeset-trends-${{ github.run_number }}/changeset-trends.md" gh-pages/changeset-validation/data/latest-trends.md
+            cp "artifacts/changeset-trends-${{ github.run_number }}/changeset-trends.md" metrics-dashboards/changeset-validation/data/latest-trends.md
             echo "✅ Copied changeset trends"
+          else
+            echo "No changeset trends data available yet" > metrics-dashboards/changeset-validation/data/latest-trends.md
           fi
 
           # Copy changeset reports
           if [ -d "artifacts/changeset-reports-${{ github.run_number }}" ]; then
-            mkdir -p gh-pages/changeset-validation/reports
-            cp -r "artifacts/changeset-reports-${{ github.run_number }}"/* gh-pages/changeset-validation/reports/ 2>/dev/null || true
+            mkdir -p metrics-dashboards/changeset-validation/reports
+            cp -r "artifacts/changeset-reports-${{ github.run_number }}"/* metrics-dashboards/changeset-validation/reports/ 2>/dev/null || true
             echo "✅ Copied changeset reports"
           fi
 
       - name: Generate metrics dashboard
         run: |
-          cat > gh-pages/deployment-metrics/index.html << 'HTMLEOF'
+          cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -724,8 +736,8 @@ jobs:
                           <div class="metric-label">Avg Synthesis Time</div>
                       </div>
                       <div class="metric-card">
-                          <div class="metric-value" id="avg-deploy-time">-</div>
-                          <div class="metric-label">Avg Deploy Time</div>
+                          <div class="metric-value" id="avg-analysis-time">-</div>
+                          <div class="metric-label">Avg Analysis Time</div>
                       </div>
                   </div>
 
@@ -814,7 +826,7 @@ jobs:
                           document.getElementById('total-runs').textContent = totalRuns;
                           document.getElementById('success-rate').textContent = successRate + '%';
                           document.getElementById('avg-synth-time').textContent = avgSynthTime + 's';
-                          document.getElementById('avg-deploy-time').textContent = avgAnalysisTime === 'N/A' ? avgAnalysisTime : avgAnalysisTime + 's';
+                          document.getElementById('avg-analysis-time').textContent = avgAnalysisTime === 'N/A' ? avgAnalysisTime : avgAnalysisTime + 's';
 
                           // Show recent results (last 20)
                           const recentRows = rows.slice(-20).reverse();
@@ -844,7 +856,7 @@ jobs:
 
       - name: Generate changeset validation dashboard
         run: |
-          cat > gh-pages/changeset-validation/index.html << 'HTMLEOF'
+          cat > metrics-dashboards/changeset-validation/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -1122,15 +1134,12 @@ jobs:
 
           echo "✅ Generated changeset validation dashboard"
 
-      - name: Commit and push metrics
-        continue-on-error: true
-        run: |
-          cd gh-pages
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add .
-          git commit -m "Update deployment metrics - Run ${{ github.run_number }}" || true
-          git push origin gh-pages || true
+      - name: Upload metrics dashboards as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-dashboards
+          path: metrics-dashboards/
+          retention-days: 90
 
   notify-results:
     name: Notify Results
