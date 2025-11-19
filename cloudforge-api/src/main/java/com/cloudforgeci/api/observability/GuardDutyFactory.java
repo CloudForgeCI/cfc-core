@@ -72,23 +72,40 @@ public class GuardDutyFactory extends BaseFactory {
 
     private void enableGuardDuty() {
         // Create detector (GuardDuty enablement) using custom resource
-        // This is idempotent - if already enabled, it will just return the existing detector ID
+        // This is idempotent - if already enabled, CreateDetector returns the existing detector ID
 
-        // List detectors to check if already enabled
-        AwsSdkCall listDetectors = AwsSdkCall.builder()
+        // CreateDetector API call - creates new detector or returns existing one
+        AwsSdkCall createDetector = AwsSdkCall.builder()
                 .service("GuardDuty")
-                .action("listDetectors")
+                .action("createDetector")
+                .parameters(java.util.Map.of(
+                        "Enable", true,
+                        "FindingPublishingFrequency", "FIFTEEN_MINUTES"
+                ))
+                .physicalResourceId(PhysicalResourceId.of("guardduty-detector-" + region))
+                .region(region)
+                .build();
+
+        // UpdateDetector API call for updates (keeps detector enabled)
+        // Note: Update not needed for GuardDuty - createDetector is idempotent
+        AwsSdkCall updateDetector = AwsSdkCall.builder()
+                .service("GuardDuty")
+                .action("createDetector")
+                .parameters(java.util.Map.of(
+                        "Enable", true,
+                        "FindingPublishingFrequency", "FIFTEEN_MINUTES"
+                ))
                 .physicalResourceId(PhysicalResourceId.of("guardduty-detector-" + region))
                 .region(region)
                 .build();
 
         // Create custom resource to enable GuardDuty
         AwsCustomResource.Builder.create(this, "GuardDutyDetector")
-                .onCreate(listDetectors)  // First check if detector exists
-                .onUpdate(listDetectors)  // On update, just check
+                .onCreate(createDetector)  // Create or retrieve existing detector
+                .onUpdate(updateDetector)  // Update detector settings
                 .policy(AwsCustomResourcePolicy.fromSdkCalls(
                         software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))  // GuardDuty requires wildcard for create/list operations
+                                .resources(List.of("*"))  // GuardDuty requires wildcard for create/update operations
                                 .build()
                 ))
                 .build();

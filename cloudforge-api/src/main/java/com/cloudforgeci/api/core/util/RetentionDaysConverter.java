@@ -61,15 +61,15 @@ public final class RetentionDaysConverter {
             return RetentionDays.THIRTEEN_MONTHS;
         } else if (days <= 545) {
             return RetentionDays.EIGHTEEN_MONTHS;
-        } else if (days <= 730) {
+        } else if (days <= 731) {
             return RetentionDays.TWO_YEARS;
-        } else if (days <= 1095) {
+        } else if (days <= 1096) {
             return RetentionDays.THREE_YEARS;
         } else if (days <= 1827) {
             return RetentionDays.FIVE_YEARS;
-        } else if (days <= 2190) {
-            return RetentionDays.SIX_YEARS; // HIPAA minimum
-        } else if (days <= 2555) {
+        } else if (days <= 2192) {
+            return RetentionDays.SIX_YEARS; // HIPAA minimum (exact 6 years)
+        } else if (days <= 2557) {
             return RetentionDays.SEVEN_YEARS;
         } else if (days <= 2920) {
             return RetentionDays.EIGHT_YEARS;

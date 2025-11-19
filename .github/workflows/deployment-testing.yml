@@ -228,8 +228,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
       - name: Verify AWS credentials
@@ -483,20 +483,20 @@ jobs:
         with:
           name: validation-results-${{ github.run_number }}
           path: |
-            cfc-testing/validation-results/
-            cfc-testing/validation-results/drift-report.txt
+            cfc-testing/scripts/validation-results/
+            cfc-testing/scripts/validation-results/drift-report.txt
           retention-days: 90
 
       - name: Check for validation failures
         if: always()
         run: |
           cd cfc-testing
-          if [ -f validation-results/drift-report.txt ]; then
-            failures=$(grep -c "MISSING_RESOURCES\|SYNTHESIS_FAILED" validation-results/drift-report.txt || echo "0")
+          if [ -f scripts/validation-results/drift-report.txt ]; then
+            failures=$(grep -c "MISSING_RESOURCES\|SYNTHESIS_FAILED" scripts/validation-results/drift-report.txt || echo "0")
             if [ "$failures" -gt 0 ]; then
               echo "::warning::Found $failures validation failures"
               echo "Failed configurations:"
-              grep "MISSING_RESOURCES\|SYNTHESIS_FAILED" validation-results/drift-report.txt | head -10
+              grep "MISSING_RESOURCES\|SYNTHESIS_FAILED" scripts/validation-results/drift-report.txt | head -10
             else
               echo "✅ All validations passed!"
             fi

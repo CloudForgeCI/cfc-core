@@ -11,12 +11,9 @@ import software.amazon.awscdk.services.efs.AccessPoint;
 import software.amazon.awscdk.services.efs.AccessPointOptions;
 import software.amazon.awscdk.services.efs.Acl;
 import software.amazon.awscdk.services.efs.PosixUser;
-import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.constructs.Construct;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_HOME;
@@ -92,30 +89,18 @@ public class FargateFactory extends BaseFactory {
 
   @Override
   public void create() {
-    // Task execution role - for pulling images, writing logs, etc.
-    Role executionRole = Role.Builder.create(this, "TaskExecutionRole")
-            .assumedBy(ServicePrincipal.Builder.create("ecs-tasks.amazonaws.com").build())
-            .managedPolicies(Arrays.asList(
-                    ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
-            ))
-            .build();
+    // Use IAM roles from SystemContext created by IAM configuration system
+    // These roles are security-profile aware and provide consistent permissions
+    Role executionRole = ctx.fargateExecutionRole.get()
+            .orElseThrow(() -> new IllegalStateException(
+                    "Fargate execution role not found - IAM configuration should have created it"));
 
-    // Task role - for application permissions within the container
-    // Conditionally add ECS Exec permissions if bastionCidr is configured
-    Role.Builder taskRoleBuilder = Role.Builder.create(this, "TaskRole")
-            .assumedBy(ServicePrincipal.Builder.create("ecs-tasks.amazonaws.com").build());
+    Role taskRole = ctx.fargateTaskRole.get()
+            .orElseThrow(() -> new IllegalStateException(
+                    "Fargate task role not found - IAM configuration should have created it"));
 
-    // Only add SSM permissions for ECS Exec if bastionCidr is configured
-    // This indicates the user wants remote access capabilities
+    // Check if ECS Exec should be enabled based on bastionCidr configuration
     boolean enableEcsExec = bastionCidr != null && !bastionCidr.isBlank();
-    if (enableEcsExec) {
-        taskRoleBuilder.managedPolicies(Arrays.asList(
-                // Required for ECS Exec to work (SSM Session Manager access)
-                ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
-        ));
-    }
-
-    Role taskRole = taskRoleBuilder.build();
 
     FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task")
             .cpu(cpu)

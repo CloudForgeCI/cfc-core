@@ -8,7 +8,6 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.actions.*;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
-import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.constructs.Construct;
 
 import java.util.List;
@@ -286,17 +285,31 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             // Generate a unique external ID for security (prevents confused deputy problem)
             externalId = "cognito-sns-" + stackName;
 
+            // Create least-privilege SNS policy for Cognito SMS
+            // Only allow publishing to SNS topics (required for SMS MFA)
+            software.amazon.awscdk.services.iam.PolicyStatement snsPublishPolicy =
+                    software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                    .sid("CognitoSNSPublish")
+                    .effect(software.amazon.awscdk.services.iam.Effect.ALLOW)
+                    .actions(List.of("sns:Publish"))
+                    .resources(List.of("*"))  // Cognito needs wildcard for SMS
+                    .build();
+
             smsRole = Role.Builder.create(this, "CognitoSmsRole")
                     .assumedBy(ServicePrincipal.Builder.create("cognito-idp.amazonaws.com")
                             .build())
                     .externalIds(List.of(externalId))
-                    .managedPolicies(List.of(
-                            ManagedPolicy.fromAwsManagedPolicyName("AmazonSNSFullAccess")
+                    .inlinePolicies(java.util.Map.of(
+                            "CognitoSNSPolicy",
+                            software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
+                                    .statements(List.of(snsPublishPolicy))
+                                    .build()
                     ))
                     .build();
-            LOG.info("Created SNS role for SMS MFA: " + smsRole.getRoleArn());
+            LOG.info("Created SNS role for SMS MFA with least-privilege permissions: " + smsRole.getRoleArn());
             LOG.info("  - External ID: " + externalId);
             LOG.info("  - SNS Region: " + snsRegion);
+            LOG.info("  - Permissions: sns:Publish only (least privilege)");
         }
 
         // Create User Pool with strong security configuration
