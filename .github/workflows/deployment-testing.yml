@@ -736,7 +736,7 @@ jobs:
                           <div class="metric-label">Avg Synthesis Time</div>
                       </div>
                       <div class="metric-card">
-                          <div class="metric-value" id="avg-deploy-time">-</div>
+                          <div class="metric-value" id="avg-analysis-time">-</div>
                           <div class="metric-label">Avg Analysis Time</div>
                       </div>
                   </div>
@@ -826,7 +826,7 @@ jobs:
                           document.getElementById('total-runs').textContent = totalRuns;
                           document.getElementById('success-rate').textContent = successRate + '%';
                           document.getElementById('avg-synth-time').textContent = avgSynthTime + 's';
-                          document.getElementById('avg-deploy-time').textContent = avgAnalysisTime === 'N/A' ? avgAnalysisTime : avgAnalysisTime + 's';
+                          document.getElementById('avg-analysis-time').textContent = avgAnalysisTime === 'N/A' ? avgAnalysisTime : avgAnalysisTime + 's';
 
                           // Show recent results (last 20)
                           const recentRows = rows.slice(-20).reverse();
