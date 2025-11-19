@@ -231,7 +231,7 @@ jobs:
           exit $EXIT_CODE
 
       - name: Generate testing strategy for PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.mode.outputs.mode != 'smoke'
         continue-on-error: true
         run: |
           cd cfc-testing
