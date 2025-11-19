@@ -285,6 +285,7 @@ EOF
     "domain": "$domain_value",
     "subdomain": "$subdomain_value",
     "enableSsl": "$ssl_value",
+    "createZone": true,
     "stackName": "$stack_name"
   }
 }
