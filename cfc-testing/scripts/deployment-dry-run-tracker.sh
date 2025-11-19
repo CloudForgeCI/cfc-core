@@ -33,7 +33,7 @@ mkdir -p "$HISTORICAL_DATA_DIR"
 
 # Initialize metrics CSV if it doesn't exist
 if [ ! -f "$METRICS_CSV" ]; then
-    echo "RunID,Timestamp,StackName,Runtime,SecurityProfile,AuthMode,NetworkMode,ComplianceFrameworks,SynthTime,ChangeSets,ResourceCount,Status,ErrorMessage" > "$METRICS_CSV"
+    echo "RunID,Timestamp,StackName,Runtime,SecurityProfile,AuthMode,NetworkMode,ComplianceFrameworks,SynthTime,AnalysisTime,ResourceCount,Status,ErrorMessage" > "$METRICS_CSV"
 fi
 
 echo -e "${BLUE}🚀 Deployment Dry-Run Tracker${NC}" | tee "$REPORT_FILE"
@@ -185,7 +185,7 @@ run_dry_run_deployment() {
         local error_msg=$(head -1 "$synth_error" | tr ',' ' ')
         echo "  Error: $error_msg" | tee -a "$REPORT_FILE"
 
-        # Record failure
+        # Record failure (0 for analysis time since we didn't get there)
         echo "$RUN_ID,$(date '+%Y-%m-%d %H:%M:%S'),$stack_name,$runtime,$security_profile,$auth_mode,$network_mode,$compliance_frameworks,$synth_duration,0,0,SYNTH_FAILED,$error_msg" >> "$METRICS_CSV"
 
         return 1
@@ -224,8 +224,8 @@ run_dry_run_deployment() {
     echo "     - Synthesis: ${synth_duration}s" | tee -a "$REPORT_FILE"
     echo "     - Analysis: ${changeset_duration}s" | tee -a "$REPORT_FILE"
 
-    # Record success
-    echo "$RUN_ID,$(date '+%Y-%m-%d %H:%M:%S'),$stack_name,$runtime,$security_profile,$auth_mode,$network_mode,$compliance_frameworks,$synth_duration,1,$resource_count,SUCCESS," >> "$METRICS_CSV"
+    # Record success - now writes actual analysis time instead of count
+    echo "$RUN_ID,$(date '+%Y-%m-%d %H:%M:%S'),$stack_name,$runtime,$security_profile,$auth_mode,$network_mode,$compliance_frameworks,$synth_duration,$changeset_duration,$resource_count,SUCCESS," >> "$METRICS_CSV"
 
     echo "" | tee -a "$REPORT_FILE"
     return 0

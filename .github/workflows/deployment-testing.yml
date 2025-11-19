@@ -793,7 +793,7 @@ jobs:
                                   networkMode: parts[6],
                                   complianceFrameworks: parts[7],
                                   synthTime: parseFloat(parts[8]),
-                                  deployTime: parseFloat(parts[9]),
+                                  analysisTime: parseFloat(parts[9]),
                                   resourceCount: parseInt(parts[10]),
                                   status: parts[11]
                               };
@@ -805,16 +805,16 @@ jobs:
                           const successRate = ((successfulRuns / totalRuns) * 100).toFixed(1);
 
                           const avgSynthTime = (rows.reduce((sum, r) => sum + r.synthTime, 0) / rows.length).toFixed(1);
-                          const deployCounts = rows.filter(r => r.deployTime > 0);
-                          const avgDeployTime = deployCounts.length > 0
-                              ? (deployCounts.reduce((sum, r) => sum + r.deployTime, 0) / deployCounts.length).toFixed(1)
+                          const analysisCounts = rows.filter(r => r.analysisTime > 0);
+                          const avgAnalysisTime = analysisCounts.length > 0
+                              ? (analysisCounts.reduce((sum, r) => sum + r.analysisTime, 0) / analysisCounts.length).toFixed(1)
                               : 'N/A';
 
                           // Update metrics
                           document.getElementById('total-runs').textContent = totalRuns;
                           document.getElementById('success-rate').textContent = successRate + '%';
                           document.getElementById('avg-synth-time').textContent = avgSynthTime + 's';
-                          document.getElementById('avg-deploy-time').textContent = avgDeployTime === 'N/A' ? avgDeployTime : avgDeployTime + 's';
+                          document.getElementById('avg-deploy-time').textContent = avgAnalysisTime === 'N/A' ? avgAnalysisTime : avgAnalysisTime + 's';
 
                           // Show recent results (last 20)
                           const recentRows = rows.slice(-20).reverse();

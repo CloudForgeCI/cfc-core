@@ -46,24 +46,24 @@ class RetentionDaysConverterTest {
         assertEquals(RetentionDays.ONE_YEAR, RetentionDaysConverter.fromDays(365));
         assertEquals(RetentionDays.THIRTEEN_MONTHS, RetentionDaysConverter.fromDays(400));
         assertEquals(RetentionDays.EIGHTEEN_MONTHS, RetentionDaysConverter.fromDays(545));
-        assertEquals(RetentionDays.TWO_YEARS, RetentionDaysConverter.fromDays(730));
-        assertEquals(RetentionDays.THREE_YEARS, RetentionDaysConverter.fromDays(1095));
+        assertEquals(RetentionDays.TWO_YEARS, RetentionDaysConverter.fromDays(731));
+        assertEquals(RetentionDays.THREE_YEARS, RetentionDaysConverter.fromDays(1096));
         assertEquals(RetentionDays.FIVE_YEARS, RetentionDaysConverter.fromDays(1827));
     }
 
     @Test
     void testMultiYearRetentionPeriods() {
-        assertEquals(RetentionDays.SIX_YEARS, RetentionDaysConverter.fromDays(2190));
-        assertEquals(RetentionDays.SEVEN_YEARS, RetentionDaysConverter.fromDays(2555));
-        assertEquals(RetentionDays.EIGHT_YEARS, RetentionDaysConverter.fromDays(2920));
-        assertEquals(RetentionDays.NINE_YEARS, RetentionDaysConverter.fromDays(3285));
-        assertEquals(RetentionDays.TEN_YEARS, RetentionDaysConverter.fromDays(3650));
+        assertEquals(RetentionDays.SIX_YEARS, RetentionDaysConverter.fromDays(2192));
+        assertEquals(RetentionDays.SEVEN_YEARS, RetentionDaysConverter.fromDays(2557));
+        assertEquals(RetentionDays.EIGHT_YEARS, RetentionDaysConverter.fromDays(2922));
+        assertEquals(RetentionDays.NINE_YEARS, RetentionDaysConverter.fromDays(3288));
+        assertEquals(RetentionDays.TEN_YEARS, RetentionDaysConverter.fromDays(3653));
     }
 
     @Test
     void testInfiniteRetention() {
-        // Any value over 10 years should map to INFINITE
-        assertEquals(RetentionDays.INFINITE, RetentionDaysConverter.fromDays(3651));
+        // Any value over 10 years (3653 days) should map to INFINITE
+        assertEquals(RetentionDays.INFINITE, RetentionDaysConverter.fromDays(3654));
         assertEquals(RetentionDays.INFINITE, RetentionDaysConverter.fromDays(5000));
         assertEquals(RetentionDays.INFINITE, RetentionDaysConverter.fromDays(10000));
     }

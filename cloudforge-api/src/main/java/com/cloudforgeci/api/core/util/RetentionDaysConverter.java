@@ -62,21 +62,21 @@ public final class RetentionDaysConverter {
         } else if (days <= 545) {
             return RetentionDays.EIGHTEEN_MONTHS;
         } else if (days <= 731) {
-            return RetentionDays.TWO_YEARS;
+            return RetentionDays.TWO_YEARS; // AWS value: 731 days
         } else if (days <= 1096) {
-            return RetentionDays.THREE_YEARS;
+            return RetentionDays.THREE_YEARS; // AWS value: 1096 days
         } else if (days <= 1827) {
             return RetentionDays.FIVE_YEARS;
         } else if (days <= 2192) {
-            return RetentionDays.SIX_YEARS; // HIPAA minimum (exact 6 years)
+            return RetentionDays.SIX_YEARS; // HIPAA minimum - AWS value: 2192 days
         } else if (days <= 2557) {
-            return RetentionDays.SEVEN_YEARS;
-        } else if (days <= 2920) {
-            return RetentionDays.EIGHT_YEARS;
-        } else if (days <= 3285) {
-            return RetentionDays.NINE_YEARS;
-        } else if (days <= 3650) {
-            return RetentionDays.TEN_YEARS;
+            return RetentionDays.SEVEN_YEARS; // AWS value: 2557 days
+        } else if (days <= 2922) {
+            return RetentionDays.EIGHT_YEARS; // AWS value: 2922 days
+        } else if (days <= 3288) {
+            return RetentionDays.NINE_YEARS; // AWS value: 3288 days
+        } else if (days <= 3653) {
+            return RetentionDays.TEN_YEARS; // AWS value: 3653 days
         } else {
             return RetentionDays.INFINITE; // For extreme retention requirements
         }

@@ -57,6 +57,13 @@ public final class ContextInjector {
      * @param scope The CDK construct scope to retrieve context from
      */
     public static void inject(Object target, Construct scope) {
+        if (target == null) {
+            throw new IllegalArgumentException("Injection target cannot be null");
+        }
+        if (scope == null) {
+            throw new IllegalArgumentException("Construct scope cannot be null");
+        }
+
         com.cloudforgeci.api.core.SystemContext systemContext =
             com.cloudforgeci.api.core.SystemContext.of(scope);
         com.cloudforgeci.api.core.DeploymentContext deploymentContext =
@@ -75,6 +82,16 @@ public final class ContextInjector {
     public static void inject(Object target,
                              com.cloudforgeci.api.core.SystemContext systemContext,
                              com.cloudforgeci.api.core.DeploymentContext deploymentContext) {
+
+        if (target == null) {
+            throw new IllegalArgumentException("Injection target cannot be null");
+        }
+        if (systemContext == null) {
+            throw new IllegalArgumentException("SystemContext cannot be null");
+        }
+        if (deploymentContext == null) {
+            throw new IllegalArgumentException("DeploymentContext cannot be null");
+        }
 
         // Get security profile configuration
         com.cloudforgeci.api.interfaces.SecurityProfileConfiguration securityConfig =
@@ -124,6 +141,13 @@ public final class ContextInjector {
      * Automatically extracts values from Slot objects.
      */
     private static Object extractValueFromContext(Object contextObject, String propertyName) throws Exception {
+        if (contextObject == null) {
+            throw new IllegalArgumentException("Context object cannot be null");
+        }
+        if (propertyName == null || propertyName.isEmpty()) {
+            throw new IllegalArgumentException("Property name cannot be null or empty");
+        }
+
         Object value = null;
 
         // Try to access as a public field first (e.g., SystemContext.stackName)
