@@ -99,7 +99,7 @@ jobs:
           if [ ! -d "target/dependency" ]; then
             mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B
           fi
-          chmod +x scipts/*.sh 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
           mkdir -p scripts/validation-results scripts/synth-results
 
       - name: Run CFC validation (full mode for GitHub Pages)
