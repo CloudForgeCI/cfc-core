@@ -306,14 +306,33 @@ synthesize_and_validate() {
     # Clean previous CDK output
     rm -rf "$CDK_OUT_DIR"
     
+    # Temporarily override cdk.json to use CloudForgeCommunitySample (non-interactive)
+    local original_cdk_json="$BASE_DIR/cdk.json"
+    local backup_cdk_json="$BASE_DIR/cdk.json.backup"
+    cp "$original_cdk_json" "$backup_cdk_json"
+
+    # Read the deployment context and inject it into cdk.json
+    local cfc_context=$(cat "$BASE_DIR/deployment-context.json")
+
+    cat > "$original_cdk_json" <<EOF
+{
+  "app": "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample",
+  "context": {
+    "cfc": $cfc_context
+  }
+}
+EOF
+
     # Run synthesis
     local synth_output="$VALIDATION_DIR/${key}-synth.log"
     local synth_error="$VALIDATION_DIR/${key}-error.log"
     local template_file="$CDK_OUT_DIR/$stack_name.template.json"
-    
+
     cd "$BASE_DIR"
 
-    if cdk synth --quiet --context cfc=@deployment-context.json > "$synth_output" 2> "$synth_error"; then
+    if cdk synth --quiet > "$synth_output" 2> "$synth_error"; then
+        # Restore original cdk.json
+        mv "$backup_cdk_json" "$original_cdk_json"
         
         echo -e "  ${GREEN}✅ Synthesis successful${NC}"
         
@@ -326,6 +345,9 @@ synthesize_and_validate() {
         fi
         
     else
+        # Restore original cdk.json on failure
+        mv "$backup_cdk_json" "$original_cdk_json"
+
         echo -e "  ${RED}❌ Synthesis failed${NC}"
         echo "$key: SYNTHESIS_FAILED - $(head -1 $synth_error)" >> "$DRIFT_REPORT_FILE"
     fi

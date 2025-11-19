@@ -184,11 +184,30 @@ run_changeset_deployment() {
 
     cd "$BASE_DIR"
 
+    # Temporarily override cdk.json to use CloudForgeCommunitySample (non-interactive)
+    local original_cdk_json="$BASE_DIR/cdk.json"
+    local backup_cdk_json="$BASE_DIR/cdk.json.backup"
+    cp "$original_cdk_json" "$backup_cdk_json"
+
+    # Read the deployment context and inject it into cdk.json
+    local cfc_context=$(cat "$BASE_DIR/deployment-context.json")
+
+    cat > "$original_cdk_json" <<EOF
+{
+  "app": "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample",
+  "context": {
+    "cfc": $cfc_context
+  }
+}
+EOF
+
     # Step 1: Synthesize
     echo "  🔧 Step 1: Synthesizing CloudFormation template..." | tee -a "$REPORT_FILE"
     local synth_start=$(date +%s.%N)
 
-    if ! cdk synth --context cfc=@deployment-context.json > "$synth_log" 2> "$synth_error"; then
+    if ! cdk synth > "$synth_log" 2> "$synth_error"; then
+        # Restore original cdk.json
+        mv "$backup_cdk_json" "$original_cdk_json"
 
         local synth_end=$(date +%s.%N)
         local synth_duration=$(echo "$synth_end - $synth_start" | bc)
@@ -202,6 +221,9 @@ run_changeset_deployment() {
 
         return 1
     fi
+
+    # Restore original cdk.json
+    mv "$backup_cdk_json" "$original_cdk_json"
 
     local synth_end=$(date +%s.%N)
     local synth_duration=$(echo "$synth_end - $synth_start" | bc)

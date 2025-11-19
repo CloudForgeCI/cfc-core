@@ -151,12 +151,31 @@ run_synthesis() {
     echo "  🔧 Synthesizing..."
     cd "$BASE_DIR"
 
+    # Temporarily override cdk.json to use CloudForgeCommunitySample (non-interactive)
+    local original_cdk_json="$BASE_DIR/cdk.json"
+    local backup_cdk_json="$BASE_DIR/cdk.json.backup"
+    cp "$original_cdk_json" "$backup_cdk_json"
+
+    # Read the deployment context and inject it into cdk.json
+    local cfc_context=$(cat "$BASE_DIR/deployment-context.json")
+
+    cat > "$original_cdk_json" <<EOF
+{
+  "app": "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample",
+  "context": {
+    "cfc": $cfc_context
+  }
+}
+EOF
+
     # Capture synthesis output
     local synth_output="$RESULTS_DIR/${runtime}-${security_profile}-${auth_mode}-${network_mode}-synth.log"
     local synth_error="$RESULTS_DIR/${runtime}-${security_profile}-${auth_mode}-${network_mode}-error.log"
     local start_time=$(date +%s.%N)
 
-    if cdk synth --quiet --context cfc=@deployment-context.json > "$synth_output" 2> "$synth_error"; then
+    if cdk synth --quiet > "$synth_output" 2> "$synth_error"; then
+        # Restore original cdk.json
+        mv "$backup_cdk_json" "$original_cdk_json"
 
         local end_time=$(date +%s.%N)
         local duration=$(echo "$end_time - $start_time" | bc)
@@ -178,6 +197,9 @@ run_synthesis() {
 
         return 0
     else
+        # Restore original cdk.json on failure
+        mv "$backup_cdk_json" "$original_cdk_json"
+
         local end_time=$(date +%s.%N)
         local duration=$(echo "$end_time - $start_time" | bc)
 
