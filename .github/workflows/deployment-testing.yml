@@ -287,7 +287,18 @@ jobs:
           path: cfc-testing/test-results/deployment-reports/historical/deployment-metrics.csv
           retention-days: 365
 
-      - name: Analyze deployment trends
+      - name: Generate deployment dashboard
+        if: always()
+        run: |
+          cd cfc-testing
+          if [ -f test-results/deployment-reports/historical/deployment-metrics.csv ]; then
+            echo "Generating interactive deployment dashboard..."
+            python3 scripts/deployment-metrics-dashboard.py
+          else
+            echo "No metrics file found, skipping dashboard generation"
+          fi
+
+      - name: Generate trends markdown
         if: always()
         run: |
           cd cfc-testing/test-results/deployment-reports/historical
@@ -322,6 +333,16 @@ jobs:
               echo "- $profile: ${avg}s" >> trends.md
             done
           fi
+
+      - name: Upload deployment dashboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-dashboard-${{ github.run_number }}
+          path: |
+            cfc-testing/test-results/deployment-reports/dashboard/deployment-dashboard.html
+            cfc-testing/test-results/deployment-reports/dashboard/deployment-analysis.json
+          retention-days: 90
 
       - name: Upload trends report
         if: always()

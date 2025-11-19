@@ -37,6 +37,14 @@ class SubdomainConfig(Enum):
     WITH_SUBDOMAIN = "with-subdomain"
     NO_SUBDOMAIN = "no-subdomain"
 
+class AuthMode(Enum):
+    NONE = "none"
+    ALB_OIDC = "alb-oidc"
+
+class NetworkMode(Enum):
+    PUBLIC_NO_NAT = "public-no-nat"
+    PRIVATE_WITH_NAT = "private-with-nat"
+
 @dataclass
 class TestConfiguration:
     runtime: Runtime
@@ -45,9 +53,11 @@ class TestConfiguration:
     domain_config: DomainConfig
     ssl_config: SSLConfig
     subdomain_config: SubdomainConfig
-    
+    auth_mode: AuthMode
+    network_mode: NetworkMode
+
     def __str__(self):
-        return f"{self.runtime.value}_{self.topology.value}_{self.security_profile.value}_{self.domain_config.value}_{self.ssl_config.value}_{self.subdomain_config.value}"
+        return f"{self.runtime.value}_{self.topology.value}_{self.security_profile.value}_{self.domain_config.value}_{self.ssl_config.value}_{self.subdomain_config.value}_{self.auth_mode.value}_{self.network_mode.value}"
     
     def is_valid(self) -> bool:
         """Check if this configuration combination is valid"""
@@ -62,6 +72,18 @@ class TestConfiguration:
         # JENKINS_SINGLE_NODE topology requires EC2 runtime (architectural constraint)
         # Fargate doesn't support single-node topology - it uses ECS Services
         if self.topology == Topology.JENKINS_SINGLE_NODE and self.runtime == Runtime.FARGATE:
+            return False
+
+        # ALB-OIDC authentication requires a domain (for redirect URIs)
+        if self.auth_mode == AuthMode.ALB_OIDC and self.domain_config == DomainConfig.NO_DOMAIN:
+            return False
+
+        # DEV profile doesn't support OIDC authentication
+        if self.security_profile == SecurityProfile.DEV and self.auth_mode == AuthMode.ALB_OIDC:
+            return False
+
+        # ALB-OIDC requires JENKINS_SERVICE topology (needs ALB for listener rules)
+        if self.auth_mode == AuthMode.ALB_OIDC and self.topology != Topology.JENKINS_SERVICE:
             return False
 
         return True
@@ -111,6 +133,16 @@ class ResourceType(Enum):
     WAF_WEB_ACL = "AWS::WAFv2::WebACL"
     CLOUDTRAIL = "AWS::CloudTrail::Trail"
     CONFIG_RULES = "AWS::Config::ConfigRule"
+
+    # Authentication (OIDC/Cognito)
+    COGNITO_USER_POOL = "AWS::Cognito::UserPool"
+    COGNITO_USER_POOL_CLIENT = "AWS::Cognito::UserPoolClient"
+    COGNITO_USER_POOL_DOMAIN = "AWS::Cognito::UserPoolDomain"
+
+    # Network
+    NAT_GATEWAY = "AWS::EC2::NatGateway"
+    ELASTIC_IP = "AWS::EC2::EIP"
+    VPC_ENDPOINT = "AWS::EC2::VPCEndpoint"
 
 class TruthTableGenerator:
     def __init__(self, output_dir: str):
@@ -170,6 +202,16 @@ class TruthTableGenerator:
             ResourceType.WAF_WEB_ACL: ["ProductionSecurityConfiguration.java"],
             ResourceType.CLOUDTRAIL: ["StagingSecurityConfiguration.java", "ProductionSecurityConfiguration.java"],
             ResourceType.CONFIG_RULES: ["StagingSecurityConfiguration.java", "ProductionSecurityConfiguration.java"],
+
+            # Authentication
+            ResourceType.COGNITO_USER_POOL: ["CognitoAuthenticationFactory.java"],
+            ResourceType.COGNITO_USER_POOL_CLIENT: ["CognitoAuthenticationFactory.java"],
+            ResourceType.COGNITO_USER_POOL_DOMAIN: ["CognitoAuthenticationFactory.java"],
+
+            # Network
+            ResourceType.NAT_GATEWAY: ["VpcFactory.java"],
+            ResourceType.ELASTIC_IP: ["VpcFactory.java"],
+            ResourceType.VPC_ENDPOINT: ["VpcFactory.java"],
         }
     
     def generate_expected_resources(self, config: TestConfiguration) -> Set[ResourceType]:
@@ -249,59 +291,81 @@ class TruthTableGenerator:
                 ResourceType.CONFIG_RULES,
                 ResourceType.CLOUDWATCH_ALARMS,
             ])
-        
+
+        # Authentication-specific resources
+        if config.auth_mode == AuthMode.ALB_OIDC:
+            resources.update([
+                ResourceType.COGNITO_USER_POOL,
+                ResourceType.COGNITO_USER_POOL_CLIENT,
+                ResourceType.COGNITO_USER_POOL_DOMAIN,
+            ])
+
+        # Network mode-specific resources
+        if config.network_mode == NetworkMode.PRIVATE_WITH_NAT:
+            resources.update([
+                ResourceType.NAT_GATEWAY,
+                ResourceType.ELASTIC_IP,
+            ])
+
         return resources
     
     def generate_truth_table(self) -> Dict[str, Dict]:
         """Generate complete truth table for all valid configurations"""
         truth_table = {}
-        
+
         for runtime in Runtime:
             for topology in Topology:
                 for security_profile in SecurityProfile:
                     for domain_config in DomainConfig:
                         for ssl_config in SSLConfig:
                             for subdomain_config in SubdomainConfig:
-                                config = TestConfiguration(
-                                    runtime, topology, security_profile,
-                                    domain_config, ssl_config, subdomain_config
-                                )
-                                
-                                key = str(config)
-                                
-                                if config.is_valid():
-                                    expected_resources = self.generate_expected_resources(config)
-                                    truth_table[key] = {
-                                        "configuration": {
-                                            "runtime": runtime.value,
-                                            "topology": topology.value,
-                                            "security_profile": security_profile.value,
-                                            "domain_config": domain_config.value,
-                                            "ssl_config": ssl_config.value,
-                                            "subdomain_config": subdomain_config.value,
-                                        },
-                                        "expected_resources": [r.value for r in expected_resources],
-                                        "resource_count": len(expected_resources),
-                                        "files_involved": self.get_files_for_resources(expected_resources),
-                                        "valid": True
-                                    }
-                                else:
-                                    truth_table[key] = {
-                                        "configuration": {
-                                            "runtime": runtime.value,
-                                            "topology": topology.value,
-                                            "security_profile": security_profile.value,
-                                            "domain_config": domain_config.value,
-                                            "ssl_config": ssl_config.value,
-                                            "subdomain_config": subdomain_config.value,
-                                        },
-                                        "expected_resources": [],
-                                        "resource_count": 0,
-                                        "files_involved": [],
-                                        "valid": False,
-                                        "reason": "Invalid combination"
-                                    }
-        
+                                for auth_mode in AuthMode:
+                                    for network_mode in NetworkMode:
+                                        config = TestConfiguration(
+                                            runtime, topology, security_profile,
+                                            domain_config, ssl_config, subdomain_config,
+                                            auth_mode, network_mode
+                                        )
+
+                                        key = str(config)
+
+                                        if config.is_valid():
+                                            expected_resources = self.generate_expected_resources(config)
+                                            truth_table[key] = {
+                                                "configuration": {
+                                                    "runtime": runtime.value,
+                                                    "topology": topology.value,
+                                                    "security_profile": security_profile.value,
+                                                    "domain_config": domain_config.value,
+                                                    "ssl_config": ssl_config.value,
+                                                    "subdomain_config": subdomain_config.value,
+                                                    "auth_mode": auth_mode.value,
+                                                    "network_mode": network_mode.value,
+                                                },
+                                                "expected_resources": [r.value for r in expected_resources],
+                                                "resource_count": len(expected_resources),
+                                                "files_involved": self.get_files_for_resources(expected_resources),
+                                                "valid": True
+                                            }
+                                        else:
+                                            truth_table[key] = {
+                                                "configuration": {
+                                                    "runtime": runtime.value,
+                                                    "topology": topology.value,
+                                                    "security_profile": security_profile.value,
+                                                    "domain_config": domain_config.value,
+                                                    "ssl_config": ssl_config.value,
+                                                    "subdomain_config": subdomain_config.value,
+                                                    "auth_mode": auth_mode.value,
+                                                    "network_mode": network_mode.value,
+                                                },
+                                                "expected_resources": [],
+                                                "resource_count": 0,
+                                                "files_involved": [],
+                                                "valid": False,
+                                                "reason": "Invalid combination"
+                                            }
+
         return truth_table
     
     def get_files_for_resources(self, resources: Set[ResourceType]) -> List[str]:

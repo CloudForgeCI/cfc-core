@@ -171,7 +171,8 @@ public class InteractiveDeployer {
         System.out.println("1. Synthesize only (generate CloudFormation template)");
         System.out.println("2. Deploy to AWS (synthesize + deploy)");
         System.out.println("3. Delete existing stack and redeploy");
-        System.out.println("4. Cancel");
+        System.out.println("4. Dry-run deployment (create changeset without executing)");
+        System.out.println("5. Cancel");
         
         String choice;
         if (deploymentOption != null && !deploymentOption.trim().isEmpty()) {
@@ -180,7 +181,7 @@ public class InteractiveDeployer {
             System.out.println("Using deployment option from command line: " + choice);
         } else {
             // Interactive input
-            System.out.print("Choose option [1-4]: ");
+            System.out.print("Choose option [1-5]: ");
             try {
                 if (scanner.hasNextLine()) {
                     choice = scanner.nextLine().trim();
@@ -207,6 +208,9 @@ public class InteractiveDeployer {
                 System.out.println("🚀 Starting fresh deployment...");
                 break;
             case "4":
+                System.out.println("\n🔍 Starting Dry-Run Deployment (creating changeset without executing)...");
+                break;
+            case "5":
                 System.out.println("❌ Deployment cancelled by user");
                 return;
             default:
@@ -261,14 +265,14 @@ public class InteractiveDeployer {
             System.out.println("\n✅ CDK Stack synthesized successfully!");
             System.out.println("🚀 Starting CDK deployment to AWS...");
             app.synth();
-            
+
             // Execute cdk deploy
             try {
                 System.out.println("⏳ Deploying stack '" + config.stackName + "' to AWS...");
                 ProcessBuilder deployProcess = new ProcessBuilder("cdk", "deploy", "--require-approval", "never");
                 Process deployProc = deployProcess.start();
                 int deployExitCode = deployProc.waitFor();
-                
+
                 if (deployExitCode == 0) {
                     System.out.println("✅ Stack '" + config.stackName + "' deployed successfully to AWS!");
                 } else {
@@ -278,6 +282,31 @@ public class InteractiveDeployer {
             } catch (Exception e) {
                 System.out.println("❌ Error during CDK deployment: " + e.getMessage());
                 System.out.println("You can manually run: cdk deploy");
+            }
+        } else if (choice.equals("4")) {
+            System.out.println("\n✅ CDK Stack synthesized successfully!");
+            System.out.println("🔍 Creating changeset for dry-run deployment...");
+            app.synth();
+
+            // Execute cdk deploy --no-execute (creates changeset without executing)
+            try {
+                System.out.println("⏳ Creating changeset for stack '" + config.stackName + "' (no execution)...");
+                ProcessBuilder deployProcess = new ProcessBuilder("cdk", "deploy", "--no-execute", "--require-approval", "never");
+                deployProcess.inheritIO();
+                Process deployProc = deployProcess.start();
+                int deployExitCode = deployProc.waitFor();
+
+                if (deployExitCode == 0) {
+                    System.out.println("✅ Changeset created successfully for stack '" + config.stackName + "'!");
+                    System.out.println("📋 Review the changeset in AWS CloudFormation console");
+                    System.out.println("💡 To execute: Run 'cdk deploy' or execute the changeset in AWS console");
+                } else {
+                    System.out.println("❌ Changeset creation failed with exit code: " + deployExitCode);
+                    System.out.println("Check the output above for details.");
+                }
+            } catch (Exception e) {
+                System.out.println("❌ Error during changeset creation: " + e.getMessage());
+                System.out.println("You can manually run: cdk deploy --no-execute");
             }
         } else {
             System.out.println("\n✅ CDK Stack synthesized successfully!");
