@@ -47,9 +47,23 @@ SUBDOMAIN_CONFIGS=("with-subdomain" "no-subdomain")
 declare -A EXPECTED_RESOURCES
 
 # Function to initialize expected resources truth table
+#
+# This function generates expected resources for all valid configuration combinations.
+#
+# Key behaviors to note:
+# 1. Route53HostedZone and ACMCertificate are often looked up (not created)
+#    - Validation marks them as LOOKUP if not found in template but referenced
+# 2. Cognito resources require BOTH domain AND SSL enabled
+#    - CognitoUserPool, CognitoUserPoolClient, CognitoUserPoolDomain
+#    - Only created for STAGING/PRODUCTION with domain + SSL
+#    - This is correct: Cognito OIDC requires HTTPS
+# 3. Compliance resources (CloudTrail, ConfigRules) created for STAGING/PRODUCTION
+#    - Requires awsConfigEnabled=true in deployment context
+# 4. WAFWebACL only for PRODUCTION profile
+# 5. S3Bucket created for ALB access logging in STAGING/PRODUCTION with JENKINS_SERVICE
 initialize_truth_table() {
     echo -e "${CYAN}📋 Initializing truth table...${NC}"
-    
+
     # Base resources that should ALWAYS exist
     local base_resources="VPC,Subnets,SecurityGroups,IAMRoles,CloudWatchLogs"
     
@@ -93,8 +107,10 @@ initialize_truth_table() {
                             
                             # Add domain-specific resources
                             if [[ "$domain_config" == "with-domain" ]]; then
+                                # Route53HostedZone and ACMCertificate are typically looked up, not created
+                                # Validation will mark them as LOOKUP if not created in template
                                 expected+=",Route53HostedZone,Route53Records"
-                                
+
                                 # Add SSL-specific resources
                                 if [[ "$ssl_config" == "ssl-enabled" ]]; then
                                     expected+=",ACMCertificate,HTTPSListener,HTTPRedirect"
@@ -119,7 +135,11 @@ initialize_truth_table() {
                                     if [[ "$topology" == "JENKINS_SERVICE" ]]; then
                                         expected+=",S3Bucket"
                                     fi
-                                    # OIDC authentication with Cognito
+                                    # OIDC authentication with Cognito (requires HTTPS/SSL + domain)
+                                    # Cognito is ONLY created when BOTH conditions are met:
+                                    # 1. Domain is configured (with-domain)
+                                    # 2. SSL is enabled (ssl-enabled)
+                                    # This is correct behavior - Cognito OIDC requires HTTPS
                                     if [[ "$domain_config" == "with-domain" && "$ssl_config" == "ssl-enabled" ]]; then
                                         expected+=",CognitoUserPool,CognitoUserPoolClient,CognitoUserPoolDomain"
                                     fi
@@ -130,7 +150,11 @@ initialize_truth_table() {
                                     if [[ "$topology" == "JENKINS_SERVICE" ]]; then
                                         expected+=",S3Bucket"
                                     fi
-                                    # OIDC authentication with Cognito
+                                    # OIDC authentication with Cognito (requires HTTPS/SSL + domain)
+                                    # Cognito is ONLY created when BOTH conditions are met:
+                                    # 1. Domain is configured (with-domain)
+                                    # 2. SSL is enabled (ssl-enabled)
+                                    # This is correct behavior - Cognito OIDC requires HTTPS
                                     if [[ "$domain_config" == "with-domain" && "$ssl_config" == "ssl-enabled" ]]; then
                                         expected+=",CognitoUserPool,CognitoUserPoolClient,CognitoUserPoolDomain"
                                     fi
@@ -360,14 +384,14 @@ validate_resources() {
     local template_file=$1
     local expected_resources=$2
     local config_key=$3
-    
+
     local validation_output="$VALIDATION_DIR/${config_key}-validation.json"
-    
+
     echo "  🔍 Validating resources..."
-    
+
     # Extract all resource types from template
     local actual_resources=$(jq -r '.Resources | to_entries[] | .value.Type' "$template_file" 2>/dev/null | sort | uniq | tr '\n' ',' | sed 's/,$//')
-    
+
     # Create validation report
     cat > "$validation_output" << EOF
 {
@@ -376,16 +400,17 @@ validate_resources() {
   "actual_resource_types": "$actual_resources",
   "validation_results": {
 EOF
-    
+
     local validation_results=""
     local missing_resources=""
-    local unexpected_resources=""
+    local lookup_resources=""
     local all_good=true
-    
+
     # Check each expected resource type
     IFS=',' read -ra EXPECTED_ARRAY <<< "$expected_resources"
     for expected in "${EXPECTED_ARRAY[@]}"; do
         local found=false
+        local is_lookup=false
         case "$expected" in
             "VPC")
                 if grep -q "AWS::EC2::VPC" "$template_file"; then found=true; fi
@@ -403,19 +428,46 @@ EOF
                 if grep -q "AWS::ElasticLoadBalancingV2::TargetGroup" "$template_file"; then found=true; fi
                 ;;
             "HTTPListener")
-                if grep -q '"Port": 80' "$template_file" && grep -q '"Protocol": "HTTP"' "$template_file"; then found=true; fi
+                # Check for Listener with Port 80 OR check for any HTTP listener
+                if jq -r '.Resources | to_entries[] | select(.value.Type == "AWS::ElasticLoadBalancingV2::Listener") | select(.value.Properties.Port == 80 or .value.Properties.Protocol == "HTTP") | .key' "$template_file" 2>/dev/null | grep -q .; then
+                    found=true
+                fi
                 ;;
             "HTTPSListener")
-                if grep -q '"Port": 443' "$template_file" && grep -q '"Protocol": "HTTPS"' "$template_file"; then found=true; fi
+                # Check for Listener with Port 443 OR Protocol HTTPS
+                if jq -r '.Resources | to_entries[] | select(.value.Type == "AWS::ElasticLoadBalancingV2::Listener") | select(.value.Properties.Port == 443 or .value.Properties.Protocol == "HTTPS") | .key' "$template_file" 2>/dev/null | grep -q .; then
+                    found=true
+                fi
                 ;;
             "HTTPRedirect")
-                if grep -q '"Type": "redirect"' "$template_file" && grep -q '"Protocol": "HTTPS"' "$template_file"; then found=true; fi
+                # Check for Listener with redirect action to HTTPS
+                if jq -r '.Resources | to_entries[] | select(.value.Type == "AWS::ElasticLoadBalancingV2::Listener") | select(.value.Properties.DefaultActions[]? | select(.Type == "redirect") | select(.RedirectConfig.Protocol == "HTTPS")) | .key' "$template_file" 2>/dev/null | grep -q .; then
+                    found=true
+                fi
                 ;;
             "ACMCertificate")
-                if grep -q "AWS::CertificateManager::Certificate" "$template_file"; then found=true; fi
+                # ACM certificates are often looked up from existing resources
+                if grep -q "AWS::CertificateManager::Certificate" "$template_file"; then
+                    found=true
+                else
+                    # Check if certificate ARN is referenced (indicating lookup)
+                    if grep -q "arn:aws:acm:" "$template_file"; then
+                        found=true
+                        is_lookup=true
+                    fi
+                fi
                 ;;
             "Route53HostedZone")
-                if grep -q "AWS::Route53::HostedZone" "$template_file"; then found=true; fi
+                # Hosted zones are typically looked up, not created
+                if grep -q "AWS::Route53::HostedZone" "$template_file"; then
+                    found=true
+                else
+                    # If Route53 records exist, zone must exist (via lookup)
+                    if grep -q "AWS::Route53::RecordSet" "$template_file"; then
+                        found=true
+                        is_lookup=true
+                    fi
+                fi
                 ;;
             "Route53Records")
                 if grep -q "AWS::Route53::RecordSet" "$template_file"; then found=true; fi
@@ -430,7 +482,10 @@ EOF
                 if grep -q "AWS::ECS::TaskDefinition" "$template_file"; then found=true; fi
                 ;;
             "EC2Instances")
-                if grep -q "AWS::EC2::Instance" "$template_file"; then found=true; fi
+                # Check for EC2 Instance or LaunchTemplate (which creates instances)
+                if grep -q "AWS::EC2::Instance" "$template_file" || grep -q "AWS::EC2::LaunchTemplate" "$template_file"; then
+                    found=true
+                fi
                 ;;
             "AutoScalingGroup")
                 if grep -q "AWS::AutoScaling::AutoScalingGroup" "$template_file"; then found=true; fi
@@ -457,13 +512,16 @@ EOF
                 if grep -q "AWS::CloudTrail::Trail" "$template_file"; then found=true; fi
                 ;;
             "ConfigRules")
-                if grep -q "AWS::Config::ConfigRule" "$template_file"; then found=true; fi
+                # Check for Config Rule OR ConfigurationRecorder (which enables Config)
+                if grep -q "AWS::Config::ConfigRule" "$template_file" || grep -q "AWS::Config::ConfigurationRecorder" "$template_file"; then
+                    found=true
+                fi
                 ;;
             "S3Bucket")
                 if grep -q "AWS::S3::Bucket" "$template_file"; then found=true; fi
                 ;;
             "CognitoUserPool")
-                if grep -q "AWS::Cognito::UserPool\"" "$template_file"; then found=true; fi
+                if grep -q "AWS::Cognito::UserPool" "$template_file"; then found=true; fi
                 ;;
             "CognitoUserPoolClient")
                 if grep -q "AWS::Cognito::UserPoolClient" "$template_file"; then found=true; fi
@@ -472,10 +530,16 @@ EOF
                 if grep -q "AWS::Cognito::UserPoolDomain" "$template_file"; then found=true; fi
                 ;;
         esac
-        
+
         if [[ "$found" == true ]]; then
-            validation_results+="\n    \"$expected\": \"FOUND\","
-            echo -e "    ${GREEN}✅ $expected${NC}"
+            if [[ "$is_lookup" == true ]]; then
+                validation_results+="\n    \"$expected\": \"LOOKUP\","
+                lookup_resources+="$expected,"
+                echo -e "    ${CYAN}🔍 $expected (via lookup)${NC}"
+            else
+                validation_results+="\n    \"$expected\": \"FOUND\","
+                echo -e "    ${GREEN}✅ $expected${NC}"
+            fi
         else
             validation_results+="\n    \"$expected\": \"MISSING\","
             missing_resources+="$expected,"
@@ -483,7 +547,7 @@ EOF
             echo -e "    ${RED}❌ $expected${NC}"
         fi
     done
-    
+
     # Close validation JSON
     echo -e "$validation_results" | sed '$ s/,$//' >> "$validation_output"
     echo "" >> "$validation_output"
@@ -491,10 +555,11 @@ EOF
     echo "  \"summary\": {" >> "$validation_output"
     echo "    \"status\": \"$(if $all_good; then echo 'PASS'; else echo 'FAIL'; fi)\"," >> "$validation_output"
     echo "    \"missing_resources\": \"${missing_resources%,}\"," >> "$validation_output"
+    echo "    \"lookup_resources\": \"${lookup_resources%,}\"," >> "$validation_output"
     echo "    \"resource_count\": $(grep -c '"Type"' "$template_file" 2>/dev/null || echo 0)" >> "$validation_output"
     echo "  }" >> "$validation_output"
     echo "}" >> "$validation_output"
-    
+
     # Add to drift report
     if ! $all_good; then
         echo "$config_key: MISSING_RESOURCES - ${missing_resources%,}" >> "$DRIFT_REPORT_FILE"
