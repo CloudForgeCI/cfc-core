@@ -180,9 +180,9 @@ class CdkConstructValidationTest {
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
         var cfc = DeploymentContext.from(stack);
-        
+
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
         
         // When & Then
         assertDoesNotThrow(() -> {
@@ -297,9 +297,9 @@ class CdkConstructValidationTest {
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
         var cfc = DeploymentContext.from(stack);
-        
-        // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+
+        // Initialize SystemContext with FARGATE runtime (test creates FargateFactory)
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
         
         // When & Then
         assertDoesNotThrow(() -> {
