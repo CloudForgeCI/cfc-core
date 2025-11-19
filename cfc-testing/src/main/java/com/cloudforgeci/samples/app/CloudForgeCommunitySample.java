@@ -32,14 +32,16 @@ public class CloudForgeCommunitySample {
 
       // Read all cfc.* parameters and build the context map
       String[] contextKeys = {
-        "runtime", "topology", "securityProfile", "stackName",
+        "runtime", "topology", "securityProfile", "stackName", "region",
         "domain", "subdomain", "enableSsl", "env", "tier",
         "networkMode", "wafEnabled", "cloudfrontEnabled", "authMode",
         "cpu", "memory", "instanceType", "minInstanceCapacity", "maxInstanceCapacity",
         "cpuTargetUtilization", "enableMonitoring", "enableEncryption",
         "logRetentionDays", "healthCheckGracePeriod", "healthCheckInterval",
         "healthCheckTimeout", "healthyThreshold", "unhealthyThreshold",
-        "bastionCidr", "lbType", "enableFlowlogs", "createZone", "artifactsPrefix"
+        "bastionCidr", "lbType", "enableFlowlogs", "createZone", "artifactsPrefix",
+        "autoProvisionIdentityCenter", "identityCenterGroupName",
+        "ssoInstanceArn", "ssoGroupId", "ssoTargetAccountId"
       };
 
       for (String key : contextKeys) {
@@ -57,9 +59,19 @@ public class CloudForgeCommunitySample {
 
     DeploymentContext cfc = DeploymentContext.from(app);
 
+    // Use region from DeploymentContext (cdk.json or deployment-context.json) with fallback to environment variable
+    String region = cfc.region() != null ? cfc.region() : System.getenv("CDK_DEFAULT_REGION");
+    String account = System.getenv("CDK_DEFAULT_ACCOUNT");
+
+    System.out.println("CloudForge deployment configuration:");
+    System.out.println("  Region: " + region);
+    System.out.println("  Account: " + account);
+    System.out.println("  Runtime: " + cfc.runtime());
+    System.out.println("  Security Profile: " + cfc.securityProfile());
+
     StackProps props = StackProps.builder().env(Environment.builder()
-            .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-            .region(System.getenv("CDK_DEFAULT_REGION")).build()).build();
+            .account(account)
+            .region(region).build()).build();
 
     // Get security profile from DeploymentContext
     SecurityProfile security = cfc.securityProfile();

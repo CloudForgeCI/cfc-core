@@ -30,8 +30,15 @@ class SecurityMonitoringFactorySimpleTest {
             assertDoesNotThrow(() -> {
                 App app = new App();
                 Stack stack = new Stack(app, "TestStack");
+                // Start SystemContext before creating factory
+                com.cloudforgeci.api.core.SystemContext.start(stack,
+                    com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
+                    com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+                    com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
+                    com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+                    com.cloudforgeci.api.core.DeploymentContext.from(stack));
                 SecurityMonitoringFactory factory = new SecurityMonitoringFactory(stack, "TestSecurityMonitoring");
-                
+
                 assertNotNull(factory, "Factory should be created");
                 assertEquals("TestSecurityMonitoring", factory.getNode().getId(), "Factory should have correct ID");
                 assertEquals(stack, factory.getNode().getScope(), "Factory should have correct parent");
@@ -248,13 +255,20 @@ class SecurityMonitoringFactorySimpleTest {
             assertDoesNotThrow(() -> {
                 App app = new App();
                 Stack stack = new Stack(app, "TestStack");
-                
+                // Start SystemContext before creating factories
+                com.cloudforgeci.api.core.SystemContext.start(stack,
+                    com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
+                    com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+                    com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
+                    com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+                    com.cloudforgeci.api.core.DeploymentContext.from(stack));
+
                 SecurityMonitoringFactory factory1 = new SecurityMonitoringFactory(stack, "Factory1");
                 SecurityMonitoringFactory factory2 = new SecurityMonitoringFactory(stack, "Factory2");
-                
+
                 assertNotNull(factory1, "First factory should be created");
                 assertNotNull(factory2, "Second factory should be created");
-                assertNotEquals(factory1.getNode().getId(), factory2.getNode().getId(), 
+                assertNotEquals(factory1.getNode().getId(), factory2.getNode().getId(),
                     "Factories should have different IDs");
             }, "SecurityMonitoringFactory should work with multiple instances");
         }
@@ -267,23 +281,35 @@ class SecurityMonitoringFactorySimpleTest {
                 Runnable task1 = () -> {
                     App app = new App();
                     Stack stack = new Stack(app, "TestStack1");
+                    com.cloudforgeci.api.core.SystemContext.start(stack,
+                        com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
+                        com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+                        com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
+                        com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+                        com.cloudforgeci.api.core.DeploymentContext.from(stack));
                     SecurityMonitoringFactory factory = new SecurityMonitoringFactory(stack, "ThreadSafeFactory1");
                     assertNotNull(factory, "Factory should be created");
                 };
-                
+
                 Runnable task2 = () -> {
                     App app = new App();
                     Stack stack = new Stack(app, "TestStack2");
+                    com.cloudforgeci.api.core.SystemContext.start(stack,
+                        com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
+                        com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+                        com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
+                        com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+                        com.cloudforgeci.api.core.DeploymentContext.from(stack));
                     SecurityMonitoringFactory factory = new SecurityMonitoringFactory(stack, "ThreadSafeFactory2");
                     assertNotNull(factory, "Factory should be created");
                 };
-                
+
                 Thread thread1 = new Thread(task1);
                 Thread thread2 = new Thread(task2);
-                
+
                 thread1.start();
                 thread2.start();
-                
+
                 thread1.join();
                 thread2.join();
             }, "SecurityMonitoringFactory should be thread-safe for instantiation");

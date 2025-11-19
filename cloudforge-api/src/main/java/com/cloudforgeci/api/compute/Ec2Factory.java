@@ -1,8 +1,10 @@
 package com.cloudforgeci.api.compute;
 
-import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforgeci.api.core.annotation.SystemContext;
+import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -75,11 +77,30 @@ public class Ec2Factory extends BaseFactory {
   private static final Logger LOG = Logger.getLogger(Ec2Factory.class.getName());
   private AutoScalingGroup asg;
 
-  @com.cloudforgeci.api.core.annotation.SystemContext
-  private SystemContext ctx;
+  @SystemContext("stackName")
+  private String stackName;
+
+  @SystemContext("runtime")
+  private RuntimeType runtime;
+
+  @SystemContext("security")
+  private SecurityProfile security;
+
+  @DeploymentContext("minInstanceCapacity")
+  private Integer minInstanceCapacity;
+
+  @DeploymentContext("maxInstanceCapacity")
+  private Integer maxInstanceCapacity;
+
+  @DeploymentContext("networkMode")
+  private String networkMode;
+
+  @DeploymentContext("retainStorage")
+  private Boolean retainStorage;
 
   public Ec2Factory(Construct scope, String id) {
     super(scope, id);
+    // All fields are automatically injected by BaseFactory
   }
 
   @Override
@@ -214,10 +235,10 @@ public class Ec2Factory extends BaseFactory {
                     "    }%n" +
                     "  }%n" +
                     "}%n" +
-                    "EOF", 
-                    ctx.stackName, ctx.runtime.name().toLowerCase(), ctx.security.name().toLowerCase(),
-                    ctx.stackName, ctx.runtime.name().toLowerCase(), ctx.security.name().toLowerCase(),
-                    ctx.stackName, ctx.runtime.name().toLowerCase(), ctx.security.name().toLowerCase()),
+                    "EOF",
+                    stackName, runtime.name().toLowerCase(), security.name().toLowerCase(),
+                    stackName, runtime.name().toLowerCase(), security.name().toLowerCase(),
+                    stackName, runtime.name().toLowerCase(), security.name().toLowerCase()),
             "",
             "# Start CloudWatch Agent",
             "echo 'Starting CloudWatch Agent...' >> /var/log/jenkins-userdata.log",
@@ -277,6 +298,17 @@ public class Ec2Factory extends BaseFactory {
             .role(ec2Role)
             .userData(userData);
 
+    // Determine EBS retention policy based on retainStorage configuration
+    // Root volume is always deleted (system disk), but data volume can be retained
+    boolean deleteDataVolume = !Boolean.TRUE.equals(retainStorage);
+
+    if (Boolean.TRUE.equals(retainStorage)) {
+      LOG.info("EBS data volumes will be RETAINED after instance termination (retainStorage=true)");
+      LOG.info("⚠️  You must manually delete EBS volumes from AWS Console to avoid ongoing storage costs");
+    } else {
+      LOG.info("EBS data volumes will be DESTROYED with instances (retainStorage=false)");
+    }
+
     // Add block devices
     ltBuilder.blockDevices(List.of(
             BlockDevice.builder()
@@ -284,7 +316,7 @@ public class Ec2Factory extends BaseFactory {
                     .volume(BlockDeviceVolume.ebs(20, EbsDeviceOptions.builder()
                             .encrypted(true)
                             .volumeType(EbsDeviceVolumeType.STANDARD)
-                            .deleteOnTermination(true)
+                            .deleteOnTermination(true)  // Always delete root volume
                             .build()))
                     .build()
     ));
@@ -297,7 +329,7 @@ public class Ec2Factory extends BaseFactory {
                       .volume(BlockDeviceVolume.ebs(100, EbsDeviceOptions.builder()
                               .encrypted(true)
                               .volumeType(EbsDeviceVolumeType.STANDARD)
-                              .deleteOnTermination(true)
+                              .deleteOnTermination(deleteDataVolume)  // Respect retainStorage setting
                               .build()))
                       .build()
       ));
@@ -307,13 +339,13 @@ public class Ec2Factory extends BaseFactory {
   }
 
   private AutoScalingGroup createAutoScalingGroup(LaunchTemplate launchTemplate) {
-    // Use DeploymentContext values for AutoScaling Group configuration
-    int minCapacity = ctx.cfc.minInstanceCapacity() != null ? ctx.cfc.minInstanceCapacity() : 1;
-    int maxCapacity = ctx.cfc.maxInstanceCapacity() != null ? ctx.cfc.maxInstanceCapacity() : 1;
+    // Use annotated field values for AutoScaling Group configuration
+    int minCapacity = minInstanceCapacity != null ? minInstanceCapacity : 1;
+    int maxCapacity = maxInstanceCapacity != null ? maxInstanceCapacity : 1;
     int desiredCapacity = Math.max(minCapacity, Math.min(maxCapacity, minCapacity)); // Start with minimum
-    
+
     // Determine subnet type based on network mode
-    SubnetType subnetType = "public-no-nat".equals(ctx.cfc.networkMode()) ? 
+    SubnetType subnetType = "public-no-nat".equals(networkMode) ?
             SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
     
     return AutoScalingGroup.Builder.create(this, "JenkinsAsg")

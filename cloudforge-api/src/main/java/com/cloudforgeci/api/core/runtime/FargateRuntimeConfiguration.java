@@ -4,38 +4,25 @@ import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
-import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
 import software.amazon.awscdk.services.ecs.CfnService;
-import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationTargetsProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationTargetGroupsProps;
-import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationActionProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
-import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
 import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListener;
 import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListenerRule;
 import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
-import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction;
-import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCondition;
-import software.amazon.awscdk.services.elasticloadbalancingv2.RedirectOptions;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate;
-import software.amazon.awscdk.services.route53.ARecord;
-import software.amazon.awscdk.services.route53.ARecordProps;
-import software.amazon.awscdk.services.route53.RecordTarget;
-import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 import software.constructs.IConstruct;
 
 import java.util.List;
 import java.util.logging.Logger;
 
-
 import static com.cloudforgeci.api.core.rules.RuleKit.forbid;
 import static com.cloudforgeci.api.core.rules.RuleKit.require;
-import static com.cloudforgeci.api.core.rules.RuleKit.when;
 import static com.cloudforgeci.api.core.rules.RuleKit.whenAll;
 import static com.cloudforgeci.api.core.rules.RuleKit.whenBoth;
 
@@ -57,7 +44,7 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
             require("fargate service", x -> x.fargateService),
             require("fargate container", x -> x.container),
             forbid("asg", x -> x.asg),
-            forbid("targetGroup", x -> x.albTargetGroup),   // listener-driven in Fargate
+            // Note: albTargetGroup is now allowed for OIDC authentication support
             forbid("instanceSg", x -> x.instanceSg)          // EC2-specific
     );
   }
@@ -172,8 +159,7 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       return; // SSL requested but no host → fall back to HTTP-only silently
     }
 
-    // 2a) ACM cert (DNS validation) - wait for zone, alb, AND domain to be available
-    
+    // 2a) Create certificate first
     whenBoth(c.zone, c.alb, (zone, alb) -> {
       if (c.cert.get().isPresent()) {
         return;
@@ -184,31 +170,34 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
         return;
       }
 
-      // Use domain name in construct ID to force replacement when domain changes
-      // This prevents "certificate in use" errors during subdomain updates
-      String certId = "HttpsCert-" + certDomain.replace(".", "-");
-
       Certificate cert = Certificate.Builder
-              .create(c, certId)
+              .create(c, "HttpsCert")
               .domainName(certDomain)
               .validation(CertificateValidation.fromDns(zone))
               .build();
 
-      // Set retention policy to RETAIN to prevent deletion errors during updates
-      // When subdomain changes, old cert will be orphaned instead of deleted
-      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.RETAIN);
-
+      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
       c.cert.set(cert);
     });
 
-    // 2b) HTTPS listener - create only when cert and alb are ready
+    // 2b) Create HTTPS listener with certificate
     whenBoth(c.cert, c.alb, (cert, alb) -> {
-      if (c.https.get().isPresent()) return; // Avoid duplicate creation
+      if (c.https.get().isPresent()) return;
+
       ApplicationListener https = alb.addListener("Https",
               BaseApplicationListenerProps.builder()
                       .port(443)
                       .certificates(java.util.List.of(ListenerCertificate.fromCertificateManager(cert)))
                       .build());
+
+      // Add explicit dependency: HTTPS listener depends on certificate
+      // This ensures CloudFormation deletes the listener BEFORE the certificate during stack deletion
+      CfnListener cfnHttps = (CfnListener) https.getNode().getDefaultChild();
+      software.amazon.awscdk.services.certificatemanager.CfnCertificate cfnCert =
+              (software.amazon.awscdk.services.certificatemanager.CfnCertificate) cert.getNode().getDefaultChild();
+      if (cfnHttps != null && cfnCert != null) {
+        cfnHttps.addDependency(cfnCert);
+      }
 
       c.https.set(https);
     });
@@ -238,7 +227,10 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
                         .healthyThresholdCount(healthyThreshold).unhealthyThresholdCount(unhealthyThreshold)
                         .build())
               .build();
-      
+
+      // Store target group in context for other factories to reference (e.g., OIDC)
+      c.albTargetGroup.set(targetGroup);
+
       // Update the HTTPS listener's default action to forward to the target group
       https.addTargetGroups("HttpsTargetGroup", AddApplicationTargetGroupsProps.builder()
               .targetGroups(java.util.List.of(targetGroup))

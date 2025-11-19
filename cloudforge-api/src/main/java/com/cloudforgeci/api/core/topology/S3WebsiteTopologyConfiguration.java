@@ -15,6 +15,7 @@ import software.amazon.awscdk.services.route53.AaaaRecord;
 import software.amazon.awscdk.services.route53.AaaaRecordProps;
 import software.amazon.awscdk.services.route53.RecordTarget;
 import software.amazon.awscdk.services.route53.targets.CloudFrontTarget;
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketAccessControl;
 import software.amazon.awscdk.services.s3.BucketEncryption;
@@ -74,6 +75,7 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
       Bucket bucket = new Bucket(c, "WebsiteBucket", BucketProps.builder()
               .publicReadAccess(false) // prefer CF rather than public bucket
               .accessControl(BucketAccessControl.PRIVATE)
+              .blockPublicAccess(BlockPublicAccess.BLOCK_ALL) // Security Hub compliance
               .websiteIndexDocument("index.html")
               .websiteErrorDocument("error.html")
               .encryption(encryption)

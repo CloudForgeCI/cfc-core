@@ -31,8 +31,9 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
 
     // OIDC requires TLS.
     r.add(ctx -> {
-      var mode = ctx.cfc.authMode();
-      if ("alb-oidc".equalsIgnoreCase(String.valueOf(mode)) && !ctx.cfc.enableSsl()) {
+      String mode = ctx.authMode.get().orElse(null);
+      Boolean sslEnabled = ctx.sslEnabled.get().orElse(false);
+      if ("alb-oidc".equalsIgnoreCase(mode) && !sslEnabled) {
         return List.of("authMode=alb-oidc requires enableSsl=true");
       }
       return List.of();
@@ -40,9 +41,13 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
 
     // If TLS + DNS expected, ensure fqdn or ability to compute it.
     r.add(ctx -> {
-      if (!ctx.cfc.enableSsl()) return List.of();
-      boolean hasFqdn = ctx.cfc.fqdn() != null && !ctx.cfc.fqdn().isBlank();
-      boolean canCompute = ctx.cfc.subdomain() != null && ctx.cfc.domain() != null;
+      Boolean sslEnabled = ctx.sslEnabled.get().orElse(false);
+      if (!sslEnabled) return List.of();
+      String fqdn = ctx.fqdn.get().orElse(null);
+      boolean hasFqdn = fqdn != null && !fqdn.isBlank();
+      String subdomain = ctx.subdomain.get().orElse(null);
+      String domain = ctx.domain.get().orElse(null);
+      boolean canCompute = subdomain != null && domain != null;
       return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl=true requires fqdn OR (subdomain + domain)");
     });
     // TEMPORARY: Comment out AutoScalingGroup forbid rule to debug
@@ -53,30 +58,24 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
 
   @Override
   public void wire(SystemContext c) {
-    
-    // Check if we have domain configuration
-    if (c.cfc.domain() == null || c.cfc.domain().isBlank()) {
-      return;
-    }
-    
+
     // Check if DNS records callback has already been registered to prevent multiple registrations
     if (c.dnsRecordsCallbackRegistered.get().isPresent()) {
       return;
     }
-    
+
     // Route53 A + AAAA aliases to ALB (only if zone + alb present)
     whenBoth(c.zone, c.alb, (zone, alb) -> {
       // Check if DNS records have already been created (inside callback to prevent multiple executions)
       if (c.dnsRecordsCreated.get().isPresent()) {
         return;
       }
-      
-      
+
       // Use subdomain for DNS record name, or use the domain directly if no subdomain
-      String recordName = c.cfc.subdomain();
+      String recordName = c.subdomain.get().orElse(null);
       if (recordName == null || recordName.isBlank()) {
         // When no subdomain is specified, use the domain name itself
-        recordName = c.cfc.domain();
+        recordName = c.domain.get().orElse(null);
         if (recordName == null || recordName.isBlank()) {
           return; // No domain or subdomain specified, cannot create DNS records
         }

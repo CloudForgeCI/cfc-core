@@ -15,6 +15,7 @@ import com.cloudforgeci.api.compute.FargateFactory;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import com.cloudforgeci.api.network.DomainFactory;
 import com.cloudforgeci.api.observability.AlarmFactory;
+import com.cloudforgeci.api.observability.WafFactory;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -68,15 +69,34 @@ public class TestInfrastructureBuilder {
     public TestInfrastructureBuilder(String stackName, SecurityProfile securityProfile, RuntimeType runtimeType, String domainName) {
         this.app = new App();
         this.stack = new Stack(app, stackName);
-        
+
         // Set required context values for testing BEFORE creating DeploymentContext
         Map<String, Object> cfcContext = new HashMap<>();
         cfcContext.put("domain", domainName);
         cfcContext.put("lbType", "alb");
         stack.getNode().setContext("cfc", cfcContext);
-        
+
         this.cfc = DeploymentContext.from(stack);
-        
+
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
+        // Use JENKINS_SERVICE topology for both FARGATE and EC2 runtime
+        TopologyType topology = TopologyType.JENKINS_SERVICE;
+        this.ctx = SystemContext.start(stack, topology, runtimeType, securityProfile, iamProfile, cfc);
+    }
+
+    public TestInfrastructureBuilder(String stackName, SecurityProfile securityProfile, RuntimeType runtimeType, String domainName, boolean createZone) {
+        this.app = new App();
+        this.stack = new Stack(app, stackName);
+
+        // Set required context values for testing BEFORE creating DeploymentContext
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("domain", domainName);
+        cfcContext.put("createZone", createZone);  // Explicitly set createZone flag
+        cfcContext.put("lbType", "alb");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        this.cfc = DeploymentContext.from(stack);
+
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
         // Use JENKINS_SERVICE topology for both FARGATE and EC2 runtime
         TopologyType topology = TopologyType.JENKINS_SERVICE;
@@ -85,28 +105,24 @@ public class TestInfrastructureBuilder {
     
     public TestInfrastructureBuilder createVpc() {
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
-        vpcFactory.injectContexts(); // Manual injection after SystemContext.start()
         vpcFactory.create();
         return this;
     }
     
     public TestInfrastructureBuilder createAlb() {
         AlbFactory albFactory = new AlbFactory(stack, "Alb");
-        albFactory.injectContexts(); // Manual injection after SystemContext.start()
         albFactory.create();
         return this;
     }
     
     public TestInfrastructureBuilder createEfs() {
         EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.injectContexts(); // Manual injection after SystemContext.start()
         efsFactory.create();
         return this;
     }
     
     public TestInfrastructureBuilder createEc2() {
         Ec2Factory ec2Factory = new Ec2Factory(stack, "Ec2");
-        ec2Factory.injectContexts(); // Manual injection after SystemContext.start()
         ec2Factory.create();
         return this;
     }
@@ -151,15 +167,13 @@ public class TestInfrastructureBuilder {
     
     public TestInfrastructureBuilder createFargate() {
         // Create Fargate factory (which will create the container internally)
-        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate", new FargateFactory.Props(cfc));
-        fargateFactory.injectContexts(); // Manual injection after SystemContext.start()
+        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
         fargateFactory.create(); // Call create() to populate fargateTaskDef and fargateService slots
         return this;
     }
     
     public TestInfrastructureBuilder createDomain() {
         DomainFactory domainFactory = new DomainFactory(stack, "Domain");
-        domainFactory.injectContexts(); // Manual injection after SystemContext.start()
         domainFactory.create();
         return this;
     }
@@ -171,6 +185,12 @@ public class TestInfrastructureBuilder {
     
     public TestInfrastructureBuilder createScaling() {
         ScalingFactory scalingFactory = new ScalingFactory(stack, "Scaling");
+        return this;
+    }
+
+    public TestInfrastructureBuilder createWaf() {
+        WafFactory wafFactory = new WafFactory(stack, "Waf");
+        wafFactory.create();
         return this;
     }
     

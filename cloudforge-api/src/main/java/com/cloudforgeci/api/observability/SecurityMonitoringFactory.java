@@ -1,6 +1,8 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.annotation.SystemContext;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
@@ -18,9 +20,12 @@ import java.util.logging.Logger;
  * Uses annotation-based context injection for cleaner code.
  */
 public class SecurityMonitoringFactory extends BaseFactory {
-    
+
     private static final Logger LOG = Logger.getLogger(SecurityMonitoringFactory.class.getName());
-    
+
+    @SystemContext("security")
+    private SecurityProfile security;
+
     public SecurityMonitoringFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -28,39 +33,39 @@ public class SecurityMonitoringFactory extends BaseFactory {
     @Override
     public void create() {
         // SecurityProfileConfiguration is now injected directly via annotation
-        LOG.info("Creating security monitoring for security profile: " + ctx.security);
-        
+        LOG.info("Creating security monitoring for security profile: " + security);
+
         // Only configure monitoring if enabled for this security profile
         if (!config.isSecurityMonitoringEnabled()) {
-            LOG.info("Security monitoring disabled for security profile: " + ctx.security);
+            LOG.info("Security monitoring disabled for security profile: " + security);
             return;
         }
-        
+
         // Create SNS topic for security alerts
         Topic securityAlertsTopic = createSecurityAlertsTopic();
-        
+
         // Configure CloudWatch alarms
         configureSecurityAlarms(securityAlertsTopic);
-        
+
         // Configure flow log monitoring if enabled
         if (config.isFlowLogsEnabled()) {
             configureFlowLogMonitoring(securityAlertsTopic);
         }
-        
-        LOG.info("Security monitoring configuration completed for profile: " + ctx.security);
+
+        LOG.info("Security monitoring configuration completed for profile: " + security);
     }
     
     /**
      * Create SNS topic for security alerts.
      */
     private Topic createSecurityAlertsTopic() {
-        String topicName = "security-alerts-" + ctx.security.name().toLowerCase();
-        
+        String topicName = "security-alerts-" + security.name().toLowerCase();
+
         Topic topic = Topic.Builder.create(this, "SecurityAlertsTopic")
                 .topicName(topicName)
-                .displayName("Security Alerts for " + ctx.security + " Environment")
+                .displayName("Security Alerts for " + security + " Environment")
                 .build();
-        
+
         LOG.info("Created security alerts SNS topic: " + topicName);
         return topic;
     }
@@ -69,12 +74,12 @@ public class SecurityMonitoringFactory extends BaseFactory {
      * Configure CloudWatch alarms for security monitoring.
      */
     private void configureSecurityAlarms(Topic alertsTopic) {
-        LOG.info("Configuring CloudWatch security alarms for profile: " + ctx.security);
-        
+        LOG.info("Configuring CloudWatch security alarms for profile: " + security);
+
         // Configure different alarm thresholds based on security profile
-        double highCpuThreshold = getHighCpuThreshold(ctx.security);
-        double highMemoryThreshold = getHighMemoryThreshold(ctx.security);
-        double highNetworkThreshold = getHighNetworkThreshold(ctx.security);
+        double highCpuThreshold = getHighCpuThreshold(security);
+        double highMemoryThreshold = getHighMemoryThreshold(security);
+        double highNetworkThreshold = getHighNetworkThreshold(security);
         
         // High CPU Utilization Alarm
         createCpuAlarm(alertsTopic, highCpuThreshold);
@@ -86,12 +91,12 @@ public class SecurityMonitoringFactory extends BaseFactory {
         createNetworkAlarm(alertsTopic, highNetworkThreshold);
         
         // Failed Login Attempts Alarm (for production)
-        if (ctx.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
+        if (security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
             createFailedLoginAlarm(alertsTopic);
         }
-        
+
         // Unusual API Activity Alarm (for staging and production)
-        if (ctx.security == com.cloudforgeci.api.interfaces.SecurityProfile.STAGING || ctx.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
+        if (security == com.cloudforgeci.api.interfaces.SecurityProfile.STAGING || security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
             createUnusualApiActivityAlarm(alertsTopic);
         }
     }
@@ -100,13 +105,13 @@ public class SecurityMonitoringFactory extends BaseFactory {
      * Configure VPC Flow Log monitoring for security analysis.
      */
     private void configureFlowLogMonitoring(Topic alertsTopic) {
-        LOG.info("Configuring VPC Flow Log monitoring for profile: " + ctx.security);
-        
+        LOG.info("Configuring VPC Flow Log monitoring for profile: " + security);
+
         // Monitor for rejected connections (potential security threats)
         createRejectedConnectionsAlarm(alertsTopic);
-        
+
         // Monitor for unusual traffic patterns (production only)
-        if (ctx.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
+        if (security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
             createUnusualTrafficPatternAlarm(alertsTopic);
         }
     }
@@ -118,14 +123,14 @@ public class SecurityMonitoringFactory extends BaseFactory {
         Metric cpuMetric = Metric.Builder.create()
                 .namespace("AWS/ECS")
                 .metricName("CPUUtilization")
-                .dimensionsMap(Map.of("ServiceName", "jenkins-" + ctx.security.name().toLowerCase()))
+                .dimensionsMap(Map.of("ServiceName", "jenkins-" + security.name().toLowerCase()))
                 .statistic("Average")
                 .period(Duration.minutes(5))
                 .build();
-        
+
         Alarm cpuAlarm = Alarm.Builder.create(this, "HighCpuAlarm")
-                .alarmName("jenkins-" + ctx.security.name().toLowerCase() + "-high-cpu")
-                .alarmDescription("High CPU utilization detected in " + ctx.security + " environment")
+                .alarmName("jenkins-" + security.name().toLowerCase() + "-high-cpu")
+                .alarmDescription("High CPU utilization detected in " + security + " environment")
                 .metric(cpuMetric)
                 .threshold(threshold)
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
@@ -143,14 +148,14 @@ public class SecurityMonitoringFactory extends BaseFactory {
         Metric memoryMetric = Metric.Builder.create()
                 .namespace("AWS/ECS")
                 .metricName("MemoryUtilization")
-                .dimensionsMap(Map.of("ServiceName", "jenkins-" + ctx.security.name().toLowerCase()))
+                .dimensionsMap(Map.of("ServiceName", "jenkins-" + security.name().toLowerCase()))
                 .statistic("Average")
                 .period(Duration.minutes(5))
                 .build();
-        
+
         Alarm memoryAlarm = Alarm.Builder.create(this, "HighMemoryAlarm")
-                .alarmName("jenkins-" + ctx.security.name().toLowerCase() + "-high-memory")
-                .alarmDescription("High memory utilization detected in " + ctx.security + " environment")
+                .alarmName("jenkins-" + security.name().toLowerCase() + "-high-memory")
+                .alarmDescription("High memory utilization detected in " + security + " environment")
                 .metric(memoryMetric)
                 .threshold(threshold)
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
@@ -168,14 +173,14 @@ public class SecurityMonitoringFactory extends BaseFactory {
         Metric networkMetric = Metric.Builder.create()
                 .namespace("AWS/ECS")
                 .metricName("NetworkIn")
-                .dimensionsMap(Map.of("ServiceName", "jenkins-" + ctx.security.name().toLowerCase()))
+                .dimensionsMap(Map.of("ServiceName", "jenkins-" + security.name().toLowerCase()))
                 .statistic("Sum")
                 .period(Duration.minutes(5))
                 .build();
-        
+
         Alarm networkAlarm = Alarm.Builder.create(this, "HighNetworkAlarm")
-                .alarmName("jenkins-" + ctx.security.name().toLowerCase() + "-high-network")
-                .alarmDescription("High network traffic detected in " + ctx.security + " environment")
+                .alarmName("jenkins-" + security.name().toLowerCase() + "-high-network")
+                .alarmDescription("High network traffic detected in " + security + " environment")
                 .metric(networkMetric)
                 .threshold(threshold)
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
@@ -199,14 +204,14 @@ public class SecurityMonitoringFactory extends BaseFactory {
         Metric failedLoginMetric = Metric.Builder.create()
                 .namespace("CWLogs")
                 .metricName("FailedLoginAttempts")
-                .dimensionsMap(Map.of("Environment", ctx.security.name()))
+                .dimensionsMap(Map.of("Environment", security.name()))
                 .statistic("Sum")
                 .period(Duration.minutes(5))
                 .build();
-        
+
         Alarm failedLoginAlarm = Alarm.Builder.create(this, "FailedLoginAlarm")
-                .alarmName("jenkins-" + ctx.security.name().toLowerCase() + "-failed-logins")
-                .alarmDescription("Multiple failed login attempts detected in " + ctx.security + " environment")
+                .alarmName("jenkins-" + security.name().toLowerCase() + "-failed-logins")
+                .alarmDescription("Multiple failed login attempts detected in " + security + " environment")
                 .metric(failedLoginMetric)
                 .threshold(5.0) // 5 failed attempts in 5 minutes
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD)
@@ -224,16 +229,16 @@ public class SecurityMonitoringFactory extends BaseFactory {
         Metric apiMetric = Metric.Builder.create()
                 .namespace("AWS/ApplicationELB")
                 .metricName("RequestCount")
-                .dimensionsMap(Map.of("LoadBalancer", "jenkins-" + ctx.security.name().toLowerCase()))
+                .dimensionsMap(Map.of("LoadBalancer", "jenkins-" + security.name().toLowerCase()))
                 .statistic("Sum")
                 .period(Duration.minutes(5))
                 .build();
-        
-        double threshold = ctx.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION ? 1000.0 : 500.0;
-        
+
+        double threshold = security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION ? 1000.0 : 500.0;
+
         Alarm apiAlarm = Alarm.Builder.create(this, "UnusualApiActivityAlarm")
-                .alarmName("jenkins-" + ctx.security.name().toLowerCase() + "-unusual-api-activity")
-                .alarmDescription("Unusual API activity detected in " + ctx.security + " environment")
+                .alarmName("jenkins-" + security.name().toLowerCase() + "-unusual-api-activity")
+                .alarmDescription("Unusual API activity detected in " + security + " environment")
                 .metric(apiMetric)
                 .threshold(threshold)
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
@@ -251,16 +256,16 @@ public class SecurityMonitoringFactory extends BaseFactory {
         Metric rejectedMetric = Metric.Builder.create()
                 .namespace("CWLogs")
                 .metricName("RejectedConnections")
-                .dimensionsMap(Map.of("Environment", ctx.security.name()))
+                .dimensionsMap(Map.of("Environment", security.name()))
                 .statistic("Sum")
                 .period(Duration.minutes(5))
                 .build();
-        
-        double threshold = ctx.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION ? 50.0 : 100.0;
-        
+
+        double threshold = security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION ? 50.0 : 100.0;
+
         Alarm rejectedAlarm = Alarm.Builder.create(this, "RejectedConnectionsAlarm")
-                .alarmName("jenkins-" + ctx.security.name().toLowerCase() + "-rejected-connections")
-                .alarmDescription("High number of rejected connections detected in " + ctx.security + " environment")
+                .alarmName("jenkins-" + security.name().toLowerCase() + "-rejected-connections")
+                .alarmDescription("High number of rejected connections detected in " + security + " environment")
                 .metric(rejectedMetric)
                 .threshold(threshold)
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
@@ -278,14 +283,14 @@ public class SecurityMonitoringFactory extends BaseFactory {
         Metric trafficMetric = Metric.Builder.create()
                 .namespace("CWLogs")
                 .metricName("UnusualTrafficPatterns")
-                .dimensionsMap(Map.of("Environment", ctx.security.name()))
+                .dimensionsMap(Map.of("Environment", security.name()))
                 .statistic("Sum")
                 .period(Duration.minutes(15))
                 .build();
-        
+
         Alarm trafficAlarm = Alarm.Builder.create(this, "UnusualTrafficAlarm")
-                .alarmName("jenkins-" + ctx.security.name().toLowerCase() + "-unusual-traffic")
-                .alarmDescription("Unusual traffic patterns detected in " + ctx.security + " environment")
+                .alarmName("jenkins-" + security.name().toLowerCase() + "-unusual-traffic")
+                .alarmDescription("Unusual traffic patterns detected in " + security + " environment")
                 .metric(trafficMetric)
                 .threshold(10.0) // 10 unusual patterns in 15 minutes
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD)

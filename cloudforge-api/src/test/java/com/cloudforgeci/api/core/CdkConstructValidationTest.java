@@ -76,8 +76,8 @@ class CdkConstructValidationTest {
         var albFactory = new AlbFactory(stack, "AlbFactory");
         
         // Create FargateFactory with proper Props
-        var fargateProps = new FargateFactory.Props(cfc);
-        var fargateFactory = new FargateFactory(stack, "FargateFactory", fargateProps);
+        
+        var fargateFactory = new FargateFactory(stack, "FargateFactory");
         fargateFactory.create(); // Call create() to build the infrastructure
         
         // Then
@@ -180,9 +180,9 @@ class CdkConstructValidationTest {
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
         var cfc = DeploymentContext.from(stack);
-        
+
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
         
         // When & Then
         assertDoesNotThrow(() -> {
@@ -193,8 +193,8 @@ class CdkConstructValidationTest {
             var efsFactory = new EfsFactory(stack, "EfsFactory");
             efsFactory.create(); // Populate EFS slot
             
-            var fargateProps = new FargateFactory.Props(cfc);
-            var fargateFactory = new FargateFactory(stack, "FargateFactory", fargateProps);
+            
+            var fargateFactory = new FargateFactory(stack, "FargateFactory");
             fargateFactory.create(); // Call create() to build the infrastructure
             assertNotNull(fargateFactory);
         });
@@ -297,9 +297,9 @@ class CdkConstructValidationTest {
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
         var cfc = DeploymentContext.from(stack);
-        
-        // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+
+        // Initialize SystemContext with FARGATE runtime (test creates FargateFactory)
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
         
         // When & Then
         assertDoesNotThrow(() -> {
@@ -310,8 +310,8 @@ class CdkConstructValidationTest {
             var efsFactory = new EfsFactory(stack, "EfsFactory");
             efsFactory.create(); // Populate EFS slot
             
-            var fargateProps = new FargateFactory.Props(cfc);
-            var fargateFactory = new FargateFactory(stack, "FargateFactory", fargateProps);
+            
+            var fargateFactory = new FargateFactory(stack, "FargateFactory");
             fargateFactory.create(); // Call create() to build the infrastructure
             assertNotNull(fargateFactory);
         });

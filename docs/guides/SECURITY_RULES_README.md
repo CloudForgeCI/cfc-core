@@ -52,7 +52,10 @@ Extends the base `IConfiguration` interface and provides the `kind()` method to 
   - Jenkins port only accessible from ALB security group
   - HTTPS only (HTTP redirects to HTTPS)
   - NFS access restricted to Jenkins instances
-  - Placeholder for WAF protection (future enhancement)
+  - **ALB access logging** enabled with S3 bucket (6-year retention, lifecycle management)
+  - **WAF protection** enabled
+  - **Cognito OIDC authentication** auto-provisioned (when domain + SSL configured)
+  - **Compliance validation** for PCI-DSS, HIPAA, SOC 2, GDPR
 
 ### 4. SecurityRules Class
 Located at: `com.cloudforgeci.api.core.rules.SecurityRules`

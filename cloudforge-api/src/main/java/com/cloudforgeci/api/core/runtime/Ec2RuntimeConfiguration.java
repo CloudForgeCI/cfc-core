@@ -133,7 +133,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
           // Apply scaling policies using ScalingFactory
           com.cloudforgeci.api.scaling.ScalingFactory scalingFactory =
               new com.cloudforgeci.api.scaling.ScalingFactory(c, "Ec2ScalingPolicy");
-          scalingFactory.scale(asg, c);
+          scalingFactory.scale(asg);
           c.scalingPoliciesApplied.set(true);
           LOG.info("Scaling policies applied successfully");
         }
@@ -152,35 +152,29 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     // ── 4) SSL + DOMAIN/FQDN → ACM + HTTPS + HTTP default redirect ─────────────
     if (!wantSslDns) return; // SSL requested but no host → fall back to HTTP-only silently
 
-    // 4a) ACM cert (DNS validation)
+    // 4a) Create certificate first
     whenBoth(c.zone, c.alb, (zone, alb) -> {
       if (c.cert.get().isPresent()) return;
 
-      // Use domain name in construct ID to force replacement when domain changes
-      // This prevents "certificate in use" errors during subdomain updates
       String certDomain = fqdn != null ? fqdn : domain;
-      String certId = "HttpsCert-" + certDomain.replace(".", "-");
 
       Certificate cert = Certificate.Builder
-              .create(c, certId)
+              .create(c, "HttpsCert")
               .domainName(certDomain)
               .validation(CertificateValidation.fromDns(zone))
               .build();
 
-      // Set retention policy to RETAIN to prevent deletion errors during updates
-      // When subdomain changes, old cert will be orphaned instead of deleted
-      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.RETAIN);
-
+      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
       c.cert.set(cert);
     });
 
-    // 4b) HTTPS listener - create only when cert and alb are ready
+    // 4b) Create HTTPS listener with certificate
     whenBoth(c.cert, c.alb, (cert, alb) -> {
-      if (c.https.get().isPresent()) return; // Avoid duplicate creation
+      if (c.https.get().isPresent()) return;
 
       ApplicationListener https;
       if (c.albTargetGroup.get().isPresent()) {
-        // Target group is available, create listener with target group
+        // Target group is available, create listener with target group and certificate
         https = alb.addListener("Https",
                 BaseApplicationListenerProps.builder()
                         .port(443)
@@ -188,7 +182,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                         .defaultAction(ListenerAction.forward(List.of(c.albTargetGroup.get().orElseThrow())))
                         .build());
       } else {
-        // Target group is not available, create listener with fixed response
+        // Target group is not available, create listener with fixed response and certificate
         https = alb.addListener("Https",
                 BaseApplicationListenerProps.builder()
                         .port(443)
@@ -198,6 +192,15 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                                 .messageBody("Jenkins is starting up...")
                                 .build()))
                         .build());
+      }
+
+      // Add explicit dependency: HTTPS listener depends on certificate
+      // This ensures CloudFormation deletes the listener BEFORE the certificate during stack deletion
+      CfnListener cfnHttps = (CfnListener) https.getNode().getDefaultChild();
+      software.amazon.awscdk.services.certificatemanager.CfnCertificate cfnCert =
+              (software.amazon.awscdk.services.certificatemanager.CfnCertificate) cert.getNode().getDefaultChild();
+      if (cfnHttps != null && cfnCert != null) {
+        cfnHttps.addDependency(cfnCert);
       }
 
       c.https.set(https);

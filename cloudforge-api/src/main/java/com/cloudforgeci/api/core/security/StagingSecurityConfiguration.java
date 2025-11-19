@@ -176,8 +176,8 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
                 LOG.info("CloudTrail enabled for STAGING profile");
             }
             
-            if (profileConfig.isConfigEnabled()) {
-                LOG.info("Config enabled for STAGING profile");
+            if (profileConfig.isAwsConfigEnabled()) {
+                LOG.info("AWS Config enabled for STAGING profile");
             }
         }
         

@@ -99,17 +99,25 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             });
         }
 
-        // ALB security group - HTTPS only, with WAF protection
+        // ALB security group - HTTPS primary, HTTP for redirect
         whenBoth(c.vpc, c.albSg, (vpc, albSg) -> {
-            // Only HTTPS allowed from anywhere
+            // HTTPS allowed from anywhere (primary)
             albSg.addIngressRule(
-                Peer.anyIpv4(), 
-                Port.tcp(443), 
-                "HTTPS_from_anywhere_(PRODUCTION)", 
+                Peer.anyIpv4(),
+                Port.tcp(443),
+                "HTTPS_from_anywhere_(PRODUCTION)",
                 false
             );
-            
-            // HTTP redirects to HTTPS handled by ALB listener rules
+
+            // HTTP allowed from anywhere for redirect to HTTPS
+            // This is required even in production when SSL is enabled
+            // The HTTP listener will redirect all traffic to HTTPS
+            albSg.addIngressRule(
+                Peer.anyIpv4(),
+                Port.tcp(80),
+                "HTTP_for_HTTPS_redirect_(PRODUCTION)",
+                false
+            );
         });
 
         // EFS security group - allow NFS from appropriate security group based on runtime
@@ -208,8 +216,8 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
                 LOG.info("GuardDuty enabled for PRODUCTION profile (threat detection)");
             }
             
-            if (profileConfig.isConfigEnabled()) {
-                LOG.info("Config enabled for PRODUCTION profile (compliance monitoring)");
+            if (profileConfig.isAwsConfigEnabled()) {
+                LOG.info("AWS Config enabled for PRODUCTION profile (compliance monitoring)");
             }
         }
         

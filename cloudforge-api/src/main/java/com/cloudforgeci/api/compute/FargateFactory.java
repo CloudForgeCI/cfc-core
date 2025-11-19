@@ -1,10 +1,7 @@
 package com.cloudforgeci.api.compute;
 
-
-import com.cloudforgeci.api.core.DeploymentContext;
-
-import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.annotation.DeploymentContext;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
@@ -14,12 +11,9 @@ import software.amazon.awscdk.services.efs.AccessPoint;
 import software.amazon.awscdk.services.efs.AccessPointOptions;
 import software.amazon.awscdk.services.efs.Acl;
 import software.amazon.awscdk.services.efs.PosixUser;
-import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.constructs.Construct;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_HOME;
@@ -50,9 +44,9 @@ import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
  * 
  * <p><strong>Example Usage:</strong></p>
  * <pre>{@code
- * FargateFactory factory = new FargateFactory(scope, "JenkinsFargate", 
- *     new FargateFactory.Props(cfc));
- * 
+ * FargateFactory factory = new FargateFactory(scope, "JenkinsFargate");
+ * factory.create();
+ *
  * // Access created resources
  * FargateService service = ctx.fargateService.get().orElseThrow();
  * FargateTaskDefinition taskDef = ctx.fargateTaskDef.get().orElseThrow();
@@ -67,42 +61,53 @@ import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
  */
 public class FargateFactory extends BaseFactory {
 
-  @com.cloudforgeci.api.core.annotation.SystemContext
-  private SystemContext ctx;
+  @DeploymentContext("bastionCidr")
+  private String bastionCidr;
 
-  @com.cloudforgeci.api.core.annotation.DeploymentContext
-  private DeploymentContext cfc;
+  @DeploymentContext("cpu")
+  private Integer cpu;
 
-  private final Props p;
+  @DeploymentContext("memory")
+  private Integer memory;
 
-  /**
-   * Configuration properties for FargateFactory.
-   * 
-   * @param cfc Deployment context containing configuration parameters
-   */
-  public record Props(DeploymentContext cfc) {}
+  @DeploymentContext("minInstanceCapacity")
+  private Integer minInstanceCapacity;
+
+  @DeploymentContext("networkMode")
+  private String networkMode;
 
   /**
    * Creates a new FargateFactory instance.
-   * 
+   *
    * @param scope The CDK construct scope
    * @param id Unique identifier for the Fargate factory
-   * @param p Configuration properties containing deployment context
    */
-  public FargateFactory(Construct scope, String id, Props p) {
+  public FargateFactory(Construct scope, String id) {
     super(scope, id);
-    this.p = p;
+    // bastionCidr, cpu, memory, minInstanceCapacity, and networkMode are automatically injected by BaseFactory
   }
 
   @Override
   public void create() {
-    Role executionRole = Role.Builder.create(this, "TaskExecutionRole")
-            .assumedBy(ServicePrincipal.Builder.create("ecs-tasks.amazonaws.com").build())
-            .managedPolicies(Arrays.asList(
-                    ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
-            ))
+    // Use IAM roles from SystemContext created by IAM configuration system
+    // These roles are security-profile aware and provide consistent permissions
+    Role executionRole = ctx.fargateExecutionRole.get()
+            .orElseThrow(() -> new IllegalStateException(
+                    "Fargate execution role not found - IAM configuration should have created it"));
+
+    Role taskRole = ctx.fargateTaskRole.get()
+            .orElseThrow(() -> new IllegalStateException(
+                    "Fargate task role not found - IAM configuration should have created it"));
+
+    // Check if ECS Exec should be enabled based on bastionCidr configuration
+    boolean enableEcsExec = bastionCidr != null && !bastionCidr.isBlank();
+
+    FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task")
+            .cpu(cpu)
+            .memoryLimitMiB(memory)
+            .executionRole(executionRole)
+            .taskRole(taskRole)
             .build();
-    FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task").cpu(cfc.cpu()).memoryLimitMiB(cfc.memory()).taskRole(executionRole).build();
     AccessPoint ap = ctx.efs.get().orElseThrow().addAccessPoint("JenkinsAp", AccessPointOptions.builder()
             .path(JENKINS_PATH)
             .posixUser(PosixUser.builder().uid("1000").gid("1000").build())
@@ -115,16 +120,23 @@ public class FargateFactory extends BaseFactory {
             .allowAllOutbound(true).build();
     ctx.fargateServiceSg.set(serviceSg);
     // Determine subnet type and public IP assignment based on network mode
-    boolean assignPublicIp = "public-no-nat".equals(cfc.networkMode());
+    boolean assignPublicIp = "public-no-nat".equals(networkMode);
     SubnetType subnetType = assignPublicIp ? SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
-    
+
+    // Enable ECS Exec only if bastionCidr is configured (indicates remote access needed)
     FargateService service = FargateService.Builder.create(this, "Service")
             .cluster(cluster)
             .securityGroups(List.of(serviceSg))
             .taskDefinition(taskDef)
-            .desiredCount(cfc.minInstanceCapacity() != null ? cfc.minInstanceCapacity() : 1)
+            .desiredCount(minInstanceCapacity != null ? minInstanceCapacity : 1)
             .assignPublicIp(assignPublicIp)
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
+            .enableExecuteCommand(enableEcsExec)  // Enable ECS Exec for shell access when bastionCidr is set
+            .enableEcsManagedTags(true)  // Helps CloudFormation track and clean up ENIs on stack deletion
+            .circuitBreaker(DeploymentCircuitBreaker.builder()
+                    .enable(true)
+                    .rollback(true)
+                    .build())  // Prevents stuck deployments and enables automatic rollback
             .build();
     
     // Set task definition in context first (needed by ContainerFactory)
@@ -146,7 +158,6 @@ public class FargateFactory extends BaseFactory {
     
     // Create container (now that task definition and volume are available)
     ContainerFactory containerFactory = new ContainerFactory(this, getNode().getId() + "Container", ContainerImage.fromRegistry("jenkins/jenkins:lts"));
-    containerFactory.injectContexts(); // Manual injection after SystemContext.start()
     containerFactory.create();
     
     // Now set the service in context after container is created

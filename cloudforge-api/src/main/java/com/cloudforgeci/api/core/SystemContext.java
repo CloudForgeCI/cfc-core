@@ -10,6 +10,7 @@ import com.cloudforgeci.api.network.VpcFactory;
 import com.cloudforgeci.api.ingress.AlbFactory;
 import com.cloudforgeci.api.storage.EfsFactory;
 import com.cloudforgeci.api.observability.LoggingCwFactory;
+import com.cloudforgeci.api.observability.GuardDutyFactory;
 import com.cloudforgeci.api.compute.FargateFactory;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import com.cloudforgeci.api.application.JenkinsBootstrap;
@@ -97,7 +98,25 @@ public final class SystemContext extends Construct {
   // Certificate Properties
   public final Slot<ApplicationListener> https = new Slot<>();
   public final Slot<software.amazon.awscdk.services.certificatemanager.ICertificate> cert = new Slot<>();
-  
+
+  // Identity Center Properties (for auto-provisioned OIDC)
+  public final Slot<software.amazon.awscdk.CustomResource> identityCenter = new Slot<>();
+
+  // Cognito Properties (for Cognito User Pool OIDC)
+  public final Slot<String> cognitoIssuer = new Slot<>();
+  public final Slot<String> cognitoAuthorizationEndpoint = new Slot<>();
+  public final Slot<String> cognitoTokenEndpoint = new Slot<>();
+  public final Slot<String> cognitoUserInfoEndpoint = new Slot<>();
+  public final Slot<String> cognitoClientId = new Slot<>();
+  public final Slot<String> cognitoClientSecretName = new Slot<>();
+  public final Slot<String> cognitoUserPoolId = new Slot<>();
+  public final Slot<String> cognitoDomainPrefix = new Slot<>();
+
+  // Cognito CDK Objects (for native ALB Cognito authentication)
+  public final Slot<software.amazon.awscdk.services.cognito.IUserPool> cognitoUserPool = new Slot<>();
+  public final Slot<software.amazon.awscdk.services.cognito.IUserPoolClient> cognitoUserPoolClient = new Slot<>();
+  public final Slot<software.amazon.awscdk.services.cognito.IUserPoolDomain> cognitoUserPoolDomain = new Slot<>();
+
   // SSL Configuration Properties
   public final Slot<Boolean> sslEnabled = new Slot<>();
   public final Slot<Boolean> httpRedirectEnabled = new Slot<>();
@@ -272,22 +291,28 @@ public final class SystemContext extends Construct {
    * @return InfrastructureFactories containing references to created factories
    */
   public InfrastructureFactories createInfrastructureFactories(Construct scope, String idPrefix) {
-    
+
     // Create infrastructure factories in dependency order
     VpcFactory vpcFactory = createVpcFactory(scope, idPrefix);
     AlbFactory albFactory = createAlbFactory(scope, idPrefix);
     EfsFactory efsFactory = createEfsFactory(scope, idPrefix);
     LoggingCwFactory loggingFactory = createLoggingFactory(scope, idPrefix);
-    
+
+    // Create GuardDuty threat detection (account-level service)
+    createGuardDutyFactory(scope, idPrefix);
+
+    // Note: Security factories (Certificate, OIDC, Identity Center) are created
+    // in JenkinsFactory after DomainFactory, as they require the hosted zone
+
     // Create instance security group only for EC2 deployments
     if (this.runtime == RuntimeType.EC2) {
       createInstanceSecurityGroup(scope, idPrefix);
     }
-    
+
     // Create target groups (orchestrated by SystemContext)
     createTargetGroups(scope, idPrefix);
-    
-    
+
+
     return new InfrastructureFactories(vpcFactory, albFactory, efsFactory, loggingFactory);
   }
   
@@ -296,7 +321,6 @@ public final class SystemContext extends Construct {
    */
   public VpcFactory createVpcFactory(Construct scope, String idPrefix) {
     VpcFactory vpcFactory = new VpcFactory(scope, idPrefix + "Vpc");
-    vpcFactory.injectContexts();
     vpcFactory.create();
     return vpcFactory;
   }
@@ -306,7 +330,6 @@ public final class SystemContext extends Construct {
    */
   public AlbFactory createAlbFactory(Construct scope, String idPrefix) {
     AlbFactory albFactory = new AlbFactory(scope, idPrefix + "Alb");
-    albFactory.injectContexts();
     albFactory.create();
     return albFactory;
   }
@@ -316,7 +339,6 @@ public final class SystemContext extends Construct {
    */
   public EfsFactory createEfsFactory(Construct scope, String idPrefix) {
     EfsFactory efsFactory = new EfsFactory(scope, idPrefix + "Efs");
-    efsFactory.injectContexts();
     efsFactory.create();
     return efsFactory;
   }
@@ -326,11 +348,53 @@ public final class SystemContext extends Construct {
    */
   public LoggingCwFactory createLoggingFactory(Construct scope, String idPrefix) {
     LoggingCwFactory loggingFactory = new LoggingCwFactory(scope, idPrefix + "Logging");
-    loggingFactory.injectContexts();
     loggingFactory.create();
     return loggingFactory;
   }
-  
+
+  /**
+   * Creates GuardDuty threat detection factory.
+   * Conditionally enabled based on security profile or explicit configuration.
+   */
+  public void createGuardDutyFactory(Construct scope, String idPrefix) {
+    GuardDutyFactory guardDutyFactory = new GuardDutyFactory(scope, idPrefix + "GuardDuty");
+    guardDutyFactory.create();
+  }
+
+  /**
+   * Creates security-related factories (Certificate, OIDC, Identity Center).
+   * These factories are conditionally created based on context configuration.
+   *
+   * IMPORTANT: Certificate is created LAST to ensure proper CloudFormation deletion order.
+   * When deleting a stack, CloudFormation deletes resources in reverse creation order.
+   * By creating the certificate last, it will be deleted first, before the ALB HTTPS listener,
+   * preventing "Certificate in use" deletion errors.
+   */
+  public void createSecurityFactories(Construct scope, String idPrefix) {
+    // Create Cognito authentication factory (auto-provisions Cognito User Pool if configured)
+    // This must run BEFORE OidcAuthenticationFactory so endpoints are available
+    com.cloudforgeci.api.security.CognitoAuthenticationFactory cognitoFactory =
+        new com.cloudforgeci.api.security.CognitoAuthenticationFactory(scope, idPrefix + "Cognito");
+    cognitoFactory.create();
+
+    // Create Identity Center factory (auto-provisions if configured)
+    com.cloudforgeci.api.security.IdentityCenterFactory identityCenterFactory =
+        new com.cloudforgeci.api.security.IdentityCenterFactory(scope, idPrefix + "IdentityCenter");
+    identityCenterFactory.create();
+
+    // Create OIDC authentication factory (configures ALB OIDC if authMode=alb-oidc)
+    // This checks for Cognito endpoints first, then IAM Identity Center, then manual config
+    com.cloudforgeci.api.security.OidcAuthenticationFactory oidcFactory =
+        new com.cloudforgeci.api.security.OidcAuthenticationFactory(scope, idPrefix + "OidcAuth");
+    oidcFactory.create();
+
+    // Create Certificate LAST so it's deleted FIRST during stack teardown
+    // This prevents "Certificate in use" errors when deleting the HTTPS listener
+    com.cloudforgeci.api.security.CertificateFactory certificateFactory =
+        new com.cloudforgeci.api.security.CertificateFactory(scope, idPrefix + "Certificate");
+    certificateFactory.create();
+  }
+
   /**
    * Creates target groups orchestrated by SystemContext.
    * This centralizes target group management and prevents duplicates.
@@ -467,24 +531,20 @@ public final class SystemContext extends Construct {
   private JenkinsSpecificFactories createFargateJenkinsFactories(Construct scope, String id) {
     
     // Create Fargate factory
-    FargateFactory fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
-    fargate.injectContexts();
+    FargateFactory fargate = new FargateFactory(scope, id + "Fargate");
     fargate.create();
-    
+
     // Create container factory
-    ContainerFactory container = new ContainerFactory(scope, id + "Container", 
+    ContainerFactory container = new ContainerFactory(scope, id + "Container",
         software.amazon.awscdk.services.ecs.ContainerImage.fromRegistry("jenkins/jenkins:lts"));
-    container.injectContexts();
     container.create();
-    
+
     // Create Jenkins bootstrap
-    JenkinsBootstrap bootstrap = new JenkinsBootstrap(scope, id + "Bootstrap", new JenkinsBootstrap.Props(cfc));
-    bootstrap.injectContexts();
+    JenkinsBootstrap bootstrap = new JenkinsBootstrap(scope, id + "Bootstrap");
     bootstrap.create();
-    
+
     // Create alarms
     AlarmFactory alarms = new AlarmFactory(scope, id + "Alarms", null);
-    alarms.injectContexts();
     alarms.create();
     
     return new JenkinsSpecificFactories(fargate, container, bootstrap, alarms, null, null);
@@ -502,20 +562,18 @@ public final class SystemContext extends Construct {
     Ec2Factory ec2 = null;
     if (cfc.maxInstanceCapacity() != null) {
       ec2 = new Ec2Factory(scope, id + "Ec2");
-      ec2.injectContexts();
       ec2.create();
     }
-    
+
     // Create single EC2 instance if no Auto Scaling Group
     // Note: Ec2InstanceFactory will be created later
     Object singleInstance = null;
     if (cfc.maxInstanceCapacity() == null) {
       // TODO: Create Ec2InstanceFactory for single instances
     }
-    
+
     // Create alarms
     AlarmFactory alarms = new AlarmFactory(scope, id + "Alarms", null);
-    alarms.injectContexts();
     alarms.create();
     
     return new JenkinsSpecificFactories(null, null, null, alarms, ec2, singleInstance);
@@ -547,7 +605,6 @@ public final class SystemContext extends Construct {
     // Create domain factory if domain is provided
     if (cfc.domain() != null && !cfc.domain().isBlank()) {
       domain = new DomainFactory(scope, id + "Domain");
-      domain.injectContexts();
       domain.create();
     }
     

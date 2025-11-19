@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.scaling;
 
 
-import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.annotation.DeploymentContext;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -12,8 +12,14 @@ import software.constructs.Construct;
 
 public class ScalingFactory extends BaseFactory {
 
-  @com.cloudforgeci.api.core.annotation.SystemContext
-  private SystemContext ctx;
+  @DeploymentContext("minInstanceCapacity")
+  private Integer minInstanceCapacity;
+
+  @DeploymentContext("maxInstanceCapacity")
+  private Integer maxInstanceCapacity;
+
+  @DeploymentContext("cpuTargetUtilization")
+  private Integer cpuTargetUtilization;
 
   public ScalingFactory(Construct scope, String id) {
     super(scope, id);
@@ -26,24 +32,25 @@ public class ScalingFactory extends BaseFactory {
     // The create() method is required by BaseFactory but not used for this factory
   }
 
-  public void scale(final FargateService service, SystemContext ctx) {
+  public void scale(final FargateService service) {
     // Only enable scaling if maxInstanceCapacity > 1
-    if (ctx.cfc.maxInstanceCapacity() == null || ctx.cfc.maxInstanceCapacity() <= 1) {
+    // Use injected DeploymentContext values via annotations
+    if (maxInstanceCapacity == null || maxInstanceCapacity <= 1) {
       return; // No scaling configuration
     }
-    
-    // Use DeploymentContext values or defaults
-    int minCapacity = ctx.cfc.minInstanceCapacity() != null ? ctx.cfc.minInstanceCapacity() : 1;
-    int maxCapacity = ctx.cfc.maxInstanceCapacity(); // Already checked for null above
-    int targetUtilization = ctx.cfc.cpuTargetUtilization() != null ? ctx.cfc.cpuTargetUtilization() : 60;
-    
+
+    // Use injected values or defaults
+    int minCapacity = minInstanceCapacity != null ? minInstanceCapacity : 1;
+    int maxCapacity = maxInstanceCapacity;
+    int targetUtilization = cpuTargetUtilization != null ? cpuTargetUtilization : 60;
+
     ScalableTaskCount scalable = service.autoScaleTaskCount(
         EnableScalingProps.builder()
             .minCapacity(minCapacity)
             .maxCapacity(maxCapacity)
             .build());
-    
-    scalable.scaleOnCpuUtilization("CpuScaleSvc", 
+
+    scalable.scaleOnCpuUtilization("CpuScaleSvc",
         CpuUtilizationScalingProps.builder()
             .targetUtilizationPercent(targetUtilization)
             .scaleInCooldown(Duration.minutes(2))
@@ -51,10 +58,10 @@ public class ScalingFactory extends BaseFactory {
             .build());
   }
 
-  public void scale(final AutoScalingGroup asg, SystemContext ctx) {
-    // Use DeploymentContext cpuTargetUtilization or default to 60%
-    int targetUtilization = ctx.cfc.cpuTargetUtilization() != null ? ctx.cfc.cpuTargetUtilization() : 60;
-    
+  public void scale(final AutoScalingGroup asg) {
+    // Use injected cpuTargetUtilization or default to 60%
+    int targetUtilization = cpuTargetUtilization != null ? cpuTargetUtilization : 60;
+
     asg.scaleOnCpuUtilization("CpuScaleAsg",
             software.amazon.awscdk.services.autoscaling.CpuUtilizationScalingProps.builder()
                     .targetUtilizationPercent(targetUtilization)

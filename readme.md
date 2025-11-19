@@ -1,453 +1,608 @@
-# CloudForgeCI — cfc-core
+# CloudForge CI — Core Libraries
 
-Core libraries for CloudForgeCI. This repository contains foundational APIs and CDK constructs used by the community and enterprise stacks.
+**Enterprise-ready Jenkins CI/CD infrastructure on AWS using CDK**
 
-**Organization:** cloudforgeci
-**Company:** CloudForgeCI
-**Repo:** https://github.com/CloudForgeCI/cfc-core
-**Sample:** https://github.com/CloudForgeCI/cloudforge-sample
+[![Maven Central](https://img.shields.io/maven-central/v/com.cloudforgeci/cloudforge-api)](https://central.sonatype.com/artifact/com.cloudforgeci/cloudforge-api)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 
----
-
-## Support This Project
-
-If CloudForgeCI saved you time and money, consider [supporting its development](SPONSORS.md)!
-
-```
-cfc-core/
-  pom.xml                  # parent (packaging=pom)
-  cloudforge-api/          # API: config models, types, shared contracts
-  cloudforge-core/         # Core: CDK constructs & builders
-  cfc-testing/             # Testing framework & sample applications
-    deploy-interactive.sh  # Interactive deployment tool
-    README.md              # Testing & samples documentation
-```
+Deploy secure, compliant Jenkins infrastructure on AWS in minutes. Built-in support for SOC2, HIPAA, PCI-DSS, and GDPR with automated remediation.
 
 ---
 
-## Interactive Deployer
+## 📚 Documentation Hub
 
-The `cfc-testing` directory contains an **Interactive Deployer** that provides a user-friendly way to configure and deploy CloudForge Community infrastructure:
+### 🚀 Getting Started
+- **[Quick Start Guide](docs/compliance/QUICK_START_GUIDE.md)** - Get running in 10 minutes
+- **[Sample Project](https://github.com/CloudForgeCI/cloudforge-sample)** - Complete working example
+- **[Interactive Deployer](docs/guides/INTERACTIVE_DEPLOYER.md)** - User-friendly CLI deployment tool
 
-```bash
-cd cfc-testing
-./deploy-interactive.sh
-```
+### 🔐 Security & Authentication
+- **[OIDC Setup Guide](docs/setup/OIDC_SETUP_GUIDE.md)** - ALB-OIDC with Identity Center, Okta, Auth0
+- **[Cognito Setup](docs/setup/COGNITO_SETUP_COMPLETE.md)** - AWS Cognito user pools with MFA
+- **[Identity Center Setup](docs/setup/AWS_IDENTITY_CENTER_SETUP.md)** - Enterprise SSO
+- **[Security Hardening](SECURITY.md)** - Security best practices
 
-**Features:**
-- 🎯 **Modular Architecture**: Uses SystemContext orchestration layer
-- 🔧 **Strategy Pattern**: Easily extensible deployment types
-- 🚀 **Multiple Deployments**: Jenkins (Fargate/EC2), S3 websites (coming soon)
-- ⚡ **Interactive Configuration**: Guided setup with sensible defaults
-- 📋 **CDK Integration**: Generates proper CDK context and synthesizes stacks
+### ✅ Compliance
+- **[Automated Compliance](docs/compliance/AUTOMATED_COMPLIANCE.md)** - Auto-remediation features
+- **[Multi-Framework Guide](docs/compliance/MULTI_FRAMEWORK_COMPLIANCE.md)** - SOC2, HIPAA, PCI-DSS, GDPR
+- **[S3 Versioning Remediation](docs/compliance/S3_VERSIONING_REMEDIATION.md)** - Automatic versioning
+- **[PCI-DSS Compliance](docs/compliance/PCI_DSS_README.md)** - Payment card security
+- **[Security Rules](docs/guides/SECURITY_RULES_README.md)** - Comprehensive guidelines
+- **[IAM Best Practices](docs/guides/IAM_RULES.md)** - IAM security rules
 
-See `cfc-testing/README.md` for detailed documentation.
+### 📖 Advanced Topics
+- **[Deployment Guide](docs/compliance/DEPLOYMENT_GUIDE.md)** - Production strategies
+- **[AWS Config Multi-Stack](docs/compliance/AWS_CONFIG_MULTI_STACK.md)** - Multi-account setup
+- **[Extended Testing](docs/guides/EXTENDED-TESTING.md)** - Comprehensive testing
+- **[AWS Audit Manager](docs/AUDIT_MANAGER.md)** - Continuous auditing
 
----
-
-## What is this?
-`cfc-core` provides the building blocks (Java libraries) that higher‑level wrappers use to assemble complete Jenkins deployments on AWS. It is consumed by the **cloudforge-community** repository (wrapper modules) and any custom CDK apps you write.
-
-- **cloudforge-api** – data models and configuration contracts (pure Java).
-- **cloudforge-core** – AWS CDK v2 constructs and helpers (Jenkins on EC2/Fargate, VPC, ALB, etc.).
-
-Companion repo (wrapper library): https://github.com/CloudForgeCI/cloudforge-community
-
----
-
-## Prerequisites
-
-- **Java 21 (JDK 21+)**
-- **Maven 3.9+** (or use the Maven Wrapper `./mvnw` if committed)
-- **Node.js 18+** (required by AWS CDK apps at synth time)
-- **Git 2.30+**
-- **GPG** (only for publishing signed releases to Maven Central)
+### 📑 Indexes
+- **[Documentation Index](docs/README.md)** - All documentation
+- **[Compliance Index](docs/compliance/COMPLIANCE_ANALYSIS_INDEX.md)** - All compliance docs
 
 ---
 
-## Local Development (SNAPSHOT workflow)
+## 🎯 Quick Start
 
-Clone and build everything into your local `~/.m2`:
-
-```bash
-git clone https://github.com/CloudForgeCI/cfc-core.git
-cd cfc-core
-
-# fast build without tests while iterating
-./mvnw -T1C -DskipTests install
-
-# full verification
-./mvnw clean verify
-```
-
-Work on a single module:
+### Option 1: Use the Sample Project (Recommended)
 
 ```bash
-# API only (+ build what it depends on)
-./mvnw -q -pl cloudforge-api -am package
-
-# Core constructs only
-./mvnw -q -pl cloudforge-core -am package
+git clone https://github.com/CloudForgeCI/cloudforge-sample.git
+cd cloudforge-sample
+vi deployment-context.json  # Edit with your settings
+mvn clean package
+cdk deploy --context cfc=@deployment-context.json
 ```
 
-Run tests:
+Includes example configurations for all scenarios: OIDC/Cognito auth, SOC2/HIPAA/PCI-DSS/GDPR compliance, EC2 and Fargate runtimes.
 
-```bash
-# all modules
-./mvnw test
-
-# just core
-./mvnw -pl cloudforge-core -am test
-```
-
-If a downstream project still uses a cached SNAPSHOT, force updates:
-
-```bash
-./mvnw -U clean install
-```
-
----
-
-## Testing & Validation
-
-### Unit Tests
-
-Run the complete test suite:
-
-```bash
-# All modules
-./mvnw test
-
-# Just API module
-./mvnw -pl cloudforge-api -am test
-
-# Just Core module  
-./mvnw -pl cloudforge-core -am test
-```
-
-### CDK Synthesis Testing
-
-The `cfc-testing` application provides extensive testing of all runtime, topology, and security profile combinations. Navigate to the testing directory and run the complete test suite:
-
-```bash
-cd cfc-testing
-rm -rf cdk.out cdk.context.json  # Clear CDK cache
-```
-
-#### Working Combinations ✅
-
-These combinations are fully functional and should pass synthesis:
-
-```bash
-# EC2 + Service + Production + Domain + SSL
-cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":true,"runtime":"EC2","topology":"service","securityProfile":"production"}'
-
-# EC2 + Service + Production + Domain + No SSL
-cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":false,"runtime":"EC2","topology":"service","securityProfile":"production"}'
-
-# EC2 + Service + Production + No Domain
-cdk synth -c cfc='{"enableSsl":false,"runtime":"EC2","topology":"service","securityProfile":"production"}'
-
-# Fargate + Service + Production + Domain + No SSL
-cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":false,"runtime":"FARGATE","topology":"service","securityProfile":"production"}'
-
-# Fargate + Service + Production + No Domain
-cdk synth -c cfc='{"enableSsl":false,"runtime":"FARGATE","topology":"service","securityProfile":"production"}'
-```
-
-#### Known Issues ❌
-
-These combinations currently have known issues and may fail synthesis:
-
-```bash
-# EC2 + Node topology (single-node architectural incompatibility)
-cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":true,"runtime":"EC2","topology":"node","securityProfile":"production"}'
-
-# Fargate + SSL (HTTP listener missing default action)
-cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":true,"runtime":"FARGATE","topology":"service","securityProfile":"production"}'
-```
-
-#### Complete Test Matrix
-
-Run all combinations systematically using the provided test script:
-
-```bash
-# Run the complete test suite
-./test-synth.sh
-```
-
-Or run individual tests manually:
-
-```bash
-cd cfc-testing
-rm -rf cdk.out cdk.context.json
-
-# Individual test examples
-cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":true,"runtime":"EC2","topology":"service","securityProfile":"production"}'
-cdk synth -c cfc='{"domain":"cloudforgeci.com","subdomain":"jenkins","enableSsl":false,"runtime":"FARGATE","topology":"service","securityProfile":"production"}'
-```
-
-#### Test Results Summary
-
-| Combination | Status | Notes |
-|-------------|--------|-------|
-| EC2 + Service + Production + Domain + SSL | ✅ SUCCESS | Working perfectly |
-| EC2 + Service + Production + Domain + No SSL | ✅ SUCCESS | Working perfectly |
-| EC2 + Service + Production + No Domain | ✅ SUCCESS | Working perfectly |
-| Fargate + Service + Production + Domain + No SSL | ✅ SUCCESS | Working perfectly |
-| Fargate + Service + Production + No Domain | ✅ SUCCESS | Working perfectly |
-| Fargate + Service + Production + Domain + SSL | ✅ SUCCESS | Working perfectly |
-| Fargate + Service + Dev + Domain + SSL | ✅ SUCCESS | Working perfectly |
-| Fargate + Service + Staging + Domain + SSL | ✅ SUCCESS | Working perfectly |
-| EC2 + Node + Production + Domain + SSL | ✅ SUCCESS | Fixed - HTTP listener routing resolved |
-| EC2 + Node + Dev + Domain + SSL | ✅ SUCCESS | Fixed - HTTP listener routing resolved |
-
-**Success Rate:** 10/10 combinations (100%) 🎉
-
-**Recent Fixes:**
-- ✅ **DNS Record Duplication**: Fixed duplicate DNS record creation using `dnsRecordsCreated` slot-based approach
-- ✅ **HTTP Listener Routing**: Fixed "Jenkins is starting up..." issue by configuring HTTP listeners to route to Fargate services in SSL mode
-- ✅ **Target Group Configuration**: Resolved ALB target group creation and listener configuration for both HTTP and HTTPS
-
-### Performance Benchmarking
-
-The `benchmark-synth.sh` script provides extensive performance testing for CDK synthesis operations. It allows you to select specific test cases and run multiple iterations to measure synthesis performance.
-
-#### Running Benchmarks
-
-```bash
-# Run the benchmark tool
-./benchmark-synth.sh
-```
-
-The script will:
-1. **Display available test cases** (1-10) with descriptive names
-2. **Prompt for test selection** (validates input)
-3. **Prompt for number of runs** (defaults to 10 if empty)
-4. **Run benchmark** with progress indicators
-5. **Show statistics** and save results to file
-
-#### Available Test Cases
-
-| # | Test Case | Status | Description |
-|---|-----------|--------|-------------|
-| 1 | EC2 + Service + Production + Domain + SSL | ✅ Working | Full production setup with SSL |
-| 2 | EC2 + Service + Production + Domain + No SSL | ✅ Working | Production setup without SSL |
-| 3 | EC2 + Service + Production + No Domain | ✅ Working | Minimal production setup |
-| 4 | Fargate + Service + Production + Domain + No SSL | ✅ Working | Fargate production without SSL |
-| 5 | Fargate + Service + Production + No Domain | ✅ Working | Minimal Fargate setup |
-| 6 | EC2 + Node + Production + Domain + SSL | ❌ Known Issue | Single-node topology issue |
-| 7 | EC2 + Node + Dev + Domain + SSL | ❌ Known Issue | Single-node topology issue |
-| 8 | Fargate + Service + Production + Domain + SSL | ✅ Working | Fargate production with SSL |
-| 9 | Fargate + Service + Dev + Domain + SSL | ✅ Working | Fargate dev with SSL |
-| 10 | Fargate + Service + Staging + Domain + SSL | ✅ Working | Fargate staging with SSL |
-
-#### Benchmark Output
-
-The script generates detailed performance metrics:
-
-```
-📊 Benchmark Results:
-====================
-runs=20
-min=2.345678
-median=2.456789
-p95=2.567890
-max=2.678901
-avg=2.456789
-```
-
-#### Benchmark Results File
-
-Detailed timing data is saved to `cfc-testing/synth_times.txt`:
-
-```
-# synth timings (seconds) - EC2 + Service + Production + Domain + SSL
-2.345678
-2.456789
-2.567890
-...
-```
-
-#### Use Cases
-
-- **Performance Regression Testing**: Compare synthesis times across different versions
-- **Configuration Optimization**: Identify which configurations are fastest/slowest
-- **Resource Planning**: Estimate synthesis time for CI/CD pipelines
-- **Debugging**: Identify performance bottlenecks in specific configurations
-
-#### Example Usage
-
-```bash
-# Benchmark a working configuration
-./benchmark-synth.sh
-# Select: 1 (EC2 + Service + Production + Domain + SSL)
-# Runs: 30
-# Result: Detailed performance metrics
-
-# Benchmark a failing configuration (to measure failure time)
-./benchmark-synth.sh
-# Select: 6 (EC2 + Node + Production + Domain + SSL)
-# Runs: 10
-# Result: Error handling and failure timing
-```
-
-#### Configuration Options
-
-The `cfc` context parameter supports the following options:
-
-- **`runtime`**: `"EC2"` | `"FARGATE"`
-- **`topology`**: `"service"` | `"node"`
-- **`securityProfile`**: `"dev"` | `"staging"` | `"production"`
-- **`domain`**: Custom domain name (e.g., `"cloudforgeci.com"`)
-- **`subdomain`**: Subdomain for the application (e.g., `"jenkins"`)
-- **`enableSsl`**: `true` | `false`
-- **`bastionCidr`**: CIDR block for SSH access in production (default: `"10.0.1.0/24"`) - restricts SSH access to bastion host or VPN network
-
----
-
-## Software Bill of Materials (SBOM)
-
-CloudForge Community Core provides comprehensive Software Bill of Materials (SBOM) files for supply chain transparency and security:
-
-```bash
-# Generate SBOMs for all modules
-mvn clean package -DskipTests
-
-# View aggregate SBOM
-cat target/cfc-core-sbom.json
-```
-
-SBOMs are generated in **CycloneDX format** (both JSON and XML) and include:
-- Complete dependency tree with versions
-- License information
-- Security hashes (SHA-256, SHA-512, etc.)
-- Package URLs (PURL) for vulnerability tracking
-
-### Vulnerability Scanning
-
-Automated dependency vulnerability scanning with OWASP Dependency-Check:
-
-```bash
-# Scan all dependencies for known vulnerabilities
-mvn dependency-check:check
-
-# View HTML report
-open target/dependency-check-report.html
-```
-
-The plugin automatically:
-- Scans all dependencies against the National Vulnerability Database (NVD)
-- Fails builds on High/Critical vulnerabilities (CVSS ≥ 7.0)
-- Generates HTML, JSON, and XML reports
-- Integrates with CI/CD pipelines
-
-### CI/CD Security Automation
-
-Automated security scanning with GitHub Actions:
-
-```yaml
-# Runs automatically on:
-# - Push to main/develop
-# - Pull requests
-# - Weekly schedule (Sundays 2 AM UTC)
-# - Manual trigger
-
-name: Security Scanning
-jobs:
-  - Generate SBOMs (CycloneDX format)
-  - Scan vulnerabilities (OWASP Dependency-Check)
-  - Additional scanning (Anchore Grype)
-  - Upload reports to GitHub Security tab
-  - Store artifacts for 90 days
-```
-
-**Features:**
-- ✅ Automated SBOM generation on every build
-- ✅ Vulnerability scanning with NVD database
-- ✅ GitHub Security integration (SARIF)
-- ✅ Fail builds on High/Critical vulnerabilities
-- ✅ Security summary in PR comments
-- ✅ Weekly scheduled scans for new CVEs
-
----
-
-## Using cfc-core from other projects
-
-In your project’s `pom.xml` add dependencies (choose the version you need):
+### Option 2: Add to Your Existing Project
 
 ```xml
+<properties>
+  <cloudforge.version>2.0.6</cloudforge.version>
+</properties>
+
 <dependencies>
   <dependency>
     <groupId>com.cloudforgeci</groupId>
     <artifactId>cloudforge-api</artifactId>
-    <version>2.0.0</version>
-  </dependency>
-  <dependency>
-    <groupId>com.cloudforgeci</groupId>
-    <artifactId>cloudforge-core</artifactId>
-    <version>2.0.0</version>
+    <version>${cloudforge.version}</version>
   </dependency>
 </dependencies>
 ```
 
-If you are consuming published artifacts from Maven Central, replace with the released version (e.g., `1.0.0`).
+Check [Maven Central](https://central.sonatype.com/artifact/com.cloudforgeci/cloudforge-api) for the latest version.
 
----
-
-## Release Process (Maven Release Plugin)
-
-This repository uses the classic **Maven Release Plugin** flow to promote from `x.y.z-SNAPSHOT` → `x.y.z`, tag, and bump to the next `x.y.(z+1)-SNAPSHOT`.
-
-Dry run (no changes committed):
+### Option 3: Local Development (Contributors)
 
 ```bash
-./mvnw -B -Prelease release:prepare -DdryRun   -DreleaseVersion=1.0.0   -DdevelopmentVersion=1.0.1-SNAPSHOT   -Dtag=v1.0.0
-```
-
-Perform the real release:
-
-```bash
-# prepare: bumps versions, commits, tags
-./mvnw -B -Prelease release:prepare   -DreleaseVersion=1.0.0   -DdevelopmentVersion=1.0.1-SNAPSHOT   -Dtag=v1.0.0
-
-# perform: checks out the tag under target/checkout and runs `mvn deploy`
-./mvnw -B -Prelease -Pcentral release:perform
-```
-
-**Publishing to Maven Central:** configure the `central-publishing-maven-plugin` in the parent POM and add a `server` with id `central` in `~/.m2/settings.xml` using your Central user token. Artifacts must be GPG-signed.
-
-Example `~/.m2/settings.xml` fragment:
-
-```xml
-<settings>
-  <servers>
-    <server>
-      <id>central</id>
-      <username>YOUR_CENTRAL_TOKEN_USERNAME</username>
-      <password>YOUR_CENTRAL_TOKEN_PASSWORD</password>
-    </server>
-  </servers>
-</settings>
-```
-
-Deploy **SNAPSHOTs** (after enabling snapshots in the Central Portal):
-
-```bash
-./mvnw -Pcentral -DskipTests deploy
+git clone https://github.com/CloudForgeCI/cfc-core.git
+cd cfc-core
+./mvnw -T1C -DskipTests install  # Fast build (skip tests)
+./mvnw clean verify               # Full build with tests
 ```
 
 ---
 
-## Troubleshooting
+## ⚙️ Configuration Reference
 
-- **Wrong Java version**: ensure CLI and IDE use JDK 21. Set `JAVA_HOME` accordingly.
-- **Live AWS lookups in tests**: avoid; prefer synth + assertions with stubbed inputs.
-- **`NoClassDefFoundError: software/constructs/Construct`**: align consumer with `software.constructs:constructs:10.x` and the matching `aws-cdk-lib` 2.x; reinstall SNAPSHOTs locally if needed.
-- **Release plugin edits the POM unexpectedly**: ensure you use literal `<version>x.y.z-SNAPSHOT</version>` in the parent POM; let modules inherit the parent version.
+CloudForge uses `deployment-context.json` to configure deployments. **All properties are optional** unless marked **[required]**.
+
+### Core Settings
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `runtime` | string | `"fargate"` | **Compute platform:** `"ec2"` or `"fargate"` |
+| `topology` | string | `"jenkins-service"` | **Architecture:** `"jenkins-service"` (HA), `"jenkins-single-node"`, or `"s3-website"` |
+| `securityProfile` | string | `"dev"` | **Security level:** `"dev"`, `"staging"`, or `"production"` |
+| `region` | string | `"us-east-1"` | AWS region to deploy to |
+| `stackName` | string | auto | CloudFormation stack name |
+| `env` | string | `"dev"` | Environment: `"dev"`, `"stage"`, or `"prod"` |
+
+### DNS & SSL
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `domain` | string | - | Your domain (e.g., `"example.com"`) |
+| `subdomain` | string | - | Subdomain (e.g., `"jenkins"` → jenkins.example.com) |
+| `fqdn` | string | - | Full domain (overrides domain+subdomain): `"jenkins.example.com"` |
+| `enableSsl` | boolean | `false` | Enable HTTPS with ACM certificate |
+| `createZone` | boolean | `false` | Create Route53 hosted zone |
+
+### Network & Security
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `networkMode` | string | `"public-no-nat"` | `"public-no-nat"` or `"private-with-nat"` |
+| `wafEnabled` | boolean | `false` | Enable AWS WAF (web application firewall) |
+| `albAccessLogging` | boolean | `false` | Enable ALB access logs to S3 |
+| `bastionCidr` | string | `"10.0.1.0/24"` | CIDR for SSH access (production only) |
+| `guardDutyEnabled` | boolean | `false` | Enable threat detection (PCI-DSS Req 11.4) |
+| `enableFlowlogs` | boolean | `false` | Enable VPC Flow Logs |
+
+### Authentication
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `authMode` | string | `"none"` | `"none"`, `"alb-oidc"`, or `"jenkins-oidc"` |
+
+#### Cognito Configuration (Simplest Authentication)
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `cognitoAutoProvision` | boolean | `false` | Automatically create Cognito User Pool |
+| `cognitoDomainPrefix` | string | - | **[required if auto-provisioning]** Unique domain prefix |
+| `cognitoMfaEnabled` | boolean | `false` | Enable multi-factor authentication |
+| `cognitoAdminGroupName` | string | `"Jenkins-Admins"` | Admin group name |
+| `cognitoInitialAdminEmail` | string | - | Email for initial admin user |
+
+[See full Cognito config options →](#cognito-configuration-full)
+
+#### OIDC Configuration (Enterprise SSO)
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `oidcIssuer` | string | - | OIDC issuer URL (from your IdP) |
+| `oidcClientId` | string | - | OIDC client ID (from your IdP) |
+| `oidcClientSecretName` | string | - | AWS Secrets Manager secret name |
+| `ssoInstanceArn` | string | - | IAM Identity Center instance ARN |
+| `ssoGroupId` | string | - | Identity Center group UUID |
+
+[See full OIDC config options →](#oidc-configuration-full)
+
+### Compute & Scaling
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `instanceType` | string | `"t3.micro"` | EC2 instance type (EC2 runtime only) |
+| `cpu` | integer | `1024` | Fargate vCPU units (Fargate runtime only) |
+| `memory` | integer | `2048` | Fargate memory MiB (Fargate runtime only) |
+| `minInstanceCapacity` | integer | `1` | Minimum instances |
+| `maxInstanceCapacity` | integer | `1` | Maximum instances |
+| `cpuTargetUtilization` | integer | `60` | CPU target % for auto-scaling |
+
+### Storage
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `artifactsBucket` | string | - | S3 bucket for build artifacts |
+| `retainStorage` | boolean | `false` | Keep EFS/EBS on stack deletion |
+| `existingFileSystemId` | string | - | Reuse existing EFS (disaster recovery) |
+
+### Monitoring & Compliance
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enableMonitoring` | boolean | `true` | CloudWatch monitoring |
+| `logRetentionDays` | integer | `7` | CloudWatch log retention days |
+| `awsConfigEnabled` | boolean | `false` | Enable AWS Config compliance |
+| `createConfigInfrastructure` | boolean | `false` | Create Config Recorder (account-level) |
+| `complianceFrameworks` | string | - | `"SOC2"`, `"HIPAA"`, `"PCI-DSS"`, `"GDPR"` (comma-separated) |
+| `auditManagerEnabled` | boolean | `false` | Enable AWS Audit Manager |
+
+### Compliance Remediation
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enableS3VersioningRemediation` | boolean | `false` | Auto-enable S3 versioning on non-compliant buckets |
+| `scopeConfigRulesToDeployment` | boolean | `false` | Scope Config rules to stack resources (vs account-wide) |
 
 ---
 
-## License
+## 📋 Example Configurations
 
-Apache License 2.0 — see `LICENSE`.
+### Minimal Dev Setup (No Domain)
+
+```json
+{
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "dev"
+}
+```
+
+**What you get:**
+- ✅ Jenkins on Fargate
+- ✅ No domain (uses ALB DNS name)
+- ✅ HTTP only (no SSL)
+- ✅ Perfect for testing
+
+### Production with SSL & Authentication
+
+```json
+{
+  "runtime": "ec2",
+  "topology": "jenkins-service",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "jenkins",
+  "enableSsl": true,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "my-jenkins-auth",
+  "cognitoMfaEnabled": true,
+  "cognitoInitialAdminEmail": "admin@example.com",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 4
+}
+```
+
+EC2 with auto-scaling, SSL, Cognito MFA, and custom domain.
+
+---
+
+## 🏆 Compliance Framework Configurations
+
+**Testing Status:**
+- ✅ **SOC2** - Fully tested in production
+- ⚠️ **HIPAA, PCI-DSS, GDPR** - Configuration provided, not yet tested in production
+
+### SOC 2 Compliance ✅ Tested
+
+Access controls, monitoring, 2-year log retention.
+
+```json
+{
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "production",
+  "complianceFrameworks": "SOC2",
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "scopeConfigRulesToDeployment": true,
+  "enableS3VersioningRemediation": true,
+  "enableMonitoring": true,
+  "logRetentionDays": 730,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "jenkins-soc2",
+  "cognitoMfaEnabled": true
+}
+```
+
+Enables IAM password policy remediation, S3 versioning remediation, MFA, and continuous monitoring scoped to your deployment. Cost: ~$50-100/month.
+
+---
+
+### HIPAA Compliance ⚠️ Not Yet Tested
+
+Encryption, access controls, audit trails, 6-year retention.
+
+```json
+{
+  "runtime": "ec2",
+  "topology": "jenkins-service",
+  "securityProfile": "production",
+  "complianceFrameworks": "HIPAA",
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "networkMode": "private-with-nat",
+  "enableEncryption": true,
+  "logRetentionDays": 2190,
+  "retainStorage": true,
+  "bastionCidr": "10.0.1.0/24",
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "jenkins-hipaa",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "both"
+}
+```
+
+14-char passwords, private network, 6-year logs, encrypted storage, MFA (TOTP+SMS), retained storage. Cost: ~$150-250/month.
+
+---
+
+### PCI-DSS Compliance ⚠️ Not Yet Tested
+
+Network segmentation, WAF, threat detection, 1-year retention.
+
+```json
+{
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "production",
+  "complianceFrameworks": "PCI-DSS",
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "guardDutyAlertsConfigured": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "certificateExpirationMonitoring": true,
+  "logRetentionDays": 365,
+  "networkMode": "private-with-nat",
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "jenkins-pcidss",
+  "cognitoMfaEnabled": true
+}
+```
+
+WAF (Req 6.6), GuardDuty (Req 11.4), ALB logging (Req 10.2), certificate monitoring (Req 4.1), 1-year logs (Req 10.7). Cost: ~$200-300/month.
+
+---
+
+### GDPR Compliance ⚠️ Not Yet Tested
+
+Encryption, access controls, audit trails, 2-year retention.
+
+```json
+{
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "production",
+  "region": "eu-west-1",
+  "complianceFrameworks": "GDPR",
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "enableEncryption": true,
+  "logRetentionDays": 730,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "jenkins-gdpr",
+  "cognitoMfaEnabled": true,
+  "enableS3VersioningRemediation": true
+}
+```
+
+EU region deployment, encryption at rest/transit, MFA, S3 versioning, CloudTrail audit. Cost: ~$50-100/month.
+
+---
+
+### Multi-Framework Compliance ⚠️ Not Yet Tested
+
+Combine multiple frameworks - strictest requirements win.
+
+```json
+{
+  "runtime": "ec2",
+  "topology": "jenkins-service",
+  "securityProfile": "production",
+  "complianceFrameworks": "SOC2,HIPAA,PCI-DSS",
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "enableS3VersioningRemediation": true,
+  "guardDutyEnabled": true,
+  "guardDutyAlertsConfigured": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "certificateExpirationMonitoring": true,
+  "networkMode": "private-with-nat",
+  "enableEncryption": true,
+  "logRetentionDays": 2190,
+  "retainStorage": true,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "jenkins-compliant",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "both",
+  "bastionCidr": "10.0.1.0/24"
+}
+```
+
+Combines all security controls: 14-char passwords, 6-year retention, WAF, GuardDuty, encrypted storage. Cost: ~$250-400/month.
+
+---
+
+## 🎓 Framework Comparison
+
+| Requirement | SOC2 | HIPAA | PCI-DSS | GDPR |
+|-------------|------|-------|---------|------|
+| **Min Password Length** | 12 | 14 | 8 | 12 |
+| **Password Rotation** | 90 days | 90 days | 90 days | 90 days |
+| **MFA Required** | ✅ | ✅ | ✅ | ✅ |
+| **Log Retention** | 2 years | 6 years | 1 year | 2 years |
+| **Encryption** | ✅ | ✅ | ✅ | ✅ |
+| **WAF** | Recommended | Recommended | Required | Recommended |
+| **Threat Detection** | Recommended | Recommended | Required | Recommended |
+| **Private Network** | Recommended | Required | Required | Recommended |
+| **Storage Retention** | Optional | Required | Optional | Optional |
+
+---
+
+## 🧰 Full Configuration Reference
+
+<details>
+<summary id="cognito-configuration-full"><b>Cognito Configuration (Full Options)</b></summary>
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `cognitoAutoProvision` | boolean | `false` | Auto-create Cognito User Pool |
+| `cognitoDomainPrefix` | string | - | **[required]** Globally unique domain prefix |
+| `cognitoUserPoolName` | string | - | User Pool display name |
+| `cognitoMfaEnabled` | boolean | `false` | Enable multi-factor authentication |
+| `cognitoMfaMethod` | string | `"both"` | MFA method: `"totp"`, `"sms"`, or `"both"` |
+| `cognitoCreateGroups` | boolean | `true` | Create admin and user groups |
+| `cognitoAdminGroupName` | string | `"Jenkins-Admins"` | Admin group name |
+| `cognitoUserGroupName` | string | `"Jenkins-Users"` | User group name |
+| `cognitoUserPoolId` | string | - | Existing User Pool ID (reuse existing) |
+| `cognitoAppClientId` | string | - | Existing App Client ID (reuse existing) |
+| `cognitoInitialAdminEmail` | string | - | Initial admin user email |
+| `cognitoInitialAdminPhone` | string | - | Phone in E.164 format: `"+12025551234"` |
+
+</details>
+
+<details>
+<summary id="oidc-configuration-full"><b>OIDC Configuration (Full Options)</b></summary>
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `oidcIssuer` | string | - | OIDC issuer URL |
+| `oidcAuthorizationEndpoint` | string | - | Authorization endpoint URL |
+| `oidcTokenEndpoint` | string | - | Token endpoint URL |
+| `oidcUserInfoEndpoint` | string | - | UserInfo endpoint URL |
+| `oidcClientId` | string | - | OIDC application client ID |
+| `oidcClientSecretName` | string | `"jenkins/oidc/client-secret"` | Secrets Manager secret name |
+
+**Legacy Identity Center:**
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ssoInstanceArn` | string | - | IAM Identity Center instance ARN |
+| `ssoGroupId` | string | - | Identity Center group UUID |
+| `ssoTargetAccountId` | string | - | 12-digit AWS account ID |
+| `autoProvisionIdentityCenter` | boolean | `false` | Auto-provision Identity Center |
+| `identityCenterGroupName` | string | `"Jenkins-Users"` | Group name for auto-provisioning |
+
+</details>
+
+<details>
+<summary><b>Health Check Configuration</b></summary>
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `healthCheckGracePeriod` | integer | `300` | Grace period (seconds) |
+| `healthCheckInterval` | integer | `30` | Check interval (seconds) |
+| `healthCheckTimeout` | integer | `5` | Timeout (seconds) |
+| `healthyThreshold` | integer | `2` | Healthy count threshold |
+| `unhealthyThreshold` | integer | `3` | Unhealthy count threshold |
+
+</details>
+
+<details>
+<summary><b>Advanced Monitoring & Threat Detection</b></summary>
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `guardDutyEnabled` | boolean | `false` | Enable GuardDuty threat detection |
+| `guardDutyAlertsConfigured` | boolean | `false` | Configure GuardDuty alerts (EventBridge) |
+| `certificateExpirationMonitoring` | boolean | `false` | Certificate expiration CloudWatch alarms |
+
+</details>
+
+---
+
+## 🧪 Testing & Validation
+
+### Quick Syntax Test
+
+```bash
+cd cfc-testing
+cdk synth --context cfc=@deployment-context.json
+```
+
+### Full Test Suite
+
+```bash
+cd cfc-testing
+./test-synth.sh
+```
+
+### Performance Benchmarking
+
+```bash
+cd cfc-testing
+./benchmark-synth.sh
+```
+
+See **[Extended Testing Guide](docs/guides/EXTENDED-TESTING.md)** for comprehensive testing documentation.
+
+---
+
+## 🔐 Security & SBOM
+
+### Generate Software Bill of Materials
+
+```bash
+mvn clean package -DskipTests
+cat target/cfc-core-sbom.json
+```
+
+### Scan for Vulnerabilities
+
+```bash
+mvn dependency-check:check
+open target/dependency-check-report.html
+```
+
+### Automated Security
+
+Security scanning runs automatically on:
+- ✅ Every push to main/develop
+- ✅ All pull requests
+- ✅ Weekly scheduled scans
+
+See **[SECURITY.md](SECURITY.md)** for details.
+
+---
+
+## 🏗️ Repository Structure
+
+```
+cfc-core/
+├── cloudforge-api/          # Core API: configuration, interfaces
+├── cfc-testing/             # Testing framework & sample app
+├── docs/                    # Complete documentation
+│   ├── compliance/          # Compliance guides (SOC2, HIPAA, PCI-DSS, GDPR)
+│   ├── setup/               # Setup guides (OIDC, Cognito, Identity Center)
+│   └── guides/              # Advanced guides (testing, IAM, security)
+├── .github/workflows/       # CI/CD automation
+├── README.md               # This file
+└── SECURITY.md             # Security policy
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines.
+
+### Prerequisites
+
+- **Java 21+**
+- **Maven 3.9+**
+- **Node.js 18+**
+- **AWS CDK CLI**
+
+### Quick Commands
+
+```bash
+# Fast build (skip tests)
+./mvnw -T1C -DskipTests install
+
+# Full build
+./mvnw clean verify
+
+# Single module
+./mvnw -pl cloudforge-api -am package
+```
+
+---
+
+## 📈 Changelog
+
+See **[CHANGELOG.md](CHANGELOG.md)** for release history.
+
+---
+
+## 🆘 Support
+
+- **GitHub Issues:** [Report bugs or request features](https://github.com/CloudForgeCI/cfc-core/issues)
+- **Sample Project:** [Complete example](https://github.com/CloudForgeCI/cloudforge-sample)
+- **Documentation:** [Full docs](docs/README.md)
+
+---
+
+## 💖 Sponsors
+
+If CloudForge CI saved you time and money, consider **[supporting development](SPONSORS.md)**!
+
+---
+
+## 📄 License
+
+Apache License 2.0 — see **[LICENSE](LICENSE)**
+
+---
+
+## 🔗 Related Projects
+
+- **[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample)** - Complete working example
+- **[cloudforge-community](https://github.com/CloudForgeCI/cloudforge-community)** - Community wrappers
+
+---
+
+**Built with ❤️ by the CloudForge CI community**

@@ -61,10 +61,15 @@ public interface SecurityProfileConfiguration {
     boolean isGuardDutyEnabled();
     
     /**
-     * Whether Config should be enabled for compliance monitoring.
+     * Whether AWS Config should be enabled for compliance monitoring.
      */
-    boolean isConfigEnabled();
-    
+    boolean isAwsConfigEnabled();
+
+    /**
+     * Whether AWS Audit Manager should be enabled for continuous auditing.
+     */
+    boolean isAuditManagerEnabled();
+
     // Encryption Configuration
     /**
      * Whether EBS volumes should be encrypted.

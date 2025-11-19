@@ -226,13 +226,16 @@ public class JenkinsFactory {
       }
       
       new AlarmFactory(scope, id + "Alarms", null);
-      
+
       // Create domain factory if domain is provided (for DNS records)
       if (cfc.domain() != null && !cfc.domain().isBlank()) {
           DomainFactory domain = new DomainFactory(scope, id + "Domain");
           domain.create();
       }
-      
+
+      // Create security factories after DomainFactory (they need the hosted zone)
+      ctx.createSecurityFactories(scope, id);
+
       JenkinsSystem result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
       
       // Execute deferred actions (runtime configuration wiring) after all factories are created
@@ -268,16 +271,18 @@ public class JenkinsFactory {
       SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
       
       // Create Jenkins-specific factories
-      FargateFactory fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
-      fargate.injectContexts(); // Manual injection after SystemContext.start()
+      FargateFactory fargate = new FargateFactory(scope, id + "Fargate");
       fargate.create(); // Call create() to populate fargateTaskDef slot
       
-      new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
+      new JenkinsBootstrap(scope, id + "Jenkins");
       new AlarmFactory(scope, id + "Alarms", null);
-      
+
       DomainFactory domain = new DomainFactory(scope, id + "Domain");
       domain.create();
-      
+
+      // Create security factories after DomainFactory (they need the hosted zone)
+      ctx.createSecurityFactories(scope, id);
+
       JenkinsSystem result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
       
       // Execute deferred actions (runtime configuration wiring) after all factories are created
@@ -355,15 +360,18 @@ public class JenkinsFactory {
     }
     
     new AlarmFactory(scope, id + "Alarms", null);
-    
+
     // Create domain and certificate if SSL is enabled
     if (cfc.enableSsl() && cfc.domain() != null && !cfc.domain().isBlank()) {
     DomainFactory domain = new DomainFactory(scope, id + "Domain");
         domain.create();
-        
+
         // SSL is handled by FargateRuntimeConfiguration
     }
-    
+
+    // Create security factories after DomainFactory (they need the hosted zone)
+    ctx.createSecurityFactories(scope, id);
+
     // Execute deferred actions (runtime configuration wiring) after all factories are created
     ctx.executeDeferredActions();
     
@@ -380,7 +388,7 @@ public class JenkinsFactory {
     // Create EFS Access Point for Jenkins persistent storage (same as Fargate)
     AccessPoint jenkinsAp = null;
     if (ctx.efs.get().isPresent()) {
-      jenkinsAp = ctx.efs.get().orElseThrow().addAccessPoint(id + "JenkinsAp", 
+      jenkinsAp = ctx.efs.get().orElseThrow().addAccessPoint(id + "JenkinsAp",
         AccessPointOptions.builder()
           .path("/jenkins")
           .posixUser(PosixUser.builder().uid("1000").gid("1000").build())
@@ -388,10 +396,10 @@ public class JenkinsFactory {
           .build());
       ctx.ap.set(jenkinsAp);
     }
-    
+
     // Create Jenkins installation user data script with EFS mounting
     UserData userData = createJenkinsUserDataWithEfs(ctx, jenkinsAp);
-    
+
     // Create IAM role for the EC2 instance with EFS permissions
     Role ec2Role = Role.Builder.create(scope, id + "Role")
         .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
@@ -400,13 +408,18 @@ public class JenkinsFactory {
             ManagedPolicy.fromAwsManagedPolicyName("AmazonElasticFileSystemClientFullAccess")
         ))
         .build();
-    
-    // Determine subnet type based on network mode
-    SubnetType subnetType = "public-no-nat".equals(ctx.cfc.networkMode()) ? 
+
+    // Determine subnet type based on network mode from SystemContext Slot
+    String networkMode = ctx.networkMode.get().orElse("private-with-nat");
+    SubnetType subnetType = "public-no-nat".equals(networkMode) ?
             SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
-    
+
             // Parse instance type from DeploymentContext
-            String instanceTypeStr = ctx.cfc.instanceType() != null ? ctx.cfc.instanceType() : "t3.micro";
+            // Note: instanceType is not in SystemContext Slots, still use cfc for this edge case
+            String instanceTypeStr = ctx.cfc.instanceType();
+            if (instanceTypeStr == null) {
+                instanceTypeStr = "t3.micro";
+            }
             InstanceType instanceType = parseInstanceType(instanceTypeStr);
             
             // Create a single EC2 instance with Jenkins installed
@@ -657,8 +670,7 @@ public class JenkinsFactory {
 
       FargateFactory fargate;
       try {
-        fargate = new FargateFactory(scope, id + "Fargate", new FargateFactory.Props(cfc));
-        fargate.injectContexts(); // Manual injection after SystemContext.start()
+        fargate = new FargateFactory(scope, id + "Fargate");
         fargate.create();
       } catch (Exception e) {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in FargateFactory instantiation/creation ***", e);
@@ -666,7 +678,7 @@ public class JenkinsFactory {
       }
       
       try {
-    new JenkinsBootstrap(scope, id + "Jenkins", new JenkinsBootstrap.Props(cfc));
+    new JenkinsBootstrap(scope, id + "Jenkins");
       } catch (Exception e) {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in JenkinsBootstrap ***", e);
         throw e;
@@ -682,13 +694,20 @@ public class JenkinsFactory {
       DomainFactory domain;
       try {
         domain = new DomainFactory(scope, id + "Domain");
-        domain.injectContexts(); // Manual injection after SystemContext.start()
         domain.create();
       } catch (Exception e) {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in DomainFactory ***", e);
         throw e;
       }
-      
+
+      // Create security factories after DomainFactory (they need the hosted zone)
+      try {
+        ctx.createSecurityFactories(scope, id);
+      } catch (Exception e) {
+        LOG.log(Level.SEVERE, "*** CRITICAL: Exception in createSecurityFactories() ***", e);
+        throw e;
+      }
+
       // SSL certificate and DNS records are handled by runtime configurations
 
       JenkinsSystem result;

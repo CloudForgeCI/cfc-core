@@ -28,7 +28,7 @@ class SecurityProfileExampleTest {
     @BeforeEach
     void setUp() {
         app = new App();
-        
+
         // Create a minimal DeploymentContext for testing
         Map<String, Object> config = new HashMap<>();
         config.put("tier", "public");
@@ -52,10 +52,19 @@ class SecurityProfileExampleTest {
         config.put("enableHealthCheck", true);
         config.put("enableBackup", false);
         config.put("backupRetentionDays", 7);
-        
+
         // Set context on the app BEFORE creating stack
         app.getNode().setContext("cfc", config);
         stack = new Stack(app, "TestStack");
+
+        // Start SystemContext before creating any factories
+        com.cloudforgeci.api.core.SystemContext.start(stack,
+            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
+            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+            SecurityProfile.DEV,
+            com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+            DeploymentContext.from(stack));
+
         testCfc = DeploymentContext.from(app);
     }
 

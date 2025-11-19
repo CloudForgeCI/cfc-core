@@ -1,0 +1,187 @@
+name: Security Issue Tracker
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  security-events: read
+  issues: write
+  contents: read
+
+jobs:
+  track-security-issues:
+    name: Track Security Vulnerabilities
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Fetch CodeQL alerts
+        id: fetch-alerts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Fetching CodeQL security alerts..."
+
+          # Fetch all open CodeQL alerts
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/${{ github.repository }}/code-scanning/alerts?state=open&per_page=100" \
+            > codeql-alerts.json
+
+          # Check if we got any results
+          if [ ! -s codeql-alerts.json ]; then
+            echo "No alerts found or API call failed"
+            echo "has_alerts=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Count alerts by severity
+          CRITICAL_COUNT=$(jq '[.[] | select(.rule.security_severity_level == "critical")] | length' codeql-alerts.json)
+          HIGH_COUNT=$(jq '[.[] | select(.rule.security_severity_level == "high")] | length' codeql-alerts.json)
+          MEDIUM_COUNT=$(jq '[.[] | select(.rule.security_severity_level == "medium")] | length' codeql-alerts.json)
+
+          echo "Critical: $CRITICAL_COUNT"
+          echo "High: $HIGH_COUNT"
+          echo "Medium: $MEDIUM_COUNT"
+
+          echo "critical_count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+          echo "high_count=$HIGH_COUNT" >> $GITHUB_OUTPUT
+          echo "medium_count=$MEDIUM_COUNT" >> $GITHUB_OUTPUT
+
+          # Set flag if we have critical or high severity issues
+          if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "has_alerts=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_alerts=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Process critical and high severity alerts
+        if: steps.fetch-alerts.outputs.has_alerts == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Processing critical and high severity alerts..."
+
+          # Extract critical and high severity alerts
+          jq '[.[] | select(.rule.security_severity_level == "critical" or .rule.security_severity_level == "high")]' \
+            codeql-alerts.json > priority-alerts.json
+
+          # Process each alert
+          jq -c '.[]' priority-alerts.json | while read -r alert; do
+            ALERT_NUMBER=$(echo "$alert" | jq -r '.number')
+            RULE_ID=$(echo "$alert" | jq -r '.rule.id')
+            RULE_NAME=$(echo "$alert" | jq -r '.rule.name')
+            SEVERITY=$(echo "$alert" | jq -r '.rule.security_severity_level')
+            FILE_PATH=$(echo "$alert" | jq -r '.most_recent_instance.location.path')
+            START_LINE=$(echo "$alert" | jq -r '.most_recent_instance.location.start_line')
+            ALERT_URL=$(echo "$alert" | jq -r '.html_url')
+            DESCRIPTION=$(echo "$alert" | jq -r '.rule.description // "No description"')
+
+            # Create issue title
+            ISSUE_TITLE="[${SEVERITY^^}] Security: $RULE_NAME in $FILE_PATH"
+
+            # Check if issue already exists for this alert
+            EXISTING_ISSUE=$(gh issue list \
+              --label "security,codeql" \
+              --search "CodeQL Alert #$ALERT_NUMBER in:title" \
+              --json number \
+              --jq '.[0].number // empty')
+
+            if [ -n "$EXISTING_ISSUE" ]; then
+              echo "Issue already exists for alert #$ALERT_NUMBER (Issue #$EXISTING_ISSUE)"
+              continue
+            fi
+
+            # Create issue body
+            cat > issue-body.md << EOF
+          ## Security Alert: $RULE_NAME
+
+          **Severity:** \`${SEVERITY^^}\`
+          **Rule ID:** \`$RULE_ID\`
+          **CodeQL Alert:** [#$ALERT_NUMBER]($ALERT_URL)
+
+          ### Description
+          $DESCRIPTION
+
+          ### Location
+          - **File:** [\`$FILE_PATH:$START_LINE\`]($ALERT_URL)
+          - **Line:** $START_LINE
+
+          ### Action Required
+          This is a **${SEVERITY^^}** severity security vulnerability that needs immediate attention.
+
+          Please review the CodeQL alert and implement the recommended fix.
+
+          ### Resources
+          - [View in CodeQL Dashboard]($ALERT_URL)
+          - [View Rule Documentation](https://codeql.github.com/codeql-query-help/)
+
+          ---
+          *This issue was automatically created by the Security Issue Tracker workflow.*
+          *CodeQL Alert: #$ALERT_NUMBER*
+          EOF
+
+            # Create the issue
+            echo "Creating issue for alert #$ALERT_NUMBER..."
+            ISSUE_NUMBER=$(gh issue create \
+              --title "$ISSUE_TITLE" \
+              --body-file issue-body.md \
+              --label "security,codeql,${SEVERITY}" \
+              --assignee "${{ github.repository_owner }}" | \
+              grep -o '[0-9]*$')
+
+            echo "✅ Created issue #$ISSUE_NUMBER for CodeQL alert #$ALERT_NUMBER"
+
+            # Rate limit: don't create too many issues at once
+            sleep 2
+          done
+
+      - name: Generate summary report
+        if: always()
+        run: |
+          echo "## Security Alert Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f codeql-alerts.json ]; then
+            CRITICAL_COUNT="${{ steps.fetch-alerts.outputs.critical_count }}"
+            HIGH_COUNT="${{ steps.fetch-alerts.outputs.high_count }}"
+            MEDIUM_COUNT="${{ steps.fetch-alerts.outputs.medium_count }}"
+
+            echo "### Alert Counts by Severity" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 🔴 Critical | $CRITICAL_COUNT |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟠 High | $HIGH_COUNT |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟡 Medium | $MEDIUM_COUNT |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ steps.fetch-alerts.outputs.has_alerts }}" == "true" ]; then
+              echo "### ⚠️ Action Required" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Critical and high severity vulnerabilities detected. Issues have been created." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "### ✅ Status" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "No critical or high severity vulnerabilities found." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "No CodeQL alerts data available." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "[View All Security Alerts](https://github.com/${{ github.repository }}/security/code-scanning)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f codeql-alerts.json priority-alerts.json issue-body.md

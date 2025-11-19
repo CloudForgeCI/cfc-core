@@ -28,19 +28,15 @@ public class ScalingFactoryTest {
     SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
     
     VpcFactory vpc = new VpcFactory(stack, "Vpc");
-    vpc.injectContexts(); // Manual injection after SystemContext.start()
     vpc.create();
-    
+
     AlbFactory alb = new AlbFactory(stack, "Alb");
-    alb.injectContexts(); // Manual injection after SystemContext.start()
     alb.create();
-    
+
     EfsFactory efs = new EfsFactory(stack, "Efs");
-    efs.injectContexts(); // Manual injection after SystemContext.start()
     efs.create();
-    
+
     Ec2Factory ec2 = new Ec2Factory(stack, "Ec2");
-    ec2.injectContexts(); // Manual injection after SystemContext.start()
     ec2.create();
     
     new ScalingFactory(stack, "Scaling");

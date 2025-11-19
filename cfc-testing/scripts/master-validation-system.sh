@@ -17,15 +17,21 @@ NC='\033[0m' # No Color
 # Configuration - dynamically determine script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# If BASE_DIR is not set, use SCRIPT_DIR as the base
-# This ensures the script works when called from any directory
+# If BASE_DIR is not set, check if we're being called from cfc-testing/
+# GitHub workflow calls: cd cfc-testing && bash scripts/master-validation-system.sh
 if [[ -z "$BASE_DIR" ]]; then
-    BASE_DIR="$SCRIPT_DIR"
+    # If called from cfc-testing/ (current dir has cdk.json), use current dir
+    if [[ -f "$(pwd)/cdk.json" ]]; then
+        BASE_DIR="$(pwd)"
+    # Otherwise assume we need parent of scripts/ dir
+    else
+        BASE_DIR="$(dirname "$SCRIPT_DIR")"
+    fi
 fi
 
 # Normalize BASE_DIR to absolute path
 BASE_DIR="$(cd "$BASE_DIR" && pwd)"
-VALIDATION_DIR="$BASE_DIR/validation-results"
+VALIDATION_DIR="$SCRIPT_DIR/validation-results"
 
 # Ensure validation directory exists
 mkdir -p "$VALIDATION_DIR"
@@ -62,15 +68,15 @@ check_prerequisites() {
         missing_deps+=("maven")
     fi
     
-    # Check required scripts
+    # Check required scripts (all in scripts/ directory for consistency)
     local required_scripts=(
         "comprehensive-resource-validator.sh"
-        "truth-table-generator.py"
         "drift-detector.sh"
+        "truth-table-generator.py"
     )
-    
+
     for script in "${required_scripts[@]}"; do
-        if [[ ! -f "$BASE_DIR/$script" ]]; then
+        if [[ ! -f "$SCRIPT_DIR/$script" ]]; then
             missing_deps+=("$script")
         fi
     done
@@ -94,12 +100,12 @@ run_full_validation() {
     # Step 1: Generate truth table
     echo -e "${CYAN}📋 Step 1: Generating truth table and test matrix...${NC}"
     cd "$BASE_DIR"
-    python3 "$BASE_DIR/truth-table-generator.py" "$VALIDATION_DIR"
+    python3 "$SCRIPT_DIR/truth-table-generator.py" "$VALIDATION_DIR"
     echo ""
 
     # Step 2: Run comprehensive resource validation
     echo -e "${CYAN}🔍 Step 2: Running comprehensive resource validation...${NC}"
-    bash "$BASE_DIR/comprehensive-resource-validator.sh"
+    bash "$SCRIPT_DIR/comprehensive-resource-validator.sh"
     echo ""
     
     # Step 3: Move results to current directory for drift detection
@@ -121,7 +127,7 @@ detect_and_report_drift() {
     echo ""
     
     # Run drift detection
-    bash "$BASE_DIR/drift-detector.sh" detect
+    bash "$SCRIPT_DIR/drift-detector.sh" detect
     
     local drift_status=$?
     echo ""
@@ -133,7 +139,7 @@ detect_and_report_drift() {
         echo -e "${YELLOW}⚠️  Configuration drift detected ($drift_status changes)${NC}"
         
         # Generate drift history
-        bash "$BASE_DIR/drift-detector.sh" history
+        bash "$SCRIPT_DIR/drift-detector.sh" history
         
         return $drift_status
     fi
@@ -279,6 +285,7 @@ EOF
     "domain": "$domain_value",
     "subdomain": "$subdomain_value",
     "enableSsl": "$ssl_value",
+    "createZone": true,
     "stackName": "$stack_name"
   }
 }
@@ -288,13 +295,7 @@ EOF
         cd "$BASE_DIR"
         local error_log="$VALIDATION_DIR/smoke-test-${stack_name}-error.log"
 
-        if cdk synth --quiet "$stack_name" \
-            --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample" \
-            --context cfc.runtime="$runtime" \
-            --context cfc.topology="$topology" \
-            --context cfc.securityProfile="$security" \
-            --context cfc.stackName="$stack_name" \
-            > /dev/null 2>"$error_log"; then
+        if cdk synth --quiet "$stack_name" --context cfc=@deployment-context.json > /dev/null 2>"$error_log"; then
 
             echo -e "  ${GREEN}✅ PASS${NC}"
             passed=$((passed + 1))
@@ -556,7 +557,7 @@ case "${1:-help}" in
         ;;
     "baseline")
         check_prerequisites
-        bash "$BASE_DIR/drift-detector.sh" baseline
+        bash "$SCRIPT_DIR/drift-detector.sh" baseline
         ;;
     "report")
         generate_comprehensive_report

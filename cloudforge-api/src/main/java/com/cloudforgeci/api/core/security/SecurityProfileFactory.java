@@ -1,7 +1,8 @@
 package com.cloudforgeci.api.core.security;
 
-import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.annotation.SystemContext;
+import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
@@ -16,61 +17,68 @@ import java.util.logging.Logger;
  * Manages logging, flow logs, and security monitoring based on security profiles.
  */
 public class SecurityProfileFactory extends BaseFactory {
-    
+
     private static final Logger LOG = Logger.getLogger(SecurityProfileFactory.class.getName());
-    
-    @com.cloudforgeci.api.core.annotation.SystemContext
-    private SystemContext ctx;
-    
+
+    @SystemContext("security")
+    private SecurityProfile security;
+
+    @SystemContext("runtime")
+    private RuntimeType runtime;
+
+    @SystemContext("stackName")
+    private String stackName;
+
     public SecurityProfileFactory(Construct scope, String id) {
         super(scope, id);
     }
-    
+
     @Override
     public void create() {
         // Get the appropriate security profile configuration
-        SecurityProfileConfiguration config = getSecurityProfileConfiguration(ctx.security);
-        
-        LOG.info("Creating observability configuration for security profile: " + ctx.security);
-        
+        SecurityProfileConfiguration config = getSecurityProfileConfiguration(security);
+
+        LOG.info("Creating observability configuration for security profile: " + security);
+
         // Configure CloudWatch Log Groups
-        configureCloudWatchLogs(ctx, config);
-        
+        configureCloudWatchLogs(config);
+
         // Configure VPC Flow Logs
-        configureVpcFlowLogs(ctx, config);
-        
+        configureVpcFlowLogs(config);
+
         // Configure Security Monitoring
-        configureSecurityMonitoring(ctx, config);
-        
+        configureSecurityMonitoring(config);
+
         LOG.info("Security profile observability configuration completed");
     }
     
     /**
      * Get the appropriate security profile configuration based on the security profile.
+     * Passes deployment context to allow overriding profile defaults for compliance frameworks.
      */
     private SecurityProfileConfiguration getSecurityProfileConfiguration(SecurityProfile securityProfile) {
         return switch (securityProfile) {
-            case DEV -> new DevSecurityProfileConfiguration();
-            case STAGING -> new StagingSecurityProfileConfiguration();
-            case PRODUCTION -> new ProductionSecurityProfileConfiguration();
+            case DEV -> new DevSecurityProfileConfiguration(ctx.cfc);
+            case STAGING -> new StagingSecurityProfileConfiguration(ctx.cfc);
+            case PRODUCTION -> new ProductionSecurityProfileConfiguration(ctx.cfc);
         };
     }
     
     /**
      * Configure CloudWatch Log Groups based on security profile.
      */
-    private void configureCloudWatchLogs(SystemContext ctx, SecurityProfileConfiguration config) {
+    private void configureCloudWatchLogs(SecurityProfileConfiguration config) {
         if (ctx.logs.get().isPresent()) {
             LOG.info("CloudWatch logs already configured, skipping");
             return;
         }
-        
+
         LogGroup logGroup = LogGroup.Builder.create(this, "SecurityProfileLogs")
                 .retention(config.getLogRetentionDays())
                 .removalPolicy(config.getLogRemovalPolicy())
-                .logGroupName("/aws/jenkins/" + ctx.stackName + "/" + ctx.runtime.name().toLowerCase() + "/" + ctx.security.name().toLowerCase())
+                .logGroupName("/aws/jenkins/" + stackName + "/" + runtime.name().toLowerCase() + "/" + security.name().toLowerCase())
                 .build();
-        
+
         ctx.logs.set(logGroup);
         LOG.info("Created CloudWatch log group with retention: " + config.getLogRetentionDays());
     }
@@ -78,108 +86,78 @@ public class SecurityProfileFactory extends BaseFactory {
     /**
      * Configure VPC Flow Logs based on security profile.
      */
-    private void configureVpcFlowLogs(SystemContext ctx, SecurityProfileConfiguration config) {
+    private void configureVpcFlowLogs(SecurityProfileConfiguration config) {
         // Check if flow logs are enabled for this security profile
         if (!config.isFlowLogsEnabled()) {
-            LOG.info("Flow logs disabled for security profile: " + ctx.security);
+            LOG.info("Flow logs disabled for security profile: " + security);
             return;
         }
-        
+
         // Check if flow logs are already configured
         if (ctx.flowlogs.get().isPresent()) {
             LOG.info("Flow logs already configured, skipping");
             return;
         }
-        
+
         // Check if VPC is available
         if (!ctx.vpc.get().isPresent()) {
             LOG.warning("VPC not available for flow logs configuration");
             return;
         }
-        
+
         // Create flow log log group
         LogGroup flowLogGroup = LogGroup.Builder.create(this, "VpcFlowLogsGroup")
                 .retention(config.getFlowLogRetentionDays())
                 .removalPolicy(config.getLogRemovalPolicy())
-                .logGroupName("/aws/vpc/flowlogs/" + ctx.security.name().toLowerCase())
+                .logGroupName("/aws/vpc/flowlogs/" + security.name().toLowerCase())
                 .build();
-        
+
         // Create flow log options
         FlowLogOptions flowLogOptions = FlowLogOptions.builder()
                 .trafficType(config.getFlowLogTrafficType())
                 .destination(FlowLogDestination.toCloudWatchLogs(flowLogGroup))
                 .build();
-        
+
         ctx.flowlogs.set(flowLogOptions);
-        LOG.info("Created VPC flow logs with traffic type: " + config.getFlowLogTrafficType() + 
+        LOG.info("Created VPC flow logs with traffic type: " + config.getFlowLogTrafficType() +
                 " and retention: " + config.getFlowLogRetentionDays());
     }
     
     /**
      * Configure security monitoring based on security profile.
+     *
+     * Note: Security monitoring components are implemented in dedicated factories:
+     * - CloudTrail: ComplianceFactory (deployment context: awsConfigEnabled)
+     * - AWS Config: ComplianceFactory (deployment context: awsConfigEnabled, createConfigInfrastructure)
+     * - GuardDuty: GuardDutyFactory (deployment context: guardDutyEnabled)
+     * - ALB Access Logging: AlbFactory (deployment context: albAccessLogging)
+     *
+     * This method logs the configuration but delegates actual setup to the specialized factories.
      */
-    private void configureSecurityMonitoring(SystemContext ctx, SecurityProfileConfiguration config) {
+    private void configureSecurityMonitoring(SecurityProfileConfiguration config) {
         if (!config.isSecurityMonitoringEnabled()) {
-            LOG.info("Security monitoring disabled for security profile: " + ctx.security);
+            LOG.info("Security monitoring disabled for security profile: " + security);
             return;
         }
-        
-        LOG.info("Configuring security monitoring for profile: " + ctx.security);
-        
-        // Configure CloudTrail if enabled
+
+        LOG.info("Security monitoring enabled for profile: " + security);
+
+        // Log which services are enabled (actual configuration happens in dedicated factories)
         if (config.isCloudTrailEnabled()) {
-            configureCloudTrail(ctx, config);
+            LOG.info("  - CloudTrail: ENABLED (configured by ComplianceFactory)");
         }
-        
-        // Configure GuardDuty if enabled
+
         if (config.isGuardDutyEnabled()) {
-            configureGuardDuty(ctx, config);
+            LOG.info("  - GuardDuty: ENABLED (configured by GuardDutyFactory)");
         }
-        
-        // Configure Config if enabled
-        if (config.isConfigEnabled()) {
-            configureConfig(ctx, config);
+
+        if (config.isAwsConfigEnabled()) {
+            LOG.info("  - AWS Config: ENABLED (configured by ComplianceFactory)");
+            LOG.info("    Set awsConfigEnabled=true and createConfigInfrastructure=true in deployment context");
         }
-        
-        // Configure ALB access logging if enabled
+
         if (config.isAlbAccessLoggingEnabled()) {
-            configureAlbAccessLogging(ctx, config);
+            LOG.info("  - ALB Access Logging: ENABLED (configured by AlbFactory)");
         }
-    }
-    
-    /**
-     * Configure CloudTrail for audit logging.
-     */
-    private void configureCloudTrail(SystemContext ctx, SecurityProfileConfiguration config) {
-        LOG.info("Configuring CloudTrail for security profile: " + ctx.security);
-        // CloudTrail configuration would be implemented here
-        // This is a placeholder for future CloudTrail integration
-    }
-    
-    /**
-     * Configure GuardDuty for threat detection.
-     */
-    private void configureGuardDuty(SystemContext ctx, SecurityProfileConfiguration config) {
-        LOG.info("Configuring GuardDuty for security profile: " + ctx.security);
-        // GuardDuty configuration would be implemented here
-        // This is a placeholder for future GuardDuty integration
-    }
-    
-    /**
-     * Configure Config for compliance monitoring.
-     */
-    private void configureConfig(SystemContext ctx, SecurityProfileConfiguration config) {
-        LOG.info("Configuring Config for security profile: " + ctx.security);
-        // Config configuration would be implemented here
-        // This is a placeholder for future Config integration
-    }
-    
-    /**
-     * Configure ALB access logging.
-     */
-    private void configureAlbAccessLogging(SystemContext ctx, SecurityProfileConfiguration config) {
-        LOG.info("Configuring ALB access logging for security profile: " + ctx.security);
-        // ALB access logging configuration would be implemented here
-        // This is a placeholder for future ALB access logging integration
     }
 }

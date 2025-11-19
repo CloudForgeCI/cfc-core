@@ -1,9 +1,6 @@
 package com.cloudforgeci.api.examples;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.SystemContext;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.constructs.Construct;
 
 import java.util.logging.Logger;

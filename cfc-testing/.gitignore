@@ -50,3 +50,10 @@ Thumbs.db
 
 # Validation Results
 validation-results
+
+test-results
+
+scripts/validation-results
+scripts/synth-results
+
+benchmark-results

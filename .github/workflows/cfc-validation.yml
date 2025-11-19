@@ -73,8 +73,9 @@ jobs:
           # Mock credentials for CDK synthesis only - not used for actual AWS operations
           MOCK_AWS_ACCESS_KEY_ID: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
           MOCK_AWS_SECRET_ACCESS_KEY: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          echo "Configuring mock AWS credentials for CDK synthesis..."
+          echo "Configuring mock credentials for CDK synthesis..."
           mkdir -p ~/.aws
           cat > ~/.aws/credentials << EOF
           [default]
@@ -83,7 +84,7 @@ jobs:
           EOF
           cat > ~/.aws/config << EOF
           [default]
-          region = us-east-1
+          region = ${AWS_DEFAULT_REGION}
           output = json
           EOF
           echo "Mock credentials configured (synth only, no deployment)"
@@ -141,12 +142,12 @@ jobs:
           cd cfc-testing
 
           # Make scripts executable
-          chmod +x *.sh 2>/dev/null || true
-          chmod +x *.py 2>/dev/null || true
+          chmod +x scripts/*.sh 2>/dev/null || true
+          chmod +x scripts/*.py 2>/dev/null || true
 
           # Create necessary directories
-          mkdir -p validation-results
-          mkdir -p synth-results
+          mkdir -p scripts/validation-results
+          mkdir -p scripts/synth-results
 
           echo "Validation environment ready"
           echo "Working directory: $(pwd)"
@@ -188,7 +189,7 @@ jobs:
 
           # Verify scripts exist
           echo "Checking scripts..."
-          ls -la *.sh *.py 2>/dev/null || echo "Script listing failed"
+          ls -la scripts/*.sh scripts/*.py 2>/dev/null | head -5 || echo "Script listing failed"
 
           # Verify CDK setup
           echo "Verifying CDK setup..."
@@ -197,7 +198,7 @@ jobs:
 
           # Run the appropriate validation mode
           echo "Starting validation..."
-          bash master-validation-system.sh ${{ steps.mode.outputs.mode }} 2>&1 | tee validation-run.log
+          bash scripts/master-validation-system.sh ${{ steps.mode.outputs.mode }} 2>&1 | tee validation-run.log
 
           # Capture exit code
           EXIT_CODE=${PIPESTATUS[0]}
@@ -212,9 +213,9 @@ jobs:
             echo "=========================================="
 
             # Show smoke test error logs if they exist
-            if [ -d "validation-results" ]; then
+            if [ -d "scripts/validation-results" ]; then
               echo "Error logs found:"
-              find validation-results -name "*-error.log" -type f | while read logfile; do
+              find scripts/validation-results -name "*-error.log" -type f | while read logfile; do
                 echo ""
                 echo "--- $(basename $logfile) ---"
                 cat "$logfile"
@@ -231,7 +232,7 @@ jobs:
           exit $EXIT_CODE
 
       - name: Generate testing strategy for PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.mode.outputs.mode != 'smoke'
         continue-on-error: true
         run: |
           cd cfc-testing
@@ -241,7 +242,7 @@ jobs:
 
           if [ -n "$CHANGED_FILES" ]; then
             echo "Changed files: $CHANGED_FILES"
-            bash master-validation-system.sh strategy "$CHANGED_FILES" > testing-strategy.txt
+            bash scripts/master-validation-system.sh strategy "$CHANGED_FILES" > testing-strategy.txt
           else
             echo "No relevant files changed"
             echo "No Java/TypeScript files changed in this PR" > testing-strategy.txt
@@ -279,10 +280,10 @@ jobs:
         with:
           name: cfc-validation-results
           path: |
-            cfc-testing/validation-results/**/*.json
-            cfc-testing/validation-results/**/*.html
-            cfc-testing/validation-results/**/*.txt
-            cfc-testing/validation-results/**/*.log
+            cfc-testing/scripts/validation-results/**/*.json
+            cfc-testing/scripts/validation-results/**/*.html
+            cfc-testing/scripts/validation-results/**/*.txt
+            cfc-testing/scripts/validation-results/**/*.log
             cfc-testing/testing-strategy.txt
             cfc-testing/validation-run.log
             cfc-testing/cdk.out/**/*.json
@@ -295,7 +296,7 @@ jobs:
         with:
           name: cfc-drift-reports
           path: |
-            cfc-testing/validation-results/drift-reports/**/*
+            cfc-testing/scripts/validation-results/drift-reports/**/*
           retention-days: 90
           if-no-files-found: ignore
 
@@ -324,11 +325,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Check for truth table results
-          if [ -f validation-results/truth-table.json ]; then
+          if [ -f scripts/validation-results/truth-table.json ]; then
             echo "### Configuration Analysis" >> $GITHUB_STEP_SUMMARY
-            TOTAL=$(jq -r '.metadata.total_configurations // 0' validation-results/truth-table.json)
-            VALID=$(jq -r '.metadata.valid_configurations // 0' validation-results/truth-table.json)
-            INVALID=$(jq -r '.metadata.invalid_configurations // 0' validation-results/truth-table.json)
+            TOTAL=$(jq -r '.metadata.total_configurations // 0' scripts/validation-results/truth-table.json)
+            VALID=$(jq -r '.metadata.valid_configurations // 0' scripts/validation-results/truth-table.json)
+            INVALID=$(jq -r '.metadata.invalid_configurations // 0' scripts/validation-results/truth-table.json)
 
             echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -339,12 +340,12 @@ jobs:
           fi
 
           # Check for validation results
-          if [ -d validation-results/current ] && [ "$(ls -A validation-results/current/*.json 2>/dev/null)" ]; then
+          if [ -d scripts/validation-results/current ] && [ "$(ls -A scripts/validation-results/current/*.json 2>/dev/null)" ]; then
             echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
             PASSED=0
             FAILED=0
 
-            for file in validation-results/current/*-validation.json; do
+            for file in scripts/validation-results/current/*-validation.json; do
               if [ -f "$file" ]; then
                 STATUS=$(jq -r '.summary.status // "UNKNOWN"' "$file")
                 if [ "$STATUS" == "PASS" ]; then
@@ -363,7 +364,7 @@ jobs:
           fi
 
           # Check for drift detection
-          LATEST_DRIFT=$(ls -t validation-results/drift-reports/drift-summary-*.txt 2>/dev/null | head -1)
+          LATEST_DRIFT=$(ls -t scripts/validation-results/drift-reports/drift-summary-*.txt 2>/dev/null | head -1)
           if [ -f "$LATEST_DRIFT" ]; then
             echo "### Drift Detection" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY

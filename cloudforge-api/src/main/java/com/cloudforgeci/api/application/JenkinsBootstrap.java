@@ -1,7 +1,5 @@
 package com.cloudforgeci.api.application;
 
-import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.services.ec2.Port;
@@ -9,18 +7,8 @@ import software.constructs.Construct;
 
 public class JenkinsBootstrap extends BaseFactory {
 
-    @com.cloudforgeci.api.core.annotation.SystemContext
-    private SystemContext ctx;
-
-    @com.cloudforgeci.api.core.annotation.DeploymentContext
-    private DeploymentContext cfc;
-
-    public record Props(DeploymentContext cfc) { }
-
-
-    public JenkinsBootstrap(Construct scope, String id, Props props) {
+    public JenkinsBootstrap(Construct scope, String id) {
         super(scope, id);
-        // Props not currently used but kept for future extensibility
     }
 
     @Override

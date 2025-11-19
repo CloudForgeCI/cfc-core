@@ -33,16 +33,16 @@ Orchestrates the entire validation system.
 
 ```bash
 # Run complete validation suite
-./master-validation-system.sh full
+scripts/master-validation-system.sh full
 
 # Quick smoke tests
-./master-validation-system.sh smoke
+scripts/master-validation-system.sh smoke
 
 # Create testing strategy for specific files
-./master-validation-system.sh strategy "FargateFactory.java,AlbFactory.java"
+scripts/master-validation-system.sh strategy "FargateFactory.java,AlbFactory.java"
 
 # Detect configuration drift
-./master-validation-system.sh drift
+scripts/master-validation-system.sh drift
 ```
 
 ### 2. `truth-table-generator.py`
@@ -62,7 +62,7 @@ Validates all configurations against truth table.
 
 ```bash
 # Run comprehensive validation
-./comprehensive-resource-validator.sh
+scripts/comprehensive-resource-validator.sh
 ```
 
 **Outputs**:
@@ -75,13 +75,13 @@ Detects configuration drift between builds.
 
 ```bash
 # Create baseline from current results
-./drift-detector.sh baseline
+scripts/drift-detector.sh baseline
 
 # Detect drift
-./drift-detector.sh detect
+scripts/drift-detector.sh detect
 
 # Generate drift history
-./drift-detector.sh history
+scripts/drift-detector.sh history
 ```
 
 ## 🚀 Quick Start
@@ -92,31 +92,31 @@ Detects configuration drift between builds.
 python3 truth-table-generator.py validation-results
 
 # 2. Run comprehensive validation
-./comprehensive-resource-validator.sh
+scripts/comprehensive-resource-validator.sh
 
 # 3. Create baseline
-./drift-detector.sh baseline
+scripts/drift-detector.sh baseline
 ```
 
 ### After Code Changes
 ```bash
 # 1. Run validation
-./master-validation-system.sh validate
+scripts/master-validation-system.sh validate
 
 # 2. Detect drift
-./master-validation-system.sh drift
+scripts/master-validation-system.sh drift
 
 # 3. Generate report
-./master-validation-system.sh report
+scripts/master-validation-system.sh report
 ```
 
 ### Quick Validation
 ```bash
 # Smoke tests (fast)
-./master-validation-system.sh smoke
+scripts/master-validation-system.sh smoke
 
 # Full validation (comprehensive)
-./master-validation-system.sh full
+scripts/master-validation-system.sh full
 ```
 
 ## 📋 Expected Resources by Configuration
@@ -237,7 +237,7 @@ npm install -g aws-cdk
 Check error logs in `validation-results/*-error.log`
 
 #### Drift Detection Issues
-Ensure baseline exists: `./drift-detector.sh baseline`
+Ensure baseline exists: `scripts/drift-detector.sh baseline`
 
 ### Debug Mode
 Add `set -x` to scripts for verbose debugging
@@ -262,8 +262,8 @@ Add `set -x` to scripts for verbose debugging
 ### Continuous Integration
 ```bash
 # In CI pipeline
-./master-validation-system.sh smoke  # Quick validation
-./master-validation-system.sh drift  # Detect drift
+scripts/master-validation-system.sh smoke  # Quick validation
+scripts/master-validation-system.sh drift  # Detect drift
 ```
 
 ## 📈 Benefits

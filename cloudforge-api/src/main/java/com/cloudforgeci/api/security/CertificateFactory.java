@@ -1,71 +1,43 @@
 package com.cloudforgeci.api.security;
 
-import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import software.amazon.awscdk.services.certificatemanager.Certificate;
-import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
+import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import software.amazon.awscdk.services.route53.IHostedZone;
 import software.constructs.Construct;
 
 public class CertificateFactory extends BaseFactory {
 
-    @com.cloudforgeci.api.core.annotation.SystemContext
-    private SystemContext ctx;
+    @com.cloudforgeci.api.core.annotation.SystemContext("zone")
+    private IHostedZone zone;
 
-    @com.cloudforgeci.api.core.annotation.DeploymentContext
-    private DeploymentContext cfc;
+    @DeploymentContext("enableSsl")
+    private Boolean enableSsl;
 
-    private final Props p;
+    @DeploymentContext("domain")
+    private String domain;
 
-    public record Props(
-            DeploymentContext cfc
-    ) {}
+    @DeploymentContext("fqdn")
+    private String fqdn;
 
-    public CertificateFactory(Construct scope, String id, Props props) {
+    @DeploymentContext("subdomain")
+    private String subdomain;
+
+    public CertificateFactory(Construct scope, String id) {
         super(scope, id);
-        this.p = props;
+        // enableSsl, domain, fqdn, subdomain, and zone are automatically injected by BaseFactory
     }
 
     @Override
     public void create() {
-        if (p.cfc.enableSsl() && p.cfc.domain() != null && !p.cfc.domain().isBlank()) {
-            createSslCertificate(ctx);
-            // Note: ARecord creation is handled by runtime configuration (Ec2RuntimeConfiguration, FargateRuntimeConfiguration)
-            // to avoid duplicate record creation
-        }
-    }
-
-    public void create(final SystemContext ctx) {
-        if (p.cfc.enableSsl() && p.cfc.domain() != null && !p.cfc.domain().isBlank()) {
-            createSslCertificate(ctx);
-            // Note: ARecord creation is handled by runtime configuration (Ec2RuntimeConfiguration, FargateRuntimeConfiguration)
-            // to avoid duplicate record creation
-        }
-    }
-
-    private void createSslCertificate(SystemContext ctx) {
-        String fqdn = p.cfc.fqdn();
-        if (fqdn == null || fqdn.isBlank()) {
-            // Construct FQDN from subdomain and domain
-            String subdomain = p.cfc.subdomain();
-            String domain = p.cfc.domain();
-            fqdn = subdomain + "." + domain;
-        }
-
-        // Create SSL certificate
-        Certificate cert = Certificate.Builder.create(this, "Cert")
-                .domainName(fqdn)
-                .validation(CertificateValidation.fromDns(ctx.zone.get().orElseThrow()))
-                .build();
-
-        // Store certificate in context for runtime configuration to use
-        // Only set if not already present to avoid duplicate HTTPS listener creation
-        if (!ctx.cert.get().isPresent()) {
-            ctx.cert.set(cert);
-        }
-        
-        // Note: HTTPS listener creation is handled by FargateRuntimeConfiguration
-        // to avoid duplicate listener creation
+        // IMPORTANT: Certificate creation is now handled by runtime configurations (Ec2RuntimeConfiguration, FargateRuntimeConfiguration)
+        // This ensures proper dependency ordering: Certificate -> Listener -> ALB
+        // CloudFormation will automatically delete in reverse order: ALB -> Listener -> Certificate
+        //
+        // DO NOT create certificates here - it causes deletion order issues where CloudFormation
+        // tries to delete the certificate before the listener, resulting in "ResourceInUseException"
+        //
+        // The runtime configuration creates the certificate with the listener dependency established,
+        // ensuring clean deletion without errors.
     }
 
 }
