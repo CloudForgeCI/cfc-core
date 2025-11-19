@@ -307,7 +307,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     ))
                     .build();
             LOG.info("Created SNS role for SMS MFA with least-privilege permissions: " + smsRole.getRoleArn());
-            LOG.info("  - External ID: " + externalId);
+            LOG.info("  - External ID: [REDACTED]");
             LOG.info("  - SNS Region: " + snsRegion);
             LOG.info("  - Permissions: sns:Publish only (least privilege)");
         }
@@ -388,11 +388,11 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     .build());
             LOG.info("Configured SMS role for User Pool:");
             LOG.info("  - Role ARN: " + smsRole.getRoleArn());
-            LOG.info("  - External ID: " + externalId);
+            LOG.info("  - External ID: [REDACTED]");
             LOG.info("  - SNS Region: " + snsRegion);
         }
 
-        LOG.info("User Pool created: " + userPool.getUserPoolId());
+        LOG.info("User Pool created: [REDACTED]");
         LOG.info("MFA Configuration Summary:");
         LOG.info("  - MFA Enabled: " + (cognitoMfaEnabled != null && cognitoMfaEnabled ? "REQUIRED" : "OPTIONAL"));
         LOG.info("  - TOTP (Authenticator Apps): " + (enableTotp ? "ENABLED" : "DISABLED"));
@@ -459,7 +459,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // The client secret is only needed for external OIDC providers (via IAM Identity Center)
         LOG.info("Cognito User Pool will manage client secret internally");
         LOG.info("Client secret retrieval command:");
-        LOG.info("  aws cognito-idp describe-user-pool-client --user-pool-id " + userPool.getUserPoolId() + " --client-id " + appClient.getUserPoolClientId());
+        LOG.info("  aws cognito-idp describe-user-pool-client --user-pool-id [REDACTED] --client-id [REDACTED]");
 
         // Export OIDC endpoints to SystemContext for OidcAuthenticationFactory to use
         // Pass null for secretName since Cognito doesn't use Secrets Manager
@@ -501,8 +501,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             IUserPoolClient appClient = UserPoolClient.fromUserPoolClientId(this, "ImportedAppClient", cognitoAppClientId);
             ctx.cognitoUserPoolClient.set(appClient);
 
-            // Import existing User Pool Domain (requires domain prefix)
-            IUserPoolDomain userPoolDomain = UserPoolDomain.fromDomainName(this, "ImportedUserPoolDomain", cognitoDomainPrefix);
+            // Import existing User Pool Domain (requires full domain name)
+            String fullDomainName = cognitoDomainPrefix + ".auth." + region + ".amazoncognito.com";
+            IUserPoolDomain userPoolDomain = UserPoolDomain.fromDomainName(this, "ImportedUserPoolDomain", fullDomainName);
             ctx.cognitoUserPoolDomain.set(userPoolDomain);
 
             LOG.info("Imported and exported Cognito CDK objects to SystemContext");
@@ -539,8 +540,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
             LOG.info("App Client created: " + appClient.getUserPoolClientId());
 
-            // Import existing User Pool Domain (or create if needed - assuming it already exists)
-            IUserPoolDomain userPoolDomain = UserPoolDomain.fromDomainName(this, "ImportedUserPoolDomain", cognitoDomainPrefix);
+            // Import existing User Pool Domain (requires full domain name)
+            String fullDomainName = cognitoDomainPrefix + ".auth." + region + ".amazoncognito.com";
+            IUserPoolDomain userPoolDomain = UserPoolDomain.fromDomainName(this, "ImportedUserPoolDomain", fullDomainName);
 
             // Export CDK objects for native ALB Cognito authentication
             ctx.cognitoUserPoolClient.set(appClient);

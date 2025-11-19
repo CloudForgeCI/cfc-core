@@ -61,8 +61,8 @@
  *
  * <pre>{@code
  * cfc.put("wafEnabled", true);
- * cfc.put("securityMonitoringEnabled", true);
- * cfc.put("flowLogRetentionDays", 90);
+ * cfc.put("enableMonitoring", true);
+ * cfc.put("logRetentionDays", 90);
  * }</pre>
  *
  * <h2>For Sales and Business Users</h2>

@@ -109,8 +109,8 @@ public class OidcAuthenticationFactory extends BaseFactory {
 
         if (hasManualConfig) {
             LOG.info("Configuring ALB-OIDC authentication with manually provided endpoints");
-            LOG.info("OIDC Issuer: " + oidcIssuer);
-            LOG.info("Client ID: " + oidcClientId);
+            LOG.info("OIDC Issuer: [REDACTED]");
+            LOG.info("Client ID: [REDACTED]");
             configureOidcAuthentication();
             return;
         }
@@ -173,7 +173,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
         }
 
         LOG.info("OIDC Endpoints:");
-        LOG.info("  Issuer: " + issuer);
+        LOG.info("  Issuer: [REDACTED]");
         LOG.info("  Authorization: [REDACTED]");
         LOG.info("  Token: [REDACTED]");
         LOG.info("  UserInfo: [REDACTED]");

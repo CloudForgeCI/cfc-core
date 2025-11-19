@@ -3,6 +3,7 @@ package com.cloudforgeci.api.observability;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.core.annotation.DeploymentContext;
 import com.cloudforgeci.api.core.annotation.SystemContext;
+import com.cloudforgeci.api.core.util.RetentionDaysConverter;
 import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import software.amazon.awscdk.services.logs.LogGroup;
@@ -82,35 +83,9 @@ public class LoggingCwFactory extends BaseFactory {
             // Use configurable log retention from DeploymentContext if monitoring is enabled
             RetentionDays retentionDays = config.getLogRetentionDays();
             if (Boolean.TRUE.equals(enableMonitoring) && logRetentionDays != null) {
-                // Map integer days to RetentionDays enum
-                int days = logRetentionDays;
-                if (days <= 1) {
-                    retentionDays = RetentionDays.ONE_DAY;
-                } else if (days <= 3) {
-                    retentionDays = RetentionDays.THREE_DAYS;
-                } else if (days <= 5) {
-                    retentionDays = RetentionDays.FIVE_DAYS;
-                } else if (days <= 7) {
-                    retentionDays = RetentionDays.ONE_WEEK;
-                } else if (days <= 14) {
-                    retentionDays = RetentionDays.TWO_WEEKS;
-                } else if (days <= 30) {
-                    retentionDays = RetentionDays.ONE_MONTH;
-                } else if (days <= 60) {
-                    retentionDays = RetentionDays.TWO_MONTHS;
-                } else if (days <= 90) {
-                    retentionDays = RetentionDays.THREE_MONTHS;
-                } else if (days <= 120) {
-                    retentionDays = RetentionDays.FOUR_MONTHS;
-                } else if (days <= 150) {
-                    retentionDays = RetentionDays.FIVE_MONTHS;
-                } else if (days <= 180) {
-                    retentionDays = RetentionDays.SIX_MONTHS;
-                } else if (days <= 365) {
-                    retentionDays = RetentionDays.ONE_YEAR;
-                } else {
-                    retentionDays = RetentionDays.TWO_YEARS;
-                }
+                // Use RetentionDaysConverter for consistent retention mapping across all factories
+                // This ensures compliance-aware thresholds (PCI-DSS, HIPAA, etc.) are properly handled
+                retentionDays = RetentionDaysConverter.fromDays(logRetentionDays);
             }
 
             // Create log group with explicit name and removal policy

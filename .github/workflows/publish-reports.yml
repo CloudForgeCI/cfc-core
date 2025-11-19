@@ -616,6 +616,13 @@ jobs:
           echo "Generated reports structure:"
           find github-pages-reports -type f | head -50
 
+      - name: Download deployment metrics artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-metrics-history
+          path: github-pages-reports/deployment-metrics/data/
+        continue-on-error: true
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
