@@ -111,6 +111,13 @@ jobs:
       - name: Install AWS CDK
         run: npm install -g aws-cdk
 
+      - name: Configure AWS credentials (for CDK context lookups)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
       - name: Build project
         run: |
           mvn clean install -DskipTests -f pom.xml
@@ -194,6 +201,13 @@ jobs:
       - name: Install AWS CDK
         run: npm install -g aws-cdk
 
+      - name: Configure AWS credentials (for CDK context lookups)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
       - name: Build project
         run: |
           # First install parent project dependencies to local Maven repo
@@ -273,11 +287,6 @@ jobs:
           aws-access-key-id: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
-
-      - name: Verify AWS credentials
-        run: |
-          aws sts get-caller-identity
-          echo "AWS Region: ${AWS_DEFAULT_REGION:-us-east-1}"
 
       - name: Build project
         run: |
