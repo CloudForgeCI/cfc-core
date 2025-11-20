@@ -62,13 +62,17 @@ create_deployment_context() {
     local cognito_domain_prefix=""
     local aws_config_enabled="false"
 
+    # For synthesis-only tests, create zone instead of lookup to avoid AWS API calls
+    local create_zone="true"
+    # Disable Audit Manager for synthesis-only tests (requires AWS API calls to resolve framework UUIDs)
+    local audit_manager_enabled="false"
+
     case "$security_profile" in
         "PRODUCTION")
             waf_enabled="true"
             alb_access_logging="true"
             guard_duty_enabled="true"
             aws_config_enabled="true"
-            audit_manager_enabled="true"
             compliance_frameworks="PCI-DSS|HIPAA|SOC2|GDPR"
             if [[ "$auth_mode" == "alb-oidc" ]]; then
                 cognito_auto_provision="true"
@@ -78,7 +82,6 @@ create_deployment_context() {
         "STAGING")
             alb_access_logging="true"
             aws_config_enabled="true"
-            audit_manager_enabled="true"
             compliance_frameworks="SOC2|HIPAA"
             if [[ "$auth_mode" == "alb-oidc" ]]; then
                 cognito_auto_provision="true"
@@ -129,6 +132,7 @@ create_deployment_context() {
   "createConfigInfrastructure": "false",
   "domain": "$DOMAIN",
   "subdomain": "$subdomain",
+  "createZone": "$create_zone",
   "logRetentionDays": "7",
   "region": "us-east-1",
   "enableEncryption": "true",
