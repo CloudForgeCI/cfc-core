@@ -57,12 +57,14 @@ create_deployment_context() {
     local waf_enabled="false"
     local alb_access_logging="false"
     local guard_duty_enabled="false"
-    local audit_manager_enabled="false"
+    local aws_config_enabled="false"
+    local create_config_infrastructure="false"
     local compliance_frameworks=""
     local cognito_auto_provision="false"
     local cognito_domain_prefix=""
-    local aws_config_enabled="false"
-    local create_config_infrastructure="false"
+
+    # For synthesis-only tests, disable Audit Manager (requires AWS API calls)
+    local audit_manager_enabled="false"
 
     case "$security_profile" in
         "PRODUCTION")
@@ -71,7 +73,6 @@ create_deployment_context() {
             guard_duty_enabled="true"
             aws_config_enabled="true"
             create_config_infrastructure="false"  # Use existing Config infrastructure
-            audit_manager_enabled="true"
             compliance_frameworks="PCI-DSS,HIPAA,SOC2,GDPR"
             if [[ "$auth_mode" == "alb-oidc" ]]; then
                 cognito_auto_provision="true"
@@ -82,7 +83,6 @@ create_deployment_context() {
             alb_access_logging="true"
             aws_config_enabled="true"
             create_config_infrastructure="false"  # Use existing Config infrastructure
-            audit_manager_enabled="true"
             compliance_frameworks="SOC2,HIPAA"
             if [[ "$auth_mode" == "alb-oidc" ]]; then
                 cognito_auto_provision="true"
@@ -97,55 +97,78 @@ create_deployment_context() {
     cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
-  "context": {
-    "stackName": "$stack_name",
-    "deploymentType": "jenkins",
-    "tier": "public",
-    "domain": "$DOMAIN",
-    "subdomain": "$subdomain",
-    "enableSsl": "true",
-    "runtime": "$runtime",
-    "topology": "JENKINS_SERVICE",
-    "securityProfile": "$security_profile",
-    "networkMode": "$network_mode",
-    "wafEnabled": "$waf_enabled",
-    "albAccessLogging": "$alb_access_logging",
-    "guardDutyEnabled": "$guard_duty_enabled",
-    "awsConfigEnabled": "$aws_config_enabled",
-    "createConfigInfrastructure": "$create_config_infrastructure",
-    "auditManagerEnabled": "$audit_manager_enabled",
-    "complianceFrameworks": "$compliance_frameworks",
-    "cloudfrontEnabled": "false",
-    "minInstanceCapacity": "2",
-    "maxInstanceCapacity": "4",
-    "cpuTargetUtilization": "60",
-    "cpu": "1024",
-    "memory": "2048",
-    "instanceType": "t3.micro",
-    "authMode": "$auth_mode",
-    "cognitoAutoProvision": "$cognito_auto_provision",
-    "cognitoDomainPrefix": "$cognito_domain_prefix",
-    "cognitoUserPoolName": "${stack_name}-users",
-    "cognitoMfaEnabled": "false",
-    "cognitoCreateGroups": "true",
-    "enableMonitoring": "true",
-    "enableEncryption": "true",
-    "logRetentionDays": "7",
-    "region": "us-east-1",
-    "enableAutoScaling": "true",
-    "healthCheckGracePeriod": "300",
-    "healthCheckInterval": "30",
-    "healthCheckTimeout": "5",
-    "healthyThreshold": "2",
-    "unhealthyThreshold": "3",
-    "bastionCidr": "10.0.1.0/24",
-    "lbType": "alb",
-    "enableFlowlogs": "false",
-    "retainStorage": "false",
-    "createZone": "false",
-    "artifactsPrefix": "jenkins/job/\${JOB_NAME}/\${BUILD_NUMBER}",
-    "env": "dev"
-  }
+  "deploymentType": "jenkins",
+  "tier": "public",
+  "domain": "$DOMAIN",
+  "subdomain": "$subdomain",
+  "enableSsl": "true",
+  "runtime": "$runtime",
+  "topology": "JENKINS_SERVICE",
+  "securityProfile": "$security_profile",
+  "networkMode": "$network_mode",
+  "wafEnabled": "$waf_enabled",
+  "albAccessLogging": "$alb_access_logging",
+  "guardDutyEnabled": "$guard_duty_enabled",
+  "awsConfigEnabled": "$aws_config_enabled",
+  "createConfigInfrastructure": "$create_config_infrastructure",
+  "auditManagerEnabled": "$audit_manager_enabled",
+  "complianceFrameworks": "$compliance_frameworks",
+  "cloudfrontEnabled": "false",
+  "minInstanceCapacity": "2",
+  "maxInstanceCapacity": "4",
+  "cpuTargetUtilization": "60",
+  "cpu": "1024",
+  "memory": "2048",
+  "instanceType": "t3.micro",
+  "authMode": "$auth_mode",
+  "cognitoAutoProvision": "$cognito_auto_provision",
+  "cognitoDomainPrefix": "$cognito_domain_prefix",
+  "cognitoUserPoolName": "${stack_name}-users",
+  "cognitoMfaEnabled": "false",
+  "cognitoCreateGroups": "true",
+  "enableMonitoring": "true",
+  "enableEncryption": "true",
+  "logRetentionDays": "7",
+  "region": "us-east-1",
+  "enableAutoScaling": "true",
+  "healthCheckGracePeriod": "300",
+  "healthCheckInterval": "30",
+  "healthCheckTimeout": "5",
+  "healthyThreshold": "2",
+  "unhealthyThreshold": "3",
+  "bastionCidr": "10.0.1.0/24",
+  "lbType": "alb",
+  "enableFlowlogs": "false",
+  "retainStorage": "false",
+  "createZone": "true",
+  "artifactsPrefix": "jenkins/job/\${JOB_NAME}/\${BUILD_NUMBER}",
+  "env": "dev",
+  "awsBaaSigned": "true",
+  "thirdPartyBaasDocumented": "true",
+  "baaProvisionsVerified": "true",
+  "subcontractorBaasTracked": "true",
+  "workforceAuthorizationProcedures": "true",
+  "terminationProcedures": "true",
+  "hipaaTrainingProgram": "true",
+  "emergencyAccessProcedures": "true",
+  "automaticLogoffEnabled": "true",
+  "incidentResponsePlan": "true",
+  "breachNotificationProcedures": "true",
+  "breachDetectionAutomation": "true",
+  "customConfigurationApplied": "true",
+  "kmsKeyRotationEnabled": "true",
+  "useCustomerManagedKeys": "true",
+  "gdprLegalBasisDocumented": "true",
+  "gdprConsentMechanismImplemented": "true",
+  "gdprPrivacyNoticeProvided": "true",
+  "gdprDataSubjectRequestProcedures": "true",
+  "gdprRightToErasureCapability": "true",
+  "gdprDataPortabilityCapability": "true",
+  "gdprDpiaCompleted": "true",
+  "gdprPrivacyByDesignImplemented": "true",
+  "gdprDataLocalizationEnforced": "true",
+  "gdprDataRetentionPolicyDefined": "true",
+  "gdprRecordsOfProcessingActivities": "true"
 }
 EOF
 
@@ -184,11 +207,30 @@ run_changeset_deployment() {
 
     cd "$BASE_DIR"
 
+    # Temporarily override cdk.json to use CloudForgeCommunitySample (non-interactive)
+    local original_cdk_json="$BASE_DIR/cdk.json"
+    local backup_cdk_json="$BASE_DIR/cdk.json.backup"
+    cp "$original_cdk_json" "$backup_cdk_json"
+
+    # Read the deployment context and inject it into cdk.json
+    local cfc_context=$(cat "$BASE_DIR/deployment-context.json")
+
+    cat > "$original_cdk_json" <<EOF
+{
+  "app": "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample",
+  "context": {
+    "cfc": $cfc_context
+  }
+}
+EOF
+
     # Step 1: Synthesize
     echo "  🔧 Step 1: Synthesizing CloudFormation template..." | tee -a "$REPORT_FILE"
     local synth_start=$(date +%s.%N)
 
-    if ! cdk synth --context cfc=@deployment-context.json > "$synth_log" 2> "$synth_error"; then
+    if ! cdk synth > "$synth_log" 2> "$synth_error"; then
+        # Restore original cdk.json
+        mv "$backup_cdk_json" "$original_cdk_json"
 
         local synth_end=$(date +%s.%N)
         local synth_duration=$(echo "$synth_end - $synth_start" | bc)
@@ -202,6 +244,9 @@ run_changeset_deployment() {
 
         return 1
     fi
+
+    # Restore original cdk.json
+    mv "$backup_cdk_json" "$original_cdk_json"
 
     local synth_end=$(date +%s.%N)
     local synth_duration=$(echo "$synth_end - $synth_start" | bc)

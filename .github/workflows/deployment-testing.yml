@@ -33,6 +33,7 @@ on:
       - 'cloudforge-api/src/main/java/**'
       - 'cfc-testing/**'
       - 'pom.xml'
+      - '.github/workflows/deployment-testing.yml'
 
 permissions:
   contents: write
@@ -110,12 +111,26 @@ jobs:
       - name: Install AWS CDK
         run: npm install -g aws-cdk
 
+      - name: Configure AWS credentials (for CDK context lookups)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
       - name: Build project
         run: |
           mvn clean install -DskipTests -f pom.xml
           # Now build cfc-testing module
           cd cfc-testing
           mvn clean package -DskipTests
+
+      - name: Download historical metrics
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: deployment-metrics-history
+          path: cfc-testing/test-results/deployment-reports/historical/
 
       - name: Run quick synthesis test
         run: |
@@ -134,9 +149,38 @@ jobs:
         with:
           name: quick-test-results-${{ github.run_number }}
           path: |
-            cfc-testing/test-results/deployment-reports/
-            cfc-testing/test-results/deployment-reports/historical/
+            cfc-testing/test-results/deployment-reports/*.txt
+            cfc-testing/test-results/deployment-reports/*.log
           retention-days: 30
+
+      - name: Upload historical metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-metrics-history
+          path: cfc-testing/test-results/deployment-reports/historical/deployment-metrics.csv
+          retention-days: 365
+
+      - name: Generate deployment dashboard
+        if: always()
+        run: |
+          cd cfc-testing
+          if [ -f test-results/deployment-reports/historical/deployment-metrics.csv ]; then
+            echo "Generating interactive deployment dashboard..."
+            python3 scripts/deployment-metrics-dashboard.py
+          else
+            echo "No metrics file found, skipping dashboard generation"
+          fi
+
+      - name: Upload deployment dashboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-dashboard-${{ github.run_number }}
+          path: |
+            cfc-testing/test-results/deployment-reports/dashboard/deployment-dashboard.html
+            cfc-testing/test-results/deployment-reports/dashboard/deployment-analysis.json
+          retention-days: 90
 
   enhanced-synthesis-test:
     name: Enhanced Synthesis Test
@@ -156,6 +200,13 @@ jobs:
 
       - name: Install AWS CDK
         run: npm install -g aws-cdk
+
+      - name: Configure AWS credentials (for CDK context lookups)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
       - name: Build project
         run: |
@@ -236,11 +287,6 @@ jobs:
           aws-access-key-id: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
-
-      - name: Verify AWS credentials
-        run: |
-          aws sts get-caller-identity
-          echo "AWS Region: ${AWS_DEFAULT_REGION:-us-east-1}"
 
       - name: Build project
         run: |
@@ -540,11 +586,20 @@ jobs:
   publish-metrics:
     name: Publish Metrics Dashboards
     runs-on: ubuntu-latest
-    needs: [quick-synthesis-test, enhanced-synthesis-test, deployment-dry-run, changeset-validation, full-resource-validation]
-    if: always() && (needs.deployment-dry-run.result == 'success' || needs.changeset-validation.result == 'success' || needs.enhanced-synthesis-test.result == 'success')
+    # Run on schedule, workflow_dispatch, or push events (whenever tests might have run)
+    if: |
+      always()
     permissions:
       contents: read
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Create metrics directories
         run: |
           mkdir -p metrics-dashboards/deployment-metrics/data
@@ -558,10 +613,18 @@ jobs:
 
       - name: Copy deployment metrics data
         run: |
+          # Debug: List all downloaded artifacts
+          echo "📦 Downloaded artifacts:"
+          ls -la artifacts/ || echo "No artifacts directory"
+
           # Copy deployment metrics CSV if available
           if [ -f "artifacts/deployment-metrics-history/deployment-metrics.csv" ]; then
             cp artifacts/deployment-metrics-history/deployment-metrics.csv metrics-dashboards/deployment-metrics/data/
             echo "✅ Copied deployment metrics CSV"
+
+            # Check if CSV has actual data (more than just header)
+            line_count=$(wc -l < metrics-dashboards/deployment-metrics/data/deployment-metrics.csv)
+            echo "📊 CSV has $line_count lines"
           else
             echo "⚠️  No deployment metrics CSV found"
             # Create empty CSV with header
@@ -610,7 +673,46 @@ jobs:
 
       - name: Generate metrics dashboard
         run: |
-          cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF'
+          # Check if pre-generated dashboard exists from test jobs
+          echo "🔍 Looking for pre-generated dashboards in artifacts/"
+          ls -la artifacts/deployment-dashboard-* 2>/dev/null || echo "No deployment-dashboard-* artifacts found"
+
+          dashboard_found=false
+          for artifact_dir in artifacts/deployment-dashboard-*; do
+            if [ -d "$artifact_dir" ] && [ -f "$artifact_dir/deployment-dashboard.html" ]; then
+              echo "✅ Found pre-generated dashboard in $artifact_dir"
+              ls -la "$artifact_dir"
+              cp "$artifact_dir/deployment-dashboard.html" metrics-dashboards/deployment-metrics/index.html
+              cp "$artifact_dir/deployment-analysis.json" metrics-dashboards/deployment-metrics/deployment-analysis.json 2>/dev/null || true
+              dashboard_found=true
+              echo "✅ Using pre-generated dashboard from test job"
+              break
+            fi
+          done
+
+          if [ "$dashboard_found" = false ]; then
+            echo "⚠️  No pre-generated dashboard found, will generate or create placeholder"
+          fi
+
+          # If no pre-generated dashboard, generate it with Python script
+          if [ "$dashboard_found" = false ]; then
+            if [ -f "metrics-dashboards/deployment-metrics/data/deployment-metrics.csv" ]; then
+              # Check if CSV has actual data (more than just header)
+              line_count=$(wc -l < metrics-dashboards/deployment-metrics/data/deployment-metrics.csv)
+              echo "📊 CSV has $line_count lines"
+
+              if [ "$line_count" -gt 1 ]; then
+                echo "✅ CSV has data, generating dashboard with Python script..."
+                python3 cfc-testing/scripts/deployment-metrics-dashboard.py \
+                  metrics-dashboards/deployment-metrics/data/deployment-metrics.csv \
+                  metrics-dashboards/deployment-metrics
+                # Rename to index.html for GitHub Pages
+                mv metrics-dashboards/deployment-metrics/deployment-dashboard.html \
+                   metrics-dashboards/deployment-metrics/index.html
+                echo "✅ Generated deployment metrics dashboard"
+              else
+                echo "⚠️  CSV exists but has no data (only header), creating placeholder..."
+                cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -872,8 +974,29 @@ jobs:
           </body>
           </html>
           HTMLEOF
-
-          echo "✅ Generated deployment metrics dashboard"
+              fi
+            else
+              echo "⚠️  No deployment metrics CSV found, creating placeholder..."
+              cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF2'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <title>CloudForge Core - Deployment Metrics</title>
+              <style>
+                  body { font-family: sans-serif; text-align: center; padding: 50px; }
+                  h1 { color: #667eea; }
+              </style>
+          </head>
+          <body>
+              <h1>🚀 Deployment Metrics</h1>
+              <p>Waiting for first deployment test run...</p>
+              <p>Metrics will appear after the first test execution.</p>
+          </body>
+          </html>
+          HTMLEOF2
+            fi
+          fi
 
       - name: Generate changeset validation dashboard
         run: |

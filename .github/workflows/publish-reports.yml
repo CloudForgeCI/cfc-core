@@ -616,19 +616,31 @@ jobs:
           echo "Generated reports structure:"
           find github-pages-reports -type f | head -50
 
-      - name: Download deployment metrics artifact
-        uses: actions/download-artifact@v4
+      - name: Download metrics dashboards artifact
+        uses: dawidd6/action-download-artifact@v3
         with:
-          name: deployment-metrics-history
-          path: github-pages-reports/deployment-metrics/data/
+          workflow: deployment-testing.yml
+          name: metrics-dashboards
+          path: ./
+          if_no_artifact_found: warn
         continue-on-error: true
 
-      - name: Download metrics dashboards artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: metrics-dashboards
-          path: github-pages-reports/
-        continue-on-error: true
+      - name: Copy metrics dashboards to github-pages-reports
+        run: |
+          # Copy deployment metrics dashboard if it exists
+          # Note: artifact extracts to ./ so files are in deployment-metrics/, not metrics-dashboards/deployment-metrics/
+          if [ -d "deployment-metrics" ]; then
+            mkdir -p github-pages-reports/deployment-metrics
+            cp -r deployment-metrics/* github-pages-reports/deployment-metrics/
+            echo "✅ Copied deployment metrics dashboard"
+          fi
+
+          # Copy changeset validation dashboard if it exists
+          if [ -d "changeset-validation" ]; then
+            mkdir -p github-pages-reports/changeset-validation
+            cp -r changeset-validation/* github-pages-reports/changeset-validation/
+            echo "✅ Copied changeset validation dashboard"
+          fi
 
       - name: Create placeholder dashboards if missing
         run: |

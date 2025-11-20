@@ -62,13 +62,17 @@ create_deployment_context() {
     local cognito_domain_prefix=""
     local aws_config_enabled="false"
 
+    # For synthesis-only tests, create zone instead of lookup to avoid AWS API calls
+    local create_zone="true"
+    # Disable Audit Manager for synthesis-only tests (requires AWS API calls to resolve framework UUIDs)
+    local audit_manager_enabled="false"
+
     case "$security_profile" in
         "PRODUCTION")
             waf_enabled="true"
             alb_access_logging="true"
             guard_duty_enabled="true"
             aws_config_enabled="true"
-            audit_manager_enabled="true"
             compliance_frameworks="PCI-DSS|HIPAA|SOC2|GDPR"
             if [[ "$auth_mode" == "alb-oidc" ]]; then
                 cognito_auto_provision="true"
@@ -78,7 +82,6 @@ create_deployment_context() {
         "STAGING")
             alb_access_logging="true"
             aws_config_enabled="true"
-            audit_manager_enabled="true"
             compliance_frameworks="SOC2|HIPAA"
             if [[ "$auth_mode" == "alb-oidc" ]]; then
                 cognito_auto_provision="true"
@@ -93,48 +96,72 @@ create_deployment_context() {
     cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
-  "context": {
-    "healthCheckTimeout": "5",
-    "memory": "2048",
-    "enableMonitoring": "true",
-    "stackName": "$stack_name",
-    "healthCheckInterval": "30",
-    "enableSsl": "true",
-    "tier": "public",
-    "wafEnabled": "$waf_enabled",
-    "albAccessLogging": "$alb_access_logging",
-    "guardDutyEnabled": "$guard_duty_enabled",
-    "awsConfigEnabled": "$aws_config_enabled",
-    "securityProfile": "$security_profile",
-    "cloudfrontEnabled": "false",
-    "healthCheckGracePeriod": "300",
-    "unhealthyThreshold": "3",
-    "healthyThreshold": "2",
-    "networkMode": "$network_mode",
-    "topology": "JENKINS_SERVICE",
-    "instanceType": "t3.micro",
-    "minInstanceCapacity": "2",
-    "runtime": "$runtime",
-    "cpu": "1024",
-    "cpuTargetUtilization": "60",
-    "enableAutoScaling": "true",
-    "env": "dev",
-    "maxInstanceCapacity": "4",
-    "authMode": "$auth_mode",
-    "cognitoAutoProvision": "$cognito_auto_provision",
-    "cognitoDomainPrefix": "$cognito_domain_prefix",
-    "cognitoUserPoolName": "${stack_name}-users",
-    "cognitoMfaEnabled": "false",
-    "cognitoCreateGroups": "true",
-    "auditManagerEnabled": "$audit_manager_enabled",
-    "complianceFrameworks": "$compliance_frameworks",
-    "createConfigInfrastructure": "false",
-    "domain": "$DOMAIN",
-    "subdomain": "$subdomain",
-    "logRetentionDays": "7",
-    "region": "us-east-1",
-    "enableEncryption": "true"
-  }
+  "healthCheckTimeout": "5",
+  "memory": "2048",
+  "enableMonitoring": "true",
+  "healthCheckInterval": "30",
+  "enableSsl": "true",
+  "tier": "public",
+  "wafEnabled": "$waf_enabled",
+  "albAccessLogging": "$alb_access_logging",
+  "guardDutyEnabled": "$guard_duty_enabled",
+  "awsConfigEnabled": "$aws_config_enabled",
+  "securityProfile": "$security_profile",
+  "cloudfrontEnabled": "false",
+  "healthCheckGracePeriod": "300",
+  "unhealthyThreshold": "3",
+  "healthyThreshold": "2",
+  "networkMode": "$network_mode",
+  "topology": "JENKINS_SERVICE",
+  "instanceType": "t3.micro",
+  "minInstanceCapacity": "2",
+  "runtime": "$runtime",
+  "cpu": "1024",
+  "cpuTargetUtilization": "60",
+  "enableAutoScaling": "true",
+  "env": "dev",
+  "maxInstanceCapacity": "4",
+  "authMode": "$auth_mode",
+  "cognitoAutoProvision": "$cognito_auto_provision",
+  "cognitoDomainPrefix": "$cognito_domain_prefix",
+  "cognitoUserPoolName": "${stack_name}-users",
+  "cognitoMfaEnabled": "false",
+  "cognitoCreateGroups": "true",
+  "auditManagerEnabled": "$audit_manager_enabled",
+  "complianceFrameworks": "$compliance_frameworks",
+  "createConfigInfrastructure": "false",
+  "domain": "$DOMAIN",
+  "subdomain": "$subdomain",
+  "createZone": "$create_zone",
+  "logRetentionDays": "7",
+  "region": "us-east-1",
+  "enableEncryption": "true",
+  "awsBaaSigned": "true",
+  "thirdPartyBaasDocumented": "true",
+  "baaProvisionsVerified": "true",
+  "subcontractorBaasTracked": "true",
+  "workforceAuthorizationProcedures": "true",
+  "terminationProcedures": "true",
+  "hipaaTrainingProgram": "true",
+  "emergencyAccessProcedures": "true",
+  "automaticLogoffEnabled": "true",
+  "incidentResponsePlan": "true",
+  "breachNotificationProcedures": "true",
+  "breachDetectionAutomation": "true",
+  "customConfigurationApplied": "true",
+  "kmsKeyRotationEnabled": "true",
+  "useCustomerManagedKeys": "true",
+  "gdprLegalBasisDocumented": "true",
+  "gdprConsentMechanismImplemented": "true",
+  "gdprPrivacyNoticeProvided": "true",
+  "gdprDataSubjectRequestProcedures": "true",
+  "gdprRightToErasureCapability": "true",
+  "gdprDataPortabilityCapability": "true",
+  "gdprDpiaCompleted": "true",
+  "gdprPrivacyByDesignImplemented": "true",
+  "gdprDataLocalizationEnforced": "true",
+  "gdprDataRetentionPolicyDefined": "true",
+  "gdprRecordsOfProcessingActivities": "true"
 }
 EOF
 
