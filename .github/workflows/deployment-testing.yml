@@ -34,6 +34,7 @@ on:
       - 'cloudforge-api/src/main/java/**'
       - 'cfc-testing/**'
       - 'pom.xml'
+      - '.github/workflows/deployment-testing.yml'
 
 permissions:
   contents: write
