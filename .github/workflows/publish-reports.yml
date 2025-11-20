@@ -628,14 +628,15 @@ jobs:
       - name: Copy metrics dashboards to github-pages-reports
         run: |
           # Copy deployment metrics dashboard if it exists
-          if [ -d "metrics-dashboards/deployment-metrics" ]; then
-            cp -r metrics-dashboards/deployment-metrics/* github-pages-reports/deployment-metrics/ 2>/dev/null || true
+          # Note: artifact extracts to ./ so files are in deployment-metrics/, not metrics-dashboards/deployment-metrics/
+          if [ -d "deployment-metrics" ]; then
+            cp -r deployment-metrics/* github-pages-reports/deployment-metrics/ 2>/dev/null || true
             echo "✅ Copied deployment metrics dashboard"
           fi
 
           # Copy changeset validation dashboard if it exists
-          if [ -d "metrics-dashboards/changeset-validation" ]; then
-            cp -r metrics-dashboards/changeset-validation/* github-pages-reports/changeset-validation/ 2>/dev/null || true
+          if [ -d "changeset-validation" ]; then
+            cp -r changeset-validation/* github-pages-reports/changeset-validation/ 2>/dev/null || true
             echo "✅ Copied changeset validation dashboard"
           fi
 
