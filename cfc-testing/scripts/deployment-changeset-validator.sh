@@ -57,12 +57,14 @@ create_deployment_context() {
     local waf_enabled="false"
     local alb_access_logging="false"
     local guard_duty_enabled="false"
-    local audit_manager_enabled="false"
+    local aws_config_enabled="false"
+    local create_config_infrastructure="false"
     local compliance_frameworks=""
     local cognito_auto_provision="false"
     local cognito_domain_prefix=""
-    local aws_config_enabled="false"
-    local create_config_infrastructure="false"
+
+    # For synthesis-only tests, disable Audit Manager (requires AWS API calls)
+    local audit_manager_enabled="false"
 
     case "$security_profile" in
         "PRODUCTION")
@@ -71,7 +73,6 @@ create_deployment_context() {
             guard_duty_enabled="true"
             aws_config_enabled="true"
             create_config_infrastructure="false"  # Use existing Config infrastructure
-            audit_manager_enabled="true"
             compliance_frameworks="PCI-DSS,HIPAA,SOC2,GDPR"
             if [[ "$auth_mode" == "alb-oidc" ]]; then
                 cognito_auto_provision="true"
@@ -82,7 +83,6 @@ create_deployment_context() {
             alb_access_logging="true"
             aws_config_enabled="true"
             create_config_infrastructure="false"  # Use existing Config infrastructure
-            audit_manager_enabled="true"
             compliance_frameworks="SOC2,HIPAA"
             if [[ "$auth_mode" == "alb-oidc" ]]; then
                 cognito_auto_provision="true"
@@ -140,7 +140,7 @@ create_deployment_context() {
   "lbType": "alb",
   "enableFlowlogs": "false",
   "retainStorage": "false",
-  "createZone": "false",
+  "createZone": "true",
   "artifactsPrefix": "jenkins/job/\${JOB_NAME}/\${BUILD_NUMBER}",
   "env": "dev",
   "awsBaaSigned": "true",
