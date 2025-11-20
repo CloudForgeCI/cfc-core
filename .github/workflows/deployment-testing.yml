@@ -587,16 +587,9 @@ jobs:
   publish-metrics:
     name: Publish Metrics Dashboards
     runs-on: ubuntu-latest
-    needs: [quick-synthesis-test, enhanced-synthesis-test, deployment-dry-run, changeset-validation, full-resource-validation]
-    # Run if at least one test job succeeded (not skipped, not failed)
+    # Run on schedule, workflow_dispatch, or push events (whenever tests might have run)
     if: |
-      always() && (
-        needs.quick-synthesis-test.result == 'success' ||
-        needs.enhanced-synthesis-test.result == 'success' ||
-        needs.deployment-dry-run.result == 'success' ||
-        needs.changeset-validation.result == 'success' ||
-        needs.full-resource-validation.result == 'success'
-      )
+      always()
     permissions:
       contents: read
     steps:
