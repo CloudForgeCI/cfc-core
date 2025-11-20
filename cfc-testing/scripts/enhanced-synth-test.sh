@@ -134,7 +134,7 @@ create_deployment_context() {
   "emergencyAccessProcedures": "true",
   "automaticLogoffEnabled": "true",
   "incidentResponsePlan": "true",
-  "breachNotectionProcedures": "true",
+  "breachDetectionProcedures": "true",
   "breachDetectionAutomation": "true",
   "customConfigurationApplied": "true",
   "kmsKeyRotationEnabled": "true",
