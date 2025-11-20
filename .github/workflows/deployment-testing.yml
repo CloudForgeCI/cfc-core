@@ -29,7 +29,6 @@ on:
     branches:
       - develop
       - main
-      - deploy_dashboard
     paths:
       - 'cloudforge-api/src/main/java/**'
       - 'cfc-testing/**'
