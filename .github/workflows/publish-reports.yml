@@ -630,13 +630,15 @@ jobs:
           # Copy deployment metrics dashboard if it exists
           # Note: artifact extracts to ./ so files are in deployment-metrics/, not metrics-dashboards/deployment-metrics/
           if [ -d "deployment-metrics" ]; then
-            cp -r deployment-metrics/* github-pages-reports/deployment-metrics/ 2>/dev/null || true
+            mkdir -p github-pages-reports/deployment-metrics
+            cp -r deployment-metrics/* github-pages-reports/deployment-metrics/
             echo "✅ Copied deployment metrics dashboard"
           fi
 
           # Copy changeset validation dashboard if it exists
           if [ -d "changeset-validation" ]; then
-            cp -r changeset-validation/* github-pages-reports/changeset-validation/ 2>/dev/null || true
+            mkdir -p github-pages-reports/changeset-validation
+            cp -r changeset-validation/* github-pages-reports/changeset-validation/
             echo "✅ Copied changeset validation dashboard"
           fi
 
