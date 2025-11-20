@@ -1198,15 +1198,6 @@ jobs:
           path: metrics-dashboards/
           retention-days: 90
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./metrics-dashboards
-          destination_dir: .
-          keep_files: false
-          commit_message: "Update deployment metrics dashboard"
-
   notify-results:
     name: Notify Results
     runs-on: ubuntu-latest
