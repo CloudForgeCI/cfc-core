@@ -593,6 +593,14 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Create metrics directories
         run: |
           mkdir -p metrics-dashboards/deployment-metrics/data
@@ -658,7 +666,33 @@ jobs:
 
       - name: Generate metrics dashboard
         run: |
-          cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF'
+          # Check if pre-generated dashboard exists from test jobs
+          dashboard_found=false
+          for artifact_dir in artifacts/deployment-dashboard-*; do
+            if [ -d "$artifact_dir" ] && [ -f "$artifact_dir/deployment-dashboard.html" ]; then
+              echo "Found pre-generated dashboard in $artifact_dir"
+              cp "$artifact_dir/deployment-dashboard.html" metrics-dashboards/deployment-metrics/index.html
+              cp "$artifact_dir/deployment-analysis.json" metrics-dashboards/deployment-metrics/deployment-analysis.json 2>/dev/null || true
+              dashboard_found=true
+              echo "✅ Using pre-generated dashboard from test job"
+              break
+            fi
+          done
+
+          # If no pre-generated dashboard, generate it with Python script
+          if [ "$dashboard_found" = false ]; then
+            if [ -f "metrics-dashboards/deployment-metrics/data/deployment-metrics.csv" ]; then
+              echo "No pre-generated dashboard found, generating with Python script..."
+              python3 cfc-testing/scripts/deployment-metrics-dashboard.py \
+                metrics-dashboards/deployment-metrics/data/deployment-metrics.csv \
+                metrics-dashboards/deployment-metrics
+              # Rename to index.html for GitHub Pages
+              mv metrics-dashboards/deployment-metrics/deployment-dashboard.html \
+                 metrics-dashboards/deployment-metrics/index.html
+              echo "✅ Generated deployment metrics dashboard"
+            else
+              echo "⚠️  No deployment metrics CSV found, creating placeholder..."
+              cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -920,8 +954,8 @@ jobs:
           </body>
           </html>
           HTMLEOF
-
-          echo "✅ Generated deployment metrics dashboard"
+            fi
+          fi
 
       - name: Generate changeset validation dashboard
         run: |
