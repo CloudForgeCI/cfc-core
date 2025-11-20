@@ -614,10 +614,18 @@ jobs:
 
       - name: Copy deployment metrics data
         run: |
+          # Debug: List all downloaded artifacts
+          echo "📦 Downloaded artifacts:"
+          ls -la artifacts/ || echo "No artifacts directory"
+
           # Copy deployment metrics CSV if available
           if [ -f "artifacts/deployment-metrics-history/deployment-metrics.csv" ]; then
             cp artifacts/deployment-metrics-history/deployment-metrics.csv metrics-dashboards/deployment-metrics/data/
             echo "✅ Copied deployment metrics CSV"
+
+            # Check if CSV has actual data (more than just header)
+            line_count=$(wc -l < metrics-dashboards/deployment-metrics/data/deployment-metrics.csv)
+            echo "📊 CSV has $line_count lines"
           else
             echo "⚠️  No deployment metrics CSV found"
             # Create empty CSV with header
@@ -667,10 +675,14 @@ jobs:
       - name: Generate metrics dashboard
         run: |
           # Check if pre-generated dashboard exists from test jobs
+          echo "🔍 Looking for pre-generated dashboards in artifacts/"
+          ls -la artifacts/deployment-dashboard-* 2>/dev/null || echo "No deployment-dashboard-* artifacts found"
+
           dashboard_found=false
           for artifact_dir in artifacts/deployment-dashboard-*; do
             if [ -d "$artifact_dir" ] && [ -f "$artifact_dir/deployment-dashboard.html" ]; then
-              echo "Found pre-generated dashboard in $artifact_dir"
+              echo "✅ Found pre-generated dashboard in $artifact_dir"
+              ls -la "$artifact_dir"
               cp "$artifact_dir/deployment-dashboard.html" metrics-dashboards/deployment-metrics/index.html
               cp "$artifact_dir/deployment-analysis.json" metrics-dashboards/deployment-metrics/deployment-analysis.json 2>/dev/null || true
               dashboard_found=true
@@ -679,20 +691,29 @@ jobs:
             fi
           done
 
+          if [ "$dashboard_found" = false ]; then
+            echo "⚠️  No pre-generated dashboard found, will generate or create placeholder"
+          fi
+
           # If no pre-generated dashboard, generate it with Python script
           if [ "$dashboard_found" = false ]; then
             if [ -f "metrics-dashboards/deployment-metrics/data/deployment-metrics.csv" ]; then
-              echo "No pre-generated dashboard found, generating with Python script..."
-              python3 cfc-testing/scripts/deployment-metrics-dashboard.py \
-                metrics-dashboards/deployment-metrics/data/deployment-metrics.csv \
-                metrics-dashboards/deployment-metrics
-              # Rename to index.html for GitHub Pages
-              mv metrics-dashboards/deployment-metrics/deployment-dashboard.html \
-                 metrics-dashboards/deployment-metrics/index.html
-              echo "✅ Generated deployment metrics dashboard"
-            else
-              echo "⚠️  No deployment metrics CSV found, creating placeholder..."
-              cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF'
+              # Check if CSV has actual data (more than just header)
+              line_count=$(wc -l < metrics-dashboards/deployment-metrics/data/deployment-metrics.csv)
+              echo "📊 CSV has $line_count lines"
+
+              if [ "$line_count" -gt 1 ]; then
+                echo "✅ CSV has data, generating dashboard with Python script..."
+                python3 cfc-testing/scripts/deployment-metrics-dashboard.py \
+                  metrics-dashboards/deployment-metrics/data/deployment-metrics.csv \
+                  metrics-dashboards/deployment-metrics
+                # Rename to index.html for GitHub Pages
+                mv metrics-dashboards/deployment-metrics/deployment-dashboard.html \
+                   metrics-dashboards/deployment-metrics/index.html
+                echo "✅ Generated deployment metrics dashboard"
+              else
+                echo "⚠️  CSV exists but has no data (only header), creating placeholder..."
+                cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -954,6 +975,27 @@ jobs:
           </body>
           </html>
           HTMLEOF
+              fi
+            else
+              echo "⚠️  No deployment metrics CSV found, creating placeholder..."
+              cat > metrics-dashboards/deployment-metrics/index.html << 'HTMLEOF2'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <title>CloudForge Core - Deployment Metrics</title>
+              <style>
+                  body { font-family: sans-serif; text-align: center; padding: 50px; }
+                  h1 { color: #667eea; }
+              </style>
+          </head>
+          <body>
+              <h1>🚀 Deployment Metrics</h1>
+              <p>Waiting for first deployment test run...</p>
+              <p>Metrics will appear after the first test execution.</p>
+          </body>
+          </html>
+          HTMLEOF2
             fi
           fi
 
