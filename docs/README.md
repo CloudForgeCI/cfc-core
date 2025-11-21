@@ -38,11 +38,8 @@ cdk deploy --context cfc=@deployment-context.json
 
 | Document | Description | Best For |
 |----------|-------------|----------|
-| **[OIDC Setup Guide](setup/OIDC_SETUP_GUIDE.md)** | ALB-OIDC with Identity Center, Okta, Auth0 | Enterprise SSO |
-| **[Cognito Setup](setup/COGNITO_SETUP_COMPLETE.md)** | AWS Cognito user pools with MFA | Quick setup, AWS-native |
-| **[Cognito MFA Compliance](setup/COGNITO_MFA_COMPLIANCE_SETUP.md)** | MFA configuration for compliance | HIPAA, PCI-DSS |
-| **[Identity Center Setup](setup/AWS_IDENTITY_CENTER_SETUP.md)** | AWS IAM Identity Center integration | Enterprise organizations |
-| **[OIDC Integration Summary](OIDC_INTEGRATION_SUMMARY.md)** | OIDC implementation overview | Developers |
+| **[Identity Center Setup](setup/AWS_IDENTITY_CENTER_SETUP.md)** | AWS IAM Identity Center + ALB-OIDC (Okta, Auth0) | Enterprise SSO |
+| **[Cognito MFA Compliance](setup/COGNITO_MFA_COMPLIANCE_SETUP.md)** | AWS Cognito user pools with MFA | HIPAA, PCI-DSS, Quick setup |
 
 ### Configuration Files
 
@@ -108,8 +105,8 @@ cdk deploy --context cfc=@deployment-context.json
 
 | Document | Description |
 |----------|-------------|
-| **[Cognito Implementation](COGNITO_IMPLEMENTATION_SUMMARY.md)** | Cognito integration details |
-| **[OIDC Authentication](OIDC_AUTHENTICATION.md)** | OIDC implementation guide |
+| **[IAM Rules](guides/IAM_RULES.md)** | IAM best practices and policies |
+| **[Security Rules](guides/SECURITY_RULES_README.md)** | Comprehensive security guidelines |
 
 ---
 
@@ -152,9 +149,8 @@ cdk deploy --context cfc=@deployment-context.json
 3. [PCI-DSS Application Security](compliance/PCI_DSS_APPLICATION_SECURITY.md)
 
 ### "I want to set up authentication"
-1. [OIDC Setup Guide](setup/OIDC_SETUP_GUIDE.md) (recommended)
-2. [Cognito Setup](setup/COGNITO_SETUP_COMPLETE.md) (easiest)
-3. [Identity Center Setup](setup/AWS_IDENTITY_CENTER_SETUP.md) (enterprise)
+1. [Identity Center Setup](setup/AWS_IDENTITY_CENTER_SETUP.md) (enterprise SSO)
+2. [Cognito MFA Setup](setup/COGNITO_MFA_COMPLIANCE_SETUP.md) (AWS-native with MFA)
 
 ### "I'm deploying to production"
 1. [Deployment Guide](compliance/DEPLOYMENT_GUIDE.md)
