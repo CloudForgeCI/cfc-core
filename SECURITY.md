@@ -61,24 +61,65 @@ Check [SECURITY_RULES_README.md](SECURITY_RULES_README.md) for the full breakdow
 
 ### Compliance
 
-If you need to check boxes for compliance frameworks, we've mapped to:
+CloudForge automates infrastructure-level technical controls for compliance frameworks:
 
-- **PCI-DSS**: Password policies, network segmentation, encryption
-- **HIPAA**: Authentication, transmission security, access controls
-- **SOC 2**: Access controls, monitoring, change management
-- **GDPR**: Security by design, processing security
+- **SOC2**: 16 AWS Config rules (9 base + 7 SOC2-specific) - ~17% of TSC criteria
+- **HIPAA**: 17 AWS Config rules (9 base + 8 HIPAA-specific) - ~38% of implementation specs
+- **PCI-DSS**: 17 AWS Config rules (9 base + 8 PCI-specific) - ~48% of technical requirements
+- **GDPR**: 17 AWS Config rules (9 base + 8 GDPR-specific) - Technical measures only (~7% of total GDPR)
 
-See [PCI_DSS_COMPLIANCE.md](PCI_DSS_COMPLIANCE.md) for the detailed mappings.
+**What's Automated:**
+- Encryption at rest (EBS, RDS, S3) and in transit (TLS 1.2+)
+- IAM password policies, MFA enforcement, access key rotation
+- Audit logging (CloudTrail, VPC Flow Logs) with tamper protection
+- Network security (security groups, SSH restrictions)
+- Continuous compliance monitoring with AWS Config
+
+**What's Not Automated (Requires Organizational Policies):**
+- Employee training and awareness programs
+- Incident response procedures and breach notification
+- Risk assessments and data protection impact assessments (DPIAs)
+- Vendor management and business associate agreements
+- Physical security controls
+- Privacy notices and data subject rights workflows
+
+**⚠️ Important:** Passing technical controls does not constitute full regulatory compliance. Organizational controls must be implemented by your security/compliance team. See [docs/AUDITOR_COMPLIANCE_MAPPING.md](docs/AUDITOR_COMPLIANCE_MAPPING.md) for a complete matrix of supported, partially supported, and unsupported controls across all frameworks.
 
 ### Monitoring & Logging
 
 Everything's logged and monitored:
-- **CloudTrail**: Every API call
-- **AWS Config**: Continuous compliance checks
-- **CloudWatch**: Centralized security event logs
-- **VPC Flow Logs**: Network traffic
-- **Audit Manager**: Automated evidence collection
-- **GuardDuty**: Optional threat detection
+- **CloudTrail**: Every API call (enabled by default)
+- **AWS Config**: Continuous compliance checks (enabled by default for PRODUCTION/STAGING)
+- **CloudWatch**: Centralized security event logs (enabled by default)
+- **VPC Flow Logs**: Network traffic (enabled by default)
+- **Audit Manager**: Automated evidence collection (optional - set `auditManagerEnabled: true`)
+- **GuardDuty**: Threat detection (enabled by default for PRODUCTION profile)
+- **WAF**: Web Application Firewall (enabled by default for PRODUCTION profile)
+- **Security Hub**: Centralized security findings (deployed via SOC2-specific Config rule)
+
+**Service Enablement by Security Profile:**
+
+| Service | DEV | STAGING | PRODUCTION |
+|---------|-----|---------|------------|
+| CloudTrail | ✅ | ✅ | ✅ |
+| AWS Config | ❌ | ✅ | ✅ |
+| CloudWatch Logs | ✅ | ✅ | ✅ |
+| VPC Flow Logs | ❌ | ✅ | ✅ |
+| WAF | ❌ | ❌ | ✅ |
+| GuardDuty | ❌ | ❌ | ✅ |
+| ALB Access Logs | ❌ | ✅ | ✅ |
+
+To customize these settings, modify your deployment configuration:
+```json
+{
+  "securityProfile": "PRODUCTION",
+  "enableMonitoring": true,
+  "guardDutyEnabled": true,
+  "wafEnabled": true,
+  "auditManagerEnabled": false,
+  "awsConfigEnabled": true
+}
+```
 
 ### Secrets
 
@@ -130,19 +171,30 @@ Production checklist:
 
 ### Monitoring
 
-- Turn on CloudTrail
-- Set up CloudWatch alarms
-- Review logs regularly
-- Have an incident response plan
+- Turn on CloudTrail (enabled by default)
+- Set up CloudWatch alarms (automated for key security events)
+- Review logs regularly (automated compliance checks via AWS Config)
+- Have an incident response plan (**required but not automated** - see [docs/AUDITOR_COMPLIANCE_MAPPING.md](docs/AUDITOR_COMPLIANCE_MAPPING.md#guidance-for-auditors-management-letter-language) for incident response guidance)
 
 ## Staying Updated
 
 Security patches come as patch versions (2.0.1 → 2.0.2) and are documented in the [CHANGELOG](CHANGELOG.md).
 
+**Security Patch Lifecycle:**
+- **Critical vulnerabilities** (CVE with CVSS 9.0+): Patched within 7 days
+- **High severity** (CVSS 7.0-8.9): Patched within 30 days
+- **Medium/Low**: Addressed in next scheduled release
+
+**Vulnerability Disclosure:**
+- CVE references and security advisories: [GitHub Security Advisories](https://github.com/CloudForgeCI/cfc-core/security/advisories)
+- Release notes with security fixes: [CHANGELOG.md](CHANGELOG.md)
+- Subscribe for notifications: Watch this repo → Custom → Security alerts
+
 To stay in the loop:
 - Watch this repo (releases only)
-- Subscribe to GitHub Security Advisories
+- Subscribe to GitHub Security Advisories (critical for CVE notifications)
 - Check the CHANGELOG before upgrading
+- Review [GitHub Security tab](https://github.com/CloudForgeCI/cfc-core/security) for dependency alerts
 
 ## Things to Know
 
@@ -219,4 +271,4 @@ Security is important to us. If you find a vulnerability, please report it respo
 
 ---
 
-**Last Updated**: 2025-01-10 | **Version**: 2.0.6
+**Last Updated**: 2025-11-20 | **Version**: 2.0.6

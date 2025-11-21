@@ -18,18 +18,20 @@ Deploy secure, compliant Jenkins infrastructure on AWS in minutes. Built-in supp
 - **[Interactive Deployer](docs/guides/INTERACTIVE_DEPLOYER.md)** - User-friendly CLI deployment tool
 
 ### 🔐 Security & Authentication
-- **[OIDC Setup Guide](docs/setup/OIDC_SETUP_GUIDE.md)** - ALB-OIDC with Identity Center, Okta, Auth0
-- **[Cognito Setup](docs/setup/COGNITO_SETUP_COMPLETE.md)** - AWS Cognito user pools with MFA
-- **[Identity Center Setup](docs/setup/AWS_IDENTITY_CENTER_SETUP.md)** - Enterprise SSO
+- **[Identity Center Setup](docs/setup/AWS_IDENTITY_CENTER_SETUP.md)** - Enterprise SSO with ALB-OIDC (Okta, Auth0)
+- **[Cognito MFA Setup](docs/setup/COGNITO_MFA_COMPLIANCE_SETUP.md)** - AWS Cognito user pools with MFA for compliance
+- **[IAM Best Practices](docs/guides/IAM_RULES.md)** - IAM security rules and policies
 - **[Security Hardening](SECURITY.md)** - Security best practices
 
 ### ✅ Compliance
+- **[Compliance Overview](docs/compliance/README.md)** - Complete compliance documentation hub
+- **[Compliance Posture & Testing](docs/COMPLIANCE_POSTURE.md)** - Infrastructure control status & coverage analysis
+- **[Auditor Compliance Mapping](docs/AUDITOR_COMPLIANCE_MAPPING.md)** - Control mappings for external audits
 - **[Automated Compliance](docs/compliance/AUTOMATED_COMPLIANCE.md)** - Auto-remediation features
 - **[Multi-Framework Guide](docs/compliance/MULTI_FRAMEWORK_COMPLIANCE.md)** - SOC2, HIPAA, PCI-DSS, GDPR
 - **[S3 Versioning Remediation](docs/compliance/S3_VERSIONING_REMEDIATION.md)** - Automatic versioning
 - **[PCI-DSS Compliance](docs/compliance/PCI_DSS_README.md)** - Payment card security
 - **[Security Rules](docs/guides/SECURITY_RULES_README.md)** - Comprehensive guidelines
-- **[IAM Best Practices](docs/guides/IAM_RULES.md)** - IAM security rules
 
 ### 📖 Advanced Topics
 - **[Deployment Guide](docs/compliance/DEPLOYMENT_GUIDE.md)** - Production strategies
