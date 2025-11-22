@@ -1004,25 +1004,71 @@ public class ComplianceFactory extends BaseFactory {
      *   <li>CloudTrail resumes logging to the bucket</li>
      * </ol>
      *
-     * <h3>Required Permissions</h3>
-     * <p>The SSM automation role needs:</p>
+     * <h3>Required Permissions (Least Privilege)</h3>
+     * <p>The SSM automation role has scoped permissions following AWS best practices:</p>
      * <ul>
-     *   <li>s3:GetBucketPolicy - Read current bucket policy</li>
-     *   <li>s3:PutBucketPolicy - Update bucket policy</li>
-     *   <li>s3:GetBucketAcl - Read bucket ACL</li>
-     *   <li>cloudtrail:GetTrail - Get CloudTrail configuration</li>
-     *   <li>cloudtrail:DescribeTrails - List CloudTrail details</li>
+     *   <li>s3:GetBucketPolicy - Scoped to CloudForge CloudTrail buckets (arn:aws:s3:::cloudforge-cloudtrail-*)</li>
+     *   <li>s3:PutBucketPolicy - Scoped to CloudForge CloudTrail buckets (arn:aws:s3:::cloudforge-cloudtrail-*)</li>
+     *   <li>s3:GetBucketAcl - Scoped to CloudForge CloudTrail buckets (arn:aws:s3:::cloudforge-cloudtrail-*)</li>
+     *   <li>cloudtrail:GetTrail - Scoped to CloudForge trails (arn:aws:cloudtrail:*:*:trail/cloudforge-cloudtrail-*)</li>
+     *   <li>cloudtrail:DescribeTrails - Scoped to CloudForge trails (arn:aws:cloudtrail:*:*:trail/cloudforge-cloudtrail-*)</li>
      * </ul>
+     * <p><b>NOTE:</b> No wildcard (*) permissions are used. All permissions are scoped to CloudForge-managed resources.</p>
      *
      * @param cloudTrailRule The AWS Config rule for CloudTrail enabled check
+     * @throws IllegalStateException if CloudTrail or S3 bucket is not configured
      */
     private void addCloudTrailBucketAccessRemediation(CfnConfigRule cloudTrailRule) {
         LOG.info("Setting up CloudTrail bucket access auto-remediation");
 
+        // Null guard: Verify CloudTrail and S3 bucket are configured before creating remediation
+        if (this.trail == null) {
+            String errorMsg = "Cannot configure CloudTrail bucket access remediation: CloudTrail is not configured. " +
+                "Ensure CloudTrail is enabled in the security profile configuration.";
+            LOG.severe(errorMsg);
+            throw new IllegalStateException(errorMsg);
+        }
+
+        if (this.trailBucket == null) {
+            String errorMsg = "Cannot configure CloudTrail bucket access remediation: CloudTrail S3 bucket is not configured. " +
+                "Ensure CloudTrail bucket creation succeeded before enabling remediation.";
+            LOG.severe(errorMsg);
+            throw new IllegalStateException(errorMsg);
+        }
+
+        if (this.trailName == null || this.trailName.isEmpty()) {
+            String errorMsg = "Cannot configure CloudTrail bucket access remediation: CloudTrail name is not set. " +
+                "This is an internal error - CloudTrail should have been assigned a name during creation.";
+            LOG.severe(errorMsg);
+            throw new IllegalStateException(errorMsg);
+        }
+
+        LOG.info("  CloudTrail name: " + this.trailName);
+        LOG.info("  CloudTrail bucket: " + this.trailBucket.getBucketName());
+        LOG.info("  Remediation will fix bucket policy if CloudTrail cannot write logs");
+
         // Create IAM role for SSM Automation with CloudTrail and S3 permissions
+        // IMPORTANT: Permissions are scoped to specific resources following least privilege principle
+
+        // Get account ID for scoped IAM permissions
+        String accountId = software.amazon.awscdk.Stack.of(this).getAccount();
+
+        // Build CloudTrail ARN pattern for this region (supports multiple trails with cloudforge prefix)
+        String cloudTrailArnPattern = String.format(
+            "arn:aws:cloudtrail:%s:%s:trail/cloudforge-cloudtrail-*",
+            this.region != null ? this.region : "*",
+            accountId
+        );
+
+        // Build S3 bucket ARN pattern for CloudTrail buckets only
+        String s3BucketArnPattern = String.format(
+            "arn:aws:s3:::cloudforge-cloudtrail-*-%s",
+            this.region != null ? this.region : "*"
+        );
+
         Role ssmAutomationRole = Role.Builder.create(this, "CloudTrailBucketAccessRemediationRole")
                 .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
-                .description("Role for automated CloudTrail S3 bucket access remediation")
+                .description("Role for automated CloudTrail S3 bucket access remediation - scoped to CloudForge resources")
                 .managedPolicies(List.of(
                     ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
                 ))
@@ -1039,7 +1085,8 @@ public class ComplianceFactory extends BaseFactory {
                                     "s3:GetBucketAcl",
                                     "s3:PutBucketAcl"
                                 ))
-                                .resources(List.of("*"))
+                                // Scoped to CloudForge CloudTrail buckets only (not wildcard)
+                                .resources(List.of(s3BucketArnPattern))
                                 .build(),
                             PolicyStatement.Builder.create()
                                 .sid("CloudTrailReadAccess")
@@ -1049,7 +1096,8 @@ public class ComplianceFactory extends BaseFactory {
                                     "cloudtrail:DescribeTrails",
                                     "cloudtrail:GetEventSelectors"
                                 ))
-                                .resources(List.of("*"))
+                                // Scoped to CloudForge trails only (not wildcard)
+                                .resources(List.of(cloudTrailArnPattern))
                                 .build()
                         ))
                         .build()
