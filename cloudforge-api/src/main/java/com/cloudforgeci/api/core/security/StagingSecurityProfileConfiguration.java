@@ -237,4 +237,89 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     public int getMaxInstanceCount() {
         return 5; // Moderate scaling for staging
     }
+
+    // AWS Config Remediation Settings - Staging mirrors production for compliance testing
+    @Override
+    public boolean isS3VersioningRemediationEnabled() {
+        // Disabled by default due to cost implications
+        // Enable in staging to test versioning behavior before production
+        return false;
+    }
+
+    @Override
+    public boolean isCloudTrailBucketAccessRemediationEnabled() {
+        // Disabled by default to prevent automatic policy changes
+        // Enable in staging to validate CloudTrail bucket policies
+        return false;
+    }
+
+    @Override
+    public boolean isEbsEncryptionRemediationEnabled() {
+        // Enabled by default - mirrors production for compliance testing
+        // Staging should validate EBS encryption remediation
+        return true;
+    }
+
+    @Override
+    public boolean isGuardDutyRemediationEnabled() {
+        // Enabled by default - mirrors production for compliance testing
+        // Staging should validate GuardDuty remediation behavior
+        return true;
+    }
+
+    @Override
+    public boolean isVpcDefaultSgRemediationEnabled() {
+        // Enabled by default - mirrors production for compliance testing
+        // Staging should validate default security group remediation
+        return true;
+    }
+
+    @Override
+    public boolean isElbDeletionProtectionRemediationEnabled() {
+        // Enabled by default - mirrors production for compliance testing
+        // Staging should validate load balancer deletion protection
+        return true;
+    }
+
+    @Override
+    public boolean isKmsKeyRotationRemediationEnabled() {
+        // Enabled by default - mirrors production for compliance testing
+        // Staging should validate KMS key rotation remediation
+        return true;
+    }
+
+    @Override
+    public boolean isSshRemovalRemediationEnabled() {
+        // Disabled by default - could break SSH access for testing
+        // Enable in staging to validate SSH removal behavior before production
+        return false;
+    }
+
+    @Override
+    public boolean isAccessKeyRotationRemediationEnabled() {
+        // Disabled by default - requires user notification workflow
+        // Enable in staging to test access key rotation procedures
+        return false;
+    }
+
+    @Override
+    public boolean isDynamoDbPitrRemediationEnabled() {
+        // Enabled by default - mirrors production for compliance testing
+        // Staging should validate DynamoDB PITR remediation
+        return true;
+    }
+
+    @Override
+    public boolean isRdsMultiAzRemediationEnabled() {
+        // Disabled by default - requires maintenance window and causes downtime
+        // Enable in staging to test Multi-AZ conversion before production
+        return false;
+    }
+
+    @Override
+    public boolean isRdsEncryptionRemediationEnabled() {
+        // Disabled by default - complex operation requiring snapshot recreation
+        // Enable in staging to test RDS encryption process before production
+        return false;
+    }
 }

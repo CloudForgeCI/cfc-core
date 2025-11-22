@@ -4,6 +4,7 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.core.annotation.DeploymentContext;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.SecretValue;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.constructs.Construct;
@@ -167,7 +168,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
             authorizationEndpoint = issuer + "/authorize";
             tokenEndpoint = issuer + "/token";
             userInfoEndpoint = issuer + "/userinfo";
-            clientId = software.amazon.awscdk.Stack.of(this).getAccount();
+            clientId = Stack.of(this).getAccount();
             secretName = stackName + "/jenkins/oidc/client-secret";
             LOG.info("Using auto-constructed OIDC endpoints (legacy mode)");
         }
@@ -282,6 +283,6 @@ public class OidcAuthenticationFactory extends BaseFactory {
     private String extractAccountIdFromArn() {
         // IAM Identity Center ARNs don't contain account IDs
         // Use the account from the CDK stack instead
-        return software.amazon.awscdk.Stack.of(this).getAccount();
+        return Stack.of(this).getAccount();
     }
 }

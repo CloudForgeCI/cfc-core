@@ -230,4 +230,104 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     public int getMaxInstanceCount() {
         return 20; // Extended scaling for production
     }
+
+    // AWS Config Remediation Settings - Production defaults
+    @Override
+    public boolean isS3VersioningRemediationEnabled() {
+        // Disabled by default due to cost implications
+        // Versioning increases storage costs as it retains all object versions
+        // Enable manually if required for compliance
+        return false;
+    }
+
+    @Override
+    public boolean isCloudTrailBucketAccessRemediationEnabled() {
+        // Disabled by default to prevent automatic policy changes
+        // CloudTrail bucket policy should be carefully managed
+        // Enable manually if needed
+        return false;
+    }
+
+    @Override
+    public boolean isEbsEncryptionRemediationEnabled() {
+        // Enabled by default - low risk, high security value
+        // Automatically enables EBS encryption by default for the account
+        // This is a one-time account-level setting with no disruption
+        return true;
+    }
+
+    @Override
+    public boolean isGuardDutyRemediationEnabled() {
+        // Enabled by default - low risk, high security value
+        // Automatically enables GuardDuty threat detection if not already enabled
+        // Production should always have threat detection enabled
+        return true;
+    }
+
+    @Override
+    public boolean isVpcDefaultSgRemediationEnabled() {
+        // Enabled by default - low risk, high security value
+        // Automatically removes all rules from the default security group
+        // Best practice: never use the default security group
+        return true;
+    }
+
+    @Override
+    public boolean isElbDeletionProtectionRemediationEnabled() {
+        // Enabled by default - low risk, high security value
+        // Automatically enables deletion protection on load balancers
+        // Prevents accidental deletion of production load balancers
+        return true;
+    }
+
+    @Override
+    public boolean isKmsKeyRotationRemediationEnabled() {
+        // Enabled by default - low risk, high security value
+        // Automatically enables automatic key rotation for customer-managed KMS keys
+        // Key rotation is a compliance best practice
+        return true;
+    }
+
+    @Override
+    public boolean isSshRemovalRemediationEnabled() {
+        // Disabled by default - could break SSH access if required
+        // Only enable if you're certain SSH should never be publicly accessible
+        // Use bastion hosts or VPN for SSH access instead
+        return false;
+    }
+
+    @Override
+    public boolean isAccessKeyRotationRemediationEnabled() {
+        // Disabled by default - requires user notification workflow
+        // Automatically revoking access keys can break applications
+        // Enable only with proper notification and rotation procedures
+        return false;
+    }
+
+    @Override
+    public boolean isDynamoDbPitrRemediationEnabled() {
+        // Enabled by default - low risk, high security value
+        // Automatically enables point-in-time recovery for DynamoDB tables
+        // Provides data protection with minimal cost impact
+        return true;
+    }
+
+    @Override
+    public boolean isRdsMultiAzRemediationEnabled() {
+        // Disabled by default - requires maintenance window and causes brief downtime
+        // Multi-AZ conversion requires database restart
+        // Enable manually during planned maintenance window
+        return false;
+    }
+
+    @Override
+    public boolean isRdsEncryptionRemediationEnabled() {
+        // Disabled by default - complex operation requiring snapshot recreation
+        // Encrypting an existing RDS instance requires:
+        // 1. Creating encrypted snapshot
+        // 2. Restoring from snapshot
+        // 3. Updating application connection strings
+        // Enable manually with proper planning
+        return false;
+    }
 }

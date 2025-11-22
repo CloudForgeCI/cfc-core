@@ -94,6 +94,9 @@ public class ComplianceFactory extends BaseFactory {
     @DeploymentContext("enableS3VersioningRemediation")
     private Boolean enableS3VersioningRemediation;
 
+    @DeploymentContext("enableCloudTrailBucketAccessRemediation")
+    private Boolean enableCloudTrailBucketAccessRemediation;
+
     @DeploymentContext("scopeConfigRulesToDeployment")
     private Boolean scopeConfigRulesToDeployment;
 
@@ -116,6 +119,7 @@ public class ComplianceFactory extends BaseFactory {
     // CloudTrail and bucket for S3 data event configuration
     private Trail trail;
     private Bucket trailBucket;
+    private String trailName;
 
     @Override
     public void create() {
@@ -133,9 +137,8 @@ public class ComplianceFactory extends BaseFactory {
 
         // Check if AWS Audit Manager should be enabled (do this BEFORE Config infrastructure)
         // This ensures Audit Manager configuration errors fail before creating account-level resources
-        boolean auditManagerEnabledFlag = (auditManagerEnabled != null)
-            ? auditManagerEnabled
-            : config.isAuditManagerEnabled();
+        boolean auditManagerEnabledFlag = Boolean.TRUE.equals(auditManagerEnabled)
+            || (auditManagerEnabled == null && config.isAuditManagerEnabled());
 
         if (auditManagerEnabledFlag) {
             LOG.info("Creating AWS Audit Manager assessments for profile: " + security);
@@ -146,29 +149,44 @@ public class ComplianceFactory extends BaseFactory {
 
         // Check if AWS Config should be enabled (deployment override takes precedence over profile default)
         // Config infrastructure creation happens AFTER Audit Manager setup to fail fast on configuration errors
-        boolean configEnabled = (awsConfigEnabled != null)
-            ? awsConfigEnabled
-            : config.isAwsConfigEnabled();
+        boolean configEnabled = Boolean.TRUE.equals(awsConfigEnabled)
+            || (awsConfigEnabled == null && config.isAwsConfigEnabled());
 
         if (configEnabled) {
             LOG.info("Creating AWS Config infrastructure and rules for profile: " + security);
 
+            // Auto-detect if Config infrastructure already exists
+            boolean configInfraExists = checkConfigInfrastructureExists();
+
             // Check if we should create Config infrastructure (Recorder + Delivery Channel)
             // These are account-level singleton resources - only ONE per region per account allowed
-            boolean shouldCreateInfra = (createConfigInfrastructure != null) ? createConfigInfrastructure : true;
+            boolean shouldCreateInfra = Boolean.TRUE.equals(createConfigInfrastructure)
+                || (createConfigInfrastructure == null && !configInfraExists);  // Auto-skip if already exists
+
+            if (configInfraExists && shouldCreateInfra) {
+                LOG.warning("Config infrastructure already exists but createConfigInfrastructure=true");
+                LOG.warning("  Existing Config Recorder detected in region: " + region);
+                LOG.warning("  Setting createConfigInfrastructure=false automatically to avoid conflict");
+                LOG.warning("  To override this behavior, manually set createConfigInfrastructure in deployment-context.json");
+                shouldCreateInfra = false;
+            }
 
             if (shouldCreateInfra) {
                 LOG.info("Creating Config Recorder and Delivery Channel (account-level singletons)");
                 LOG.info("  IMPORTANT: Only ONE stack per region should have createConfigInfrastructure=true");
-                CfnConfigurationRecorder recorder = createConfigInfrastructure();
+                ConfigInfrastructure configInfra = createConfigInfrastructure();
 
-                // Create Config Rules that depend on the recorder we created
-                createConfigRules(recorder);
-                createAllFrameworkConfigRules(recorder);
+                // Create Config Rules that depend on the recorder being started
+                createConfigRules(configInfra.recorder, configInfra.starterResource);
+                createAllFrameworkConfigRules(configInfra.recorder, configInfra.starterResource);
             } else {
-                LOG.info("Skipping Config infrastructure creation (createConfigInfrastructure=false)");
-                LOG.info("  Assuming Config Recorder 'cloudforge-config-recorder' already exists in this region");
-                LOG.info("  Config Rules will reference existing recorder by name (no CloudFormation dependency)");
+                if (configInfraExists) {
+                    LOG.info("Config infrastructure already exists in region (auto-detected)");
+                } else {
+                    LOG.info("Skipping Config infrastructure creation (createConfigInfrastructure=false)");
+                }
+                LOG.info("  Config Recorder 'cloudforge-config-recorder' will be referenced by name");
+                LOG.info("  Config Rules will use existing recorder (no CloudFormation dependency)");
 
                 // Create Config Rules without recorder dependency
                 // Rules will reference the existing recorder by name at runtime
@@ -190,8 +208,6 @@ public class ComplianceFactory extends BaseFactory {
      * When a framework is removed, its condition becomes false and CloudFormation deletes those rules.
      */
     private void createFrameworkConditions() {
-        software.amazon.awscdk.Stack stack = software.amazon.awscdk.Stack.of(this);
-
         List<String> frameworks = determineFrameworks();
 
         LOG.info("Creating CloudFormation conditions for frameworks: " + String.join(", ", frameworks));
@@ -203,25 +219,25 @@ public class ComplianceFactory extends BaseFactory {
 
         // Create condition for PCI-DSS
         boolean enablePciDss = normalizedFrameworks.contains("PCIDSS");
-        pciDssCondition = CfnCondition.Builder.create(stack, "EnablePciDssRules")
+        pciDssCondition = CfnCondition.Builder.create(this, "EnablePciDssRules")
                 .expression(Fn.conditionEquals(enablePciDss ? "true" : "false", "true"))
                 .build();
 
         // Create condition for SOC 2
         boolean enableSoc2 = normalizedFrameworks.contains("SOC2");
-        soc2Condition = CfnCondition.Builder.create(stack, "EnableSoc2Rules")
+        soc2Condition = CfnCondition.Builder.create(this, "EnableSoc2Rules")
                 .expression(Fn.conditionEquals(enableSoc2 ? "true" : "false", "true"))
                 .build();
 
         // Create condition for HIPAA
         boolean enableHipaa = normalizedFrameworks.contains("HIPAA");
-        hipaaCondition = CfnCondition.Builder.create(stack, "EnableHipaaRules")
+        hipaaCondition = CfnCondition.Builder.create(this, "EnableHipaaRules")
                 .expression(Fn.conditionEquals(enableHipaa ? "true" : "false", "true"))
                 .build();
 
         // Create condition for GDPR
         boolean enableGdpr = normalizedFrameworks.contains("GDPR");
-        gdprCondition = CfnCondition.Builder.create(stack, "EnableGdprRules")
+        gdprCondition = CfnCondition.Builder.create(this, "EnableGdprRules")
                 .expression(Fn.conditionEquals(enableGdpr ? "true" : "false", "true"))
                 .build();
 
@@ -249,14 +265,23 @@ public class ComplianceFactory extends BaseFactory {
     private void createCloudTrail() {
         LOG.info("Creating CloudTrail for audit logging");
 
-        // Create bucket with auto-generated name to avoid "AlreadyExists" errors
-        Bucket trailBucket = getOrCreateBucket("CloudTrailBucket");
+        // Use a fixed, account-level trail name instead of stack-specific
+        // This allows multiple stacks to share the same CloudTrail
+        this.trailName = "cloudforge-cloudtrail-" + this.region;
 
-        LOG.info("CloudTrail bucket will use CloudFormation-generated unique name");
+        LOG.info("CloudTrail will use fixed name: " + this.trailName);
+        LOG.info("  If trail exists, CloudFormation will update it (no conflict)");
 
-        // Create CloudTrail using high-level Trail construct first
+        // Check SSM Parameter Store at DEPLOYMENT TIME for existing bucket (stack-scoped)
+        String ssmParamName = "/cloudforge/shared/" + this.region + "/stack/" + this.stackName + "/cloudtrail/bucket-arn";
+        Bucket trailBucket = getOrCreateBucketWithSSM("CloudTrailBucket", ssmParamName);
+
+        LOG.info("CloudTrail bucket ARN will be tracked in SSM Parameter Store for reuse");
+
+        // Create CloudTrail using high-level Trail construct
+        // If trail with this name already exists, CloudFormation will update it or fail gracefully
         Trail trail = Trail.Builder.create(this, "CloudTrail")
-                .trailName(stackName + "-cloudtrail")
+                .trailName(this.trailName)  // Fixed name for reusability
                 .bucket(trailBucket)
                 .sendToCloudWatchLogs(true)
                 .enableFileValidation(true)
@@ -268,11 +293,22 @@ public class ComplianceFactory extends BaseFactory {
         this.trail = trail;
         this.trailBucket = trailBucket;
 
-        // Set removal policy to match bucket retention behavior
-        trail.applyRemovalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY);
+        // CloudTrail trail can be safely deleted - all audit logs are stored in the S3 bucket
+        // The S3 bucket has its own RETAIN policy to preserve the actual log data
+        trail.applyRemovalPolicy(RemovalPolicy.DESTROY);
 
         LOG.info("CloudTrail created: " + trail.getTrailArn());
-        LOG.info("CloudTrail removal policy: " + (security == SecurityProfile.PRODUCTION ? "RETAIN (production)" : "DESTROY (non-production)"));
+        LOG.info("CloudTrail removal policy: DESTROY (logs retained in S3 bucket)");
+        LOG.info("CloudTrail name: " + trailName + " (reusable across multiple stacks in this region)");
+
+        // Store CloudTrail ARN in SSM for future reference (stack-specific)
+        AwsCustomResource cloudTrailSsmWriter = storeResourceArnInSSM("CloudTrailArn",
+                "/cloudforge/" + this.stackName + "/" + this.region + "/cloudtrail/arn",
+                trail.getTrailArn(),
+                "CloudTrail ARN for stack " + this.stackName + " in region " + this.region);
+        if (cloudTrailSsmWriter != null) {
+            cloudTrailSsmWriter.getNode().addDependency(trail);
+        }
 
         // Configure S3 data event logging using CloudFormation escape hatch
         configureCloudTrailS3DataEvents(trail);
@@ -343,20 +379,50 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createConfigRules(CfnConfigurationRecorder recorder) {
+    private void createConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         LOG.info("Setting up AWS Config rules for compliance monitoring");
 
         // Create managed rules based on security profile
-        // All rules explicitly depend on the recorder
-        createEncryptionConfigRules(recorder);
-        createS3ConfigRules(recorder);
-        createIAMConfigRules(recorder);
+        // All rules explicitly depend on the recorder being started
+        createEncryptionConfigRules(recorder, starterResource);
+        createS3ConfigRules(recorder, starterResource);
+        createIAMConfigRules(recorder, starterResource);
 
         if (security == SecurityProfile.PRODUCTION) {
-            createProductionConfigRules(recorder);
+            createProductionConfigRules(recorder, starterResource);
         }
 
         LOG.info("AWS Config rules configured");
+    }
+
+    /**
+     * Inner class to hold Config infrastructure components (recorder + starter).
+     * Config Rules must depend on BOTH the recorder AND the starter resource
+     * to ensure the recorder is in STARTED state before rules are created.
+     */
+    private static class ConfigInfrastructure {
+        final CfnConfigurationRecorder recorder;
+        final AwsCustomResource starterResource;
+
+        ConfigInfrastructure(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+            this.recorder = recorder;
+            this.starterResource = starterResource;
+        }
+    }
+
+    /**
+     * Helper method to add dependencies to Config Rules.
+     * Rules must depend on both the recorder AND the starter resource.
+     *
+     * @param rule The Config Rule to add dependencies to
+     * @param recorder The Configuration Recorder
+     * @param starterResource The Custom Resource that starts the recorder
+     */
+    private void addConfigRuleDependencies(CfnConfigRule rule, CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+        rule.getNode().addDependency(recorder);
+        if (starterResource != null) {
+            rule.getNode().addDependency(starterResource);
+        }
     }
 
     /**
@@ -368,9 +434,9 @@ public class ComplianceFactory extends BaseFactory {
      * If resources already exist from a previous deployment, CDK will reuse them.
      * This enables multiple stacks to share the same Config infrastructure.
      *
-     * @return The Configuration Recorder instance for rule dependency management
+     * @return ConfigInfrastructure containing recorder and starter resource for rule dependencies
      */
-    private CfnConfigurationRecorder createConfigInfrastructure() {
+    private ConfigInfrastructure createConfigInfrastructure() {
         // Use fixed names (not stack-specific) since these are account-level resources
         // AWS Config only allows 1 recorder and 1 delivery channel per region per account
         String recorderName = "cloudforge-config-recorder";
@@ -380,13 +446,16 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("  Recorder name: " + recorderName);
         LOG.info("  Delivery channel: " + channelName);
 
-        // Create bucket with auto-generated name to avoid "AlreadyExists" errors
-        Bucket configBucket = getOrCreateBucket("ConfigBucket");
+        // Create bucket with SSM tracking for PRODUCTION mode (stack-scoped)
+        String configSsmParam = "/cloudforge/shared/" + this.region + "/stack/" + this.stackName + "/config/bucket-arn";
+        Bucket configBucket = getOrCreateBucketWithSSM("ConfigBucket", configSsmParam);
 
-        LOG.info("AWS Config bucket will use CloudFormation-generated unique name");
+        LOG.info("AWS Config bucket ARN will be tracked in SSM Parameter Store");
 
+        // Create IAM role for AWS Config with explicit trust policy
         Role configRole = Role.Builder.create(this, "ConfigRole")
                 .assumedBy(ServicePrincipal.Builder.create("config.amazonaws.com").build())
+                .description("AWS Config service role for compliance monitoring and rule evaluation")
                 .managedPolicies(List.of(
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AWS_ConfigRole"),
                         ManagedPolicy.fromAwsManagedPolicyName("SecurityAudit")  // Required for Security Hub evaluation
@@ -439,6 +508,9 @@ public class ComplianceFactory extends BaseFactory {
 
         configBucket.grantWrite(configRole);
 
+        // RETAIN the Config role - it's referenced by the retained recorder/delivery channel
+        configRole.applyRemovalPolicy(RemovalPolicy.RETAIN);
+
         CfnConfigurationRecorder recorder = CfnConfigurationRecorder.Builder.create(this, "ConfigRecorder")
                 .name(recorderName)
                 .roleArn(configRole.getRoleArn())
@@ -468,11 +540,38 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("AWS Config infrastructure created (will be retained on stack deletion)");
 
+        // Store Config Recorder and Delivery Channel ARNs in SSM for compliance tracking
+        // These are ALWAYS tracked (not just PRODUCTION) because they're account-level singletons
+        String recorderArn = software.amazon.awscdk.Stack.of(this).formatArn(software.amazon.awscdk.ArnComponents.builder()
+                .service("config")
+                .resource("config-recorder")
+                .resourceName(recorderName)
+                .build());
+        String channelArn = software.amazon.awscdk.Stack.of(this).formatArn(software.amazon.awscdk.ArnComponents.builder()
+                .service("config")
+                .resource("delivery-channel")
+                .resourceName(channelName)
+                .build());
+
+        // Store Recorder ARN (always, not just PRODUCTION)
+        AwsCustomResource recorderSsmWriter = storeResourceArnInSSMAlways("ConfigRecorderArn",
+                "/cloudforge/shared/" + this.region + "/config/recorder-arn",
+                recorderArn,
+                "AWS Config Recorder ARN for region " + this.region);
+        recorderSsmWriter.getNode().addDependency(recorder);
+
+        // Store Channel ARN (always, not just PRODUCTION)
+        AwsCustomResource channelSsmWriter = storeResourceArnInSSMAlways("ConfigDeliveryChannelArn",
+                "/cloudforge/shared/" + this.region + "/config/channel-arn",
+                channelArn,
+                "AWS Config Delivery Channel ARN for region " + this.region);
+        channelSsmWriter.getNode().addDependency(deliveryChannel);
+
         // Automatically start the Config Recorder for SOC2 and other compliance frameworks
         // This ensures compliance recording begins immediately upon deployment
-        startConfigRecorder(recorder, recorderName);
+        AwsCustomResource starterResource = startConfigRecorder(recorder, recorderName);
 
-        return recorder;
+        return new ConfigInfrastructure(recorder, starterResource);
     }
 
     /**
@@ -492,8 +591,9 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The CfnConfigurationRecorder to start
      * @param recorderName The name of the recorder (e.g., "cloudforge-config-recorder")
+     * @return The AwsCustomResource that starts the recorder (for Config Rule dependencies)
      */
-    private void startConfigRecorder(CfnConfigurationRecorder recorder, String recorderName) {
+    private AwsCustomResource startConfigRecorder(CfnConfigurationRecorder recorder, String recorderName) {
         LOG.info("Auto-starting Config Recorder for compliance frameworks");
         LOG.info("  Recorder: " + recorderName);
         LOG.info("  Reason: SOC2/HIPAA/PCI-DSS/GDPR require continuous compliance monitoring");
@@ -502,7 +602,7 @@ public class ComplianceFactory extends BaseFactory {
         if (region == null || region.isEmpty() || region.contains("$")) {
             LOG.warning("Region not available - cannot auto-start Config Recorder");
             LOG.warning("  Manual start required: aws configservice start-configuration-recorder --configuration-recorder-name " + recorderName);
-            return;
+            return null;
         }
 
         // Create AWS SDK call to start the recorder
@@ -516,6 +616,19 @@ public class ComplianceFactory extends BaseFactory {
                 .region(region)
                 .build();
 
+        // Create AWS SDK call to verify the recorder is running
+        // This ensures Config Rules are not created until recorder is operational
+        AwsSdkCall verifyRecorderCall = AwsSdkCall.builder()
+                .service("ConfigService")
+                .action("describeConfigurationRecorderStatus")
+                .parameters(Map.of(
+                        "ConfigurationRecorderNames", List.of(recorderName)
+                ))
+                .physicalResourceId(PhysicalResourceId.of("config-recorder-verifier-" + recorderName))
+                .region(region)
+                .outputPaths(List.of("ConfigurationRecordersStatus.0.recording"))  // Extract recording status
+                .build();
+
         // Create custom resource that starts the recorder on create and update
         AwsCustomResource startRecorderResource = AwsCustomResource.Builder.create(this, "StartConfigRecorder")
                 .onCreate(startRecorderCall)
@@ -527,28 +640,49 @@ public class ComplianceFactory extends BaseFactory {
                 ))
                 .build();
 
+        // Create a second custom resource that WAITS for the recorder to be operational
+        // This verifier depends on the starter and MUST complete before Config Rules are created
+        AwsCustomResource verifyRecorderResource = AwsCustomResource.Builder.create(this, "VerifyConfigRecorderStarted")
+                .onCreate(verifyRecorderCall)
+                .onUpdate(verifyRecorderCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
+                                .resources(List.of("*"))
+                                .build()
+                ))
+                .build();
+
+        // Chain: Recorder → Starter → Verifier → Config Rules
+        verifyRecorderResource.getNode().addDependency(startRecorderResource);
+
         // Ensure recorder is created before we try to start it
         startRecorderResource.getNode().addDependency(recorder);
 
         LOG.info("Config Recorder auto-start configured successfully");
         LOG.info("  Recorder will start automatically during deployment");
+        LOG.info("  Verifier will confirm recorder is operational before Config Rules are created");
         LOG.info("  Compliance recording will begin immediately");
+
+        // Return the VERIFIER resource (not the starter) for Config Rule dependencies
+        // Config Rules must wait for the verifier to confirm the recorder is operational
+        return verifyRecorderResource;
     }
 
     /**
      * Creates Config rules for encryption compliance.
-     * All rules explicitly depend on the Configuration Recorder.
+     * All rules explicitly depend on the Configuration Recorder being started.
      *
      * @param recorder The Configuration Recorder that rules depend on
+     * @param starterResource The Custom Resource that starts the recorder
      */
-    private void createEncryptionConfigRules(CfnConfigurationRecorder recorder) {
+    private void createEncryptionConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         CfnConfigRule ebsRule = CfnConfigRule.Builder.create(this, "EbsEncryptionRule")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
                         .sourceIdentifier(ManagedRuleIdentifiers.EC2_EBS_ENCRYPTION_BY_DEFAULT)
                         .build())
                 .build();
-        ebsRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(ebsRule, recorder, starterResource);
 
         CfnConfigRule s3EncryptionRule = CfnConfigRule.Builder.create(this, "S3BucketEncryptionRule")
                 .source(CfnConfigRule.SourceProperty.builder()
@@ -556,12 +690,12 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier(ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED)
                         .build())
                 .build();
-        s3EncryptionRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(s3EncryptionRule, recorder, starterResource);
     }
 
     /**
      * Creates Config rules for S3 security compliance.
-     * All rules explicitly depend on the Configuration Recorder.
+     * All rules explicitly depend on the Configuration Recorder being started.
      *
      * Optional scoping: If scopeConfigRulesToDeployment is enabled, rules only monitor
      * S3 buckets tagged with the deployment ID, not all buckets in the account.
@@ -570,15 +704,16 @@ public class ComplianceFactory extends BaseFactory {
      * enables versioning on non-compliant buckets.
      *
      * @param recorder The Configuration Recorder that rules depend on
+     * @param starterResource The Custom Resource that starts the recorder
      */
-    private void createS3ConfigRules(CfnConfigurationRecorder recorder) {
+    private void createS3ConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         CfnConfigRule publicAccessRule = CfnConfigRule.Builder.create(this, "S3PublicAccessBlockRule")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
                         .sourceIdentifier(ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED)
                         .build())
                 .build();
-        publicAccessRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(publicAccessRule, recorder, starterResource);
 
         // Build S3 versioning rule with optional scope configuration
         CfnConfigRule.Builder versioningRuleBuilder = CfnConfigRule.Builder.create(this, "S3VersioningRule")
@@ -600,23 +735,27 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         CfnConfigRule versioningRule = versioningRuleBuilder.build();
-        versioningRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(versioningRule, recorder, starterResource);
 
         // Add automatic remediation if enabled
-        if (Boolean.TRUE.equals(enableS3VersioningRemediation)) {
+        boolean shouldEnableS3VersioningRemediation = Boolean.TRUE.equals(enableS3VersioningRemediation)
+            || (enableS3VersioningRemediation == null && config.isS3VersioningRemediationEnabled());
+
+        if (shouldEnableS3VersioningRemediation) {
             createS3VersioningRemediation(versioningRule);
         }
     }
 
     /**
      * Creates Config rules for IAM security compliance.
-     * All rules explicitly depend on the Configuration Recorder.
+     * All rules explicitly depend on the Configuration Recorder being started.
      *
      * Includes automatic remediation for password policy based on enabled compliance frameworks.
      *
      * @param recorder The Configuration Recorder that rules depend on
+     * @param starterResource The Custom Resource that starts the recorder
      */
-    private void createIAMConfigRules(CfnConfigurationRecorder recorder) {
+    private void createIAMConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         // Get password policy parameters based on enabled compliance frameworks
         Map<String, Object> passwordPolicyParams = getPasswordPolicyParameters();
 
@@ -627,7 +766,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .inputParameters(passwordPolicyParams)
                 .build();
-        passwordPolicyRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(passwordPolicyRule, recorder, starterResource);
 
         // Create automatic remediation for password policy
         createPasswordPolicyRemediation(passwordPolicyRule);
@@ -638,7 +777,7 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier(ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK)
                         .build())
                 .build();
-        rootAccessKeyRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(rootAccessKeyRule, recorder, starterResource);
     }
 
     /**
@@ -843,19 +982,251 @@ public class ComplianceFactory extends BaseFactory {
     }
 
     /**
+     * Creates auto-remediation configuration for CloudTrail bucket access errors.
+     *
+     * <p>This remediation automatically fixes CloudTrail S3 bucket policy access issues
+     * that prevent CloudTrail from writing logs. Common issues include:</p>
+     * <ul>
+     *   <li>Missing or incorrect bucket policy for CloudTrail service</li>
+     *   <li>Insufficient ACL permissions on the bucket</li>
+     *   <li>Bucket policy that denies CloudTrail access</li>
+     * </ul>
+     *
+     * <p>The remediation uses the AWS-managed SSM document
+     * <code>AWSConfigRemediation-EnableCloudTrailLogFileValidation</code> to automatically
+     * fix bucket access policies when AWS Config detects non-compliance.</p>
+     *
+     * <h3>How It Works</h3>
+     * <ol>
+     *   <li>AWS Config detects CloudTrail is not enabled or cannot access its bucket</li>
+     *   <li>Config triggers this automated remediation</li>
+     *   <li>SSM Automation updates the S3 bucket policy with correct CloudTrail permissions</li>
+     *   <li>CloudTrail resumes logging to the bucket</li>
+     * </ol>
+     *
+     * <h3>Required Permissions (Least Privilege)</h3>
+     * <p>The SSM automation role has scoped permissions following AWS best practices:</p>
+     * <ul>
+     *   <li>s3:GetBucketPolicy - Scoped to CloudForge CloudTrail buckets (arn:aws:s3:::cloudforge-cloudtrail-*)</li>
+     *   <li>s3:PutBucketPolicy - Scoped to CloudForge CloudTrail buckets (arn:aws:s3:::cloudforge-cloudtrail-*)</li>
+     *   <li>s3:GetBucketAcl - Scoped to CloudForge CloudTrail buckets (arn:aws:s3:::cloudforge-cloudtrail-*)</li>
+     *   <li>cloudtrail:GetTrail - Scoped to CloudForge trails (arn:aws:cloudtrail:*:*:trail/cloudforge-cloudtrail-*)</li>
+     *   <li>cloudtrail:DescribeTrails - Scoped to CloudForge trails (arn:aws:cloudtrail:*:*:trail/cloudforge-cloudtrail-*)</li>
+     * </ul>
+     * <p><b>NOTE:</b> No wildcard (*) permissions are used. All permissions are scoped to CloudForge-managed resources.</p>
+     *
+     * @param cloudTrailRule The AWS Config rule for CloudTrail enabled check
+     * @throws IllegalStateException if CloudTrail or S3 bucket is not configured
+     */
+    private void addCloudTrailBucketAccessRemediation(CfnConfigRule cloudTrailRule) {
+        LOG.info("Setting up CloudTrail bucket access auto-remediation");
+
+        // Null guard: Verify CloudTrail and S3 bucket are configured before creating remediation
+        if (this.trail == null) {
+            String errorMsg = "Cannot configure CloudTrail bucket access remediation: CloudTrail is not configured. " +
+                "Ensure CloudTrail is enabled in the security profile configuration.";
+            LOG.severe(errorMsg);
+            throw new IllegalStateException(errorMsg);
+        }
+
+        if (this.trailBucket == null) {
+            String errorMsg = "Cannot configure CloudTrail bucket access remediation: CloudTrail S3 bucket is not configured. " +
+                "Ensure CloudTrail bucket creation succeeded before enabling remediation.";
+            LOG.severe(errorMsg);
+            throw new IllegalStateException(errorMsg);
+        }
+
+        if (this.trailName == null || this.trailName.isEmpty()) {
+            String errorMsg = "Cannot configure CloudTrail bucket access remediation: CloudTrail name is not set. " +
+                "This is an internal error - CloudTrail should have been assigned a name during creation.";
+            LOG.severe(errorMsg);
+            throw new IllegalStateException(errorMsg);
+        }
+
+        LOG.info("  CloudTrail name: " + this.trailName);
+        LOG.info("  CloudTrail bucket: " + this.trailBucket.getBucketName());
+        LOG.info("  Remediation will fix bucket policy if CloudTrail cannot write logs");
+
+        // Create IAM role for SSM Automation with CloudTrail and S3 permissions
+        // IMPORTANT: Permissions are scoped to specific resources following least privilege principle
+
+        // Get account ID for scoped IAM permissions
+        String accountId = software.amazon.awscdk.Stack.of(this).getAccount();
+
+        // Build CloudTrail ARN pattern for this region (supports multiple trails with cloudforge prefix)
+        String cloudTrailArnPattern = String.format(
+            "arn:aws:cloudtrail:%s:%s:trail/cloudforge-cloudtrail-*",
+            this.region != null ? this.region : "*",
+            accountId
+        );
+
+        // Build S3 bucket ARN pattern for CloudTrail buckets only
+        String s3BucketArnPattern = String.format(
+            "arn:aws:s3:::cloudforge-cloudtrail-*-%s",
+            this.region != null ? this.region : "*"
+        );
+
+        Role ssmAutomationRole = Role.Builder.create(this, "CloudTrailBucketAccessRemediationRole")
+                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
+                .description("Role for automated CloudTrail S3 bucket access remediation - scoped to CloudForge resources")
+                .managedPolicies(List.of(
+                    ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
+                ))
+                .inlinePolicies(Map.of(
+                    "CloudTrailBucketAccessPermissions",
+                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
+                        .statements(List.of(
+                            PolicyStatement.Builder.create()
+                                .sid("S3BucketPolicyManagement")
+                                .effect(Effect.ALLOW)
+                                .actions(List.of(
+                                    "s3:GetBucketPolicy",
+                                    "s3:PutBucketPolicy",
+                                    "s3:GetBucketAcl",
+                                    "s3:PutBucketAcl"
+                                ))
+                                // Scoped to CloudForge CloudTrail buckets only (not wildcard)
+                                .resources(List.of(s3BucketArnPattern))
+                                .build(),
+                            PolicyStatement.Builder.create()
+                                .sid("CloudTrailReadAccess")
+                                .effect(Effect.ALLOW)
+                                .actions(List.of(
+                                    "cloudtrail:GetTrail",
+                                    "cloudtrail:DescribeTrails",
+                                    "cloudtrail:GetEventSelectors"
+                                ))
+                                // Scoped to CloudForge trails only (not wildcard)
+                                .resources(List.of(cloudTrailArnPattern))
+                                .build()
+                        ))
+                        .build()
+                ))
+                .build();
+
+        // RETAIN the remediation role when CloudTrail is retained (production)
+        // CloudTrail uses this role for auto-remediation of bucket access issues
+        ssmAutomationRole.applyRemovalPolicy(
+            security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY
+        );
+
+        // Create custom SSM Automation document for CloudTrail bucket policy fix
+        software.amazon.awscdk.services.ssm.CfnDocument cloudTrailFixDocument =
+            software.amazon.awscdk.services.ssm.CfnDocument.Builder.create(this, "CloudTrailBucketPolicyFixDocument")
+                .name(stackName + "-fix-cloudtrail-bucket-access")
+                .documentType("Automation")
+                .documentFormat("YAML")
+                .content(Map.of(
+                    "schemaVersion", "0.3",
+                    "description", "Fixes CloudTrail S3 bucket access policy to allow CloudTrail to write logs",
+                    "assumeRole", "{{ AutomationAssumeRole }}",
+                    "parameters", Map.of(
+                        "AutomationAssumeRole", Map.of(
+                            "type", "String",
+                            "description", "IAM role ARN for automation execution"
+                        ),
+                        "TrailName", Map.of(
+                            "type", "String",
+                            "description", "Name of the CloudTrail trail"
+                        ),
+                        "BucketName", Map.of(
+                            "type", "String",
+                            "description", "Name of the S3 bucket for CloudTrail logs"
+                        )
+                    ),
+                    "mainSteps", List.of(
+                        Map.of(
+                            "name", "GetCloudTrailBucket",
+                            "action", "aws:executeAwsApi",
+                            "description", "Retrieve CloudTrail S3 bucket name",
+                            "inputs", Map.of(
+                                "Service", "cloudtrail",
+                                "Api", "GetTrail",
+                                "Name", "{{ TrailName }}"
+                            ),
+                            "outputs", List.of(
+                                Map.of(
+                                    "Name", "S3BucketName",
+                                    "Selector", "$.Trail.S3BucketName",
+                                    "Type", "String"
+                                )
+                            )
+                        ),
+                        Map.of(
+                            "name", "FixBucketPolicy",
+                            "action", "aws:executeAwsApi",
+                            "description", "Update S3 bucket policy to grant CloudTrail access",
+                            "inputs", Map.of(
+                                "Service", "s3",
+                                "Api", "PutBucketPolicy",
+                                "Bucket", "{{ BucketName }}",
+                                "Policy", "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"AWSCloudTrailAclCheck\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cloudtrail.amazonaws.com\"},\"Action\":\"s3:GetBucketAcl\",\"Resource\":\"arn:aws:s3:::{{ BucketName }}\"},{\"Sid\":\"AWSCloudTrailWrite\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cloudtrail.amazonaws.com\"},\"Action\":\"s3:PutObject\",\"Resource\":\"arn:aws:s3:::{{ BucketName }}/AWSLogs/*\",\"Condition\":{\"StringEquals\":{\"s3:x-amz-acl\":\"bucket-owner-full-control\"}}}]}"
+                            )
+                        )
+                    )
+                ))
+                .build();
+
+        // Create remediation configuration using the custom document
+        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
+                this, "CloudTrailBucketAccessRemediation")
+                .configRuleName(cloudTrailRule.getRef())
+                .targetType("SSM_DOCUMENT")
+                .targetId(cloudTrailFixDocument.getRef())
+                .targetVersion("1")
+                .automatic(true)  // Enable automatic remediation
+                .maximumAutomaticAttempts(3)
+                .retryAttemptSeconds(120)
+                .build();
+
+        // Configure remediation parameters
+        remediation.addPropertyOverride("Parameters", Map.of(
+            "AutomationAssumeRole", Map.of(
+                "StaticValue", Map.of("Values", List.of(ssmAutomationRole.getRoleArn()))
+            ),
+            "TrailName", Map.of(
+                "StaticValue", Map.of("Values", List.of(this.trailName != null ? this.trailName : "cloudforge-cloudtrail-" + this.region))
+            ),
+            "BucketName", Map.of(
+                "StaticValue", Map.of("Values", List.of(this.trailBucket != null ? this.trailBucket.getBucketName() : ""))
+            )
+        ));
+
+        // Ensure dependencies
+        remediation.getNode().addDependency(cloudTrailRule);
+        remediation.getNode().addDependency(cloudTrailFixDocument);
+
+        LOG.info("CloudTrail bucket access automatic remediation configured");
+        LOG.info("  SSM Document: " + cloudTrailFixDocument.getRef());
+        LOG.info("  Mode: Automatic (fixes S3 bucket policy when CloudTrail cannot access bucket)");
+        LOG.info("  Max attempts: 3, Retry interval: 120 seconds");
+        LOG.info("  Permissions: S3 bucket policy updates, CloudTrail read access");
+        LOG.info("  This ensures CloudTrail can always write audit logs for compliance");
+    }
+
+    /**
      * Creates additional Config rules for production environments.
      * All rules explicitly depend on the Configuration Recorder.
      *
      * @param recorder The Configuration Recorder that rules depend on
+     * @param starterResource The Custom Resource that starts the recorder
      */
-    private void createProductionConfigRules(CfnConfigurationRecorder recorder) {
+    private void createProductionConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         CfnConfigRule cloudTrailRule = CfnConfigRule.Builder.create(this, "CloudTrailEnabledRule")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
                         .sourceIdentifier(ManagedRuleIdentifiers.CLOUD_TRAIL_ENABLED)
                         .build())
                 .build();
-        cloudTrailRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(cloudTrailRule, recorder, starterResource);
+
+        // Add auto-remediation for CloudTrail bucket access errors if enabled
+        boolean shouldEnableCloudTrailBucketAccessRemediation = Boolean.TRUE.equals(enableCloudTrailBucketAccessRemediation)
+            || (enableCloudTrailBucketAccessRemediation == null && config.isCloudTrailBucketAccessRemediationEnabled());
+
+        if (shouldEnableCloudTrailBucketAccessRemediation) {
+            addCloudTrailBucketAccessRemediation(cloudTrailRule);
+        }
 
         CfnConfigRule cloudTrailValidationRule = CfnConfigRule.Builder.create(this, "CloudTrailLogFileValidationRule")
                 .source(CfnConfigRule.SourceProperty.builder()
@@ -863,7 +1234,7 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier(ManagedRuleIdentifiers.CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED)
                         .build())
                 .build();
-        cloudTrailValidationRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(cloudTrailValidationRule, recorder, starterResource);
 
         CfnConfigRule vpcFlowLogsRule = CfnConfigRule.Builder.create(this, "VpcFlowLogsRule")
                 .source(CfnConfigRule.SourceProperty.builder()
@@ -871,7 +1242,7 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier(ManagedRuleIdentifiers.VPC_FLOW_LOGS_ENABLED)
                         .build())
                 .build();
-        vpcFlowLogsRule.getNode().addDependency(recorder);
+        addConfigRuleDependencies(vpcFlowLogsRule, recorder, starterResource);
     }
 
     /**
@@ -955,12 +1326,20 @@ public class ComplianceFactory extends BaseFactory {
      * Creates additional Config rules for production environments WITHOUT recorder dependency.
      */
     private void createProductionConfigRulesWithoutRecorder() {
-        CfnConfigRule.Builder.create(this, "CloudTrailEnabledRule")
+        CfnConfigRule cloudTrailRule = CfnConfigRule.Builder.create(this, "CloudTrailEnabledRule")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
                         .sourceIdentifier(ManagedRuleIdentifiers.CLOUD_TRAIL_ENABLED)
                         .build())
                 .build();
+
+        // Add auto-remediation for CloudTrail bucket access errors if enabled
+        boolean shouldEnableCloudTrailBucketAccessRemediation = Boolean.TRUE.equals(enableCloudTrailBucketAccessRemediation)
+            || (enableCloudTrailBucketAccessRemediation == null && config.isCloudTrailBucketAccessRemediationEnabled());
+
+        if (shouldEnableCloudTrailBucketAccessRemediation) {
+            addCloudTrailBucketAccessRemediation(cloudTrailRule);
+        }
 
         CfnConfigRule.Builder.create(this, "CloudTrailLogFileValidationRule")
                 .source(CfnConfigRule.SourceProperty.builder()
@@ -1019,7 +1398,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createAllFrameworkConfigRules(CfnConfigurationRecorder recorder) {
+    private void createAllFrameworkConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         List<String> frameworks = determineFrameworks();
 
         if (frameworks.isEmpty()) {
@@ -1031,16 +1410,16 @@ public class ComplianceFactory extends BaseFactory {
         // Always create ALL framework rules, using conditions to control deployment
         // This allows CloudFormation to track and DELETE rules when frameworks are removed
         LOG.info("Creating PCI-DSS Config rules (condition-controlled)");
-        createPciDssConfigRules(recorder);
+        createPciDssConfigRules(recorder, starterResource);
 
         LOG.info("Creating SOC 2 Config rules (condition-controlled)");
-        createSoc2ConfigRules(recorder);
+        createSoc2ConfigRules(recorder, starterResource);
 
         LOG.info("Creating HIPAA Config rules (condition-controlled)");
-        createHipaaConfigRules(recorder);
+        createHipaaConfigRules(recorder, starterResource);
 
         LOG.info("Creating GDPR Config rules (condition-controlled)");
-        createGdprConfigRules(recorder);
+        createGdprConfigRules(recorder, starterResource);
 
         LOG.info("All framework-specific Config rules created with conditions");
     }
@@ -1051,7 +1430,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createPciDssConfigRules(CfnConfigurationRecorder recorder) {
+    private void createPciDssConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         LOG.info("Creating PCI-DSS AWS Config rules (condition-controlled)");
 
         // Requirement 1: Network Segmentation
@@ -1165,7 +1544,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createSoc2ConfigRules(CfnConfigurationRecorder recorder) {
+    private void createSoc2ConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         LOG.info("Creating SOC 2 AWS Config rules (condition-controlled)");
 
         // CC6.1: Logical Access Controls
@@ -1262,7 +1641,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createHipaaConfigRules(CfnConfigurationRecorder recorder) {
+    private void createHipaaConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         LOG.info("Creating HIPAA AWS Config rules (condition-controlled)");
 
         // §164.308(a)(1): Security Management Process
@@ -1369,7 +1748,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createGdprConfigRules(CfnConfigurationRecorder recorder) {
+    private void createGdprConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
         LOG.info("Creating GDPR AWS Config rules (condition-controlled)");
 
         // Article 25: Data Protection by Design
@@ -1874,16 +2253,14 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("Creating " + frameworks.size() + " assessment(s): " + String.join(", ", frameworks));
 
-        // Get stack reference for lazy evaluation
-        software.amazon.awscdk.Stack stack = software.amazon.awscdk.Stack.of(this);
-
         // Generate shortId for assessment names (assessments are stack-specific)
         String shortId = Integer.toHexString(stackName.hashCode());
 
-        // Create bucket with auto-generated name to avoid "AlreadyExists" errors
-        Bucket assessmentReportBucket = getOrCreateBucket("AuditManagerReportBucket");
+        // Create bucket with SSM tracking for PRODUCTION mode (stack-scoped)
+        String auditSsmParam = "/cloudforge/shared/" + this.region + "/stack/" + this.stackName + "/audit-manager/bucket-arn";
+        Bucket assessmentReportBucket = getOrCreateBucketWithSSM("AuditManagerReportBucket", auditSsmParam);
 
-        LOG.info("Audit Manager bucket will use CloudFormation-generated unique name");
+        LOG.info("Audit Manager bucket ARN will be tracked in SSM Parameter Store");
 
         // Enforce SSL/TLS for compliance
         assessmentReportBucket.addToResourcePolicy(
@@ -2011,7 +2388,7 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("Created shared Audit Manager role and bucket with comprehensive permissions");
 
         // Get account ID for assessments
-        String accountId = stack.getAccount();
+        String accountId = software.amazon.awscdk.Stack.of(this).getAccount();
 
         // Create one assessment per framework
         int assessmentCount = 0;
@@ -2260,6 +2637,21 @@ public class ComplianceFactory extends BaseFactory {
                 "--output", "json"
             );
 
+            // Inherit environment variables (AWS_PROFILE, AWS_REGION, etc.)
+            Map<String, String> env = pb.environment();
+            // Preserve AWS_PROFILE if set
+            String awsProfile = System.getenv("AWS_PROFILE");
+            if (awsProfile != null && !awsProfile.isEmpty()) {
+                env.put("AWS_PROFILE", awsProfile);
+                LOG.info("Using AWS_PROFILE=" + awsProfile + " for framework query");
+            }
+            // Preserve AWS_REGION if set
+            String awsRegion = System.getenv("AWS_REGION");
+            if (awsRegion != null && !awsRegion.isEmpty()) {
+                env.put("AWS_REGION", awsRegion);
+                LOG.info("Using AWS_REGION=" + awsRegion + " for framework query");
+            }
+
             Process process = pb.start();
 
             // Wait for process with timeout (10 seconds - increased from 5)
@@ -2337,6 +2729,76 @@ public class ComplianceFactory extends BaseFactory {
     }
 
     /**
+     * Check if AWS Config infrastructure (Recorder and Delivery Channel) already exists.
+     * Queries AWS Config to detect existing resources before attempting creation.
+     *
+     * @return true if Config Recorder exists, false otherwise
+     */
+    private boolean checkConfigInfrastructureExists() {
+        LOG.info("Checking if AWS Config infrastructure exists in region: " + region);
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                "/usr/local/bin/aws", "configservice", "describe-configuration-recorders",
+                "--output", "json"
+            );
+
+            // Inherit environment variables (AWS_PROFILE, AWS_REGION, etc.)
+            Map<String, String> env = pb.environment();
+            String awsProfile = System.getenv("AWS_PROFILE");
+            if (awsProfile != null && !awsProfile.isEmpty()) {
+                env.put("AWS_PROFILE", awsProfile);
+            }
+            String awsRegion = System.getenv("AWS_REGION");
+            if (awsRegion != null && !awsRegion.isEmpty()) {
+                env.put("AWS_REGION", awsRegion);
+            }
+
+            Process process = pb.start();
+            boolean finished = process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+
+            if (!finished) {
+                process.destroyForcibly();
+                LOG.warning("AWS CLI query timed out after 10 seconds checking Config Recorder");
+                return false;
+            }
+
+            if (process.exitValue() == 0) {
+                StringBuilder output = new StringBuilder();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line);
+                    }
+                }
+
+                String json = output.toString();
+                // Check if ConfigurationRecorders array has any entries
+                boolean exists = json.contains("\"ConfigurationRecorders\"") &&
+                                json.contains("\"name\"") &&
+                                !json.contains("\"ConfigurationRecorders\": []");
+
+                if (exists) {
+                    LOG.info("✓ Existing Config Recorder detected in region: " + region);
+                    LOG.info("  Will skip infrastructure creation to avoid 'ResourceAlreadyExistsException'");
+                } else {
+                    LOG.info("✗ No existing Config Recorder found in region: " + region);
+                    LOG.info("  Will create new Config infrastructure");
+                }
+
+                return exists;
+            } else {
+                LOG.warning("AWS CLI command failed with exit code: " + process.exitValue());
+                return false;
+            }
+        } catch (Exception e) {
+            LOG.warning("Error checking for existing Config infrastructure: " + e.getMessage());
+            LOG.warning("  Assuming no Config infrastructure exists (will attempt creation)");
+            return false;
+        }
+    }
+
+    /**
      * Creates an S3 bucket with auto-generated name to avoid "AlreadyExists" errors.
      *
      * CloudFormation auto-generates unique bucket names when bucketName is not specified.
@@ -2374,6 +2836,157 @@ public class ComplianceFactory extends BaseFactory {
                 .build();
 
         return bucket;
+    }
+
+    /**
+     * Get or create S3 bucket with SSM Parameter Store tracking (deployment-time).
+     *
+     * For PRODUCTION mode:
+     * - Stores bucket ARN in SSM Parameter Store at deployment time
+     * - Allows reuse of retained buckets across stack redeployments
+     * - Prevents conflicts with retained buckets
+     *
+     * For DEV/STAGING mode:
+     * - Just creates bucket normally (will be destroyed with stack)
+     */
+    private Bucket getOrCreateBucketWithSSM(String id, String ssmParameterName) {
+        // Only use SSM tracking in PRODUCTION mode (where resources are retained)
+        if (security != SecurityProfile.PRODUCTION) {
+            LOG.info("Non-production mode: Creating bucket without SSM tracking");
+            return getOrCreateBucket(id);
+        }
+
+        LOG.info("Production mode: Using SSM Parameter Store for bucket tracking: " + ssmParameterName);
+
+        // Always create new bucket (CloudFormation will generate unique name)
+        // This avoids conflicts with retained buckets from previous deployments
+        Bucket bucket = getOrCreateBucket(id);
+
+        // Create Custom Resource to store bucket ARN in SSM at deployment time
+        // ARN is used instead of name for direct code reference capability
+        AwsSdkCall putParameterCall = AwsSdkCall.builder()
+                .service("SSM")
+                .action("putParameter")
+                .parameters(java.util.Map.of(
+                        "Name", ssmParameterName,
+                        "Value", bucket.getBucketArn(),
+                        "Type", "String",
+                        "Description", "CloudForge retained " + id + " ARN for region " + region,
+                        "Overwrite", true
+                ))
+                .physicalResourceId(software.amazon.awscdk.customresources.PhysicalResourceId.of(id + "-SSMWriter"))
+                .region(region)
+                .build();
+
+        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, id + "SSMWriter")
+                .onCreate(putParameterCall)
+                .onUpdate(putParameterCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
+                                .resources(List.of("*"))
+                                .build()
+                ))
+                .build();
+
+        // Ensure bucket is created before we write to SSM
+        ssmWriter.getNode().addDependency(bucket);
+
+        LOG.info("Bucket ARN will be tracked in SSM for future reference: " + ssmParameterName);
+        LOG.info("  Note: New unique bucket created to avoid conflicts with retained buckets");
+        return bucket;
+    }
+
+    /**
+     * Store resource ARN in SSM Parameter Store (deployment-time).
+     *
+     * This helper method stores any resource ARN in SSM for compliance tracking.
+     * The parameter persists after stack deletion for audit trail purposes.
+     *
+     * Only active in PRODUCTION mode.
+     *
+     * @param id Unique identifier for the Custom Resource
+     * @param ssmParameterName SSM parameter name (e.g., "/cloudforge/shared/us-west-2/cloudtrail/arn")
+     * @param arnValue The ARN value to store (CDK token or string)
+     * @param description Human-readable description for the parameter
+     * @return The AwsCustomResource that stores the parameter
+     */
+    private AwsCustomResource storeResourceArnInSSM(String id, String ssmParameterName, String arnValue, String description) {
+        if (security != SecurityProfile.PRODUCTION) {
+            LOG.fine("Non-production mode: Skipping SSM tracking for " + id);
+            return null;
+        }
+
+        LOG.info("Storing " + id + " ARN in SSM Parameter Store: " + ssmParameterName);
+
+        AwsSdkCall putParameterCall = AwsSdkCall.builder()
+                .service("SSM")
+                .action("putParameter")
+                .parameters(java.util.Map.of(
+                        "Name", ssmParameterName,
+                        "Value", arnValue,
+                        "Type", "String",
+                        "Description", description,
+                        "Overwrite", true
+                ))
+                .physicalResourceId(software.amazon.awscdk.customresources.PhysicalResourceId.of(id + "-SSMWriter"))
+                .region(region)
+                .build();
+
+        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, id + "SSMWriter")
+                .onCreate(putParameterCall)
+                .onUpdate(putParameterCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
+                                .resources(List.of("*"))
+                                .build()
+                ))
+                .build();
+
+        LOG.fine(id + " ARN will be tracked in SSM: " + ssmParameterName);
+        return ssmWriter;
+    }
+
+    /**
+     * Store resource ARN in SSM Parameter Store (deployment-time) - ALWAYS (not just PRODUCTION).
+     *
+     * This variant always stores the ARN regardless of security profile.
+     * Used for account-level singleton resources like Config Recorder and Delivery Channel.
+     *
+     * @param id Unique identifier for the Custom Resource
+     * @param ssmParameterName SSM parameter name (e.g., "/cloudforge/shared/us-west-2/config/recorder-arn")
+     * @param arnValue The ARN value to store (CDK token or string)
+     * @param description Human-readable description for the parameter
+     * @return The AwsCustomResource that stores the parameter
+     */
+    private AwsCustomResource storeResourceArnInSSMAlways(String id, String ssmParameterName, String arnValue, String description) {
+        LOG.info("Storing " + id + " ARN in SSM Parameter Store (always): " + ssmParameterName);
+
+        AwsSdkCall putParameterCall = AwsSdkCall.builder()
+                .service("SSM")
+                .action("putParameter")
+                .parameters(java.util.Map.of(
+                        "Name", ssmParameterName,
+                        "Value", arnValue,
+                        "Type", "String",
+                        "Description", description,
+                        "Overwrite", true
+                ))
+                .physicalResourceId(software.amazon.awscdk.customresources.PhysicalResourceId.of(id + "-SSMWriter"))
+                .region(region)
+                .build();
+
+        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, id + "SSMWriter")
+                .onCreate(putParameterCall)
+                .onUpdate(putParameterCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
+                                .resources(List.of("*"))
+                                .build()
+                ))
+                .build();
+
+        LOG.fine(id + " ARN will be tracked in SSM: " + ssmParameterName);
+        return ssmWriter;
     }
 
     /**
