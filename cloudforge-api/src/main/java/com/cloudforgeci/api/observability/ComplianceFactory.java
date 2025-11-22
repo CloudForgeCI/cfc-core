@@ -137,9 +137,8 @@ public class ComplianceFactory extends BaseFactory {
 
         // Check if AWS Audit Manager should be enabled (do this BEFORE Config infrastructure)
         // This ensures Audit Manager configuration errors fail before creating account-level resources
-        boolean auditManagerEnabledFlag = (auditManagerEnabled != null)
-            ? auditManagerEnabled
-            : config.isAuditManagerEnabled();
+        boolean auditManagerEnabledFlag = Boolean.TRUE.equals(auditManagerEnabled)
+            || (auditManagerEnabled == null && config.isAuditManagerEnabled());
 
         if (auditManagerEnabledFlag) {
             LOG.info("Creating AWS Audit Manager assessments for profile: " + security);
@@ -150,9 +149,8 @@ public class ComplianceFactory extends BaseFactory {
 
         // Check if AWS Config should be enabled (deployment override takes precedence over profile default)
         // Config infrastructure creation happens AFTER Audit Manager setup to fail fast on configuration errors
-        boolean configEnabled = (awsConfigEnabled != null)
-            ? awsConfigEnabled
-            : config.isAwsConfigEnabled();
+        boolean configEnabled = Boolean.TRUE.equals(awsConfigEnabled)
+            || (awsConfigEnabled == null && config.isAwsConfigEnabled());
 
         if (configEnabled) {
             LOG.info("Creating AWS Config infrastructure and rules for profile: " + security);
@@ -162,9 +160,8 @@ public class ComplianceFactory extends BaseFactory {
 
             // Check if we should create Config infrastructure (Recorder + Delivery Channel)
             // These are account-level singleton resources - only ONE per region per account allowed
-            boolean shouldCreateInfra = (createConfigInfrastructure != null)
-                ? createConfigInfrastructure
-                : !configInfraExists;  // Auto-skip if already exists
+            boolean shouldCreateInfra = Boolean.TRUE.equals(createConfigInfrastructure)
+                || (createConfigInfrastructure == null && !configInfraExists);  // Auto-skip if already exists
 
             if (configInfraExists && shouldCreateInfra) {
                 LOG.warning("Config infrastructure already exists but createConfigInfrastructure=true");
@@ -211,8 +208,6 @@ public class ComplianceFactory extends BaseFactory {
      * When a framework is removed, its condition becomes false and CloudFormation deletes those rules.
      */
     private void createFrameworkConditions() {
-        software.amazon.awscdk.Stack stack = software.amazon.awscdk.Stack.of(this);
-
         List<String> frameworks = determineFrameworks();
 
         LOG.info("Creating CloudFormation conditions for frameworks: " + String.join(", ", frameworks));
@@ -224,25 +219,25 @@ public class ComplianceFactory extends BaseFactory {
 
         // Create condition for PCI-DSS
         boolean enablePciDss = normalizedFrameworks.contains("PCIDSS");
-        pciDssCondition = CfnCondition.Builder.create(stack, "EnablePciDssRules")
+        pciDssCondition = CfnCondition.Builder.create(this, "EnablePciDssRules")
                 .expression(Fn.conditionEquals(enablePciDss ? "true" : "false", "true"))
                 .build();
 
         // Create condition for SOC 2
         boolean enableSoc2 = normalizedFrameworks.contains("SOC2");
-        soc2Condition = CfnCondition.Builder.create(stack, "EnableSoc2Rules")
+        soc2Condition = CfnCondition.Builder.create(this, "EnableSoc2Rules")
                 .expression(Fn.conditionEquals(enableSoc2 ? "true" : "false", "true"))
                 .build();
 
         // Create condition for HIPAA
         boolean enableHipaa = normalizedFrameworks.contains("HIPAA");
-        hipaaCondition = CfnCondition.Builder.create(stack, "EnableHipaaRules")
+        hipaaCondition = CfnCondition.Builder.create(this, "EnableHipaaRules")
                 .expression(Fn.conditionEquals(enableHipaa ? "true" : "false", "true"))
                 .build();
 
         // Create condition for GDPR
         boolean enableGdpr = normalizedFrameworks.contains("GDPR");
-        gdprCondition = CfnCondition.Builder.create(stack, "EnableGdprRules")
+        gdprCondition = CfnCondition.Builder.create(this, "EnableGdprRules")
                 .expression(Fn.conditionEquals(enableGdpr ? "true" : "false", "true"))
                 .build();
 
@@ -298,11 +293,12 @@ public class ComplianceFactory extends BaseFactory {
         this.trail = trail;
         this.trailBucket = trailBucket;
 
-        // Set removal policy to match bucket retention behavior
-        trail.applyRemovalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY);
+        // CloudTrail trail can be safely deleted - all audit logs are stored in the S3 bucket
+        // The S3 bucket has its own RETAIN policy to preserve the actual log data
+        trail.applyRemovalPolicy(RemovalPolicy.DESTROY);
 
         LOG.info("CloudTrail created: " + trail.getTrailArn());
-        LOG.info("CloudTrail removal policy: " + (security == SecurityProfile.PRODUCTION ? "RETAIN (production)" : "DESTROY (non-production)"));
+        LOG.info("CloudTrail removal policy: DESTROY (logs retained in S3 bucket)");
         LOG.info("CloudTrail name: " + trailName + " (reusable across multiple stacks in this region)");
 
         // Store CloudTrail ARN in SSM for future reference (stack-specific)
@@ -441,9 +437,6 @@ public class ComplianceFactory extends BaseFactory {
      * @return ConfigInfrastructure containing recorder and starter resource for rule dependencies
      */
     private ConfigInfrastructure createConfigInfrastructure() {
-        // Get stack reference for ARN construction
-        software.amazon.awscdk.Stack stack = software.amazon.awscdk.Stack.of(this);
-
         // Use fixed names (not stack-specific) since these are account-level resources
         // AWS Config only allows 1 recorder and 1 delivery channel per region per account
         String recorderName = "cloudforge-config-recorder";
@@ -459,8 +452,10 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("AWS Config bucket ARN will be tracked in SSM Parameter Store");
 
+        // Create IAM role for AWS Config with explicit trust policy
         Role configRole = Role.Builder.create(this, "ConfigRole")
                 .assumedBy(ServicePrincipal.Builder.create("config.amazonaws.com").build())
+                .description("AWS Config service role for compliance monitoring and rule evaluation")
                 .managedPolicies(List.of(
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AWS_ConfigRole"),
                         ManagedPolicy.fromAwsManagedPolicyName("SecurityAudit")  // Required for Security Hub evaluation
@@ -513,6 +508,9 @@ public class ComplianceFactory extends BaseFactory {
 
         configBucket.grantWrite(configRole);
 
+        // RETAIN the Config role - it's referenced by the retained recorder/delivery channel
+        configRole.applyRemovalPolicy(RemovalPolicy.RETAIN);
+
         CfnConfigurationRecorder recorder = CfnConfigurationRecorder.Builder.create(this, "ConfigRecorder")
                 .name(recorderName)
                 .roleArn(configRole.getRoleArn())
@@ -544,12 +542,12 @@ public class ComplianceFactory extends BaseFactory {
 
         // Store Config Recorder and Delivery Channel ARNs in SSM for compliance tracking
         // These are ALWAYS tracked (not just PRODUCTION) because they're account-level singletons
-        String recorderArn = stack.formatArn(software.amazon.awscdk.ArnComponents.builder()
+        String recorderArn = software.amazon.awscdk.Stack.of(this).formatArn(software.amazon.awscdk.ArnComponents.builder()
                 .service("config")
                 .resource("config-recorder")
                 .resourceName(recorderName)
                 .build());
-        String channelArn = stack.formatArn(software.amazon.awscdk.ArnComponents.builder()
+        String channelArn = software.amazon.awscdk.Stack.of(this).formatArn(software.amazon.awscdk.ArnComponents.builder()
                 .service("config")
                 .resource("delivery-channel")
                 .resourceName(channelName)
@@ -740,7 +738,10 @@ public class ComplianceFactory extends BaseFactory {
         addConfigRuleDependencies(versioningRule, recorder, starterResource);
 
         // Add automatic remediation if enabled
-        if (Boolean.TRUE.equals(enableS3VersioningRemediation)) {
+        boolean shouldEnableS3VersioningRemediation = Boolean.TRUE.equals(enableS3VersioningRemediation)
+            || (enableS3VersioningRemediation == null && config.isS3VersioningRemediationEnabled());
+
+        if (shouldEnableS3VersioningRemediation) {
             createS3VersioningRemediation(versioningRule);
         }
     }
@@ -1055,6 +1056,12 @@ public class ComplianceFactory extends BaseFactory {
                 ))
                 .build();
 
+        // RETAIN the remediation role when CloudTrail is retained (production)
+        // CloudTrail uses this role for auto-remediation of bucket access issues
+        ssmAutomationRole.applyRemovalPolicy(
+            security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY
+        );
+
         // Create custom SSM Automation document for CloudTrail bucket policy fix
         software.amazon.awscdk.services.ssm.CfnDocument cloudTrailFixDocument =
             software.amazon.awscdk.services.ssm.CfnDocument.Builder.create(this, "CloudTrailBucketPolicyFixDocument")
@@ -1166,7 +1173,10 @@ public class ComplianceFactory extends BaseFactory {
         addConfigRuleDependencies(cloudTrailRule, recorder, starterResource);
 
         // Add auto-remediation for CloudTrail bucket access errors if enabled
-        if (enableCloudTrailBucketAccessRemediation != null && enableCloudTrailBucketAccessRemediation) {
+        boolean shouldEnableCloudTrailBucketAccessRemediation = Boolean.TRUE.equals(enableCloudTrailBucketAccessRemediation)
+            || (enableCloudTrailBucketAccessRemediation == null && config.isCloudTrailBucketAccessRemediationEnabled());
+
+        if (shouldEnableCloudTrailBucketAccessRemediation) {
             addCloudTrailBucketAccessRemediation(cloudTrailRule);
         }
 
@@ -1276,7 +1286,10 @@ public class ComplianceFactory extends BaseFactory {
                 .build();
 
         // Add auto-remediation for CloudTrail bucket access errors if enabled
-        if (enableCloudTrailBucketAccessRemediation != null && enableCloudTrailBucketAccessRemediation) {
+        boolean shouldEnableCloudTrailBucketAccessRemediation = Boolean.TRUE.equals(enableCloudTrailBucketAccessRemediation)
+            || (enableCloudTrailBucketAccessRemediation == null && config.isCloudTrailBucketAccessRemediationEnabled());
+
+        if (shouldEnableCloudTrailBucketAccessRemediation) {
             addCloudTrailBucketAccessRemediation(cloudTrailRule);
         }
 
@@ -2192,9 +2205,6 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("Creating " + frameworks.size() + " assessment(s): " + String.join(", ", frameworks));
 
-        // Get stack reference for lazy evaluation
-        software.amazon.awscdk.Stack stack = software.amazon.awscdk.Stack.of(this);
-
         // Generate shortId for assessment names (assessments are stack-specific)
         String shortId = Integer.toHexString(stackName.hashCode());
 
@@ -2330,7 +2340,7 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("Created shared Audit Manager role and bucket with comprehensive permissions");
 
         // Get account ID for assessments
-        String accountId = stack.getAccount();
+        String accountId = software.amazon.awscdk.Stack.of(this).getAccount();
 
         // Create one assessment per framework
         int assessmentCount = 0;

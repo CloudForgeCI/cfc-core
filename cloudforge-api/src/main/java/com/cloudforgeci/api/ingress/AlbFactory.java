@@ -106,12 +106,8 @@ public class AlbFactory extends BaseFactory {
     private ApplicationLoadBalancer createLoadBalancer(SecurityGroup albSg) {
         // Enable access logging for compliance if configured
         if (Boolean.TRUE.equals(albAccessLogging)) {
-            // Get region from deployment context or stack
-            String tempRegion = region;
-            if (tempRegion == null || tempRegion.isEmpty()) {
-                tempRegion = Stack.of(this).getRegion();
-            }
-            final String effectiveRegion = tempRegion; // Make final for use in lambda
+            // Get region from deployment context
+            final String effectiveRegion = (region != null && !region.isEmpty()) ? region : "us-east-1";
 
             // Validate required fields for ALB access logging
             String validationError = validateLoggingPrerequisites(effectiveRegion, stackName);
@@ -120,8 +116,8 @@ public class AlbFactory extends BaseFactory {
                 return createAlbWithoutLogging(albSg);
             }
 
-            // Get stack reference for lazy evaluation
-            Stack stack = Stack.of(this);
+            // Get stack account for bucket naming (captured in lambda)
+            final String accountId = Stack.of(this).getAccount();
 
             // Use Lazy.uncachedString() to defer bucket name construction until synthesis time
             String bucketName = Lazy.uncachedString(
@@ -129,7 +125,7 @@ public class AlbFactory extends BaseFactory {
                         @Override
                         public String produce(IResolveContext context) {
                             // STACK-SPECIFIC bucket name to avoid conflicts between stacks
-                            return (stackName + "-alb-logs-" + stack.getAccount() + "-" + effectiveRegion).toLowerCase();
+                            return (stackName + "-alb-logs-" + accountId + "-" + effectiveRegion).toLowerCase();
                         }
                     },
                     LazyStringValueOptions.builder()

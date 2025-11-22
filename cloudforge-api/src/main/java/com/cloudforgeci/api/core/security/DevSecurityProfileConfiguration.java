@@ -202,4 +202,77 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     public int getMaxInstanceCount() {
         return 2; // Limited scaling for dev
     }
+
+    // AWS Config Remediation Settings - All disabled for dev flexibility
+    @Override
+    public boolean isS3VersioningRemediationEnabled() {
+        // Disabled for dev - developers need flexibility to manage buckets
+        return false;
+    }
+
+    @Override
+    public boolean isCloudTrailBucketAccessRemediationEnabled() {
+        // Disabled for dev - no CloudTrail in dev by default
+        return false;
+    }
+
+    @Override
+    public boolean isEbsEncryptionRemediationEnabled() {
+        // Disabled for dev - allow flexibility for testing
+        return false;
+    }
+
+    @Override
+    public boolean isGuardDutyRemediationEnabled() {
+        // Disabled for dev - no GuardDuty in dev by default
+        return false;
+    }
+
+    @Override
+    public boolean isVpcDefaultSgRemediationEnabled() {
+        // Disabled for dev - developers may use default SG for testing
+        return false;
+    }
+
+    @Override
+    public boolean isElbDeletionProtectionRemediationEnabled() {
+        // Disabled for dev - allow quick iteration and deletion
+        return false;
+    }
+
+    @Override
+    public boolean isKmsKeyRotationRemediationEnabled() {
+        // Disabled for dev - not needed in development environment
+        return false;
+    }
+
+    @Override
+    public boolean isSshRemovalRemediationEnabled() {
+        // Disabled for dev - developers may need SSH access for debugging
+        return false;
+    }
+
+    @Override
+    public boolean isAccessKeyRotationRemediationEnabled() {
+        // Disabled for dev - developers manage their own access keys
+        return false;
+    }
+
+    @Override
+    public boolean isDynamoDbPitrRemediationEnabled() {
+        // Disabled for dev - point-in-time recovery not needed for dev data
+        return false;
+    }
+
+    @Override
+    public boolean isRdsMultiAzRemediationEnabled() {
+        // Disabled for dev - single AZ is sufficient for development
+        return false;
+    }
+
+    @Override
+    public boolean isRdsEncryptionRemediationEnabled() {
+        // Disabled for dev - encryption not required for development data
+        return false;
+    }
 }

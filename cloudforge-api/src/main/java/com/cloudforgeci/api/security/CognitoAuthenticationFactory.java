@@ -311,10 +311,16 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                                     .build()
                     ))
                     .build();
+
+            // RETAIN the SMS role when User Pool is retained (production)
+            // Without this, stack deletion removes the role but leaves the User Pool orphaned
+            smsRole.applyRemovalPolicy(userPoolRemovalPolicy);
+
             LOG.info("Created SNS role for SMS MFA with least-privilege permissions: " + smsRole.getRoleArn());
             LOG.info("  - External ID: [REDACTED]");
             LOG.info("  - SNS Region: " + snsRegion);
             LOG.info("  - Permissions: sns:Publish only (least privilege)");
+            LOG.info("  - Removal policy: " + userPoolRemovalPolicy);
         }
 
         // Create User Pool with strong security configuration

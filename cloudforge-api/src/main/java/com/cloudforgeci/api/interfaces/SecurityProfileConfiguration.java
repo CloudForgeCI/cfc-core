@@ -176,4 +176,82 @@ public interface SecurityProfileConfiguration {
      * Get the maximum number of instances for auto-scaling.
      */
     int getMaxInstanceCount();
+
+    // AWS Config Remediation Settings
+    /**
+     * Whether S3 bucket versioning remediation should be enabled.
+     * Automatically enables versioning on non-compliant S3 buckets.
+     * WARNING: Has cost implications - versioned objects consume additional storage.
+     */
+    boolean isS3VersioningRemediationEnabled();
+
+    /**
+     * Whether CloudTrail bucket access remediation should be enabled.
+     * Automatically fixes CloudTrail S3 bucket policy when CloudTrail can't write logs.
+     */
+    boolean isCloudTrailBucketAccessRemediationEnabled();
+
+    /**
+     * Whether EBS encryption remediation should be enabled.
+     * Automatically enables EBS encryption by default for the account.
+     */
+    boolean isEbsEncryptionRemediationEnabled();
+
+    /**
+     * Whether GuardDuty remediation should be enabled.
+     * Automatically enables GuardDuty threat detection if not already enabled.
+     */
+    boolean isGuardDutyRemediationEnabled();
+
+    /**
+     * Whether VPC default security group remediation should be enabled.
+     * Automatically removes all rules from the default security group.
+     */
+    boolean isVpcDefaultSgRemediationEnabled();
+
+    /**
+     * Whether ELB deletion protection remediation should be enabled.
+     * Automatically enables deletion protection on load balancers.
+     */
+    boolean isElbDeletionProtectionRemediationEnabled();
+
+    /**
+     * Whether KMS key rotation remediation should be enabled.
+     * Automatically enables automatic key rotation for customer-managed KMS keys.
+     */
+    boolean isKmsKeyRotationRemediationEnabled();
+
+    /**
+     * Whether SSH removal remediation should be enabled.
+     * Automatically removes public SSH access from security groups.
+     * WARNING: Could break access if SSH is required.
+     */
+    boolean isSshRemovalRemediationEnabled();
+
+    /**
+     * Whether access key rotation remediation should be enabled.
+     * Automatically revokes IAM access keys that are 90+ days old.
+     * WARNING: Requires user notification workflow.
+     */
+    boolean isAccessKeyRotationRemediationEnabled();
+
+    /**
+     * Whether DynamoDB point-in-time recovery remediation should be enabled.
+     * Automatically enables PITR for DynamoDB tables.
+     */
+    boolean isDynamoDbPitrRemediationEnabled();
+
+    /**
+     * Whether RDS Multi-AZ remediation should be enabled.
+     * Automatically enables Multi-AZ for RDS instances.
+     * WARNING: Requires maintenance window and causes brief downtime.
+     */
+    boolean isRdsMultiAzRemediationEnabled();
+
+    /**
+     * Whether RDS encryption remediation should be enabled.
+     * Automatically creates encrypted snapshot and replaces unencrypted RDS instances.
+     * WARNING: Complex operation requiring snapshot recreation.
+     */
+    boolean isRdsEncryptionRemediationEnabled();
 }
