@@ -2,7 +2,12 @@ package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforgeci.api.interfaces.SecurityProfile;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.customresources.AwsCustomResource;
+import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
+import software.amazon.awscdk.customresources.AwsSdkCall;
+import software.amazon.awscdk.customresources.PhysicalResourceId;
 import software.amazon.awscdk.services.cognito.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.actions.*;
@@ -471,6 +476,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         ctx.cognitoUserPoolDomain.set(userPoolDomain);
         LOG.info("Exported Cognito CDK objects to SystemContext for native ALB Cognito authentication");
 
+        // Store User Pool ARN in SSM Parameter Store for compliance tracking (PRODUCTION only)
+        storeUserPoolArnInSSM(userPool);
+
         LOG.info("Cognito User Pool setup complete");
     }
 
@@ -784,5 +792,61 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 }
             });
         });
+    }
+
+    /**
+     * Store Cognito User Pool ARN in SSM Parameter Store (deployment-time).
+     *
+     * This helper method stores the User Pool ARN in SSM for compliance tracking.
+     * The parameter persists after stack deletion for audit trail purposes.
+     *
+     * Only active in PRODUCTION mode.
+     *
+     * @param userPool The UserPool to track
+     */
+    private void storeUserPoolArnInSSM(UserPool userPool) {
+        // Check if we have access to security profile via context
+        var securityProfileConfig = ctx.securityProfileConfig.get().orElse(null);
+        if (securityProfileConfig == null || securityProfileConfig.getSecurityProfile() != SecurityProfile.PRODUCTION) {
+            LOG.fine("Non-production mode: Skipping SSM tracking for User Pool");
+            return;
+        }
+
+        if (region == null || region.isEmpty() || region.contains("$")) {
+            LOG.warning("Region not available - cannot store User Pool ARN in SSM");
+            return;
+        }
+
+        LOG.info("Storing User Pool ARN in SSM Parameter Store for compliance tracking");
+
+        String ssmParameterName = "/cloudforge/shared/" + region + "/stack/" + this.stackName + "/cognito/user-pool-arn";
+
+        AwsSdkCall putParameterCall = AwsSdkCall.builder()
+                .service("SSM")
+                .action("putParameter")
+                .parameters(java.util.Map.of(
+                        "Name", ssmParameterName,
+                        "Value", userPool.getUserPoolArn(),
+                        "Type", "String",
+                        "Description", "CloudForge retained Cognito User Pool ARN for region " + region,
+                        "Overwrite", true
+                ))
+                .physicalResourceId(PhysicalResourceId.of("UserPoolArn-SSMWriter"))
+                .region(region)
+                .build();
+
+        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, "UserPoolArnSSMWriter")
+                .onCreate(putParameterCall)
+                .onUpdate(putParameterCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
+                                .resources(List.of("*"))
+                                .build()
+                ))
+                .build();
+
+        ssmWriter.getNode().addDependency(userPool);
+
+        LOG.info("User Pool ARN will be tracked in SSM: " + ssmParameterName);
     }
 }

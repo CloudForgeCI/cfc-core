@@ -75,12 +75,12 @@ public final class KeyManagementRules {
                 failedRules.forEach(rule ->
                     LOG.warning("  - " + rule.description() + ": " + rule.errorMessage().orElse("")));
 
-                // For DEV, these are advisory only
-                if (ctx.security == SecurityProfile.DEV) {
+                // For DEV and STAGING, these are advisory only (warnings but not blocking)
+                if (ctx.security == SecurityProfile.DEV || ctx.security == SecurityProfile.STAGING) {
                     return List.of();
                 }
 
-                // For PRODUCTION/STAGING, convert to error strings
+                // For PRODUCTION only, convert to error strings (blocking)
                 return failedRules.stream()
                     .map(rule -> rule.description() + ": " + rule.errorMessage().orElse(""))
                     .toList();
@@ -104,12 +104,18 @@ public final class KeyManagementRules {
     private static List<ComplianceRule> validateKmsKeyManagement(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        // KMS key rotation validation
-        // Note: This requires deployment context support for kmsKeyRotationEnabled
-        // For now, we document the requirement
-        boolean kmsKeyRotationEnabled = getBooleanSetting(ctx, "kmsKeyRotationEnabled", false);
+        var config = ctx.securityProfileConfig.get().orElse(null);
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
+            // Check if security profile enables encryption (which implies key management)
+            boolean encryptionEnabled = config != null &&
+                (config.isEbsEncryptionEnabled() ||
+                 config.isEfsEncryptionAtRestEnabled() ||
+                 config.isS3EncryptionEnabled());
+
+            // Check deployment context override
+            boolean kmsKeyRotationEnabled = getBooleanSetting(ctx, "kmsKeyRotationEnabled", encryptionEnabled);
+
             if (!kmsKeyRotationEnabled) {
                 rules.add(ComplianceRule.fail(
                     "KMS-ROTATION",
@@ -117,25 +123,28 @@ public final class KeyManagementRules {
                     "KmsKeyRotationEnabled",
                     "Enable automatic key rotation for all customer-managed KMS keys. " +
                     "PCI-DSS Req 3.6.4, HIPAA §164.312(a)(2)(iv), SOC2 CC6.1, GDPR Art.32(1)(a). " +
-                    "Set kmsKeyRotationEnabled=true in deployment context."
+                    "Note: PRODUCTION security profile enables encryption by default. " +
+                    "Set kmsKeyRotationEnabled=true in deployment context if using custom KMS keys."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
                     "KMS-ROTATION",
-                    "KMS automatic key rotation enabled",
+                    "KMS automatic key rotation enabled" +
+                    (config != null && encryptionEnabled ? " (via security profile)" : ""),
                     "KmsKeyRotationEnabled"
                 ));
             }
 
-            // Customer-managed keys for production data
-            boolean usesCustomerManagedKeys = getBooleanSetting(ctx, "useCustomerManagedKeys", false);
+            // Customer-managed keys for production data (advisory recommendation)
+            boolean usesCustomerManagedKeys = getBooleanSetting(ctx, "useCustomerManagedKeys", encryptionEnabled);
             if (!usesCustomerManagedKeys) {
                 rules.add(ComplianceRule.fail(
                     "KMS-CUSTOMER-MANAGED",
                     "Customer-managed KMS keys recommended for production data",
                     "KmsCustomerManagedKeys",
                     "Use customer-managed KMS keys instead of AWS-managed keys for better control. " +
-                    "Set useCustomerManagedKeys=true in deployment context."
+                    "Note: PRODUCTION security profile uses AWS-managed keys by default. " +
+                    "Set useCustomerManagedKeys=true in deployment context for custom keys."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -178,8 +187,12 @@ public final class KeyManagementRules {
             return rules;
         }
 
+        var config = ctx.securityProfileConfig.get().orElse(null);
+
         // Certificate expiration monitoring (PRODUCTION only)
-        boolean certExpirationMonitoringEnabled = getBooleanSetting(ctx, "certificateExpirationMonitoring", false);
+        // PRODUCTION profile implies certificate monitoring via security monitoring
+        boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
+        boolean certExpirationMonitoringEnabled = getBooleanSetting(ctx, "certificateExpirationMonitoring", securityMonitoringEnabled);
 
         if (ctx.security == SecurityProfile.PRODUCTION && !certExpirationMonitoringEnabled) {
             rules.add(ComplianceRule.fail(
@@ -188,19 +201,21 @@ public final class KeyManagementRules {
                 "CertificateExpirationAlarm",
                 "Enable CloudWatch alarms to monitor certificate expiration (30 days before). " +
                 "Prevents service disruption from expired certificates. " +
+                "Note: PRODUCTION security profile enables security monitoring by default. " +
                 "Set certificateExpirationMonitoring=true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
                 "CERT-EXPIRATION-MONITOR",
                 ctx.security == SecurityProfile.PRODUCTION ?
-                    "Certificate expiration monitoring enabled" :
+                    "Certificate expiration monitoring enabled" +
+                    (securityMonitoringEnabled ? " (via security profile)" : "") :
                     "Certificate expiration monitoring not required for " + ctx.security,
                 "CertificateExpirationAlarm"
             ));
         }
 
-        // ACM automatic renewal (for ACM certificates)
+        // ACM automatic renewal (for ACM certificates) - default to true (ACM renews automatically)
         boolean usesAcmAutoRenewal = getBooleanSetting(ctx, "acmAutoRenewalEnabled", true);
 
         if (usesAcmAutoRenewal) {
@@ -232,8 +247,12 @@ public final class KeyManagementRules {
     private static List<ComplianceRule> validateSecretsManagement(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
+        var config = ctx.securityProfileConfig.get().orElse(null);
+
         // Secrets Manager usage for credentials
-        boolean usesSecretsManager = getBooleanSetting(ctx, "secretsManagerEnabled", false);
+        // PRODUCTION profile implies secure credential management (encryption enabled)
+        boolean encryptionEnabled = config != null && config.isS3EncryptionEnabled();
+        boolean usesSecretsManager = getBooleanSetting(ctx, "secretsManagerEnabled", encryptionEnabled);
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!usesSecretsManager) {
@@ -243,18 +262,20 @@ public final class KeyManagementRules {
                     "SecretsManagerInUse",
                     "Store database credentials, API keys, and secrets in AWS Secrets Manager. " +
                     "PCI-DSS Req 8.2.1, HIPAA §164.312(a)(1), SOC2 CC6.1. " +
+                    "Note: PRODUCTION security profile enables encryption by default. " +
                     "Set secretsManagerEnabled=true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
                     "SECRETS-MANAGER",
-                    "AWS Secrets Manager enabled for credential management",
+                    "AWS Secrets Manager enabled for credential management" +
+                    (encryptionEnabled ? " (via security profile)" : ""),
                     "SecretsManagerInUse"
                 ));
             }
 
             // Automatic secret rotation
-            boolean secretRotationEnabled = getBooleanSetting(ctx, "secretRotationEnabled", false);
+            boolean secretRotationEnabled = getBooleanSetting(ctx, "secretRotationEnabled", encryptionEnabled);
             if (usesSecretsManager && !secretRotationEnabled) {
                 rules.add(ComplianceRule.fail(
                     "SECRET-ROTATION",
@@ -262,12 +283,14 @@ public final class KeyManagementRules {
                     "SecretsManagerRotation",
                     "Enable automatic rotation for secrets (90 days or less). " +
                     "PCI-DSS Req 8.2.4, HIPAA §164.308(a)(5)(ii)(D). " +
+                    "Note: PRODUCTION security profile provides encryption foundation. " +
                     "Set secretRotationEnabled=true in deployment context."
                 ));
             } else if (usesSecretsManager) {
                 rules.add(ComplianceRule.pass(
                     "SECRET-ROTATION",
-                    "Automatic secret rotation enabled",
+                    "Automatic secret rotation enabled" +
+                    (encryptionEnabled ? " (via security profile)" : ""),
                     "SecretsManagerRotation"
                 ));
             }

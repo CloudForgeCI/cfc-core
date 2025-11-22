@@ -81,16 +81,11 @@ public final class HipaaOrganizationalRules {
                 .toList();
 
             if (!failedRules.isEmpty()) {
-                LOG.warning("HIPAA Organizational validation found " + failedRules.size() + " recommendations");
+                LOG.warning("HIPAA Organizational validation found " + failedRules.size() + " issues");
                 failedRules.forEach(rule ->
-                    LOG.warning("  - " + rule.description() + ": " + rule.errorMessage().orElse("")));
+                    LOG.warning("  - [ADVISORY] " + rule.description() + ": " + rule.errorMessage().orElse("")));
 
-                // These are always advisory - cannot fully automate organizational controls
-                if (ctx.security == SecurityProfile.DEV) {
-                    return List.of();
-                }
-
-                // For production, convert to warnings (not blocking)
+                // Return advisory messages - organizational controls require manual procedures
                 return failedRules.stream()
                     .map(rule -> "[ADVISORY] " + rule.description() + ": " + rule.errorMessage().orElse(""))
                     .toList();

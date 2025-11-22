@@ -2,13 +2,9 @@ package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import software.amazon.awscdk.customresources.AwsCustomResource;
-import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
-import software.amazon.awscdk.customresources.AwsSdkCall;
-import software.amazon.awscdk.customresources.PhysicalResourceId;
+import software.amazon.awscdk.services.guardduty.CfnDetector;
 import software.constructs.Construct;
 
-import java.util.List;
 import java.util.logging.Logger;
 
 /**
@@ -27,8 +23,14 @@ public class GuardDutyFactory extends BaseFactory {
     @DeploymentContext("region")
     private String region;
 
+    @DeploymentContext("stackName")
+    private String stackName;
+
     @DeploymentContext("guardDutyEnabled")
     private Boolean guardDutyEnabled;
+
+    @DeploymentContext("createGuardDutyDetector")
+    private Boolean createGuardDutyDetector;
 
     public GuardDutyFactory(Construct scope, String id) {
         super(scope, id);
@@ -44,7 +46,7 @@ public class GuardDutyFactory extends BaseFactory {
             LOG.info("GuardDuty setting inherited from security profile: " + guardDutyEnabled);
         }
 
-        if (!Boolean.TRUE.equals(guardDutyEnabled)) {
+        if (Boolean.FALSE.equals(guardDutyEnabled)) {
             LOG.info("GuardDuty is disabled");
             LOG.info("  Note: GuardDuty is required for PCI-DSS Req 11.4 (threat detection)");
             LOG.info("  Enable by setting guardDutyEnabled=true or using PRODUCTION security profile");
@@ -71,45 +73,23 @@ public class GuardDutyFactory extends BaseFactory {
     }
 
     private void enableGuardDuty() {
-        // Create detector (GuardDuty enablement) using custom resource
-        // This is idempotent - if already enabled, CreateDetector returns the existing detector ID
+        // GuardDuty detector is account-region singleton - only one per account per region
+        // Only create if explicitly requested via createGuardDutyDetector flag
 
-        // CreateDetector API call - creates new detector or returns existing one
-        AwsSdkCall createDetector = AwsSdkCall.builder()
-                .service("GuardDuty")
-                .action("createDetector")
-                .parameters(java.util.Map.of(
-                        "Enable", true,
-                        "FindingPublishingFrequency", "FIFTEEN_MINUTES"
-                ))
-                .physicalResourceId(PhysicalResourceId.of("guardduty-detector-" + region))
-                .region(region)
-                .build();
+        if (Boolean.TRUE.equals(createGuardDutyDetector)) {
+            CfnDetector.Builder.create(this, "GuardDutyDetector")
+                    .enable(true)
+                    .findingPublishingFrequency("FIFTEEN_MINUTES")
+                    .build();
 
-        // UpdateDetector API call for updates (keeps detector enabled)
-        // Note: Update not needed for GuardDuty - createDetector is idempotent
-        AwsSdkCall updateDetector = AwsSdkCall.builder()
-                .service("GuardDuty")
-                .action("createDetector")
-                .parameters(java.util.Map.of(
-                        "Enable", true,
-                        "FindingPublishingFrequency", "FIFTEEN_MINUTES"
-                ))
-                .physicalResourceId(PhysicalResourceId.of("guardduty-detector-" + region))
-                .region(region)
-                .build();
-
-        // Create custom resource to enable GuardDuty
-        AwsCustomResource.Builder.create(this, "GuardDutyDetector")
-                .onCreate(createDetector)  // Create or retrieve existing detector
-                .onUpdate(updateDetector)  // Update detector settings
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))  // GuardDuty requires wildcard for create/update operations
-                                .build()
-                ))
-                .build();
-
-        LOG.fine("GuardDuty detector custom resource created");
+            LOG.info("GuardDuty detector creation enabled via createGuardDutyDetector=true");
+            LOG.info("  Note: If detector already exists in account-region, deployment will fail");
+            LOG.info("  This is expected - only set createGuardDutyDetector=true for first deployment in account-region");
+        } else {
+            LOG.info("GuardDuty detector creation skipped (createGuardDutyDetector not set)");
+            LOG.info("  Validation will check for existing GuardDuty detector");
+            LOG.info("  To create detector: set createGuardDutyDetector=true in deployment context");
+            LOG.info("  Or enable manually: aws guardduty create-detector --enable --region " + region);
+        }
     }
 }

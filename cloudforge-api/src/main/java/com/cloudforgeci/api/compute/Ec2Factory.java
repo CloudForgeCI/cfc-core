@@ -300,7 +300,7 @@ public class Ec2Factory extends BaseFactory {
 
     // Determine EBS retention policy based on retainStorage configuration
     // Root volume is always deleted (system disk), but data volume can be retained
-    boolean deleteDataVolume = !Boolean.TRUE.equals(retainStorage);
+    boolean deleteDataVolume = Boolean.FALSE.equals(retainStorage) || retainStorage == null;
 
     if (Boolean.TRUE.equals(retainStorage)) {
       LOG.info("EBS data volumes will be RETAINED after instance termination (retainStorage=true)");

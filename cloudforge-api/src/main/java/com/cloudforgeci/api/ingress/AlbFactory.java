@@ -5,6 +5,10 @@ import com.cloudforgeci.api.core.annotation.DeploymentContext;
 import com.cloudforgeci.api.core.annotation.SystemContext;
 import com.cloudforgeci.api.interfaces.RuntimeType;
 import software.amazon.awscdk.*;
+import software.amazon.awscdk.customresources.AwsCustomResource;
+import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
+import software.amazon.awscdk.customresources.AwsSdkCall;
+import software.amazon.awscdk.customresources.PhysicalResourceId;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
@@ -142,30 +146,13 @@ public class AlbFactory extends BaseFactory {
                     RemovalPolicy.RETAIN :
                     RemovalPolicy.DESTROY;
 
-            // Create S3 bucket for ALB logs (stack-specific to avoid multi-stack conflicts)
-            var logBucket = Bucket.Builder.create(this, "AlbLogsBucket")
-                    .bucketName(bucketName)
-                    .encryption(BucketEncryption.S3_MANAGED)
-                    .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
-                    .removalPolicy(removalPolicy)
-                    .autoDeleteObjects(!isProduction)
-                    .versioned(true)  // Enable versioning for compliance (SOC2/PCI-DSS/HIPAA)
-                    .lifecycleRules(List.of(
-                        LifecycleRule.builder()
-                            .transitions(List.of(
-                                Transition.builder()
-                                    .storageClass(StorageClass.GLACIER)
-                                    .transitionAfter(Duration.days(90))
-                                    .build(),
-                                Transition.builder()
-                                    .storageClass(StorageClass.DEEP_ARCHIVE)
-                                    .transitionAfter(Duration.days(365))
-                                    .build()
-                            ))
-                            .expiration(Duration.days(2190))
-                            .build()
-                    ))
-                    .build();
+            // Get or create ALB logs bucket with SSM tracking (PRODUCTION only)
+            IBucket logBucket = getOrCreateAlbLogsBucketWithSSM(
+                bucketName,
+                removalPolicy,
+                isProduction,
+                effectiveRegion
+            );
 
             var alb = ApplicationLoadBalancer.Builder.create(this, "JenkinsAlb")
                     .vpc(vpc)
@@ -228,6 +215,117 @@ public class AlbFactory extends BaseFactory {
      * @param stackName The stack name (must not be null or empty)
      * @return Error message if validation fails, null if validation passes
      */
+    /**
+     * Get or create ALB logs bucket with SSM tracking for PRODUCTION mode.
+     *
+     * For PRODUCTION mode:
+     * - Create bucket WITHOUT explicit name (CloudFormation generates unique name)
+     * - Store ARN in SSM at deployment time for tracking
+     * - This prevents conflicts with retained buckets
+     *
+     * For DEV/STAGING mode:
+     * - Create bucket with explicit name (will be destroyed with stack)
+     */
+    private IBucket getOrCreateAlbLogsBucketWithSSM(String bucketName, RemovalPolicy removalPolicy,
+                                                     boolean isProduction, String region) {
+        if (!isProduction) {
+            // DEV/STAGING: Create bucket without SSM tracking (will be deleted with stack)
+            LOG.info("Non-production mode: Creating ALB logs bucket without SSM tracking");
+            return createAlbLogsBucket(bucketName, removalPolicy, false);
+        }
+
+        // PRODUCTION: Create bucket WITHOUT explicit name and track ARN in SSM
+        LOG.info("Production mode: Creating ALB logs bucket with auto-generated name");
+        LOG.info("  CloudFormation will generate unique bucket name to avoid conflicts");
+
+        // Create bucket WITHOUT specifying bucketName - CloudFormation generates unique name
+        Bucket newBucket = Bucket.Builder.create(this, "AlbLogsBucket")
+                // NO bucketName specified - CloudFormation auto-generates unique name
+                .encryption(BucketEncryption.S3_MANAGED)
+                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                .removalPolicy(removalPolicy)
+                .autoDeleteObjects(false)  // Never auto-delete in PRODUCTION
+                .versioned(true)
+                .lifecycleRules(List.of(
+                    LifecycleRule.builder()
+                        .transitions(List.of(
+                            Transition.builder()
+                                .storageClass(StorageClass.GLACIER)
+                                .transitionAfter(Duration.days(90))
+                                .build(),
+                            Transition.builder()
+                                .storageClass(StorageClass.DEEP_ARCHIVE)
+                                .transitionAfter(Duration.days(365))
+                                .build()
+                        ))
+                        .expiration(Duration.days(2190))
+                        .build()
+                ))
+                .build();
+
+        // Store bucket ARN in SSM at deployment time using Custom Resource (stack-scoped)
+        String ssmParameterName = "/cloudforge/shared/" + region + "/stack/" + this.stackName + "/alb-logs/bucket-arn";
+
+        AwsSdkCall putParameterCall = AwsSdkCall.builder()
+                .service("SSM")
+                .action("putParameter")
+                .parameters(java.util.Map.of(
+                        "Name", ssmParameterName,
+                        "Value", newBucket.getBucketArn(),
+                        "Type", "String",
+                        "Description", "CloudForge retained ALB logs bucket ARN for region " + region,
+                        "Overwrite", true
+                ))
+                .physicalResourceId(PhysicalResourceId.of("AlbLogsBucket-SSMWriter"))
+                .region(region)
+                .build();
+
+        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, "AlbLogsBucketSSMWriter")
+                .onCreate(putParameterCall)
+                .onUpdate(putParameterCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
+                                .resources(List.of("*"))
+                                .build()
+                ))
+                .build();
+
+        ssmWriter.getNode().addDependency(newBucket);
+
+        LOG.info("ALB logs bucket will use CloudFormation-generated unique name");
+        LOG.info("ALB logs bucket ARN will be stored in SSM: " + ssmParameterName);
+        return newBucket;
+    }
+
+    /**
+     * Create ALB logs S3 bucket with compliance-driven lifecycle rules.
+     */
+    private Bucket createAlbLogsBucket(String bucketName, RemovalPolicy removalPolicy, boolean autoDelete) {
+        return Bucket.Builder.create(this, "AlbLogsBucket")
+                .bucketName(bucketName)
+                .encryption(BucketEncryption.S3_MANAGED)
+                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                .removalPolicy(removalPolicy)
+                .autoDeleteObjects(autoDelete)
+                .versioned(true)  // Enable versioning for compliance (SOC2/PCI-DSS/HIPAA)
+                .lifecycleRules(List.of(
+                    LifecycleRule.builder()
+                        .transitions(List.of(
+                            Transition.builder()
+                                .storageClass(StorageClass.GLACIER)
+                                .transitionAfter(Duration.days(90))
+                                .build(),
+                            Transition.builder()
+                                .storageClass(StorageClass.DEEP_ARCHIVE)
+                                .transitionAfter(Duration.days(365))
+                                .build()
+                        ))
+                        .expiration(Duration.days(2190))
+                        .build()
+                ))
+                .build();
+    }
+
     private String validateLoggingPrerequisites(String region, String stackName) {
         if (region == null || region.isEmpty() || region.contains("$")) {
             return "Region is not available. Set 'region' in deployment context or CDK_DEFAULT_REGION environment variable";

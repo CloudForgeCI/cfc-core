@@ -69,16 +69,11 @@ public final class AdvancedMonitoringRules {
                 .toList();
 
             if (!failedRules.isEmpty()) {
-                LOG.warning("Advanced Monitoring validation found " + failedRules.size() + " recommendations");
+                LOG.warning("Advanced Monitoring validation found " + failedRules.size() + " issues");
                 failedRules.forEach(rule ->
                     LOG.warning("  - " + rule.description() + ": " + rule.errorMessage().orElse("")));
 
-                // For DEV, these are advisory only
-                if (ctx.security == SecurityProfile.DEV) {
-                    return List.of();
-                }
-
-                // For PRODUCTION/STAGING, convert to error strings
+                // Return blocking errors for missing advanced monitoring features
                 return failedRules.stream()
                     .map(rule -> rule.description() + ": " + rule.errorMessage().orElse(""))
                     .toList();
@@ -103,7 +98,11 @@ public final class AdvancedMonitoringRules {
     private static List<ComplianceRule> validateSecurityHub(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        boolean securityHubEnabled = getBooleanSetting(ctx, "securityHubEnabled", false);
+        var config = ctx.securityProfileConfig.get().orElse(null);
+
+        // PRODUCTION profile enables security monitoring which includes Security Hub
+        boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
+        boolean securityHubEnabled = getBooleanSetting(ctx, "securityHubEnabled", securityMonitoringEnabled);
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!securityHubEnabled) {
@@ -114,12 +113,14 @@ public final class AdvancedMonitoringRules {
                     "Enable Security Hub for centralized compliance monitoring and reporting. " +
                     "Provides PCI-DSS, CIS AWS Foundations, and AWS Foundational Security Best Practices. " +
                     "PCI-DSS Req 10, 11; HIPAA §164.308(a)(1)(ii)(D); SOC2 CC7.2; GDPR Art.32(1)(d). " +
+                    "Note: PRODUCTION security profile enables security monitoring by default. " +
                     "Set securityHubEnabled=true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
                     "SECURITYHUB-ENABLED",
-                    "AWS Security Hub enabled for compliance dashboard",
+                    "AWS Security Hub enabled for compliance dashboard" +
+                    (securityMonitoringEnabled ? " (via security profile)" : ""),
                     "SecurityHubEnabled"
                 ));
             }
@@ -145,13 +146,14 @@ public final class AdvancedMonitoringRules {
                     ));
                 }
 
-                // Automated response actions
-                boolean securityHubAutoRemediation = getBooleanSetting(ctx, "securityHubAutoRemediation", false);
+                // Automated response actions (advisory only)
+                boolean securityHubAutoRemediation = getBooleanSetting(ctx, "securityHubAutoRemediation", securityMonitoringEnabled);
 
                 if (securityHubAutoRemediation) {
                     rules.add(ComplianceRule.pass(
                         "SECURITYHUB-AUTO-REMEDIATION",
-                        "Security Hub automated remediation enabled"
+                        "Security Hub automated remediation enabled" +
+                        (securityMonitoringEnabled ? " (via security profile)" : "")
                     ));
                 } else {
                     rules.add(ComplianceRule.fail(
@@ -195,7 +197,11 @@ public final class AdvancedMonitoringRules {
     private static List<ComplianceRule> validateInspector(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        boolean inspectorEnabled = getBooleanSetting(ctx, "inspectorEnabled", false);
+        var config = ctx.securityProfileConfig.get().orElse(null);
+
+        // PRODUCTION profile enables security monitoring which includes Inspector
+        boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
+        boolean inspectorEnabled = getBooleanSetting(ctx, "inspectorEnabled", securityMonitoringEnabled);
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!inspectorEnabled) {
@@ -205,12 +211,14 @@ public final class AdvancedMonitoringRules {
                     "InspectorEnabled",
                     "Enable Inspector for automated vulnerability scanning of EC2 instances and containers. " +
                     "PCI-DSS Req 6.2, 11.2; HIPAA §164.308(a)(8); SOC2 CC7.1; GDPR Art.32(1)(d). " +
+                    "Note: PRODUCTION security profile enables security monitoring by default. " +
                     "Set inspectorEnabled=true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
                     "INSPECTOR-ENABLED",
-                    "Amazon Inspector enabled for vulnerability scanning",
+                    "Amazon Inspector enabled for vulnerability scanning" +
+                    (securityMonitoringEnabled ? " (via security profile)" : ""),
                     "InspectorEnabled"
                 ));
             }
@@ -227,13 +235,14 @@ public final class AdvancedMonitoringRules {
                     ));
                 }
 
-                // Continuous scanning
-                boolean inspectorContinuousScanning = getBooleanSetting(ctx, "inspectorContinuousScanning", true);
+                // Continuous scanning (default to true for PRODUCTION)
+                boolean inspectorContinuousScanning = getBooleanSetting(ctx, "inspectorContinuousScanning", securityMonitoringEnabled);
 
                 if (inspectorContinuousScanning) {
                     rules.add(ComplianceRule.pass(
                         "INSPECTOR-CONTINUOUS",
-                        "Inspector continuous scanning enabled"
+                        "Inspector continuous scanning enabled" +
+                        (securityMonitoringEnabled ? " (via security profile)" : "")
                     ));
                 } else {
                     rules.add(ComplianceRule.fail(
@@ -351,8 +360,13 @@ public final class AdvancedMonitoringRules {
     private static List<ComplianceRule> validateCentralizedMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
+        var config = ctx.securityProfileConfig.get().orElse(null);
+
+        // PRODUCTION profile enables security monitoring
+        boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
+
         // CloudWatch dashboard for compliance
-        boolean complianceDashboardEnabled = getBooleanSetting(ctx, "complianceDashboardEnabled", false);
+        boolean complianceDashboardEnabled = getBooleanSetting(ctx, "complianceDashboardEnabled", securityMonitoringEnabled);
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!complianceDashboardEnabled) {
@@ -360,18 +374,20 @@ public final class AdvancedMonitoringRules {
                     "COMPLIANCE-DASHBOARD",
                     "CloudWatch compliance dashboard recommended for production",
                     "Create CloudWatch dashboard to visualize compliance metrics. " +
+                    "Note: PRODUCTION security profile enables security monitoring by default. " +
                     "Set complianceDashboardEnabled=true when dashboard is created."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
                     "COMPLIANCE-DASHBOARD",
-                    "Compliance monitoring dashboard enabled"
+                    "Compliance monitoring dashboard enabled" +
+                    (securityMonitoringEnabled ? " (via security profile)" : "")
                 ));
             }
         }
 
         // Security alerting (SNS topics)
-        boolean securityAlertingEnabled = getBooleanSetting(ctx, "securityAlertingEnabled", false);
+        boolean securityAlertingEnabled = getBooleanSetting(ctx, "securityAlertingEnabled", securityMonitoringEnabled);
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!securityAlertingEnabled) {
@@ -380,12 +396,14 @@ public final class AdvancedMonitoringRules {
                     "Security alerting (SNS) required for production incidents",
                     "Configure SNS topics for security alerts from GuardDuty, Security Hub, Config. " +
                     "PCI-DSS Req 10, 12.10; HIPAA §164.308(a)(6); SOC2 CC7.3. " +
+                    "Note: PRODUCTION security profile enables security monitoring by default. " +
                     "Set securityAlertingEnabled=true when SNS topics are configured."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
                     "SECURITY-ALERTING",
-                    "Security alerting (SNS) enabled"
+                    "Security alerting (SNS) enabled" +
+                    (securityMonitoringEnabled ? " (via security profile)" : "")
                 ));
             }
         }

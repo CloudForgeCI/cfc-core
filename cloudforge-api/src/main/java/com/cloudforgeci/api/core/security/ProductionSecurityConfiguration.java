@@ -193,7 +193,11 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         com.cloudforgeci.api.observability.ComplianceFactory complianceFactory =
             new com.cloudforgeci.api.observability.ComplianceFactory(c, "ProductionCompliance");
         complianceFactory.create();
-        
+
+        // Create GuardDuty threat detection (enabled by PRODUCTION profile by default)
+        // GuardDutyFactory will check security profile configuration
+        c.createGuardDutyFactory(c, "Production");
+
         // Configure logging retention (extended for compliance)
         if (profileConfig.getLogRetentionDays() != null) {
             LOG.info("PRODUCTION profile configured with log retention: " + profileConfig.getLogRetentionDays());
