@@ -1,0 +1,40 @@
+{
+  "description": "Staging environment with SOC 2 compliance for pre-production validation",
+  "stackName": "CloudForge-Staging-SOC2",
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "staging",
+  "region": "us-east-1",
+
+  "networkMode": "private-with-nat",
+  "wafEnabled": true,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "cloudforge-staging",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "complianceFrameworks": "SOC2",
+  "scopeConfigRulesToDeployment": true,
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailLoggingRemediation": true,
+
+  "guardDutyEnabled": true,
+  "guardDutyAlertsConfigured": true,
+
+  "logRetentionDays": 365,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 4,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 60,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "retainStorage": true,
+  "certificateExpirationMonitoring": true
+}

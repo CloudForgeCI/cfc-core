@@ -1,0 +1,28 @@
+{
+  "description": "Standard development environment with basic security controls",
+  "stackName": "CloudForge-Dev-Standard",
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "dev",
+  "region": "us-east-1",
+
+  "networkMode": "private-with-nat",
+  "wafEnabled": false,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "cloudforge-dev",
+  "cognitoMfaEnabled": false,
+
+  "awsConfigEnabled": false,
+  "guardDutyEnabled": false,
+  "logRetentionDays": 30,
+
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 2,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 70,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "retainStorage": false
+}

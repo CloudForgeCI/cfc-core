@@ -1,0 +1,24 @@
+{
+  "description": "Minimal development environment - fast setup, no compliance overhead",
+  "stackName": "CloudForge-Dev",
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "dev",
+  "region": "us-east-1",
+
+  "networkMode": "public-no-nat",
+  "wafEnabled": false,
+  "authMode": "none",
+
+  "awsConfigEnabled": false,
+  "guardDutyEnabled": false,
+  "logRetentionDays": 7,
+
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
+  "enableAutoScaling": false,
+
+  "enableMonitoring": true,
+  "enableEncryption": false,
+  "retainStorage": false
+}
