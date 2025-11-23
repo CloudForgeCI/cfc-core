@@ -5,6 +5,7 @@ import com.cloudforgeci.api.interfaces.RuntimeType;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.observability.ComplianceFactory;
 import com.cloudforgeci.api.observability.FlowLogFactory;
+import com.cloudforgeci.api.observability.GuardDutyFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -189,9 +190,15 @@ class GdprComplianceIntegrationTest extends IntegrationTestBase {
         FlowLogFactory flowLogFactory = new FlowLogFactory(stack, "FlowLogs");
         flowLogFactory.create();
 
+        GuardDutyFactory guardDutyFactory = new GuardDutyFactory(stack, "GuardDuty");
+        guardDutyFactory.create();
+
         synthesizeTemplate();
 
         // Then: Verify Article 33 - Notification of Personal Data Breach
+        // GuardDuty detects threats and security events
+        assertGuardDutyEnabled();
+
         // CloudTrail detects unauthorized access
         assertCloudTrailEnabled();
 
@@ -355,5 +362,39 @@ class GdprComplianceIntegrationTest extends IntegrationTestBase {
                 "Status", "Enabled"
             )
         ));
+    }
+
+    @Test
+    void testGdprThreatDetectionAndPrevention() {
+        // Given: Complete infrastructure with security monitoring
+        builder.createCompleteInfrastructure();
+
+        GuardDutyFactory guardDutyFactory = new GuardDutyFactory(stack, "GuardDuty");
+        guardDutyFactory.create();
+
+        ComplianceFactory complianceFactory = new ComplianceFactory(stack, "Compliance");
+        complianceFactory.create();
+
+        synthesizeTemplate();
+
+        // Then: Verify Article 32 - Security of Processing includes threat detection
+        // GuardDuty provides continuous threat detection
+        assertGuardDutyEnabled();
+
+        // GuardDuty detector properties
+        template.hasResourceProperties("AWS::GuardDuty::Detector", Map.of(
+            "Enable", true,
+            "FindingPublishingFrequency", "FIFTEEN_MINUTES"
+        ));
+
+        // AWS Config provides configuration monitoring
+        assertConfigRulesDeployed(10);
+
+        // CloudTrail provides API activity monitoring
+        assertCloudTrailEnabled();
+
+        // Combined monitoring satisfies GDPR Article 32(1)(d):
+        // "A process for regularly testing, assessing and evaluating
+        // the effectiveness of technical and organisational measures"
     }
 }
