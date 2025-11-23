@@ -1,0 +1,54 @@
+{
+  "description": "Production environment with PCI-DSS compliance for payment card processing",
+  "stackName": "CloudForge-Prod-PCIDSS",
+  "runtime": "ec2",
+  "topology": "jenkins-service",
+  "securityProfile": "production",
+  "region": "us-east-1",
+
+  "domain": "example.com",
+  "subdomain": "jenkins",
+  "enableSsl": true,
+  "createZone": false,
+
+  "networkMode": "private-with-nat",
+  "wafEnabled": true,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "cloudforge-pcidss",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "complianceFrameworks": "PCI-DSS,HIPAA,SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailLoggingRemediation": true,
+  "complianceMode": "enforce",
+
+  "guardDutyEnabled": true,
+  "guardDutyAlertsConfigured": true,
+  "auditManagerEnabled": true,
+
+  "logRetentionDays": 730,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+
+  "instanceType": "t3.large",
+  "minInstanceCapacity": 3,
+  "maxInstanceCapacity": 10,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 50,
+
+  "healthCheckGracePeriod": 300,
+  "healthCheckInterval": 30,
+  "healthCheckTimeout": 5,
+  "healthyThreshold": 2,
+  "unhealthyThreshold": 2,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "retainStorage": true,
+  "certificateExpirationMonitoring": true
+}

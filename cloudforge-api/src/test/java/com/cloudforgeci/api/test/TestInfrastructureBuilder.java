@@ -17,6 +17,7 @@ import com.cloudforgeci.api.network.DomainFactory;
 import com.cloudforgeci.api.observability.AlarmFactory;
 import com.cloudforgeci.api.observability.WafFactory;
 import com.cloudforgeci.api.scaling.ScalingFactory;
+import com.cloudforgeci.api.observability.ComplianceFactory;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.ec2.Vpc;
@@ -46,64 +47,99 @@ public class TestInfrastructureBuilder {
     private final Stack stack;
     private DeploymentContext cfc;
     private SystemContext ctx;
-    
+    private final Map<String, Object> contextOverrides;
+    private final SecurityProfile securityProfile;
+    private final RuntimeType runtimeType;
+    private boolean systemContextCreated = false;
+
     public TestInfrastructureBuilder(String stackName, SecurityProfile securityProfile, RuntimeType runtimeType) {
         this.app = new App();
         this.stack = new Stack(app, stackName);
-        
+        this.securityProfile = securityProfile;
+        this.runtimeType = runtimeType;
+
         // Set required context values for testing BEFORE creating DeploymentContext
-        Map<String, Object> cfcContext = new HashMap<>();
+        this.contextOverrides = new HashMap<>();
         // Don't set domain to avoid hosted zone requirement by default
-        // cfcContext.put("domain", "test.example.com");
-        cfcContext.put("lbType", "alb");
-        stack.getNode().setContext("cfc", cfcContext);
-        
-        this.cfc = DeploymentContext.from(stack);
-        
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
-        // Use JENKINS_SERVICE topology for both FARGATE and EC2 runtime
-        TopologyType topology = TopologyType.JENKINS_SERVICE;
-        this.ctx = SystemContext.start(stack, topology, runtimeType, securityProfile, iamProfile, cfc);
+        // contextOverrides.put("domain", "test.example.com");
+        contextOverrides.put("lbType", "alb");
+
+        // Don't create SystemContext yet - will be created when first infrastructure method is called
+        // This allows builder methods to modify context first
+    }
+
+    /**
+     * Initialize SystemContext if not already created.
+     * This is called automatically by infrastructure creation methods.
+     */
+    private void ensureSystemContextCreated() {
+        if (!systemContextCreated) {
+            stack.getNode().setContext("cfc", contextOverrides);
+            this.cfc = DeploymentContext.from(stack);
+
+            IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
+            TopologyType topology = TopologyType.JENKINS_SERVICE;
+            this.ctx = SystemContext.start(stack, topology, runtimeType, securityProfile, iamProfile, cfc);
+            systemContextCreated = true;
+        }
     }
     
     public TestInfrastructureBuilder(String stackName, SecurityProfile securityProfile, RuntimeType runtimeType, String domainName) {
         this.app = new App();
         this.stack = new Stack(app, stackName);
+        this.securityProfile = securityProfile;
+        this.runtimeType = runtimeType;
 
         // Set required context values for testing BEFORE creating DeploymentContext
-        Map<String, Object> cfcContext = new HashMap<>();
-        cfcContext.put("domain", domainName);
-        cfcContext.put("lbType", "alb");
-        stack.getNode().setContext("cfc", cfcContext);
+        this.contextOverrides = new HashMap<>();
+        contextOverrides.put("domain", domainName);
+        contextOverrides.put("lbType", "alb");
 
-        this.cfc = DeploymentContext.from(stack);
-
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
-        // Use JENKINS_SERVICE topology for both FARGATE and EC2 runtime
-        TopologyType topology = TopologyType.JENKINS_SERVICE;
-        this.ctx = SystemContext.start(stack, topology, runtimeType, securityProfile, iamProfile, cfc);
+        // Don't create SystemContext yet
     }
 
     public TestInfrastructureBuilder(String stackName, SecurityProfile securityProfile, RuntimeType runtimeType, String domainName, boolean createZone) {
         this.app = new App();
         this.stack = new Stack(app, stackName);
+        this.securityProfile = securityProfile;
+        this.runtimeType = runtimeType;
 
         // Set required context values for testing BEFORE creating DeploymentContext
-        Map<String, Object> cfcContext = new HashMap<>();
-        cfcContext.put("domain", domainName);
-        cfcContext.put("createZone", createZone);  // Explicitly set createZone flag
-        cfcContext.put("lbType", "alb");
-        stack.getNode().setContext("cfc", cfcContext);
+        this.contextOverrides = new HashMap<>();
+        contextOverrides.put("domain", domainName);
+        contextOverrides.put("createZone", createZone);  // Explicitly set createZone flag
+        contextOverrides.put("lbType", "alb");
 
-        this.cfc = DeploymentContext.from(stack);
+        // Don't create SystemContext yet
+    }
 
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
-        // Use JENKINS_SERVICE topology for both FARGATE and EC2 runtime
-        TopologyType topology = TopologyType.JENKINS_SERVICE;
-        this.ctx = SystemContext.start(stack, topology, runtimeType, securityProfile, iamProfile, cfc);
+    public TestInfrastructureBuilder(String stackName, SecurityProfile securityProfile, RuntimeType runtimeType, Map<String, Object> customContext) {
+        this.app = new App();
+        this.securityProfile = securityProfile;
+        this.runtimeType = runtimeType;
+
+        // Get region from context or use default
+        String region = (String) customContext.getOrDefault("region", "us-east-1");
+
+        // Create stack with environment for ALB logging
+        this.stack = Stack.Builder.create(app, stackName)
+            .env(software.amazon.awscdk.Environment.builder()
+                .region(region)
+                .build())
+            .build();
+
+        // Use custom context provided by caller
+        this.contextOverrides = new HashMap<>(customContext);
+        // Ensure lbType is set if not provided
+        if (!contextOverrides.containsKey("lbType")) {
+            contextOverrides.put("lbType", "alb");
+        }
+
+        // Don't create SystemContext yet
     }
     
     public TestInfrastructureBuilder createVpc() {
+        ensureSystemContextCreated();
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
         vpcFactory.create();
         return this;
@@ -193,8 +229,97 @@ public class TestInfrastructureBuilder {
         wafFactory.create();
         return this;
     }
+
+    public TestInfrastructureBuilder createCompliance() {
+        ensureSystemContextCreated();
+        ComplianceFactory complianceFactory = new ComplianceFactory(stack, "Compliance");
+        complianceFactory.create();
+        return this;
+    }
+
+    // ============================================================================
+    // Builder methods for setting context values
+    // ============================================================================
+
+    public TestInfrastructureBuilder withAwsConfigEnabled(boolean enabled) {
+        updateContext("awsConfigEnabled", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withCreateConfigInfrastructure(boolean enabled) {
+        updateContext("createConfigInfrastructure", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withComplianceFrameworks(String frameworks) {
+        updateContext("complianceFrameworks", frameworks);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withScopeConfigRulesToDeployment(boolean enabled) {
+        updateContext("scopeConfigRulesToDeployment", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withEnableS3VersioningRemediation(boolean enabled) {
+        updateContext("enableS3VersioningRemediation", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withEnableCloudTrailLoggingRemediation(boolean enabled) {
+        updateContext("enableCloudTrailLoggingRemediation", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withGuardDutyEnabled(boolean enabled) {
+        updateContext("guardDutyEnabled", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withWafEnabled(boolean enabled) {
+        updateContext("wafEnabled", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withLogRetentionDays(int days) {
+        updateContext("logRetentionDays", days);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withAuthMode(String mode) {
+        updateContext("authMode", mode);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withCognitoAutoProvision(boolean enabled) {
+        updateContext("cognitoAutoProvision", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withCognitoMfaEnabled(boolean enabled) {
+        updateContext("cognitoMfaEnabled", enabled);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withCognitoDomainPrefix(String prefix) {
+        updateContext("cognitoDomainPrefix", prefix);
+        return this;
+    }
+
+    /**
+     * Updates the CDK context. Must be called BEFORE any infrastructure is created.
+     */
+    private void updateContext(String key, Object value) {
+        if (systemContextCreated) {
+            throw new IllegalStateException(
+                "Cannot update context after SystemContext has been created. " +
+                "Call with* methods before calling create* methods.");
+        }
+        contextOverrides.put(key, value);
+    }
     
     public TestInfrastructureBuilder createCompleteInfrastructure() {
+        ensureSystemContextCreated();
         if (ctx.runtime == RuntimeType.FARGATE) {
             // For FARGATE runtime with JENKINS_SERVICE topology, create EFS
             return createVpc()
@@ -220,6 +345,7 @@ public class TestInfrastructureBuilder {
     }
     
     public TestInfrastructureBuilder createMinimalInfrastructure() {
+        ensureSystemContextCreated();
         if (ctx.runtime == RuntimeType.FARGATE) {
             return createVpc()
                     .createAlb()
@@ -238,14 +364,17 @@ public class TestInfrastructureBuilder {
     }
     
     public SystemContext getSystemContext() {
+        ensureSystemContextCreated();
         return ctx;
     }
-    
+
     public DeploymentContext getDeploymentContext() {
+        ensureSystemContextCreated();
         return cfc;
     }
-    
+
     public DeploymentContext getCfc() {
+        ensureSystemContextCreated();
         return cfc;
     }
     
@@ -255,6 +384,7 @@ public class TestInfrastructureBuilder {
     
     // Helper methods to access created resources
     public Vpc getVpc() {
+        ensureSystemContextCreated();
         return ctx.vpc.get().orElseThrow();
     }
     
@@ -274,6 +404,7 @@ public class TestInfrastructureBuilder {
     }
     
     public RuntimeType getRuntime() {
+        ensureSystemContextCreated();
         return ctx.runtime;
     }
     

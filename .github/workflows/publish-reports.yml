@@ -617,12 +617,13 @@ jobs:
           find github-pages-reports -type f | head -50
 
       - name: Download metrics dashboards artifact
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v6
         with:
           workflow: deployment-testing.yml
           name: metrics-dashboards
           path: ./
           if_no_artifact_found: warn
+          allow_forks: false
         continue-on-error: true
 
       - name: Copy metrics dashboards to github-pages-reports

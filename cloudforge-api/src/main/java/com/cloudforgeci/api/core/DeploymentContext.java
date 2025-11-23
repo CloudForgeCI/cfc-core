@@ -195,6 +195,7 @@ public final class DeploymentContext {
 
     // Threat Detection
     private final Boolean guardDutyEnabled;  // Enable GuardDuty for threat detection (PCI-DSS Req 11.4)
+    private final Boolean createGuardDutyDetector;  // Create GuardDuty detector (account-region singleton)
     private final Boolean guardDutyAlertsConfigured;  // GuardDuty alerts configured (EventBridge to SNS/SIEM)
     private final Boolean certificateExpirationMonitoring;  // Certificate expiration monitoring enabled (CloudWatch alarms)
 
@@ -248,7 +249,8 @@ public final class DeploymentContext {
     private final Integer minInstanceCapacity;
 
     private final boolean enableFlowlogs;
-    
+    private final Boolean cloudTrailEnabled;  // Enable CloudTrail for API audit logging
+
     // Advanced Configuration
     private final boolean enableMonitoring;
     private final boolean enableEncryption;
@@ -307,6 +309,7 @@ public final class DeploymentContext {
         this.wafEnabled = bool("wafEnabled", false);
         this.albAccessLogging = boolOrNull("albAccessLogging");
         this.guardDutyEnabled = boolOrNull("guardDutyEnabled");
+        this.createGuardDutyDetector = boolOrNull("createGuardDutyDetector");
         this.guardDutyAlertsConfigured = boolOrNull("guardDutyAlertsConfigured");
         this.certificateExpirationMonitoring = boolOrNull("certificateExpirationMonitoring");
         this.cloudfront = bool("cloudfront", false);
@@ -355,6 +358,7 @@ public final class DeploymentContext {
         this.cpuTargetUtilization = intval("cpuTargetUtilization", 60);
 
         this.enableFlowlogs = bool("enableFlowlogs", false);
+        this.cloudTrailEnabled = boolOrNull("cloudTrailEnabled");
 
         // Security - SSH Access Control
         this.bastionCidr = str("bastionCidr", "10.0.1.0/24");
@@ -440,6 +444,7 @@ public final class DeploymentContext {
     public boolean wafEnabled() { return wafEnabled; }
     public Boolean albAccessLogging() { return albAccessLogging; }
     public Boolean guardDutyEnabled() { return guardDutyEnabled; }
+    public Boolean createGuardDutyDetector() { return createGuardDutyDetector; }
     public Boolean guardDutyAlertsConfigured() { return guardDutyAlertsConfigured; }
     public Boolean certificateExpirationMonitoring() { return certificateExpirationMonitoring; }
     public boolean cloudfrontEnabled() { return cloudfront; }
@@ -450,6 +455,7 @@ public final class DeploymentContext {
     public Integer minInstanceCapacity() { return minInstanceCapacity; }
 
     public boolean enableFlowlogs() { return enableFlowlogs; }
+    public Boolean cloudTrailEnabled() { return cloudTrailEnabled; }
 
     // Security - SSH Access Control
     public String bastionCidr() { return bastionCidr; }
