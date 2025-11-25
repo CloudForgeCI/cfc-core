@@ -38,7 +38,7 @@ class DnsLabelSimpleTest {
         @ParameterizedTest
         @ValueSource(strings = {
             "a",
-            "A", 
+            "A",
             "0",
             "9",
             "test",
@@ -127,7 +127,7 @@ class DnsLabelSimpleTest {
         void shouldRejectTooLongLabels() {
             String tooLong = "a".repeat(64); // 64 chars
             assertFalse(validator.isValid(tooLong, null));
-            
+
             String wayTooLong = "a".repeat(100); // 100 chars
             assertFalse(validator.isValid(wayTooLong, null));
         }
@@ -194,18 +194,18 @@ class DnsLabelSimpleTest {
         void shouldHandleBoundaryLengths() {
             // 1 char (valid)
             assertTrue(validator.isValid("a", null));
-            
+
             // 2 chars (valid)
             assertTrue(validator.isValid("ab", null));
-            
+
             // 62 chars (valid)
             String label62 = "a" + "b".repeat(60) + "c";
             assertTrue(validator.isValid(label62, null));
-            
+
             // 63 chars (valid - maximum)
             String label63 = "a" + "b".repeat(61) + "c";
             assertTrue(validator.isValid(label63, null));
-            
+
             // 64 chars (invalid)
             String label64 = "a" + "b".repeat(62) + "c";
             assertFalse(validator.isValid(label64, null));

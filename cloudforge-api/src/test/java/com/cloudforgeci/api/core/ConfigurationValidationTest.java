@@ -28,10 +28,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertEquals(RuntimeType.FARGATE, context.runtime());
@@ -46,10 +46,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         // Note: We can't easily test specific runtime/topology combinations in unit tests
@@ -66,10 +66,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertNotNull(context.securityProfile());
@@ -82,10 +82,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertNotNull(context.networkMode());
@@ -98,10 +98,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertNotNull(context.lbType());
@@ -114,10 +114,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertNotNull(context.authMode());
@@ -129,10 +129,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         // SSL should be false by default
@@ -145,10 +145,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         // IAM profile is not part of DeploymentContext
@@ -161,10 +161,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertFalse(context.wafEnabled());
@@ -177,10 +177,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertTrue(context.minInstanceCapacity() > 0);
@@ -194,10 +194,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertTrue(context.cpu() > 0);
@@ -210,10 +210,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         // Domain should be null by default
@@ -228,10 +228,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertNotNull(context.tier());
@@ -244,10 +244,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertNotNull(context.region());
@@ -260,10 +260,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         // Deployment ID and version should be null by default
@@ -277,10 +277,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         // Artifacts bucket should be null by default
@@ -294,10 +294,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         // SSO fields should be null by default
@@ -312,10 +312,10 @@ class ConfigurationValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When
         var context = DeploymentContext.from(stack);
-        
+
         // Then
         assertNotNull(context);
         assertTrue(context.cpuTargetUtilization() >= 0);
@@ -331,17 +331,17 @@ class ConfigurationValidationTest {
             Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.DEV),
             Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.STAGING),
             Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.PRODUCTION),
-            
+
             // EC2 + Single Node combinations
             Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.DEV),
             Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.STAGING),
             Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.PRODUCTION),
-            
+
             // Fargate + Service combinations
             Arguments.of(RuntimeType.FARGATE, TopologyType.JENKINS_SERVICE, SecurityProfile.DEV),
             Arguments.of(RuntimeType.FARGATE, TopologyType.JENKINS_SERVICE, SecurityProfile.STAGING),
             Arguments.of(RuntimeType.FARGATE, TopologyType.JENKINS_SERVICE, SecurityProfile.PRODUCTION)
-            
+
             // Note: Fargate + Single Node is not supported (topology mismatch)
             // Note: S3-website is not yet implemented
         );

@@ -32,11 +32,11 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     public StagingSecurityProfileConfiguration(DeploymentContext deploymentContext) {
         this.deploymentContext = deploymentContext;
         java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(getClass().getName());
-        LOG.severe("=== STAGING profile constructor called ===");
-        LOG.severe("deploymentContext=" + (deploymentContext != null ? "NOT NULL" : "NULL"));
+        LOG.severe("=== STAGING profile constructor called == = ");
+        LOG.severe("deploymentContext = " + (deploymentContext != null ? "NOT NULL" : "NULL"));
         if (deploymentContext != null) {
-            LOG.severe("logRetentionDays=" + deploymentContext.logRetentionDays());
-            LOG.severe("guardDutyEnabled=" + deploymentContext.guardDutyEnabled());
+            LOG.severe("logRetentionDays = " + deploymentContext.logRetentionDays());
+            LOG.severe("guardDutyEnabled = " + deploymentContext.guardDutyEnabled());
         }
     }
 
@@ -52,7 +52,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     public SecurityProfile getSecurityProfile() {
         return SecurityProfile.STAGING;
     }
-    
+
     // Logging Configuration - Moderate retention
     @Override
     public RetentionDays getLogRetentionDays() {
@@ -66,45 +66,45 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         }
         return RetentionDays.ONE_MONTH; // Moderate retention for staging (default for non-compliant deployments)
     }
-    
+
     @Override
     public RetentionDays getFlowLogRetentionDays() {
         return RetentionDays.ONE_MONTH; // Moderate retention for staging
     }
-    
+
     @Override
     public RemovalPolicy getLogRemovalPolicy() {
         return RemovalPolicy.RETAIN; // Retain logs for staging analysis
     }
-    
+
     // Flow Log Configuration - Enhanced monitoring
     @Override
     public boolean isFlowLogsEnabled() {
         return true; // Enabled for staging monitoring
     }
-    
+
     @Override
     public FlowLogTrafficType getFlowLogTrafficType() {
         return FlowLogTrafficType.ALL; // All traffic for comprehensive monitoring
     }
-    
+
     // Security Monitoring - Moderate for staging
     @Override
     public boolean isSecurityMonitoringEnabled() {
         return true; // Enabled for staging
     }
-    
+
     @Override
     public boolean isCloudTrailEnabled() {
         return true; // Enabled for staging audit
     }
-    
+
     @Override
     public boolean isGuardDutyEnabled() {
         java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(getClass().getName());
-        LOG.severe("DEBUG isGuardDutyEnabled: deploymentContext=" + (deploymentContext != null));
+        LOG.severe("DEBUG isGuardDutyEnabled: deploymentContext = " + (deploymentContext != null));
         if (deploymentContext != null) {
-            LOG.severe("DEBUG guardDutyEnabled value=" + deploymentContext.guardDutyEnabled());
+            LOG.severe("DEBUG guardDutyEnabled value = " + deploymentContext.guardDutyEnabled());
         }
         // Check deployment context first for compliance framework overrides
         if (deploymentContext != null && deploymentContext.guardDutyEnabled() != null) {
@@ -115,7 +115,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         LOG.severe("STAGING profile: Using default GuardDuty (false)");
         return false; // Optional for staging (default for non-compliant deployments)
     }
-    
+
     @Override
     public boolean isAwsConfigEnabled() {
         return true; // Enabled for staging compliance
@@ -131,33 +131,33 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     public boolean isEbsEncryptionEnabled() {
         return true; // Encryption enabled
     }
-    
+
     @Override
     public boolean isEfsEncryptionInTransitEnabled() {
         return true; // Encryption enabled
     }
-    
+
     @Override
     public boolean isEfsEncryptionAtRestEnabled() {
         return true; // Encryption enabled
     }
-    
+
     @Override
     public boolean isS3EncryptionEnabled() {
         return true; // Encryption enabled
     }
-    
+
     // Network Security - Moderate restrictions
     @Override
     public boolean isVpcEndpointsEnabled() {
         return true; // Enabled for staging security
     }
-    
+
     @Override
     public boolean isNatGatewayEnabled() {
         return true; // Use private subnets for staging
     }
-    
+
     @Override
     public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
         // Staging respects network mode for cost optimization
@@ -166,7 +166,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         }
         return 0; // No NAT gateways for public subnets in staging
     }
-    
+
     @Override
     public boolean isWafEnabled() {
         // Check deployment context first, then fall back to profile default
@@ -175,7 +175,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         }
         return true; // Enabled for staging testing
     }
-    
+
     @Override
     public boolean isCloudFrontEnabled() {
         // Check deployment context first, then fall back to profile default
@@ -184,55 +184,55 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         }
         return false; // Optional for staging
     }
-    
+
     // Backup and Recovery - Moderate for staging
     @Override
     public boolean isAutomatedBackupEnabled() {
         return true; // Automated backups for staging
     }
-    
+
     @Override
     public int getBackupRetentionDays() {
         return 30; // Moderate retention for staging
     }
-    
+
     @Override
     public boolean isCrossRegionBackupEnabled() {
         return false; // Optional for staging
     }
-    
+
     // Compliance and Audit - Moderate for staging
     @Override
     public boolean isDetailedBillingEnabled() {
         return true; // Enabled for staging cost analysis
     }
-    
+
     @Override
     public boolean isAlbAccessLoggingEnabled() {
         return true; // Enabled for staging analysis
     }
-    
+
     @Override
     public RetentionDays getAlbAccessLogRetentionDays() {
         return RetentionDays.ONE_MONTH; // Moderate retention for staging
     }
-    
+
     // Performance and Reliability - Moderate for staging
     @Override
     public boolean isMultiAzEnforced() {
         return true; // Multi-AZ for staging reliability
     }
-    
+
     @Override
     public boolean isAutoScalingEnabled() {
         return true; // Auto-scaling for staging
     }
-    
+
     @Override
     public int getMinInstanceCount() {
         return 1; // Minimum for staging
     }
-    
+
     @Override
     public int getMaxInstanceCount() {
         return 5; // Moderate scaling for staging

@@ -24,8 +24,10 @@ public @interface Arn {
         // Basic arn:partition:service:region:account:resource
         // Account can be empty (for global services) or exactly 12 digits
         private static final String RX = "^arn:aws[a-zA-Z-]*:[a-z0-9-]+:[a-z0-9-]*:(?:|\\d{12}):.+";
-        public void initialize(Arn a){ optional = a.optional(); }
-        public boolean isValid(String v, ConstraintValidatorContext c){
+        @Override
+        public void initialize(Arn a) { optional = a.optional(); }
+        @Override
+        public boolean isValid(String v, ConstraintValidatorContext c) {
             if (v == null || v.isBlank()) return optional;
             return v.matches(RX);
         }

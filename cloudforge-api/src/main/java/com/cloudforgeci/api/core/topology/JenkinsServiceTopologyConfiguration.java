@@ -39,19 +39,19 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
 
     // This topology supports both Fargate and EC2 runtimes.
     r.add(ctx -> (ctx.runtime != RuntimeType.FARGATE && ctx.runtime != RuntimeType.EC2)
-            ? List.of("JENKINS_SERVICE requires runtime=FARGATE or runtime=EC2") : List.of());
+            ? List.of("JENKINS_SERVICE requires runtime = FARGATE or runtime = EC2") : List.of());
 
     // OIDC requires TLS at ALB. (Runtime profile handles cert wiring; we enforce semantics here.)
     r.add(ctx -> {
       String mode = ctx.authMode.get().orElse(null);
       Boolean sslEnabled = ctx.sslEnabled.get().orElse(false);
       if ("alb-oidc".equalsIgnoreCase(mode) && !sslEnabled) {
-        return List.of("authMode=alb-oidc requires enableSsl=true");
+        return List.of("authMode = alb-oidc requires enableSsl = true");
       }
       return List.of();
     });
 
-    // If enableSsl=true and caller expects DNS, they should also provide fqdn (either explicit or subdomain+domain).
+    // If enableSsl = true and caller expects DNS, they should also provide fqdn (either explicit or subdomain+domain).
     r.add(ctx -> {
       Boolean sslEnabled = ctx.sslEnabled.get().orElse(false);
       if (!sslEnabled) return List.of();
@@ -60,7 +60,7 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
       String subdomain = ctx.subdomain.get().orElse(null);
       String domain = ctx.domain.get().orElse(null);
       boolean canCompute = subdomain != null && domain != null;
-      return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl=true requires fqdn OR (subdomain + domain)");
+      return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl = true requires fqdn OR (subdomain + domain)");
     });
     // AutoScalingGroup is forbidden for Fargate runtime, but allowed for EC2 runtime
     boolean isFargate = c.runtime.equals(RuntimeType.FARGATE);
@@ -76,7 +76,7 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
     Integer maxCap = c.maxInstanceCapacity.get().orElse(null);
     Integer minCap = c.minInstanceCapacity.get().orElse(null);
     boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1;
-    if(scale) {
+    if (scale) {
       // Fargate autoscaling - use service.autoScaleTaskCount() directly
       // Check if callback has already been registered to prevent multiple registrations
       if (!c.fargateAutoscalingCallbackRegistered.get().isPresent()) {
@@ -97,7 +97,7 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
         c.fargateAutoscalingCallbackRegistered.set(true);
       } else {
       }
-      
+
       // EC2 autoscaling - add AutoScalingGroup to target group
       // Check if callback has already been registered to prevent multiple registrations
       if (!c.ec2AutoscalingCallbackRegistered.get().isPresent()) {
@@ -106,7 +106,7 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
           if (c.asgAddedToTargetGroup.get().isPresent()) {
             return;
           }
-          
+
           tg.addTarget(asg);
           c.asgAddedToTargetGroup.set(true);
         });
@@ -114,19 +114,19 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
       } else {
       }
     }
-    
+
     // DNS A/AAAA records for ALB (for both SSL and non-SSL deployments)
     // Check if DNS records callback has already been registered to prevent multiple registrations
     if (c.dnsRecordsCallbackRegistered.get().isPresent()) {
       return;
     }
-    
+
     whenBoth(c.zone, c.alb, (zone, alb) -> {
       // Check if DNS records have already been created (inside callback to prevent multiple executions)
       if (c.dnsRecordsCreated.get().isPresent()) {
         return;
       }
-      
+
       // Use subdomain for DNS record name, or use the domain directly if no subdomain
       String record = c.subdomain.get().orElse(null);
       if (record == null || record.isBlank()) {
@@ -144,11 +144,11 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
               .zone(zone).recordName(record).target(target).build());
       new AaaaRecord(c, constructIdPrefix + "AAAA", AaaaRecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
-      
+
       // Set the DNS records created flag to prevent duplicate execution
       c.dnsRecordsCreated.set(true);
     });
-    
+
     // Mark that the DNS records callback has been registered
     c.dnsRecordsCallbackRegistered.set(true);
   }

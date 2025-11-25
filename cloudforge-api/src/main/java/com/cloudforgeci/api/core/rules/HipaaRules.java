@@ -238,7 +238,7 @@ public final class HipaaRules {
             rules.add(ComplianceRule.fail(
                 "HIPAA-164.312(a)(2)(i)-Auth",
                 "Unique user identification required for PHI access (HIPAA §164.312(a)(2)(i))",
-                "Configure authMode='alb-oidc' or 'jenkins-oidc' to identify and authenticate users."
+                "Configure authMode = 'alb-oidc' or 'jenkins-oidc' to identify and authenticate users."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -369,7 +369,7 @@ public final class HipaaRules {
             rules.add(ComplianceRule.fail(
                 "HIPAA-164.312(d)-Auth",
                 "Authentication required for all users accessing ePHI (HIPAA §164.312(d))",
-                "Configure authMode='alb-oidc' or 'jenkins-oidc' with strong authentication mechanism."
+                "Configure authMode = 'alb-oidc' or 'jenkins-oidc' with strong authentication mechanism."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -390,7 +390,7 @@ public final class HipaaRules {
                     "HIPAA-164.312(d)-MFA",
                     "Multi-factor authentication recommended for ePHI access (HIPAA §164.312(d))",
                     "IAMMfaEnabled",
-                    "Either: (1) Enable Cognito MFA: cognitoAutoProvision=true, cognitoMfaEnabled=true " +
+                    "Either: (1) Enable Cognito MFA: cognitoAutoProvision = true, cognitoMfaEnabled = true " +
                     "OR (2) Configure AWS IAM Identity Center: provide ssoInstanceArn with MFA enforcement."
                 ));
             } else {
@@ -526,7 +526,7 @@ public final class HipaaRules {
      */
     public static String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== HIPAA Security Rule Compliance Report ===\n\n");
+        report.append("\n=== HIPAA Security Rule Compliance Report == = \n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

@@ -122,7 +122,7 @@ public final class ThreatProtectionRules {
                 "ANTI-MALWARE-PROTECTION",
                 "Anti-malware protection required for PCI-DSS Req 5.1",
                 "PRODUCTION profile with FARGATE + GuardDuty satisfies this requirement. " +
-                "For EC2: deploy anti-malware or set antiMalwareEnabled=true."
+                "For EC2: deploy anti-malware or set antiMalwareEnabled = true."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -140,7 +140,7 @@ public final class ThreatProtectionRules {
                     "ANTI-MALWARE-AUTO-UPDATE",
                     "Anti-malware definitions must be kept current",
                     "Enable automatic anti-malware signature updates. " +
-                    "PCI-DSS Req 5.2. Set antiMalwareAutoUpdate=true."
+                    "PCI-DSS Req 5.2. Set antiMalwareAutoUpdate = true."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -157,7 +157,7 @@ public final class ThreatProtectionRules {
                     "MALWARE-SCAN-LOGGING",
                     "Anti-malware scan results must be logged",
                     "Configure anti-malware to log scan results and alerts. " +
-                    "PCI-DSS Req 5.2. Set malwareScanLogging=true when logging is configured."
+                    "PCI-DSS Req 5.2. Set malwareScanLogging = true when logging is configured."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -177,7 +177,7 @@ public final class ThreatProtectionRules {
                     "Container image scanning recommended for malware detection",
                     "Enable ECR image scanning or use Inspector for container vulnerability detection. " +
                     "PCI-DSS Req 5.1 (alternative for containers). " +
-                    "Set containerImageScanning=true when enabled."
+                    "Set containerImageScanning = true when enabled."
                 ));
             } else if (containerImageScanning || antiMalwareEnabled) {
                 rules.add(ComplianceRule.pass(
@@ -229,7 +229,7 @@ public final class ThreatProtectionRules {
                     (requiresPciDss ? "PCI-DSS Req 11.4; " : "") +
                     (requiresHipaa ? "HIPAA §164.312(e)(1); " : "") +
                     "Monitors VPC Flow Logs, CloudTrail, DNS queries. " +
-                    "Set guardDutyEnabled=true in deployment context."
+                    "Set guardDutyEnabled = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -249,7 +249,7 @@ public final class ThreatProtectionRules {
                     "GUARDDUTY-ALERTS",
                     "GuardDuty alerts required for PRODUCTION security incidents",
                     "Configure EventBridge rules to send GuardDuty findings to SNS/SIEM. " +
-                    "PCI-DSS Req 11.4.3. Set guardDutyAlertsConfigured=true when configured."
+                    "PCI-DSS Req 11.4.3. Set guardDutyAlertsConfigured = true when configured."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -270,7 +270,7 @@ public final class ThreatProtectionRules {
                     "WafEnabled",
                     "Enable WAF for protection against OWASP Top 10, SQL injection, XSS attacks. " +
                     "PCI-DSS Req 6.6, 11.4. " +
-                    "Set wafEnabled=true in deployment context."
+                    "Set wafEnabled = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -290,7 +290,7 @@ public final class ThreatProtectionRules {
                     "VpcFlowLogsEnabled",
                     "Enable VPC Flow Logs for network traffic baseline and anomaly detection. " +
                     "PCI-DSS Req 11.4. " +
-                    "Set enableFlowlogs=true in deployment context."
+                    "Set enableFlowlogs = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -340,7 +340,7 @@ public final class ThreatProtectionRules {
                 "Implement file integrity monitoring (FIM) on system files and critical applications. " +
                 "For containers: use immutable infrastructure (new deployment = new container). " +
                 "PCI-DSS Req 11.5. " +
-                "Set fileIntegrityMonitoring=true when FIM is configured or use PRODUCTION security profile with FARGATE."
+                "Set fileIntegrityMonitoring = true when FIM is configured or use PRODUCTION security profile with FARGATE."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -359,7 +359,7 @@ public final class ThreatProtectionRules {
                     "ConfigEnabled",
                     "Enable AWS Config to detect unauthorized infrastructure changes. " +
                     "PCI-DSS Req 11.5 (infrastructure-level FIM). " +
-                    "Set awsConfigEnabled=true in deployment context."
+                    "Set awsConfigEnabled = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -401,7 +401,7 @@ public final class ThreatProtectionRules {
                 "Enable GuardDuty for ECS/EKS runtime threat detection or use third-party tools. " +
                 "Monitors suspicious process activity, network connections, privilege escalation. " +
                 "GDPR Art.32(2) requires security of processing. " +
-                "Set containerRuntimeSecurity=true when monitoring is configured."
+                "Set containerRuntimeSecurity = true when monitoring is configured."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -424,7 +424,7 @@ public final class ThreatProtectionRules {
                 "Immutable infrastructure recommended for containers",
                 "Deploy new containers instead of modifying running containers. " +
                 "Prevents unauthorized file modifications. PCI-DSS Req 11.5 (best practice). " +
-                "Set immutableInfrastructure=true."
+                "Set immutableInfrastructure = true."
             ));
         }
 

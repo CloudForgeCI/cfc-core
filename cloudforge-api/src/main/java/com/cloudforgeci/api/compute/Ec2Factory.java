@@ -36,11 +36,11 @@ import java.util.List;
 
 /**
  * Factory for creating EC2-based Jenkins compute infrastructure.
- * 
+ *
  * <p>This factory creates and configures EC2 instances for Jenkins deployments,
  * including auto-scaling groups, launch templates, and IAM roles. It respects
  * the network mode configuration to place instances in appropriate subnets.</p>
- * 
+ *
  * <p><strong>Key Features:</strong></p>
  * <ul>
  *   <li>Auto-scaling groups with configurable min/max capacity</li>
@@ -50,23 +50,23 @@ import java.util.List;
  *   <li>CloudWatch logging integration</li>
  *   <li>Network mode awareness (public vs private subnets)</li>
  * </ul>
- * 
+ *
  * <p><strong>Storage Options:</strong></p>
  * <ul>
  *   <li><strong>EFS:</strong> When EFS is available, instances mount EFS for persistent storage</li>
  *   <li><strong>EBS:</strong> When EFS is not available, instances use EBS volumes</li>
  * </ul>
- * 
+ *
  * <p><strong>Example Usage:</strong></p>
  * <pre>{@code
  * Ec2Factory factory = new Ec2Factory(scope, "JenkinsEC2");
  * factory.create(ctx);
- * 
+ *
  * // Access created resources
  * AutoScalingGroup asg = ctx.asg.get().orElseThrow();
  * Role instanceRole = ctx.ec2InstanceRole.get().orElseThrow();
  * }</pre>
- * 
+ *
  * @author CloudForgeCI
  * @since 1.0.0
  * @see SystemContext
@@ -110,7 +110,7 @@ public class Ec2Factory extends BaseFactory {
 
   /**
    * Creates the complete EC2-based Jenkins infrastructure.
-   * 
+   *
    * <p>This method orchestrates the creation of all EC2-related resources:</p>
    * <ul>
    *   <li>IAM role for EC2 instances with appropriate permissions</li>
@@ -120,11 +120,11 @@ public class Ec2Factory extends BaseFactory {
    *   <li>Auto-scaling group with configurable capacity</li>
    *   <li>Auto-scaling policies and CloudWatch alarms</li>
    * </ul>
-   * 
+   *
    * <p>The method respects the network mode setting to place instances in
    * appropriate subnets (public vs private) and configures storage based
    * on EFS availability.</p>
-   * 
+   *
    * @throws IllegalStateException if required resources are not available in context
    * @see SystemContext
    * @see DeploymentContext#networkMode()
@@ -133,7 +133,7 @@ public class Ec2Factory extends BaseFactory {
    */
   private void createEc2Infrastructure() {
     // Use existing IAM role created by IAM configuration (has CloudWatch Logs permissions)
-    Role ec2Role = ctx.ec2InstanceRole.get().orElseThrow(() -> 
+    Role ec2Role = ctx.ec2InstanceRole.get().orElseThrow(() ->
         new IllegalStateException("EC2 instance role not found - IAM configuration should have created it"));
 
     // Use existing instance security group (created by JenkinsFactory)
@@ -152,7 +152,7 @@ public class Ec2Factory extends BaseFactory {
     // Create Auto Scaling Group
     this.asg = createAutoScalingGroup(launchTemplate);
     ctx.asg.set(asg);
-    
+
     // Auto-scaling configuration is handled by the orchestration layer
     // The JenkinsServiceTopologyConfiguration will add the ASG to the target group
   }
@@ -266,7 +266,7 @@ public class Ec2Factory extends BaseFactory {
       ud.addCommands(
               "command -v dnf >/dev/null && dnf -y install amazon-efs-utils || yum -y install amazon-efs-utils",
               "mkdir -p /var/lib/jenkins",
-              String.format("echo \"%s:/ /var/lib/jenkins efs _netdev,tls,iam,accesspoint=%s 0 0\" >> /etc/fstab",
+              String.format("echo \"%s:/ /var/lib/jenkins efs _netdev,tls,iam,accesspoint = %s 0 0\" >> /etc/fstab",
                       ctx.efs.get().orElseThrow().getFileSystemId(), ctx.ap.get().orElseThrow().getAccessPointId()),
               "mount -a || (journalctl -xe; exit 1)",
               "chown -R 1000:1000 /var/lib/jenkins || true",
@@ -276,8 +276,8 @@ public class Ec2Factory extends BaseFactory {
       // Use EBS for storage
       String dataDev = "/dev/xvdh";
       ud.addCommands(
-              "DATA_DEV=\"" + dataDev + "\"",
-              "if [ ! -b \"$DATA_DEV\" ]; then DATA_DEV=$(readlink -f /dev/nvme1n1 || true); fi",
+              "DATA_DEV = \"" + dataDev + "\"",
+              "if [ ! -b \"$DATA_DEV\" ]; then DATA_DEV = $(readlink -f /dev/nvme1n1 || true); fi",
               "mkfs -t xfs -f \"$DATA_DEV\" || true",
               "mkdir -p /var/lib/jenkins",
               "echo \"$DATA_DEV /var/lib/jenkins xfs defaults,noatime 0 2\" >> /etc/fstab",
@@ -303,10 +303,10 @@ public class Ec2Factory extends BaseFactory {
     boolean deleteDataVolume = Boolean.FALSE.equals(retainStorage) || retainStorage == null;
 
     if (Boolean.TRUE.equals(retainStorage)) {
-      LOG.info("EBS data volumes will be RETAINED after instance termination (retainStorage=true)");
+      LOG.info("EBS data volumes will be RETAINED after instance termination (retainStorage = true)");
       LOG.info("⚠️  You must manually delete EBS volumes from AWS Console to avoid ongoing storage costs");
     } else {
-      LOG.info("EBS data volumes will be DESTROYED with instances (retainStorage=false)");
+      LOG.info("EBS data volumes will be DESTROYED with instances (retainStorage = false)");
     }
 
     // Add block devices
@@ -347,7 +347,7 @@ public class Ec2Factory extends BaseFactory {
     // Determine subnet type based on network mode
     SubnetType subnetType = "public-no-nat".equals(networkMode) ?
             SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
-    
+
     return AutoScalingGroup.Builder.create(this, "JenkinsAsg")
             .vpc(ctx.vpc.get().orElseThrow())
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())

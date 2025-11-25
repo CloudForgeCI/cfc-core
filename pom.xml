@@ -309,13 +309,13 @@
                     <limit>
                       <counter>INSTRUCTION</counter>
                       <value>COVEREDRATIO</value>
-                      <minimum>0.50</minimum>
+                      <minimum>0.65</minimum>
                     </limit>
                     <!-- Fail build if branch coverage is less than 60% -->
                     <limit>
                       <counter>BRANCH</counter>
                       <value>COVEREDRATIO</value>
-                      <minimum>0.25</minimum>
+                      <minimum>0.50</minimum>
                     </limit>
                   </limits>
                 </rule>

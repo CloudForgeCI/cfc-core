@@ -57,9 +57,9 @@ public class FlowLogFactory extends BaseFactory {
         ctx.flowlogs.set(flowLogOptions);
 
         LOG.info("Flow logs configured for " + security + " profile: " +
-                "traffic=" + config.getFlowLogTrafficType() +
-                ", retention=" + config.getFlowLogRetentionDays() +
-                ", removal=" + config.getLogRemovalPolicy());
+                "traffic = " + config.getFlowLogTrafficType() +
+                ", retention = " + config.getFlowLogRetentionDays() +
+                ", removal = " + config.getLogRemovalPolicy());
     }
 
 }

@@ -103,15 +103,15 @@ public class LoggingCwFactory extends BaseFactory {
             LogGroup logGroup = logGroupBuilder.build();
 
             LOG.info("LoggingCwFactory: Configured log group: " + logGroupName +
-                     " with retention=" + retentionDays +
-                     ", removal=" + config.getLogRemovalPolicy());
+                     " with retention = " + retentionDays +
+                     ", removal = " + config.getLogRemovalPolicy());
 
             LOG.info("LoggingCwFactory: About to set logs in context");
             ctx.logs.set(logGroup);
 
             LOG.info("CloudWatch logs configured for " + security + " profile: " +
-                    "retention=" + config.getLogRetentionDays() +
-                    ", removal=" + config.getLogRemovalPolicy());
+                    "retention = " + config.getLogRetentionDays() +
+                    ", removal = " + config.getLogRemovalPolicy());
         } catch (Exception e) {
             LOG.log(Level.SEVERE, "LoggingCwFactory: Exception in create() method", e);
             throw e;

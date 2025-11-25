@@ -89,7 +89,7 @@ public class AlbFactory extends BaseFactory {
             // For both EC2 and Fargate, the default action will be updated by RuntimeConfiguration
             ApplicationListener http = createFargateHttpListener(alb, Boolean.TRUE.equals(enableSsl));
             ctx.http.set(http);
-            
+
         } catch (Exception e) {
             LOG.severe("Exception in AlbFactory.create(): " + e.getMessage());
             throw e;
@@ -173,7 +173,7 @@ public class AlbFactory extends BaseFactory {
         } else {
             LOG.info("ALB access logging is disabled");
             LOG.info("  Note: Access logs may be required for audit and compliance frameworks");
-            LOG.info("  Enable by setting albAccessLogging=true or using PRODUCTION/STAGING security profile");
+            LOG.info("  Enable by setting albAccessLogging = true or using PRODUCTION/STAGING security profile");
 
             return createAlbWithoutLogging(albSg);
         }

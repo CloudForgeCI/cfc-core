@@ -124,7 +124,7 @@ public final class KeyManagementRules {
                     "Enable automatic key rotation for all customer-managed KMS keys. " +
                     "PCI-DSS Req 3.6.4, HIPAA §164.312(a)(2)(iv), SOC2 CC6.1, GDPR Art.32(1)(a). " +
                     "Note: PRODUCTION security profile enables encryption by default. " +
-                    "Set kmsKeyRotationEnabled=true in deployment context if using custom KMS keys."
+                    "Set kmsKeyRotationEnabled = true in deployment context if using custom KMS keys."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -144,7 +144,7 @@ public final class KeyManagementRules {
                     "KmsCustomerManagedKeys",
                     "Use customer-managed KMS keys instead of AWS-managed keys for better control. " +
                     "Note: PRODUCTION security profile uses AWS-managed keys by default. " +
-                    "Set useCustomerManagedKeys=true in deployment context for custom keys."
+                    "Set useCustomerManagedKeys = true in deployment context for custom keys."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -202,7 +202,7 @@ public final class KeyManagementRules {
                 "Enable CloudWatch alarms to monitor certificate expiration (30 days before). " +
                 "Prevents service disruption from expired certificates. " +
                 "Note: PRODUCTION security profile enables security monitoring by default. " +
-                "Set certificateExpirationMonitoring=true in deployment context."
+                "Set certificateExpirationMonitoring = true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -263,7 +263,7 @@ public final class KeyManagementRules {
                     "Store database credentials, API keys, and secrets in AWS Secrets Manager. " +
                     "PCI-DSS Req 8.2.1, HIPAA §164.312(a)(1), SOC2 CC6.1. " +
                     "Note: PRODUCTION security profile enables encryption by default. " +
-                    "Set secretsManagerEnabled=true in deployment context."
+                    "Set secretsManagerEnabled = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -284,7 +284,7 @@ public final class KeyManagementRules {
                     "Enable automatic rotation for secrets (90 days or less). " +
                     "PCI-DSS Req 8.2.4, HIPAA §164.308(a)(5)(ii)(D). " +
                     "Note: PRODUCTION security profile provides encryption foundation. " +
-                    "Set secretRotationEnabled=true in deployment context."
+                    "Set secretRotationEnabled = true in deployment context."
                 ));
             } else if (usesSecretsManager) {
                 rules.add(ComplianceRule.pass(

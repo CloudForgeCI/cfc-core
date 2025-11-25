@@ -89,7 +89,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             DeploymentContext stagingCfc = DeploymentContext.from(stagingStack);
             IAMProfile stagingIamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
             SystemContext stagingCtx = SystemContext.start(stagingStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, stagingIamProfile, stagingCfc);
-            
+
             SecurityMonitoringFactory stagingFactory = new SecurityMonitoringFactory(stagingStack, "StagingSecurityMonitoring");
 
             assertDoesNotThrow(() -> {
@@ -106,7 +106,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             DeploymentContext productionCfc = DeploymentContext.from(productionStack);
             IAMProfile productionIamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
             SystemContext productionCtx = SystemContext.start(productionStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION, productionIamProfile, productionCfc);
-            
+
             SecurityMonitoringFactory productionFactory = new SecurityMonitoringFactory(productionStack, "ProductionSecurityMonitoring");
 
             assertDoesNotThrow(() -> {
@@ -123,7 +123,7 @@ class SecurityMonitoringFactoryFunctionalTest {
         @DisplayName("Should handle missing context gracefully")
         void shouldHandleMissingContextGracefully() {
             SecurityMonitoringFactory factoryWithoutContext = new SecurityMonitoringFactory(stack, "NoContextFactory");
-            
+
             // Should not throw exception even without context injection
             assertDoesNotThrow(() -> {
                 factoryWithoutContext.create();
@@ -153,8 +153,8 @@ class SecurityMonitoringFactoryFunctionalTest {
         void shouldCreateDifferentInstancesWithDifferentIds() {
             SecurityMonitoringFactory factory1 = new SecurityMonitoringFactory(stack, "Factory1");
             SecurityMonitoringFactory factory2 = new SecurityMonitoringFactory(stack, "Factory2");
-            
-            assertNotEquals(factory1.getNode().getId(), factory2.getNode().getId(), 
+
+            assertNotEquals(factory1.getNode().getId(), factory2.getNode().getId(),
                 "Different factories should have different IDs");
         }
 
@@ -163,7 +163,7 @@ class SecurityMonitoringFactoryFunctionalTest {
         void shouldMaintainFactoryStateCorrectly() {
             String originalId = factory.getNode().getId();
             Stack originalStack = (Stack) factory.getNode().getScope();
-            
+
             assertEquals("TestSecurityMonitoring", originalId, "Factory should maintain correct ID");
             assertEquals(stack, originalStack, "Factory should maintain correct stack reference");
         }
@@ -202,7 +202,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             DeploymentContext ec2Cfc = DeploymentContext.from(ec2Stack);
             IAMProfile ec2IamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
             SystemContext ec2Ctx = SystemContext.start(ec2Stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, ec2IamProfile, ec2Cfc);
-            
+
             SecurityMonitoringFactory ec2Factory = new SecurityMonitoringFactory(ec2Stack, "EC2SecurityMonitoring");
 
             assertDoesNotThrow(() -> {
@@ -219,7 +219,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             DeploymentContext topologyCfc = DeploymentContext.from(topologyStack);
             IAMProfile topologyIamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
             SystemContext topologyCtx = SystemContext.start(topologyStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, topologyIamProfile, topologyCfc);
-            
+
             SecurityMonitoringFactory topologyFactory = new SecurityMonitoringFactory(topologyStack, "TopologySecurityMonitoring");
 
             assertDoesNotThrow(() -> {

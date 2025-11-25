@@ -17,9 +17,9 @@ public class CompleteInfrastructureTest {
     void createsCompleteInfrastructureWithDevProfile() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("DevTest", SecurityProfile.DEV, RuntimeType.FARGATE);
         builder.createCompleteInfrastructure();
-        
+
         Template template = Template.fromStack(builder.getStack());
-        
+
         // Verify all major resources are created
         template.resourceCountIs("AWS::EC2::VPC", 1);
         template.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
@@ -35,7 +35,7 @@ public class CompleteInfrastructureTest {
         template.resourceCountIs("AWS::Logs::LogGroup", 1);
         // For FARGATE runtime, no EC2 instance role
         // template.resourceCountIs("AWS::IAM::Role", 1); // EC2 Instance Role
-        
+
         // Verify security profile is correctly set
         assertEquals(SecurityProfile.DEV, builder.getSystemContext().security);
     }
@@ -44,16 +44,16 @@ public class CompleteInfrastructureTest {
     void createsCompleteInfrastructureWithStagingProfile() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("StagingTest", SecurityProfile.STAGING, RuntimeType.FARGATE);
         builder.createCompleteInfrastructure();
-        
+
         Template template = Template.fromStack(builder.getStack());
-        
+
         // Verify all major resources are created
         template.resourceCountIs("AWS::EC2::VPC", 1);
         template.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
         template.resourceCountIs("AWS::EFS::FileSystem", 1);
         // For FARGATE runtime, AutoScalingGroup is forbidden
         // template.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 1);
-        
+
         // Verify security profile is correctly set
         assertEquals(SecurityProfile.STAGING, builder.getSystemContext().security);
     }
@@ -62,16 +62,16 @@ public class CompleteInfrastructureTest {
     void createsCompleteInfrastructureWithProductionProfile() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("ProductionTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE);
         builder.createCompleteInfrastructure();
-        
+
         Template template = Template.fromStack(builder.getStack());
-        
+
         // Verify all major resources are created
         template.resourceCountIs("AWS::EC2::VPC", 1);
         template.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
         template.resourceCountIs("AWS::EFS::FileSystem", 1);
         // For FARGATE runtime, AutoScalingGroup is forbidden
         // template.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 1);
-        
+
         // Verify security profile is correctly set
         assertEquals(SecurityProfile.PRODUCTION, builder.getSystemContext().security);
     }
@@ -88,9 +88,9 @@ public class CompleteInfrastructureTest {
     void createsMinimalInfrastructure() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("MinimalTest", SecurityProfile.DEV, RuntimeType.FARGATE);
         builder.createMinimalInfrastructure();
-        
+
         Template template = Template.fromStack(builder.getStack());
-        
+
         // Verify minimal resources are created
         template.resourceCountIs("AWS::EC2::VPC", 1);
         template.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
@@ -104,7 +104,7 @@ public class CompleteInfrastructureTest {
     void verifiesSecurityGroupWiring() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("SecurityTest", SecurityProfile.DEV, RuntimeType.FARGATE);
         builder.createCompleteInfrastructure();
-        
+
         // Verify security groups are properly wired
         assertNotNull(builder.getAlbSecurityGroup());
         assertNotNull(builder.getEfsSecurityGroup());
@@ -118,7 +118,7 @@ public class CompleteInfrastructureTest {
     void verifiesResourceDependencies() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("DependencyTest", SecurityProfile.DEV, RuntimeType.FARGATE);
         builder.createCompleteInfrastructure();
-        
+
         // Verify all resources are accessible
         assertNotNull(builder.getVpc());
         assertNotNull(builder.getAlb());
@@ -138,7 +138,7 @@ public class CompleteInfrastructureTest {
     void verifiesSystemContextSlots() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("ContextTest", SecurityProfile.DEV, RuntimeType.FARGATE);
         builder.createCompleteInfrastructure();
-        
+
         // Verify all required slots are populated
         assertTrue(builder.getSystemContext().vpc.get().isPresent());
         assertTrue(builder.getSystemContext().alb.get().isPresent());
@@ -164,7 +164,7 @@ public class CompleteInfrastructureTest {
     void verifiesSecurityProfileValidation() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("ValidationTest", SecurityProfile.DEV, RuntimeType.FARGATE);
         builder.createCompleteInfrastructure();
-        
+
         // Verify security profile validation passes
         assertDoesNotThrow(() -> {
             Template.fromStack(builder.getStack());
@@ -176,7 +176,7 @@ public class CompleteInfrastructureTest {
         TestInfrastructureBuilder devBuilder = new TestInfrastructureBuilder("DevIamTest", SecurityProfile.DEV, RuntimeType.FARGATE);
         TestInfrastructureBuilder stagingBuilder = new TestInfrastructureBuilder("StagingIamTest", SecurityProfile.STAGING, RuntimeType.FARGATE);
         TestInfrastructureBuilder prodBuilder = new TestInfrastructureBuilder("ProdIamTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE);
-        
+
         // Verify IAM profile mapping
         assertEquals(SecurityProfile.DEV, devBuilder.getSystemContext().security);
         assertEquals(SecurityProfile.STAGING, stagingBuilder.getSystemContext().security);

@@ -21,11 +21,11 @@ class ObservabilityStructureTest {
         @DisplayName("Should have correct class structure")
         void shouldHaveCorrectClassStructure() {
             // Verify class extends Construct
-            assertTrue(Construct.class.isAssignableFrom(AlarmFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(AlarmFactory.class),
                 "AlarmFactory should extend Construct");
-            
+
             // Verify Props is a static inner class
-            assertTrue(AlarmFactory.Props.class.isMemberClass(), 
+            assertTrue(AlarmFactory.Props.class.isMemberClass(),
                 "Props should be a member class");
         }
 
@@ -35,7 +35,7 @@ class ObservabilityStructureTest {
             assertDoesNotThrow(() -> {
                 AlarmFactory.class.getConstructor(Construct.class, String.class, AlarmFactory.Props.class);
             }, "Should have expected constructor signature");
-            
+
             assertDoesNotThrow(() -> {
                 AlarmFactory.Props.class.getConstructor();
             }, "Props should have default constructor");
@@ -67,11 +67,11 @@ class ObservabilityStructureTest {
         @DisplayName("Should have correct class structure")
         void shouldHaveCorrectClassStructure() {
             // Verify class extends BaseFactory
-            assertTrue(BaseFactory.class.isAssignableFrom(FlowLogFactory.class), 
+            assertTrue(BaseFactory.class.isAssignableFrom(FlowLogFactory.class),
                 "FlowLogFactory should extend BaseFactory");
-            
+
             // Verify class extends Construct
-            assertTrue(Construct.class.isAssignableFrom(FlowLogFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(FlowLogFactory.class),
                 "FlowLogFactory should extend Construct");
         }
 
@@ -100,11 +100,11 @@ class ObservabilityStructureTest {
         @DisplayName("Should have correct class structure")
         void shouldHaveCorrectClassStructure() {
             // Verify class extends BaseFactory
-            assertTrue(BaseFactory.class.isAssignableFrom(LoggingCwFactory.class), 
+            assertTrue(BaseFactory.class.isAssignableFrom(LoggingCwFactory.class),
                 "LoggingCwFactory should extend BaseFactory");
-            
+
             // Verify class extends Construct
-            assertTrue(Construct.class.isAssignableFrom(LoggingCwFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(LoggingCwFactory.class),
                 "LoggingCwFactory should extend Construct");
         }
 
@@ -133,11 +133,11 @@ class ObservabilityStructureTest {
         @DisplayName("Should have correct class structure")
         void shouldHaveCorrectClassStructure() {
             // Verify class extends BaseFactory
-            assertTrue(BaseFactory.class.isAssignableFrom(SecurityMonitoringFactory.class), 
+            assertTrue(BaseFactory.class.isAssignableFrom(SecurityMonitoringFactory.class),
                 "SecurityMonitoringFactory should extend BaseFactory");
-            
+
             // Verify class extends Construct
-            assertTrue(Construct.class.isAssignableFrom(SecurityMonitoringFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(SecurityMonitoringFactory.class),
                 "SecurityMonitoringFactory should extend Construct");
         }
 
@@ -162,29 +162,29 @@ class ObservabilityStructureTest {
         void shouldHavePrivateHelperMethods() {
             assertDoesNotThrow(() -> {
                 SecurityMonitoringFactory.class.getDeclaredMethod("createSecurityAlertsTopic");
-                SecurityMonitoringFactory.class.getDeclaredMethod("configureSecurityAlarms", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("configureSecurityAlarms",
                     software.amazon.awscdk.services.sns.Topic.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("configureFlowLogMonitoring", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("configureFlowLogMonitoring",
                     software.amazon.awscdk.services.sns.Topic.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("createCpuAlarm", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("createCpuAlarm",
                     software.amazon.awscdk.services.sns.Topic.class, double.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("createMemoryAlarm", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("createMemoryAlarm",
                     software.amazon.awscdk.services.sns.Topic.class, double.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("createNetworkAlarm", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("createNetworkAlarm",
                     software.amazon.awscdk.services.sns.Topic.class, double.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("createFailedLoginAlarm", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("createFailedLoginAlarm",
                     software.amazon.awscdk.services.sns.Topic.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("createUnusualApiActivityAlarm", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("createUnusualApiActivityAlarm",
                     software.amazon.awscdk.services.sns.Topic.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("createRejectedConnectionsAlarm", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("createRejectedConnectionsAlarm",
                     software.amazon.awscdk.services.sns.Topic.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("createUnusualTrafficPatternAlarm", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("createUnusualTrafficPatternAlarm",
                     software.amazon.awscdk.services.sns.Topic.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("getHighCpuThreshold", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("getHighCpuThreshold",
                     com.cloudforgeci.api.interfaces.SecurityProfile.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("getHighMemoryThreshold", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("getHighMemoryThreshold",
                     com.cloudforgeci.api.interfaces.SecurityProfile.class);
-                SecurityMonitoringFactory.class.getDeclaredMethod("getHighNetworkThreshold", 
+                SecurityMonitoringFactory.class.getDeclaredMethod("getHighNetworkThreshold",
                     com.cloudforgeci.api.interfaces.SecurityProfile.class);
             }, "Should have all expected private helper methods");
         }
@@ -197,24 +197,24 @@ class ObservabilityStructureTest {
         @Test
         @DisplayName("All observability classes should extend Construct")
         void allObservabilityClassesShouldExtendConstruct() {
-            assertTrue(Construct.class.isAssignableFrom(AlarmFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(AlarmFactory.class),
                 "AlarmFactory should extend Construct");
-            assertTrue(Construct.class.isAssignableFrom(FlowLogFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(FlowLogFactory.class),
                 "FlowLogFactory should extend Construct");
-            assertTrue(Construct.class.isAssignableFrom(LoggingCwFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(LoggingCwFactory.class),
                 "LoggingCwFactory should extend Construct");
-            assertTrue(Construct.class.isAssignableFrom(SecurityMonitoringFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(SecurityMonitoringFactory.class),
                 "SecurityMonitoringFactory should extend Construct");
         }
 
         @Test
         @DisplayName("BaseFactory classes should extend BaseFactory")
         void baseFactoryClassesShouldExtendBaseFactory() {
-            assertTrue(BaseFactory.class.isAssignableFrom(FlowLogFactory.class), 
+            assertTrue(BaseFactory.class.isAssignableFrom(FlowLogFactory.class),
                 "FlowLogFactory should extend BaseFactory");
-            assertTrue(BaseFactory.class.isAssignableFrom(LoggingCwFactory.class), 
+            assertTrue(BaseFactory.class.isAssignableFrom(LoggingCwFactory.class),
                 "LoggingCwFactory should extend BaseFactory");
-            assertTrue(BaseFactory.class.isAssignableFrom(SecurityMonitoringFactory.class), 
+            assertTrue(BaseFactory.class.isAssignableFrom(SecurityMonitoringFactory.class),
                 "SecurityMonitoringFactory should extend BaseFactory");
         }
 
@@ -224,11 +224,11 @@ class ObservabilityStructureTest {
             assertDoesNotThrow(() -> {
                 FlowLogFactory.class.getMethod("create");
             }, "FlowLogFactory should have create method");
-            
+
             assertDoesNotThrow(() -> {
                 LoggingCwFactory.class.getMethod("create");
             }, "LoggingCwFactory should have create method");
-            
+
             assertDoesNotThrow(() -> {
                 SecurityMonitoringFactory.class.getMethod("create");
             }, "SecurityMonitoringFactory should have create method");

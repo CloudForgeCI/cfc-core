@@ -41,14 +41,14 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
     // S3 website topology does not provision Jenkins compute (runtime is irrelevant here).
     // If TLS is enabled, we front with CloudFront (viewer TLS at edge).
     r.add(ctx -> ctx.cfc.enableSsl() && !ctx.cfc.cloudfrontEnabled()
-            ? List.of("S3_WEBSITE with enableSsl=true requires cloudfront=true (viewer TLS at edge)") : List.of());
+            ? List.of("S3_WEBSITE with enableSsl = true requires cloudfront = true (viewer TLS at edge)") : List.of());
 
     // If cloudfront + custom host expected, ensure fqdn (or can compute).
     r.add(ctx -> {
       if (!ctx.cfc.cloudfrontEnabled()) return List.of();
       boolean hasFqdn = ctx.cfc.fqdn() != null && !ctx.cfc.fqdn().isBlank();
       boolean canCompute = ctx.cfc.subdomain() != null && ctx.cfc.domain() != null;
-      return (hasFqdn || canCompute) ? List.of() : List.of("cloudfront=true requires fqdn OR (subdomain + domain)");
+      return (hasFqdn || canCompute) ? List.of() : List.of("cloudfront = true requires fqdn OR (subdomain + domain)");
     });
 
     r.addAll(List.of(
@@ -83,7 +83,7 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
       c.websiteBucket.set(bucket);
     });
 
-    // 2) CloudFront distribution (optional; required if enableSsl=true)
+    // 2) CloudFront distribution (optional; required if enableSsl = true)
     c.once("S3:Distribution", () -> {
       if (!c.cfc.cloudfrontEnabled()) return;
 

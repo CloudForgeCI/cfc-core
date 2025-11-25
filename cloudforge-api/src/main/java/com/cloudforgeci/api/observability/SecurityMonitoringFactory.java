@@ -29,7 +29,7 @@ public class SecurityMonitoringFactory extends BaseFactory {
     public SecurityMonitoringFactory(Construct scope, String id) {
         super(scope, id);
     }
-    
+
     @Override
     public void create() {
         // SecurityProfileConfiguration is now injected directly via annotation
@@ -54,7 +54,7 @@ public class SecurityMonitoringFactory extends BaseFactory {
 
         LOG.info("Security monitoring configuration completed for profile: " + security);
     }
-    
+
     /**
      * Create SNS topic for security alerts.
      */
@@ -69,7 +69,7 @@ public class SecurityMonitoringFactory extends BaseFactory {
         LOG.info("Created security alerts SNS topic: " + topicName);
         return topic;
     }
-    
+
     /**
      * Configure CloudWatch alarms for security monitoring.
      */
@@ -80,16 +80,16 @@ public class SecurityMonitoringFactory extends BaseFactory {
         double highCpuThreshold = getHighCpuThreshold(security);
         double highMemoryThreshold = getHighMemoryThreshold(security);
         double highNetworkThreshold = getHighNetworkThreshold(security);
-        
+
         // High CPU Utilization Alarm
         createCpuAlarm(alertsTopic, highCpuThreshold);
-        
-        // High Memory Utilization Alarm  
+
+        // High Memory Utilization Alarm
         createMemoryAlarm(alertsTopic, highMemoryThreshold);
-        
+
         // High Network Traffic Alarm
         createNetworkAlarm(alertsTopic, highNetworkThreshold);
-        
+
         // Failed Login Attempts Alarm (for production)
         if (security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
             createFailedLoginAlarm(alertsTopic);
@@ -100,7 +100,7 @@ public class SecurityMonitoringFactory extends BaseFactory {
             createUnusualApiActivityAlarm(alertsTopic);
         }
     }
-    
+
     /**
      * Configure VPC Flow Log monitoring for security analysis.
      */
@@ -115,7 +115,7 @@ public class SecurityMonitoringFactory extends BaseFactory {
             createUnusualTrafficPatternAlarm(alertsTopic);
         }
     }
-    
+
     /**
      * Create CPU utilization alarm.
      */
@@ -136,11 +136,11 @@ public class SecurityMonitoringFactory extends BaseFactory {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
                 .evaluationPeriods(2)
                 .build();
-        
+
         cpuAlarm.addAlarmAction(new SnsAction(alertsTopic));
         LOG.info("Created CPU alarm with threshold: " + threshold + "%");
     }
-    
+
     /**
      * Create memory utilization alarm.
      */
@@ -161,11 +161,11 @@ public class SecurityMonitoringFactory extends BaseFactory {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
                 .evaluationPeriods(2)
                 .build();
-        
+
         memoryAlarm.addAlarmAction(new SnsAction(alertsTopic));
         LOG.info("Created memory alarm with threshold: " + threshold + "%");
     }
-    
+
     /**
      * Create network traffic alarm.
      */
@@ -186,11 +186,11 @@ public class SecurityMonitoringFactory extends BaseFactory {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
                 .evaluationPeriods(3)
                 .build();
-        
+
         networkAlarm.addAlarmAction(new SnsAction(alertsTopic));
         LOG.info("Created network alarm with threshold: " + threshold + " bytes");
     }
-    
+
     /**
      * Create failed login attempts alarm (production only).
      */
@@ -199,7 +199,7 @@ public class SecurityMonitoringFactory extends BaseFactory {
             LOG.warning("Cannot create failed login alarm - logs not configured");
             return;
         }
-        
+
         // Create metric filter for failed login attempts
         Metric failedLoginMetric = Metric.Builder.create()
                 .namespace("CWLogs")
@@ -217,11 +217,11 @@ public class SecurityMonitoringFactory extends BaseFactory {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD)
                 .evaluationPeriods(1)
                 .build();
-        
+
         failedLoginAlarm.addAlarmAction(new SnsAction(alertsTopic));
         LOG.info("Created failed login alarm for production environment");
     }
-    
+
     /**
      * Create unusual API activity alarm.
      */
@@ -244,11 +244,11 @@ public class SecurityMonitoringFactory extends BaseFactory {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
                 .evaluationPeriods(2)
                 .build();
-        
+
         apiAlarm.addAlarmAction(new SnsAction(alertsTopic));
         LOG.info("Created API activity alarm with threshold: " + threshold + " requests");
     }
-    
+
     /**
      * Create rejected connections alarm from VPC Flow Logs.
      */
@@ -271,11 +271,11 @@ public class SecurityMonitoringFactory extends BaseFactory {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
                 .evaluationPeriods(2)
                 .build();
-        
+
         rejectedAlarm.addAlarmAction(new SnsAction(alertsTopic));
         LOG.info("Created rejected connections alarm with threshold: " + threshold);
     }
-    
+
     /**
      * Create unusual traffic pattern alarm (production only).
      */
@@ -296,11 +296,11 @@ public class SecurityMonitoringFactory extends BaseFactory {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD)
                 .evaluationPeriods(1)
                 .build();
-        
+
         trafficAlarm.addAlarmAction(new SnsAction(alertsTopic));
         LOG.info("Created unusual traffic pattern alarm for production environment");
     }
-    
+
     /**
      * Get CPU threshold based on security profile.
      */
@@ -311,7 +311,7 @@ public class SecurityMonitoringFactory extends BaseFactory {
             case PRODUCTION -> 70.0; // Strict for production
         };
     }
-    
+
     /**
      * Get memory threshold based on security profile.
      */
@@ -322,7 +322,7 @@ public class SecurityMonitoringFactory extends BaseFactory {
             case PRODUCTION -> 80.0; // Strict for production
         };
     }
-    
+
     /**
      * Get network threshold based on security profile.
      */

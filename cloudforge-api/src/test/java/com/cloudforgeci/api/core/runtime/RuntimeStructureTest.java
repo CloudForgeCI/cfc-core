@@ -25,7 +25,7 @@ class RuntimeStructureTest {
         @Test
         @DisplayName("Should implement RuntimeConfiguration interface")
         void shouldImplementRuntimeConfigurationInterface() {
-            assertTrue(RuntimeConfiguration.class.isAssignableFrom(FargateRuntimeConfiguration.class), 
+            assertTrue(RuntimeConfiguration.class.isAssignableFrom(FargateRuntimeConfiguration.class),
                 "FargateRuntimeConfiguration should implement RuntimeConfiguration");
         }
 
@@ -59,7 +59,7 @@ class RuntimeStructureTest {
                 // Just verify the method exists and has correct signature
                 var method = FargateRuntimeConfiguration.class.getMethod("rules", com.cloudforgeci.api.core.SystemContext.class);
                 assertNotNull(method, "Rules method should exist");
-                assertEquals(com.cloudforgeci.api.core.SystemContext.class, method.getParameterTypes()[0], 
+                assertEquals(com.cloudforgeci.api.core.SystemContext.class, method.getParameterTypes()[0],
                     "Rules method should accept SystemContext parameter");
             }, "Should have correct rules method signature");
         }
@@ -70,7 +70,7 @@ class RuntimeStructureTest {
             assertDoesNotThrow(() -> {
                 FargateRuntimeConfiguration.class.getDeclaredMethod("kind");
             }, "Should have kind method");
-            
+
             assertDoesNotThrow(() -> {
                 FargateRuntimeConfiguration.class.getDeclaredMethod("id");
             }, "Should have id method");
@@ -84,7 +84,7 @@ class RuntimeStructureTest {
         @Test
         @DisplayName("Should implement RuntimeConfiguration interface")
         void shouldImplementRuntimeConfigurationInterface() {
-            assertTrue(RuntimeConfiguration.class.isAssignableFrom(Ec2RuntimeConfiguration.class), 
+            assertTrue(RuntimeConfiguration.class.isAssignableFrom(Ec2RuntimeConfiguration.class),
                 "Ec2RuntimeConfiguration should implement RuntimeConfiguration");
         }
 
@@ -118,7 +118,7 @@ class RuntimeStructureTest {
                 // Just verify the method exists and has correct signature
                 var method = Ec2RuntimeConfiguration.class.getMethod("rules", com.cloudforgeci.api.core.SystemContext.class);
                 assertNotNull(method, "Rules method should exist");
-                assertEquals(com.cloudforgeci.api.core.SystemContext.class, method.getParameterTypes()[0], 
+                assertEquals(com.cloudforgeci.api.core.SystemContext.class, method.getParameterTypes()[0],
                     "Rules method should accept SystemContext parameter");
             }, "Should have correct rules method signature");
         }
@@ -129,7 +129,7 @@ class RuntimeStructureTest {
             assertDoesNotThrow(() -> {
                 Ec2RuntimeConfiguration.class.getDeclaredMethod("kind");
             }, "Should have kind method");
-            
+
             assertDoesNotThrow(() -> {
                 Ec2RuntimeConfiguration.class.getDeclaredMethod("id");
             }, "Should have id method");
@@ -143,9 +143,9 @@ class RuntimeStructureTest {
         @Test
         @DisplayName("Both runtime configurations should implement RuntimeConfiguration")
         void bothRuntimeConfigurationsShouldImplementRuntimeConfiguration() {
-            assertTrue(RuntimeConfiguration.class.isAssignableFrom(FargateRuntimeConfiguration.class), 
+            assertTrue(RuntimeConfiguration.class.isAssignableFrom(FargateRuntimeConfiguration.class),
                 "FargateRuntimeConfiguration should implement RuntimeConfiguration");
-            assertTrue(RuntimeConfiguration.class.isAssignableFrom(Ec2RuntimeConfiguration.class), 
+            assertTrue(RuntimeConfiguration.class.isAssignableFrom(Ec2RuntimeConfiguration.class),
                 "Ec2RuntimeConfiguration should implement RuntimeConfiguration");
         }
 
@@ -154,8 +154,8 @@ class RuntimeStructureTest {
         void bothRuntimeConfigurationsShouldHaveDifferentRuntimeTypes() {
             FargateRuntimeConfiguration fargateConfig = new FargateRuntimeConfiguration();
             Ec2RuntimeConfiguration ec2Config = new Ec2RuntimeConfiguration();
-            
-            assertNotEquals(fargateConfig.kind(), ec2Config.kind(), 
+
+            assertNotEquals(fargateConfig.kind(), ec2Config.kind(),
                 "Fargate and EC2 configurations should have different runtime types");
         }
 
@@ -164,8 +164,8 @@ class RuntimeStructureTest {
         void bothRuntimeConfigurationsShouldHaveDifferentIds() {
             FargateRuntimeConfiguration fargateConfig = new FargateRuntimeConfiguration();
             Ec2RuntimeConfiguration ec2Config = new Ec2RuntimeConfiguration();
-            
-            assertNotEquals(fargateConfig.id(), ec2Config.id(), 
+
+            assertNotEquals(fargateConfig.id(), ec2Config.id(),
                 "Fargate and EC2 configurations should have different IDs");
         }
 
@@ -175,16 +175,16 @@ class RuntimeStructureTest {
             assertDoesNotThrow(() -> {
                 FargateRuntimeConfiguration fargateConfig = new FargateRuntimeConfiguration();
                 Ec2RuntimeConfiguration ec2Config = new Ec2RuntimeConfiguration();
-                
+
                 // Verify both have rules methods
                 var fargateMethod = FargateRuntimeConfiguration.class.getMethod("rules", com.cloudforgeci.api.core.SystemContext.class);
                 var ec2Method = Ec2RuntimeConfiguration.class.getMethod("rules", com.cloudforgeci.api.core.SystemContext.class);
-                
+
                 assertNotNull(fargateMethod, "Fargate should have rules method");
                 assertNotNull(ec2Method, "EC2 should have rules method");
-                assertEquals(com.cloudforgeci.api.core.SystemContext.class, fargateMethod.getParameterTypes()[0], 
+                assertEquals(com.cloudforgeci.api.core.SystemContext.class, fargateMethod.getParameterTypes()[0],
                     "Fargate rules method should accept SystemContext");
-                assertEquals(com.cloudforgeci.api.core.SystemContext.class, ec2Method.getParameterTypes()[0], 
+                assertEquals(com.cloudforgeci.api.core.SystemContext.class, ec2Method.getParameterTypes()[0],
                     "EC2 rules method should accept SystemContext");
             }, "Both configurations should have rules methods");
         }
@@ -199,7 +199,7 @@ class RuntimeStructureTest {
         void fargateRuntimeConfigurationShouldBeImmutable() {
             FargateRuntimeConfiguration config1 = new FargateRuntimeConfiguration();
             FargateRuntimeConfiguration config2 = new FargateRuntimeConfiguration();
-            
+
             // Both instances should return the same values (immutable behavior)
             assertEquals(config1.kind(), config2.kind(), "Fargate configurations should be consistent");
             assertEquals(config1.id(), config2.id(), "Fargate configurations should be consistent");
@@ -210,7 +210,7 @@ class RuntimeStructureTest {
         void ec2RuntimeConfigurationShouldBeImmutable() {
             Ec2RuntimeConfiguration config1 = new Ec2RuntimeConfiguration();
             Ec2RuntimeConfiguration config2 = new Ec2RuntimeConfiguration();
-            
+
             // Both instances should return the same values (immutable behavior)
             assertEquals(config1.kind(), config2.kind(), "EC2 configurations should be consistent");
             assertEquals(config1.id(), config2.id(), "EC2 configurations should be consistent");
@@ -224,7 +224,7 @@ class RuntimeStructureTest {
             assertDoesNotThrow(() -> {
                 FargateRuntimeConfiguration fargateConfig = new FargateRuntimeConfiguration();
                 Ec2RuntimeConfiguration ec2Config = new Ec2RuntimeConfiguration();
-                
+
                 // These should not throw NPE even with null context
                 fargateConfig.kind();
                 fargateConfig.id();
@@ -239,24 +239,24 @@ class RuntimeStructureTest {
             assertDoesNotThrow(() -> {
                 FargateRuntimeConfiguration fargateConfig = new FargateRuntimeConfiguration();
                 Ec2RuntimeConfiguration ec2Config = new Ec2RuntimeConfiguration();
-                
+
                 // Multiple threads accessing the same configuration should be safe
                 Runnable fargateTask = () -> {
                     fargateConfig.kind();
                     fargateConfig.id();
                 };
-                
+
                 Runnable ec2Task = () -> {
                     ec2Config.kind();
                     ec2Config.id();
                 };
-                
+
                 Thread fargateThread = new Thread(fargateTask);
                 Thread ec2Thread = new Thread(ec2Task);
-                
+
                 fargateThread.start();
                 ec2Thread.start();
-                
+
                 fargateThread.join();
                 ec2Thread.join();
             }, "Runtime configurations should be thread-safe");

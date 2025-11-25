@@ -120,33 +120,33 @@ public final class SystemContext extends Construct {
   // SSL Configuration Properties
   public final Slot<Boolean> sslEnabled = new Slot<>();
   public final Slot<Boolean> httpRedirectEnabled = new Slot<>();
-  
+
   // Networking Configuration Properties (used in SecurityProfile)
   public final Slot<String> networkMode = new Slot<>(); // "public-no-nat" | "private-with-nat"
   public final Slot<Boolean> wafEnabled = new Slot<>();
   public final Slot<Boolean> cloudfront = new Slot<>();
   public final Slot<String> lbType = new Slot<>(); // "alb" | "nlb"
-  
+
   // Auto Scaling Configuration Properties (used in RuntimeConfiguration)
   public final Slot<Integer> minInstanceCapacity = new Slot<>();
   public final Slot<Integer> maxInstanceCapacity = new Slot<>();
   public final Slot<Integer> cpuTargetUtilization = new Slot<>();
-  
+
   // Container Configuration Properties (used in FargateRuntimeConfiguration)
   public final Slot<Integer> cpu = new Slot<>();
   public final Slot<Integer> memory = new Slot<>();
-  
+
   // Authentication Configuration Properties (used in SecurityProfile)
   public final Slot<String> authMode = new Slot<>(); // "none" | "alb-oidc" | "jenkins-oidc"
   public final Slot<String> ssoInstanceArn = new Slot<>();
   public final Slot<String> ssoGroupId = new Slot<>();
   public final Slot<String> ssoTargetAccountId = new Slot<>();
-  
+
   // Storage Configuration Properties (used in IAMConfiguration)
   public final Slot<String> artifactsBucket = new Slot<>();
   public final Slot<String> artifactsPrefix = new Slot<>();
   public final Slot<Boolean> enableFlowlogs = new Slot<>();
-  
+
   // DNS Configuration Properties (used in TopologyConfiguration)
   public final Slot<String> domain = new Slot<>();
   public final Slot<String> subdomain = new Slot<>();
@@ -183,29 +183,29 @@ public final class SystemContext extends Construct {
 
   /** Start once at the entry point; installs runtime + topology + security + iam rules and wiring. */
   public static SystemContext start(Construct scope, TopologyType topology, RuntimeType runtime, SecurityProfile security, IAMProfile iamProfile, DeploymentContext cfc) {
-    
+
     try {
       Stack stack = Stack.of(scope);
-      
+
       SystemContext existing = (SystemContext) stack.getNode().tryFindChild(NODE_ID);
       if (existing != null) {
         // Allow multiple runtime types in the same stack for testing purposes
         // Runtime type check removed to allow EC2 and Fargate in same stack
         if (existing.topology != topology) {
-          throw new IllegalStateException("SystemContext already started with topology=" + existing.topology);
+          throw new IllegalStateException("SystemContext already started with topology = " + existing.topology);
         }
         if (existing.security != security) {
-          throw new IllegalStateException("SystemContext already started with security=" + existing.security);
+          throw new IllegalStateException("SystemContext already started with security = " + existing.security);
         }
         if (existing.iamProfile != iamProfile) {
-          throw new IllegalStateException("SystemContext already started with iamProfile=" + existing.iamProfile);
+          throw new IllegalStateException("SystemContext already started with iamProfile = " + existing.iamProfile);
         }
-        
+
         return existing;
       }
-      
+
       var ctx = new SystemContext(stack, topology, runtime, security, iamProfile, cfc);
-      
+
       if (!ctx.installed) {
         try {
           Rules.installAll(ctx);   // installs RuntimeRules, TopologyRules, SecurityRules, and IAMRules
@@ -216,7 +216,7 @@ public final class SystemContext extends Construct {
         ctx.installed = true;
       } else {
       }
-      
+
       return ctx;
 
     } catch (Exception e) {
@@ -262,30 +262,30 @@ public final class SystemContext extends Construct {
   public String debugPath(Construct scope) {
     String here = scope.getNode().getPath();
     String sc   = this.getNode().getPath();
-    return "scopePath=" + here + " | ctxPath=" + sc + " | runtime=" + runtime + " | topology=" + topology + " | security=" + security + " | iamProfile=" + iamProfile + " | slots=" + presentSlots();
+    return "scopePath = " + here + " | ctxPath = " + sc + " | runtime = " + runtime + " | topology = " + topology + " | security = " + security + " | iamProfile = " + iamProfile + " | slots = " + presentSlots();
   }
 
   public String presentSlots() {
-    return "vpc="+vpc.get().isPresent()
-            +", alb="+alb.get().isPresent()
-            +", efs="+efs.get().isPresent()
-            +", http="+http.get().isPresent()
-            +", tg="+albTargetGroup.get().isPresent()
-            +", ap="+ap.get().isPresent()
-            +", asg="+asg.get().isPresent()
-            +", fargate="+fargateService.get().isPresent()
-            +", instSg="+instanceSg.get().isPresent();
+    return "vpc = "+vpc.get().isPresent()
+            +", alb = "+alb.get().isPresent()
+            +", efs = "+efs.get().isPresent()
+            +", http = "+http.get().isPresent()
+            +", tg = "+albTargetGroup.get().isPresent()
+            +", ap = "+ap.get().isPresent()
+            +", asg = "+asg.get().isPresent()
+            +", fargate = "+fargateService.get().isPresent()
+            +", instSg = "+instanceSg.get().isPresent();
   }
 
   // ============================================================================
   // ORCHESTRATION LAYER - Centralized Factory Creation
   // ============================================================================
-  
+
   /**
    * Creates infrastructure factories in the correct order with proper context injection.
    * This orchestration layer ensures that infrastructure factories are created consistently
    * and can be reused across different application factories.
-   * 
+   *
    * @param scope The CDK construct scope
    * @param idPrefix Prefix for factory IDs (e.g., "Jenkins", "MyApp")
    * @return InfrastructureFactories containing references to created factories
@@ -315,7 +315,7 @@ public final class SystemContext extends Construct {
 
     return new InfrastructureFactories(vpcFactory, albFactory, efsFactory, loggingFactory);
   }
-  
+
   /**
    * Creates a VPC factory with proper context injection.
    */
@@ -324,7 +324,7 @@ public final class SystemContext extends Construct {
     vpcFactory.create();
     return vpcFactory;
   }
-  
+
   /**
    * Creates an ALB factory with proper context injection.
    */
@@ -333,7 +333,7 @@ public final class SystemContext extends Construct {
     albFactory.create();
     return albFactory;
   }
-  
+
   /**
    * Creates an EFS factory with proper context injection.
    */
@@ -342,7 +342,7 @@ public final class SystemContext extends Construct {
     efsFactory.create();
     return efsFactory;
   }
-  
+
   /**
    * Creates a logging factory with proper context injection.
    */
@@ -382,7 +382,7 @@ public final class SystemContext extends Construct {
         new com.cloudforgeci.api.security.IdentityCenterFactory(scope, idPrefix + "IdentityCenter");
     identityCenterFactory.create();
 
-    // Create OIDC authentication factory (configures ALB OIDC if authMode=alb-oidc)
+    // Create OIDC authentication factory (configures ALB OIDC if authMode = alb-oidc)
     // This checks for Cognito endpoints first, then IAM Identity Center, then manual config
     com.cloudforgeci.api.security.OidcAuthenticationFactory oidcFactory =
         new com.cloudforgeci.api.security.OidcAuthenticationFactory(scope, idPrefix + "OidcAuth");
@@ -400,12 +400,12 @@ public final class SystemContext extends Construct {
    * This centralizes target group management and prevents duplicates.
    */
   public void createTargetGroups(Construct scope, String idPrefix) {
-    
+
     if (this.runtime == RuntimeType.EC2) {
       // Create target group for EC2 runtime
-      ApplicationLoadBalancer alb = this.alb.get().orElseThrow(() -> 
+      ApplicationLoadBalancer alb = this.alb.get().orElseThrow(() ->
         new IllegalStateException("ALB not found when creating target groups"));
-      
+
       ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(scope, idPrefix + "Tg")
           .vpc(this.vpc.get().orElseThrow())
           .port(8080)
@@ -424,18 +424,18 @@ public final class SystemContext extends Construct {
                   cfc.unhealthyThreshold() != null ? cfc.unhealthyThreshold() : 3)
               .build())
           .build();
-      
+
       this.albTargetGroup.set(targetGroup);
-      
+
       // Update HTTP listener to use the target group
-      ApplicationListener http = this.http.get().orElseThrow(() -> 
+      ApplicationListener http = this.http.get().orElseThrow(() ->
         new IllegalStateException("HTTP listener not found when updating target group"));
-      
+
       http.addTargetGroups(idPrefix + "HttpTg", AddApplicationTargetGroupsProps.builder()
           .targetGroups(List.of(targetGroup))
           .build());
-      
-      
+
+
     } else if (this.runtime == RuntimeType.FARGATE) {
       // For Fargate, target groups are created by FargateRuntimeConfiguration
       // We should not create target groups here to avoid conflicts
@@ -443,18 +443,18 @@ public final class SystemContext extends Construct {
       LOG.warning("*** SystemContext: Unknown runtime type: " + this.runtime + " ***");
     }
   }
-  
+
   /**
    * Creates instance security group for EC2 deployments.
    * This is infrastructure-specific but not a full factory.
    */
   public SecurityGroup createInstanceSecurityGroup(Construct scope, String idPrefix) {
-    
+
     // Check if instance security group already exists
     if (this.instanceSg.get().isPresent()) {
       return this.instanceSg.get().orElseThrow();
     }
-    
+
     SecurityGroup instanceSg = SecurityGroup.Builder.create(scope, idPrefix + "InstanceSg")
             .vpc(vpc.get().orElseThrow())
             .description("EC2 Instance Security Group")
@@ -463,59 +463,59 @@ public final class SystemContext extends Construct {
     this.instanceSg.set(instanceSg);
     return instanceSg;
   }
-  
+
   // ============================================================================
   // DEPLOYMENT TYPE ORCHESTRATION - High-level deployment methods
   // ============================================================================
-  
+
   /**
    * Creates a complete Jenkins deployment with infrastructure and Jenkins-specific resources.
    * Supports both Fargate and EC2 runtimes with optional domain and SSL.
-   * 
+   *
    * @param scope The CDK construct scope
    * @param id Unique identifier for the Jenkins deployment
    * @return JenkinsDeployment containing all created resources
    */
   public JenkinsDeployment createJenkinsDeployment(Construct scope, String id) {
-    
+
     // Create infrastructure factories
     InfrastructureFactories infra = createInfrastructureFactories(scope, id);
-    
+
     // Create Jenkins-specific factories based on runtime
     JenkinsSpecificFactories jenkins = createJenkinsSpecificFactories(scope, id);
-    
+
     // Create domain and SSL if configured
     DomainAndSslFactories domainSsl = createDomainAndSslFactories(scope, id);
-    
-    
+
+
     return new JenkinsDeployment(infra, jenkins, domainSsl);
   }
-  
+
   /**
    * Creates a complete S3 + CloudFront deployment for static web applications.
    * Supports Angular, React, or any static site with optional domain.
-   * 
+   *
    * @param scope The CDK construct scope
    * @param id Unique identifier for the S3 deployment
    * @return S3CloudFrontDeployment containing all created resources
    */
   public S3CloudFrontDeployment createS3CloudFrontDeployment(Construct scope, String id) {
-    
+
     // Create S3 and CloudFront factories
     S3CloudFrontFactories s3cf = createS3CloudFrontFactories(scope, id);
-    
+
     // Create domain if configured
     DomainAndSslFactories domainSsl = createDomainAndSslFactories(scope, id);
-    
-    
+
+
     return new S3CloudFrontDeployment(s3cf, domainSsl);
   }
-  
+
   /**
    * Creates Jenkins-specific factories based on the current runtime configuration.
    */
   private JenkinsSpecificFactories createJenkinsSpecificFactories(Construct scope, String id) {
-    
+
     if (runtime == RuntimeType.FARGATE) {
       return createFargateJenkinsFactories(scope, id);
     } else if (runtime == RuntimeType.EC2) {
@@ -524,12 +524,12 @@ public final class SystemContext extends Construct {
       throw new IllegalArgumentException("Unsupported runtime for Jenkins deployment: " + runtime);
     }
   }
-  
+
   /**
    * Creates Fargate-specific Jenkins factories.
    */
   private JenkinsSpecificFactories createFargateJenkinsFactories(Construct scope, String id) {
-    
+
     // Create Fargate factory
     FargateFactory fargate = new FargateFactory(scope, id + "Fargate");
     fargate.create();
@@ -546,18 +546,18 @@ public final class SystemContext extends Construct {
     // Create alarms
     AlarmFactory alarms = new AlarmFactory(scope, id + "Alarms", null);
     alarms.create();
-    
+
     return new JenkinsSpecificFactories(fargate, container, bootstrap, alarms, null, null);
   }
-  
+
   /**
    * Creates EC2-specific Jenkins factories.
    */
   private JenkinsSpecificFactories createEc2JenkinsFactories(Construct scope, String id) {
-    
+
     // Instance security group is already created by createInfrastructureFactories()
     // No need to create it again here
-    
+
     // Create EC2 factory (Auto Scaling Group) if maxInstanceCapacity is provided
     Ec2Factory ec2 = null;
     if (cfc.maxInstanceCapacity() != null) {
@@ -575,48 +575,48 @@ public final class SystemContext extends Construct {
     // Create alarms
     AlarmFactory alarms = new AlarmFactory(scope, id + "Alarms", null);
     alarms.create();
-    
+
     return new JenkinsSpecificFactories(null, null, null, alarms, ec2, singleInstance);
   }
-  
+
   /**
    * Creates S3 and CloudFront factories for static web applications.
    */
   private S3CloudFrontFactories createS3CloudFrontFactories(Construct scope, String id) {
-    
+
     // Create S3 bucket factory
     // TODO: Create S3BucketFactory
     Object s3 = null;
-    
+
     // Create CloudFront distribution factory
     // TODO: Create CloudFrontFactory
     Object cloudfront = null;
-    
+
     return new S3CloudFrontFactories(s3, cloudfront);
   }
-  
+
   /**
    * Creates domain and SSL factories if configured in the deployment context.
    */
   private DomainAndSslFactories createDomainAndSslFactories(Construct scope, String id) {
-    
+
     DomainFactory domain = null;
-    
+
     // Create domain factory if domain is provided
     if (cfc.domain() != null && !cfc.domain().isBlank()) {
       domain = new DomainFactory(scope, id + "Domain");
       domain.create();
     }
-    
+
     // SSL certificate creation is handled by runtime configurations (FargateRuntimeConfiguration)
-    
+
     return new DomainAndSslFactories(domain, null);
   }
-  
+
   // ============================================================================
   // DEPLOYMENT CONTAINERS - Records for different deployment types
   // ============================================================================
-  
+
   /**
    * Container for infrastructure factories created by the orchestration layer.
    * This provides a clean interface for accessing infrastructure components.
@@ -627,7 +627,7 @@ public final class SystemContext extends Construct {
       EfsFactory efs,
       LoggingCwFactory logging
   ) {}
-  
+
   /**
    * Container for Jenkins-specific factories.
    */
@@ -639,7 +639,7 @@ public final class SystemContext extends Construct {
       Ec2Factory ec2,
       Object singleInstance
   ) {}
-  
+
   /**
    * Container for S3 and CloudFront factories.
    */
@@ -647,7 +647,7 @@ public final class SystemContext extends Construct {
       Object s3,
       Object cloudfront
   ) {}
-  
+
   /**
    * Container for domain and SSL factories.
    */
@@ -655,7 +655,7 @@ public final class SystemContext extends Construct {
       DomainFactory domain,
       Object ssl  // SSL is handled by runtime configurations
   ) {}
-  
+
   /**
    * Container for complete Jenkins deployment.
    */
@@ -664,7 +664,7 @@ public final class SystemContext extends Construct {
       JenkinsSpecificFactories jenkins,
       DomainAndSslFactories domainSsl
   ) {}
-  
+
   /**
    * Container for complete S3 + CloudFront deployment.
    */

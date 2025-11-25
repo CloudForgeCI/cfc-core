@@ -51,7 +51,7 @@ public class DomainFactory extends BaseFactory {
 
     private IHostedZone createHostedZone(String domainName) {
         if (createZone) {
-            // Create a new hosted zone resource when createZone=true
+            // Create a new hosted zone resource when createZone = true
             HostedZone zone = HostedZone.Builder.create(this, getNode().getId() + "Zone")
                     .zoneName(domainName)
                     .build();
@@ -67,7 +67,7 @@ public class DomainFactory extends BaseFactory {
             LOG.info("Created hosted zone for " + domainName + " with removal policy: " + policy);
             return zone;
         } else {
-            // Use existing hosted zone lookup when createZone=false (normal behavior)
+            // Use existing hosted zone lookup when createZone = false (normal behavior)
             LOG.info("Looking up existing hosted zone for " + domainName);
             return HostedZone.fromLookup(this, getNode().getId() + "Zone",
                     HostedZoneProviderProps.builder()

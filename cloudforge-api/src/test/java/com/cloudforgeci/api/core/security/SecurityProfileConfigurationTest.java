@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.Map;
 
 public class SecurityProfileConfigurationTest {
-  
+
   private App app;
   private Stack stack;
   private DeploymentContext cfc;
@@ -34,7 +34,7 @@ public class SecurityProfileConfigurationTest {
   void devSecurityProfileCreatesCorrectContext() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     assertEquals(SecurityProfile.DEV, ctx.security);
     assertEquals(IAMProfile.EXTENDED, ctx.iamProfile);
     assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology);
@@ -45,7 +45,7 @@ public class SecurityProfileConfigurationTest {
   void stagingSecurityProfileCreatesCorrectContext() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, iamProfile, cfc);
-    
+
     assertEquals(SecurityProfile.STAGING, ctx.security);
     assertEquals(IAMProfile.STANDARD, ctx.iamProfile);
     assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology);
@@ -56,7 +56,7 @@ public class SecurityProfileConfigurationTest {
   void productionSecurityProfileCreatesCorrectContext() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION, iamProfile, cfc);
-    
+
     assertEquals(SecurityProfile.PRODUCTION, ctx.security);
     assertEquals(IAMProfile.MINIMAL, ctx.iamProfile);
     assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology);
@@ -76,7 +76,7 @@ public class SecurityProfileConfigurationTest {
     assertTrue(IAMProfileMapper.isValidCombination(SecurityProfile.DEV, IAMProfile.EXTENDED));
     assertTrue(IAMProfileMapper.isValidCombination(SecurityProfile.STAGING, IAMProfile.STANDARD));
     assertTrue(IAMProfileMapper.isValidCombination(SecurityProfile.PRODUCTION, IAMProfile.MINIMAL));
-    
+
     // Invalid combinations
     assertFalse(IAMProfileMapper.isValidCombination(SecurityProfile.PRODUCTION, IAMProfile.EXTENDED));
     assertFalse(IAMProfileMapper.isValidCombination(SecurityProfile.STAGING, IAMProfile.MINIMAL));
@@ -93,7 +93,7 @@ public class SecurityProfileConfigurationTest {
   void systemContextAllowsMismatchedRuntime() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     // Should allow different runtime types in the same stack
     SystemContext ctx2 = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
     assertSame(ctx, ctx2); // Should return the same SystemContext instance
@@ -103,7 +103,7 @@ public class SecurityProfileConfigurationTest {
   void systemContextThrowsExceptionForMismatchedTopology() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     // Try to start with different topology - should throw exception
     assertThrows(IllegalStateException.class, () -> {
       SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, iamProfile, cfc);
@@ -114,7 +114,7 @@ public class SecurityProfileConfigurationTest {
   void systemContextThrowsExceptionForMismatchedSecurity() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     // Try to start with different security profile - should throw exception
     assertThrows(IllegalStateException.class, () -> {
       SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, iamProfile, cfc);
@@ -125,7 +125,7 @@ public class SecurityProfileConfigurationTest {
   void systemContextThrowsExceptionForMismatchedIamProfile() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     // Try to start with different IAM profile - should throw exception
     assertThrows(IllegalStateException.class, () -> {
       SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, IAMProfile.STANDARD, cfc);
@@ -136,10 +136,10 @@ public class SecurityProfileConfigurationTest {
   void systemContextReturnsExistingContextForSameParameters() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     // Start again with same parameters - should return existing context
     SystemContext ctx2 = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     assertSame(ctx, ctx2);
   }
 
@@ -147,7 +147,7 @@ public class SecurityProfileConfigurationTest {
   void systemContextOfReturnsCorrectContext() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     // SystemContext.of should return the same context
     SystemContext retrievedCtx = SystemContext.of(stack);
     assertSame(ctx, retrievedCtx);
@@ -165,7 +165,7 @@ public class SecurityProfileConfigurationTest {
   void allSecurityProfilesAreSupported() {
     SecurityProfile[] profiles = SecurityProfile.values();
     assertEquals(3, profiles.length);
-    
+
     for (SecurityProfile profile : profiles) {
       IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(profile);
       assertNotNull(iamProfile);
@@ -176,7 +176,7 @@ public class SecurityProfileConfigurationTest {
   void allIamProfilesAreSupported() {
     IAMProfile[] profiles = IAMProfile.values();
     assertEquals(3, profiles.length);
-    
+
     for (IAMProfile profile : profiles) {
       assertNotNull(profile);
     }

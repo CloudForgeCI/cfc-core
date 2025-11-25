@@ -20,13 +20,13 @@ public class SecurityExample {
         if (id == null) {
             throw new IllegalArgumentException("ID cannot be null");
         }
-        
+
         // Uses SecurityProfile.DEV by default
         JenkinsFactory.createEc2(scope, id + "Dev", cfc);
-        
+
         // Or explicitly specify DEV security profile
         JenkinsFactory.createEc2(scope, id + "DevExplicit", cfc, SecurityProfile.DEV);
-        
+
         // Same for Fargate
         JenkinsFactory.createFargate(scope, id + "DevFargate", cfc, SecurityProfile.DEV);
     }
@@ -40,7 +40,7 @@ public class SecurityExample {
         if (id == null) {
             throw new IllegalArgumentException("ID cannot be null");
         }
-        
+
         // Staging security profile
         JenkinsFactory.createEc2(scope, id + "Staging", cfc, SecurityProfile.STAGING);
         JenkinsFactory.createFargate(scope, id + "StagingFargate", cfc, SecurityProfile.STAGING);
@@ -55,7 +55,7 @@ public class SecurityExample {
         if (id == null) {
             throw new IllegalArgumentException("ID cannot be null");
         }
-        
+
         // Production security profile with maximum restrictions
         JenkinsFactory.createEc2(scope, id + "Production", cfc, SecurityProfile.PRODUCTION);
         JenkinsFactory.createFargate(scope, id + "ProductionFargate", cfc, SecurityProfile.PRODUCTION);
@@ -63,19 +63,19 @@ public class SecurityExample {
 
     /**
      * Example showing how different security profiles affect the deployment:
-     * 
+     *
      * DEV Security Profile:
      * - SSH access from anywhere (0.0.0.0/0)
      * - Jenkins port accessible from anywhere
      * - HTTP/HTTPS accessible from anywhere
      * - Minimal security restrictions for development convenience
-     * 
+     *
      * STAGING Security Profile:
      * - SSH access restricted to VPC CIDR
      * - Jenkins port only accessible from ALB security group
      * - HTTP/HTTPS accessible from anywhere (needed for external testing)
      * - Moderate security restrictions
-     * 
+     *
      * PRODUCTION Security Profile:
      * - SSH access restricted to specific bastion/VPN CIDR (10.0.1.0/24)
      * - Jenkins port only accessible from ALB security group
@@ -88,7 +88,7 @@ public class SecurityExample {
         if (id == null) {
             throw new IllegalArgumentException("ID cannot be null");
         }
-        
+
         // Create deployments with different security profiles
         createDevJenkins(scope, id + "Dev", cfc);
         createStagingJenkins(scope, id + "Staging", cfc);

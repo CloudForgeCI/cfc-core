@@ -27,14 +27,14 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
 
     // This topology is only valid with EC2 runtime.
     r.add(ctx -> ctx.runtime != RuntimeType.EC2
-            ? List.of("JENKINS_SINGLE_NODE requires runtime=EC2") : List.of());
+            ? List.of("JENKINS_SINGLE_NODE requires runtime = EC2") : List.of());
 
     // OIDC requires TLS.
     r.add(ctx -> {
       String mode = ctx.authMode.get().orElse(null);
       Boolean sslEnabled = ctx.sslEnabled.get().orElse(false);
       if ("alb-oidc".equalsIgnoreCase(mode) && !sslEnabled) {
-        return List.of("authMode=alb-oidc requires enableSsl=true");
+        return List.of("authMode = alb-oidc requires enableSsl = true");
       }
       return List.of();
     });
@@ -48,7 +48,7 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
       String subdomain = ctx.subdomain.get().orElse(null);
       String domain = ctx.domain.get().orElse(null);
       boolean canCompute = subdomain != null && domain != null;
-      return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl=true requires fqdn OR (subdomain + domain)");
+      return (hasFqdn || canCompute) ? List.of() : List.of("enableSsl = true requires fqdn OR (subdomain + domain)");
     });
     // TEMPORARY: Comment out AutoScalingGroup forbid rule to debug
     // r.add(forbid("AutoScalingGroup", x -> x.asg));
@@ -80,7 +80,7 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
           return; // No domain or subdomain specified, cannot create DNS records
         }
       }
-      
+
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
       // Include stack name in construct ID to ensure uniqueness across different deployments
@@ -89,12 +89,12 @@ public final class JenkinsSingleNodeTopologyConfiguration implements TopologyCon
               .zone(zone).recordName(recordName).target(target).build());
       new AaaaRecord(c, constructIdPrefix + "AAAA", AaaaRecordProps.builder()
               .zone(zone).recordName(recordName).target(target).build());
-      
-      
+
+
       // Set the DNS records created flag to prevent duplicate execution
       c.dnsRecordsCreated.set(true);
     });
-    
+
     // Mark that the DNS records callback has been registered
     c.dnsRecordsCallbackRegistered.set(true);
 

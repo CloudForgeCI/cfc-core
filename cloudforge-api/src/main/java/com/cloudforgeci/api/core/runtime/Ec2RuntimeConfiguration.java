@@ -42,31 +42,31 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
   @Override
   public List<Rule> rules(SystemContext c) {
     var rules = new ArrayList<Rule>();
-    
+
     // Always required
     rules.add(require("vpc", x -> x.vpc));
     rules.add(require("alb", x -> x.alb));
     rules.add(require("targetGroup", x -> x.albTargetGroup));
     rules.add(require("instanceSg", x -> x.instanceSg));
     rules.add(forbid("fargate", x -> x.fargateService));
-    
+
     // AutoScalingGroup is only required for JENKINS_SERVICE topology when maxInstanceCapacity > 1
     // When maxInstanceCapacity <= 1, JenkinsFactory creates a single instance instead of ASG
     // JENKINS_SINGLE_NODE forbids AutoScalingGroup
     if (c.topology == TopologyType.JENKINS_SERVICE && c.cfc.maxInstanceCapacity() != null && c.cfc.maxInstanceCapacity() > 1) {
         rules.add(require("asg", x -> x.asg));
     }
-    
+
     return rules;
   }
 
   @Override
   public void wire(SystemContext c) {
-    LOG.info("=== Ec2RuntimeConfiguration.wire() called ===");
+    LOG.info("=== Ec2RuntimeConfiguration.wire() called == = ");
 
     // Ensure this configuration only runs for EC2 runtime
     if (c.runtime != RuntimeType.EC2) {
-      LOG.info("Skipping EC2 runtime configuration (runtime=" + c.runtime + ")");
+      LOG.info("Skipping EC2 runtime configuration (runtime = " + c.runtime + ")");
       return;
     }
 
@@ -230,7 +230,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
       }
     });
 
-    LOG.info("=== Ec2RuntimeConfiguration.wire() completed ===");
+    LOG.info("=== Ec2RuntimeConfiguration.wire() completed == = ");
   }
 
   private static String norm(String s) {

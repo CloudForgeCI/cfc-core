@@ -34,6 +34,8 @@ import software.amazon.awscdk.services.ecs.ContainerImage;
 import software.amazon.awscdk.services.route53.IHostedZone;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.certificatemanager.Certificate;
+import software.amazon.awscdk.services.certificatemanager.ICertificate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,7 +44,7 @@ import java.util.Map;
  * for testing purposes, ensuring all validation requirements are met.
  */
 public class TestInfrastructureBuilder {
-    
+
     private final App app;
     private final Stack stack;
     private DeploymentContext cfc;
@@ -83,7 +85,7 @@ public class TestInfrastructureBuilder {
             systemContextCreated = true;
         }
     }
-    
+
     public TestInfrastructureBuilder(String stackName, SecurityProfile securityProfile, RuntimeType runtimeType, String domainName) {
         this.app = new App();
         this.stack = new Stack(app, stackName);
@@ -137,32 +139,32 @@ public class TestInfrastructureBuilder {
 
         // Don't create SystemContext yet
     }
-    
+
     public TestInfrastructureBuilder createVpc() {
         ensureSystemContextCreated();
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
         vpcFactory.create();
         return this;
     }
-    
+
     public TestInfrastructureBuilder createAlb() {
         AlbFactory albFactory = new AlbFactory(stack, "Alb");
         albFactory.create();
         return this;
     }
-    
+
     public TestInfrastructureBuilder createEfs() {
         EfsFactory efsFactory = new EfsFactory(stack, "Efs");
         efsFactory.create();
         return this;
     }
-    
+
     public TestInfrastructureBuilder createEc2() {
         Ec2Factory ec2Factory = new Ec2Factory(stack, "Ec2");
         ec2Factory.create();
         return this;
     }
-    
+
     public TestInfrastructureBuilder createMockInstanceSecurityGroup() {
         // Create a mock instance security group for FARGATE runtime to satisfy security wiring
         SecurityGroup mockInstanceSg = SecurityGroup.Builder.create(stack, "MockInstanceSg")
@@ -173,7 +175,7 @@ public class TestInfrastructureBuilder {
         ctx.instanceSg.set(mockInstanceSg);
         return this;
     }
-    
+
     public TestInfrastructureBuilder createMockEfsSecurityGroup() {
         // Create a mock EFS security group for EC2 runtime to satisfy validation
         SecurityGroup mockEfsSg = SecurityGroup.Builder.create(stack, "MockEfsSg")
@@ -184,7 +186,7 @@ public class TestInfrastructureBuilder {
         ctx.efsSg.set(mockEfsSg);
         return this;
     }
-    
+
     public TestInfrastructureBuilder createMockAsg() {
         // Create a mock ASG for EC2 runtime to satisfy validation
         AutoScalingGroup mockAsg = AutoScalingGroup.Builder.create(stack, "MockAsg")
@@ -200,25 +202,36 @@ public class TestInfrastructureBuilder {
         ctx.asg.set(mockAsg);
         return this;
     }
-    
+
+    public TestInfrastructureBuilder createMockCertificate() {
+        ensureSystemContextCreated();
+        // Create a mock certificate from an ARN to satisfy HIPAA/compliance TLS requirements
+        // This avoids the need for actual Route53 hosted zones and certificate validation
+        String mockCertArn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012";
+        ICertificate mockCert = Certificate.fromCertificateArn(stack, "MockCert", mockCertArn);
+        ctx.cert.set(mockCert);
+        return this;
+    }
+
     public TestInfrastructureBuilder createFargate() {
         // Create Fargate factory (which will create the container internally)
         FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
         fargateFactory.create(); // Call create() to populate fargateTaskDef and fargateService slots
         return this;
     }
-    
+
     public TestInfrastructureBuilder createDomain() {
+        ensureSystemContextCreated();
         DomainFactory domainFactory = new DomainFactory(stack, "Domain");
         domainFactory.create();
         return this;
     }
-    
+
     public TestInfrastructureBuilder createAlarms() {
         AlarmFactory alarmFactory = new AlarmFactory(stack, "Alarms", null);
         return this;
     }
-    
+
     public TestInfrastructureBuilder createScaling() {
         ScalingFactory scalingFactory = new ScalingFactory(stack, "Scaling");
         return this;
@@ -317,7 +330,7 @@ public class TestInfrastructureBuilder {
         }
         contextOverrides.put(key, value);
     }
-    
+
     public TestInfrastructureBuilder createCompleteInfrastructure() {
         ensureSystemContextCreated();
         if (ctx.runtime == RuntimeType.FARGATE) {
@@ -343,7 +356,7 @@ public class TestInfrastructureBuilder {
                     .createScaling();
         }
     }
-    
+
     public TestInfrastructureBuilder createMinimalInfrastructure() {
         ensureSystemContextCreated();
         if (ctx.runtime == RuntimeType.FARGATE) {
@@ -358,11 +371,11 @@ public class TestInfrastructureBuilder {
                     .createEfs();
         }
     }
-    
+
     public Stack getStack() {
         return stack;
     }
-    
+
     public SystemContext getSystemContext() {
         ensureSystemContextCreated();
         return ctx;
@@ -377,85 +390,85 @@ public class TestInfrastructureBuilder {
         ensureSystemContextCreated();
         return cfc;
     }
-    
+
     public App getApp() {
         return app;
     }
-    
+
     // Helper methods to access created resources
     public Vpc getVpc() {
         ensureSystemContextCreated();
         return ctx.vpc.get().orElseThrow();
     }
-    
+
     public SecurityGroup getAlbSecurityGroup() {
         return ctx.albSg.get().orElseThrow();
     }
-    
+
     public SecurityGroup getEfsSecurityGroup() {
         return ctx.efsSg.get().orElseThrow();
     }
-    
+
     public SecurityGroup getInstanceSecurityGroup() {
         if (ctx.runtime == RuntimeType.FARGATE) {
             throw new UnsupportedOperationException("Instance security group not available for Fargate runtime");
         }
         return ctx.instanceSg.get().orElseThrow();
     }
-    
+
     public RuntimeType getRuntime() {
         ensureSystemContextCreated();
         return ctx.runtime;
     }
-    
+
     public ApplicationLoadBalancer getAlb() {
         return ctx.alb.get().orElseThrow();
     }
-    
+
     public ApplicationListener getHttpListener() {
         return ctx.http.get().orElseThrow();
     }
-    
+
     public FileSystem getEfs() {
         return ctx.efs.get().orElseThrow();
     }
-    
+
     public AccessPoint getAccessPoint() {
         return ctx.ap.get().orElseThrow();
     }
-    
+
     public AutoScalingGroup getAsg() {
         return ctx.asg.get().orElseThrow();
     }
-    
+
     public FargateService getFargateService() {
         return ctx.fargateService.get().orElseThrow();
     }
-    
+
     public TaskDefinition getTaskDefinition() {
         return ctx.fargateTaskDef.get().orElseThrow();
     }
-    
+
     public ContainerDefinition getContainer() {
         return ctx.container.get().orElseThrow();
     }
-    
+
     public IHostedZone getHostedZone() {
         return ctx.zone.get().orElseThrow();
     }
-    
+
     public LogGroup getLogGroup() {
         return ctx.logs.get().orElseThrow();
     }
-    
+
     public Role getEc2InstanceRole() {
         return ctx.ec2InstanceRole.get().orElseThrow();
     }
-    
+
     public Role getFargateExecutionRole() {
         return ctx.fargateExecutionRole.get().orElseThrow();
     }
-    
+
     public Role getFargateTaskRole() {
         return ctx.fargateTaskRole.get().orElseThrow();
     }

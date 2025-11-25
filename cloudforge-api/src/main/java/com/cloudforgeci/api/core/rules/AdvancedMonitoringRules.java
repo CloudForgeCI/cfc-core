@@ -114,7 +114,7 @@ public final class AdvancedMonitoringRules {
                     "Provides PCI-DSS, CIS AWS Foundations, and AWS Foundational Security Best Practices. " +
                     "PCI-DSS Req 10, 11; HIPAA §164.308(a)(1)(ii)(D); SOC2 CC7.2; GDPR Art.32(1)(d). " +
                     "Note: PRODUCTION security profile enables security monitoring by default. " +
-                    "Set securityHubEnabled=true in deployment context."
+                    "Set securityHubEnabled = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -137,7 +137,7 @@ public final class AdvancedMonitoringRules {
                         "SECURITYHUB-STANDARDS",
                         "At least one Security Hub standard must be enabled",
                         "Enable PCI-DSS, CIS, or AWS Foundational Security Best Practices standard. " +
-                        "Set securityHubPciDssEnabled=true or securityHubCisEnabled=true."
+                        "Set securityHubPciDssEnabled = true or securityHubCisEnabled = true."
                     ));
                 } else {
                     rules.add(ComplianceRule.pass(
@@ -160,7 +160,7 @@ public final class AdvancedMonitoringRules {
                         "SECURITYHUB-AUTO-REMEDIATION",
                         "Automated remediation recommended for Security Hub findings",
                         "Configure EventBridge rules for automatic remediation of common findings. " +
-                        "Set securityHubAutoRemediation=true when implemented."
+                        "Set securityHubAutoRemediation = true when implemented."
                     ));
                 }
             }
@@ -212,7 +212,7 @@ public final class AdvancedMonitoringRules {
                     "Enable Inspector for automated vulnerability scanning of EC2 instances and containers. " +
                     "PCI-DSS Req 6.2, 11.2; HIPAA §164.308(a)(8); SOC2 CC7.1; GDPR Art.32(1)(d). " +
                     "Note: PRODUCTION security profile enables security monitoring by default. " +
-                    "Set inspectorEnabled=true in deployment context."
+                    "Set inspectorEnabled = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -249,7 +249,7 @@ public final class AdvancedMonitoringRules {
                         "INSPECTOR-CONTINUOUS",
                         "Continuous scanning recommended for production",
                         "Enable continuous vulnerability scanning in Inspector. " +
-                        "Set inspectorContinuousScanning=true."
+                        "Set inspectorContinuousScanning = true."
                     ));
                 }
             }
@@ -303,7 +303,7 @@ public final class AdvancedMonitoringRules {
                     "Enable Macie to discover and protect sensitive data (PII, PHI) in S3. " +
                     "GDPR Art.25 (data protection by design), Art.30 (records of processing). " +
                     "HIPAA §164.308(a)(1)(ii)(A) (risk analysis). " +
-                    "Set macieEnabled=true in deployment context."
+                    "Set macieEnabled = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -322,7 +322,7 @@ public final class AdvancedMonitoringRules {
                         "MACIE-AUTOMATED-DISCOVERY",
                         "Automated sensitive data discovery jobs required",
                         "Configure automated Macie discovery jobs for all S3 buckets. " +
-                        "Set macieAutomatedDiscovery=true when jobs are scheduled."
+                        "Set macieAutomatedDiscovery = true when jobs are scheduled."
                     ));
                 } else {
                     rules.add(ComplianceRule.pass(
@@ -375,7 +375,7 @@ public final class AdvancedMonitoringRules {
                     "CloudWatch compliance dashboard recommended for production",
                     "Create CloudWatch dashboard to visualize compliance metrics. " +
                     "Note: PRODUCTION security profile enables security monitoring by default. " +
-                    "Set complianceDashboardEnabled=true when dashboard is created."
+                    "Set complianceDashboardEnabled = true when dashboard is created."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -397,7 +397,7 @@ public final class AdvancedMonitoringRules {
                     "Configure SNS topics for security alerts from GuardDuty, Security Hub, Config. " +
                     "PCI-DSS Req 10, 12.10; HIPAA §164.308(a)(6); SOC2 CC7.3. " +
                     "Note: PRODUCTION security profile enables security monitoring by default. " +
-                    "Set securityAlertingEnabled=true when SNS topics are configured."
+                    "Set securityAlertingEnabled = true when SNS topics are configured."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(

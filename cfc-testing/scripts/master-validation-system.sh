@@ -320,6 +320,34 @@ EOF
     echo "Total:  $((passed + failed))"
     echo ""
 
+    # Create summary file for CI/CD artifact collection
+    local summary_file="$VALIDATION_DIR/smoke-test-summary.txt"
+    cat > "$summary_file" << EOF
+Smoke Test Summary
+==================
+Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+Passed: $passed
+Failed: $failed
+Total:  $((passed + failed))
+
+Test Configurations:
+EOF
+
+    for config in "${smoke_configs[@]}"; do
+        echo "  - $config" >> "$summary_file"
+    done
+
+    if [[ $failed -gt 0 ]]; then
+        echo "" >> "$summary_file"
+        echo "Failed Configurations:" >> "$summary_file"
+        for failed_config in "${failed_configs[@]}"; do
+            echo "  - $failed_config" >> "$summary_file"
+        done
+    fi
+
+    echo "" >> "$summary_file"
+    echo "Smoke test summary written to: $summary_file"
+
     if [[ $failed -eq 0 ]]; then
         echo -e "${GREEN}🎉 All smoke tests passed${NC}"
         return 0

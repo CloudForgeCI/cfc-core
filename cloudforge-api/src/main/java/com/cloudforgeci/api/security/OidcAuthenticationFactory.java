@@ -96,7 +96,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
     public void create() {
         // Only configure OIDC if authMode is "alb-oidc"
         if (!"alb-oidc".equals(authMode)) {
-            LOG.info("ALB-OIDC authentication not enabled (authMode=" + authMode + ")");
+            LOG.info("ALB-OIDC authentication not enabled (authMode = " + authMode + ")");
             return;
         }
 
@@ -120,7 +120,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
         if (ssoInstanceArn != null && !ssoInstanceArn.isEmpty()) {
             LOG.warning("Using legacy auto-constructed OIDC endpoints from ssoInstanceArn");
             LOG.warning("This may not work with all IAM Identity Center configurations");
-            LOG.warning("Recommended: Use Cognito (cognitoAutoProvision=true) or manually configure OIDC endpoints");
+            LOG.warning("Recommended: Use Cognito (cognitoAutoProvision = true) or manually configure OIDC endpoints");
             LOG.info("SSO Instance ARN: " + ssoInstanceArn);
             configureOidcAuthentication();
             return;
@@ -128,7 +128,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
 
         // No OIDC configuration provided
         LOG.warning("ALB-OIDC enabled but no OIDC configuration provided");
-        LOG.warning("Option 1 (Recommended): Use Cognito User Pool - set cognitoAutoProvision=true");
+        LOG.warning("Option 1 (Recommended): Use Cognito User Pool - set cognitoAutoProvision = true");
         LOG.warning("Option 2: Provide manual OIDC endpoints from IAM Identity Center:");
         LOG.warning("  - oidcIssuer, oidcAuthorizationEndpoint, oidcTokenEndpoint, oidcUserInfoEndpoint, oidcClientId");
         LOG.warning("Option 3 (Legacy): Provide ssoInstanceArn for auto-constructed endpoints (may not work)");

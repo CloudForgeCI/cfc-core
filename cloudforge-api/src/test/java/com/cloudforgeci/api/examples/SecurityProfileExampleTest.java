@@ -110,13 +110,13 @@ class SecurityProfileExampleTest {
         @DisplayName("Should have required annotation fields")
         void shouldHaveRequiredAnnotationFields() {
             SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
-            
+
             // Verify that the class uses annotations properly
             var fields = SecurityProfileExample.class.getDeclaredFields();
             boolean hasSystemContextField = false;
             boolean hasDeploymentContextField = false;
             boolean hasSecurityProfileConfigField = false;
-            
+
             for (var field : fields) {
                 if (field.isAnnotationPresent(com.cloudforgeci.api.core.annotation.SystemContext.class)) {
                     hasSystemContextField = true;
@@ -128,7 +128,7 @@ class SecurityProfileExampleTest {
                     hasSecurityProfileConfigField = true;
                 }
             }
-            
+
             // Note: The actual injection mechanism would be tested in integration tests
             // Here we just verify the structure is correct
             assertNotNull(example, "Example should be created");
@@ -138,7 +138,7 @@ class SecurityProfileExampleTest {
         @DisplayName("Should implement create method")
         void shouldImplementCreateMethod() {
             SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
-            
+
             // Verify the create method exists and can be called
             // Note: This may fail due to missing context injection, but we're testing the method exists
             assertDoesNotThrow(() -> {
@@ -160,7 +160,7 @@ class SecurityProfileExampleTest {
         @DisplayName("Should demonstrate configuration access patterns")
         void shouldDemonstrateConfigurationAccessPatterns() {
             SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
-            
+
             // The example should demonstrate how to access security profile configuration
             // We verify the class structure rather than execution due to context injection requirements
             assertNotNull(example, "Example should be created");
@@ -172,7 +172,7 @@ class SecurityProfileExampleTest {
         @DisplayName("Should handle resource configuration based on profile")
         void shouldHandleResourceConfigurationBasedOnProfile() {
             SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
-            
+
             // Verify that the example demonstrates conditional resource configuration
             // We test the class structure rather than execution due to context injection requirements
             assertNotNull(example, "Example should be created");
@@ -191,14 +191,14 @@ class SecurityProfileExampleTest {
             // Verify that the example uses the correct logging framework
             var fields = SecurityProfileExample.class.getDeclaredFields();
             boolean hasLoggerField = false;
-            
+
             for (var field : fields) {
                 if (field.getType().equals(java.util.logging.Logger.class)) {
                     hasLoggerField = true;
                     break;
                 }
             }
-            
+
             assertTrue(hasLoggerField, "Should use java.util.logging.Logger for logging");
         }
 
@@ -206,19 +206,19 @@ class SecurityProfileExampleTest {
         @DisplayName("Should demonstrate meaningful configuration logging")
         void shouldDemonstrateMeaningfulConfigurationLogging() {
             SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
-            
+
             // The create method should log meaningful information about the security profile
             // We verify the logging framework is used rather than execution
             var fields = SecurityProfileExample.class.getDeclaredFields();
             boolean hasLoggerField = false;
-            
+
             for (var field : fields) {
                 if (field.getType().equals(java.util.logging.Logger.class)) {
                     hasLoggerField = true;
                     break;
                 }
             }
-            
+
             assertTrue(hasLoggerField, "Should use java.util.logging.Logger for logging");
         }
     }
@@ -231,7 +231,7 @@ class SecurityProfileExampleTest {
         @DisplayName("Should have proper method visibility")
         void shouldHaveProperMethodVisibility() {
             var methods = SecurityProfileExample.class.getDeclaredMethods();
-            
+
             for (var method : methods) {
                 if (method.getName().equals("create")) {
                     assertTrue(java.lang.reflect.Modifier.isPublic(method.getModifiers()),
@@ -261,7 +261,7 @@ class SecurityProfileExampleTest {
         @DisplayName("Should demonstrate practical usage patterns")
         void shouldDemonstratePracticalUsagePatterns() {
             SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
-            
+
             // The example should show realistic usage of the security profile system
             assertNotNull(example, "Example should be instantiable");
             assertTrue(example instanceof com.cloudforgeci.api.core.annotation.BaseFactory,
@@ -275,12 +275,12 @@ class SecurityProfileExampleTest {
             String className = SecurityProfileExample.class.getSimpleName();
             assertTrue(className.contains("SecurityProfile"), "Class name should indicate security profile focus");
             assertTrue(className.contains("Example"), "Class name should indicate it's an example");
-            
+
             // Verify key methods exist for educational purposes
             var methods = SecurityProfileExample.class.getDeclaredMethods();
             boolean hasCreateMethod = false;
             boolean hasConfigureMethod = false;
-            
+
             for (var method : methods) {
                 if (method.getName().equals("create")) {
                     hasCreateMethod = true;
@@ -289,7 +289,7 @@ class SecurityProfileExampleTest {
                     hasConfigureMethod = true;
                 }
             }
-            
+
             assertTrue(hasCreateMethod, "Should have create method for demonstration");
             assertTrue(hasConfigureMethod, "Should have configuration method for demonstration");
         }

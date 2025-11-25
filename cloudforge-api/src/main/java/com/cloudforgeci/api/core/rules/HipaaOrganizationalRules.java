@@ -118,7 +118,7 @@ public final class HipaaOrganizationalRules {
                 "AWS Business Associate Agreement (BAA) must be signed",
                 "Sign AWS BAA through AWS Artifact or contact AWS sales. " +
                 "HIPAA §164.308(b)(1): Required for all AWS services handling PHI. " +
-                "Set awsBaaSigned=true after signing BAA."
+                "Set awsBaaSigned = true after signing BAA."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -137,7 +137,7 @@ public final class HipaaOrganizationalRules {
                 "Document BAAs with all vendors that may access PHI: " +
                 "monitoring tools, log management, backup services, support vendors. " +
                 "HIPAA §164.308(b)(1), §164.314(a). " +
-                "Set thirdPartyBaasDocumented=true when BAAs are in place."
+                "Set thirdPartyBaasDocumented = true when BAAs are in place."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -155,7 +155,7 @@ public final class HipaaOrganizationalRules {
                 "Verify all BAAs include required HIPAA provisions",
                 "Ensure BAAs include: safeguard obligations, subcontractor requirements, " +
                 "breach notification, termination provisions, data return/destruction. " +
-                "HIPAA §164.314(a)(2). Set baaProvisionsVerified=true after verification."
+                "HIPAA §164.314(a)(2). Set baaProvisionsVerified = true after verification."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -173,7 +173,7 @@ public final class HipaaOrganizationalRules {
                 "Track Business Associate Agreements for all subcontractors",
                 "Maintain list of AWS services used and verify each has BAA coverage. " +
                 "Monitor AWS sub-processor lists. HIPAA §164.308(b)(2). " +
-                "Set subcontractorBaasTracked=true when tracking system is in place."
+                "Set subcontractorBaasTracked = true when tracking system is in place."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -208,7 +208,7 @@ public final class HipaaOrganizationalRules {
                 "Implement workforce authorization procedures for PHI access",
                 "Document and implement procedures for determining PHI access needs. " +
                 "HIPAA §164.308(a)(3)(ii)(A). IAM roles provide technical enforcement. " +
-                "Set workforceAuthorizationProcedures=true when documented."
+                "Set workforceAuthorizationProcedures = true when documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -226,7 +226,7 @@ public final class HipaaOrganizationalRules {
                 "Implement workforce termination procedures",
                 "Document procedures for terminating access when employment ends. " +
                 "HIPAA §164.308(a)(3)(ii)(C). Include IAM user/role removal. " +
-                "Set terminationProcedures=true when procedures are documented."
+                "Set terminationProcedures = true when procedures are documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -244,7 +244,7 @@ public final class HipaaOrganizationalRules {
                 "HIPAA security awareness training required for workforce",
                 "Implement annual HIPAA security awareness training program. " +
                 "HIPAA §164.308(a)(5). Document training completion. " +
-                "Set hipaaTrainingProgram=true when training is implemented."
+                "Set hipaaTrainingProgram = true when training is implemented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -278,7 +278,7 @@ public final class HipaaOrganizationalRules {
                 "Document procedures for obtaining PHI access during emergency. " +
                 "HIPAA §164.308(a)(7)(ii)(C), §164.312(a)(2)(ii). " +
                 "Include break-glass IAM roles, audit logging, approval workflows. " +
-                "Set emergencyAccessProcedures=true when documented."
+                "Set emergencyAccessProcedures = true when documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -296,7 +296,7 @@ public final class HipaaOrganizationalRules {
                 "Automatic logoff required for workstations accessing PHI",
                 "Implement automatic session timeout for Jenkins/application access. " +
                 "HIPAA §164.312(a)(2)(iii). Typical timeout: 15-30 minutes. " +
-                "Set automaticLogoffEnabled=true when session timeouts are configured."
+                "Set automaticLogoffEnabled = true when session timeouts are configured."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -330,7 +330,7 @@ public final class HipaaOrganizationalRules {
                 "Security incident response plan required",
                 "Document incident response procedures including breach identification, " +
                 "investigation, mitigation, and notification. HIPAA §164.308(a)(6). " +
-                "Set incidentResponsePlan=true when plan is documented."
+                "Set incidentResponsePlan = true when plan is documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -349,7 +349,7 @@ public final class HipaaOrganizationalRules {
                 "Document breach notification procedures: risk assessment, individual notification " +
                 "(60 days), HHS notification, media notification (>500 individuals). " +
                 "HIPAA §164.410, 45 CFR 164.400-414. " +
-                "Set breachNotificationProcedures=true when procedures are documented."
+                "Set breachNotificationProcedures = true when procedures are documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -366,7 +366,7 @@ public final class HipaaOrganizationalRules {
                 "HIPAA-BREACH-DETECTION",
                 "Automated breach detection recommended",
                 "Configure GuardDuty, Security Hub, and CloudWatch alarms for breach indicators. " +
-                "Set breachDetectionAutomation=true when automation is configured."
+                "Set breachDetectionAutomation = true when automation is configured."
             ));
         } else {
             rules.add(ComplianceRule.pass(

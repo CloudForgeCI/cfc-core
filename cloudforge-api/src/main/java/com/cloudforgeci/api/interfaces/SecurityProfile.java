@@ -1,7 +1,7 @@
 package com.cloudforgeci.api.interfaces;
 
-public enum SecurityProfile { 
-    DEV, 
-    STAGING, 
-    PRODUCTION 
+public enum SecurityProfile {
+    DEV,
+    STAGING,
+    PRODUCTION
 }

@@ -52,7 +52,7 @@ public final class SecurityRules {
     // Install multi-framework compliance validation rules
     // Only run compliance validation if auditManagerEnabled is true
     if (!ctx.cfc.auditManagerEnabled()) {
-      LOG.info("Skipping compliance validation (auditManagerEnabled=false)");
+      LOG.info("Skipping compliance validation (auditManagerEnabled = false)");
       return;
     }
 

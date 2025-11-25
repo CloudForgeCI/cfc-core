@@ -124,7 +124,7 @@ public final class IncidentResponseRules {
                 "containment, eradication, recovery, post-incident review. " +
                 "PCI-DSS Req 12.10.1; HIPAA §164.308(a)(6); SOC2 CC7.4; GDPR Art.33. " +
                 "Note: PRODUCTION security profile enables security monitoring by default. " +
-                "Set incidentResponsePlanDocumented=true when plan is documented."
+                "Set incidentResponsePlanDocumented = true when plan is documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -145,7 +145,7 @@ public final class IncidentResponseRules {
                 "communications coordinator, legal/compliance liaison. " +
                 "PCI-DSS Req 12.10.2. " +
                 "Note: PRODUCTION security profile enables security monitoring by default. " +
-                "Set incidentResponseTeamDefined=true when defined."
+                "Set incidentResponseTeamDefined = true when defined."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -165,7 +165,7 @@ public final class IncidentResponseRules {
                 "Conduct tabletop exercises or simulated incidents annually. " +
                 "PCI-DSS Req 12.10.3; SOC2 CC7.4. Document test results and improvements. " +
                 "Note: PRODUCTION security profile provides security monitoring foundation. " +
-                "Set incidentResponseTested=true when last test is within 12 months."
+                "Set incidentResponseTested = true when last test is within 12 months."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -189,7 +189,7 @@ public final class IncidentResponseRules {
                     "GDPR requires breach notification to supervisory authority within 72 hours",
                     "Document procedures for: breach detection, severity assessment, " +
                     "supervisory authority notification (72 hours), data subject notification. " +
-                    "GDPR Article 33. Set breachNotification72Hours=true when procedures exist."
+                    "GDPR Article 33. Set breachNotification72Hours = true when procedures exist."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -232,7 +232,7 @@ public final class IncidentResponseRules {
                 "communication plan, infrastructure rebuild procedures. " +
                 "PCI-DSS Req 12.10.4; HIPAA §164.308(a)(7)(ii)(B); SOC2 A1.2. " +
                 "Note: PRODUCTION security profile enables automated backups and cross-region replication. " +
-                "Set disasterRecoveryPlanDocumented=true when plan is documented."
+                "Set disasterRecoveryPlanDocumented = true when plan is documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -252,7 +252,7 @@ public final class IncidentResponseRules {
                 "Define acceptable downtime (RTO) and data loss (RPO) for each system. " +
                 "SOC2 A1.2. Common targets: RTO 4-24 hours, RPO 1-24 hours. " +
                 "Note: PRODUCTION security profile provides backup foundation. " +
-                "Set rtoRpoDefined=true when RTO/RPO are documented."
+                "Set rtoRpoDefined = true when RTO/RPO are documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -272,7 +272,7 @@ public final class IncidentResponseRules {
                 "Conduct DR test: restore from backups, rebuild infrastructure, verify RTO/RPO. " +
                 "PCI-DSS Req 12.10.5; HIPAA §164.308(a)(7)(ii)(D); SOC2 A1.2. " +
                 "Note: PRODUCTION security profile enables automated backups. " +
-                "Set disasterRecoveryTested=true when last test is within 12 months."
+                "Set disasterRecoveryTested = true when last test is within 12 months."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -293,7 +293,7 @@ public final class IncidentResponseRules {
                 "personnel availability, critical business functions prioritization. " +
                 "SOC2 A1.1. " +
                 "Note: PRODUCTION security profile enables cross-region backup for DR. " +
-                "Set businessContinuityPlan=true when documented."
+                "Set businessContinuityPlan = true when documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -333,7 +333,7 @@ public final class IncidentResponseRules {
                 "Test backup restoration quarterly: verify backup integrity, " +
                 "measure restore time, validate data completeness. " +
                 "HIPAA §164.308(a)(7)(ii)(D); SOC2 A1.3. " +
-                "Set backupRestoreTested=true when last test is within 90 days."
+                "Set backupRestoreTested = true when last test is within 90 days."
             ));
         } else if (config.isAutomatedBackupEnabled()) {
             rules.add(ComplianceRule.pass(
@@ -352,7 +352,7 @@ public final class IncidentResponseRules {
                     "Off-site backup storage required for disaster recovery",
                     "Enable cross-region backup replication for geographic redundancy. " +
                     "PCI-DSS Req 9.5.1; HIPAA §164.310(d)(2)(iv); SOC2 A1.3. " +
-                    "Set crossRegionBackupEnabled=true in deployment context."
+                    "Set crossRegionBackupEnabled = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -394,7 +394,7 @@ public final class IncidentResponseRules {
                 "Enable CloudTrail log file validation to detect tampering. " +
                 "PCI-DSS Req 10.5.5; HIPAA §164.312(c)(2). " +
                 "Note: PRODUCTION security profile enables CloudTrail by default. " +
-                "Set cloudTrailLogFileValidation=true in deployment context."
+                "Set cloudTrailLogFileValidation = true in deployment context."
             ));
         } else if (config.isCloudTrailEnabled()) {
             rules.add(ComplianceRule.pass(
@@ -415,7 +415,7 @@ public final class IncidentResponseRules {
                 "Aggregate logs to CloudWatch Logs, S3, or SIEM for correlation and analysis. " +
                 "PCI-DSS Req 10.6; SOC2 CC7.2. " +
                 "Note: PRODUCTION security profile enables security monitoring and CloudTrail. " +
-                "Set centralizedLogAggregation=true when logs are centralized."
+                "Set centralizedLogAggregation = true when logs are centralized."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -436,7 +436,7 @@ public final class IncidentResponseRules {
                 "Configure CloudWatch alarms or GuardDuty for automated log analysis. " +
                 "PCI-DSS Req 10.6.1; HIPAA §164.308(a)(1)(ii)(D). " +
                 "Note: PRODUCTION security profile enables GuardDuty and security monitoring. " +
-                "Set automatedLogReview=true when automated alerting is configured."
+                "Set automatedLogReview = true when automated alerting is configured."
             ));
         } else {
             rules.add(ComplianceRule.pass(

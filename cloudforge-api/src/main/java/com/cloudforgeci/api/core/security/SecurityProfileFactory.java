@@ -51,7 +51,7 @@ public class SecurityProfileFactory extends BaseFactory {
 
         LOG.info("Security profile observability configuration completed");
     }
-    
+
     /**
      * Get the appropriate security profile configuration based on the security profile.
      * Passes deployment context to allow overriding profile defaults for compliance frameworks.
@@ -63,7 +63,7 @@ public class SecurityProfileFactory extends BaseFactory {
             case PRODUCTION -> new ProductionSecurityProfileConfiguration(ctx.cfc);
         };
     }
-    
+
     /**
      * Configure CloudWatch Log Groups based on security profile.
      */
@@ -82,7 +82,7 @@ public class SecurityProfileFactory extends BaseFactory {
         ctx.logs.set(logGroup);
         LOG.info("Created CloudWatch log group with retention: " + config.getLogRetentionDays());
     }
-    
+
     /**
      * Configure VPC Flow Logs based on security profile.
      */
@@ -122,7 +122,7 @@ public class SecurityProfileFactory extends BaseFactory {
         LOG.info("Created VPC flow logs with traffic type: " + config.getFlowLogTrafficType() +
                 " and retention: " + config.getFlowLogRetentionDays());
     }
-    
+
     /**
      * Configure security monitoring based on security profile.
      *
@@ -153,7 +153,7 @@ public class SecurityProfileFactory extends BaseFactory {
 
         if (config.isAwsConfigEnabled()) {
             LOG.info("  - AWS Config: ENABLED (configured by ComplianceFactory)");
-            LOG.info("    Set awsConfigEnabled=true and createConfigInfrastructure=true in deployment context");
+            LOG.info("    Set awsConfigEnabled = true and createConfigInfrastructure = true in deployment context");
         }
 
         if (config.isAlbAccessLoggingEnabled()) {

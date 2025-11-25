@@ -134,7 +134,7 @@ public final class Soc2Rules {
             rules.add(ComplianceRule.fail(
                 "SOC2-CC6.2-Auth",
                 "User authentication required for customer-facing systems",
-                "Configure authMode='alb-oidc' or 'jenkins-oidc' to authenticate users."
+                "Configure authMode = 'alb-oidc' or 'jenkins-oidc' to authenticate users."
             ));
         } else {
             rules.add(ComplianceRule.pass("SOC2-CC6.2-Auth", "User authentication enabled"));
@@ -462,7 +462,7 @@ public final class Soc2Rules {
      */
     public static String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== SOC 2 Trust Services Criteria Compliance Report ===\n\n");
+        report.append("\n=== SOC 2 Trust Services Criteria Compliance Report == = \n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

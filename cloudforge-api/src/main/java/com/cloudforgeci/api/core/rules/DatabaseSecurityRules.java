@@ -122,7 +122,7 @@ public final class DatabaseSecurityRules {
                 "RdsEncryptionAtRestEnabled",
                 "Enable RDS encryption at rest for all database instances. " +
                 "PCI-DSS Req 3.4, HIPAA §164.312(a)(2)(iv), GDPR Art.32(1)(a). " +
-                "Set rdsEncryptionEnabled=true in deployment context."
+                "Set rdsEncryptionEnabled = true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -142,7 +142,7 @@ public final class DatabaseSecurityRules {
                 "RdsBackupEnabled",
                 "Enable automated backups for RDS instances (7-35 days retention). " +
                 "HIPAA §164.310(d)(2)(iii), SOC2 A1.3, GDPR Art.32(1)(c). " +
-                "Set rdsBackupEnabled=true in deployment context."
+                "Set rdsBackupEnabled = true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -163,7 +163,7 @@ public final class DatabaseSecurityRules {
                     "RdsMultiAzEnabled",
                     "Enable Multi-AZ deployment for high availability. " +
                     "SOC2 A1.2, HIPAA §164.308(a)(7)(ii)(B). " +
-                    "Set rdsMultiAz=true in deployment context."
+                    "Set rdsMultiAz = true in deployment context."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -182,7 +182,7 @@ public final class DatabaseSecurityRules {
                 "RDS-BACKUP-RETENTION",
                 "RDS backup retention must be at least 7 days for production",
                 "Minimum 7 days backup retention required. Current: " + rdsBackupRetentionDays + " days. " +
-                "Set rdsBackupRetentionDays=7 (or higher) in deployment context."
+                "Set rdsBackupRetentionDays = 7 (or higher) in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -199,7 +199,7 @@ public final class DatabaseSecurityRules {
                 "RDS-AUTO-UPGRADE",
                 "RDS automatic minor version upgrades recommended for production",
                 "Enable automatic minor version upgrades for security patches. " +
-                "PCI-DSS Req 6.2. Set rdsAutoMinorVersionUpgrade=true."
+                "PCI-DSS Req 6.2. Set rdsAutoMinorVersionUpgrade = true."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -245,7 +245,7 @@ public final class DatabaseSecurityRules {
                 "DynamoDbEncryptionEnabled",
                 "Enable DynamoDB encryption at rest (KMS). " +
                 "PCI-DSS Req 3.4, HIPAA §164.312(a)(2)(iv), GDPR Art.32(1)(a). " +
-                "Set dynamoDbEncryptionEnabled=true in deployment context."
+                "Set dynamoDbEncryptionEnabled = true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -265,7 +265,7 @@ public final class DatabaseSecurityRules {
                 "DynamoDbPitrEnabled",
                 "Enable Point-in-Time Recovery for production tables. " +
                 "SOC2 A1.3, HIPAA §164.310(d)(2)(iii). " +
-                "Set dynamoDbPitrEnabled=true in deployment context."
+                "Set dynamoDbPitrEnabled = true in deployment context."
             ));
         } else if (ctx.security == SecurityProfile.PRODUCTION) {
             rules.add(ComplianceRule.pass(
@@ -306,7 +306,7 @@ public final class DatabaseSecurityRules {
                 "Database Activity Streams recommended for production audit logging",
                 "Enable Database Activity Streams for real-time audit logging. " +
                 "PCI-DSS Req 10.2, HIPAA §164.312(b). " +
-                "Set dbActivityStreamsEnabled=true in deployment context."
+                "Set dbActivityStreamsEnabled = true in deployment context."
             ));
         } else if (dbActivityStreamsEnabled) {
             rules.add(ComplianceRule.pass(
@@ -332,7 +332,7 @@ public final class DatabaseSecurityRules {
                     "DB-PERFORMANCE-INSIGHTS-ENCRYPTION",
                     "Performance Insights data must be encrypted",
                     "Enable encryption for Performance Insights data. " +
-                    "Set performanceInsightsEncrypted=true."
+                    "Set performanceInsightsEncrypted = true."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -350,7 +350,7 @@ public final class DatabaseSecurityRules {
                 "DB-ENHANCED-MONITORING",
                 "RDS Enhanced Monitoring recommended for production",
                 "Enable Enhanced Monitoring for real-time OS metrics. " +
-                "SOC2 CC7.2. Set rdsEnhancedMonitoringEnabled=true."
+                "SOC2 CC7.2. Set rdsEnhancedMonitoringEnabled = true."
             ));
         } else if (enhancedMonitoringEnabled) {
             rules.add(ComplianceRule.pass(
