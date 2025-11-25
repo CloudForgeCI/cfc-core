@@ -4,6 +4,8 @@ Compliance Truth Table Generator for CloudForge Core
 Parses compliance test files and generates truth tables showing all test combinations
 """
 
+import csv
+import io
 import json
 import os
 import re
@@ -45,8 +47,15 @@ class ComplianceTruthTableParser:
         """Parse a test file and extract all parameterized tests"""
         framework = ComplianceFramework(framework_name, filepath, source_file)
 
-        with open(os.path.join(self.project_root, filepath), 'r') as f:
-            content = f.read()
+        try:
+            with open(os.path.join(self.project_root, filepath), 'r') as f:
+                content = f.read()
+        except FileNotFoundError:
+            print(f"WARNING: Test file not found: {filepath}. Skipping...")
+            return framework
+        except Exception as e:
+            print(f"ERROR: Failed to read {filepath}: {e}. Skipping...")
+            return framework
 
         # Find all @ParameterizedTest methods
         # Pattern: @ParameterizedTest + @CsvSource + method signature
@@ -70,6 +79,7 @@ class ComplianceTruthTableParser:
 
             # Extract test cases from CSV
             test_cases = []
+            # Split by quotes to get individual CSV lines
             csv_lines = [line.strip() for line in csv_content.split('"') if line.strip() and not line.strip() == ',']
 
             for line in csv_lines:
@@ -80,14 +90,20 @@ class ComplianceTruthTableParser:
                 # Extract comment if present
                 comment = ""
                 if '//' in line:
-                    parts = line.split('//')
+                    parts = line.split('//', 1)
                     line = parts[0].strip().rstrip(',')
                     comment = parts[1].strip() if len(parts) > 1 else ""
                 else:
                     line = line.rstrip(',')
 
-                # Parse CSV values
-                values = [v.strip() for v in line.split(',') if v.strip()]
+                # Parse CSV values using csv module for proper handling
+                try:
+                    reader = csv.reader(io.StringIO(line))
+                    row = next(reader)
+                    values = [v.strip() for v in row if v.strip()]
+                except (csv.Error, StopIteration):
+                    # Fallback to simple split for edge cases
+                    values = [v.strip() for v in line.split(',') if v.strip()]
 
                 if values:
                     # Determine if test should be compliant based on comment or values
@@ -567,9 +583,6 @@ class ComplianceTruthTableGenerator:
                     <td style="font-size: 0.85em;">{test_list}</td>
                 </tr>
                 """
-
-            # Calculate coverage percentage
-            coverage_pct = (compliant_cases / total_cases * 100) if total_cases > 0 else 0
 
             framework_details += f"""
             <div class="framework-card">
@@ -1349,22 +1362,22 @@ class ComplianceTruthTableGenerator:
         }}
     </style>
     <script>
-        function showAudience(audience) {{
+        function showAudience(audience, btn) {{
             // Hide all sections
             document.querySelectorAll('.audience-section').forEach(section => {{
                 section.classList.remove('active');
             }});
 
             // Remove active state from all buttons
-            document.querySelectorAll('.audience-nav button').forEach(btn => {{
-                btn.classList.remove('active');
+            document.querySelectorAll('.audience-nav button').forEach(button => {{
+                button.classList.remove('active');
             }});
 
             // Show selected section
             document.getElementById(audience).classList.add('active');
 
             // Highlight active button
-            event.target.classList.add('active');
+            btn.classList.add('active');
         }}
 
         // Show executive section by default on load
@@ -1398,10 +1411,10 @@ class ComplianceTruthTableGenerator:
         </div>
 
         <div class="audience-nav">
-            <button onclick="showAudience('executive')">📊 Executive / Company</button>
-            <button onclick="showAudience('enduser')">👤 End User</button>
-            <button onclick="showAudience('developer')">🔧 Developer</button>
-            <button onclick="showAudience('auditor')">📋 Auditor</button>
+            <button onclick="showAudience('executive', this)">📊 Executive / Company</button>
+            <button onclick="showAudience('enduser', this)">👤 End User</button>
+            <button onclick="showAudience('developer', this)">🔧 Developer</button>
+            <button onclick="showAudience('auditor', this)">📋 Auditor</button>
         </div>
 
         {exec_summary}
@@ -1462,16 +1475,15 @@ class ComplianceTruthTableGenerator:
         return json_file, html_file
 
 def main():
+    # Determine script directory and project root (2 levels up from scripts dir)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(script_dir))
+
     if len(sys.argv) > 1:
         output_dir = sys.argv[1]
     else:
         # Default to validation-results in scripts directory
-        script_dir = os.path.dirname(os.path.abspath(__file__))
         output_dir = os.path.join(script_dir, "validation-results")
-
-    # Determine project root (2 levels up from scripts dir)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(script_dir))
 
     generator = ComplianceTruthTableGenerator(project_root, output_dir)
     generator.run()

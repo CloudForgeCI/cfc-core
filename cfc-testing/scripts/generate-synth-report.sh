@@ -307,7 +307,7 @@ cat > "$OUTPUT_DIR/comprehensive-synth-report.html" << 'EOF'
                         <div class="summary-label">Failed</div>
                     </div>
                     <div class="summary-card">
-                        <div class="summary-number">${Math.round((results.successful / (results.total || results.tests.length)) * 100) || 100}%</div>
+                        <div class="summary-number">${(results.total || results.tests.length) > 0 ? Math.round((results.successful / (results.total || results.tests.length)) * 100) : 0}%</div>
                         <div class="summary-label">Success Rate</div>
                     </div>
                 </div>

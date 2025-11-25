@@ -690,12 +690,12 @@ jobs:
           if [ -d "downloaded-metrics" ]; then
             echo "✅ downloaded-metrics directory exists"
             echo "📁 Contents:"
-            ls -laR downloaded-metrics/ | head -50
+            find downloaded-metrics -type f -ls | head -50
           else
             echo "❌ downloaded-metrics directory not found"
             echo "⚠️  This is expected if no deployment tests have run yet"
             echo "Current directory contents:"
-            ls -la
+            find . -maxdepth 1 -type f -ls
           fi
 
       - name: Copy metrics dashboards to github-pages-reports
