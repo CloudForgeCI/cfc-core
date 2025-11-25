@@ -189,7 +189,7 @@ jobs:
             local file_count=0
             for xml_file in "$dir"/*.xml; do
               if [ -f "$xml_file" ]; then
-                ((file_count++))
+                file_count=$((file_count + 1))
               fi
             done
 
