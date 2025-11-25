@@ -325,7 +325,8 @@ class ComplianceFactoryTest {
         cfcContext.put("awsConfigEnabled", true);
         cfcContext.put("auditManagerEnabled", true);
         cfcContext.put("auditManagerFrameworkId", "test-framework-id");
-        cfcContext.put("complianceFrameworks", "SOC2,HIPAA,PCI-DSS,GDPR");
+        // Use mock UUIDs instead of framework short names to avoid AWS CLI dependency in CI
+        cfcContext.put("complianceFrameworks", "12345678-1234-1234-1234-123456789012,23456789-2345-2345-2345-234567890123,34567890-3456-3456-3456-345678901234,45678901-4567-4567-4567-456789012345");
         cfcContext.put("createConfigInfrastructure", true);
         cfcContext.put("enableS3VersioningRemediation", true);
         cfcContext.put("enableCloudTrailBucketAccessRemediation", true);
