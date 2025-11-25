@@ -32,12 +32,12 @@ class OneOfSimpleTest {
         void shouldInitializeWithAllowedValues() {
             OneOf annotation = new TestOneOfAnnotation("option1", "option2", "option3");
             validator.initialize(annotation);
-            
+
             // Test that allowed values are valid
             assertTrue(validator.isValid("option1", null));
             assertTrue(validator.isValid("option2", null));
             assertTrue(validator.isValid("option3", null));
-            
+
             // Test that disallowed values are invalid
             assertFalse(validator.isValid("invalid", null));
             assertFalse(validator.isValid("option4", null));
@@ -48,7 +48,7 @@ class OneOfSimpleTest {
         void shouldHandleEmptyAllowedValues() {
             OneOf annotation = new TestOneOfAnnotation();
             validator.initialize(annotation);
-            
+
             // Only null should be valid when no values are allowed
             assertTrue(validator.isValid(null, null));
             assertFalse(validator.isValid("", null));
@@ -60,7 +60,7 @@ class OneOfSimpleTest {
         void shouldHandleSingleAllowedValue() {
             OneOf annotation = new TestOneOfAnnotation("only-option");
             validator.initialize(annotation);
-            
+
             assertTrue(validator.isValid("only-option", null));
             assertTrue(validator.isValid(null, null));
             assertFalse(validator.isValid("other-option", null));
@@ -98,7 +98,7 @@ class OneOfSimpleTest {
             assertTrue(validator.isValid("dev", null));
             assertTrue(validator.isValid("staging", null));
             assertTrue(validator.isValid("production", null));
-            
+
             // Case variations should be invalid
             assertFalse(validator.isValid("Dev", null));
             assertFalse(validator.isValid("DEV", null));
@@ -171,7 +171,7 @@ class OneOfSimpleTest {
         void shouldValidateEnvironmentValues() {
             OneOf annotation = new TestOneOfAnnotation("dev", "staging", "prod");
             validator.initialize(annotation);
-            
+
             assertTrue(validator.isValid("dev", null));
             assertTrue(validator.isValid("staging", null));
             assertTrue(validator.isValid("prod", null));
@@ -184,7 +184,7 @@ class OneOfSimpleTest {
         void shouldValidateNetworkModes() {
             OneOf annotation = new TestOneOfAnnotation("public-no-nat", "private-with-nat");
             validator.initialize(annotation);
-            
+
             assertTrue(validator.isValid("public-no-nat", null));
             assertTrue(validator.isValid("private-with-nat", null));
             assertFalse(validator.isValid("public", null));
@@ -197,7 +197,7 @@ class OneOfSimpleTest {
         void shouldValidateLoadBalancerTypes() {
             OneOf annotation = new TestOneOfAnnotation("alb", "nlb");
             validator.initialize(annotation);
-            
+
             assertTrue(validator.isValid("alb", null));
             assertTrue(validator.isValid("nlb", null));
             assertFalse(validator.isValid("elb", null));
@@ -210,7 +210,7 @@ class OneOfSimpleTest {
         void shouldValidateAuthModes() {
             OneOf annotation = new TestOneOfAnnotation("none", "alb-oidc", "jenkins-oidc");
             validator.initialize(annotation);
-            
+
             assertTrue(validator.isValid("none", null));
             assertTrue(validator.isValid("alb-oidc", null));
             assertTrue(validator.isValid("jenkins-oidc", null));
@@ -224,7 +224,7 @@ class OneOfSimpleTest {
         void shouldValidateTierValues() {
             OneOf annotation = new TestOneOfAnnotation("public", "enterprise");
             validator.initialize(annotation);
-            
+
             assertTrue(validator.isValid("public", null));
             assertTrue(validator.isValid("enterprise", null));
             assertFalse(validator.isValid("private", null));
@@ -242,7 +242,7 @@ class OneOfSimpleTest {
         void shouldHandleSpecialCharacters() {
             OneOf annotation = new TestOneOfAnnotation("test-value", "test_value", "test.value", "test@value");
             validator.initialize(annotation);
-            
+
             assertTrue(validator.isValid("test-value", null));
             assertTrue(validator.isValid("test_value", null));
             assertTrue(validator.isValid("test.value", null));
@@ -255,7 +255,7 @@ class OneOfSimpleTest {
         void shouldHandleNumericValues() {
             OneOf annotation = new TestOneOfAnnotation("1", "2", "3");
             validator.initialize(annotation);
-            
+
             assertTrue(validator.isValid("1", null));
             assertTrue(validator.isValid("2", null));
             assertTrue(validator.isValid("3", null));

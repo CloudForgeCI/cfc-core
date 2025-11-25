@@ -15,7 +15,7 @@ public class AlbFactorySecurityTest {
   void createsAlbWithDevSecurityProfile() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbDevTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
-    
+
     Template t = Template.fromStack(builder.getStack());
     t.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
     t.resourceCountIs("AWS::ElasticLoadBalancingV2::Listener", 1);
@@ -28,7 +28,7 @@ public class AlbFactorySecurityTest {
   void createsAlbWithStagingSecurityProfile() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbStagingTest", SecurityProfile.STAGING, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
-    
+
     Template t = Template.fromStack(builder.getStack());
     t.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
     t.resourceCountIs("AWS::ElasticLoadBalancingV2::Listener", 1);
@@ -38,7 +38,7 @@ public class AlbFactorySecurityTest {
   void createsAlbWithProductionSecurityProfile() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbProductionTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
-    
+
     Template t = Template.fromStack(builder.getStack());
     t.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
     t.resourceCountIs("AWS::ElasticLoadBalancingV2::Listener", 1);
@@ -48,9 +48,9 @@ public class AlbFactorySecurityTest {
   void createsAlbWithCorrectResourceName() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbResourceTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
-    
+
     Template t = Template.fromStack(builder.getStack());
-    
+
     // Verify ALB resource exists
     t.hasResource("AWS::ElasticLoadBalancingV2::LoadBalancer", Map.of());
   }
@@ -59,9 +59,9 @@ public class AlbFactorySecurityTest {
   void createsAlbSecurityGroupWithCorrectDescription() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbSecurityTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
-    
+
     Template t = Template.fromStack(builder.getStack());
-    
+
     // Verify ALB security group exists
     assertNotNull(builder.getAlbSecurityGroup());
   }
@@ -70,9 +70,9 @@ public class AlbFactorySecurityTest {
   void createsAlbWithCorrectVpc() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbVpcTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
-    
+
     Template t = Template.fromStack(builder.getStack());
-    
+
     // Verify ALB is created in the correct VPC
     assertNotNull(builder.getVpc());
     assertNotNull(builder.getAlb());
@@ -82,9 +82,9 @@ public class AlbFactorySecurityTest {
   void createsAlbWithHttpListener() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbListenerTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
-    
+
     Template t = Template.fromStack(builder.getStack());
-    
+
     // Verify HTTP listener is created
     t.resourceCountIs("AWS::ElasticLoadBalancingV2::Listener", 1);
     assertNotNull(builder.getHttpListener());

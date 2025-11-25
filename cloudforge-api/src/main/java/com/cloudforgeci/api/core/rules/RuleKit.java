@@ -44,7 +44,7 @@ public final class RuleKit {
   public static <A,B,C,D> void whenAll4(Slot<A> a, Slot<B> b, Slot<C> c, Slot<D> d, QuadConsumer<A,B,C,D> fn) {
     Runnable tryRun = () -> {
       var ao = a.get(); var bo = b.get(); var co = c.get(); var do_ = d.get();
-      if (ao.isPresent() && bo.isPresent() && co.isPresent() && do_.isPresent()) 
+      if (ao.isPresent() && bo.isPresent() && co.isPresent() && do_.isPresent())
         fn.accept(ao.get(), bo.get(), co.get(), do_.get());
     };
     a.onSet(x -> tryRun.run()); b.onSet(x -> tryRun.run()); c.onSet(x -> tryRun.run()); d.onSet(x -> tryRun.run()); tryRun.run();
@@ -53,10 +53,10 @@ public final class RuleKit {
   public static <A,B,C,D,E> void whenAll5(Slot<A> a, Slot<B> b, Slot<C> c, Slot<D> d, Slot<E> e, PentaConsumer<A,B,C,D,E> fn) {
     Runnable tryRun = () -> {
       var ao = a.get(); var bo = b.get(); var co = c.get(); var do_ = d.get(); var eo = e.get();
-      if (ao.isPresent() && bo.isPresent() && co.isPresent() && do_.isPresent() && eo.isPresent()) 
+      if (ao.isPresent() && bo.isPresent() && co.isPresent() && do_.isPresent() && eo.isPresent())
         fn.accept(ao.get(), bo.get(), co.get(), do_.get(), eo.get());
     };
-    a.onSet(x -> tryRun.run()); b.onSet(x -> tryRun.run()); c.onSet(x -> tryRun.run()); 
+    a.onSet(x -> tryRun.run()); b.onSet(x -> tryRun.run()); c.onSet(x -> tryRun.run());
     d.onSet(x -> tryRun.run()); e.onSet(x -> tryRun.run()); tryRun.run();
   }
 }

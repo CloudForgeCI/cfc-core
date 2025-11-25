@@ -294,7 +294,7 @@ public final class PciDssRules {
                 "Web Application Firewall (WAF) strongly recommended for production",
                 "WafEnabled",
                 "PCI-DSS Req 6.6: Web Application Firewall (WAF) strongly recommended for production. " +
-                "Set wafEnabled=true in deployment context. " +
+                "Set wafEnabled = true in deployment context. " +
                 "Alternative: Document regular application security reviews per PCI-DSS 6.6."
             ));
         } else {
@@ -339,7 +339,7 @@ public final class PciDssRules {
                 "PCI-DSS-Req-8.2-Auth",
                 "Authentication must be enabled for production environments",
                 "PCI-DSS Req 8.2: Authentication must be enabled for production environments. " +
-                "Configure authMode='alb-oidc' or 'jenkins-oidc' with MFA-enabled identity provider. " +
+                "Configure authMode = 'alb-oidc' or 'jenkins-oidc' with MFA-enabled identity provider. " +
                 "Users must use multi-factor authentication to access cardholder data."
             ));
         } else {
@@ -361,7 +361,7 @@ public final class PciDssRules {
                     "PCI-DSS-Req-8.3-MFA",
                     "Multi-factor authentication required for OIDC mode",
                     "PCI-DSS Req 8.3: Multi-factor authentication required for OIDC mode. " +
-                    "Either: (1) Enable Cognito MFA: cognitoAutoProvision=true, cognitoMfaEnabled=true " +
+                    "Either: (1) Enable Cognito MFA: cognitoAutoProvision = true, cognitoMfaEnabled = true " +
                     "OR (2) Configure AWS IAM Identity Center: provide ssoInstanceArn with MFA enforcement."
                 ));
             } else {
@@ -496,7 +496,7 @@ public final class PciDssRules {
                 "PCI-DSS-Req-11.6-Config",
                 "AWS Config recommended for continuous compliance monitoring",
                 "PCI-DSS Req 11.6: AWS Config recommended for continuous compliance monitoring. " +
-                "Set awsConfigEnabled=true in deployment context."
+                "Set awsConfigEnabled = true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -535,7 +535,7 @@ public final class PciDssRules {
                 "Custom configuration required - vendor defaults must be changed",
                 "Verify default passwords, SNMP strings, and credentials have been changed. " +
                 "PCI-DSS Req 2.1: Change all vendor-supplied defaults before deploying. " +
-                "Set customConfigurationApplied=true after verification or use PRODUCTION security profile."
+                "Set customConfigurationApplied = true after verification or use PRODUCTION security profile."
             ));
         }
 
@@ -552,7 +552,7 @@ public final class PciDssRules {
                 "Security hardening configuration standards required",
                 "Apply CIS benchmarks or NIST hardening guidelines. " +
                 "PCI-DSS Req 2.2: Develop configuration standards for all system components. " +
-                "Set securityHardeningApplied=true after implementing hardening or use PRODUCTION security profile."
+                "Set securityHardeningApplied = true after implementing hardening or use PRODUCTION security profile."
             ));
         }
 
@@ -569,7 +569,7 @@ public final class PciDssRules {
                 "Disable unnecessary services and protocols",
                 "PCI-DSS Req 2.2.2: Enable only necessary services, protocols, and daemons. " +
                 "Remove or disable FTP, telnet, and other insecure services. " +
-                "Set unnecessaryServicesDisabled=true after verification or use PRODUCTION security profile."
+                "Set unnecessaryServicesDisabled = true after verification or use PRODUCTION security profile."
             ));
         }
 
@@ -586,7 +586,7 @@ public final class PciDssRules {
                 "Use minimal base images without unnecessary functionality",
                 "PCI-DSS Req 2.2.5: Remove unnecessary functionality (scripts, utilities, etc). " +
                 "Use minimal container images or hardened AMIs. " +
-                "Set minimalBaseImageUsed=true when using minimal images or use PRODUCTION security profile."
+                "Set minimalBaseImageUsed = true when using minimal images or use PRODUCTION security profile."
             ));
         }
 
@@ -619,7 +619,7 @@ public final class PciDssRules {
                 "Maintain inventory of system components in scope for PCI-DSS",
                 "PCI-DSS Req 2.4: Keep inventory of all systems in cardholder data environment. " +
                 "Use AWS Systems Manager Inventory or Config. " +
-                "Set systemInventoryMaintained=true when inventory system is active or enable AWS Config."
+                "Set systemInventoryMaintained = true when inventory system is active or enable AWS Config."
             ));
         }
 
@@ -643,7 +643,7 @@ public final class PciDssRules {
      */
     public static String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== PCI-DSS Compliance Report ===\n\n");
+        report.append("\n=== PCI-DSS Compliance Report == = \n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

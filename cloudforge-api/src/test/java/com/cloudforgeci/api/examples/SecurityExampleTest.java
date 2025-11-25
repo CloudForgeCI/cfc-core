@@ -58,7 +58,7 @@ class SecurityExampleTest {
         stack = new Stack(app, "TestStack");
         testCfc = DeploymentContext.from(app);
     }
-    
+
     private Map<String, Object> createTestConfig() {
         Map<String, Object> config = new HashMap<>();
         config.put("tier", "public");
@@ -178,7 +178,7 @@ class SecurityExampleTest {
             testApp.getNode().setContext("cfc", createTestConfig());
             Stack testStack = new Stack(testApp, "TestNullScopeStack");
             DeploymentContext testCfc = DeploymentContext.from(testApp);
-            
+
             // These tests verify that the methods handle null parameters appropriately
             // The actual CDK constructs will throw their own exceptions for invalid parameters
             assertThrows(Exception.class, () -> {
@@ -194,7 +194,7 @@ class SecurityExampleTest {
             testApp.getNode().setContext("cfc", createTestConfig());
             Stack testStack = new Stack(testApp, "TestNullIdStack");
             DeploymentContext testCfc = DeploymentContext.from(testApp);
-            
+
             assertThrows(Exception.class, () -> {
                 SecurityExample.createDevJenkins(testStack, null, testCfc);
             }, "Should throw exception for null id");
@@ -208,7 +208,7 @@ class SecurityExampleTest {
             testApp.getNode().setContext("cfc", createTestConfig());
             Stack testStack = new Stack(testApp, "TestNullContextStack");
             DeploymentContext testCfc = DeploymentContext.from(testApp);
-            
+
             assertThrows(Exception.class, () -> {
                 SecurityExample.createDevJenkins(testStack, "TestDev", null);
             }, "Should throw exception for null DeploymentContext");
@@ -243,7 +243,7 @@ class SecurityExampleTest {
             // Verify that all public methods in SecurityExample are static
             // This ensures the example can be used without instantiation
             var methods = SecurityExample.class.getDeclaredMethods();
-            
+
             for (var method : methods) {
                 if (method.getName().startsWith("create") || method.getName().startsWith("demonstrate")) {
                     assertTrue(java.lang.reflect.Modifier.isStatic(method.getModifiers()),
@@ -298,7 +298,7 @@ class SecurityExampleTest {
             boolean hasDevExample = false;
             boolean hasStagingExample = false;
             boolean hasProductionExample = false;
-            
+
             for (var method : methods) {
                 String methodName = method.getName().toLowerCase();
                 if (methodName.contains("dev")) {
@@ -311,7 +311,7 @@ class SecurityExampleTest {
                     hasProductionExample = true;
                 }
             }
-            
+
             assertTrue(hasDevExample, "Should have development security example");
             assertTrue(hasStagingExample, "Should have staging security example");
             assertTrue(hasProductionExample, "Should have production security example");

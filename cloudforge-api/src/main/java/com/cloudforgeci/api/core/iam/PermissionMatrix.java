@@ -19,7 +19,7 @@ public final class PermissionMatrix {
      */
     public static final List<String> CORE_PERMISSIONS = List.of(
         "logs:CreateLogGroup",
-        "logs:CreateLogStream", 
+        "logs:CreateLogStream",
         "logs:PutLogEvents",
         "logs:DescribeLogGroups",
         "logs:DescribeLogStreams"
@@ -39,7 +39,7 @@ public final class PermissionMatrix {
         ),
         IAMProfile.STANDARD, List.of(
             "ssm:GetParameter",
-            "ssm:GetParameters", 
+            "ssm:GetParameters",
             "ssm:GetParametersByPath",
             "ssm:SendCommand",
             "ssm:ListCommandInvocations",
@@ -77,7 +77,7 @@ public final class PermissionMatrix {
         ),
         IAMProfile.STANDARD, List.of(
             "ecr:GetAuthorizationToken",
-            "ecr:BatchCheckLayerAvailability", 
+            "ecr:BatchCheckLayerAvailability",
             "ecr:GetDownloadUrlForLayer",
             "ecr:BatchGetImage",
             "ecr:DescribeRepositories",
@@ -92,7 +92,7 @@ public final class PermissionMatrix {
         IAMProfile.EXTENDED, List.of(
             "ecr:*",
             "ecs:DescribeClusters",
-            "ecs:DescribeServices", 
+            "ecs:DescribeServices",
             "ecs:DescribeTasks",
             "ecs:DescribeTaskDefinition",
             "ecs:ListTasks",
@@ -132,7 +132,7 @@ public final class PermissionMatrix {
         ),
         IAMProfile.STANDARD, List.of(
             "elasticloadbalancing:DescribeLoadBalancers",
-            "elasticloadbalancing:DescribeTargetGroups", 
+            "elasticloadbalancing:DescribeTargetGroups",
             "elasticloadbalancing:DescribeTargetHealth",
             "elasticloadbalancing:DescribeListeners",
             "elasticloadbalancing:DescribeRules"
@@ -144,7 +144,7 @@ public final class PermissionMatrix {
 
     /**
      * Gets the required permissions for a specific topology/runtime/iam combination.
-     * 
+     *
      * @param topology the topology type
      * @param runtime the runtime type
      * @param iamProfile the IAM profile
@@ -152,44 +152,44 @@ public final class PermissionMatrix {
      */
     public static List<String> getRequiredPermissions(TopologyType topology, RuntimeType runtime, IAMProfile iamProfile) {
         List<String> permissions = new java.util.ArrayList<>(CORE_PERMISSIONS);
-        
+
         // Add runtime-specific permissions
         if (runtime == RuntimeType.EC2) {
             permissions.addAll(EC2_PERMISSIONS.get(iamProfile));
         } else if (runtime == RuntimeType.FARGATE) {
             permissions.addAll(FARGATE_PERMISSIONS.get(iamProfile));
         }
-        
+
         // Add topology-specific permissions
         if (topology == TopologyType.JENKINS_SERVICE || topology == TopologyType.JENKINS_SINGLE_NODE) {
             permissions.addAll(EFS_PERMISSIONS.get(iamProfile));
             permissions.addAll(ALB_PERMISSIONS.get(iamProfile));
         }
-        
+
         return permissions;
     }
 
     /**
      * Validates that the provided permissions are appropriate for the given combination.
-     * 
+     *
      * @param topology the topology type
      * @param runtime the runtime type
      * @param iamProfile the IAM profile
      * @param providedPermissions the permissions being granted
      * @return validation result with any issues found
      */
-    public static ValidationResult validatePermissions(TopologyType topology, RuntimeType runtime, 
+    public static ValidationResult validatePermissions(TopologyType topology, RuntimeType runtime,
                                                      IAMProfile iamProfile, List<String> providedPermissions) {
         List<String> requiredPermissions = getRequiredPermissions(topology, runtime, iamProfile);
         List<String> issues = new java.util.ArrayList<>();
-        
+
         // Check for missing required permissions
         for (String required : requiredPermissions) {
             if (!hasPermission(providedPermissions, required)) {
                 issues.add("Missing required permission: " + required);
             }
         }
-        
+
         // Check for excessive permissions (only for MINIMAL profile)
         if (iamProfile == IAMProfile.MINIMAL) {
             for (String provided : providedPermissions) {
@@ -198,7 +198,7 @@ public final class PermissionMatrix {
                 }
             }
         }
-        
+
         return new ValidationResult(issues.isEmpty(), issues);
     }
 
@@ -206,9 +206,9 @@ public final class PermissionMatrix {
      * Checks if a permission is present in the provided list (supports wildcards).
      */
     private static boolean hasPermission(List<String> permissions, String required) {
-        return permissions.stream().anyMatch(perm -> 
-            perm.equals(required) || 
-            perm.equals("*") || 
+        return permissions.stream().anyMatch(perm ->
+            perm.equals(required) ||
+            perm.equals("*") ||
             perm.endsWith("*") && required.startsWith(perm.substring(0, perm.length() - 1))
         );
     }
@@ -217,9 +217,9 @@ public final class PermissionMatrix {
      * Checks if a permission is allowed based on the required permissions list.
      */
     private static boolean isPermissionAllowed(List<String> allowedPermissions, String permission) {
-        return allowedPermissions.stream().anyMatch(allowed -> 
-            allowed.equals(permission) || 
-            allowed.equals("*") || 
+        return allowedPermissions.stream().anyMatch(allowed ->
+            allowed.equals(permission) ||
+            allowed.equals("*") ||
             allowed.endsWith("*") && permission.startsWith(allowed.substring(0, allowed.length() - 1))
         );
     }
@@ -231,7 +231,7 @@ public final class PermissionMatrix {
         public boolean hasIssues() {
             return !issues.isEmpty();
         }
-        
+
         public String getIssuesAsString() {
             return String.join("\n", issues);
         }

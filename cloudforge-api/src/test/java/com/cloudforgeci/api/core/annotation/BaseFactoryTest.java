@@ -67,7 +67,7 @@ class BaseFactoryTest {
         @Test
         @DisplayName("Should extend Construct")
         void shouldExtendConstruct() {
-            assertTrue(Construct.class.isAssignableFrom(BaseFactory.class), 
+            assertTrue(Construct.class.isAssignableFrom(BaseFactory.class),
                 "BaseFactory should extend Construct");
         }
 
@@ -148,15 +148,15 @@ class BaseFactoryTest {
         void allGetterMethodsShouldReturnCorrectTypes() {
             assertDoesNotThrow(() -> {
                 var getSystemContextMethod = BaseFactory.class.getDeclaredMethod("getSystemContext");
-                assertEquals(SystemContext.class, getSystemContextMethod.getReturnType(), 
+                assertEquals(SystemContext.class, getSystemContextMethod.getReturnType(),
                     "getSystemContext should return SystemContext");
-                
+
                 var getDeploymentContextMethod = BaseFactory.class.getDeclaredMethod("getDeploymentContext");
-                assertEquals(DeploymentContext.class, getDeploymentContextMethod.getReturnType(), 
+                assertEquals(DeploymentContext.class, getDeploymentContextMethod.getReturnType(),
                     "getDeploymentContext should return DeploymentContext");
-                
+
                 var getSecurityProfileConfigurationMethod = BaseFactory.class.getDeclaredMethod("getSecurityProfileConfiguration");
-                assertEquals(SecurityProfileConfiguration.class, getSecurityProfileConfigurationMethod.getReturnType(), 
+                assertEquals(SecurityProfileConfiguration.class, getSecurityProfileConfigurationMethod.getReturnType(),
                     "getSecurityProfileConfiguration should return SecurityProfileConfiguration");
             }, "All getter methods should have correct return types");
         }
@@ -193,15 +193,15 @@ class BaseFactoryTest {
         void protectedFieldsShouldBeAccessibleToSubclasses() {
             assertDoesNotThrow(() -> {
                 Field ctxField = BaseFactory.class.getDeclaredField("ctx");
-                assertTrue(java.lang.reflect.Modifier.isProtected(ctxField.getModifiers()), 
+                assertTrue(java.lang.reflect.Modifier.isProtected(ctxField.getModifiers()),
                     "ctx field should be protected");
-                
+
                 Field cfcField = BaseFactory.class.getDeclaredField("cfc");
-                assertTrue(java.lang.reflect.Modifier.isProtected(cfcField.getModifiers()), 
+                assertTrue(java.lang.reflect.Modifier.isProtected(cfcField.getModifiers()),
                     "cfc field should be protected");
-                
+
                 Field configField = BaseFactory.class.getDeclaredField("config");
-                assertTrue(java.lang.reflect.Modifier.isProtected(configField.getModifiers()), 
+                assertTrue(java.lang.reflect.Modifier.isProtected(configField.getModifiers()),
                     "config field should be protected");
             }, "Protected fields should be accessible to subclasses");
         }
@@ -211,15 +211,15 @@ class BaseFactoryTest {
         void fieldsShouldHaveCorrectTypes() {
             assertDoesNotThrow(() -> {
                 Field ctxField = BaseFactory.class.getDeclaredField("ctx");
-                assertEquals(SystemContext.class, ctxField.getType(), 
+                assertEquals(SystemContext.class, ctxField.getType(),
                     "ctx field should be SystemContext type");
-                
+
                 Field cfcField = BaseFactory.class.getDeclaredField("cfc");
-                assertEquals(DeploymentContext.class, cfcField.getType(), 
+                assertEquals(DeploymentContext.class, cfcField.getType(),
                     "cfc field should be DeploymentContext type");
-                
+
                 Field configField = BaseFactory.class.getDeclaredField("config");
-                assertEquals(SecurityProfileConfiguration.class, configField.getType(), 
+                assertEquals(SecurityProfileConfiguration.class, configField.getType(),
                     "config field should be SecurityProfileConfiguration type");
             }, "Fields should have correct types");
         }
@@ -235,10 +235,10 @@ class BaseFactoryTest {
             assertDoesNotThrow(() -> {
                 TestBaseFactory factory1 = new TestBaseFactory(stack, "Factory1");
                 TestBaseFactory factory2 = new TestBaseFactory(stack, "Factory2");
-                
+
                 assertNotNull(factory1, "First factory should be created");
                 assertNotNull(factory2, "Second factory should be created");
-                assertNotEquals(factory1.getNode().getId(), factory2.getNode().getId(), 
+                assertNotEquals(factory1.getNode().getId(), factory2.getNode().getId(),
                     "Factories should have different IDs");
             }, "BaseFactory should work with multiple instances");
         }
@@ -262,20 +262,20 @@ class BaseFactoryTest {
         void baseFactoryShouldBeThreadSafeForGetterMethods() {
             assertDoesNotThrow(() -> {
                 TestBaseFactory factory = new TestBaseFactory(stack, "ThreadSafeFactory");
-                
+
                 // Multiple threads calling getter methods should be safe
                 Runnable task = () -> {
                     factory.getSystemContext();
                     factory.getDeploymentContext();
                     factory.getSecurityProfileConfiguration();
                 };
-                
+
                 Thread thread1 = new Thread(task);
                 Thread thread2 = new Thread(task);
-                
+
                 thread1.start();
                 thread2.start();
-                
+
                 thread1.join();
                 thread2.join();
             }, "BaseFactory should be thread-safe for getter methods");

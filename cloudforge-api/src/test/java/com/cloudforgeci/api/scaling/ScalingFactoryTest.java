@@ -26,7 +26,7 @@ public class ScalingFactoryTest {
     var cfc = DeploymentContext.from(stack);
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     VpcFactory vpc = new VpcFactory(stack, "Vpc");
     vpc.create();
 
@@ -38,7 +38,7 @@ public class ScalingFactoryTest {
 
     Ec2Factory ec2 = new Ec2Factory(stack, "Ec2");
     ec2.create();
-    
+
     new ScalingFactory(stack, "Scaling");
     Template t = Template.fromStack(stack);
     t.resourceCountIs("AWS::AutoScaling::ScalingPolicy", 1);

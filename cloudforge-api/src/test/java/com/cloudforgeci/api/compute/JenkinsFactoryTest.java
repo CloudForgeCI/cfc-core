@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Comprehensive unit tests for JenkinsFactory.
- * 
+ *
  * Tests cover all major functionality including:
  * - EC2 deployment creation with different security profiles
  * - Network mode handling (public-no-nat vs private-with-nat)
@@ -40,7 +40,7 @@ class JenkinsFactoryTest {
     void setUp() {
         app = new App();
         stack = new Stack(app, "TestStack");
-        
+
         // Create test deployment contexts using the correct API
         devContext = DeploymentContext.from(stack);
         stagingContext = DeploymentContext.from(stack);
@@ -56,13 +56,13 @@ class JenkinsFactoryTest {
         void shouldCreateEc2DeploymentWithDevProfile() {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(stack, "JenkinsDev", devContext);
-            
+
             // Then
             assertNotNull(system);
             assertNotNull(system.vpc());
             assertNotNull(system.alb());
             assertNotNull(system.efs());
-            
+
             // Verify SystemContext was properly initialized
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.DEV, ctx.security);
@@ -76,13 +76,13 @@ class JenkinsFactoryTest {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(
                 stack, "JenkinsStaging", stagingContext, SecurityProfile.STAGING);
-            
+
             // Then
             assertNotNull(system);
             assertNotNull(system.vpc());
             assertNotNull(system.alb());
             assertNotNull(system.efs());
-            
+
             // Verify SystemContext uses explicit security profile
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.STAGING, ctx.security);
@@ -94,14 +94,14 @@ class JenkinsFactoryTest {
             // Create separate stacks to avoid resource naming conflicts
             Stack publicStack = new Stack(app, "PublicStack");
             Stack privateStack = new Stack(app, "PrivateStack");
-            
+
             DeploymentContext publicContext = DeploymentContext.from(publicStack);
             DeploymentContext privateContext = DeploymentContext.from(privateStack);
-            
+
             // Test public-no-nat mode (default)
             JenkinsFactory.JenkinsSystem publicSystem = JenkinsFactory.createEc2(publicStack, "PublicJenkins", publicContext);
             assertNotNull(publicSystem);
-            
+
             // Test private-with-nat mode
             JenkinsFactory.JenkinsSystem privateSystem = JenkinsFactory.createEc2(privateStack, "PrivateJenkins", privateContext);
             assertNotNull(privateSystem);
@@ -112,16 +112,16 @@ class JenkinsFactoryTest {
         void shouldCreateResourcesWithProperNaming() {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(stack, "TestJenkins", devContext);
-            
+
             // Then
             assertNotNull(system);
-            
+
             // Verify VPC was created
             assertNotNull(system.vpc());
-            
+
             // Verify ALB was created
             assertNotNull(system.alb());
-            
+
             // Verify EFS was created
             assertNotNull(system.efs());
         }
@@ -145,7 +145,7 @@ class JenkinsFactoryTest {
         void shouldHandleNullIdGracefully() {
             // When - JenkinsFactory may handle null id internally
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(stack, null, devContext);
-            
+
             // Then - Should not throw exception, but may have default behavior
             assertNotNull(system);
         }
@@ -173,7 +173,7 @@ class JenkinsFactoryTest {
         void shouldHandleEmptyIdGracefully() {
             // When - JenkinsFactory may handle empty id internally
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(stack, "", devContext);
-            
+
             // Then - Should not throw exception, but may have default behavior
             assertNotNull(system);
         }
@@ -189,10 +189,10 @@ class JenkinsFactoryTest {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(
                 stack, "JenkinsDev", devContext, SecurityProfile.DEV);
-            
+
             // Then
             assertNotNull(system);
-            
+
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.DEV, ctx.security);
             assertEquals(IAMProfile.EXTENDED, ctx.iamProfile); // DEV uses MINIMAL IAM (not EXTENDED)
@@ -204,10 +204,10 @@ class JenkinsFactoryTest {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(
                 stack, "JenkinsStaging", stagingContext, SecurityProfile.STAGING);
-            
+
             // Then
             assertNotNull(system);
-            
+
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.STAGING, ctx.security);
             assertEquals(IAMProfile.STANDARD, ctx.iamProfile); // STAGING uses MINIMAL IAM (not STANDARD)
@@ -219,10 +219,10 @@ class JenkinsFactoryTest {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(
                 stack, "JenkinsProd", productionContext, SecurityProfile.PRODUCTION);
-            
+
             // Then
             assertNotNull(system);
-            
+
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.PRODUCTION, ctx.security);
             assertEquals(IAMProfile.MINIMAL, ctx.iamProfile); // PRODUCTION uses MINIMAL IAM
@@ -238,15 +238,15 @@ class JenkinsFactoryTest {
         void shouldCreateCompleteInfrastructureStack() {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(stack, "CompleteJenkins", devContext);
-            
+
             // Then
             assertNotNull(system);
-            
+
             // Verify all major components exist
             assertNotNull(system.vpc());
             assertNotNull(system.alb());
             assertNotNull(system.efs());
-            
+
             // Verify SystemContext has all required resources
             SystemContext ctx = SystemContext.of(stack);
             assertTrue(ctx.vpc.get().isPresent());
@@ -262,18 +262,18 @@ class JenkinsFactoryTest {
             // Create separate stacks to avoid resource naming conflicts
             Stack stack1 = new Stack(app, "TestStack1");
             Stack stack2 = new Stack(app, "TestStack2");
-            
+
             DeploymentContext ctx1 = DeploymentContext.from(stack1);
             DeploymentContext ctx2 = DeploymentContext.from(stack2);
-            
+
             // When
             JenkinsFactory.JenkinsSystem system1 = JenkinsFactory.createEc2(stack1, "Jenkins1", ctx1);
             JenkinsFactory.JenkinsSystem system2 = JenkinsFactory.createEc2(stack2, "Jenkins2", ctx2);
-            
+
             // Then
             assertNotNull(system1);
             assertNotNull(system2);
-            
+
             // Both should be created successfully
             assertNotNull(system1.vpc());
             assertNotNull(system2.vpc());
@@ -289,10 +289,10 @@ class JenkinsFactoryTest {
         void shouldRespectDeploymentContextConfiguration() {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(stack, "CustomJenkins", devContext);
-            
+
             // Then
             assertNotNull(system);
-            
+
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.DEV, ctx.security);
             assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology);
@@ -304,10 +304,10 @@ class JenkinsFactoryTest {
         void shouldHandleDefaultConfigurationValues() {
             // When
             JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(stack, "MinimalJenkins", devContext);
-            
+
             // Then
             assertNotNull(system);
-            
+
             SystemContext ctx = SystemContext.of(stack);
             assertEquals(SecurityProfile.DEV, ctx.security); // Default security profile
             assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology); // Default topology

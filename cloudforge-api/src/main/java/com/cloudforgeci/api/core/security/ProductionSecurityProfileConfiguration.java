@@ -41,7 +41,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     public SecurityProfile getSecurityProfile() {
         return SecurityProfile.PRODUCTION;
     }
-    
+
     // Logging Configuration - Extended retention for compliance
     @Override
     public RetentionDays getLogRetentionDays() {
@@ -54,17 +54,17 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         }
         return RetentionDays.TWO_YEARS; // Extended retention for compliance
     }
-    
+
     @Override
     public RetentionDays getFlowLogRetentionDays() {
         return RetentionDays.TWO_YEARS; // Extended retention for compliance
     }
-    
+
     @Override
     public RemovalPolicy getLogRemovalPolicy() {
         return RemovalPolicy.RETAIN; // Always retain logs in production
     }
-    
+
     // Flow Log Configuration - Comprehensive monitoring
     @Override
     public boolean isFlowLogsEnabled() {
@@ -79,12 +79,12 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         }
         return true; // Always enabled for production
     }
-    
+
     @Override
     public FlowLogTrafficType getFlowLogTrafficType() {
         return FlowLogTrafficType.ALL; // All traffic for comprehensive monitoring
     }
-    
+
     // Security Monitoring - Comprehensive for production
     @Override
     public boolean isSecurityMonitoringEnabled() {
@@ -124,7 +124,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         }
         return true; // Always enabled for production threat detection
     }
-    
+
     @Override
     public boolean isAwsConfigEnabled() {
         // AWS Config enabled for production compliance monitoring
@@ -147,7 +147,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     public boolean isEbsEncryptionEnabled() {
         return true; // Mandatory encryption
     }
-    
+
     @Override
     public boolean isEfsEncryptionInTransitEnabled() {
         // Check deployment context raw map first for testing overrides
@@ -161,28 +161,28 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         }
         return true; // Mandatory encryption
     }
-    
+
     @Override
     public boolean isEfsEncryptionAtRestEnabled() {
         return true; // Mandatory encryption
     }
-    
+
     @Override
     public boolean isS3EncryptionEnabled() {
         return true; // Mandatory encryption
     }
-    
+
     // Network Security - Maximum restrictions
     @Override
     public boolean isVpcEndpointsEnabled() {
         return true; // Always enabled for production security
     }
-    
+
     @Override
     public boolean isNatGatewayEnabled() {
         return true; // Always use private subnets for production
     }
-    
+
     @Override
     public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
         // Production respects network mode but defaults to NAT gateways for security
@@ -192,7 +192,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         // Use 2 NAT gateways for high availability across AZs for private subnets
         return 2;
     }
-    
+
     @Override
     public boolean isWafEnabled() {
         // Use deployment context wafEnabled field, default to false if not set
@@ -205,10 +205,10 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         // This provides core security protection (SQLi + OS exploits)
         // while allowing Jenkins to function without 403 errors.
         //
-        // To enable: set wafEnabled=true in deployment-context.json
+        // To enable: set wafEnabled = true in deployment-context.json
         return deploymentContext != null && deploymentContext.wafEnabled();
     }
-    
+
     @Override
     public boolean isCloudFrontEnabled() {
         // Check deployment context first, then fall back to profile default
@@ -227,10 +227,10 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         // For DDoS protection, use WAF at the ALB level instead.
         // CloudFront is better suited for static content delivery (e.g., S3 websites).
         //
-        // To enable: set cloudfrontEnabled=true in deployment-context.json
+        // To enable: set cloudfrontEnabled = true in deployment-context.json
         return false;
     }
-    
+
     // Backup and Recovery - Comprehensive for production
     @Override
     public boolean isAutomatedBackupEnabled() {
@@ -245,12 +245,12 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         }
         return true; // Always enabled for production
     }
-    
+
     @Override
     public int getBackupRetentionDays() {
         return 90; // Extended retention for production
     }
-    
+
     @Override
     public boolean isCrossRegionBackupEnabled() {
         // Check deployment context raw map first for testing overrides
@@ -264,13 +264,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         }
         return true; // Always enabled for production disaster recovery
     }
-    
+
     // Compliance and Audit - Comprehensive for production
     @Override
     public boolean isDetailedBillingEnabled() {
         return true; // Always enabled for production cost management
     }
-    
+
     @Override
     public boolean isAlbAccessLoggingEnabled() {
         // Check deployment context raw map first for testing overrides
@@ -284,28 +284,28 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         }
         return true; // Always enabled for production audit
     }
-    
+
     @Override
     public RetentionDays getAlbAccessLogRetentionDays() {
         return RetentionDays.TWO_YEARS; // Extended retention for compliance
     }
-    
+
     // Performance and Reliability - Maximum for production
     @Override
     public boolean isMultiAzEnforced() {
         return true; // Always enforced for production
     }
-    
+
     @Override
     public boolean isAutoScalingEnabled() {
         return true; // Always enabled for production
     }
-    
+
     @Override
     public int getMinInstanceCount() {
         return 2; // Minimum for production high availability
     }
-    
+
     @Override
     public int getMaxInstanceCount() {
         return 20; // Extended scaling for production

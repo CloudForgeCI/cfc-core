@@ -51,14 +51,14 @@ import java.util.logging.Logger;
 
 /**
  * Factory class for creating Jenkins deployments on AWS.
- * 
+ *
  * <p>This factory supports multiple deployment topologies and runtime environments:</p>
  * <ul>
  *   <li><strong>Topologies:</strong> JENKINS_SINGLE_NODE, JENKINS_SERVICE</li>
  *   <li><strong>Runtimes:</strong> EC2, FARGATE</li>
  *   <li><strong>Security Profiles:</strong> DEV, STAGING, PRODUCTION</li>
  * </ul>
- * 
+ *
  * <p>The factory automatically configures:</p>
  * <ul>
  *   <li>VPC and networking (respects networkMode: public-no-nat, private-with-nat)</li>
@@ -68,18 +68,18 @@ import java.util.logging.Logger;
  *   <li>Observability (CloudWatch logs, flow logs, alarms)</li>
  *   <li>Auto-scaling (for service topology)</li>
  * </p>
- * 
+ *
  * <p><strong>Example Usage:</strong></p>
  * <pre>{@code
  * // Create EC2-based Jenkins deployment
  * JenkinsFactory.JenkinsSystem system = JenkinsFactory.createEc2(scope, "Jenkins", cfc);
- * 
+ *
  * // Access created resources
  * Vpc vpc = system.vpc().getVpc();
  * ApplicationLoadBalancer alb = system.alb().getAlb();
  * FileSystem efs = system.efs().getEfs();
  * }</pre>
- * 
+ *
  * @author CloudForgeCI
  * @since 1.0.0
  * @see DeploymentContext
@@ -87,12 +87,12 @@ import java.util.logging.Logger;
  * @see SecurityProfile
  */
 public class JenkinsFactory {
-  
+
     private static final Logger LOG = Logger.getLogger(JenkinsFactory.class.getName());
-  
+
   /**
    * Container for Jenkins system components created by the factory.
-   * 
+   *
    * <p>This record holds references to the core infrastructure components
    * that make up a Jenkins deployment:</p>
    * <ul>
@@ -100,7 +100,7 @@ public class JenkinsFactory {
    *   <li><strong>alb:</strong> Application Load Balancer factory for ingress</li>
    *   <li><strong>efs:</strong> EFS factory for persistent storage</li>
    * </ul>
-   * 
+   *
    * @param vpc The VPC factory containing VPC, subnets, and security groups
    * @param alb The ALB factory containing load balancer and listeners
    * @param efs The EFS factory containing file system and access points
@@ -113,7 +113,7 @@ public class JenkinsFactory {
 
   /**
    * Creates an EC2-based Jenkins deployment using the default security profile.
-   * 
+   *
    * <p>This is a convenience method that uses the security profile from the deployment context.
    * It creates a complete Jenkins infrastructure including:</p>
    * <ul>
@@ -124,7 +124,7 @@ public class JenkinsFactory {
    *   <li>Security groups and IAM roles</li>
    *   <li>CloudWatch logging and monitoring</li>
    * </ul>
-   * 
+   *
    * @param scope The CDK construct scope
    * @param id Unique identifier for the Jenkins deployment
    * @param cfc Deployment context containing configuration parameters
@@ -133,9 +133,9 @@ public class JenkinsFactory {
    * @see #createEc2(Construct, String, DeploymentContext, SecurityProfile)
    */
   public static JenkinsSystem createEc2(Construct scope, String id, DeploymentContext cfc) {
-    
+
     try {
-      
+
       JenkinsSystem result = createEc2(scope, id, cfc, cfc.securityProfile());
       return result;
     } catch (Exception e) {
@@ -145,7 +145,7 @@ public class JenkinsFactory {
 
   /**
    * Creates an EC2-based Jenkins deployment with a specific security profile.
-   * 
+   *
    * <p>This method allows explicit control over the security profile used for the deployment.
    * Different security profiles provide different levels of hardening:</p>
    * <ul>
@@ -153,10 +153,10 @@ public class JenkinsFactory {
    *   <li><strong>STAGING:</strong> Moderate security for testing environments</li>
    *   <li><strong>PRODUCTION:</strong> Maximum security with comprehensive monitoring</li>
    * </ul>
-   * 
+   *
    * <p>The deployment includes all infrastructure components and respects the networkMode
    * setting (public-no-nat vs private-with-nat) for proper subnet placement.</p>
-   * 
+   *
    * @param scope The CDK construct scope
    * @param id Unique identifier for the Jenkins deployment
    * @param cfc Deployment context containing configuration parameters
@@ -170,48 +170,48 @@ public class JenkinsFactory {
     try {
       // Map security profile to appropriate IAM profile
       IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
-      
+
       // Force EC2 runtime for EC2 deployments
       SystemContext ctx = SystemContext.start(scope, cfc.topology(), RuntimeType.EC2, security, iamProfile, cfc);
-      
+
       // Set configuration values in SystemContext for centralized management
       ctx.sslEnabled.set(cfc.enableSsl());
       ctx.httpRedirectEnabled.set(cfc.enableSsl()); // Redirect HTTP to HTTPS when SSL is enabled
-      
+
       // Networking Configuration
       ctx.networkMode.set(cfc.networkMode());
       ctx.wafEnabled.set(cfc.wafEnabled());
       ctx.cloudfront.set(cfc.cloudfrontEnabled());
       ctx.lbType.set(cfc.lbType());
-      
+
       // Auto Scaling Configuration
       ctx.minInstanceCapacity.set(cfc.minInstanceCapacity());
       ctx.maxInstanceCapacity.set(cfc.maxInstanceCapacity());
       ctx.cpuTargetUtilization.set(cfc.cpuTargetUtilization());
-      
+
       // Container Configuration
       ctx.cpu.set(cfc.cpu());
       ctx.memory.set(cfc.memory());
-      
+
       // Authentication Configuration
       ctx.authMode.set(cfc.authMode());
       ctx.ssoInstanceArn.set(cfc.ssoInstanceArn());
       ctx.ssoGroupId.set(cfc.ssoGroupId());
       ctx.ssoTargetAccountId.set(cfc.ssoTargetAccountId());
-      
+
       // Storage Configuration
       ctx.artifactsBucket.set(cfc.artifactsBucket());
       ctx.artifactsPrefix.set(cfc.artifactsPrefix());
       ctx.enableFlowlogs.set(cfc.enableFlowlogs());
-      
+
       // DNS Configuration
       ctx.domain.set(cfc.domain());
       ctx.subdomain.set(cfc.subdomain());
       ctx.fqdn.set(cfc.fqdn());
-    
+
       // Use orchestration layer to create infrastructure factories
       SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
-      
+
       // AutoScalingGroup for JENKINS_SERVICE topology only if maxInstanceCapacity > 1
       // Otherwise, create single instance for JENKINS_SERVICE topology
       if (cfc.topology() == TopologyType.JENKINS_SERVICE) {
@@ -224,7 +224,7 @@ public class JenkinsFactory {
       } else if (cfc.topology() == TopologyType.JENKINS_SINGLE_NODE) {
           createSingleEc2Instance(scope, id + "SingleInstance", ctx);
       }
-      
+
       new AlarmFactory(scope, id + "Alarms", null);
 
       // Create domain factory if domain is provided (for DNS records)
@@ -237,12 +237,12 @@ public class JenkinsFactory {
       ctx.createSecurityFactories(scope, id);
 
       JenkinsSystem result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
-      
+
       // Execute deferred actions (runtime configuration wiring) after all factories are created
       ctx.executeDeferredActions();
-      
+
       return result;
-      
+
     } catch (Exception e) {
       throw e;
     }
@@ -261,19 +261,19 @@ public class JenkinsFactory {
     try {
       IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
       SystemContext ctx = SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, security, iamProfile, cfc);
-    
+
       // Set DNS configuration early to ensure domain context is available for SSL certificate creation
       ctx.domain.set(cfc.domain());
       ctx.subdomain.set(cfc.subdomain());
       ctx.fqdn.set(cfc.fqdn());
-    
+
       // Use orchestration layer to create infrastructure factories
       SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
-      
+
       // Create Jenkins-specific factories
       FargateFactory fargate = new FargateFactory(scope, id + "Fargate");
       fargate.create(); // Call create() to populate fargateTaskDef slot
-      
+
       new JenkinsBootstrap(scope, id + "Jenkins");
       new AlarmFactory(scope, id + "Alarms", null);
 
@@ -284,12 +284,12 @@ public class JenkinsFactory {
       ctx.createSecurityFactories(scope, id);
 
       JenkinsSystem result = new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
-      
+
       // Execute deferred actions (runtime configuration wiring) after all factories are created
       ctx.executeDeferredActions();
-      
+
       return result;
-      
+
     } catch (Exception e) {
       throw e;
     }
@@ -301,51 +301,51 @@ public class JenkinsFactory {
    */
   public static JenkinsSystem createEc2(Construct scope, String id, DeploymentContext cfc, SecurityProfile security, IAMProfile iamProfile) {
     if (!IAMProfileMapper.isValidCombination(security, iamProfile)) {
-      throw new IllegalArgumentException("Invalid combination: SecurityProfile=" + security + " with IAMProfile=" + iamProfile);
+      throw new IllegalArgumentException("Invalid combination: SecurityProfile = " + security + " with IAMProfile = " + iamProfile);
     }
     // Use the provided IAM profile (mapped from security profile)
     IAMProfile effectiveIamProfile = iamProfile;
     // Force EC2 runtime for EC2 deployments
     SystemContext ctx = SystemContext.start(scope, cfc.topology(), RuntimeType.EC2, security, effectiveIamProfile, cfc);
-    
+
     // Set configuration values in SystemContext for centralized management
     ctx.sslEnabled.set(cfc.enableSsl());
     ctx.httpRedirectEnabled.set(cfc.enableSsl()); // Redirect HTTP to HTTPS when SSL is enabled
-    
+
     // Networking Configuration
     ctx.networkMode.set(cfc.networkMode());
     ctx.wafEnabled.set(cfc.wafEnabled());
       ctx.cloudfront.set(cfc.cloudfrontEnabled());
     ctx.lbType.set(cfc.lbType());
-    
+
     // Auto Scaling Configuration
     ctx.minInstanceCapacity.set(cfc.minInstanceCapacity());
     ctx.maxInstanceCapacity.set(cfc.maxInstanceCapacity());
     ctx.cpuTargetUtilization.set(cfc.cpuTargetUtilization());
-    
+
     // Container Configuration
     ctx.cpu.set(cfc.cpu());
     ctx.memory.set(cfc.memory());
-    
+
     // Authentication Configuration
     ctx.authMode.set(cfc.authMode());
     ctx.ssoInstanceArn.set(cfc.ssoInstanceArn());
     ctx.ssoGroupId.set(cfc.ssoGroupId());
     ctx.ssoTargetAccountId.set(cfc.ssoTargetAccountId());
-    
+
     // Storage Configuration
     ctx.artifactsBucket.set(cfc.artifactsBucket());
     ctx.artifactsPrefix.set(cfc.artifactsPrefix());
     ctx.enableFlowlogs.set(cfc.enableFlowlogs());
-    
+
     // DNS Configuration
     ctx.domain.set(cfc.domain());
     ctx.subdomain.set(cfc.subdomain());
     ctx.fqdn.set(cfc.fqdn());
-    
+
     // Use orchestration layer to create infrastructure factories
     SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
-    
+
     // AutoScalingGroup for JENKINS_SERVICE topology only if maxInstanceCapacity > 1
     // Otherwise, create single instance for JENKINS_SERVICE topology
     if (cfc.topology() == TopologyType.JENKINS_SERVICE) {
@@ -358,7 +358,7 @@ public class JenkinsFactory {
     } else if (cfc.topology() == TopologyType.JENKINS_SINGLE_NODE) {
         createSingleEc2Instance(scope, id + "SingleInstance", ctx);
     }
-    
+
     new AlarmFactory(scope, id + "Alarms", null);
 
     // Create domain and certificate if SSL is enabled
@@ -374,7 +374,7 @@ public class JenkinsFactory {
 
     // Execute deferred actions (runtime configuration wiring) after all factories are created
     ctx.executeDeferredActions();
-    
+
     return new JenkinsSystem(infra.vpc(), infra.alb(), infra.efs());
   }
 
@@ -421,7 +421,7 @@ public class JenkinsFactory {
                 instanceTypeStr = "t3.micro";
             }
             InstanceType instanceType = parseInstanceType(instanceTypeStr);
-            
+
             // Create a single EC2 instance with Jenkins installed
             Instance instance = Instance.Builder.create(scope, id)
                 .vpc(ctx.vpc.get().orElseThrow())
@@ -432,26 +432,26 @@ public class JenkinsFactory {
                 .role(ec2Role)
                 .userData(userData)
                 .build();
-    
+
     // Set the instance in SystemContext for compatibility
     ctx.ec2Instance.set(instance);
-    
+
     // Use the existing target group from the orchestration layer instead of creating a new one
     if (ctx.albTargetGroup.get().isPresent()) {
       ApplicationTargetGroup existingTargetGroup = ctx.albTargetGroup.get().orElseThrow();
-      
+
       // Add the instance to the existing target group so ALB can route traffic to it
       existingTargetGroup.addTarget(new InstanceTarget(instance));
     } else {
       LOG.severe("*** ERROR: No target group found! Target groups should be created by orchestration layer ***");
       throw new IllegalStateException("Target group not found - orchestration layer should have created it");
     }
-    
-    
+
+
     // Note: We don't set asg slot since it's forbidden for JENKINS_SINGLE_NODE
     // The instance is now properly connected to the ALB via the target group
   }
-  
+
   /**
    * Parses instance type string into CDK InstanceType.
    * Supports common T3 instance types.
@@ -460,19 +460,19 @@ public class JenkinsFactory {
     if (instanceTypeStr == null || instanceTypeStr.isEmpty()) {
       return InstanceType.of(InstanceClass.T3, InstanceSize.MICRO);
     }
-    
+
     String[] parts = instanceTypeStr.toLowerCase().split("\\.");
     if (parts.length != 2) {
       LOG.warning("Invalid instance type format: " + instanceTypeStr + ", using t3.micro");
       return InstanceType.of(InstanceClass.T3, InstanceSize.MICRO);
     }
-    
+
     String family = parts[0];
     String size = parts[1];
-    
+
     InstanceClass instanceClass;
     InstanceSize instanceSize;
-    
+
     // Parse instance class
     switch (family) {
       case "t3":
@@ -491,7 +491,7 @@ public class JenkinsFactory {
         LOG.warning("Unsupported instance class: " + family + ", using t3");
         instanceClass = InstanceClass.T3;
     }
-    
+
     // Parse instance size
     switch (size) {
       case "micro":
@@ -516,7 +516,7 @@ public class JenkinsFactory {
         LOG.warning("Unsupported instance size: " + size + ", using micro");
         instanceSize = InstanceSize.MICRO;
     }
-    
+
     return InstanceType.of(instanceClass, instanceSize);
   }
 
@@ -529,7 +529,7 @@ public class JenkinsFactory {
     ud.addCommands(
         "#!/bin/bash",
         "set -euxo pipefail",
-        "echo '=== Jenkins EC2 User Data Script Started ===' >> /var/log/jenkins-userdata.log",
+        "echo '=== Jenkins EC2 User Data Script Started == = ' >> /var/log/jenkins-userdata.log",
         "echo 'Timestamp: ' $(date) >> /var/log/jenkins-userdata.log",
         "",
         "# Update system packages",
@@ -557,8 +557,8 @@ public class JenkinsFactory {
         "# Mount EFS with access point (same as Fargate approach)",
         "echo 'Step 5: Mounting EFS for Jenkins persistent storage...' >> /var/log/jenkins-userdata.log",
         "mkdir -p /var/lib/jenkins",
-        String.format("echo \"%s:/ /var/lib/jenkins efs _netdev,tls,iam,accesspoint=%s 0 0\" >> /etc/fstab",
-            ctx.efs.get().orElseThrow().getFileSystemId(), 
+        String.format("echo \"%s:/ /var/lib/jenkins efs _netdev,tls,iam,accesspoint = %s 0 0\" >> /etc/fstab",
+            ctx.efs.get().orElseThrow().getFileSystemId(),
             jenkinsAp != null ? jenkinsAp.getAccessPointId() : "none"),
         "mount -a || (echo 'EFS mount failed, checking logs...' >> /var/log/jenkins-userdata.log; journalctl -xe >> /var/log/jenkins-userdata.log; exit 1)",
         "chown -R 1000:1000 /var/lib/jenkins || true",
@@ -576,7 +576,7 @@ public class JenkinsFactory {
         "systemctl status jenkins >> /var/log/jenkins-userdata.log 2>&1",
         "echo 'Jenkins installation and configuration completed successfully!' >> /var/log/jenkins-userdata.log",
         "echo 'Timestamp: ' $(date) >> /var/log/jenkins-userdata.log",
-        "echo '=== Jenkins EC2 User Data Script Completed ===' >> /var/log/jenkins-userdata.log"
+        "echo '=== Jenkins EC2 User Data Script Completed == = ' >> /var/log/jenkins-userdata.log"
     );
     return ud;
   }
@@ -613,7 +613,7 @@ public class JenkinsFactory {
       ud.addCommands(
           "command -v dnf >/dev/null && dnf -y install amazon-efs-utils || yum -y install amazon-efs-utils",
           "mkdir -p /var/lib/jenkins",
-          String.format("echo \"%s:/ /var/lib/jenkins efs _netdev,tls,iam,accesspoint=%s 0 0\" >> /etc/fstab",
+          String.format("echo \"%s:/ /var/lib/jenkins efs _netdev,tls,iam,accesspoint = %s 0 0\" >> /etc/fstab",
                   ctx.efs.get().orElseThrow().getFileSystemId(), ctx.ap.get().orElseThrow().getAccessPointId()),
           "mount -a || (journalctl -xe; exit 1)",
           "chown -R 1000:1000 /var/lib/jenkins || true",
@@ -623,8 +623,8 @@ public class JenkinsFactory {
       // Use EBS for storage
       String dataDev = "/dev/xvdh";
       ud.addCommands(
-          "DATA_DEV=\"" + dataDev + "\"",
-          "if [ ! -b \"$DATA_DEV\" ]; then DATA_DEV=$(readlink -f /dev/nvme1n1 || true); fi",
+          "DATA_DEV = \"" + dataDev + "\"",
+          "if [ ! -b \"$DATA_DEV\" ]; then DATA_DEV = $(readlink -f /dev/nvme1n1 || true); fi",
           "mkfs -t xfs -f \"$DATA_DEV\" || true",
           "mkdir -p /var/lib/jenkins",
           "echo \"$DATA_DEV /var/lib/jenkins xfs defaults,noatime 0 2\" >> /etc/fstab",
@@ -642,7 +642,7 @@ public class JenkinsFactory {
    * Validates that the IAM profile is appropriate for the security profile.
    */
   public static JenkinsSystem createFargate(Construct scope, String id, DeploymentContext cfc, SecurityProfile security, IAMProfile iamProfile) {
-    
+
     try {
       SystemContext ctx;
       try {
@@ -651,15 +651,15 @@ public class JenkinsFactory {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in SystemContext.start() ***", e);
         throw e;
       }
-    
+
       // Set DNS configuration early to ensure domain context is available for SSL certificate creation
       ctx.domain.set(cfc.domain());
       ctx.subdomain.set(cfc.subdomain());
       ctx.fqdn.set(cfc.fqdn());
-    
+
       // Use orchestration layer to create infrastructure factories
       SystemContext.InfrastructureFactories infra = ctx.createInfrastructureFactories(scope, id);
-      
+
       // Create FlowLogFactory
       try {
         new FlowLogFactory(scope, id + "Flowlog");
@@ -676,21 +676,21 @@ public class JenkinsFactory {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in FargateFactory instantiation/creation ***", e);
         throw e;
       }
-      
+
       try {
     new JenkinsBootstrap(scope, id + "Jenkins");
       } catch (Exception e) {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in JenkinsBootstrap ***", e);
         throw e;
       }
-      
+
       try {
     new AlarmFactory(scope, id + "Alarms", null);
       } catch (Exception e) {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in AlarmFactory ***", e);
         throw e;
       }
-      
+
       DomainFactory domain;
       try {
         domain = new DomainFactory(scope, id + "Domain");
@@ -717,7 +717,7 @@ public class JenkinsFactory {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in JenkinsSystem creation ***", e);
         throw e;
       }
-      
+
       // Execute deferred actions (runtime configuration wiring) after all factories are created
       try {
         ctx.executeDeferredActions();
@@ -725,7 +725,7 @@ public class JenkinsFactory {
         LOG.log(Level.SEVERE, "*** CRITICAL: Exception in executeDeferredActions() ***", e);
         throw e;
       }
-      
+
       return result;
 
     } catch (Exception e) {

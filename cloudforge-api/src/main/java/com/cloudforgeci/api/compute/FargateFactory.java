@@ -21,11 +21,11 @@ import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
 
 /**
  * Factory for creating Fargate-based Jenkins compute infrastructure.
- * 
+ *
  * <p>This factory creates and configures AWS Fargate services for Jenkins deployments,
  * providing a serverless container-based approach. It respects network mode configuration
  * to place tasks in appropriate subnets and handles EFS integration for persistent storage.</p>
- * 
+ *
  * <p><strong>Key Features:</strong></p>
  * <ul>
  *   <li>Fargate task definitions with Jenkins container</li>
@@ -35,13 +35,13 @@ import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
  *   <li>Network mode awareness (public vs private subnets)</li>
  *   <li>Security group configuration</li>
  * </ul>
- * 
+ *
  * <p><strong>Network Configuration:</strong></p>
  * <ul>
  *   <li><strong>public-no-nat:</strong> Tasks get public IPs and use public subnets</li>
  *   <li><strong>private-with-nat:</strong> Tasks use private subnets with NAT gateway</li>
  * </ul>
- * 
+ *
  * <p><strong>Example Usage:</strong></p>
  * <pre>{@code
  * FargateFactory factory = new FargateFactory(scope, "JenkinsFargate");
@@ -51,7 +51,7 @@ import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
  * FargateService service = ctx.fargateService.get().orElseThrow();
  * FargateTaskDefinition taskDef = ctx.fargateTaskDef.get().orElseThrow();
  * }</pre>
- * 
+ *
  * @author CloudForgeCI
  * @since 1.0.0
  * @see DeploymentContext
@@ -138,11 +138,11 @@ public class FargateFactory extends BaseFactory {
                     .rollback(true)
                     .build())  // Prevents stuck deployments and enables automatic rollback
             .build();
-    
+
     // Set task definition in context first (needed by ContainerFactory)
     // Note: EFS permissions are handled by IAMRules based on security profile
     ctx.fargateTaskDef.set(taskDef);
-    
+
     // Add EFS volume to task definition (needed by ContainerFactory)
     ctx.fargateTaskDef.get().orElseThrow().addVolume(Volume.builder()
             .name(JENKINS_HOME)
@@ -155,11 +155,11 @@ public class FargateFactory extends BaseFactory {
                             .build())
                     .build())
             .build());
-    
+
     // Create container (now that task definition and volume are available)
     ContainerFactory containerFactory = new ContainerFactory(this, getNode().getId() + "Container", ContainerImage.fromRegistry("jenkins/jenkins:lts"));
     containerFactory.create();
-    
+
     // Now set the service in context after container is created
     ctx.fargateService.set(service);
 

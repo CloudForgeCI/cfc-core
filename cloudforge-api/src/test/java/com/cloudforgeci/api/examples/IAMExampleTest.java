@@ -32,7 +32,7 @@ class IAMExampleTest {
     @BeforeEach
     void setUp() {
         app = new App();
-        
+
         // Create a minimal DeploymentContext for testing
         Map<String, Object> config = new HashMap<>();
         config.put("tier", "public");
@@ -56,12 +56,12 @@ class IAMExampleTest {
         config.put("enableHealthCheck", true);
         config.put("enableBackup", false);
         config.put("backupRetentionDays", 7);
-        
+
         // Set context on the app BEFORE creating stack
         app.getNode().setContext("cfc", config);
         stack = new Stack(app, "TestStack");
         testCfc = DeploymentContext.from(app);
-        
+
         // Set up output capture for console output tests
         outputStream = new ByteArrayOutputStream();
         originalOut = System.out;
@@ -142,7 +142,7 @@ class IAMExampleTest {
                     App testApp = new App();
                     testApp.getNode().setContext("cfc", createTestConfig());
                     // Specify AWS environment to avoid context provider errors
-                    Stack testStack = new Stack(testApp, "TestExplicitStack", 
+                    Stack testStack = new Stack(testApp, "TestExplicitStack",
                         software.amazon.awscdk.StackProps.builder()
                             .env(software.amazon.awscdk.Environment.builder()
                                 .account("123456789012")
@@ -184,16 +184,16 @@ class IAMExampleTest {
         void shouldDemonstrateIAMValidation() {
             // Capture console output to verify validation demonstrations
             System.setOut(new PrintStream(outputStream));
-            
+
             try {
                 assertDoesNotThrow(() -> {
                     IAMExample.demonstrateIAMValidation(stack, "TestValidation", testCfc);
                 }, "Should demonstrate IAM validation without errors");
-                
+
                 String output = outputStream.toString();
-                assertTrue(output.contains("Automatic IAM Profile Mapping"), 
+                assertTrue(output.contains("Automatic IAM Profile Mapping"),
                     "Should demonstrate automatic IAM profile mapping");
-                assertTrue(output.contains("IAM Profile Validation"), 
+                assertTrue(output.contains("IAM Profile Validation"),
                     "Should demonstrate IAM profile validation");
             } finally {
                 System.setOut(originalOut);
@@ -218,14 +218,14 @@ class IAMExampleTest {
         void shouldDemonstratePermissionMatrix() {
             // Capture console output to verify permission matrix demonstrations
             System.setOut(new PrintStream(outputStream));
-            
+
             try {
                 assertDoesNotThrow(() -> {
                     IAMExample.demonstratePermissionMatrix();
                 }, "Should demonstrate permission matrix without errors");
-                
+
                 String output = outputStream.toString();
-                assertTrue(output.contains("Permission Matrix Examples"), 
+                assertTrue(output.contains("Permission Matrix Examples"),
                     "Should demonstrate permission matrix examples");
             } finally {
                 System.setOut(originalOut);
@@ -304,7 +304,7 @@ class IAMExampleTest {
         @DisplayName("All example methods should be static")
         void allMethodsShouldBeStatic() {
             var methods = IAMExample.class.getDeclaredMethods();
-            
+
             for (var method : methods) {
                 if (method.getName().startsWith("create") || method.getName().startsWith("demonstrate")) {
                     assertTrue(java.lang.reflect.Modifier.isStatic(method.getModifiers()),
@@ -354,7 +354,7 @@ class IAMExampleTest {
             boolean hasMinimalExample = false;
             boolean hasStandardExample = false;
             boolean hasExtendedExample = false;
-            
+
             for (var method : methods) {
                 String methodName = method.getName().toLowerCase();
                 if (methodName.contains("minimal")) {
@@ -367,7 +367,7 @@ class IAMExampleTest {
                     hasExtendedExample = true;
                 }
             }
-            
+
             // Note: The actual profile usage is verified through the method calls
             // Here we just check that the example structure covers different aspects
             assertNotNull(IAMExample.class, "IAMExample class should exist");
@@ -420,7 +420,7 @@ class IAMExampleTest {
             boolean hasExplicitSelection = false;
             boolean hasValidation = false;
             boolean hasPermissionMatrix = false;
-            
+
             for (var method : methods) {
                 String methodName = method.getName().toLowerCase();
                 if (methodName.contains("automatic")) {
@@ -436,7 +436,7 @@ class IAMExampleTest {
                     hasPermissionMatrix = true;
                 }
             }
-            
+
             assertTrue(hasAutomaticMapping, "Should demonstrate automatic IAM mapping");
             assertTrue(hasExplicitSelection, "Should demonstrate explicit IAM selection");
             assertTrue(hasValidation, "Should demonstrate IAM validation");

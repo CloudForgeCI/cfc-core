@@ -12,12 +12,12 @@ public final class IAMProfileMapper {
 
     /**
      * Maps a Security Profile to the appropriate IAM Profile.
-     * 
+     *
      * Security Profile -> IAM Profile Mapping:
      * - PRODUCTION -> MINIMAL (least privilege for production)
      * - STAGING -> STANDARD (balanced permissions for testing)
      * - DEV -> EXTENDED (broader permissions for development)
-     * 
+     *
      * @param securityProfile the security profile
      * @return the corresponding IAM profile
      */
@@ -32,7 +32,7 @@ public final class IAMProfileMapper {
     /**
      * Maps a Security Profile to the appropriate IAM Profile with override capability.
      * This allows explicit IAM profile selection when needed.
-     * 
+     *
      * @param securityProfile the security profile
      * @param overrideIamProfile the IAM profile override (null to use default mapping)
      * @return the IAM profile to use
@@ -47,7 +47,7 @@ public final class IAMProfileMapper {
     /**
      * Validates that the IAM profile is appropriate for the security profile.
      * Prevents dangerous combinations like PRODUCTION + EXTENDED IAM.
-     * 
+     *
      * @param securityProfile the security profile
      * @param iamProfile the IAM profile
      * @return true if the combination is valid, false otherwise
@@ -62,7 +62,7 @@ public final class IAMProfileMapper {
 
     /**
      * Gets the recommended IAM profile for a given security profile.
-     * 
+     *
      * @param securityProfile the security profile
      * @return the recommended IAM profile
      */

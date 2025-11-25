@@ -28,16 +28,16 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             // This simulates the CDK synthesis process
             // In a real test, we would call cdk synth with the config
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             // Verify the context is created successfully
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -50,14 +50,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -69,14 +69,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -88,14 +88,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -107,14 +107,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -126,14 +126,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -145,14 +145,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -164,14 +164,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -183,14 +183,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -202,14 +202,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -221,14 +221,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -240,14 +240,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -259,14 +259,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -278,14 +278,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -297,14 +297,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -316,14 +316,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -335,14 +335,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -354,14 +354,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -373,14 +373,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -392,14 +392,14 @@ class CdkSynthesisValidationTest {
         // Given
         var app = new software.amazon.awscdk.App();
         var stack = new software.amazon.awscdk.Stack(app, "TestStack");
-        
+
         // When & Then
         assertDoesNotThrow(() -> {
             var cfc = DeploymentContext.from(stack);
-            
+
             // Initialize SystemContext
             var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
-            
+
             assertNotNull(ctx);
             assertNotNull(cfc);
         });
@@ -411,34 +411,34 @@ class CdkSynthesisValidationTest {
      */
     private static Stream<Arguments> workingSynthesisCombinations() {
         return Stream.of(
-            Arguments.of("EC2 + Service + Production + Domain + SSL", 
+            Arguments.of("EC2 + Service + Production + Domain + SSL",
                 "{\"domain\":\"cloudforgeci.com\",\"subdomain\":\"jenkins\",\"enableSsl\":true,\"runtime\":\"EC2\",\"topology\":\"service\",\"securityProfile\":\"production\"}"),
-            
-            Arguments.of("EC2 + Service + Production + Domain + No SSL", 
+
+            Arguments.of("EC2 + Service + Production + Domain + No SSL",
                 "{\"domain\":\"cloudforgeci.com\",\"subdomain\":\"jenkins\",\"enableSsl\":false,\"runtime\":\"EC2\",\"topology\":\"service\",\"securityProfile\":\"production\"}"),
-            
-            Arguments.of("EC2 + Service + Production + No Domain", 
+
+            Arguments.of("EC2 + Service + Production + No Domain",
                 "{\"enableSsl\":false,\"runtime\":\"EC2\",\"topology\":\"service\",\"securityProfile\":\"production\"}"),
-            
-            Arguments.of("Fargate + Service + Production + Domain + No SSL", 
+
+            Arguments.of("Fargate + Service + Production + Domain + No SSL",
                 "{\"domain\":\"cloudforgeci.com\",\"subdomain\":\"jenkins\",\"enableSsl\":false,\"runtime\":\"FARGATE\",\"topology\":\"service\",\"securityProfile\":\"production\"}"),
-            
-            Arguments.of("Fargate + Service + Production + No Domain", 
+
+            Arguments.of("Fargate + Service + Production + No Domain",
                 "{\"enableSsl\":false,\"runtime\":\"FARGATE\",\"topology\":\"service\",\"securityProfile\":\"production\"}"),
-            
-            Arguments.of("Fargate + Service + Production + Domain + SSL", 
+
+            Arguments.of("Fargate + Service + Production + Domain + SSL",
                 "{\"domain\":\"cloudforgeci.com\",\"subdomain\":\"jenkins\",\"enableSsl\":true,\"runtime\":\"FARGATE\",\"topology\":\"service\",\"securityProfile\":\"production\"}"),
-            
-            Arguments.of("Fargate + Service + Dev + Domain + SSL", 
+
+            Arguments.of("Fargate + Service + Dev + Domain + SSL",
                 "{\"domain\":\"cloudforgeci.com\",\"subdomain\":\"jenkins\",\"enableSsl\":true,\"runtime\":\"FARGATE\",\"topology\":\"service\",\"securityProfile\":\"dev\"}"),
-            
-            Arguments.of("Fargate + Service + Staging + Domain + SSL", 
+
+            Arguments.of("Fargate + Service + Staging + Domain + SSL",
                 "{\"domain\":\"cloudforgeci.com\",\"subdomain\":\"jenkins\",\"enableSsl\":true,\"runtime\":\"FARGATE\",\"topology\":\"service\",\"securityProfile\":\"staging\"}"),
-            
-            Arguments.of("EC2 + Node + Production + Domain + SSL", 
+
+            Arguments.of("EC2 + Node + Production + Domain + SSL",
                 "{\"domain\":\"cloudforgeci.com\",\"subdomain\":\"jenkins\",\"enableSsl\":true,\"runtime\":\"EC2\",\"topology\":\"node\",\"securityProfile\":\"production\"}"),
-            
-            Arguments.of("EC2 + Node + Dev + Domain + SSL", 
+
+            Arguments.of("EC2 + Node + Dev + Domain + SSL",
                 "{\"domain\":\"cloudforgeci.com\",\"subdomain\":\"jenkins\",\"enableSsl\":true,\"runtime\":\"EC2\",\"topology\":\"node\",\"securityProfile\":\"dev\"}")
         );
     }

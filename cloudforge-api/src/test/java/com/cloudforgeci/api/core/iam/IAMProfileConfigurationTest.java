@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.Map;
 
 public class IAMProfileConfigurationTest {
-  
+
   private App app;
   private Stack stack;
   private DeploymentContext cfc;
@@ -59,10 +59,10 @@ public class IAMProfileConfigurationTest {
   void minimalIamConfigurationHasCorrectRules() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     MinimalIAMConfiguration config = new MinimalIAMConfiguration();
     var rules = config.rules(ctx);
-    
+
     assertNotNull(rules);
     assertFalse(rules.isEmpty());
   }
@@ -71,10 +71,10 @@ public class IAMProfileConfigurationTest {
   void standardIamConfigurationHasCorrectRules() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, iamProfile, cfc);
-    
+
     StandardIAMConfiguration config = new StandardIAMConfiguration();
     var rules = config.rules(ctx);
-    
+
     assertNotNull(rules);
     assertFalse(rules.isEmpty());
   }
@@ -83,10 +83,10 @@ public class IAMProfileConfigurationTest {
   void extendedIamConfigurationHasCorrectRules() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION, iamProfile, cfc);
-    
+
     ExtendedIAMConfiguration config = new ExtendedIAMConfiguration();
     var rules = config.rules(ctx);
-    
+
     assertNotNull(rules);
     assertFalse(rules.isEmpty());
   }
@@ -104,7 +104,7 @@ public class IAMProfileConfigurationTest {
     assertTrue(IAMProfileMapper.isValidCombination(SecurityProfile.DEV, IAMProfile.EXTENDED));
     assertTrue(IAMProfileMapper.isValidCombination(SecurityProfile.STAGING, IAMProfile.STANDARD));
     assertTrue(IAMProfileMapper.isValidCombination(SecurityProfile.PRODUCTION, IAMProfile.MINIMAL));
-    
+
     // Invalid combinations
     assertFalse(IAMProfileMapper.isValidCombination(SecurityProfile.PRODUCTION, IAMProfile.EXTENDED));
     assertFalse(IAMProfileMapper.isValidCombination(SecurityProfile.STAGING, IAMProfile.MINIMAL));
@@ -114,9 +114,9 @@ public class IAMProfileConfigurationTest {
   void minimalIamConfigurationWiresCorrectly() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     MinimalIAMConfiguration config = new MinimalIAMConfiguration();
-    
+
     // Should not throw exception when wiring
     assertDoesNotThrow(() -> config.wire(ctx));
   }
@@ -125,7 +125,7 @@ public class IAMProfileConfigurationTest {
   void standardIamConfigurationWiresCorrectly() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, iamProfile, cfc);
-    
+
     // IAM rules are already installed during SystemContext.start()
     // No need to manually call config.wire(ctx) as it would cause conflicts
     assertNotNull(ctx);
@@ -135,9 +135,9 @@ public class IAMProfileConfigurationTest {
   void extendedIamConfigurationWiresCorrectly() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION, iamProfile, cfc);
-    
+
     ExtendedIAMConfiguration config = new ExtendedIAMConfiguration();
-    
+
     // Should not throw exception when wiring
     assertDoesNotThrow(() -> config.wire(ctx));
   }
@@ -153,14 +153,14 @@ public class IAMProfileConfigurationTest {
   void allIamProfilesHaveConfigurations() {
     IAMProfile[] profiles = IAMProfile.values();
     assertEquals(3, profiles.length);
-    
+
     for (IAMProfile profile : profiles) {
       IAMConfiguration config = switch (profile) {
         case MINIMAL -> new MinimalIAMConfiguration();
         case STANDARD -> new StandardIAMConfiguration();
         case EXTENDED -> new ExtendedIAMConfiguration();
       };
-      
+
       assertEquals(profile, config.kind());
       assertNotNull(config.id());
     }
@@ -169,7 +169,7 @@ public class IAMProfileConfigurationTest {
   @Test
   void iamProfileMapperHandlesAllSecurityProfiles() {
     SecurityProfile[] securityProfiles = SecurityProfile.values();
-    
+
     for (SecurityProfile securityProfile : securityProfiles) {
       IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
       assertNotNull(iamProfile);
@@ -181,11 +181,11 @@ public class IAMProfileConfigurationTest {
   void iamConfigurationRulesAreNotNull() {
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     MinimalIAMConfiguration minimalConfig = new MinimalIAMConfiguration();
     StandardIAMConfiguration standardConfig = new StandardIAMConfiguration();
     ExtendedIAMConfiguration extendedConfig = new ExtendedIAMConfiguration();
-    
+
     assertNotNull(minimalConfig.rules(ctx));
     assertNotNull(standardConfig.rules(ctx));
     assertNotNull(extendedConfig.rules(ctx));
@@ -196,7 +196,7 @@ public class IAMProfileConfigurationTest {
     MinimalIAMConfiguration minimalConfig = new MinimalIAMConfiguration();
     StandardIAMConfiguration standardConfig = new StandardIAMConfiguration();
     ExtendedIAMConfiguration extendedConfig = new ExtendedIAMConfiguration();
-    
+
     assertNotEquals(minimalConfig.id(), standardConfig.id());
     assertNotEquals(minimalConfig.id(), extendedConfig.id());
     assertNotEquals(standardConfig.id(), extendedConfig.id());

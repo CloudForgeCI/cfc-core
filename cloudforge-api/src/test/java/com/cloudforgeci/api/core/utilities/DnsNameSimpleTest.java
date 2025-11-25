@@ -148,11 +148,11 @@ class DnsNameSimpleTest {
             // 62 chars (valid)
             String label62 = "a".repeat(60) + "bc";
             assertTrue(validator.isValid(label62 + ".com", null));
-            
+
             // 63 chars (valid - maximum)
             String label63 = "a".repeat(61) + "bc";
             assertTrue(validator.isValid(label63 + ".com", null));
-            
+
             // 64 chars (invalid)
             String label64 = "a".repeat(62) + "bc";
             assertFalse(validator.isValid(label64 + ".com", null));

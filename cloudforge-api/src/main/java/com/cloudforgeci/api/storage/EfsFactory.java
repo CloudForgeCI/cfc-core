@@ -72,10 +72,10 @@ public class EfsFactory extends BaseFactory {
         : RemovalPolicy.DESTROY;
 
     if (Boolean.TRUE.equals(retainStorage)) {
-      LOG.info("EFS file system will be RETAINED after stack deletion (retainStorage=true)");
+      LOG.info("EFS file system will be RETAINED after stack deletion (retainStorage = true)");
       LOG.info("⚠️  You must manually delete the EFS file system from AWS Console to avoid ongoing storage costs");
     } else {
-      LOG.info("EFS file system will be DESTROYED with stack (retainStorage=false)");
+      LOG.info("EFS file system will be DESTROYED with stack (retainStorage = false)");
     }
 
     return FileSystem.Builder.create(this, "Efs")

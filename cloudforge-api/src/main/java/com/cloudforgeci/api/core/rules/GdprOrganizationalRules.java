@@ -127,7 +127,7 @@ public final class GdprOrganizationalRules {
                 "Identify and document legal basis for each processing activity: " +
                 "consent, contract, legal obligation, vital interests, public task, or legitimate interests. " +
                 "GDPR Article 6(1). Required for lawful processing. " +
-                "Set gdprLegalBasisDocumented=true when documentation is complete."
+                "Set gdprLegalBasisDocumented = true when documentation is complete."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -146,7 +146,7 @@ public final class GdprOrganizationalRules {
                 "If using consent: ensure freely given, specific, informed, unambiguous. " +
                 "Separate consent for different purposes. Easy withdrawal. " +
                 "GDPR Article 7. Document consent records. " +
-                "Set gdprConsentMechanismImplemented=true when implemented (or N/A if not using consent)."
+                "Set gdprConsentMechanismImplemented = true when implemented (or N/A if not using consent)."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -165,7 +165,7 @@ public final class GdprOrganizationalRules {
                 "Privacy notice must include: controller identity, purposes, legal basis, " +
                 "recipients, retention periods, data subject rights, withdrawal of consent. " +
                 "GDPR Articles 13-14. Must be concise, transparent, accessible. " +
-                "Set gdprPrivacyNoticeProvided=true when privacy notice is published."
+                "Set gdprPrivacyNoticeProvided = true when privacy notice is published."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -203,7 +203,7 @@ public final class GdprOrganizationalRules {
                 "Document procedures for: access requests, rectification, erasure, " +
                 "restriction, portability, objection. 1-month response timeline. " +
                 "GDPR Articles 15-22. Include identity verification. " +
-                "Set gdprDataSubjectRequestProcedures=true when procedures are documented."
+                "Set gdprDataSubjectRequestProcedures = true when procedures are documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -222,7 +222,7 @@ public final class GdprOrganizationalRules {
                 "Ensure systems can delete/anonymize personal data upon request. " +
                 "GDPR Article 17. Consider backup retention, legal holds. " +
                 "Document erasure procedures. " +
-                "Set gdprRightToErasureCapability=true when erasure is technically feasible."
+                "Set gdprRightToErasureCapability = true when erasure is technically feasible."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -240,7 +240,7 @@ public final class GdprOrganizationalRules {
                 "Implement data portability capability (structured, machine-readable format)",
                 "Enable data export in structured, commonly used, machine-readable format (JSON, CSV). " +
                 "GDPR Article 20. Applies when processing is based on consent or contract. " +
-                "Set gdprDataPortabilityCapability=true when export functionality exists."
+                "Set gdprDataPortabilityCapability = true when export functionality exists."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -275,7 +275,7 @@ public final class GdprOrganizationalRules {
                 "Conduct DPIA if processing: involves systematic monitoring, special categories of data, " +
                 "large-scale profiling, automated decision-making. GDPR Article 35. " +
                 "Assess risks to rights and freedoms. Document safeguards. " +
-                "Set gdprDpiaCompleted=true when DPIA is documented."
+                "Set gdprDpiaCompleted = true when DPIA is documented."
             ));
         } else if (dpiaCompleted || ctx.security != SecurityProfile.PRODUCTION) {
             rules.add(ComplianceRule.pass(
@@ -294,7 +294,7 @@ public final class GdprOrganizationalRules {
                 "Implement technical and organizational measures ensuring: data minimization, " +
                 "pseudonymization, encryption, confidentiality, integrity, availability. " +
                 "GDPR Article 25. Infrastructure encryption satisfies part of this. " +
-                "Set gdprPrivacyByDesignImplemented=true when measures are documented."
+                "Set gdprPrivacyByDesignImplemented = true when measures are documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -333,7 +333,7 @@ public final class GdprOrganizationalRules {
                 "If transferring personal data outside EU/EEA: use Standard Contractual Clauses (SCCs), " +
                 "Binding Corporate Rules (BCRs), or adequacy decision. " +
                 "GDPR Articles 44-46. AWS SCCs available through AWS Artifact. " +
-                "Set gdprInternationalTransferSafeguards=true when safeguards are in place."
+                "Set gdprInternationalTransferSafeguards = true when safeguards are in place."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -351,7 +351,7 @@ public final class GdprOrganizationalRules {
                 "Document data localization requirements and enforcement",
                 "Verify all personal data remains in approved regions (EU/EEA or adequate country). " +
                 "Configure S3 bucket policies, RDS read replicas, backup regions accordingly. " +
-                "Set gdprDataLocalizationEnforced=true when localization is configured."
+                "Set gdprDataLocalizationEnforced = true when localization is configured."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -386,7 +386,7 @@ public final class GdprOrganizationalRules {
                 "Document retention periods for each category of personal data. " +
                 "GDPR Article 5(1)(e): data kept no longer than necessary. " +
                 "Implement automated deletion after retention period expires. " +
-                "Set gdprDataRetentionPolicyDefined=true when policy is documented."
+                "Set gdprDataRetentionPolicyDefined = true when policy is documented."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -405,7 +405,7 @@ public final class GdprOrganizationalRules {
                 "Document: purposes, categories of data subjects, categories of data, " +
                 "recipients, transfers, retention periods, security measures. " +
                 "GDPR Article 30. Required for organizations >250 employees or high-risk processing. " +
-                "Set gdprRecordsOfProcessingActivities=true when ROPA is maintained."
+                "Set gdprRecordsOfProcessingActivities = true when ROPA is maintained."
             ));
         } else {
             rules.add(ComplianceRule.pass(

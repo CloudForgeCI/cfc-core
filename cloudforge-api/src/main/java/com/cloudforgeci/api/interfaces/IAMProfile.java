@@ -13,7 +13,7 @@ public enum IAMProfile {
      * - Minimal write permissions for core functionality
      */
     MINIMAL,
-    
+
     /**
      * STANDARD: Balanced permissions for normal operation.
      * Suitable for staging and development environments.
@@ -22,7 +22,7 @@ public enum IAMProfile {
      * - Monitoring and logging permissions
      */
     STANDARD,
-    
+
     /**
      * EXTENDED: Broader permissions for development and debugging.
      * Suitable for development environments only.

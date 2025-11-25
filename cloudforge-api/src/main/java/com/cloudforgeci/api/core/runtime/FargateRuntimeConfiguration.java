@@ -28,7 +28,7 @@ import static com.cloudforgeci.api.core.rules.RuleKit.whenBoth;
 
 
 public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
-  
+
     private static final Logger LOG = Logger.getLogger(FargateRuntimeConfiguration.class.getName());
   @Override public RuntimeType kind() { return RuntimeType.FARGATE; }
   @Override public String id() { return "runtime:FARGATE"; }
@@ -55,17 +55,17 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
     if (c.runtime != RuntimeType.FARGATE) {
       return;
     }
-    
+
     // Add explicit guard to prevent duplicate execution
     if (c.wired.get().isPresent()) {
       return;
     }
     c.wired.set(true);
-    
+
     // Track if HTTP and HTTPS listeners have been configured to prevent duplicates
     final boolean[] httpConfigured = {false};
     final boolean[] httpsConfigured = {false};
-    
+
     try {
       // Inputs & flags
       final boolean ssl   = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl());
@@ -113,13 +113,13 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
           return;
         }
         httpConfigured[0] = true;
-        
+
         // Create a target group for the Fargate service with configurable health check settings
         int interval = c.cfc.healthCheckInterval() != null ? c.cfc.healthCheckInterval() : 30;
         int timeout = c.cfc.healthCheckTimeout() != null ? c.cfc.healthCheckTimeout() : 5;
         int healthyThreshold = c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2;
         int unhealthyThreshold = c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3;
-        
+
         ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "FargateHttpTargetGroup")
                 .vpc(c.vpc.get().orElseThrow())
                 .port(8080)
@@ -132,13 +132,13 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
                         .healthyThresholdCount(healthyThreshold).unhealthyThresholdCount(unhealthyThreshold)
                         .build())
                 .build();
-        
+
         // Update the HTTP listener's default action to forward to the target group
         // Note: This replaces the fixed response with a forward action
         http.addTargetGroups("HttpTargetGroup", AddApplicationTargetGroupsProps.builder()
                 .targetGroups(java.util.List.of(targetGroup))
                 .build());
-        
+
 
         // Make ECS wait for HTTP listener & rules
         CfnService cfnSvc  = (CfnService)  svc.getNode().getDefaultChild();
@@ -153,7 +153,7 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       });
       return; // ← CRITICAL: prevents creating cert/https/redirect that detach the HTTP TG
     }
-    
+
     // ── 2) SSL + DOMAIN/FQDN → ACM + HTTPS + HTTP default redirect ─────────────
     if (!wantSslDns) {
       return; // SSL requested but no host → fall back to HTTP-only silently
@@ -208,13 +208,13 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
         return;
       }
       httpsConfigured[0] = true;
-      
+
       // Create a target group for the Fargate service with configurable health check settings
       int interval = c.cfc.healthCheckInterval() != null ? c.cfc.healthCheckInterval() : 30;
       int timeout = c.cfc.healthCheckTimeout() != null ? c.cfc.healthCheckTimeout() : 5;
       int healthyThreshold = c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2;
       int unhealthyThreshold = c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3;
-      
+
       ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "FargateHttpsTargetGroup")
               .vpc(c.vpc.get().orElseThrow())
               .port(8080)
@@ -235,7 +235,7 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       https.addTargetGroups("HttpsTargetGroup", AddApplicationTargetGroupsProps.builder()
               .targetGroups(java.util.List.of(targetGroup))
               .build());
-      
+
 
       CfnService cfnSvc  = (CfnService)  svc.getNode().getDefaultChild();
       CfnListener cfnHttps= (CfnListener) https.getNode().getDefaultChild();

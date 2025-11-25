@@ -17,7 +17,7 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
 /**
  * Standard IAM configuration with balanced permissions.
  * Suitable for staging and development environments.
- * 
+ *
  * Key features:
  * - Standard operational permissions
  * - Limited administrative access
@@ -27,25 +27,25 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
 public final class StandardIAMConfiguration implements IAMConfiguration {
 
     @Override
-    public IAMProfile kind() { 
-        return IAMProfile.STANDARD; 
+    public IAMProfile kind() {
+        return IAMProfile.STANDARD;
     }
 
     @Override
-    public String id() { 
-        return "iam:STANDARD"; 
+    public String id() {
+        return "iam:STANDARD";
     }
 
     @Override
     public List<Rule> rules(SystemContext c) {
         var rules = new java.util.ArrayList<Rule>();
         rules.add(require("vpc", x -> x.vpc));
-        
+
         // Instance security group is only required for EC2 runtime
         if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
-        
+
         rules.add(require("alb security group", x -> x.albSg));
         rules.add(require("efs security group", x -> x.efsSg));
         return rules;

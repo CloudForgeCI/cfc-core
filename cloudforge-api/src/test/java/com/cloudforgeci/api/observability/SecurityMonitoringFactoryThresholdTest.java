@@ -98,7 +98,7 @@ class SecurityMonitoringFactoryThresholdTest {
             double devThreshold = (double) getCpuThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double stagingThreshold = (double) getCpuThresholdMethod.invoke(factory, SecurityProfile.STAGING);
             double productionThreshold = (double) getCpuThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
-            
+
             assertTrue(devThreshold >= stagingThreshold, "DEV should have higher or equal threshold than STAGING");
             assertTrue(stagingThreshold >= productionThreshold, "STAGING should have higher or equal threshold than PRODUCTION");
         }
@@ -144,7 +144,7 @@ class SecurityMonitoringFactoryThresholdTest {
             double devThreshold = (double) getMemoryThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double stagingThreshold = (double) getMemoryThresholdMethod.invoke(factory, SecurityProfile.STAGING);
             double productionThreshold = (double) getMemoryThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
-            
+
             assertTrue(devThreshold >= stagingThreshold, "DEV should have higher or equal threshold than STAGING");
             assertTrue(stagingThreshold >= productionThreshold, "STAGING should have higher or equal threshold than PRODUCTION");
         }
@@ -190,7 +190,7 @@ class SecurityMonitoringFactoryThresholdTest {
             double devThreshold = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double stagingThreshold = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.STAGING);
             double productionThreshold = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
-            
+
             assertTrue(devThreshold >= stagingThreshold, "DEV should have higher or equal threshold than STAGING");
             assertTrue(stagingThreshold >= productionThreshold, "STAGING should have higher or equal threshold than PRODUCTION");
         }
@@ -201,13 +201,13 @@ class SecurityMonitoringFactoryThresholdTest {
             double devThreshold = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double stagingThreshold = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.STAGING);
             double productionThreshold = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
-            
+
             // DEV: 1GB = 1,000,000,000 bytes
             assertEquals(1000000000.0, devThreshold, "DEV threshold should be exactly 1GB");
-            
+
             // STAGING: 500MB = 500,000,000 bytes
             assertEquals(500000000.0, stagingThreshold, "STAGING threshold should be exactly 500MB");
-            
+
             // PRODUCTION: 100MB = 100,000,000 bytes
             assertEquals(100000000.0, productionThreshold, "PRODUCTION threshold should be exactly 100MB");
         }
@@ -258,13 +258,13 @@ class SecurityMonitoringFactoryThresholdTest {
             double prodCpu = (double) getCpuThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
             double prodMemory = (double) getMemoryThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
             double prodNetwork = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
-            
+
             for (SecurityProfile profile : SecurityProfile.values()) {
                 if (profile != SecurityProfile.PRODUCTION) {
                     double cpu = (double) getCpuThresholdMethod.invoke(factory, profile);
                     double memory = (double) getMemoryThresholdMethod.invoke(factory, profile);
                     double network = (double) getNetworkThresholdMethod.invoke(factory, profile);
-                    
+
                     assertTrue(cpu >= prodCpu, "Production should have lowest CPU threshold");
                     assertTrue(memory >= prodMemory, "Production should have lowest memory threshold");
                     assertTrue(network >= prodNetwork, "Production should have lowest network threshold");
@@ -278,13 +278,13 @@ class SecurityMonitoringFactoryThresholdTest {
             double devCpu = (double) getCpuThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double devMemory = (double) getMemoryThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double devNetwork = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.DEV);
-            
+
             for (SecurityProfile profile : SecurityProfile.values()) {
                 if (profile != SecurityProfile.DEV) {
                     double cpu = (double) getCpuThresholdMethod.invoke(factory, profile);
                     double memory = (double) getMemoryThresholdMethod.invoke(factory, profile);
                     double network = (double) getNetworkThresholdMethod.invoke(factory, profile);
-                    
+
                     assertTrue(devCpu >= cpu, "DEV should have highest CPU threshold");
                     assertTrue(devMemory >= memory, "DEV should have highest memory threshold");
                     assertTrue(devNetwork >= network, "DEV should have highest network threshold");
@@ -299,23 +299,23 @@ class SecurityMonitoringFactoryThresholdTest {
             double devCpu = (double) getCpuThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double stagingCpu = (double) getCpuThresholdMethod.invoke(factory, SecurityProfile.STAGING);
             double prodCpu = (double) getCpuThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
-            
+
             assertTrue(devCpu - stagingCpu >= 5.0, "DEV and STAGING CPU thresholds should differ by at least 5%");
             assertTrue(stagingCpu - prodCpu >= 5.0, "STAGING and PRODUCTION CPU thresholds should differ by at least 5%");
-            
+
             // Memory thresholds should have meaningful differences
             double devMemory = (double) getMemoryThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double stagingMemory = (double) getMemoryThresholdMethod.invoke(factory, SecurityProfile.STAGING);
             double prodMemory = (double) getMemoryThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
-            
+
             assertTrue(devMemory - stagingMemory >= 3.0, "DEV and STAGING memory thresholds should differ by at least 3%");
             assertTrue(stagingMemory - prodMemory >= 3.0, "STAGING and PRODUCTION memory thresholds should differ by at least 3%");
-            
+
             // Network thresholds should have meaningful differences
             double devNetwork = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.DEV);
             double stagingNetwork = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.STAGING);
             double prodNetwork = (double) getNetworkThresholdMethod.invoke(factory, SecurityProfile.PRODUCTION);
-            
+
             assertTrue(devNetwork / stagingNetwork >= 1.5, "DEV network threshold should be at least 1.5x STAGING");
             assertTrue(stagingNetwork / prodNetwork >= 2.0, "STAGING network threshold should be at least 2x PRODUCTION");
         }
@@ -328,44 +328,44 @@ class SecurityMonitoringFactoryThresholdTest {
         @Test
         @DisplayName("Threshold methods should be instance methods")
         void thresholdMethodsShouldBeInstanceMethods() {
-            assertFalse(java.lang.reflect.Modifier.isStatic(getCpuThresholdMethod.getModifiers()), 
+            assertFalse(java.lang.reflect.Modifier.isStatic(getCpuThresholdMethod.getModifiers()),
                 "getCpuThreshold should be an instance method");
-            assertFalse(java.lang.reflect.Modifier.isStatic(getMemoryThresholdMethod.getModifiers()), 
+            assertFalse(java.lang.reflect.Modifier.isStatic(getMemoryThresholdMethod.getModifiers()),
                 "getMemoryThreshold should be an instance method");
-            assertFalse(java.lang.reflect.Modifier.isStatic(getNetworkThresholdMethod.getModifiers()), 
+            assertFalse(java.lang.reflect.Modifier.isStatic(getNetworkThresholdMethod.getModifiers()),
                 "getNetworkThreshold should be an instance method");
         }
 
         @Test
         @DisplayName("Threshold methods should be private")
         void thresholdMethodsShouldBePrivate() {
-            assertTrue(java.lang.reflect.Modifier.isPrivate(getCpuThresholdMethod.getModifiers()), 
+            assertTrue(java.lang.reflect.Modifier.isPrivate(getCpuThresholdMethod.getModifiers()),
                 "getCpuThreshold should be private");
-            assertTrue(java.lang.reflect.Modifier.isPrivate(getMemoryThresholdMethod.getModifiers()), 
+            assertTrue(java.lang.reflect.Modifier.isPrivate(getMemoryThresholdMethod.getModifiers()),
                 "getMemoryThreshold should be private");
-            assertTrue(java.lang.reflect.Modifier.isPrivate(getNetworkThresholdMethod.getModifiers()), 
+            assertTrue(java.lang.reflect.Modifier.isPrivate(getNetworkThresholdMethod.getModifiers()),
                 "getNetworkThreshold should be private");
         }
 
         @Test
         @DisplayName("Threshold methods should return double")
         void thresholdMethodsShouldReturnDouble() {
-            assertEquals(double.class, getCpuThresholdMethod.getReturnType(), 
+            assertEquals(double.class, getCpuThresholdMethod.getReturnType(),
                 "getCpuThreshold should return double");
-            assertEquals(double.class, getMemoryThresholdMethod.getReturnType(), 
+            assertEquals(double.class, getMemoryThresholdMethod.getReturnType(),
                 "getMemoryThreshold should return double");
-            assertEquals(double.class, getNetworkThresholdMethod.getReturnType(), 
+            assertEquals(double.class, getNetworkThresholdMethod.getReturnType(),
                 "getNetworkThreshold should return double");
         }
 
         @Test
         @DisplayName("Threshold methods should handle null gracefully")
         void thresholdMethodsShouldHandleNullGracefully() {
-            assertThrows(Exception.class, () -> getCpuThresholdMethod.invoke(factory, (SecurityProfile) null), 
+            assertThrows(Exception.class, () -> getCpuThresholdMethod.invoke(factory, (SecurityProfile) null),
                 "getCpuThreshold should throw exception with null input");
-            assertThrows(Exception.class, () -> getMemoryThresholdMethod.invoke(factory, (SecurityProfile) null), 
+            assertThrows(Exception.class, () -> getMemoryThresholdMethod.invoke(factory, (SecurityProfile) null),
                 "getMemoryThreshold should throw exception with null input");
-            assertThrows(Exception.class, () -> getNetworkThresholdMethod.invoke(factory, (SecurityProfile) null), 
+            assertThrows(Exception.class, () -> getNetworkThresholdMethod.invoke(factory, (SecurityProfile) null),
                 "getNetworkThreshold should throw exception with null input");
         }
     }

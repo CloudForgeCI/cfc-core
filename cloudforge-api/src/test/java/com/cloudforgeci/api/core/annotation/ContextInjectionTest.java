@@ -88,7 +88,7 @@ public class ContextInjectionTest {
         assertEquals(SecurityProfile.PRODUCTION, factory.getSecurityProfile());
         assertEquals(RuntimeType.FARGATE, factory.getRuntime());
     }
-    
+
     /**
      * Test factory class that demonstrates annotation-based context injection.
      */

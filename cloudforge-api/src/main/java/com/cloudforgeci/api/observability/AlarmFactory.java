@@ -36,7 +36,7 @@ import java.util.logging.Logger;
  * development stays lenient to avoid alert fatigue.</p>
  *
  * <h2>Threshold Examples</h2>
- * <table border="1">
+ * <table border = "1">
  *   <tr><th>Alarm</th><th>Dev</th><th>Staging</th><th>Production</th></tr>
  *   <tr><td>5xx Errors</td><td>10/min</td><td>7/min</td><td>5/min</td></tr>
  *   <tr><td>4xx Errors</td><td>50/5min</td><td>30/5min</td><td>20/5min</td></tr>

@@ -28,25 +28,25 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
     }
 
     @Override
-    public SecurityProfile kind() { 
-        return SecurityProfile.PRODUCTION; 
+    public SecurityProfile kind() {
+        return SecurityProfile.PRODUCTION;
     }
 
     @Override
-    public String id() { 
-        return "security:PRODUCTION"; 
+    public String id() {
+        return "security:PRODUCTION";
     }
 
     @Override
     public List<Rule> rules(SystemContext c) {
         var rules = new java.util.ArrayList<Rule>();
         rules.add(require("vpc", x -> x.vpc));
-        
+
         // Instance security group is only required for EC2 runtime
         if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
-        
+
         rules.add(require("alb security group", x -> x.albSg));
         rules.add(require("efs security group", x -> x.efsSg));
         return rules;
@@ -54,20 +54,20 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
     @Override
     public void wire(SystemContext c) {
-        
+
         // Configure observability based on security profile
         configureObservability(c);
-        
+
         // Create hosted zone if domain is provided
         createHostedZone(c);
-        
+
         // Validate required dependencies before proceeding
         validateDependencies(c);
-        
+
         // Debug: Check what slots are available
-        
+
         // Production security settings - maximum restrictions
-        
+
         // Instance security group - only for EC2 runtime
         if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
             whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
@@ -78,17 +78,17 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
                     "SSH_from_bastion/VPN_(PRODUCTION)",
                     false
                 );
-                
+
                 // Jenkins port only from ALB security group
                 if (c.albSg.get().isPresent()) {
                     instanceSg.addIngressRule(
                         Peer.securityGroupId(c.albSg.get().orElseThrow().getSecurityGroupId()),
-                        Port.tcp(8080), 
-                        "Jenkins_from_ALB_(PRODUCTION)", 
+                        Port.tcp(8080),
+                        "Jenkins_from_ALB_(PRODUCTION)",
                         false
                     );
                 }
-                
+
                 // Deny all other traffic explicitly
                 instanceSg.addEgressRule(
                     Peer.anyIpv4(),
@@ -160,7 +160,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // This ensures proper separation of concerns and avoids duplicate listener creation
         whenBoth(c.alb, c.sslEnabled, (alb, sslEnabled) -> {
             if (sslEnabled) {
-                
+
                 // Configure HTTP listener to redirect to HTTPS when SSL is enabled
                 whenBoth(c.httpRedirectEnabled, c.http, (httpRedirectEnabled, httpListener) -> {
                     if (httpRedirectEnabled) {
@@ -202,86 +202,86 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         if (profileConfig.getLogRetentionDays() != null) {
             LOG.info("PRODUCTION profile configured with log retention: " + profileConfig.getLogRetentionDays());
         }
-        
+
         // Configure flow logs (comprehensive for production)
         if (profileConfig.isFlowLogsEnabled()) {
             LOG.info("Flow logs enabled for PRODUCTION profile with traffic type: " + profileConfig.getFlowLogTrafficType());
         }
-        
+
         // Configure security monitoring (comprehensive for production)
         if (profileConfig.isSecurityMonitoringEnabled()) {
             LOG.info("Security monitoring enabled for PRODUCTION profile");
-            
+
             if (profileConfig.isCloudTrailEnabled()) {
                 LOG.info("CloudTrail enabled for PRODUCTION profile (audit compliance)");
             }
-            
+
             if (profileConfig.isGuardDutyEnabled()) {
                 LOG.info("GuardDuty enabled for PRODUCTION profile (threat detection)");
             }
-            
+
             if (profileConfig.isAwsConfigEnabled()) {
                 LOG.info("AWS Config enabled for PRODUCTION profile (compliance monitoring)");
             }
         }
-        
+
         // Configure encryption (mandatory for production)
         if (profileConfig.isEbsEncryptionEnabled()) {
             LOG.info("EBS encryption enabled for PRODUCTION profile (mandatory)");
         }
-        
+
         if (profileConfig.isEfsEncryptionInTransitEnabled()) {
             LOG.info("EFS encryption in transit enabled for PRODUCTION profile (mandatory)");
         }
-        
+
         if (profileConfig.isEfsEncryptionAtRestEnabled()) {
             LOG.info("EFS encryption at rest enabled for PRODUCTION profile (mandatory)");
         }
-        
+
         if (profileConfig.isS3EncryptionEnabled()) {
             LOG.info("S3 encryption enabled for PRODUCTION profile (mandatory)");
         }
-        
+
         // Configure backup (comprehensive for production)
         if (profileConfig.isAutomatedBackupEnabled()) {
             LOG.info("Automated backup enabled for PRODUCTION profile with retention: " + profileConfig.getBackupRetentionDays() + " days");
         }
-        
+
         if (profileConfig.isCrossRegionBackupEnabled()) {
             LOG.info("Cross-region backup enabled for PRODUCTION profile (disaster recovery)");
         }
-        
+
         // Configure auto-scaling (comprehensive for production)
         if (profileConfig.isAutoScalingEnabled()) {
             LOG.info("Auto-scaling enabled for PRODUCTION profile: " + profileConfig.getMinInstanceCount() + "-" + profileConfig.getMaxInstanceCount() + " instances");
         }
-        
+
         // Configure network security (maximum for production)
         if (profileConfig.isVpcEndpointsEnabled()) {
             LOG.info("VPC endpoints enabled for PRODUCTION profile (network security)");
         }
-        
+
         if (profileConfig.isNatGatewayEnabled()) {
             LOG.info("NAT Gateway enabled for PRODUCTION profile (private subnets)");
         }
-        
+
         if (profileConfig.isWafEnabled()) {
             LOG.info("WAF enabled for PRODUCTION profile (web application protection)");
         }
-        
+
         if (profileConfig.isCloudFrontEnabled()) {
             LOG.info("CloudFront enabled for PRODUCTION profile (DDoS protection)");
         }
-        
+
         // Configure compliance and audit (comprehensive for production)
         if (profileConfig.isDetailedBillingEnabled()) {
             LOG.info("Detailed billing enabled for PRODUCTION profile (cost management)");
         }
-        
+
         if (profileConfig.isAlbAccessLoggingEnabled()) {
             LOG.info("ALB access logging enabled for PRODUCTION profile with retention: " + profileConfig.getAlbAccessLogRetentionDays());
         }
-        
+
         // Configure reliability (maximum for production)
         if (profileConfig.isMultiAzEnforced()) {
             LOG.info("Multi-AZ deployment enforced for PRODUCTION profile (high availability)");
@@ -305,9 +305,9 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2 && !c.instanceSg.get().isPresent()) {
             throw new IllegalStateException("Instance Security Group required for EC2 runtime in ProductionSecurityConfiguration");
         }
-        
+
         LOG.info("ProductionSecurityConfiguration dependencies validated successfully");
-        
+
         // Auto Scaling Configuration moved to RuntimeConfiguration
         // This ensures scaling configuration is handled by the appropriate runtime profile
 
@@ -316,7 +316,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         com.cloudforgeci.api.observability.WafFactory wafFactory =
             new com.cloudforgeci.api.observability.WafFactory(c, "ProductionWaf");
         wafFactory.create();
-        
+
         // CloudFront Configuration - centralized CDN handling
         whenBoth(c.cloudfront, c.domain, (cloudfront, domain) -> {
             if (cloudfront && domain != null) {
@@ -326,7 +326,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
                 LOG.info("CloudFront configuration enabled for domain: " + domain);
             }
         });
-        
+
         // Authentication Configuration - centralized auth handling
         whenBoth(c.authMode, c.alb, (authMode, alb) -> {
             if ("alb-oidc".equalsIgnoreCase(authMode)) {
@@ -340,7 +340,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // For now, focusing on security group restrictions for production hardening
     }
 
-    private static <A,B> void whenBoth(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b, 
+    private static <A,B> void whenBoth(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b,
                                       java.util.function.BiConsumer<A,B> fn) {
         Runnable tryRun = () -> {
             var ao = a.get(); var bo = b.get();
@@ -348,8 +348,8 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         };
         a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run()); tryRun.run();
     }
-    
-    private static <A,B,C,D> void whenAll(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b, 
+
+    private static <A,B,C,D> void whenAll(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b,
                                          com.cloudforgeci.api.core.Slot<C> c, com.cloudforgeci.api.core.Slot<D> d,
                                          Function4<A,B,C,D,Void> fn) {
         Runnable tryRun = () -> {
@@ -358,11 +358,11 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
                 fn.apply(ao.get(), bo.get(), co.get(), do_.get());
             }
         };
-        a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run()); 
-        c.onSet(z -> tryRun.run()); d.onSet(w -> tryRun.run()); 
+        a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run());
+        c.onSet(z -> tryRun.run()); d.onSet(w -> tryRun.run());
         tryRun.run();
     }
-    
+
     /**
      * Create or lookup hosted zone if domain is provided.
      */
@@ -374,21 +374,21 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
                 LOG.info("ProductionSecurityConfiguration: Hosted zone already exists");
                 return; // Already created
             }
-            
+
             if (c.cfc.createZone()) {
-                // Create a new hosted zone when createZone=true
-                LOG.info("ProductionSecurityConfiguration: Creating new hosted zone (createZone=true)");
-                software.amazon.awscdk.services.route53.HostedZone zone = 
+                // Create a new hosted zone when createZone = true
+                LOG.info("ProductionSecurityConfiguration: Creating new hosted zone (createZone = true)");
+                software.amazon.awscdk.services.route53.HostedZone zone =
                     software.amazon.awscdk.services.route53.HostedZone.Builder.create((software.constructs.Construct)c.getNode().getScope(), "ProductionZone")
                         .zoneName(c.cfc.domain())
                         .build();
                 c.zone.set(zone);
                 LOG.info("ProductionSecurityConfiguration: New hosted zone created and set in context");
             } else {
-                // Use existing hosted zone when createZone=false
-                LOG.info("ProductionSecurityConfiguration: Looking up existing hosted zone (createZone=false)");
-                software.amazon.awscdk.services.route53.IHostedZone zone = 
-                    software.amazon.awscdk.services.route53.HostedZone.fromLookup((software.constructs.Construct)c.getNode().getScope(), "ProductionZoneLookup", 
+                // Use existing hosted zone when createZone = false
+                LOG.info("ProductionSecurityConfiguration: Looking up existing hosted zone (createZone = false)");
+                software.amazon.awscdk.services.route53.IHostedZone zone =
+                    software.amazon.awscdk.services.route53.HostedZone.fromLookup((software.constructs.Construct)c.getNode().getScope(), "ProductionZoneLookup",
                         software.amazon.awscdk.services.route53.HostedZoneProviderProps.builder()
                             .domainName(c.cfc.domain())
                             .build());
@@ -397,14 +397,14 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             }
         }
     }
-    
+
     /**
      * Check if we're in a test environment.
      */
     private boolean isTestEnvironment() {
         // Check if we're running in a test environment
         String testEnv = System.getProperty("test.environment");
-        return "true".equalsIgnoreCase(testEnv) || 
+        return "true".equalsIgnoreCase(testEnv) ||
                System.getProperty("java.class.path").contains("junit") ||
                System.getProperty("java.class.path").contains("test");
     }

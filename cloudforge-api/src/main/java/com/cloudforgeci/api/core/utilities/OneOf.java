@@ -13,8 +13,8 @@ public @interface OneOf {
     String[] value();
     class Validator implements ConstraintValidator<OneOf, String> {
         private Set<String> allowed;
-        public void initialize(OneOf a){ allowed = Set.of(a.value()); }
-        public boolean isValid(String v, ConstraintValidatorContext c){
+        public void initialize(OneOf a) { allowed = Set.of(a.value()); }
+        public boolean isValid(String v, ConstraintValidatorContext c) {
             return v == null || allowed.contains(v);
         }
     }

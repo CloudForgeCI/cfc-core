@@ -26,21 +26,21 @@ public class Ec2FactoryTest {
     DeploymentContext cfc = DeploymentContext.from(stack);
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
     SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
-    
+
     VpcFactory vpc = new VpcFactory(stack, "Vpc");
     vpc.create();
-    
+
     AlbFactory alb = new AlbFactory(stack, "Alb");
     alb.create();
-    
+
     EfsFactory efs = new EfsFactory(stack, "Efs");
     efs.create();
-    
+
     new FargateFactory(stack, "Ecs");
-    
+
     Ec2Factory ec2 = new Ec2Factory(stack, "Ec2");
     ec2.create();
-    
+
     Template t = Template.fromStack(stack);
     t.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 1);
   }

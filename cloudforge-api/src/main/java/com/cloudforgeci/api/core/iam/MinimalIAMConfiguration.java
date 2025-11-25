@@ -17,7 +17,7 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
 /**
  * Minimal IAM configuration with least privilege permissions.
  * Suitable for production environments with strict compliance requirements.
- * 
+ *
  * Key principles:
  * - No administrative permissions
  * - Only essential read/write permissions
@@ -27,25 +27,25 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
 public final class MinimalIAMConfiguration implements IAMConfiguration {
 
     @Override
-    public IAMProfile kind() { 
-        return IAMProfile.MINIMAL; 
+    public IAMProfile kind() {
+        return IAMProfile.MINIMAL;
     }
 
     @Override
-    public String id() { 
-        return "iam:MINIMAL"; 
+    public String id() {
+        return "iam:MINIMAL";
     }
 
     @Override
     public List<Rule> rules(SystemContext c) {
         var rules = new java.util.ArrayList<Rule>();
         rules.add(require("vpc", x -> x.vpc));
-        
+
         // Instance security group is only required for EC2 runtime
         if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
-        
+
         rules.add(require("alb security group", x -> x.albSg));
         return rules;
     }

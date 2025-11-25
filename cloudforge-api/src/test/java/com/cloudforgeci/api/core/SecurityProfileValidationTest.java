@@ -23,11 +23,11 @@ class SecurityProfileValidationTest {
     void shouldCreateValidDevSecurityProfileConfiguration() {
         // Given
         var config = new DevSecurityProfileConfiguration();
-        
+
         // When & Then
         assertNotNull(config);
         assertEquals(SecurityProfile.DEV, config.getSecurityProfile());
-        
+
         // Verify key methods are accessible
         assertDoesNotThrow(() -> {
             config.isFlowLogsEnabled();
@@ -43,11 +43,11 @@ class SecurityProfileValidationTest {
     void shouldCreateValidStagingSecurityProfileConfiguration() {
         // Given
         var config = new StagingSecurityProfileConfiguration();
-        
+
         // When & Then
         assertNotNull(config);
         assertEquals(SecurityProfile.STAGING, config.getSecurityProfile());
-        
+
         // Verify key methods are accessible
         assertDoesNotThrow(() -> {
             config.isFlowLogsEnabled();
@@ -63,11 +63,11 @@ class SecurityProfileValidationTest {
     void shouldCreateValidProductionSecurityProfileConfiguration() {
         // Given
         var config = new ProductionSecurityProfileConfiguration();
-        
+
         // When & Then
         assertNotNull(config);
         assertEquals(SecurityProfile.PRODUCTION, config.getSecurityProfile());
-        
+
         // Verify key methods are accessible
         assertDoesNotThrow(() -> {
             config.isFlowLogsEnabled();
@@ -83,7 +83,7 @@ class SecurityProfileValidationTest {
     void shouldValidateDevSecurityProfileValues() {
         // Given
         var config = new DevSecurityProfileConfiguration();
-        
+
         // When & Then
         assertFalse(config.isFlowLogsEnabled(), "Dev should not have flow logs enabled");
         assertNotNull(config.getLogRetentionDays(), "Dev should have log retention");
@@ -97,7 +97,7 @@ class SecurityProfileValidationTest {
     void shouldValidateStagingSecurityProfileValues() {
         // Given
         var config = new StagingSecurityProfileConfiguration();
-        
+
         // When & Then
         assertTrue(config.isFlowLogsEnabled(), "Staging should have flow logs enabled");
         assertNotNull(config.getLogRetentionDays(), "Staging should have log retention");
@@ -111,7 +111,7 @@ class SecurityProfileValidationTest {
     void shouldValidateProductionSecurityProfileValues() {
         // Given
         var config = new ProductionSecurityProfileConfiguration();
-        
+
         // When & Then
         assertTrue(config.isFlowLogsEnabled(), "Production should have flow logs enabled");
         assertNotNull(config.getLogRetentionDays(), "Production should have log retention");
@@ -127,18 +127,18 @@ class SecurityProfileValidationTest {
         var devConfig = new DevSecurityProfileConfiguration();
         var stagingConfig = new StagingSecurityProfileConfiguration();
         var productionConfig = new ProductionSecurityProfileConfiguration();
-        
+
         // When & Then
         // Dev should have minimal security
         assertFalse(devConfig.isFlowLogsEnabled());
         assertFalse(devConfig.isSecurityMonitoringEnabled());
         assertEquals(0, devConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"));
-        
+
         // Staging should have moderate security
         assertTrue(stagingConfig.isFlowLogsEnabled());
         assertTrue(stagingConfig.isSecurityMonitoringEnabled());
         assertEquals(0, stagingConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"));
-        
+
         // Production should have maximum security
         assertTrue(productionConfig.isFlowLogsEnabled());
         assertTrue(productionConfig.isSecurityMonitoringEnabled());
@@ -152,7 +152,7 @@ class SecurityProfileValidationTest {
         var devConfig = new DevSecurityProfileConfiguration();
         var stagingConfig = new StagingSecurityProfileConfiguration();
         var productionConfig = new ProductionSecurityProfileConfiguration();
-        
+
         // When & Then
         assertEquals(0, devConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"), "Dev should have 0 NAT gateways");
         assertEquals(0, stagingConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"), "Staging should have 0 NAT gateways");
@@ -166,7 +166,7 @@ class SecurityProfileValidationTest {
         var devConfig = new DevSecurityProfileConfiguration();
         var stagingConfig = new StagingSecurityProfileConfiguration();
         var productionConfig = new ProductionSecurityProfileConfiguration();
-        
+
         // When & Then
         assertEquals(SecurityProfile.DEV, devConfig.getSecurityProfile());
         assertEquals(SecurityProfile.STAGING, stagingConfig.getSecurityProfile());
@@ -180,7 +180,7 @@ class SecurityProfileValidationTest {
         var devConfig = new DevSecurityProfileConfiguration();
         var stagingConfig = new StagingSecurityProfileConfiguration();
         var productionConfig = new ProductionSecurityProfileConfiguration();
-        
+
         // When & Then
         assertTrue(devConfig instanceof com.cloudforgeci.api.interfaces.SecurityProfileConfiguration);
         assertTrue(stagingConfig instanceof com.cloudforgeci.api.interfaces.SecurityProfileConfiguration);

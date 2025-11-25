@@ -164,16 +164,16 @@ public class ComplianceFactory extends BaseFactory {
                 || (createConfigInfrastructure == null && !configInfraExists);  // Auto-skip if already exists
 
             if (configInfraExists && shouldCreateInfra) {
-                LOG.warning("Config infrastructure already exists but createConfigInfrastructure=true");
+                LOG.warning("Config infrastructure already exists but createConfigInfrastructure = true");
                 LOG.warning("  Existing Config Recorder detected in region: " + region);
-                LOG.warning("  Setting createConfigInfrastructure=false automatically to avoid conflict");
+                LOG.warning("  Setting createConfigInfrastructure = false automatically to avoid conflict");
                 LOG.warning("  To override this behavior, manually set createConfigInfrastructure in deployment-context.json");
                 shouldCreateInfra = false;
             }
 
             if (shouldCreateInfra) {
                 LOG.info("Creating Config Recorder and Delivery Channel (account-level singletons)");
-                LOG.info("  IMPORTANT: Only ONE stack per region should have createConfigInfrastructure=true");
+                LOG.info("  IMPORTANT: Only ONE stack per region should have createConfigInfrastructure = true");
                 ConfigInfrastructure configInfra = createConfigInfrastructure();
 
                 // Create Config Rules that depend on the recorder being started
@@ -183,7 +183,7 @@ public class ComplianceFactory extends BaseFactory {
                 if (configInfraExists) {
                     LOG.info("Config infrastructure already exists in region (auto-detected)");
                 } else {
-                    LOG.info("Skipping Config infrastructure creation (createConfigInfrastructure=false)");
+                    LOG.info("Skipping Config infrastructure creation (createConfigInfrastructure = false)");
                 }
                 LOG.info("  Config Recorder 'cloudforge-config-recorder' will be referenced by name");
                 LOG.info("  Config Rules will use existing recorder (no CloudFormation dependency)");
@@ -241,8 +241,8 @@ public class ComplianceFactory extends BaseFactory {
                 .expression(Fn.conditionEquals(enableGdpr ? "true" : "false", "true"))
                 .build();
 
-        LOG.info("CloudFormation conditions created: PCI-DSS=" + enablePciDss + ", SOC2=" + enableSoc2 +
-                 ", HIPAA=" + enableHipaa + ", GDPR=" + enableGdpr);
+        LOG.info("CloudFormation conditions created: PCI-DSS = " + enablePciDss + ", SOC2 = " + enableSoc2 +
+                 ", HIPAA = " + enableHipaa + ", GDPR = " + enableGdpr);
     }
 
     /**
@@ -1247,7 +1247,7 @@ public class ComplianceFactory extends BaseFactory {
 
     /**
      * Creates Config rules WITHOUT recorder dependency.
-     * Used when createConfigInfrastructure=false and recorder already exists outside this stack.
+     * Used when createConfigInfrastructure = false and recorder already exists outside this stack.
      * Rules will reference existing recorder by name at runtime.
      */
     private void createConfigRulesWithoutRecorder() {
@@ -1358,7 +1358,7 @@ public class ComplianceFactory extends BaseFactory {
 
     /**
      * Creates ALL framework-specific AWS Config rules WITHOUT recorder dependency.
-     * Used when createConfigInfrastructure=false.
+     * Used when createConfigInfrastructure = false.
      */
     private void createAllFrameworkConfigRulesWithoutRecorder() {
         List<String> frameworks = determineFrameworks();
@@ -2643,13 +2643,13 @@ public class ComplianceFactory extends BaseFactory {
             String awsProfile = System.getenv("AWS_PROFILE");
             if (awsProfile != null && !awsProfile.isEmpty()) {
                 env.put("AWS_PROFILE", awsProfile);
-                LOG.info("Using AWS_PROFILE=" + awsProfile + " for framework query");
+                LOG.info("Using AWS_PROFILE = " + awsProfile + " for framework query");
             }
             // Preserve AWS_REGION if set
             String awsRegion = System.getenv("AWS_REGION");
             if (awsRegion != null && !awsRegion.isEmpty()) {
                 env.put("AWS_REGION", awsRegion);
-                LOG.info("Using AWS_REGION=" + awsRegion + " for framework query");
+                LOG.info("Using AWS_REGION = " + awsRegion + " for framework query");
             }
 
             Process process = pb.start();

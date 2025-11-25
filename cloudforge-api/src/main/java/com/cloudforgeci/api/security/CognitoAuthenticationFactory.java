@@ -128,7 +128,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     public void create() {
         // Only configure Cognito if authMode is OIDC-based
         if (!"alb-oidc".equals(authMode) && !"jenkins-oidc".equals(authMode)) {
-            LOG.info("Cognito authentication not applicable (authMode=" + authMode + ")");
+            LOG.info("Cognito authentication not applicable (authMode = " + authMode + ")");
             return;
         }
 
@@ -148,7 +148,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             return;
         }
 
-        LOG.info("Cognito authentication not configured (use cognitoAutoProvision=true or provide cognitoUserPoolId)");
+        LOG.info("Cognito authentication not configured (use cognitoAutoProvision = true or provide cognitoUserPoolId)");
     }
 
     /**
@@ -176,7 +176,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // Validate required configuration
         if (cognitoDomainPrefix == null || cognitoDomainPrefix.isEmpty()) {
             LOG.severe("cognitoDomainPrefix is required for Cognito auto-provisioning");
-            throw new IllegalArgumentException("cognitoDomainPrefix is required when cognitoAutoProvision=true");
+            throw new IllegalArgumentException("cognitoDomainPrefix is required when cognitoAutoProvision = true");
         }
 
         // Sanitize domain prefix: lowercase, only alphanumerics and hyphens
@@ -206,7 +206,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         LOG.info("Creating/Importing Cognito User Pool: " + userPoolName);
         LOG.info("Domain prefix: " + cognitoDomainPrefix);
-        LOG.info("User Pool removal policy: " + userPoolRemovalPolicy + " (isProduction=" + isProduction + ")");
+        LOG.info("User Pool removal policy: " + userPoolRemovalPolicy + " (isProduction = " + isProduction + ")");
 
         // Determine which MFA methods to enable based on cognitoMfaMethod
         // Valid values: "totp", "sms", "both" (default: "both")

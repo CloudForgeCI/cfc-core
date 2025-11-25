@@ -305,7 +305,7 @@ public final class GdprRules {
             rules.add(ComplianceRule.fail(
                 "GDPR-AUTHENTICATION",
                 "Authentication required to ensure confidentiality (GDPR Art. 32(1)(b))",
-                "Authentication mode is 'none'. Configure authMode='alb-oidc' or 'jenkins-oidc' to control access to personal data."
+                "Authentication mode is 'none'. Configure authMode = 'alb-oidc' or 'jenkins-oidc' to control access to personal data."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -444,7 +444,7 @@ public final class GdprRules {
      */
     public static String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== GDPR Technical Safeguards Compliance Report ===\n\n");
+        report.append("\n=== GDPR Technical Safeguards Compliance Report == = \n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

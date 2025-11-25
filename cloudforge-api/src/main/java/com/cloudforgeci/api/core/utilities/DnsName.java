@@ -20,7 +20,7 @@ public @interface DnsName {
     Class<? extends Payload>[] payload() default {};
     class Validator implements ConstraintValidator<DnsName, String> {
         private static final String LABEL_RX = "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$";
-        public boolean isValid(String v, ConstraintValidatorContext c){
+        public boolean isValid(String v, ConstraintValidatorContext c) {
             if (v == null || v.isBlank()) return true;
             if (v.length() > 253) return false;
             for (String part : v.split("\\.")) {

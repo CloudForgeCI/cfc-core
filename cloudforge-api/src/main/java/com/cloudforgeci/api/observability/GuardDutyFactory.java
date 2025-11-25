@@ -49,7 +49,7 @@ public class GuardDutyFactory extends BaseFactory {
         if (Boolean.FALSE.equals(guardDutyEnabled)) {
             LOG.info("GuardDuty is disabled");
             LOG.info("  Note: GuardDuty is required for PCI-DSS Req 11.4 (threat detection)");
-            LOG.info("  Enable by setting guardDutyEnabled=true or using PRODUCTION security profile");
+            LOG.info("  Enable by setting guardDutyEnabled = true or using PRODUCTION security profile");
             return;
         }
 
@@ -82,13 +82,13 @@ public class GuardDutyFactory extends BaseFactory {
                     .findingPublishingFrequency("FIFTEEN_MINUTES")
                     .build();
 
-            LOG.info("GuardDuty detector creation enabled via createGuardDutyDetector=true");
+            LOG.info("GuardDuty detector creation enabled via createGuardDutyDetector = true");
             LOG.info("  Note: If detector already exists in account-region, deployment will fail");
-            LOG.info("  This is expected - only set createGuardDutyDetector=true for first deployment in account-region");
+            LOG.info("  This is expected - only set createGuardDutyDetector = true for first deployment in account-region");
         } else {
             LOG.info("GuardDuty detector creation skipped (createGuardDutyDetector not set)");
             LOG.info("  Validation will check for existing GuardDuty detector");
-            LOG.info("  To create detector: set createGuardDutyDetector=true in deployment context");
+            LOG.info("  To create detector: set createGuardDutyDetector = true in deployment context");
             LOG.info("  Or enable manually: aws guardduty create-detector --enable --region " + region);
         }
     }

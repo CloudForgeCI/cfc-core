@@ -32,7 +32,7 @@ class ArnSimpleTest {
         void shouldInitializeWithOptionalFalse() {
             Arn annotation = new TestArnAnnotation(false);
             validator.initialize(annotation);
-            
+
             // Test that null/blank is invalid when not optional
             assertFalse(validator.isValid(null, null));
             assertFalse(validator.isValid("", null));
@@ -44,7 +44,7 @@ class ArnSimpleTest {
         void shouldInitializeWithOptionalTrue() {
             Arn annotation = new TestArnAnnotation(true);
             validator.initialize(annotation);
-            
+
             // Test that null/blank is valid when optional
             assertTrue(validator.isValid(null, null));
             assertTrue(validator.isValid("", null));
@@ -90,7 +90,7 @@ class ArnSimpleTest {
         @ParameterizedTest
         @ValueSource(strings = {
             "arn:aws-us-gov:s3:::my-bucket",
-            "arn:aws-cn:s3:::my-bucket", 
+            "arn:aws-cn:s3:::my-bucket",
             "arn:aws-iso:s3:::my-bucket",
             "arn:aws-iso-b:s3:::my-bucket"
         })

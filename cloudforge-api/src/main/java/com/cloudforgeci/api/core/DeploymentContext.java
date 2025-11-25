@@ -20,7 +20,7 @@ import java.util.Map;
 /**
  * Typed configuration interface for CDK deployment context.
  *
- * <p>Loads configuration from cdk.json "cfc" block or CLI flags (-c key=value).
+ * <p>Loads configuration from cdk.json "cfc" block or CLI flags (-c key = value).
  * Provides type-safe access with validation and sensible defaults.</p>
  *
  * <p><b>Quick Start Example (cdk.json):</b></p>
@@ -169,10 +169,10 @@ public final class DeploymentContext {
     // Required-ish high level knobs
     @OneOf(value = {"public", "enterprise"}, message = "Tier must be 'public' or 'enterprise'")
     private final String tier;        // public | enterprise
-    
+
     @OneOf(value = {"dev", "stage", "prod"}, message = "Environment must be 'dev', 'stage', or 'prod'")
     private final String env;         // dev | stage | prod
-    
+
     private final SecurityProfile securityProfile; // DEV | STAGING | PRODUCTION
     private final String region;      // default: us-east-1
 
@@ -261,7 +261,7 @@ public final class DeploymentContext {
     private final String complianceMode;  // "enforce" | "advisory" (default based on securityProfile)
     private final Integer logRetentionDays;
     private final String instanceType;
-    
+
     // Health Check Configuration
     private final Integer healthCheckGracePeriod;
     private final Integer healthCheckInterval;
@@ -377,7 +377,7 @@ public final class DeploymentContext {
         this.complianceMode = str("complianceMode", null);  // null = use default based on securityProfile
         this.logRetentionDays = intval("logRetentionDays", 7);
         this.instanceType = str("instanceType", "t3.micro");
-        
+
         // Health Check Configuration
         this.healthCheckGracePeriod = intval("healthCheckGracePeriod", 300);
         this.healthCheckInterval = intval("healthCheckInterval", 30);
@@ -403,7 +403,7 @@ public final class DeploymentContext {
 
         // SSL default remains explicit; do not silently infer on domain unless asked to
         this.enableSsl = bool("enableSsl", false);
-        
+
         // Zone creation flag - only create hosted zones when explicitly requested
         this.createZone = bool("createZone", false);
 
@@ -424,16 +424,16 @@ public final class DeploymentContext {
 
     public String tier() { return tier; }
     public String env() { return env; }
-    
+
     /**
      * Gets the security profile enum.
-     * 
+     *
      * @return SecurityProfile enum value
      */
     public SecurityProfile securityProfile() {
         return securityProfile;
     }
-    
+
     public String region() { return region; }
 
     public String domain() { return domain; }
@@ -474,7 +474,7 @@ public final class DeploymentContext {
     public String complianceMode() { return complianceMode; }
     public Integer logRetentionDays() { return logRetentionDays; }
     public String instanceType() { return instanceType; }
-    
+
     // Health Check Configuration
     public Integer healthCheckGracePeriod() { return healthCheckGracePeriod; }
     public Integer healthCheckInterval() { return healthCheckInterval; }
@@ -586,7 +586,7 @@ public final class DeploymentContext {
 
         // Cross-axis sanity (context level; rules will also validate)
         if (topology == TopologyType.JENKINS_SINGLE_NODE && runtime != RuntimeType.EC2) {
-            errs.add("JENKINS_SINGLE_NODE requires runtime=EC2 (got " + runtime + ")");
+            errs.add("JENKINS_SINGLE_NODE requires runtime = EC2 (got " + runtime + ")");
         }
 
         if (!errs.isEmpty()) {
@@ -714,12 +714,12 @@ public final class DeploymentContext {
 
     @Override public String toString() {
         return "DeploymentContext{" +
-                "runtimeKind=" + runtime +
-                ", topologyKind=" + topology +
-                ", env='" + env + '\'' +
-                ", fqdn='" + fqdn + '\'' +
-                ", cpu=" + cpu +
-                ", memory=" + memory +
+                "runtimeKind = " + runtime +
+                ", topologyKind = " + topology +
+                ", env = '" + env + '\'' +
+                ", fqdn = '" + fqdn + '\'' +
+                ", cpu = " + cpu +
+                ", memory = " + memory +
                 '}';
     }
 

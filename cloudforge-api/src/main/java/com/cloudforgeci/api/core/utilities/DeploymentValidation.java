@@ -24,7 +24,7 @@ public @interface DeploymentValidation {
             if (c == null) return true;
 
             // 1) CFN+ACM region rule (if using CloudFront and an ARN is provided)
-  /*          if ("cloudfront".equals(""){//c.frontDoor()) && c.acmArn() != null && !c.acmArn().isBlank()) {
+  /*          if ("cloudfront".equals("") {//c.frontDoor()) && c.acmArn() != null && !c.acmArn().isBlank()) {
                 String[] parts = c.acmArn().split(":");
                 if (parts.length < 4 || !"us-east-1".equals(parts[3])) {
                     ctx.disableDefaultConstraintViolation();
@@ -50,7 +50,7 @@ public @interface DeploymentValidation {
 
             return true;
         }
-        private boolean fail(ConstraintValidatorContext ctx, String msg, String prop){
+        private boolean fail(ConstraintValidatorContext ctx, String msg, String prop) {
             ctx.disableDefaultConstraintViolation();
             ctx.buildConstraintViolationWithTemplate(msg).addPropertyNode(prop).addConstraintViolation();
             return false;
