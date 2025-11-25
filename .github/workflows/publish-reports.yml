@@ -185,13 +185,22 @@ jobs:
               return
             fi
 
-            cat > "$dir/index.html" << 'HTMLEOF'
+            # Count files first
+            local file_count=0
+            for xml_file in "$dir"/*.xml; do
+              if [ -f "$xml_file" ]; then
+                ((file_count++))
+              fi
+            done
+
+            # Generate HTML file
+            cat > "$dir/index.html" << EOF
           <!DOCTYPE html>
           <html lang="en">
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>MODULENAME Test Reports</title>
+              <title>$module_name Test Reports</title>
               <style>
                   * { margin: 0; padding: 0; box-sizing: border-box; }
                   body {
@@ -261,40 +270,33 @@ jobs:
           <body>
               <div class="container">
                   <div class="header">
-                      <h1>📋 MODULENAME Test Reports</h1>
+                      <h1>📋 $module_name Test Reports</h1>
                       <p>JUnit Surefire XML Test Reports</p>
                       <a href="../../" class="back-link">← Back to All Reports</a>
                   </div>
                   <div class="content">
                       <div class="file-count">
-                          <strong>FILECOUNT</strong> test report files
+                          <strong>$file_count</strong> test report files
                       </div>
                       <ul class="test-list">
-          FILELIST
+          EOF
+
+            # Generate file list directly
+            for xml_file in "$dir"/*.xml; do
+              if [ -f "$xml_file" ]; then
+                local filename=$(basename "$xml_file")
+                echo "                        <li class=\"test-item\"><a href=\"$filename\">$filename</a></li>" >> "$dir/index.html"
+              fi
+            done
+
+            # Close HTML
+            cat >> "$dir/index.html" << 'EOF'
                       </ul>
                   </div>
               </div>
           </body>
           </html>
-          HTMLEOF
-
-            # Replace module name
-            sed -i "s/MODULENAME/$module_name/g" "$dir/index.html"
-
-            # Generate file list
-            local file_list=""
-            local file_count=0
-            for xml_file in "$dir"/*.xml; do
-              if [ -f "$xml_file" ]; then
-                local filename=$(basename "$xml_file")
-                file_list="$file_list                        <li class=\"test-item\"><a href=\"$filename\">$filename</a></li>\n"
-                ((file_count++))
-              fi
-            done
-
-            # Replace file list and count
-            sed -i "s|FILELIST|$file_list|g" "$dir/index.html"
-            sed -i "s/FILECOUNT/$file_count/g" "$dir/index.html"
+          EOF
 
             echo "✅ Generated index for $module_name ($file_count files)"
           }
@@ -683,8 +685,8 @@ jobs:
                           <ul>
                               <li><a href="coverage/cloudforge-api/index.html">CloudForge API Coverage</a> <span class="badge badge-success">Latest</span></li>
                               <li><a href="coverage/cloudforge-core/index.html">CloudForge Core Coverage</a> <span class="badge badge-success">Latest</span></li>
-                              <li><a href="coverage/cloudforge-api/surefire-reports/">CloudForge API Test Reports</a></li>
-                              <li><a href="coverage/cloudforge-core/surefire-reports/">CloudForge Core Test Reports</a></li>
+                              <li><a href="coverage/cloudforge-api/surefire-reports/index.html">CloudForge API Test Reports</a></li>
+                              <li><a href="coverage/cloudforge-core/surefire-reports/index.html">CloudForge Core Test Reports</a></li>
                           </ul>
                       </div>
 
