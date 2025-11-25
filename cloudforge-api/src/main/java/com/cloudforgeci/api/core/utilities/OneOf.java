@@ -13,7 +13,9 @@ public @interface OneOf {
     String[] value();
     class Validator implements ConstraintValidator<OneOf, String> {
         private Set<String> allowed;
+        @Override
         public void initialize(OneOf a) { allowed = Set.of(a.value()); }
+        @Override
         public boolean isValid(String v, ConstraintValidatorContext c) {
             return v == null || allowed.contains(v);
         }

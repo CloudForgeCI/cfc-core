@@ -203,10 +203,12 @@ class IdentityCenterFactoryTest {
         int counter = 0;
         for (SecurityProfile profile : SecurityProfile.values()) {
             App app = new App();
-            Stack stack = new Stack(app, "TestIdentityCenterProfile" + counter++);
+            String stackName = "TestIdentityCenterProfile" + counter;
+            Stack stack = new Stack(app, stackName);
+            counter++;
 
             Map<String, Object> cfcContext = new HashMap<>();
-            cfcContext.put("stackName", "TestIdentityCenterProfile" + counter);
+            cfcContext.put("stackName", stackName);
             cfcContext.put("securityProfile", profile.name());
             cfcContext.put("domain", "example.com");
             cfcContext.put("enableSsl", true);
@@ -300,10 +302,12 @@ class IdentityCenterFactoryTest {
         int counter = 0;
         for (String ssoArn : ssoArns) {
             App app = new App();
-            Stack stack = new Stack(app, "TestSsoInstance" + counter++);
+            String stackName = "TestSsoInstance" + counter;
+            Stack stack = new Stack(app, stackName);
+            counter++;
 
             Map<String, Object> cfcContext = new HashMap<>();
-            cfcContext.put("stackName", "TestSsoInstance" + counter);
+            cfcContext.put("stackName", stackName);
             cfcContext.put("securityProfile", "PRODUCTION");
             cfcContext.put("domain", "example.com");
             cfcContext.put("enableSsl", true);

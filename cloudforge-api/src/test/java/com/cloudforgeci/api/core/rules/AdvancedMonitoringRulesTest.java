@@ -819,46 +819,46 @@ class AdvancedMonitoringRulesTest {
     @ParameterizedTest
     @CsvSource({
         // Scenario 1: Maximum security - PRODUCTION with all features
-        "PRODUCTION,true,GDPR,true,true,true,true,true,true,true,true,true,true,true",
+        "PRODUCTION,true,GDPR,true,true,true,true,true,true,true,true,true,true,true,true",
 
         // Scenario 2: PRODUCTION with GDPR but no monitoring - FAIL (many missing features)
-        "PRODUCTION,false,GDPR,false,false,false,false,false,false,false,false,false,false,false",
+        "PRODUCTION,false,GDPR,false,false,false,false,false,false,false,false,false,false,false,false",
 
-        // Scenario 3: PRODUCTION with SecurityHub only - FAIL (missing Inspector, Macie for GDPR, alerting)
-        "PRODUCTION,false,GDPR,true,true,false,false,false,false,false,false,false,true,true",
+        // Scenario 3: PRODUCTION with SecurityHub only - FAIL (missing Inspector, Macie for GDPR, alerting, auto-remediation)
+        "PRODUCTION,false,GDPR,true,true,false,false,false,false,false,false,false,true,true,false",
 
         // Scenario 4: PRODUCTION with Inspector only - FAIL (missing SecurityHub, Macie for GDPR)
-        "PRODUCTION,false,GDPR,false,false,false,true,true,true,true,false,false,false,false",
+        "PRODUCTION,false,GDPR,false,false,false,false,true,true,true,true,false,false,false,false",
 
         // Scenario 5: PRODUCTION with Macie only (GDPR) - FAIL (missing SecurityHub, Inspector, alerting)
-        "PRODUCTION,false,GDPR,false,false,false,false,false,false,false,true,true,false,false",
+        "PRODUCTION,false,GDPR,false,false,false,false,false,false,false,false,true,true,false,false",
 
         // Scenario 6: PRODUCTION without GDPR/HIPAA - no Macie required
-        "PRODUCTION,false,PCI-DSS,true,true,true,true,true,true,true,false,false,true,true",
+        "PRODUCTION,false,PCI-DSS,true,true,true,true,true,true,true,true,false,false,true,true",
 
         // Scenario 7: STAGING with all features (advisory)
-        "STAGING,true,GDPR,true,true,true,true,true,true,true,true,true,true,true",
+        "STAGING,true,GDPR,true,true,true,true,true,true,true,true,true,true,true,true",
 
         // Scenario 8: STAGING minimal (advisory)
-        "STAGING,false,NONE,false,false,false,false,false,false,false,false,false,false,false",
+        "STAGING,false,NONE,false,false,false,false,false,false,false,false,false,false,false,false",
 
         // Scenario 9: DEV with all features
-        "DEV,true,HIPAA,true,true,true,true,true,true,true,true,true,true,true",
+        "DEV,true,HIPAA,true,true,true,true,true,true,true,true,true,true,true,true",
 
         // Scenario 10: DEV minimal
-        "DEV,false,NONE,false,false,false,false,false,false,false,false,false,false,false",
+        "DEV,false,NONE,false,false,false,false,false,false,false,false,false,false,false,false",
 
-        // Scenario 11: PRODUCTION with infrastructure monitoring but weak compliance features
-        "PRODUCTION,true,NONE,false,false,false,true,true,true,true,false,false,true,true",
+        // Scenario 11: PRODUCTION with infrastructure monitoring but weak compliance features - FAIL (missing SecurityHub)
+        "PRODUCTION,true,NONE,false,false,false,false,true,true,true,true,false,false,true,true",
 
         // Scenario 12: PRODUCTION with compliance features but no centralized monitoring - FAIL
-        "PRODUCTION,false,SOC2,true,true,true,true,true,true,true,false,false,false,false",
+        "PRODUCTION,false,SOC2,true,true,true,true,true,true,true,true,false,false,false,false",
     })
     void testAMExpandedComprehensiveScenarios(String profile, boolean securityMonitoring,
                                               String complianceFramework, boolean securityHubEnabled,
-                                              boolean pciDss, boolean awsFoundational, boolean inspectorEnabled,
-                                              boolean ec2Scanning, boolean ecrScanning, boolean continuousScanning,
-                                              boolean macieEnabled, boolean automatedDiscovery,
+                                              boolean pciDss, boolean awsFoundational, boolean autoRemediation,
+                                              boolean inspectorEnabled, boolean ec2Scanning, boolean ecrScanning,
+                                              boolean continuousScanning, boolean macieEnabled, boolean automatedDiscovery,
                                               boolean complianceDashboard, boolean securityAlerting) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestAMComprehensive");
@@ -870,6 +870,7 @@ class AdvancedMonitoringRulesTest {
         customContext.put("securityHubEnabled", String.valueOf(securityHubEnabled));
         customContext.put("securityHubPciDssEnabled", String.valueOf(pciDss));
         customContext.put("securityHubAwsFoundationalEnabled", String.valueOf(awsFoundational));
+        customContext.put("securityHubAutoRemediation", String.valueOf(autoRemediation));
         customContext.put("inspectorEnabled", String.valueOf(inspectorEnabled));
         customContext.put("inspectorEc2Scanning", String.valueOf(ec2Scanning));
         customContext.put("inspectorEcrScanning", String.valueOf(ecrScanning));
@@ -895,8 +896,10 @@ class AdvancedMonitoringRulesTest {
             } else if (!pciDss && !awsFoundational) {
                 // No standards enabled (note: cis is not in params, checking pciDss and awsFoundational)
                 shouldFail = true;
+            } else if (!autoRemediation) {
+                // Auto-remediation is required (fails validation per AdvancedMonitoringRules line 159-165)
+                shouldFail = true;
             }
-            // Note: autoRemediation is not in comprehensive params, would fail if we checked
 
             // Inspector required
             if (!inspectorEnabled) {

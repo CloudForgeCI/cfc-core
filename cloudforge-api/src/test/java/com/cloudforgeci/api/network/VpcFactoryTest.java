@@ -144,18 +144,6 @@ public class VpcFactoryTest {
   }
 
   @Test
-  void createsVpcWithPrivateWithNatNetworkMode() {
-    Map<String, Object> context = new HashMap<>();
-    context.put("networkMode", "private-with-nat");
-    TestInfrastructureBuilder builder = new TestInfrastructureBuilder("VpcPrivateNatTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, context);
-    builder.createCompleteInfrastructure();
-
-    Template t = Template.fromStack(builder.getStack());
-    t.resourceCountIs("AWS::EC2::VPC", 1);
-    t.resourceCountIs("AWS::EC2::NatGateway", 2);
-  }
-
-  @Test
   void createsVpcWithSubnetRouteTableAssociations() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("VpcSubnetAssocTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();

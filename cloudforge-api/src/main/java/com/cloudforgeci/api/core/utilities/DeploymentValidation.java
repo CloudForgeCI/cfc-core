@@ -20,6 +20,7 @@ public @interface DeploymentValidation {
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
     class Validator implements ConstraintValidator<DeploymentValidation, DeploymentContext> {
+        @Override
         public boolean isValid(DeploymentContext c, ConstraintValidatorContext ctx) {
             if (c == null) return true;
 
