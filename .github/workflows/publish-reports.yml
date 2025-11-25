@@ -174,6 +174,135 @@ jobs:
             echo "✅ Copied cloudforge-core surefire reports"
           fi
 
+      - name: Generate surefire reports index pages
+        run: |
+          # Function to generate index.html for a surefire-reports directory
+          generate_surefire_index() {
+            local dir=$1
+            local module_name=$2
+
+            if [ ! -d "$dir" ]; then
+              return
+            fi
+
+            cat > "$dir/index.html" << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>MODULENAME Test Reports</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      padding: 20px;
+                  }
+                  .container { max-width: 1200px; margin: 0 auto; }
+                  .header {
+                      text-align: center;
+                      color: white;
+                      padding: 40px 20px;
+                  }
+                  .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+                  .content {
+                      background: white;
+                      border-radius: 12px;
+                      padding: 30px;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                  }
+                  .test-list {
+                      list-style: none;
+                      padding: 0;
+                  }
+                  .test-item {
+                      padding: 15px;
+                      margin: 10px 0;
+                      background: #f6f8fa;
+                      border-radius: 6px;
+                      border-left: 4px solid #667eea;
+                  }
+                  .test-item:hover {
+                      background: #e8eaf6;
+                      transform: translateX(5px);
+                      transition: all 0.3s ease;
+                  }
+                  .test-item a {
+                      color: #667eea;
+                      text-decoration: none;
+                      font-weight: 500;
+                      font-size: 1.1em;
+                  }
+                  .test-item a:hover {
+                      color: #764ba2;
+                  }
+                  .back-link {
+                      display: inline-block;
+                      margin-top: 20px;
+                      color: white;
+                      text-decoration: none;
+                      padding: 10px 20px;
+                      background: rgba(255,255,255,0.2);
+                      border-radius: 6px;
+                  }
+                  .back-link:hover {
+                      background: rgba(255,255,255,0.3);
+                  }
+                  .file-count {
+                      text-align: center;
+                      margin: 20px 0;
+                      font-size: 1.2em;
+                      color: #666;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>📋 MODULENAME Test Reports</h1>
+                      <p>JUnit Surefire XML Test Reports</p>
+                      <a href="../../" class="back-link">← Back to All Reports</a>
+                  </div>
+                  <div class="content">
+                      <div class="file-count">
+                          <strong>FILECOUNT</strong> test report files
+                      </div>
+                      <ul class="test-list">
+          FILELIST
+                      </ul>
+                  </div>
+              </div>
+          </body>
+          </html>
+          HTMLEOF
+
+            # Replace module name
+            sed -i "s/MODULENAME/$module_name/g" "$dir/index.html"
+
+            # Generate file list
+            local file_list=""
+            local file_count=0
+            for xml_file in "$dir"/*.xml; do
+              if [ -f "$xml_file" ]; then
+                local filename=$(basename "$xml_file")
+                file_list="$file_list                        <li class=\"test-item\"><a href=\"$filename\">$filename</a></li>\n"
+                ((file_count++))
+              fi
+            done
+
+            # Replace file list and count
+            sed -i "s|FILELIST|$file_list|g" "$dir/index.html"
+            sed -i "s/FILECOUNT/$file_count/g" "$dir/index.html"
+
+            echo "✅ Generated index for $module_name ($file_count files)"
+          }
+
+          # Generate indexes for both modules
+          generate_surefire_index "github-pages-reports/coverage/cloudforge-api/surefire-reports" "CloudForge API"
+          generate_surefire_index "github-pages-reports/coverage/cloudforge-core/surefire-reports" "CloudForge Core"
+
       - name: Copy validation reports
         run: |
           echo "Copying validation reports..."
