@@ -34,6 +34,8 @@ import software.amazon.awscdk.services.ecs.ContainerImage;
 import software.amazon.awscdk.services.route53.IHostedZone;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.certificatemanager.Certificate;
+import software.amazon.awscdk.services.certificatemanager.ICertificate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -200,6 +202,16 @@ public class TestInfrastructureBuilder {
         ctx.asg.set(mockAsg);
         return this;
     }
+
+    public TestInfrastructureBuilder createMockCertificate() {
+        ensureSystemContextCreated();
+        // Create a mock certificate from an ARN to satisfy HIPAA/compliance TLS requirements
+        // This avoids the need for actual Route53 hosted zones and certificate validation
+        String mockCertArn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012";
+        ICertificate mockCert = Certificate.fromCertificateArn(stack, "MockCert", mockCertArn);
+        ctx.cert.set(mockCert);
+        return this;
+    }
     
     public TestInfrastructureBuilder createFargate() {
         // Create Fargate factory (which will create the container internally)
@@ -209,6 +221,7 @@ public class TestInfrastructureBuilder {
     }
     
     public TestInfrastructureBuilder createDomain() {
+        ensureSystemContextCreated();
         DomainFactory domainFactory = new DomainFactory(stack, "Domain");
         domainFactory.create();
         return this;

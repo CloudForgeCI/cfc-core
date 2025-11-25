@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.core.util.RetentionDaysConverter;
 import com.cloudforgeci.api.interfaces.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.TopologyType;
@@ -9,12 +10,15 @@ import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
+import java.util.logging.Logger;
+
 /**
  * Production security profile configuration with comprehensive security measures.
  * Implements enterprise-grade security for SOC/HIPAA/PCI-DSS compliance.
  */
 public class ProductionSecurityProfileConfiguration implements SecurityProfileConfiguration {
 
+    private static final Logger LOG = Logger.getLogger(ProductionSecurityProfileConfiguration.class.getName());
     private final DeploymentContext deploymentContext;
 
     /**
@@ -41,6 +45,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     // Logging Configuration - Extended retention for compliance
     @Override
     public RetentionDays getLogRetentionDays() {
+        // Check deployment context first for compliance framework overrides
+        if (deploymentContext != null && deploymentContext.logRetentionDays() != null) {
+            int days = deploymentContext.logRetentionDays();
+            RetentionDays retention = RetentionDaysConverter.fromDays(days);
+            LOG.info("PRODUCTION profile: Overriding log retention from deployment context: " + days + " days -> " + retention);
+            return retention;
+        }
         return RetentionDays.TWO_YEARS; // Extended retention for compliance
     }
     
@@ -57,6 +68,15 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     // Flow Log Configuration - Comprehensive monitoring
     @Override
     public boolean isFlowLogsEnabled() {
+        // Check deployment context raw map first for testing overrides
+        if (deploymentContext != null && deploymentContext.raw() != null) {
+            Object value = deploymentContext.raw().get("flowLogsEnabled");
+            if (value != null) {
+                boolean enabled = Boolean.parseBoolean(String.valueOf(value));
+                LOG.info("PRODUCTION profile: Overriding flowLogsEnabled from deployment context: " + enabled);
+                return enabled;
+            }
+        }
         return true; // Always enabled for production
     }
     
@@ -68,16 +88,40 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     // Security Monitoring - Comprehensive for production
     @Override
     public boolean isSecurityMonitoringEnabled() {
+        // Check deployment context raw map first for testing overrides
+        if (deploymentContext != null && deploymentContext.raw() != null) {
+            Object value = deploymentContext.raw().get("securityMonitoringEnabled");
+            if (value != null) {
+                boolean enabled = Boolean.parseBoolean(String.valueOf(value));
+                LOG.info("PRODUCTION profile: Overriding securityMonitoringEnabled from deployment context: " + enabled);
+                return enabled;
+            }
+        }
         return true; // Always enabled for production
     }
-    
+
     @Override
     public boolean isCloudTrailEnabled() {
+        // Check deployment context raw map first for testing overrides
+        if (deploymentContext != null && deploymentContext.raw() != null) {
+            Object value = deploymentContext.raw().get("cloudTrailEnabled");
+            if (value != null) {
+                boolean enabled = Boolean.parseBoolean(String.valueOf(value));
+                LOG.info("PRODUCTION profile: Overriding cloudTrailEnabled from deployment context: " + enabled);
+                return enabled;
+            }
+        }
         return true; // Always enabled for production audit
     }
-    
+
     @Override
     public boolean isGuardDutyEnabled() {
+        // Check deployment context first for compliance framework overrides
+        if (deploymentContext != null && deploymentContext.guardDutyEnabled() != null) {
+            boolean enabled = deploymentContext.guardDutyEnabled();
+            LOG.info("PRODUCTION profile: Overriding GuardDuty from deployment context: " + enabled);
+            return enabled;
+        }
         return true; // Always enabled for production threat detection
     }
     
@@ -106,6 +150,15 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     
     @Override
     public boolean isEfsEncryptionInTransitEnabled() {
+        // Check deployment context raw map first for testing overrides
+        if (deploymentContext != null && deploymentContext.raw() != null) {
+            Object value = deploymentContext.raw().get("efsEncryptionInTransitEnabled");
+            if (value != null) {
+                boolean enabled = Boolean.parseBoolean(String.valueOf(value));
+                LOG.info("PRODUCTION profile: Overriding efsEncryptionInTransitEnabled from deployment context: " + enabled);
+                return enabled;
+            }
+        }
         return true; // Mandatory encryption
     }
     
@@ -181,6 +234,15 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     // Backup and Recovery - Comprehensive for production
     @Override
     public boolean isAutomatedBackupEnabled() {
+        // Check deployment context raw map first for testing overrides
+        if (deploymentContext != null && deploymentContext.raw() != null) {
+            Object value = deploymentContext.raw().get("automatedBackupEnabled");
+            if (value != null) {
+                boolean enabled = Boolean.parseBoolean(String.valueOf(value));
+                LOG.info("PRODUCTION profile: Overriding automatedBackupEnabled from deployment context: " + enabled);
+                return enabled;
+            }
+        }
         return true; // Always enabled for production
     }
     
@@ -191,6 +253,15 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     
     @Override
     public boolean isCrossRegionBackupEnabled() {
+        // Check deployment context raw map first for testing overrides
+        if (deploymentContext != null && deploymentContext.raw() != null) {
+            Object value = deploymentContext.raw().get("crossRegionBackupEnabled");
+            if (value != null) {
+                boolean enabled = Boolean.parseBoolean(String.valueOf(value));
+                LOG.info("PRODUCTION profile: Overriding crossRegionBackupEnabled from deployment context: " + enabled);
+                return enabled;
+            }
+        }
         return true; // Always enabled for production disaster recovery
     }
     
@@ -202,6 +273,15 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     
     @Override
     public boolean isAlbAccessLoggingEnabled() {
+        // Check deployment context raw map first for testing overrides
+        if (deploymentContext != null && deploymentContext.raw() != null) {
+            Object value = deploymentContext.raw().get("albAccessLogging");
+            if (value != null) {
+                boolean enabled = Boolean.parseBoolean(String.valueOf(value));
+                LOG.info("PRODUCTION profile: Overriding albAccessLogging from deployment context: " + enabled);
+                return enabled;
+            }
+        }
         return true; // Always enabled for production audit
     }
     

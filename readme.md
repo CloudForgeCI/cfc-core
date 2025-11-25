@@ -8,6 +8,8 @@
 
 Deploy secure, compliant Jenkins infrastructure on AWS in minutes. Built-in support for SOC2, HIPAA, PCI-DSS, and GDPR with automated remediation.
 
+**📈 [Live Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** — Coverage, validation, compliance truth tables & drift detection
+
 ---
 
 ## 📚 Documentation Hub
@@ -30,18 +32,22 @@ Deploy secure, compliant Jenkins infrastructure on AWS in minutes. Built-in supp
 - **[Automated Compliance](docs/compliance/AUTOMATED_COMPLIANCE.md)** - Auto-remediation features
 - **[Multi-Framework Guide](docs/compliance/MULTI_FRAMEWORK_COMPLIANCE.md)** - SOC2, HIPAA, PCI-DSS, GDPR
 - **[S3 Versioning Remediation](docs/compliance/S3_VERSIONING_REMEDIATION.md)** - Automatic versioning
-- **[PCI-DSS Compliance](docs/compliance/PCI_DSS_README.md)** - Payment card security
+- **[PCI-DSS Compliance](docs/compliance/PCI_DSS_COMPLIANCE.md)** - Payment card security
 - **[Security Rules](docs/guides/SECURITY_RULES_README.md)** - Comprehensive guidelines
 
 ### 📖 Advanced Topics
 - **[Deployment Guide](docs/compliance/DEPLOYMENT_GUIDE.md)** - Production strategies
 - **[AWS Config Multi-Stack](docs/compliance/AWS_CONFIG_MULTI_STACK.md)** - Multi-account setup
-- **[Extended Testing](docs/guides/EXTENDED-TESTING.md)** - Comprehensive testing
+- **[Extended Testing](docs/guides/EXTENDED-TESTING.md)** - Comprehensive testing (deployment configurations)
+- **[Compliance Truth Tables](docs/testing/COMPLIANCE_TRUTH_TABLES.md)** - Systematic compliance rules testing
 - **[AWS Audit Manager](docs/AUDIT_MANAGER.md)** - Continuous auditing
+
+### 📊 Reports & Testing
+- **[📈 Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** - Live coverage, validation, compliance & drift reports
 
 ### 📑 Indexes
 - **[Documentation Index](docs/README.md)** - All documentation
-- **[Compliance Index](docs/compliance/COMPLIANCE_ANALYSIS_INDEX.md)** - All compliance docs
+- **[Compliance README](docs/compliance/README.md)** - All compliance docs
 
 ---
 
