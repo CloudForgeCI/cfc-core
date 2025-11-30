@@ -1,10 +1,14 @@
 package com.cloudforgeci.api.core.iam;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.IAMProfile;
+import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforgeci.api.interfaces.IAMConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
@@ -42,7 +46,7 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
         rules.add(require("vpc", x -> x.vpc));
 
         // Instance security group is only required for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
 

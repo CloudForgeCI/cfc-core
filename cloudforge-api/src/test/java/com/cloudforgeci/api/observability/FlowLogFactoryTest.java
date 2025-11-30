@@ -1,5 +1,9 @@
 package com.cloudforgeci.api.observability;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -108,7 +112,7 @@ class FlowLogFactoryTest {
 
         // Then: Should have security field
         boolean hasSecurity = java.util.Arrays.stream(fields)
-            .anyMatch(f -> f.getType().equals(com.cloudforgeci.api.interfaces.SecurityProfile.class));
+            .anyMatch(f -> f.getType().equals(SecurityProfile.class));
 
         assertTrue(hasSecurity, "Should have SecurityProfile field");
     }
@@ -169,7 +173,7 @@ class FlowLogFactoryTest {
 
         // Then: Should have fields with SystemContext annotation
         long annotatedFields = java.util.Arrays.stream(fields)
-            .filter(f -> f.isAnnotationPresent(com.cloudforgeci.api.core.annotation.SystemContext.class))
+            .filter(f -> f.isAnnotationPresent(com.cloudforge.core.annotation.SystemContext.class))
             .count();
 
         assertTrue(annotatedFields >= 1, "Should have at least 1 @SystemContext annotated field");

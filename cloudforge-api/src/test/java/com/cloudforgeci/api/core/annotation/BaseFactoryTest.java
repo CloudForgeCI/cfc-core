@@ -1,5 +1,9 @@
 package com.cloudforgeci.api.core.annotation;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
@@ -31,10 +35,10 @@ class BaseFactoryTest {
         stack = new Stack(app, "TestStack");
         // Start SystemContext before creating factory
         SystemContext.start(stack,
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
-            com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
-            com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.FARGATE,
+            SecurityProfile.DEV,
+            com.cloudforge.core.enums.IAMProfile.MINIMAL,
             DeploymentContext.from(stack));
         factory = new TestBaseFactory(stack, "TestFactory");
     }

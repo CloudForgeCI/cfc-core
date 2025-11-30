@@ -7,6 +7,7 @@ Complete documentation for deploying and managing secure, compliant Jenkins infr
 ## 📖 Table of Contents
 
 - [Quick Start](#quick-start)
+- [Applications & Plugins](#applications--plugins)
 - [Setup & Configuration](#setup--configuration)
 - [Compliance & Security](#compliance--security)
 - [Advanced Topics](#advanced-topics)
@@ -29,6 +30,27 @@ cd cloudforge-sample
 mvn clean package
 cdk deploy --context cfc=@deployment-context.json
 ```
+
+---
+
+## 🔌 Applications & Plugins
+
+### Application Catalog
+
+| Document | Description |
+|----------|-------------|
+| **[Application Catalog](applications/README.md)** | Complete catalog of 14 built-in applications |
+| **[Application Compliance](applications/COMPLIANCE.md)** | Compliance requirements for each application |
+| **[OIDC Integration](applications/OIDC.md)** | Application-level OIDC authentication (Grafana, GitLab, Jenkins) |
+
+### Plugin System
+
+| Document | Description |
+|----------|-------------|
+| **[Plugin Ecosystem](plugins/PLUGIN-ECOSYSTEM.md)** | Overview of built-in applications and plugin architecture |
+| **[Plugin System Guide](plugins/PLUGIN-SYSTEM.md)** | Core architecture and development patterns |
+| **[Application Plugin Guide](plugins/APPLICATION-PLUGIN-GUIDE.md)** | Build custom application plugins |
+| **[Compliance Plugin Guide](plugins/COMPLIANCE-PLUGIN-GUIDE.md)** | Build custom compliance framework validators |
 
 ---
 

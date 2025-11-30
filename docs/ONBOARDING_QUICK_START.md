@@ -57,7 +57,7 @@ Navigate to the DNS name in your browser. **No authentication required** for dev
 
 ### What You Get
 
-- ✅ Jenkins on Fargate (no server management)
+- ✅ Application on Fargate (no server management)
 - ✅ Public ALB (internet accessible)
 - ✅ EFS storage (persistent data)
 - ✅ Auto-scaling (1 task)
@@ -112,7 +112,7 @@ Navigate to ALB DNS, authenticate with Cognito (you'll create an account on firs
 
 ### What You Get
 
-- ✅ Jenkins on Fargate with auto-scaling (1-2 tasks)
+- ✅ Application on Fargate with auto-scaling (1-2 tasks)
 - ✅ Private subnets with NAT
 - ✅ Cognito authentication (no MFA)
 - ✅ Encryption at rest
@@ -144,7 +144,9 @@ Edit `deployment-context.json`:
   "domain": "mycompany.com",
   "subdomain": "jenkins",
   "createZone": false,  // Set true if Route53 zone doesn't exist
-  "cognitoDomainPrefix": "mycompany-jenkins-prod"  // Must be globally unique
+  "cognitoDomainPrefix": "mycompany-jenkins-prod",  // Must be globally unique
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailBucketAccessRemediation": true
 }
 ```
 
@@ -205,10 +207,7 @@ aws configservice describe-compliance-by-config-rule \
 ### Step 7: Initial Admin Setup
 
 ```bash
-# Get Jenkins initial admin password from EC2 instance
-# (Stored in EFS at /var/lib/jenkins/secrets/initialAdminPassword)
-
-# Or create Cognito admin user
+# Create Cognito admin user
 aws cognito-idp admin-create-user \
   --user-pool-id <pool-id-from-outputs> \
   --username admin@mycompany.com \
@@ -217,25 +216,23 @@ aws cognito-idp admin-create-user \
   --message-action SUPPRESS
 ```
 
-### Step 8: Access Jenkins
+### Step 8: Access Application
 
 Navigate to `https://jenkins.mycompany.com` (or ALB DNS if domain not configured).
 
 1. Authenticate with Cognito
 2. Complete MFA setup (TOTP - use Google Authenticator, Authy, etc.)
-3. Enter Jenkins initial admin password
-4. Install suggested plugins
-5. Create first admin user
+3. Complete application-specific setup (varies by application)
 
 ### What You Get
 
-- ✅ Jenkins on EC2 with auto-scaling (2-6 instances)
+- ✅ Application on EC2 with auto-scaling (2-6 instances)
 - ✅ Private subnets with NAT
 - ✅ Custom domain with SSL/TLS
 - ✅ Cognito authentication with MFA
 - ✅ Encryption at rest and in transit
 - ✅ **20+ AWS Config rules** (SOC 2)
-- ✅ **Auto-remediation** (S3 versioning, CloudTrail logging)
+- ✅ **Auto-remediation** (S3 versioning, CloudTrail logging, RDS security)
 - ✅ CloudTrail audit logging
 - ✅ GuardDuty threat detection
 - ✅ WAF web application firewall
@@ -303,6 +300,59 @@ cdk deploy -c cfc=@deployment-context.json
 
 ---
 
+## Path 6: Applications with Databases (20 Minutes)
+
+**Goal**: Deploy applications that require RDS databases (GitLab, Mattermost, Metabase, etc.)
+
+### Quick Setup
+
+```bash
+cd cfc-testing
+# Create deployment context for application with database
+cat > deployment-context.json <<EOF
+{
+  "stackName": "MyCompany-GitLab",
+  "context": {
+    "applicationId": "gitlab",
+    "securityProfile": "production",
+    "runtime": "FARGATE",
+    "domain": "mycompany.com",
+    "subdomain": "gitlab",
+    "enableSsl": true,
+    "cognitoDomainPrefix": "mycompany-gitlab-unique123"
+  }
+}
+EOF
+
+# Deploy (database automatically provisioned)
+cdk deploy -c cfc=@deployment-context.json
+```
+
+### What's Different?
+
+- ✅ **RDS PostgreSQL** automatically provisioned
+- ✅ **Secrets Manager** for database credentials
+- ✅ **Encryption** at rest with KMS
+- ✅ **Automated backups** (7-30 days based on profile)
+- ✅ **Multi-AZ** for production environments
+- ✅ **Auto-remediation** for database compliance (deletion protection, auto-upgrades)
+
+### Optional Database Provisioning
+
+For applications that support both RDS and embedded databases (Metabase, Grafana):
+
+```json
+{
+  "applicationId": "metabase",
+  "securityProfile": "production",
+  "provisionDatabase": true  // ← Optional: use RDS instead of H2
+}
+```
+
+**Cost**: Add ~$15-80/month for RDS (depending on instance size)
+
+---
+
 ## Common Customizations
 
 ### Change Instance Type
@@ -328,6 +378,19 @@ cdk deploy -c cfc=@deployment-context.json
 ```json
 {
   "scopeConfigRulesToDeployment": true  // Only monitor this stack's resources
+}
+```
+
+### Enable Automated Remediation
+
+```json
+{
+  "awsConfigEnabled": true,
+  "complianceFrameworks": "SOC2,HIPAA",
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailBucketAccessRemediation": true,
+  "enableRdsDeletionProtectionRemediation": true,
+  "enableRdsAutoMinorVersionUpgradeRemediation": true
 }
 ```
 

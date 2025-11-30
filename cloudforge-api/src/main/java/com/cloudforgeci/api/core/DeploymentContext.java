@@ -1,11 +1,11 @@
 package com.cloudforgeci.api.core;
 
-import com.cloudforgeci.api.core.utilities.DnsLabel;
-import com.cloudforgeci.api.core.utilities.DnsName;
-import com.cloudforgeci.api.core.utilities.OneOf;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.utilities.DnsLabel;
+import com.cloudforge.core.utilities.DnsName;
+import com.cloudforge.core.utilities.OneOf;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
@@ -76,7 +76,7 @@ import java.util.Map;
  *
  * <p><b>Authentication:</b></p>
  * <ul>
- *   <li>authMode: "none" | "alb-oidc" | "jenkins-oidc" (default: none)</li>
+ *   <li>authMode: "none" | "alb-oidc" | "jenkins-oidc" | "application-oidc" (default: none)</li>
  * </ul>
  *
  * <p><b>Cognito (Auto-provision User Pool):</b></p>
@@ -207,8 +207,8 @@ public final class DeploymentContext {
     private final String existingFileSystemId;  // Reuse existing EFS by ID (for disaster recovery workflows)
 
     // Auth / SSO
-    @OneOf(value = {"none", "alb-oidc", "jenkins-oidc"}, message = "Auth mode must be 'none', 'alb-oidc', or 'jenkins-oidc'")
-    private final String authMode;    // none | alb-oidc | jenkins-oidc
+    @OneOf(value = {"none", "alb-oidc", "jenkins-oidc", "application-oidc"}, message = "Auth mode must be 'none', 'alb-oidc', 'jenkins-oidc', or 'application-oidc'")
+    private final String authMode;    // none | alb-oidc | jenkins-oidc | application-oidc
 
     // Cognito Configuration (recommended for OIDC)
     private final Boolean cognitoAutoProvision;         // Auto-provision Cognito User Pool
@@ -261,6 +261,13 @@ public final class DeploymentContext {
     private final String complianceMode;  // "enforce" | "advisory" (default based on securityProfile)
     private final Integer logRetentionDays;
     private final String instanceType;
+    private final Boolean provisionDatabase;  // Whether to provision RDS database for applications with optional database support
+
+    // AWS Config Remediation Settings
+    private final Boolean enableS3VersioningRemediation;  // Enable automated S3 versioning remediation
+    private final Boolean enableCloudTrailBucketAccessRemediation;  // Enable automated CloudTrail bucket access logging remediation
+    private final Boolean enableRdsDeletionProtectionRemediation;  // Enable automated RDS deletion protection remediation
+    private final Boolean enableRdsAutoMinorVersionUpgradeRemediation;  // Enable automated RDS auto minor version upgrade remediation
 
     // Health Check Configuration
     private final Integer healthCheckGracePeriod;
@@ -316,7 +323,7 @@ public final class DeploymentContext {
         this.lbType = oneOf("lbType", "alb", List.of("alb", "nlb"));
 
         this.authMode = oneOf("authMode", "none",
-                List.of("none", "alb-oidc", "jenkins-oidc"));
+                List.of("none", "alb-oidc", "jenkins-oidc", "application-oidc"));
 
         // Cognito Configuration
         this.cognitoAutoProvision = bool("cognitoAutoProvision", false);
@@ -377,6 +384,13 @@ public final class DeploymentContext {
         this.complianceMode = str("complianceMode", null);  // null = use default based on securityProfile
         this.logRetentionDays = intval("logRetentionDays", 7);
         this.instanceType = str("instanceType", "t3.micro");
+        this.provisionDatabase = boolOrNull("provisionDatabase");
+
+        // AWS Config Remediation Settings (all disabled by default, opt-in required)
+        this.enableS3VersioningRemediation = boolOrNull("enableS3VersioningRemediation");
+        this.enableCloudTrailBucketAccessRemediation = boolOrNull("enableCloudTrailBucketAccessRemediation");
+        this.enableRdsDeletionProtectionRemediation = boolOrNull("enableRdsDeletionProtectionRemediation");
+        this.enableRdsAutoMinorVersionUpgradeRemediation = boolOrNull("enableRdsAutoMinorVersionUpgradeRemediation");
 
         // Health Check Configuration
         this.healthCheckGracePeriod = intval("healthCheckGracePeriod", 300);
@@ -474,6 +488,11 @@ public final class DeploymentContext {
     public String complianceMode() { return complianceMode; }
     public Integer logRetentionDays() { return logRetentionDays; }
     public String instanceType() { return instanceType; }
+    public Boolean provisionDatabase() { return provisionDatabase; }
+    public Boolean enableS3VersioningRemediation() { return enableS3VersioningRemediation; }
+    public Boolean enableCloudTrailBucketAccessRemediation() { return enableCloudTrailBucketAccessRemediation; }
+    public Boolean enableRdsDeletionProtectionRemediation() { return enableRdsDeletionProtectionRemediation; }
+    public Boolean enableRdsAutoMinorVersionUpgradeRemediation() { return enableRdsAutoMinorVersionUpgradeRemediation; }
 
     // Health Check Configuration
     public Integer healthCheckGracePeriod() { return healthCheckGracePeriod; }
@@ -585,9 +604,7 @@ public final class DeploymentContext {
         }
 
         // Cross-axis sanity (context level; rules will also validate)
-        if (topology == TopologyType.JENKINS_SINGLE_NODE && runtime != RuntimeType.EC2) {
-            errs.add("JENKINS_SINGLE_NODE requires runtime = EC2 (got " + runtime + ")");
-        }
+        // JENKINS_SINGLE_NODE topology removed in 3.0.0 - use JENKINS_SERVICE instead
 
         if (!errs.isEmpty()) {
             throw new IllegalArgumentException("DeploymentContext validation failed:\n - "
@@ -619,7 +636,7 @@ public final class DeploymentContext {
                 case "ec2" -> { runtime = RuntimeType.EC2;}
                 case "fargate" -> { runtime = RuntimeType.FARGATE; }
                 case "jenkins-fargate" -> { runtime = RuntimeType.FARGATE; topology = TopologyType.JENKINS_SERVICE; }
-                case "jenkins-ec2"     -> { runtime = RuntimeType.EC2;     topology = TopologyType.JENKINS_SINGLE_NODE; }
+                case "jenkins-ec2"     -> { runtime = RuntimeType.EC2;     topology = TopologyType.JENKINS_SERVICE; }
                 case "cf-alb-s3"       -> { runtime = RuntimeType.EC2;     topology = TopologyType.S3_WEBSITE; }
                 case "cf-alb-proxy"    -> { runtime = RuntimeType.EC2;     topology = TopologyType.JENKINS_SERVICE; }
                 default -> { runtime = RuntimeType.FARGATE; topology = TopologyType.JENKINS_SERVICE; }
@@ -644,10 +661,14 @@ public final class DeploymentContext {
                 .replace('_', '-')
                 .replace(' ', '-');
         return switch (t) {
-            case "jenkins-single-node", "jenkins_single_node", "single-node", "single_node", "node" -> TopologyType.JENKINS_SINGLE_NODE;
             case "jenkins-service", "jenkins_service", "service" -> TopologyType.JENKINS_SERVICE;
             case "s3-website", "s3_website", "s3" -> TopologyType.S3_WEBSITE;
-            default -> TopologyType.JENKINS_SINGLE_NODE;
+            case "application-service", "application_service", "app-service", "application" -> TopologyType.APPLICATION_SERVICE;
+            // CloudForge 3.0.0: No default fallback - explicit topology required
+            default -> throw new IllegalArgumentException(
+                "Unknown topology '" + val + "'. Valid values: jenkins-service, s3-website, application-service. " +
+                "Note: JENKINS_SINGLE_NODE was removed in 3.0.0 - use jenkins-service instead."
+            );
         };
     }
 

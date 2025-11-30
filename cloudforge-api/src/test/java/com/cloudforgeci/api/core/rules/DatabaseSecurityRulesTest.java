@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,7 +51,7 @@ class DatabaseSecurityRulesTest {
 
         // When: Installing database security rules
         // Then: Should not throw (advisory for DEV)
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -66,7 +66,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing database security rules
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
@@ -93,7 +93,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing database security rules
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
 
     }
 
@@ -117,7 +117,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing database security rules
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
 
     }
 
@@ -143,19 +143,8 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing database security rules
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
 
-    }
-
-    @Test
-    void testDatabaseSecurityRulesCannotBeInstantiated() {
-        // The DatabaseSecurityRules class should not be instantiable (utility class)
-        try {
-            var constructor = DatabaseSecurityRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("DatabaseSecurityRules should have a private constructor");
-        }
     }
 
     @Test
@@ -170,7 +159,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing database security rules
-        DatabaseSecurityRules.install(ctx);
+        new DatabaseSecurityRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -196,7 +185,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure encryption at rest
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -219,7 +208,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should require SSL for connections
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -243,7 +232,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure automated backups
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -265,7 +254,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enable point-in-time recovery
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -289,7 +278,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure database audit logging
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -311,7 +300,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enable IAM authentication
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -333,7 +322,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enable Multi-AZ deployment
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -355,7 +344,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enable deletion protection
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -378,7 +367,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should use Secrets Manager for credentials
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -402,7 +391,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should deploy in private subnets
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -418,7 +407,7 @@ class DatabaseSecurityRulesTest {
                     profile, iamProfile, cfc);
 
             // When/Then: Should not throw for any security profile
-            assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx),
+            assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx),
                 "DatabaseSecurityRules should not throw for security profile: " + profile);
         }
     }
@@ -435,8 +424,8 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing rules multiple times
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
 
         // Then: Should be idempotent (no errors on repeated calls)
     }
@@ -461,7 +450,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enable database activity streams
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -485,7 +474,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should encrypt database snapshots
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     @Test
@@ -509,7 +498,7 @@ class DatabaseSecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should apply secure parameter group settings
-        assertDoesNotThrow(() -> DatabaseSecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
     }
 
     // ==================== EXPANDED PARAMETERIZED TRUTH TABLE TESTS ====================
@@ -580,7 +569,7 @@ class DatabaseSecurityRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
-        DatabaseSecurityRules.install(builder.getSystemContext());
+        new DatabaseSecurityRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;
@@ -661,7 +650,7 @@ class DatabaseSecurityRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
-        DatabaseSecurityRules.install(builder.getSystemContext());
+        new DatabaseSecurityRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;
@@ -758,7 +747,7 @@ class DatabaseSecurityRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
-        DatabaseSecurityRules.install(builder.getSystemContext());
+        new DatabaseSecurityRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;
@@ -885,7 +874,7 @@ class DatabaseSecurityRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
-        DatabaseSecurityRules.install(builder.getSystemContext());
+        new DatabaseSecurityRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;

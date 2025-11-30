@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -42,12 +42,12 @@ class TopologyRulesTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Installing topology rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
 
     @Test
@@ -62,7 +62,7 @@ class TopologyRulesTest {
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // When: Installing topology rules
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
@@ -80,7 +80,7 @@ class TopologyRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing topology rules
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
@@ -99,18 +99,7 @@ class TopologyRulesTest {
 
         // When: Installing topology rules
         // Then: Should not throw (wiring is deferred via ctx.once())
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
-    }
-
-    @Test
-    void testTopologyRulesCannotBeInstantiated() {
-        // The TopologyRules class should not be instantiable (utility class)
-        try {
-            var constructor = TopologyRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("TopologyRules should have a private constructor");
-        }
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
 
     @Test
@@ -126,7 +115,7 @@ class TopologyRulesTest {
             IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
 
             // Choose appropriate runtime for each topology
-            RuntimeType runtime = topology == TopologyType.JENKINS_SINGLE_NODE
+            RuntimeType runtime = topology == TopologyType.JENKINS_SERVICE
                 ? RuntimeType.EC2
                 : RuntimeType.FARGATE;
 
@@ -135,7 +124,7 @@ class TopologyRulesTest {
 
             // When: Installing topology rules
             // Then: Should not throw for any topology type
-            assertDoesNotThrow(() -> TopologyRules.install(ctx),
+            assertDoesNotThrow(() -> new TopologyRules().install(ctx),
                 "TopologyRules.install should not throw for topology: " + topology);
         }
     }
@@ -152,7 +141,7 @@ class TopologyRulesTest {
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Installing topology rules
-        TopologyRules.install(ctx);
+        new TopologyRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -172,7 +161,7 @@ class TopologyRulesTest {
 
             // When: Installing topology rules
             // Then: Should not throw for any security profile
-            assertDoesNotThrow(() -> TopologyRules.install(ctx),
+            assertDoesNotThrow(() -> new TopologyRules().install(ctx),
                 "TopologyRules.install should not throw for security profile: " + profile);
         }
     }
@@ -180,7 +169,7 @@ class TopologyRulesTest {
     @Test
     void testTopologyRulesHandlesNullContext() {
         // This tests that the install method requires a non-null context
-        assertThrows(NullPointerException.class, () -> TopologyRules.install(null));
+        assertThrows(NullPointerException.class, () -> new TopologyRules().install(null));
     }
 
     @Test
@@ -194,10 +183,10 @@ class TopologyRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // First install should work
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
 
         // Second install on same context should also work (idempotent)
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
 
     @Test
@@ -207,10 +196,10 @@ class TopologyRulesTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
         assertNotNull(ctx.getNode());
     }
 
@@ -224,7 +213,7 @@ class TopologyRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
         assertNotNull(ctx.getNode());
     }
 
@@ -238,7 +227,7 @@ class TopologyRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
         assertNotNull(ctx.getNode());
     }
 
@@ -253,7 +242,7 @@ class TopologyRulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     SecurityProfile.DEV, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> TopologyRules.install(ctx),
+            assertDoesNotThrow(() -> new TopologyRules().install(ctx),
                 "TopologyRules.install should work with IAM profile: " + iamProfile);
         }
     }
@@ -265,10 +254,10 @@ class TopologyRulesTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
 
     @Test
@@ -281,7 +270,7 @@ class TopologyRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
 
     @Test
@@ -294,7 +283,7 @@ class TopologyRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
 
     @Test
@@ -309,13 +298,13 @@ class TopologyRulesTest {
 
             // Choose appropriate topology for each runtime
             TopologyType topology = runtime == RuntimeType.EC2
-                ? TopologyType.JENKINS_SINGLE_NODE
+                ? TopologyType.JENKINS_SERVICE
                 : TopologyType.JENKINS_SERVICE;
 
             SystemContext ctx = SystemContext.start(stack, topology, runtime,
                     SecurityProfile.DEV, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> TopologyRules.install(ctx),
+            assertDoesNotThrow(() -> new TopologyRules().install(ctx),
                 "TopologyRules.install should work with runtime: " + runtime);
         }
     }
@@ -330,7 +319,7 @@ class TopologyRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        TopologyRules.install(ctx);
+        new TopologyRules().install(ctx);
 
         // Node should have validation added
         assertNotNull(ctx.getNode());
@@ -347,6 +336,6 @@ class TopologyRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Wiring should be deferred via ctx.once() - this tests the pattern works
-        assertDoesNotThrow(() -> TopologyRules.install(ctx));
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
 }

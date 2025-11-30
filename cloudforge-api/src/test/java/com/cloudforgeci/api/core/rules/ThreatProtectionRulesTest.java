@@ -2,12 +2,12 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -51,7 +51,7 @@ class ThreatProtectionRulesTest {
 
         // When: Installing threat protection rules
         // Then: Should not throw (advisory for DEV)
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -66,7 +66,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
@@ -90,7 +90,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
 
     }
 
@@ -113,19 +113,8 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
 
-    }
-
-    @Test
-    void testThreatProtectionRulesCannotBeInstantiated() {
-        // The ThreatProtectionRules class should not be instantiable (utility class)
-        try {
-            var constructor = ThreatProtectionRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("ThreatProtectionRules should have a private constructor");
-        }
     }
 
     @Test
@@ -140,7 +129,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        ThreatProtectionRules.install(ctx);
+        new ThreatProtectionRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -167,7 +156,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -189,7 +178,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -210,7 +199,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -233,7 +222,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -255,7 +244,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -270,7 +259,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -294,7 +283,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -311,11 +300,11 @@ class ThreatProtectionRulesTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -344,7 +333,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -359,7 +348,7 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Installing threat protection rules
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -380,7 +369,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -401,7 +390,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -422,7 +411,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -443,7 +432,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -464,7 +453,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -485,7 +474,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -506,7 +495,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -527,7 +516,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -548,7 +537,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -569,7 +558,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -590,7 +579,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -611,7 +600,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -632,7 +621,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -653,7 +642,7 @@ class ThreatProtectionRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -668,8 +657,8 @@ class ThreatProtectionRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing rules multiple times
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
-        assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
+        assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
 
     @Test
@@ -684,7 +673,7 @@ class ThreatProtectionRulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     profile, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx),
+            assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx),
                 "ThreatProtectionRules should not throw for security profile: " + profile);
         }
     }
@@ -701,12 +690,12 @@ class ThreatProtectionRulesTest {
 
             TopologyType topology = runtime == RuntimeType.FARGATE
                 ? TopologyType.JENKINS_SERVICE
-                : TopologyType.JENKINS_SINGLE_NODE;
+                : TopologyType.JENKINS_SERVICE;
 
             SystemContext ctx = SystemContext.start(stack, topology, runtime,
                     SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> ThreatProtectionRules.install(ctx),
+            assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx),
                 "ThreatProtectionRules should not throw for runtime: " + runtime);
         }
     }
@@ -783,7 +772,7 @@ class ThreatProtectionRulesTest {
             "TestThreatMalware", secProfile, runtimeType, customContext);
 
         builder.createMinimalInfrastructure();
-        ThreatProtectionRules.install(builder.getSystemContext());
+        new ThreatProtectionRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // PRODUCTION + EC2 + PCI-DSS without anti-malware should FAIL (infrastructure requirement)
@@ -871,7 +860,7 @@ class ThreatProtectionRulesTest {
             "TestThreatIDS", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        ThreatProtectionRules.install(builder.getSystemContext());
+        new ThreatProtectionRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // PCI-DSS requires: GuardDuty, WAF, VPC Flow Logs (infrastructure requirements, blocking)
@@ -961,7 +950,7 @@ class ThreatProtectionRulesTest {
             "TestThreatFIM", secProfile, runtimeType, customContext);
 
         builder.createMinimalInfrastructure();
-        ThreatProtectionRules.install(builder.getSystemContext());
+        new ThreatProtectionRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // PCI-DSS + EC2 requires: FIM and AWS Config (infrastructure requirements, blocking)
@@ -1040,7 +1029,7 @@ class ThreatProtectionRulesTest {
             "TestThreatContainer", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        ThreatProtectionRules.install(builder.getSystemContext());
+        new ThreatProtectionRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // Container runtime security is ADVISORY (non-blocking) even for GDPR
@@ -1120,7 +1109,7 @@ class ThreatProtectionRulesTest {
             "TestThreatComp", secProfile, runtimeType, customContext);
 
         builder.createMinimalInfrastructure();
-        ThreatProtectionRules.install(builder.getSystemContext());
+        new ThreatProtectionRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;

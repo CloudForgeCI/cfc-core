@@ -2,7 +2,8 @@ package com.cloudforgeci.api.core.topology;
 
 import com.cloudforgeci.api.core.SystemContext;
 
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.TopologyConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
 import software.amazon.awscdk.services.cloudfront.BehaviorOptions;
@@ -140,7 +141,7 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
    * - DEV: S3-managed encryption (AES-256)
    */
   private static BucketEncryption determineEncryption(SystemContext c) {
-    if (c.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION) {
+    if (c.security == SecurityProfile.PRODUCTION) {
       // Production: Use KMS encryption for enhanced security and audit capabilities
       return BucketEncryption.KMS_MANAGED;
     }

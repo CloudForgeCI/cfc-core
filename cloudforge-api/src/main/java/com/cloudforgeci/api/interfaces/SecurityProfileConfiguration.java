@@ -1,10 +1,11 @@
 package com.cloudforgeci.api.interfaces;
 
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.RemovalPolicy;
-
-// Note: TopologyType and RuntimeType are already imported via the interface package
 
 /**
  * Configuration interface for security profile settings.
@@ -107,7 +108,7 @@ public interface SecurityProfileConfiguration {
      * This method encapsulates all NAT gateway logic including network mode, security requirements,
      * and topology-specific needs.
      *
-     * @param topology The deployment topology (JENKINS_SINGLE_NODE, JENKINS_SERVICE, etc.)
+     * @param topology The deployment topology (JENKINS_SERVICE, S3_WEBSITE, etc.)
      * @param runtime The runtime type (EC2, FARGATE)
      * @param networkMode The network mode (public-no-nat, private-with-nat)
      * @return The number of NAT gateways to create (0, 1, or 2)

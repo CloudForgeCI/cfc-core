@@ -1,12 +1,13 @@
 package com.cloudforgeci.samples.app;
 
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.samples.launchers.JenkinsEc2Stack;
-import com.cloudforgeci.samples.launchers.JenkinsFargateStack;
+import com.cloudforgeci.api.application.JenkinsApplicationSpec;
+import com.cloudforgeci.samples.launchers.ApplicationFargateStack;
+import com.cloudforgeci.samples.launchers.ApplicationEc2Stack;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import io.github.cdklabs.cdknag.AwsSolutionsChecks;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Aspects;
@@ -17,6 +18,14 @@ import software.constructs.Construct;
 
 import java.util.Map;
 
+/**
+ * CloudForge Community Sample Application.
+ *
+ * <p>CloudForge 3.0.0: Updated for universal application framework</p>
+ *
+ * <p>This sample demonstrates deploying Jenkins with full SOC2 compliance using the
+ * new ApplicationSpec pattern that separates application concerns from infrastructure.</p>
+ */
 public class CloudForgeCommunitySample {
 
   public static void main(final String[] args) {
@@ -41,7 +50,7 @@ public class CloudForgeCommunitySample {
         "healthCheckTimeout", "healthyThreshold", "unhealthyThreshold",
         "bastionCidr", "lbType", "enableFlowlogs", "createZone", "artifactsPrefix",
         "autoProvisionIdentityCenter", "identityCenterGroupName",
-        "ssoInstanceArn", "ssoGroupId", "ssoTargetAccountId"
+        "ssoInstanceArn", "ssoGroupId", "ssoTargetAccountId", "iamProfile"
       };
 
       for (String key : contextKeys) {
@@ -63,36 +72,50 @@ public class CloudForgeCommunitySample {
     String region = cfc.region() != null ? cfc.region() : System.getenv("CDK_DEFAULT_REGION");
     String account = System.getenv("CDK_DEFAULT_ACCOUNT");
 
-    System.out.println("CloudForge deployment configuration:");
+    // Get security profile from DeploymentContext
+    SecurityProfile security = cfc.securityProfile();
+
+    // Map IAM profile from security profile
+    IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
+
+    System.out.println("=".repeat(80));
+    System.out.println("CloudForge 3.0.0 deployment configuration:");
     System.out.println("  Region: " + region);
     System.out.println("  Account: " + account);
     System.out.println("  Runtime: " + cfc.runtime());
-    System.out.println("  Security Profile: " + cfc.securityProfile());
+    System.out.println("  Security Profile: " + security);
+    System.out.println("  IAM Profile: " + iamProfile + " (auto-mapped from " + security + ")");
+    System.out.println("  Topology: " + cfc.topology());
+    System.out.println("  Network Mode: " + (cfc.networkMode() != null ? cfc.networkMode() : "private-with-nat (default)"));
+    System.out.println("  SSL Enabled: " + cfc.enableSsl());
+    System.out.println("  WAF Enabled: " + cfc.wafEnabled());
+    System.out.println("=".repeat(80));
 
     StackProps props = StackProps.builder().env(Environment.builder()
             .account(account)
             .region(region).build()).build();
 
-    // Get security profile from DeploymentContext
-    SecurityProfile security = cfc.securityProfile();
-    IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(security);
-
     // Use stack name from context or default to runtime-based name
     String stackName = cfc.stackName();
     if (stackName == null || stackName.isEmpty()) {
-      stackName = (cfc.getRuntime() == RuntimeType.EC2) ? "JenkinsEc2" : "JenkinsFargate";
+      stackName = (cfc.runtime() == RuntimeType.EC2) ? "JenkinsEc2" : "JenkinsFargate";
     }
 
-    // Create stacks based on runtime type
-    if (cfc.getRuntime() == RuntimeType.EC2) {
-      new JenkinsEc2Stack(app, stackName, props, security, iamProfile);
-    } else if (cfc.getRuntime() == RuntimeType.FARGATE) {
-      new JenkinsFargateStack(app, stackName, props, security, iamProfile);
+    // Create JenkinsApplicationSpec
+    JenkinsApplicationSpec jenkinsSpec = new JenkinsApplicationSpec();
+
+    // Create stacks based on runtime type using universal ApplicationFactory
+    if (cfc.runtime() == RuntimeType.EC2) {
+      new ApplicationEc2Stack(app, stackName, props, security, iamProfile, jenkinsSpec);
+    } else if (cfc.runtime() == RuntimeType.FARGATE) {
+      new ApplicationFargateStack(app, stackName, props, security, iamProfile, jenkinsSpec);
     } else {
-      throw new IllegalArgumentException("Unsupported runtime type: " + cfc.getRuntime());
+      throw new IllegalArgumentException("Unsupported runtime type: " + cfc.runtime());
     }
 
+    // Uncomment to enable AWS Solutions checks (cdk-nag)
     //Aspects.of(app).add(new AwsSolutionsChecks());
+
     app.synth();
   }
 

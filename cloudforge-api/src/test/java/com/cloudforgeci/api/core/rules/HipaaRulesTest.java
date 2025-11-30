@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -53,7 +53,7 @@ class HipaaRulesTest {
 
         // When: Installing HIPAA rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -69,20 +69,9 @@ class HipaaRulesTest {
 
         // When: Installing HIPAA rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
-    @Test
-    void testHipaaRulesCannotBeInstantiated() {
-        try {
-            var constructor = HipaaRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("HipaaRules should have a private constructor");
-        }
-    }
-
-    @Test
     void testHipaaRulesMultipleInstallations() {
         // Given: A PRODUCTION deployment
         App app = new App();
@@ -94,10 +83,10 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules multiple times
-        HipaaRules.install(ctx);
+        new HipaaRules().install(ctx);
 
         // Then: Should be idempotent
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -121,7 +110,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -146,7 +135,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -172,7 +161,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -197,7 +186,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -221,7 +210,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -248,7 +237,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -274,7 +263,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -299,7 +288,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -324,7 +313,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -348,7 +337,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -372,7 +361,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -397,7 +386,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -422,7 +411,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -447,7 +436,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -503,7 +492,7 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules with all requirements
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -518,7 +507,7 @@ class HipaaRulesTest {
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Installing HIPAA rules
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -541,7 +530,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -564,7 +553,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -587,7 +576,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -611,7 +600,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -634,7 +623,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -658,7 +647,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -681,7 +670,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -705,7 +694,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -729,7 +718,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -752,7 +741,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -775,7 +764,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -798,7 +787,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -823,7 +812,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -847,7 +836,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -870,7 +859,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -894,7 +883,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -917,7 +906,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -940,7 +929,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -963,7 +952,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -986,7 +975,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -1009,7 +998,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -1034,7 +1023,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -1057,7 +1046,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -1080,7 +1069,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -1105,7 +1094,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -1120,12 +1109,12 @@ class HipaaRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA rules multiple times
-        HipaaRules.install(ctx);
-        HipaaRules.install(ctx);
-        HipaaRules.install(ctx);
+        new HipaaRules().install(ctx);
+        new HipaaRules().install(ctx);
+        new HipaaRules().install(ctx);
 
         // Then: Should be fully idempotent
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -1146,7 +1135,7 @@ class HipaaRulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     profile, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> HipaaRules.install(ctx),
+            assertDoesNotThrow(() -> new HipaaRules().install(ctx),
                 "HIPAA rules should work with profile: " + profile);
         }
     }
@@ -1168,7 +1157,7 @@ class HipaaRulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, runtime,
                     SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> HipaaRules.install(ctx),
+            assertDoesNotThrow(() -> new HipaaRules().install(ctx),
                 "HIPAA rules should work with runtime: " + runtime);
         }
     }
@@ -1239,8 +1228,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // HIPAA validation checks ALL requirements, so any missing requirement causes failure
         boolean shouldFail = false;
@@ -1321,8 +1310,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // HIPAA validation checks ALL requirements, so any missing requirement causes failure
         boolean shouldFail = false;
@@ -1402,8 +1391,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // HIPAA validation checks ALL requirements, so any missing requirement causes failure
         boolean shouldFail = false;
@@ -1487,8 +1476,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // HIPAA validation checks ALL requirements, so any missing requirement causes failure
         boolean shouldFail = false;
@@ -1580,8 +1569,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // HIPAA validation checks ALL requirements, so any missing requirement causes failure
         // HIPAA MFA requires BOTH cognitoMfa AND cognitoAuto to be true, OR hasSso
@@ -1670,8 +1659,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // HIPAA validation checks ALL requirements, so any missing requirement causes failure
         boolean shouldFail = false;
@@ -1757,8 +1746,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // HIPAA validation checks ALL requirements, so any missing requirement causes failure
         boolean shouldFail = false;
@@ -1804,8 +1793,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // This test validates the security profile early-return branches
         // DEV profile should always pass (early return), ADVISORY mode should always pass
@@ -1879,8 +1868,8 @@ class HipaaRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        HipaaRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
 
         // Comprehensive checks for all HIPAA requirements when ENFORCE + PRODUCTION/STAGING
         boolean shouldFail = "ENFORCE".equals(complianceMode) &&
@@ -1953,7 +1942,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     /**
@@ -2012,7 +2001,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     /**
@@ -2071,7 +2060,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     /**
@@ -2137,7 +2126,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     /**
@@ -2198,7 +2187,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     /**
@@ -2247,7 +2236,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     /**
@@ -2303,7 +2292,7 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     /**
@@ -2386,6 +2375,6 @@ class HipaaRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 }

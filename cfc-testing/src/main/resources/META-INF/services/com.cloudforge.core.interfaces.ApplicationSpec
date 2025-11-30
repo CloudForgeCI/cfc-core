@@ -1,0 +1,4 @@
+# Custom Application Plugins for cfc-testing
+
+# Code Quality
+com.cloudforgeci.samples.plugins.application.SonarQubeApplicationSpec

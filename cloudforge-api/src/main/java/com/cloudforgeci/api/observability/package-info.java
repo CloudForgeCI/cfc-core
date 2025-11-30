@@ -79,7 +79,7 @@
  * <p>Development environments get basic monitoring to save costs, while production
  * gets comprehensive protection. All configurable without code changes.</p>
  *
- * @see com.cloudforgeci.api.interfaces.SecurityProfile
- * @see com.cloudforgeci.api.interfaces.SecurityProfileConfiguration
+ * @see SecurityProfile
+ * @see SecurityProfileConfiguration
  */
 package com.cloudforgeci.api.observability;

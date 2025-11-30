@@ -1,0 +1,15 @@
+# Cross-framework validators (always load)
+com.cloudforgeci.api.core.rules.KeyManagementRules
+com.cloudforgeci.api.core.rules.DatabaseSecurityRules
+com.cloudforgeci.api.core.rules.AdvancedMonitoringRules
+com.cloudforgeci.api.core.rules.ThreatProtectionRules
+com.cloudforgeci.api.core.rules.IncidentResponseRules
+
+# Framework-specific validators
+com.cloudforgeci.api.core.rules.HipaaRules
+com.cloudforgeci.api.core.rules.HipaaOrganizationalRules
+com.cloudforgeci.api.core.rules.PciDssRules
+com.cloudforgeci.api.core.rules.Soc2Rules
+com.cloudforgeci.api.core.rules.GdprRules
+com.cloudforgeci.api.core.rules.GdprOrganizationalRules
+com.cloudforgeci.api.core.rules.Iso27001Rules

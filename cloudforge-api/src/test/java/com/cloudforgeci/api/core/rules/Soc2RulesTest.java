@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -53,7 +53,7 @@ class Soc2RulesTest {
 
         // When: Installing SOC2 rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -69,20 +69,9 @@ class Soc2RulesTest {
 
         // When: Installing SOC2 rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
-    @Test
-    void testSoc2RulesCannotBeInstantiated() {
-        try {
-            var constructor = Soc2Rules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("Soc2Rules should have a private constructor");
-        }
-    }
-
-    @Test
     void testSoc2RulesMultipleInstallations() {
         // Given: A PRODUCTION deployment
         App app = new App();
@@ -94,10 +83,10 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules multiple times
-        Soc2Rules.install(ctx);
+        new Soc2Rules().install(ctx);
 
         // Then: Should be idempotent
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -124,7 +113,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -151,7 +140,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -176,7 +165,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -203,7 +192,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -228,7 +217,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -254,7 +243,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -279,7 +268,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -304,7 +293,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -330,7 +319,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -359,7 +348,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -388,7 +377,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -415,7 +404,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -474,7 +463,7 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules with all trust services criteria
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -489,7 +478,7 @@ class Soc2RulesTest {
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Installing SOC2 rules
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -513,7 +502,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -537,7 +526,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -561,7 +550,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -585,7 +574,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -609,7 +598,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -633,7 +622,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -657,7 +646,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -681,7 +670,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -705,7 +694,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -729,7 +718,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -753,7 +742,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -777,7 +766,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -801,7 +790,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -825,7 +814,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -850,7 +839,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -875,7 +864,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -899,7 +888,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -923,7 +912,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -951,7 +940,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -975,7 +964,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -999,7 +988,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -1023,7 +1012,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -1047,7 +1036,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -1071,7 +1060,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -1095,7 +1084,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -1110,12 +1099,12 @@ class Soc2RulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing SOC2 rules multiple times
-        Soc2Rules.install(ctx);
-        Soc2Rules.install(ctx);
-        Soc2Rules.install(ctx);
+        new Soc2Rules().install(ctx);
+        new Soc2Rules().install(ctx);
+        new Soc2Rules().install(ctx);
 
         // Then: Should be fully idempotent
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -1136,7 +1125,7 @@ class Soc2RulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     profile, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> Soc2Rules.install(ctx),
+            assertDoesNotThrow(() -> new Soc2Rules().install(ctx),
                 "SOC2 rules should work with profile: " + profile);
         }
     }
@@ -1158,7 +1147,7 @@ class Soc2RulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, runtime,
                     SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> Soc2Rules.install(ctx),
+            assertDoesNotThrow(() -> new Soc2Rules().install(ctx),
                 "SOC2 rules should work with runtime: " + runtime);
         }
     }
@@ -1223,8 +1212,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // DEV profile doesn't run SOC2 validation, so synthesis should always pass
         // For STAGING/PRODUCTION in ADVISORY mode, synthesis should pass (warnings only)
@@ -1296,8 +1285,8 @@ class Soc2RulesTest {
         if (!authMode.equals("none")) {
             builder.createMockCertificate();
         }
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -1383,8 +1372,8 @@ class Soc2RulesTest {
         if (hasCert) {
             builder.createMockCertificate();
         }
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -1466,8 +1455,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -1542,8 +1531,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -1638,8 +1627,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -1721,8 +1710,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -1805,8 +1794,8 @@ class Soc2RulesTest {
         if ("alb-oidc".equals(authMode)) {
             builder.createMockCertificate();
         }
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -1907,7 +1896,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     /**
@@ -1973,7 +1962,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     /**
@@ -2034,7 +2023,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     /**
@@ -2092,7 +2081,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     /**
@@ -2148,7 +2137,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     /**
@@ -2253,7 +2242,7 @@ class Soc2RulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     /**
@@ -2328,8 +2317,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -2426,8 +2415,8 @@ class Soc2RulesTest {
         if (hasCert) {
             builder.createMockCertificate();
         }
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -2529,8 +2518,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Test synthesis based on shouldFailLogging flag
         if (shouldFailLogging) {
@@ -2632,8 +2621,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -2728,8 +2717,8 @@ class Soc2RulesTest {
         // Always create mock certificate for runtime tests since EC2 requires it
         builder.createMockCertificate();
         builder.createMinimalInfrastructure();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -2835,8 +2824,8 @@ class Soc2RulesTest {
         if (auth) {
             builder.createMockCertificate();
         }
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;
@@ -2946,8 +2935,8 @@ class Soc2RulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        Soc2Rules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
 
         // Determine if synthesis should fail
         boolean shouldFail = false;

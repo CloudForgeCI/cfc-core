@@ -17,8 +17,10 @@ class Runtime(Enum):
     FARGATE = "FARGATE"
 
 class Topology(Enum):
-    JENKINS_SINGLE_NODE = "JENKINS_SINGLE_NODE"
-    JENKINS_SERVICE = "JENKINS_SERVICE"
+    # JENKINS_SINGLE_NODE = "JENKINS_SINGLE_NODE"  # DEPRECATED - removed in CloudForge 3.0.0
+    # JENKINS_SERVICE = "JENKINS_SERVICE"  # Legacy topology - for backward compatibility
+    APPLICATION_SERVICE = "APPLICATION_SERVICE"  # Universal application topology (CloudForge 3.0.0+)
+    # S3_WEBSITE = "S3_WEBSITE"  # Static website topology - not yet implemented in synthesis tests
 
 class SecurityProfile(Enum):
     DEV = "DEV"
@@ -60,7 +62,12 @@ class TestConfiguration:
         return f"{self.runtime.value}_{self.topology.value}_{self.security_profile.value}_{self.domain_config.value}_{self.ssl_config.value}_{self.subdomain_config.value}_{self.auth_mode.value}_{self.network_mode.value}"
     
     def is_valid(self) -> bool:
-        """Check if this configuration combination is valid"""
+        """
+        Check if this configuration combination is valid.
+
+        CloudForge 3.0.0 supports only APPLICATION_SERVICE topology with EC2/FARGATE runtimes.
+        All configurations using APPLICATION_SERVICE are valid as long as they meet basic requirements.
+        """
         # SSL requires domain
         if self.ssl_config == SSLConfig.SSL_ENABLED and self.domain_config == DomainConfig.NO_DOMAIN:
             return False
@@ -69,21 +76,8 @@ class TestConfiguration:
         if self.subdomain_config == SubdomainConfig.WITH_SUBDOMAIN and self.domain_config == DomainConfig.NO_DOMAIN:
             return False
 
-        # JENKINS_SINGLE_NODE topology requires EC2 runtime (architectural constraint)
-        # Fargate doesn't support single-node topology - it uses ECS Services
-        if self.topology == Topology.JENKINS_SINGLE_NODE and self.runtime == Runtime.FARGATE:
-            return False
-
         # ALB-OIDC authentication requires a domain (for redirect URIs)
         if self.auth_mode == AuthMode.ALB_OIDC and self.domain_config == DomainConfig.NO_DOMAIN:
-            return False
-
-        # DEV profile doesn't support OIDC authentication
-        if self.security_profile == SecurityProfile.DEV and self.auth_mode == AuthMode.ALB_OIDC:
-            return False
-
-        # ALB-OIDC requires JENKINS_SERVICE topology (needs ALB for listener rules)
-        if self.auth_mode == AuthMode.ALB_OIDC and self.topology != Topology.JENKINS_SERVICE:
             return False
 
         return True
@@ -185,8 +179,8 @@ class TruthTableGenerator:
             
             # DomainFactory
             ResourceType.ROUTE53_HOSTED_ZONE: ["DomainFactory.java"],
-            ResourceType.ROUTE53_RECORDS: ["JenkinsServiceTopologyConfiguration.java", "JenkinsSingleNodeTopologyConfiguration.java"],
-            ResourceType.ACM_CERTIFICATE: ["FargateRuntimeConfiguration.java", "Ec2RuntimeConfiguration.java"],
+            ResourceType.ROUTE53_RECORDS: ["ApplicationServiceTopologyConfiguration.java", "DomainFactory.java"],
+            ResourceType.ACM_CERTIFICATE: ["CertificateFactory.java", "DomainFactory.java"],
             
             # IAM Factories
             ResourceType.IAM_ROLES: ["IamStandardConfiguration.java", "FargateFactory.java", "Ec2Factory.java"],
@@ -241,15 +235,14 @@ class TruthTableGenerator:
             ])
         else:  # EC2
             resources.add(ResourceType.EC2_INSTANCES)
-            if config.topology == Topology.JENKINS_SERVICE:
-                resources.add(ResourceType.AUTO_SCALING_GROUP)
-        
-        # Topology-specific resources
-        if config.topology == Topology.JENKINS_SERVICE:
-            resources.update([
-                ResourceType.APPLICATION_LOAD_BALANCER,
-                ResourceType.TARGET_GROUPS,
-            ])
+            # EC2 with APPLICATION_SERVICE topology uses Auto Scaling
+            resources.add(ResourceType.AUTO_SCALING_GROUP)
+
+        # APPLICATION_SERVICE topology uses ALB
+        resources.update([
+            ResourceType.APPLICATION_LOAD_BALANCER,
+            ResourceType.TARGET_GROUPS,
+        ])
         
         # EFS for Jenkins (both runtimes)
         resources.update([
@@ -264,17 +257,17 @@ class TruthTableGenerator:
                 ResourceType.ROUTE53_HOSTED_ZONE,
                 ResourceType.ROUTE53_RECORDS,
             ])
-            
-            if config.topology == Topology.JENKINS_SERVICE:
-                if config.ssl_config == SSLConfig.SSL_ENABLED:
-                    resources.update([
-                        ResourceType.ACM_CERTIFICATE,
-                        ResourceType.HTTPS_LISTENER,
-                        ResourceType.HTTP_LISTENER,  # For redirect
-                    ])
-                else:
-                    resources.add(ResourceType.HTTP_LISTENER)
-        elif config.topology == Topology.JENKINS_SERVICE:
+
+            # APPLICATION_SERVICE with domain can have SSL
+            if config.ssl_config == SSLConfig.SSL_ENABLED:
+                resources.update([
+                    ResourceType.ACM_CERTIFICATE,
+                    ResourceType.HTTPS_LISTENER,
+                    ResourceType.HTTP_LISTENER,  # For redirect
+                ])
+            else:
+                resources.add(ResourceType.HTTP_LISTENER)
+        else:
             # No domain but still need HTTP listener for ALB
             resources.add(ResourceType.HTTP_LISTENER)
         

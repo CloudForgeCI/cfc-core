@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.core.topology;
 
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
 import com.cloudforgeci.api.interfaces.TopologyConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
 import software.amazon.awscdk.Duration;

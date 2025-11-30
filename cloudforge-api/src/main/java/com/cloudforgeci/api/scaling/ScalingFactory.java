@@ -2,7 +2,7 @@ package com.cloudforgeci.api.scaling;
 
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.DeploymentContext;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;

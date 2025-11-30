@@ -2,10 +2,10 @@ package com.cloudforgeci.api.api;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -50,12 +50,12 @@ class SystemContextFieldAccessTest {
         }
 
         @Test
-        @DisplayName("topology field should be set to JENKINS_SINGLE_NODE")
+        @DisplayName("topology field should be set to JENKINS_SERVICE")
         void topologyFieldJenkinsSingleNode() {
-            SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.FARGATE,
+            SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     SecurityProfile.DEV, IAMProfile.MINIMAL, cfc);
 
-            assertEquals(TopologyType.JENKINS_SINGLE_NODE, ctx.topology, "Topology should be JENKINS_SINGLE_NODE");
+            assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology, "Topology should be JENKINS_SERVICE");
         }
 
         @Test

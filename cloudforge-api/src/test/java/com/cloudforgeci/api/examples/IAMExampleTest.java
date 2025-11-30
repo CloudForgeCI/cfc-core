@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.examples;
 
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.IAMProfile;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.IAMProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,7 +59,12 @@ class IAMExampleTest {
 
         // Set context on the app BEFORE creating stack
         app.getNode().setContext("cfc", config);
-        stack = new Stack(app, "TestStack");
+        stack = new Stack(app, "TestStack", software.amazon.awscdk.StackProps.builder()
+                .env(software.amazon.awscdk.Environment.builder()
+                        .account("123456789012")
+                        .region("us-east-1")
+                        .build())
+                .build());
         testCfc = DeploymentContext.from(app);
 
         // Set up output capture for console output tests

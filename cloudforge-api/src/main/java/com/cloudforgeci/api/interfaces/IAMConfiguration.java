@@ -1,5 +1,7 @@
 package com.cloudforgeci.api.interfaces;
 
+import com.cloudforge.core.enums.IAMProfile;
+
 /**
  * IAM Configuration interface that extends the base BaseConfiguration interface.
  * Provides IAM-specific configuration methods for different permission profiles.

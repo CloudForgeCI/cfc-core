@@ -2,11 +2,11 @@ package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -148,7 +148,7 @@ class SecurityMonitoringFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Creating SecurityMonitoringFactory for EC2
@@ -210,7 +210,7 @@ class SecurityMonitoringFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Creating SecurityMonitoringFactory with minimal config
@@ -270,7 +270,7 @@ class SecurityMonitoringFactoryTest {
     @Test
     void testSecurityMonitoringFactoryWithAllTopologies() {
         // Given: Each topology type
-        TopologyType[] topologies = {TopologyType.JENKINS_SERVICE, TopologyType.JENKINS_SINGLE_NODE, TopologyType.S3_WEBSITE};
+        TopologyType[] topologies = {TopologyType.JENKINS_SERVICE, TopologyType.JENKINS_SERVICE, TopologyType.S3_WEBSITE};
         int counter = 0;
 
         for (TopologyType topology : topologies) {

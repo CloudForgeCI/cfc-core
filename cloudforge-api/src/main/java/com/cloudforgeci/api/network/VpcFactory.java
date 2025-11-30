@@ -1,10 +1,10 @@
 package com.cloudforgeci.api.network;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.core.annotation.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
 import software.amazon.awscdk.services.ec2.*;
 import software.constructs.Construct;
 
@@ -66,6 +66,9 @@ public final class VpcFactory extends BaseFactory {
     @DeploymentContext("networkMode")
     private String networkMode;
 
+    @SystemContext("flowlogs")
+    private FlowLogOptions flowlogs;
+
     public VpcFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -88,9 +91,9 @@ public final class VpcFactory extends BaseFactory {
         // Create VPC with basic configuration
         Vpc vpc = createVpc();
 
-        // Add flow logs if configured
-        if (ctx.flowlogs.get().isPresent()) {
-            vpc.addFlowLog("VpcFlowlog", ctx.flowlogs.get().orElseThrow());
+        // Add flow logs if configured (injected via annotation)
+        if (flowlogs != null) {
+            vpc.addFlowLog("VpcFlowlog", flowlogs);
         }
 
         // Store VPC in SystemContext

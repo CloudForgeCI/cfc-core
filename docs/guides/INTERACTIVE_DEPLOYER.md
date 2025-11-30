@@ -5,12 +5,17 @@ An interactive command-line tool that guides you through configuring and deployi
 ## Features
 
 - **Interactive Configuration**: Prompts for all necessary parameters with sensible defaults
-- **Modular Architecture**: Uses SystemContext orchestration layer for expandable deployment types
-- **Strategy Pattern**: Easily extensible deployment strategies
-- **Multiple Deployment Types**: 
-  - Jenkins (Fargate/EC2) - ✅ Fully Implemented
-  - S3 + CloudFront (Static Website) - 🚧 Coming Soon
-  - S3 + CloudFront + SES + Lambda (Website + Mailer) - 🚧 Coming Soon
+- **Plugin-Based Architecture**: Automatic discovery of applications via ServiceLoader
+- **Multiple Applications**:
+  - CI/CD: Jenkins, GitLab, Drone
+  - Analytics: Metabase, Superset, Grafana
+  - Collaboration: Mattermost
+  - Container Registry: Harbor, Nexus
+  - VCS: Gitea
+  - Databases: PostgreSQL, Redis
+  - Secrets Management: Vault
+  - Monitoring: Prometheus
+- **Automatic Database Provisioning**: RDS databases for applications that require them
 - **Smart Defaults**: Skips irrelevant questions based on your choices
 - **Validation**: Ensures all required fields are provided
 - **CDK Integration**: Generates proper CDK context and synthesizes stacks
@@ -77,12 +82,14 @@ Adding a new deployment type requires:
 - **Subdomain**: Subdomain prefix (e.g., ci, app) - skipped if no domain
 - **SSL Certificate**: Enable SSL - skipped if no domain
 
-### Jenkins Deployment
+### Application Deployment
+- **Application**: Choose from 15+ pre-configured applications
 - **Runtime**: Fargate or EC2
-- **Topology**: JENKINS_SERVICE or JENKINS_SINGLE_NODE
+- **Topology**: APPLICATION_SERVICE (multi-instance) or S3_WEBSITE (static sites)
 - **Instance Capacity**: Min/max instances (EC2 only)
 - **CPU/Memory**: Resource allocation
-- **Authentication**: none, alb-oidc, or jenkins-oidc
+- **Authentication**: Cognito OIDC or application-native OIDC
+- **Database**: Automatic RDS provisioning for database-required applications
 
 ### S3 Website Deployment
 - **Bucket Name**: S3 bucket for hosting
@@ -112,11 +119,14 @@ Environment:
   3. prod
 Choose [dev]: 1
 
-Deployment Type:
-  1. jenkins (default)
-  2. s3-website (Coming Soon)
-  3. s3-website-mailer (Coming Soon)
-Choose [jenkins]: 1
+Application:
+  1. jenkins
+  2. gitlab
+  3. metabase
+  4. grafana
+  5. mattermost
+  ... (15+ total)
+Choose: 1
 
 Domain (e.g., example.com) []: mycompany.com
 Subdomain (e.g., ci, app) []: ci
@@ -128,9 +138,9 @@ Runtime:
 Choose [FARGATE]: 1
 
 Topology:
-  1. JENKINS_SERVICE (default)
-  2. JENKINS_SINGLE_NODE
-Choose [JENKINS_SERVICE]: 1
+  1. APPLICATION_SERVICE (default)
+  2. S3_WEBSITE
+Choose [APPLICATION_SERVICE]: 1
 
 CPU (units) [1024]: 2048
 Memory (MB) [2048]: 4096
@@ -183,7 +193,7 @@ Proceed with deployment? [Y/n]: y
 ✅ Jenkins deployment created successfully!
    - Infrastructure: VPC, ALB, EFS
    - Runtime: FARGATE
-   - Topology: JENKINS_SERVICE
+   - Topology: APPLICATION_SERVICE
    - Domain: mycompany.com
    - SSL: Enabled
 
@@ -200,7 +210,8 @@ The interactive deployer builds a CDK context map with all your configuration:
   "env": "dev",
   "tier": "public",
   "runtime": "FARGATE",
-  "topology": "JENKINS_SERVICE",
+  "topology": "APPLICATION_SERVICE",
+  "applicationId": "jenkins",
   "securityProfile": "DEV",
   "domain": "mycompany.com",
   "subdomain": "ci",

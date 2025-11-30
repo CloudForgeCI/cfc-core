@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,7 +51,7 @@ class KeyManagementRulesTest {
 
         // When: Installing key management rules
         // Then: Should not throw (advisory for DEV)
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -66,7 +66,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing key management rules
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
@@ -91,7 +91,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing key management rules
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
 
     }
 
@@ -114,19 +114,8 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing key management rules
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
 
-    }
-
-    @Test
-    void testKeyManagementRulesCannotBeInstantiated() {
-        // The KeyManagementRules class should not be instantiable (utility class)
-        try {
-            var constructor = KeyManagementRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("KeyManagementRules should have a private constructor");
-        }
     }
 
     @Test
@@ -141,7 +130,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing key management rules
-        KeyManagementRules.install(ctx);
+        new KeyManagementRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -167,7 +156,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should use customer-managed keys
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -189,7 +178,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enable automatic key rotation
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -212,7 +201,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enforce strict key policies
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -235,7 +224,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enable automatic secret rotation
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -258,7 +247,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure multi-region keys
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -280,7 +269,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should integrate with CloudHSM
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -302,7 +291,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should use key aliases
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -324,7 +313,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure deletion window
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -346,7 +335,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should use envelope encryption
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -369,7 +358,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enable key usage auditing
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -391,7 +380,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should enforce grant constraints
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -407,7 +396,7 @@ class KeyManagementRulesTest {
                     profile, iamProfile, cfc);
 
             // When/Then: Should not throw for any security profile
-            assertDoesNotThrow(() -> KeyManagementRules.install(ctx),
+            assertDoesNotThrow(() -> new KeyManagementRules().install(ctx),
                 "KeyManagementRules should not throw for security profile: " + profile);
         }
     }
@@ -424,8 +413,8 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing rules multiple times
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
 
         // Then: Should be idempotent (no errors on repeated calls)
     }
@@ -450,7 +439,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should support imported key material
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -473,7 +462,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should encrypt SSM parameters
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     @Test
@@ -496,7 +485,7 @@ class KeyManagementRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should tag KMS keys
-        assertDoesNotThrow(() -> KeyManagementRules.install(ctx));
+        assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
     }
 
     // ==================== EXPANDED PARAMETERIZED TRUTH TABLE TESTS ====================
@@ -537,7 +526,7 @@ class KeyManagementRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
-        KeyManagementRules.install(builder.getSystemContext());
+        new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // PRODUCTION requires BOTH kmsRotation AND customerManagedKeys
@@ -597,7 +586,7 @@ class KeyManagementRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
-        KeyManagementRules.install(builder.getSystemContext());
+        new KeyManagementRules().install(builder.getSystemContext());
 
         // NOTE: Certificate validation only runs when a certificate exists (ctx.cert.get().isPresent()).
         // Since TestInfrastructureBuilder doesn't create certificates by default, the validation
@@ -647,7 +636,7 @@ class KeyManagementRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
-        KeyManagementRules.install(builder.getSystemContext());
+        new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // PRODUCTION requires BOTH secretsManager AND secretRotation
@@ -734,7 +723,7 @@ class KeyManagementRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
-        KeyManagementRules.install(builder.getSystemContext());
+        new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // PRODUCTION has three independent validation checks:

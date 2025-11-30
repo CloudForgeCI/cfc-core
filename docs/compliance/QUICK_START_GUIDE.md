@@ -63,10 +63,11 @@ cdk deploy --require-approval never
 
 ```json
 {
-  "stackName": "my-jenkins-stack",
+  "stackName": "my-application-stack",
   "context": {
+    "applicationId": "jenkins",
     "runtime": "FARGATE",
-    "topology": "JENKINS_SERVICE",
+    "topology": "APPLICATION_SERVICE",
     "securityProfile": "PRODUCTION",
     "domain": "example.com",
     "subdomain": "jenkins",
@@ -85,7 +86,10 @@ cdk deploy --require-approval never
     "kmsKeyRotationEnabled": true,
     "securityHubEnabled": true,
     "inspectorEnabled": true,
-    "macieEnabled": true
+    "macieEnabled": true,
+
+    "enableS3VersioningRemediation": false,
+    "enableCloudTrailBucketAccessRemediation": false
   }
 }
 ```
@@ -220,12 +224,76 @@ cdk deploy --require-approval never
 
 ---
 
+## Configuration Parameter Reference
+
+### Application Parameters
+
+| Parameter | Type | Values | Description |
+|-----------|------|--------|-------------|
+| `applicationId` | string | jenkins, gitlab, metabase, grafana, mattermost, harbor, nexus, gitea, drone, superset, vault, prometheus, redis, postgresql | **Required**. Application to deploy |
+| `applicationName` | string | Any | Display name for application (auto-set from applicationId) |
+| `provisionDatabase` | boolean | true, false | **Optional apps only** (Metabase, Grafana). Use RDS instead of embedded DB. Default: false |
+
+### Infrastructure Parameters
+
+| Parameter | Type | Values | Description |
+|-----------|------|--------|-------------|
+| `runtime` | string | FARGATE, EC2 | Container runtime. Default: FARGATE |
+| `topology` | string | APPLICATION_SERVICE, S3_WEBSITE | Deployment topology. Default: APPLICATION_SERVICE |
+| `securityProfile` | string | DEV, STAGING, PRODUCTION | Security configuration level |
+
+### Database Parameters (RDS)
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `dbInstanceClass` | string | Varies by app | RDS instance type (e.g., db.t3.small) |
+| `dbAllocatedStorage` | number | 20-50GB | Storage size in GB |
+| `dbBackupRetentionDays` | number | 7-30 days | Backup retention period |
+| `dbName` | string | App-specific | Database name |
+| `dbEngineVersion` | string | 13-15 | PostgreSQL version |
+
+### Compliance & Remediation Parameters
+
+| Parameter | Type | Values | Description |
+|-----------|------|--------|-------------|
+| `complianceFrameworks` | string | PCI-DSS, HIPAA, SOC2, GDPR, ISO27001 | Comma-separated list |
+| `complianceMode` | string | enforce, advisory | enforcement or warnings only |
+| `auditManagerEnabled` | boolean | true, false | Enable AWS Audit Manager |
+| `awsConfigEnabled` | boolean | true, false | Enable AWS Config monitoring |
+| `createConfigInfrastructure` | boolean | true, false | Create Config Recorder/Delivery Channel |
+| `enableS3VersioningRemediation` | boolean | true, false | Auto-enable S3 versioning |
+| `enableCloudTrailBucketAccessRemediation` | boolean | true, false | Auto-enable CloudTrail logging |
+| `enableRdsDeletionProtectionRemediation` | boolean | true, false | Auto-enable RDS deletion protection |
+| `enableRdsAutoMinorVersionUpgradeRemediation` | boolean | true, false | Auto-enable RDS security patches |
+
+### Available Applications
+
+| Application | Category | Database Requirement | OIDC Support |
+|-------------|----------|---------------------|--------------|
+| **jenkins** | CI/CD | NONE | Yes |
+| **gitlab** | CI/CD | REQUIRED (PostgreSQL) | Yes |
+| **drone** | CI/CD | NONE | Yes |
+| **metabase** | Analytics | OPTIONAL (H2 or PostgreSQL) | Yes |
+| **superset** | Analytics | REQUIRED (PostgreSQL) | Yes |
+| **grafana** | Monitoring | OPTIONAL (SQLite or PostgreSQL) | Yes |
+| **mattermost** | Collaboration | REQUIRED (PostgreSQL) | Yes |
+| **harbor** | Container Registry | REQUIRED (PostgreSQL) | Yes |
+| **nexus** | Artifact Registry | NONE | Yes |
+| **gitea** | VCS | NONE | Yes |
+| **vault** | Secrets | NONE | No |
+| **prometheus** | Monitoring | NONE | No |
+| **redis** | Database | NONE | No |
+| **postgresql** | Database | NONE | No |
+
+---
+
 ## Essential Compliance Settings
 
 ### Minimum Configuration (All Frameworks)
 
 ```json
 {
+  "applicationId": "jenkins",
   "auditManagerEnabled": true,
   "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR",
   "enableEncryption": true,
@@ -242,6 +310,9 @@ cdk deploy --require-approval never
 
 ```json
 {
+  "applicationId": "gitlab",
+  "runtime": "FARGATE",
+  "topology": "APPLICATION_SERVICE",
   "securityProfile": "PRODUCTION",
   "auditManagerEnabled": true,
   "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR",
@@ -265,7 +336,12 @@ cdk deploy --require-approval never
   "inspectorContinuousScanning": true,
 
   "macieEnabled": true,
-  "macieAutomatedDiscovery": true
+  "macieAutomatedDiscovery": true,
+
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailBucketAccessRemediation": true,
+  "enableRdsDeletionProtectionRemediation": true,
+  "enableRdsAutoMinorVersionUpgradeRemediation": true
 }
 ```
 
@@ -277,6 +353,9 @@ cdk deploy --require-approval never
 
 ```json
 {
+  "applicationId": "mattermost",
+  "runtime": "EC2",
+  "topology": "APPLICATION_SERVICE",
   "securityProfile": "PRODUCTION",
   "auditManagerEnabled": true,
   "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR",
@@ -324,7 +403,12 @@ cdk deploy --require-approval never
   "gdprLegalBasisDocumented": true,
   "gdprDataSubjectRequestProcedures": true,
   "gdprDpiaCompleted": true,
-  "gdprInternationalTransferSafeguards": true
+  "gdprInternationalTransferSafeguards": true,
+
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailBucketAccessRemediation": true,
+  "enableRdsDeletionProtectionRemediation": true,
+  "enableRdsAutoMinorVersionUpgradeRemediation": true
 }
 ```
 

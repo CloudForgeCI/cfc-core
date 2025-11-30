@@ -1,10 +1,10 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.core.annotation.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -86,6 +86,9 @@ public class Ec2Factory extends BaseFactory {
   @SystemContext("security")
   private SecurityProfile security;
 
+  @SystemContext("applicationSpec")
+  private com.cloudforge.core.interfaces.ApplicationSpec applicationSpec;
+
   @DeploymentContext("minInstanceCapacity")
   private Integer minInstanceCapacity;
 
@@ -131,13 +134,34 @@ public class Ec2Factory extends BaseFactory {
    * @see DeploymentContext#minInstanceCapacity()
    * @see DeploymentContext#maxInstanceCapacity()
    */
+  @SystemContext("ec2InstanceRole")
+  private Role ec2InstanceRole;
+
+  @SystemContext("instanceSg")
+  private SecurityGroup instanceSg;
+
+  @SystemContext("vpc")
+  private software.amazon.awscdk.services.ec2.Vpc vpc;
+
+  @SystemContext("albSg")
+  private SecurityGroup albSg;
+
+  @SystemContext("efs")
+  private software.amazon.awscdk.services.efs.FileSystem efs;
+
+  @SystemContext("ap")
+  private software.amazon.awscdk.services.efs.AccessPoint ap;
+
   private void createEc2Infrastructure() {
     // Use existing IAM role created by IAM configuration (has CloudWatch Logs permissions)
-    Role ec2Role = ctx.ec2InstanceRole.get().orElseThrow(() ->
-        new IllegalStateException("EC2 instance role not found - IAM configuration should have created it"));
+    if (ec2InstanceRole == null) {
+      throw new IllegalStateException("EC2 instance role not found - IAM configuration should have created it");
+    }
 
     // Use existing instance security group (created by JenkinsFactory)
-    SecurityGroup instanceSg = ctx.instanceSg.get().orElseThrow();
+    if (instanceSg == null) {
+      throw new IllegalStateException("Instance security group not found");
+    }
 
     // Create CloudWatch log group
     LogGroup logs = createLogGroup();
@@ -147,7 +171,7 @@ public class Ec2Factory extends BaseFactory {
     UserData userData = createUserData();
 
     // Create launch template
-    LaunchTemplate launchTemplate = createLaunchTemplate(ec2Role, instanceSg, userData);
+    LaunchTemplate launchTemplate = createLaunchTemplate(ec2InstanceRole, instanceSg, userData);
 
     // Create Auto Scaling Group
     this.asg = createAutoScalingGroup(launchTemplate);
@@ -161,137 +185,71 @@ public class Ec2Factory extends BaseFactory {
   // This ensures proper CloudWatch Logs permissions are included
 
   private SecurityGroup createInstanceSecurityGroup() {
-    SecurityGroup instanceSg = SecurityGroup.Builder.create(this, "JenkinsEc2Sg")
-            .vpc(ctx.vpc.get().orElseThrow())
-            .description("Jenkins EC2 Instance Security Group")
+    int appPort = applicationSpec != null ? applicationSpec.applicationPort() : 8080;
+    String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+
+    if (vpc == null) {
+      throw new IllegalStateException("VPC not available");
+    }
+    if (albSg == null) {
+      throw new IllegalStateException("ALB security group not available");
+    }
+
+    SecurityGroup instanceSg = SecurityGroup.Builder.create(this, appId + "Ec2Sg")
+            .vpc(vpc)
+            .description(appId + " EC2 Instance Security Group")
             .allowAllOutbound(true)
             .build();
 
     // Add ingress rule from ALB security group
-    instanceSg.addIngressRule(ctx.albSg.get().orElseThrow(), Port.tcp(8080), "ALB_to_Jenkins");
+    instanceSg.addIngressRule(albSg, Port.tcp(appPort), "ALB_to_" + appId);
 
     return instanceSg;
   }
 
   private LogGroup createLogGroup() {
-    return LogGroup.Builder.create(this, "JenkinsEc2Logs")
+    String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+    return LogGroup.Builder.create(this, appId + "Ec2Logs")
             .retention(RetentionDays.ONE_WEEK)
             .build();
   }
 
   private UserData createUserData() {
     UserData ud = UserData.forLinux();
+
+    // Add bash best practices
     ud.addCommands(
-            "#!/bin/bash",
-            "set -euxo pipefail",
-            "command -v dnf >/dev/null && dnf -y update || yum -y update",
-            "command -v dnf >/dev/null && dnf -y install java-17-amazon-corretto-headless || yum -y install java-17-amazon-corretto-headless",
-            "echo 'userdata start OK' > /var/log/jenkins-userdata.log",
-            "",
-            "# Install Jenkins",
-            "curl -fsSL https://pkg.jenkins.io/redhat-stable/jenkins.repo -o /etc/yum.repos.d/jenkins.repo",
-            "rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key",
-            "command -v dnf >/dev/null && dnf -y install jenkins || yum -y install jenkins",
-            "",
-            "# Install CloudWatch Agent",
-            "echo 'Installing CloudWatch Agent...' >> /var/log/jenkins-userdata.log",
-            "wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm",
-            "rpm -U ./amazon-cloudwatch-agent.rpm",
-            "rm -f ./amazon-cloudwatch-agent.rpm",
-            "",
-            "# Configure CloudWatch Agent",
-            "echo 'Configuring CloudWatch Agent...' >> /var/log/jenkins-userdata.log",
-            "mkdir -p /opt/aws/amazon-cloudwatch-agent/etc",
-            String.format("cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'%n" +
-                    "{%n" +
-                    "  \"agent\": {%n" +
-                    "    \"metrics_collection_interval\": 60,%n" +
-                    "    \"run_as_user\": \"root\"%n" +
-                    "  },%n" +
-                    "  \"logs\": {%n" +
-                    "    \"logs_collected\": {%n" +
-                    "      \"files\": {%n" +
-                    "        \"collect_list\": [%n" +
-                    "          {%n" +
-                    "            \"file_path\": \"/var/log/jenkins/jenkins.log\",%n" +
-                    "            \"log_group_name\": \"/aws/jenkins/%s/%s/%s\",%n" +
-                    "            \"log_stream_name\": \"{instance_id}/jenkins.log\",%n" +
-                    "            \"timezone\": \"UTC\"%n" +
-                    "          },%n" +
-                    "          {%n" +
-                    "            \"file_path\": \"/var/log/jenkins-userdata.log\",%n" +
-                    "            \"log_group_name\": \"/aws/jenkins/%s/%s/%s\",%n" +
-                    "            \"log_stream_name\": \"{instance_id}/userdata.log\",%n" +
-                    "            \"timezone\": \"UTC\"%n" +
-                    "          },%n" +
-                    "          {%n" +
-                    "            \"file_path\": \"/var/log/messages\",%n" +
-                    "            \"log_group_name\": \"/aws/jenkins/%s/%s/%s\",%n" +
-                    "            \"log_stream_name\": \"{instance_id}/messages\",%n" +
-                    "            \"timezone\": \"UTC\"%n" +
-                    "          }%n" +
-                    "        ]%n" +
-                    "      }%n" +
-                    "    }%n" +
-                    "  }%n" +
-                    "}%n" +
-                    "EOF",
-                    stackName, runtime.name().toLowerCase(), security.name().toLowerCase(),
-                    stackName, runtime.name().toLowerCase(), security.name().toLowerCase(),
-                    stackName, runtime.name().toLowerCase(), security.name().toLowerCase()),
-            "",
-            "# Start CloudWatch Agent",
-            "echo 'Starting CloudWatch Agent...' >> /var/log/jenkins-userdata.log",
-            "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s",
-            "",
-            "# Configure Jenkins",
-            "systemctl enable jenkins",
-            "systemctl start jenkins",
-            "echo 'jenkins installed and started' >> /var/log/jenkins-userdata.log",
-            "",
-            "# Wait for Jenkins to generate admin password and log it",
-            "echo 'Waiting for Jenkins to generate admin password...' >> /var/log/jenkins-userdata.log",
-            "sleep 60",
-            "if [ -f /var/lib/jenkins/secrets/initialAdminPassword ]; then",
-            "  echo 'Jenkins Admin Password:' >> /var/log/jenkins-userdata.log",
-            "  cat /var/lib/jenkins/secrets/initialAdminPassword >> /var/log/jenkins-userdata.log",
-            "  echo 'Jenkins Admin Password logged to CloudWatch' >> /var/log/jenkins-userdata.log",
-            "else",
-            "  echo 'Jenkins admin password file not found yet' >> /var/log/jenkins-userdata.log",
-            "fi"
+        "#!/bin/bash",
+        "set -euxo pipefail",
+        "echo 'UserData script started' > /var/log/userdata.log"
     );
 
-    // Add EFS mounting if EFS is available
-    if (ctx.efs.get().isPresent() && ctx.ap.get().isPresent()) {
-      ud.addCommands(
-              "command -v dnf >/dev/null && dnf -y install amazon-efs-utils || yum -y install amazon-efs-utils",
-              "mkdir -p /var/lib/jenkins",
-              String.format("echo \"%s:/ /var/lib/jenkins efs _netdev,tls,iam,accesspoint = %s 0 0\" >> /etc/fstab",
-                      ctx.efs.get().orElseThrow().getFileSystemId(), ctx.ap.get().orElseThrow().getAccessPointId()),
-              "mount -a || (journalctl -xe; exit 1)",
-              "chown -R 1000:1000 /var/lib/jenkins || true",
-              "echo 'efs mounted' >> /var/log/jenkins-userdata.log"
-      );
-    } else {
-      // Use EBS for storage
-      String dataDev = "/dev/xvdh";
-      ud.addCommands(
-              "DATA_DEV = \"" + dataDev + "\"",
-              "if [ ! -b \"$DATA_DEV\" ]; then DATA_DEV = $(readlink -f /dev/nvme1n1 || true); fi",
-              "mkfs -t xfs -f \"$DATA_DEV\" || true",
-              "mkdir -p /var/lib/jenkins",
-              "echo \"$DATA_DEV /var/lib/jenkins xfs defaults,noatime 0 2\" >> /etc/fstab",
-              "mount -a",
-              "chown -R 1000:1000 /var/lib/jenkins || true",
-              "echo 'ebs mounted' >> /var/log/jenkins-userdata.log"
-      );
-    }
+    // Create Ec2Context for application configuration
+    boolean hasEfs = efs != null && ap != null;
+    String efsId = hasEfs ? efs.getFileSystemId() : null;
+    String accessPointId = hasEfs ? ap.getAccessPointId() : null;
+
+    com.cloudforgeci.api.core.Ec2ContextImpl ec2Context = new com.cloudforgeci.api.core.Ec2ContextImpl(
+        stackName,
+        runtime.name().toLowerCase(),
+        security.name().toLowerCase(),
+        hasEfs,
+        efsId,
+        accessPointId
+    );
+
+    // Create UserDataBuilder and delegate to ApplicationSpec
+    com.cloudforgeci.api.core.UserDataBuilderImpl builder =
+        new com.cloudforgeci.api.core.UserDataBuilderImpl(ud);
+
+    applicationSpec.configureUserData(builder, ec2Context);
 
     return ud;
   }
 
   private LaunchTemplate createLaunchTemplate(Role ec2Role, SecurityGroup instanceSg, UserData userData) {
-    LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, "JenkinsLt")
+    String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+    LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, appId + "Lt")
             .machineImage(MachineImage.latestAmazonLinux2023())
             .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
             .securityGroup(instanceSg)
@@ -322,10 +280,11 @@ public class Ec2Factory extends BaseFactory {
     ));
 
     // Add data volume if not using EFS
-    if (ctx.efs.get().isEmpty()) {
+    if (efs == null) {
+      String ebsDeviceName = applicationSpec != null ? applicationSpec.ebsDeviceName() : "/dev/xvdh";
       ltBuilder.blockDevices(List.of(
               BlockDevice.builder()
-                      .deviceName("/dev/xvdh")
+                      .deviceName(ebsDeviceName)
                       .volume(BlockDeviceVolume.ebs(100, EbsDeviceOptions.builder()
                               .encrypted(true)
                               .volumeType(EbsDeviceVolumeType.STANDARD)
@@ -348,8 +307,13 @@ public class Ec2Factory extends BaseFactory {
     SubnetType subnetType = "public-no-nat".equals(networkMode) ?
             SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
 
-    return AutoScalingGroup.Builder.create(this, "JenkinsAsg")
-            .vpc(ctx.vpc.get().orElseThrow())
+    if (vpc == null) {
+      throw new IllegalStateException("VPC not available");
+    }
+
+    String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+    return AutoScalingGroup.Builder.create(this, appId + "Asg")
+            .vpc(vpc)
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
             .minCapacity(minCapacity)
             .desiredCapacity(desiredCapacity)

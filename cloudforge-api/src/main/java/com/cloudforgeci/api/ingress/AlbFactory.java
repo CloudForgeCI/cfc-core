@@ -1,9 +1,9 @@
 package com.cloudforgeci.api.ingress;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.core.annotation.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.*;
 import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
@@ -57,6 +57,12 @@ public class AlbFactory extends BaseFactory {
     @DeploymentContext("stackName")
     private String stackName;
 
+    @SystemContext("securityProfileConfig")
+    private com.cloudforgeci.api.interfaces.SecurityProfileConfiguration securityProfileConfig;
+
+    @SystemContext("applicationSpec")
+    private com.cloudforge.core.interfaces.ApplicationSpec applicationSpec;
+
     public AlbFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -68,8 +74,7 @@ public class AlbFactory extends BaseFactory {
         }
 
         try {
-            // Get compliance settings from security profile
-            var securityProfileConfig = ctx.securityProfileConfig.get().orElse(null);
+            // Get compliance settings from security profile (injected via annotation)
             if (securityProfileConfig != null && albAccessLogging == null) {
                 // Use security profile setting if not explicitly configured in deployment context
                 albAccessLogging = securityProfileConfig.isAlbAccessLoggingEnabled();
@@ -135,9 +140,8 @@ public class AlbFactory extends BaseFactory {
 
             LOG.info("ALB logs bucket name (stack-specific): " + bucketName);
 
-            // Determine removal policy based on security profile
-            var securityProfile = ctx.securityProfileConfig.get().orElse(null);
-            boolean isProduction = (securityProfile != null && securityProfile.getClass().getSimpleName().contains("Production"));
+            // Determine removal policy based on security profile (injected via annotation)
+            boolean isProduction = (securityProfileConfig != null && securityProfileConfig.getClass().getSimpleName().contains("Production"));
             RemovalPolicy removalPolicy = isProduction ?
                     RemovalPolicy.RETAIN :
                     RemovalPolicy.DESTROY;
@@ -150,10 +154,14 @@ public class AlbFactory extends BaseFactory {
                 effectiveRegion
             );
 
-            var alb = ApplicationLoadBalancer.Builder.create(this, "JenkinsAlb")
+            String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+            String albId = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + "Alb";
+
+            ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, albId)
                     .vpc(vpc)
                     .securityGroup(albSg)
                     .internetFacing(true)
+                    .deletionProtection(shouldEnableDeletionProtection())
                     .build();
 
             // Enable security compliance settings
@@ -180,16 +188,41 @@ public class AlbFactory extends BaseFactory {
     }
 
     private ApplicationLoadBalancer createAlbWithoutLogging(SecurityGroup albSg) {
-        var alb = ApplicationLoadBalancer.Builder.create(this, "JenkinsAlb")
+        String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+        String albId = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + "Alb";
+
+        ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, albId)
                 .vpc(vpc)
                 .securityGroup(albSg)
                 .internetFacing(true)
+                .deletionProtection(shouldEnableDeletionProtection())
                 .build();
 
         // Enable security compliance settings
         configureAlbSecurity(alb);
 
         return alb;
+    }
+
+    /**
+     * Determine if deletion protection should be enabled based on security profile.
+     * Production security profiles enable deletion protection by default.
+     */
+    private boolean shouldEnableDeletionProtection() {
+        if (securityProfileConfig == null) {
+            return false; // Default to disabled if no security profile
+        }
+
+        // Check if this is a production-grade security profile
+        boolean isProduction = securityProfileConfig.getClass().getSimpleName().contains("Production");
+
+        if (isProduction) {
+            LOG.info("ALB deletion protection: ENABLED (Production security profile)");
+            return true;
+        } else {
+            LOG.info("ALB deletion protection: DISABLED (Dev/Staging security profile)");
+            return false;
+        }
     }
 
     /**
@@ -339,13 +372,20 @@ public class AlbFactory extends BaseFactory {
         int healthy = healthyThreshold != null ? healthyThreshold : 2;
         int unhealthy = unhealthyThreshold != null ? unhealthyThreshold : 3;
 
-        return ApplicationTargetGroup.Builder.create(this, "JenkinsTg")
+        // Get application-specific health check path and port
+        String healthCheckPath = applicationSpec != null ? applicationSpec.healthCheckPath() : "/";
+        int applicationPort = applicationSpec != null ? applicationSpec.applicationPort() : 8080;
+
+        String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+        String tgId = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + "Tg";
+
+        return ApplicationTargetGroup.Builder.create(this, tgId)
                 .vpc(vpc)
-                .port(8080)
+                .port(applicationPort)
                 .protocol(ApplicationProtocol.HTTP)
                 .targetType(TargetType.INSTANCE)
                 .healthCheck(HealthCheck.builder()
-                        .path("/login")
+                        .path(healthCheckPath)
                         .healthyHttpCodes("200-299")
                         .interval(Duration.seconds(interval))
                         .timeout(Duration.seconds(timeout))
@@ -363,25 +403,31 @@ public class AlbFactory extends BaseFactory {
     }
 
     private ApplicationListener createFargateHttpListener(ApplicationLoadBalancer alb, boolean sslEnabled) {
+        String appId = applicationSpec != null ? applicationSpec.applicationId() : "Application";
+        String startupMessage = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + " is starting up...";
+
         // Create HTTP listener with a temporary default action
         // This will be updated by FargateRuntimeConfiguration when the Fargate service is ready
         return alb.addListener("Http", BaseApplicationListenerProps.builder()
                 .port(80)
                 .defaultAction(ListenerAction.fixedResponse(200, FixedResponseOptions.builder()
                         .contentType("text/plain")
-                        .messageBody("Jenkins is starting up...")
+                        .messageBody(startupMessage)
                         .build()))
                 .build());
     }
 
     private ApplicationListener createHttpListenerWithoutTargetGroup(ApplicationLoadBalancer alb, boolean sslEnabled) {
+        String appId = applicationSpec != null ? applicationSpec.applicationId() : "Application";
+        String startupMessage = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + " is starting up...";
+
         // HTTP listener configuration is now handled by SecurityProfile wiring
         // SSL redirect logic is centralized in SecurityProfile.wire() method
         return alb.addListener("Http", BaseApplicationListenerProps.builder()
                 .port(80)
                 .defaultAction(ListenerAction.fixedResponse(200, FixedResponseOptions.builder()
                         .contentType("text/plain")
-                        .messageBody("Jenkins is starting up...")
+                        .messageBody(startupMessage)
                         .build()))
                 .build());
     }

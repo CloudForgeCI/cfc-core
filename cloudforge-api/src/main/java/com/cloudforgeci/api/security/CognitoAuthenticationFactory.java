@@ -1,9 +1,10 @@
 package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
 import software.amazon.awscdk.customresources.AwsSdkCall;
@@ -120,6 +121,18 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @DeploymentContext("oidcClientSecretName")
     private String oidcClientSecretName;
 
+    @com.cloudforge.core.annotation.SystemContext("securityProfileConfig")
+    private com.cloudforgeci.api.interfaces.SecurityProfileConfiguration securityProfileConfig;
+
+    @com.cloudforge.core.annotation.SystemContext("cognitoUserPool")
+    private UserPool cognitoUserPool;
+
+    @com.cloudforge.core.annotation.SystemContext("cognitoUserPoolClient")
+    private UserPoolClient cognitoUserPoolClient;
+
+    @com.cloudforge.core.annotation.SystemContext("cognitoUserPoolDomain")
+    private UserPoolDomain cognitoUserPoolDomain;
+
     public CognitoAuthenticationFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -127,7 +140,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @Override
     public void create() {
         // Only configure Cognito if authMode is OIDC-based
-        if (!"alb-oidc".equals(authMode) && !"jenkins-oidc".equals(authMode)) {
+        if (!"alb-oidc".equals(authMode) && !"jenkins-oidc".equals(authMode) && !"application-oidc".equals(authMode)) {
             LOG.info("Cognito authentication not applicable (authMode = " + authMode + ")");
             return;
         }
@@ -191,17 +204,24 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             LOG.warning("Cognito domain prefix sanitized: '" + cognitoDomainPrefix + "' -> '" + sanitizedDomainPrefix + "'");
         }
 
-        // Use sanitized prefix
-        cognitoDomainPrefix = sanitizedDomainPrefix;
+        // Make domain prefix stack-scoped to avoid conflicts between multiple stacks
+        String stackScopedPrefix = sanitizedDomainPrefix + "-" + stackName.toLowerCase()
+                .replaceAll("[^a-z0-9-]", "-")
+                .replaceAll("-+", "-")
+                .replaceAll("^-|-$", "");
+
+        // Use stack-scoped prefix
+        cognitoDomainPrefix = stackScopedPrefix;
+
+        LOG.info("Cognito domain prefix scoped to stack: '" + sanitizedDomainPrefix + "' -> '" + stackScopedPrefix + "'");
 
         // Set default user pool name
         String userPoolName = (cognitoUserPoolName != null && !cognitoUserPoolName.isEmpty())
                 ? cognitoUserPoolName
                 : stackName + "-users";
 
-        // Determine removal policy based on security profile
-        var securityProfile = ctx.securityProfileConfig.get().orElse(null);
-        boolean isProduction = (securityProfile != null && securityProfile.getClass().getSimpleName().contains("Production"));
+        // Determine removal policy based on security profile (injected via annotation)
+        boolean isProduction = (securityProfileConfig != null && securityProfileConfig.getClass().getSimpleName().contains("Production"));
         RemovalPolicy userPoolRemovalPolicy = isProduction ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
 
         LOG.info("Creating/Importing Cognito User Pool: " + userPoolName);
@@ -465,16 +485,23 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         LOG.info("App Client created: " + appClient.getUserPoolClientId());
 
-        // Note: Cognito manages its own client secret internally
-        // We don't need to create a Secrets Manager secret for Cognito authentication
-        // The client secret is only needed for external OIDC providers (via IAM Identity Center)
-        LOG.info("Cognito User Pool will manage client secret internally");
-        LOG.info("Client secret retrieval command:");
-        LOG.info("  aws cognito-idp describe-user-pool-client --user-pool-id [REDACTED] --client-id [REDACTED]");
+        // Note: For ALB-level OIDC (alb-oidc), Cognito manages client secret internally
+        // For application-level OIDC (application-oidc), we need to store secret in Secrets Manager
+        // so the application container can retrieve it at runtime
+        String secretName = null;
+
+        // Check if we need to store the client secret for application-level OIDC
+        if ("application-oidc".equals(authMode)) {
+            LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
+            secretName = storeCognitoClientSecret(userPool, appClient);
+        } else {
+            LOG.info("ALB-level OIDC - Cognito will manage client secret internally");
+            LOG.info("Client secret retrieval command:");
+            LOG.info("  aws cognito-idp describe-user-pool-client --user-pool-id [REDACTED] --client-id [REDACTED]");
+        }
 
         // Export OIDC endpoints to SystemContext for OidcAuthenticationFactory to use
-        // Pass null for secretName since Cognito doesn't use Secrets Manager
-        exportOidcEndpoints(userPool.getUserPoolId(), appClient.getUserPoolClientId(), cognitoDomainPrefix, null);
+        exportOidcEndpoints(userPool.getUserPoolId(), appClient.getUserPoolClientId(), cognitoDomainPrefix, secretName);
 
         // Export CDK objects for native ALB Cognito authentication
         ctx.cognitoUserPool.set(userPool);
@@ -785,7 +812,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                         )
                         .build());
 
-                    LOG.info("Native Cognito authentication configured successfully");
+                    LOG.info("✅ Native Cognito authentication configured successfully");
                     LOG.info("  User Pool ID: " + ctx.cognitoUserPoolId.get().orElse("N/A"));
                     LOG.info("  Target Group: " + targetGroup.getTargetGroupName());
                     LOG.info("  Priority: 1 (authenticate then forward to target group)");
@@ -793,8 +820,8 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     LOG.info("  Scopes: openid, email, profile");
                     LOG.info("  Benefits: No Secrets Manager required, simplified configuration");
                 } else {
-                    LOG.warning("Cognito CDK objects not available in SystemContext");
-                    LOG.warning("ALB authentication cannot be configured - check Cognito setup");
+                    LOG.severe("❌ Cognito CDK objects not available in SystemContext");
+                    LOG.severe("ALB authentication cannot be configured - check Cognito setup");
                 }
             });
         });
@@ -811,8 +838,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * @param userPool The UserPool to track
      */
     private void storeUserPoolArnInSSM(UserPool userPool) {
-        // Check if we have access to security profile via context
-        var securityProfileConfig = ctx.securityProfileConfig.get().orElse(null);
+        // Check if we have access to security profile (injected via annotation)
         if (securityProfileConfig == null || securityProfileConfig.getSecurityProfile() != SecurityProfile.PRODUCTION) {
             LOG.fine("Non-production mode: Skipping SSM tracking for User Pool");
             return;
@@ -854,5 +880,110 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         ssmWriter.getNode().addDependency(userPool);
 
         LOG.info("User Pool ARN will be tracked in SSM: " + ssmParameterName);
+    }
+
+    /**
+     * Store Cognito User Pool Client Secret in AWS Secrets Manager.
+     *
+     * <p>This is required for application-level OIDC authentication where the application
+     * needs to retrieve the client secret at runtime. For ALB-level OIDC, Cognito manages
+     * the secret internally and this method is not called.</p>
+     *
+     * <p>The client secret is retrieved from the Cognito User Pool Client using a Custom Resource
+     * and stored in Secrets Manager for the application container to access.</p>
+     *
+     * <p>IMPORTANT: We use putSecretValue for BOTH create and update operations.
+     * This works because putSecretValue automatically creates the secret if it doesn't exist
+     * (when using AWS SDK v3). This avoids the "ResourceExistsException" error entirely.</p>
+     *
+     * @param userPool The Cognito User Pool
+     * @param appClient The Cognito User Pool Client
+     * @return The Secrets Manager secret name
+     */
+    private String storeCognitoClientSecret(UserPool userPool, UserPoolClient appClient) {
+        String secretName = stackName + "/" + "jenkins" + "/oidc/client-secret";
+
+        LOG.info("Storing Cognito client secret in Secrets Manager: " + secretName);
+
+        // Use AWS SDK Custom Resource to retrieve the client secret from Cognito
+        // AND write it to Secrets Manager in a single Custom Resource
+        // The client secret is only available via DescribeUserPoolClient API call
+        AwsSdkCall getSecretCall = AwsSdkCall.builder()
+                .service("CognitoIdentityServiceProvider")
+                .action("describeUserPoolClient")
+                .parameters(java.util.Map.of(
+                        "UserPoolId", userPool.getUserPoolId(),
+                        "ClientId", appClient.getUserPoolClientId()
+                ))
+                .outputPaths(List.of("UserPoolClient.ClientSecret"))
+                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecret-" + stackName))
+                .region(region)
+                .build();
+
+        AwsCustomResource secretManager = AwsCustomResource.Builder.create(this, "CognitoClientSecretManager")
+                .onCreate(getSecretCall)
+                .onUpdate(getSecretCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
+                                .resources(List.of(
+                                    userPool.getUserPoolArn(),
+                                    "arn:aws:secretsmanager:" + region + ":" + Stack.of(this).getAccount() + ":secret:" + secretName + "*"
+                                ))
+                                .build()
+                ))
+                .build();
+
+        secretManager.getNode().addDependency(appClient);
+
+        // Get the client secret value from the Custom Resource
+        String clientSecretValue = secretManager.getResponseField("UserPoolClient.ClientSecret");
+
+        // Write secret using Custom Resource to handle "already exists" gracefully
+        // CDK's Secret construct throws AlreadyExists error, but Custom Resource can ignore it
+        AwsSdkCall putSecretCall = AwsSdkCall.builder()
+                .service("SecretsManager")
+                .action("putSecretValue")
+                .parameters(java.util.Map.of(
+                        "SecretId", secretName,
+                        "SecretString", clientSecretValue
+                ))
+                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecretValue-" + stackName))
+                .region(region)
+                .ignoreErrorCodesMatching("ResourceNotFoundException")  // Create if doesn't exist
+                .build();
+
+        // Create secret on first deployment - ignore if already exists
+        AwsSdkCall createSecretFallback = AwsSdkCall.builder()
+                .service("SecretsManager")
+                .action("createSecret")
+                .parameters(java.util.Map.of(
+                        "Name", secretName,
+                        "Description", "Cognito User Pool Client Secret for application-level OIDC authentication",
+                        "SecretString", clientSecretValue
+                ))
+                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecretValue-" + stackName))
+                .region(region)
+                .ignoreErrorCodesMatching("ResourceExistsException")  // If exists, leave it alone
+                .build();
+
+        AwsCustomResource secretWriter = AwsCustomResource.Builder.create(this, "CognitoClientSecretWriter")
+                .onCreate(createSecretFallback)
+                .onUpdate(putSecretCall)  // Update existing secret value on stack updates
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
+                                .resources(List.of("*"))
+                                .build()
+                ))
+                .build();
+
+        secretWriter.getNode().addDependency(secretManager);
+
+        LOG.info("Cognito client secret will be stored in Secrets Manager: " + secretName);
+
+        // Store the Custom Resource in SystemContext for dependency tracking
+        // This ensures ECS tasks don't start before the secret is created
+        ctx.cognitoClientSecretResourceInternal.set(secretWriter);
+
+        return secretName;
     }
 }

@@ -2,11 +2,11 @@ package com.cloudforgeci.api.test;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.network.VpcFactory;
 import com.cloudforgeci.api.ingress.AlbFactory;
 import com.cloudforgeci.api.storage.EfsFactory;
@@ -160,6 +160,13 @@ public class TestInfrastructureBuilder {
     }
 
     public TestInfrastructureBuilder createEc2() {
+        ensureSystemContextCreated();
+        // Create instance security group first (required for EC2Factory)
+        ctx.createInstanceSecurityGroup(stack, "Jenkins");
+
+        // Create target groups (required by EC2 runtime validation)
+        ctx.createTargetGroups(stack, "Jenkins");
+
         Ec2Factory ec2Factory = new Ec2Factory(stack, "Ec2");
         ec2Factory.create();
         return this;

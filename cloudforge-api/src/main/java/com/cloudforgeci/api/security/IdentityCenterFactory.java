@@ -1,7 +1,9 @@
 package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.interfaces.ApplicationSpec;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.SecretValue;
 import software.amazon.awscdk.services.secretsmanager.Secret;
@@ -40,6 +42,9 @@ public class IdentityCenterFactory extends BaseFactory {
 
     @DeploymentContext("stackName")
     private String stackName;
+
+    @SystemContext("applicationSpec")
+    private ApplicationSpec applicationSpec;
 
     // Check if manual OIDC endpoints are configured (means not using Identity Center)
     @DeploymentContext("oidcIssuer")
@@ -86,12 +91,14 @@ public class IdentityCenterFactory extends BaseFactory {
     private void createClientSecret() {
         LOG.info("Creating OIDC client secret in Secrets Manager");
 
+        String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+
         // Create secret with placeholder value
         // User must update this with actual client secret from Identity Center
-        String secretName = stackName + "/jenkins/oidc/client-secret";
+        String secretName = stackName + "/" + appId + "/oidc/client-secret";
         Secret.Builder.create(this, "OidcClientSecret")
                 .secretName(secretName)
-                .description("OIDC client secret for Jenkins ALB authentication (update with actual value from IAM Identity Center)")
+                .description("OIDC client secret for " + appId + " ALB authentication (update with actual value from IAM Identity Center)")
                 .secretObjectValue(java.util.Map.of(
                         "clientSecret", SecretValue.unsafePlainText("PLACEHOLDER-UPDATE-FROM-IDENTITY-CENTER")
                 ))

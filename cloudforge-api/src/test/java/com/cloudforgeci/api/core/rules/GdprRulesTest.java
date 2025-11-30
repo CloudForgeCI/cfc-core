@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -53,7 +53,7 @@ class GdprRulesTest {
 
         // When: Installing GDPR rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -69,20 +69,9 @@ class GdprRulesTest {
 
         // When: Installing GDPR rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
-    @Test
-    void testGdprRulesCannotBeInstantiated() {
-        try {
-            var constructor = GdprRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("GdprRules should have a private constructor");
-        }
-    }
-
-    @Test
     void testGdprRulesMultipleInstallations() {
         // Given: A PRODUCTION deployment
         App app = new App();
@@ -94,10 +83,10 @@ class GdprRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing GDPR rules multiple times
-        GdprRules.install(ctx);
+        new GdprRules().install(ctx);
 
         // Then: Should be idempotent
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -119,7 +108,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -142,7 +131,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -163,7 +152,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -185,7 +174,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -207,7 +196,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -229,7 +218,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -251,7 +240,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -273,7 +262,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -295,7 +284,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -316,7 +305,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -338,7 +327,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -378,7 +367,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -392,7 +381,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -406,7 +395,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -428,7 +417,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -450,7 +439,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -472,7 +461,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -494,7 +483,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -517,7 +506,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -540,7 +529,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -562,7 +551,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -584,7 +573,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -605,7 +594,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -627,7 +616,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -650,7 +639,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -673,7 +662,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     // ========================================
@@ -736,8 +725,8 @@ class GdprRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         // Should not throw regardless of whether validation runs
         assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
@@ -811,8 +800,8 @@ class GdprRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
@@ -885,8 +874,8 @@ class GdprRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
@@ -970,8 +959,8 @@ class GdprRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
@@ -1067,8 +1056,8 @@ class GdprRulesTest {
         if (hasCert) {
             builder.createMockCertificate();
         }
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
@@ -1146,8 +1135,8 @@ class GdprRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
@@ -1222,8 +1211,8 @@ class GdprRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
@@ -1303,8 +1292,8 @@ class GdprRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
@@ -1376,8 +1365,8 @@ class GdprRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        GdprRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
@@ -1455,7 +1444,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     // ========================================
@@ -1525,7 +1514,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     /**
@@ -1585,7 +1574,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     /**
@@ -1645,7 +1634,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     /**
@@ -1707,7 +1696,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     /**
@@ -1762,7 +1751,7 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     /**
@@ -1864,6 +1853,6 @@ class GdprRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 }

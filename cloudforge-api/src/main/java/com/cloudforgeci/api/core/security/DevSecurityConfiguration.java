@@ -1,7 +1,11 @@
 package com.cloudforgeci.api.core.security;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityConfiguration;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
@@ -42,7 +46,7 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
         rules.add(require("vpc", x -> x.vpc));
 
         // Instance security group is only required for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
 
@@ -56,6 +60,12 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
 
         // Configure observability based on security profile
         configureObservability(c);
+
+        // WAF Configuration - respects deployment context override
+        // WafFactory will only create WAF if config.isWafEnabled() returns true
+        com.cloudforgeci.api.observability.WafFactory wafFactory =
+            new com.cloudforgeci.api.observability.WafFactory(c, "DevWaf");
+        wafFactory.create();
 
         // Development security settings - minimal restrictions
 
@@ -96,7 +106,7 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
 
         // EFS security group - allow NFS from appropriate security group based on runtime
         whenBoth(c.vpc, c.efsSg, (vpc, efsSg) -> {
-            if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.FARGATE) {
+            if (c.runtime == RuntimeType.FARGATE) {
                 // For Fargate, allow NFS from Fargate service security group
                 if (c.fargateServiceSg.get().isPresent()) {
                     efsSg.addIngressRule(
@@ -109,10 +119,13 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
             } else {
                 // For EC2, allow NFS from instance security group
                 if (c.instanceSg.get().isPresent()) {
+                    String appId = (c.applicationSpec != null && c.applicationSpec.get().isPresent())
+                        ? c.applicationSpec.get().orElseThrow().applicationId()
+                        : "app";
                     efsSg.addIngressRule(
                         Peer.securityGroupId(c.instanceSg.get().orElseThrow().getSecurityGroupId()),
                         Port.tcp(2049),
-                        "NFS_from_Jenkins_instances_(DEV)",
+                        "NFS_from_" + appId + "_instances_(DEV)",
                         false
                     );
                 }

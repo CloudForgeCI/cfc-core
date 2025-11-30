@@ -2,12 +2,12 @@ package com.cloudforgeci.api.integration.deployment;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.integration.IntegrationTestBase;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -72,13 +72,13 @@ class RuntimeTopologyIntegrationTest extends IntegrationTestBase {
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
 
         // When: Creating system context for Fargate + Single Node
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
 
         // Then: Verify system context is created
         assertNotNull(ctx);
         assertEquals(RuntimeType.FARGATE, ctx.runtime);
-        assertEquals(TopologyType.JENKINS_SINGLE_NODE, ctx.topology);
+        assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology);
     }
 
     @Test
@@ -123,13 +123,13 @@ class RuntimeTopologyIntegrationTest extends IntegrationTestBase {
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
 
         // When: Creating system context for EC2 + Single Node
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE,
                 RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
 
         // Then: Verify system context is created
         assertNotNull(ctx);
         assertEquals(RuntimeType.EC2, ctx.runtime);
-        assertEquals(TopologyType.JENKINS_SINGLE_NODE, ctx.topology);
+        assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology);
     }
 
     @Test
@@ -378,7 +378,7 @@ class RuntimeTopologyIntegrationTest extends IntegrationTestBase {
         // Given/When/Then: Test all topology types
         TopologyType[] topologies = {
             TopologyType.JENKINS_SERVICE,
-            TopologyType.JENKINS_SINGLE_NODE,
+            TopologyType.JENKINS_SERVICE,
             TopologyType.S3_WEBSITE
         };
 
@@ -403,7 +403,7 @@ class RuntimeTopologyIntegrationTest extends IntegrationTestBase {
             IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
 
             // Use appropriate runtime for topology
-            RuntimeType runtime = (topology == TopologyType.JENKINS_SINGLE_NODE)
+            RuntimeType runtime = (topology == TopologyType.JENKINS_SERVICE)
                 ? RuntimeType.EC2
                 : RuntimeType.FARGATE;
 

@@ -1,7 +1,7 @@
 package com.cloudforgeci.api.examples;
 
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

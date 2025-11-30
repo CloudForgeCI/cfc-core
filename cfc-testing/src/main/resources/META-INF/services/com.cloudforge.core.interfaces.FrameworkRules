@@ -1,0 +1,4 @@
+# Custom Compliance Framework Plugins for cfc-testing
+
+# Internal Security Policies
+com.cloudforgeci.samples.plugins.compliance.CustomSecurityPolicyRules

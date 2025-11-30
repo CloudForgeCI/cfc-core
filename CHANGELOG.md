@@ -2,15 +2,44 @@
 
 All notable changes to CloudForge Community Core are documented here.
 
-## [Unreleased]
+## [3.0.0] - Current Release
 
 ### Added
 
+**Plugin System (NEW)**
+- Universal ApplicationSpec plugin system for custom applications
+- Compliance framework plugin system for custom validators
+- Java ServiceLoader-based automatic plugin discovery
+- 14 built-in applications across 8 categories
+- 12 built-in compliance frameworks (5 always-load, 7 conditional)
+- Plugin ecosystem documentation and developer guides
+
+**Applications (NEW)**
+- Jenkins, GitLab, Drone (CI/CD)
+- Gitea (Version Control)
+- Grafana, Prometheus (Monitoring)
+- Metabase, Apache Superset (Analytics)
+- PostgreSQL, Redis (Databases)
+- Nexus, Harbor (Artifact Registries)
+- HashiCorp Vault (Secrets Management)
+- Mattermost (Collaboration)
+
+**OIDC Integration (NEW)**
+- Application-level OIDC integration framework
+- Grafana OIDC integration (implemented)
+- GitLab OIDC integration (implemented)
+- Jenkins OIDC integration (implemented)
+- Gitea OIDC integration (in progress)
+- Cognito and IAM Identity Center OIDC configurations
+- PKCE support for enhanced security
+- Secrets Manager integration for client secrets
+
 **Authentication & Security**
 - AWS IAM Identity Center integration for enterprise SSO
-- OIDC authentication factory for ALB-based auth
+- OIDC authentication factory for ALB-based auth (alb-oidc mode)
+- Application-level OIDC integration (application-oidc mode)
 - Cognito authentication with auto-provisioning
-- Multi-framework compliance support (PCI-DSS, HIPAA, SOC 2, GDPR)
+- Multi-framework compliance support (PCI-DSS, HIPAA, SOC 2, GDPR, ISO 27001)
 - Security profile configurations (DEV, STAGING, PRODUCTION)
 - Comprehensive security rules engine with compliance mappings
 
@@ -44,6 +73,9 @@ All notable changes to CloudForge Community Core are documented here.
 - Improved error messages and validation
 - Context injection framework
 - Slot-based configuration system
+- ApplicationFactory for universal application deployment
+- FrameworkLoader for automatic compliance discovery
+- Ec2Context and UserDataBuilder for simplified EC2 configuration
 
 **Supply Chain Security**
 - Software Bill of Materials (SBOM) generation in CycloneDX format

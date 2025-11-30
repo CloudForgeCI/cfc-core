@@ -1,4 +1,4 @@
-package com.cloudforgeci.api.core.annotation;
+package com.cloudforge.core.annotation;
 
 /**
  * Migration guide for converting existing factory classes to use annotation-based context injection.

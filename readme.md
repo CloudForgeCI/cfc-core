@@ -1,12 +1,12 @@
-# CloudForge CI — Core Libraries
+# CloudForge 3.0.0 — Universal Application Deployment Platform
 
-**Enterprise-ready Jenkins CI/CD infrastructure on AWS using CDK**
+**Enterprise-ready application deployment infrastructure on AWS using CDK**
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.cloudforgeci/cloudforge-api)](https://central.sonatype.com/artifact/com.cloudforgeci/cloudforge-api)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 
-Deploy secure, compliant Jenkins infrastructure on AWS in minutes. Built-in support for SOC2, HIPAA, PCI-DSS, and GDPR with automated remediation.
+Deploy secure, compliant application infrastructure on AWS in minutes. **14 applications across 8 categories**: CI/CD (Jenkins, GitLab, Drone), Version Control (Gitea), Monitoring (Grafana, Prometheus), Databases (PostgreSQL, Redis), Secrets Management (Vault), Artifact Registry (Nexus, Harbor), Collaboration (Mattermost), and Analytics (Metabase, Superset). Built-in OIDC authentication (Cognito, IAM Identity Center) and compliance support (SOC2, HIPAA, PCI-DSS, GDPR) with automated remediation.
 
 **📈 [Live Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** — Coverage, validation, compliance truth tables & drift detection
 
@@ -19,11 +19,22 @@ Deploy secure, compliant Jenkins infrastructure on AWS in minutes. Built-in supp
 - **[Sample Project](https://github.com/CloudForgeCI/cloudforge-sample)** - Complete working example
 - **[Interactive Deployer](docs/guides/INTERACTIVE_DEPLOYER.md)** - User-friendly CLI deployment tool
 
+### 🔌 Plugin System
+- **[Plugin Ecosystem Overview](docs/plugins/PLUGIN-ECOSYSTEM.md)** - 14 built-in applications + custom plugins
+- **[Plugin System Guide](docs/plugins/PLUGIN-SYSTEM.md)** - Architecture and development
+- **[Application Plugin Guide](docs/plugins/APPLICATION-PLUGIN-GUIDE.md)** - Build custom application plugins
+- **[Compliance Plugin Guide](docs/plugins/COMPLIANCE-PLUGIN-GUIDE.md)** - Build compliance framework plugins
+- **[Plugin Examples](cfc-testing/PLUGIN-EXAMPLES.md)** - SonarQube + custom compliance examples
+
 ### 🔐 Security & Authentication
+- **[OIDC Integration Guide](docs/applications/OIDC.md)** - Application-level OIDC (Grafana, GitLab, Jenkins)
 - **[Identity Center Setup](docs/setup/AWS_IDENTITY_CENTER_SETUP.md)** - Enterprise SSO with ALB-OIDC (Okta, Auth0)
 - **[Cognito MFA Setup](docs/setup/COGNITO_MFA_COMPLIANCE_SETUP.md)** - AWS Cognito user pools with MFA for compliance
 - **[IAM Best Practices](docs/guides/IAM_RULES.md)** - IAM security rules and policies
 - **[Security Hardening](SECURITY.md)** - Security best practices
+
+### 💾 Database (RDS) Integration
+- **[Database Deployment Guide](docs/databases/DATABASE-DEPLOYMENT-GUIDE.md)** - RDS provisioning, compliance, and automated remediation
 
 ### ✅ Compliance
 - **[Compliance Overview](docs/compliance/README.md)** - Complete compliance documentation hub
@@ -179,6 +190,21 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 | `retainStorage` | boolean | `false` | Keep EFS/EBS on stack deletion |
 | `existingFileSystemId` | string | - | Reuse existing EFS (disaster recovery) |
 
+### Database (RDS)
+
+CloudForge 3.0+ automatically provisions RDS databases for applications with database requirements.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `provisionDatabase` | boolean | auto | **Optional DB apps only** (Metabase, Grafana). `true` = RDS PostgreSQL, `false` = embedded DB (H2/SQLite) |
+| `enableRdsDeletionProtectionRemediation` | boolean | `false` | Auto-enable RDS deletion protection (HIPAA, SOC2, GDPR) |
+| `enableRdsAutoMinorVersionUpgradeRemediation` | boolean | `false` | Auto-enable RDS security patches (PCI-DSS, SOC2, HIPAA, GDPR) |
+
+**Applications with database requirements:**
+- **REQUIRED:** GitLab, Mattermost, Harbor, Superset (always provision RDS)
+- **OPTIONAL:** Metabase, Grafana (choose RDS or embedded)
+- See [DATABASE-DEPLOYMENT-GUIDE.md](docs/databases/DATABASE-DEPLOYMENT-GUIDE.md) for full details
+
 ### Monitoring & Compliance
 
 | Property | Type | Default | Description |
@@ -189,6 +215,8 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 | `createConfigInfrastructure` | boolean | `false` | Create Config Recorder (account-level) |
 | `complianceFrameworks` | string | - | `"SOC2"`, `"HIPAA"`, `"PCI-DSS"`, `"GDPR"` (comma-separated) |
 | `auditManagerEnabled` | boolean | `false` | Enable AWS Audit Manager |
+| `enableS3VersioningRemediation` | boolean | `false` | Auto-enable S3 versioning (SOC2, GDPR) |
+| `enableCloudTrailBucketAccessRemediation` | boolean | `false` | Auto-enable CloudTrail bucket logging (PCI-DSS, HIPAA) |
 
 ### Compliance Remediation
 

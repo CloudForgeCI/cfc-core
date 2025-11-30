@@ -1,8 +1,9 @@
 package com.cloudforgeci.api.storage;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.core.annotation.SystemContext;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.interfaces.ApplicationSpec;
 
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
@@ -20,7 +21,10 @@ import java.util.logging.Logger;
  *   <li>Creating new file systems with configurable retention policies</li>
  *   <li>Reusing existing file systems for disaster recovery workflows</li>
  *   <li>Applying security groups and encryption settings</li>
+ *   <li>Creating Access Points with application-specific ownership and permissions</li>
  * </ul>
+ *
+ * <p>CloudForge 3.0.0: Uses ApplicationSpec to determine Access Point configuration</p>
  */
 public class EfsFactory extends BaseFactory {
 
@@ -35,9 +39,12 @@ public class EfsFactory extends BaseFactory {
   @SystemContext("vpc")
   private Vpc vpc;
 
+  @SystemContext("applicationSpec")
+  private ApplicationSpec applicationSpec;
+
   public EfsFactory(Construct scope, String id) {
     super(scope, id);
-    // existingFileSystemId and retainStorage are automatically injected by BaseFactory
+    // Fields are automatically injected by BaseFactory via @SystemContext and @DeploymentContext annotations
   }
 
   @Override
@@ -56,6 +63,10 @@ public class EfsFactory extends BaseFactory {
     // Always create new EFS for now - full import support requires AccessPoint lookup
     FileSystem fs = createFileSystem(efsSg);
     ctx.efs.set(fs);
+
+    // Create Access Point for application-specific access
+    AccessPoint ap = createAccessPoint(fs);
+    ctx.ap.set(ap);
   }
 
   private SecurityGroup createSecurityGroup() {
@@ -85,6 +96,47 @@ public class EfsFactory extends BaseFactory {
             .performanceMode(PerformanceMode.GENERAL_PURPOSE)
             .throughputMode(ThroughputMode.BURSTING)
             .removalPolicy(removalPolicy)
+            .build();
+  }
+
+  private AccessPoint createAccessPoint(FileSystem fs) {
+    // ApplicationSpec is injected via @SystemContext annotation
+    if (applicationSpec == null) {
+      throw new IllegalStateException("ApplicationSpec not available - required for EFS Access Point creation");
+    }
+
+    String efsPath = applicationSpec.efsDataPath();
+
+    // Some applications (like GitLab) need to run as root - use default 0:0 for those
+    String containerUser = applicationSpec.containerUser();
+    String uid = "0";  // default to root
+    String gid = "0";  // default to root
+
+    if (containerUser != null && !containerUser.isBlank()) {
+      String[] userParts = containerUser.split(":");
+      uid = userParts[0];
+      gid = userParts[1];
+    }
+
+    String permissions = applicationSpec.efsPermissions();
+
+    LOG.info("Creating EFS Access Point:");
+    LOG.info("  Path: " + efsPath);
+    LOG.info("  Owner: " + uid + ":" + gid + (containerUser == null ? " (root - application requires root access)" : ""));
+    LOG.info("  Permissions: " + permissions);
+
+    return AccessPoint.Builder.create(this, "AccessPoint")
+            .fileSystem(fs)
+            .path(efsPath)
+            .createAcl(Acl.builder()
+                    .ownerUid(uid)
+                    .ownerGid(gid)
+                    .permissions(permissions)
+                    .build())
+            .posixUser(PosixUser.builder()
+                    .uid(uid)
+                    .gid(gid)
+                    .build())
             .build();
   }
 }

@@ -1,7 +1,9 @@
 package com.cloudforgeci.api.core.rules;
 
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,15 +31,22 @@ import java.util.logging.Logger;
  *
  * <h2>Usage</h2>
  * <pre>{@code
- * // Install advanced monitoring validation
- * AdvancedMonitoringRules.install(ctx);
+ * // Automatically loaded via FrameworkLoader (v2.0 pattern)
+ * // Or manually: new AdvancedMonitoringRules().install(ctx);
  * }</pre>
+ *
+ * @since 3.1.0
  */
-public final class AdvancedMonitoringRules {
+@ComplianceFramework(
+    value = "AdvancedMonitoring",
+    priority = -5,
+    alwaysLoad = true,
+    displayName = "Advanced Security Monitoring",
+    description = "Cross-framework advanced monitoring and compliance dashboard validation"
+)
+public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(AdvancedMonitoringRules.class.getName());
-
-    private AdvancedMonitoringRules() {}
 
     /**
      * Install advanced monitoring validation rules.
@@ -45,7 +54,8 @@ public final class AdvancedMonitoringRules {
      *
      * @param ctx System context
      */
-    public static void install(SystemContext ctx) {
+    @Override
+    public void install(SystemContext ctx) {
         LOG.info("Installing advanced monitoring compliance validation rules for " + ctx.security);
 
         ctx.getNode().addValidation(() -> {
@@ -95,7 +105,7 @@ public final class AdvancedMonitoringRules {
      *   <li>Compliance status tracking over time</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateSecurityHub(SystemContext ctx) {
+    private List<ComplianceRule> validateSecurityHub(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -194,7 +204,7 @@ public final class AdvancedMonitoringRules {
      *   <li>CVE detection and remediation guidance</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateInspector(SystemContext ctx) {
+    private List<ComplianceRule> validateInspector(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -283,7 +293,7 @@ public final class AdvancedMonitoringRules {
      *   <li>GDPR and HIPAA compliance support</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateMacie(SystemContext ctx) {
+    private List<ComplianceRule> validateMacie(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         boolean macieEnabled = getBooleanSetting(ctx, "macieEnabled", false);
@@ -357,7 +367,7 @@ public final class AdvancedMonitoringRules {
      *   <li>Event-driven security response</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateCentralizedMonitoring(SystemContext ctx) {
+    private List<ComplianceRule> validateCentralizedMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -414,7 +424,7 @@ public final class AdvancedMonitoringRules {
     /**
      * Helper method to safely get boolean settings from deployment context.
      */
-    private static boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
+    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
         try {
             String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
             return Boolean.parseBoolean(value);

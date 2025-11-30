@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -42,12 +42,12 @@ class RuntimeRulesTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Installing runtime rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
     }
 
     @Test
@@ -62,7 +62,7 @@ class RuntimeRulesTest {
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // When: Installing runtime rules
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
@@ -81,18 +81,7 @@ class RuntimeRulesTest {
 
         // When: Installing runtime rules
         // Then: Wiring should be deferred via ctx.once() - should not throw
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
-    }
-
-    @Test
-    void testRuntimeRulesCannotBeInstantiated() {
-        // The RuntimeRules class should not be instantiable (utility class)
-        try {
-            var constructor = RuntimeRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("RuntimeRules should have a private constructor");
-        }
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
     }
 
     @Test
@@ -108,14 +97,14 @@ class RuntimeRulesTest {
             // Choose appropriate topology for each runtime
             TopologyType topology = runtime == RuntimeType.FARGATE
                 ? TopologyType.JENKINS_SERVICE
-                : TopologyType.JENKINS_SINGLE_NODE;
+                : TopologyType.JENKINS_SERVICE;
 
             SystemContext ctx = SystemContext.start(stack, topology, runtime,
                     SecurityProfile.DEV, iamProfile, cfc);
 
             // When: Installing runtime rules
             // Then: Should not throw for any runtime type
-            assertDoesNotThrow(() -> RuntimeRules.install(ctx),
+            assertDoesNotThrow(() -> new RuntimeRules().install(ctx),
                 "RuntimeRules.install should not throw for runtime: " + runtime);
         }
     }
@@ -132,7 +121,7 @@ class RuntimeRulesTest {
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Installing runtime rules
-        RuntimeRules.install(ctx);
+        new RuntimeRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -152,7 +141,7 @@ class RuntimeRulesTest {
 
             // When: Installing runtime rules
             // Then: Should not throw for any security profile
-            assertDoesNotThrow(() -> RuntimeRules.install(ctx),
+            assertDoesNotThrow(() -> new RuntimeRules().install(ctx),
                 "RuntimeRules.install should not throw for security profile: " + profile);
         }
     }
@@ -160,7 +149,7 @@ class RuntimeRulesTest {
     @Test
     void testRuntimeRulesHandlesNullContext() {
         // This tests that the install method requires a non-null context
-        assertThrows(NullPointerException.class, () -> RuntimeRules.install(null));
+        assertThrows(NullPointerException.class, () -> new RuntimeRules().install(null));
     }
 
     @Test
@@ -174,10 +163,10 @@ class RuntimeRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // First install should work
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
 
         // Second install on same context should also work (idempotent)
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
     }
 
     @Test
@@ -187,10 +176,10 @@ class RuntimeRulesTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
         assertNotNull(ctx.getNode());
     }
 
@@ -204,7 +193,7 @@ class RuntimeRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
         assertNotNull(ctx.getNode());
     }
 
@@ -218,7 +207,7 @@ class RuntimeRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
         assertNotNull(ctx.getNode());
     }
 
@@ -230,10 +219,10 @@ class RuntimeRulesTest {
             Stack stack = createTestStack(app, stackName, SecurityProfile.DEV);
 
             DeploymentContext cfc = DeploymentContext.from(stack);
-            SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+            SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                     SecurityProfile.DEV, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> RuntimeRules.install(ctx),
+            assertDoesNotThrow(() -> new RuntimeRules().install(ctx),
                 "RuntimeRules.install should work with IAM profile: " + iamProfile);
         }
     }
@@ -249,7 +238,7 @@ class RuntimeRulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     SecurityProfile.DEV, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> RuntimeRules.install(ctx),
+            assertDoesNotThrow(() -> new RuntimeRules().install(ctx),
                 "RuntimeRules.install should work with IAM profile: " + iamProfile);
         }
     }
@@ -261,10 +250,10 @@ class RuntimeRulesTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
     }
 
     @Test
@@ -277,7 +266,7 @@ class RuntimeRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
     }
 
     @Test
@@ -294,7 +283,7 @@ class RuntimeRulesTest {
             SystemContext ctx = SystemContext.start(stack, topology, RuntimeType.FARGATE,
                     SecurityProfile.DEV, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> RuntimeRules.install(ctx),
+            assertDoesNotThrow(() -> new RuntimeRules().install(ctx),
                 "RuntimeRules.install should work with topology: " + topology);
         }
     }
@@ -309,7 +298,7 @@ class RuntimeRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        RuntimeRules.install(ctx);
+        new RuntimeRules().install(ctx);
 
         // Node should have validation added
         assertNotNull(ctx.getNode());
@@ -326,6 +315,6 @@ class RuntimeRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Wiring should be deferred via ctx.once() - this tests the pattern works
-        assertDoesNotThrow(() -> RuntimeRules.install(ctx));
+        assertDoesNotThrow(() -> new RuntimeRules().install(ctx));
     }
 }

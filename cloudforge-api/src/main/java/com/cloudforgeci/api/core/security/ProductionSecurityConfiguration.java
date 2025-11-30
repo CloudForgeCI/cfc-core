@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.core.security;
 
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityConfiguration;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
@@ -43,7 +43,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         rules.add(require("vpc", x -> x.vpc));
 
         // Instance security group is only required for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
 
@@ -69,7 +69,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // Production security settings - maximum restrictions
 
         // Instance security group - only for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
                 // SSH only from specific bastion host or VPN CIDR (configurable via bastionCidr)
                 instanceSg.addIngressRule(
@@ -122,7 +122,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
         // EFS security group - allow NFS from appropriate security group based on runtime
         whenBoth(c.vpc, c.efsSg, (vpc, efsSg) -> {
-            if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.FARGATE) {
+            if (c.runtime == RuntimeType.FARGATE) {
                 // For Fargate, allow NFS from Fargate service security group
                 if (c.fargateServiceSg.get().isPresent()) {
                     efsSg.addIngressRule(
@@ -135,10 +135,13 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             } else {
                 // For EC2, allow NFS from instance security group
                 if (c.instanceSg.get().isPresent()) {
+                    String appId = (c.applicationSpec != null && c.applicationSpec.get().isPresent())
+                        ? c.applicationSpec.get().orElseThrow().applicationId()
+                        : "app";
                     efsSg.addIngressRule(
                         Peer.securityGroupId(c.instanceSg.get().orElseThrow().getSecurityGroupId()),
                         Port.tcp(2049),
-                        "NFS_from_Jenkins_instances_(PRODUCTION)",
+                        "NFS_from_" + appId + "_instances_(PRODUCTION)",
                         false
                     );
                 }
@@ -302,7 +305,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         if (!c.efsSg.get().isPresent()) {
             throw new IllegalStateException("EFS Security Group required for ProductionSecurityConfiguration");
         }
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2 && !c.instanceSg.get().isPresent()) {
+        if (c.runtime == RuntimeType.EC2 && !c.instanceSg.get().isPresent()) {
             throw new IllegalStateException("Instance Security Group required for EC2 runtime in ProductionSecurityConfiguration");
         }
 

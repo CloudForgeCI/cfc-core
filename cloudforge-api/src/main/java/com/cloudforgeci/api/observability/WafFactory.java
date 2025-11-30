@@ -1,8 +1,9 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.interfaces.ApplicationSpec;
 import software.amazon.awscdk.services.wafv2.CfnWebACL;
 import software.amazon.awscdk.services.wafv2.CfnWebACLAssociation;
 import software.constructs.Construct;
@@ -26,6 +27,9 @@ public class WafFactory extends BaseFactory {
 
     @SystemContext("stackName")
     private String stackName;
+
+    @SystemContext("applicationSpec")
+    private ApplicationSpec applicationSpec;
 
     public WafFactory(Construct scope, String id) {
         super(scope, id);
@@ -97,6 +101,8 @@ public class WafFactory extends BaseFactory {
         ));
 
         // Create WAF WebACL
+        String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+
         CfnWebACL webAcl = CfnWebACL.Builder.create(this, "WafWebACL")
                 .scope("REGIONAL")  // REGIONAL for ALB (CLOUDFRONT for CloudFront distributions)
                 .defaultAction(CfnWebACL.DefaultActionProperty.builder()
@@ -105,11 +111,11 @@ public class WafFactory extends BaseFactory {
                 .rules(rules)
                 .visibilityConfig(CfnWebACL.VisibilityConfigProperty.builder()
                         .cloudWatchMetricsEnabled(true)
-                        .metricName("jenkins-waf-" + stackName.toLowerCase())
+                        .metricName(appId + "-waf-" + stackName.toLowerCase())
                         .sampledRequestsEnabled(true)
                         .build())
-                .name("jenkins-waf-" + stackName.toLowerCase())
-                .description("WAF WebACL for Jenkins ALB - " + security.name())
+                .name(appId + "-waf-" + stackName.toLowerCase())
+                .description("WAF WebACL for " + appId + " ALB - " + security.name())
                 .build();
 
         ctx.wafWebAcl.set(webAcl);

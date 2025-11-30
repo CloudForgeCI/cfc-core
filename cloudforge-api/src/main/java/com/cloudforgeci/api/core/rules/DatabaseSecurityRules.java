@@ -1,7 +1,9 @@
 package com.cloudforgeci.api.core.rules;
 
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,15 +32,22 @@ import java.util.logging.Logger;
  *
  * <h2>Usage</h2>
  * <pre>{@code
- * // Install database security validation
- * DatabaseSecurityRules.install(ctx);
+ * // Automatically loaded via FrameworkLoader (v2.0 pattern)
+ * // Or manually: new DatabaseSecurityRules().install(ctx);
  * }</pre>
+ *
+ * @since 3.1.0
  */
-public final class DatabaseSecurityRules {
+@ComplianceFramework(
+    value = "DatabaseSecurity",
+    priority = -5,
+    alwaysLoad = true,
+    displayName = "Database Security",
+    description = "Cross-framework database security validation"
+)
+public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(DatabaseSecurityRules.class.getName());
-
-    private DatabaseSecurityRules() {}
 
     /**
      * Install database security validation rules.
@@ -46,7 +55,8 @@ public final class DatabaseSecurityRules {
      *
      * @param ctx System context
      */
-    public static void install(SystemContext ctx) {
+    @Override
+    public void install(SystemContext ctx) {
         LOG.info("Installing database security compliance validation rules for " + ctx.security);
 
         ctx.getNode().addValidation(() -> {
@@ -98,7 +108,7 @@ public final class DatabaseSecurityRules {
      *   <li>Minor version auto-upgrade</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateRdsSecurity(SystemContext ctx) {
+    private List<ComplianceRule> validateRdsSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         boolean rdsEnabled = getBooleanSetting(ctx, "rdsEnabled", false);
@@ -221,7 +231,7 @@ public final class DatabaseSecurityRules {
      *   <li>Backup enabled</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateDynamoDbSecurity(SystemContext ctx) {
+    private List<ComplianceRule> validateDynamoDbSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         boolean dynamoDbEnabled = getBooleanSetting(ctx, "dynamoDbEnabled", false);
@@ -288,7 +298,7 @@ public final class DatabaseSecurityRules {
      *   <li>Enhanced monitoring enabled</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateDatabaseMonitoring(SystemContext ctx) {
+    private List<ComplianceRule> validateDatabaseMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         boolean rdsEnabled = getBooleanSetting(ctx, "rdsEnabled", false);
@@ -365,7 +375,7 @@ public final class DatabaseSecurityRules {
     /**
      * Helper method to safely get boolean settings from deployment context.
      */
-    private static boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
+    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
         try {
             String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
             return Boolean.parseBoolean(value);
@@ -377,7 +387,7 @@ public final class DatabaseSecurityRules {
     /**
      * Helper method to safely get integer settings from deployment context.
      */
-    private static int getIntSetting(SystemContext ctx, String key, int defaultValue) {
+    private int getIntSetting(SystemContext ctx, String key, int defaultValue) {
         try {
             String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
             return Integer.parseInt(value);

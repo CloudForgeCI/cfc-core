@@ -1,5 +1,11 @@
 package com.cloudforgeci.api.core.security;
 
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
+
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -116,13 +122,13 @@ class SecurityProfileFactoryTest {
         // When: Getting method
         var method = SecurityProfileFactory.class.getDeclaredMethod(
             "getSecurityProfileConfiguration",
-            com.cloudforgeci.api.interfaces.SecurityProfile.class
+            SecurityProfile.class
         );
 
         // Then: Should exist and be private
         assertNotNull(method);
         assertTrue(java.lang.reflect.Modifier.isPrivate(method.getModifiers()));
-        assertEquals(com.cloudforgeci.api.interfaces.SecurityProfileConfiguration.class, method.getReturnType());
+        assertEquals(SecurityProfileConfiguration.class, method.getReturnType());
     }
 
     @Test
@@ -130,7 +136,7 @@ class SecurityProfileFactoryTest {
         // When: Getting method
         var method = SecurityProfileFactory.class.getDeclaredMethod(
             "configureCloudWatchLogs",
-            com.cloudforgeci.api.interfaces.SecurityProfileConfiguration.class
+            SecurityProfileConfiguration.class
         );
 
         // Then: Should exist and be private
@@ -144,7 +150,7 @@ class SecurityProfileFactoryTest {
         // When: Getting method
         var method = SecurityProfileFactory.class.getDeclaredMethod(
             "configureVpcFlowLogs",
-            com.cloudforgeci.api.interfaces.SecurityProfileConfiguration.class
+            SecurityProfileConfiguration.class
         );
 
         // Then: Should exist and be private
@@ -158,7 +164,7 @@ class SecurityProfileFactoryTest {
         // When: Getting method
         var method = SecurityProfileFactory.class.getDeclaredMethod(
             "configureSecurityMonitoring",
-            com.cloudforgeci.api.interfaces.SecurityProfileConfiguration.class
+            SecurityProfileConfiguration.class
         );
 
         // Then: Should exist and be private
@@ -186,7 +192,7 @@ class SecurityProfileFactoryTest {
 
         // Then: Should have security field
         boolean hasSecurity = java.util.Arrays.stream(fields)
-            .anyMatch(f -> f.getType().equals(com.cloudforgeci.api.interfaces.SecurityProfile.class));
+            .anyMatch(f -> f.getType().equals(SecurityProfile.class));
 
         assertTrue(hasSecurity, "Should have SecurityProfile field");
     }
@@ -198,7 +204,7 @@ class SecurityProfileFactoryTest {
 
         // Then: Should have runtime field
         boolean hasRuntime = java.util.Arrays.stream(fields)
-            .anyMatch(f -> f.getType().equals(com.cloudforgeci.api.interfaces.RuntimeType.class));
+            .anyMatch(f -> f.getType().equals(RuntimeType.class));
 
         assertTrue(hasRuntime, "Should have RuntimeType field");
     }
@@ -246,7 +252,7 @@ class SecurityProfileFactoryTest {
 
         // Then: Should have fields with SystemContext annotation
         long annotatedFields = java.util.Arrays.stream(fields)
-            .filter(f -> f.isAnnotationPresent(com.cloudforgeci.api.core.annotation.SystemContext.class))
+            .filter(f -> f.isAnnotationPresent(com.cloudforge.core.annotation.SystemContext.class))
             .count();
 
         assertTrue(annotatedFields >= 3, "Should have at least 3 @SystemContext annotated fields");

@@ -1,16 +1,22 @@
 package com.cloudforgeci.api.examples;
 
-import com.cloudforgeci.api.compute.JenkinsFactory;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
+import com.cloudforgeci.api.compute.ApplicationFactory;
+import com.cloudforgeci.api.application.JenkinsApplicationSpec;
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.core.iam.PermissionMatrix;
 import software.constructs.Construct;
 
 /**
  * Example demonstrating how to use the IAM Rules system with different permission profiles.
  * This shows how to create Jenkins deployments with minimal, standard, and extended IAM configurations.
+ *
+ * <p>CloudForge 3.0.0: Updated to use ApplicationFactory with JenkinsApplicationSpec</p>
  */
 public class IAMExample {
 
@@ -19,14 +25,16 @@ public class IAMExample {
      * The IAM profile is automatically selected based on the security profile.
      */
     public static void createWithAutomaticIAM(Construct scope, String id, DeploymentContext cfc) {
+        JenkinsApplicationSpec jenkinsSpec = new JenkinsApplicationSpec();
+
         // Production deployment - automatically uses MINIMAL IAM profile
-        JenkinsFactory.createEc2(scope, id + "Prod", cfc, SecurityProfile.PRODUCTION);
+        ApplicationFactory.createEc2(scope, id + "Prod", cfc, SecurityProfile.PRODUCTION, jenkinsSpec);
 
         // Staging deployment - automatically uses STANDARD IAM profile
-        JenkinsFactory.createFargate(scope, id + "Staging", cfc, SecurityProfile.STAGING);
+        ApplicationFactory.createFargate(scope, id + "Staging", cfc, SecurityProfile.STAGING, jenkinsSpec);
 
         // Development deployment - automatically uses EXTENDED IAM profile
-        JenkinsFactory.createEc2(scope, id + "Dev", cfc, SecurityProfile.DEV);
+        ApplicationFactory.createEc2(scope, id + "Dev", cfc, SecurityProfile.DEV, jenkinsSpec);
     }
 
     /**
@@ -34,23 +42,27 @@ public class IAMExample {
      * This allows fine-grained control over permissions while maintaining security validation.
      */
     public static void createWithExplicitIAM(Construct scope, String id, DeploymentContext cfc) {
+        JenkinsApplicationSpec jenkinsSpec = new JenkinsApplicationSpec();
+
         // Production with minimal permissions (recommended)
-        JenkinsFactory.createEc2(scope, id + "ProdMinimal", cfc, SecurityProfile.PRODUCTION, IAMProfile.MINIMAL);
+        ApplicationFactory.createEc2(scope, id + "ProdMinimal", cfc, SecurityProfile.PRODUCTION, IAMProfile.MINIMAL, jenkinsSpec);
 
         // Staging with standard permissions (recommended)
-        JenkinsFactory.createFargate(scope, id + "StagingStandard", cfc, SecurityProfile.STAGING, IAMProfile.STANDARD);
+        ApplicationFactory.createFargate(scope, id + "StagingStandard", cfc, SecurityProfile.STAGING, IAMProfile.STANDARD, jenkinsSpec);
 
         // Development with extended permissions (recommended)
-        JenkinsFactory.createEc2(scope, id + "DevExtended", cfc, SecurityProfile.DEV, IAMProfile.EXTENDED);
+        ApplicationFactory.createEc2(scope, id + "DevExtended", cfc, SecurityProfile.DEV, IAMProfile.EXTENDED, jenkinsSpec);
 
         // Example of production with standard permissions (allowed but not recommended)
-        JenkinsFactory.createFargate(scope, id + "ProdStandard", cfc, SecurityProfile.PRODUCTION, IAMProfile.STANDARD);
+        ApplicationFactory.createFargate(scope, id + "ProdStandard", cfc, SecurityProfile.PRODUCTION, IAMProfile.STANDARD, jenkinsSpec);
     }
 
     /**
      * Example demonstrating IAM profile validation and mapping.
      */
     public static void demonstrateIAMValidation(Construct scope, String id, DeploymentContext cfc) {
+        JenkinsApplicationSpec jenkinsSpec = new JenkinsApplicationSpec();
+
         // Show automatic mapping
         System.out.println("Automatic IAM Profile Mapping:");
         System.out.println("PRODUCTION -> " + IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION));
@@ -65,7 +77,7 @@ public class IAMExample {
 
         // This would throw an exception due to invalid combination
         try {
-            JenkinsFactory.createEc2(scope, id + "Invalid", cfc, SecurityProfile.PRODUCTION, IAMProfile.EXTENDED);
+            ApplicationFactory.createEc2(scope, id + "Invalid", cfc, SecurityProfile.PRODUCTION, IAMProfile.EXTENDED, jenkinsSpec);
         } catch (IllegalArgumentException e) {
             System.out.println("Caught expected exception: " + e.getMessage());
         }
@@ -79,14 +91,14 @@ public class IAMExample {
 
         // Get required permissions for different combinations
         var ec2ProdPermissions = PermissionMatrix.getRequiredPermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.EC2,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.EC2,
             IAMProfile.MINIMAL
         );
 
         var fargateDevPermissions = PermissionMatrix.getRequiredPermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.FARGATE,
             IAMProfile.EXTENDED
         );
 
@@ -95,8 +107,8 @@ public class IAMExample {
 
         // Validate permissions
         var validationResult = PermissionMatrix.validatePermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.EC2,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.EC2,
             IAMProfile.MINIMAL,
             ec2ProdPermissions
         );

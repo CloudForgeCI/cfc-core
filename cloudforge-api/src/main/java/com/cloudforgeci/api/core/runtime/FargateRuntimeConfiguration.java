@@ -1,7 +1,7 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
@@ -120,13 +120,17 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
         int healthyThreshold = c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2;
         int unhealthyThreshold = c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3;
 
+        // Get application-specific configuration from ApplicationSpec
+        int applicationPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
+        String healthCheckPath = c.applicationSpec.get().map(spec -> spec.healthCheckPath()).orElse("/");
+
         ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "FargateHttpTargetGroup")
                 .vpc(c.vpc.get().orElseThrow())
-                .port(8080)
+                .port(applicationPort)
                 .protocol(ApplicationProtocol.HTTP)
                 .targets(java.util.List.of(svc))
                 .healthCheck(HealthCheck.builder()
-                        .path("/login").healthyHttpCodes("200-299")
+                        .path(healthCheckPath).healthyHttpCodes("200-299")
                         .interval(software.amazon.awscdk.Duration.seconds(interval))
                         .timeout(software.amazon.awscdk.Duration.seconds(timeout))
                         .healthyThresholdCount(healthyThreshold).unhealthyThresholdCount(unhealthyThreshold)
@@ -215,13 +219,17 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       int healthyThreshold = c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2;
       int unhealthyThreshold = c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3;
 
+      // Get application-specific configuration from ApplicationSpec
+      int applicationPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
+      String healthCheckPath = c.applicationSpec.get().map(spec -> spec.healthCheckPath()).orElse("/");
+
       ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "FargateHttpsTargetGroup")
               .vpc(c.vpc.get().orElseThrow())
-              .port(8080)
+              .port(applicationPort)
               .protocol(ApplicationProtocol.HTTP)
               .targets(java.util.List.of(svc))
                 .healthCheck(HealthCheck.builder()
-                        .path("/login").healthyHttpCodes("200-299")
+                        .path(healthCheckPath).healthyHttpCodes("200-299")
                         .interval(software.amazon.awscdk.Duration.seconds(interval))
                         .timeout(software.amazon.awscdk.Duration.seconds(timeout))
                         .healthyThresholdCount(healthyThreshold).unhealthyThresholdCount(unhealthyThreshold)

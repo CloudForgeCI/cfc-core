@@ -1,7 +1,10 @@
 package com.cloudforgeci.api.core.rules;
 
+
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,11 +41,16 @@ import java.util.logging.Logger;
  * fully automated. Infrastructure validation ensures technical readiness, but
  * organizations must maintain separate documentation and processes.</p>
  */
-public final class HipaaOrganizationalRules {
+@ComplianceFramework(
+    value = "HIPAA-Organizational",
+    priority = 15,
+    displayName = "HIPAA Organizational Requirements",
+    description = "Validates HIPAA organizational and administrative safeguards"
+)
+public class HipaaOrganizationalRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(HipaaOrganizationalRules.class.getName());
 
-    private HipaaOrganizationalRules() {}
 
     /**
      * Install HIPAA organizational validation rules.
@@ -50,7 +58,8 @@ public final class HipaaOrganizationalRules {
      *
      * @param ctx System context
      */
-    public static void install(SystemContext ctx) {
+        @Override
+    public void install(SystemContext ctx) {
         // Only apply if HIPAA is in compliance frameworks
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
         if (complianceFrameworks == null || !complianceFrameworks.toUpperCase().contains("HIPAA")) {
@@ -106,7 +115,7 @@ public final class HipaaOrganizationalRules {
      *   <li>§164.308(b)(3) - Documentation of satisfactory assurances</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateBusinessAssociateAgreements(SystemContext ctx) {
+    private List<ComplianceRule> validateBusinessAssociateAgreements(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // AWS BAA signed
@@ -196,7 +205,7 @@ public final class HipaaOrganizationalRules {
      *   <li>§164.308(a)(3)(ii)(C) - Termination procedures</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateWorkforceSecurity(SystemContext ctx) {
+    private List<ComplianceRule> validateWorkforceSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Authorization procedures
@@ -265,7 +274,7 @@ public final class HipaaOrganizationalRules {
      *   <li>§164.312(a)(2)(ii) - Emergency access procedure (technical)</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateEmergencyAccess(SystemContext ctx) {
+    private List<ComplianceRule> validateEmergencyAccess(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Emergency access procedures documented
@@ -318,7 +327,7 @@ public final class HipaaOrganizationalRules {
      *   <li>45 CFR Part 164, Subpart D - Breach notification requirements</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateBreachNotification(SystemContext ctx) {
+    private List<ComplianceRule> validateBreachNotification(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Incident response plan

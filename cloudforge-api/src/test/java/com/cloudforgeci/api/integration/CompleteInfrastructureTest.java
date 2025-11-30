@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.integration;
 
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.assertions.Template;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -80,7 +80,7 @@ public class CompleteInfrastructureTest {
     void createsCompleteInfrastructureWithEc2Runtime() {
         // Skip EC2 tests due to topology incompatibility
         // JENKINS_SERVICE requires FARGATE runtime and forbids AutoScalingGroup
-        // JENKINS_SINGLE_NODE forbids both EFS and AutoScalingGroup
+        // JENKINS_SERVICE forbids both EFS and AutoScalingGroup
         org.junit.jupiter.api.Assumptions.assumeTrue(false, "EC2 runtime not supported with current topology configurations");
     }
 

@@ -1,10 +1,10 @@
 package com.cloudforgeci.api.core.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -57,6 +57,10 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     // Flow Log Configuration - Basic monitoring
     @Override
     public boolean isFlowLogsEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.enableFlowlogs()) {
+            return true;
+        }
         return false; // Disabled by default in dev for cost savings
     }
 

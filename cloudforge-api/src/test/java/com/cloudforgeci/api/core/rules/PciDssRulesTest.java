@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -72,7 +72,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw (rules are only enforced for PRODUCTION)
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -88,7 +88,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -107,7 +107,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules in ADVISORY mode
         // Then: Should not throw (violations logged as warnings)
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -126,18 +126,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules in ENFORCE mode
         // Then: Should not throw during installation
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
-    }
-
-    @Test
-    void testPciDssRulesCannotBeInstantiated() {
-        // The PciDssRules class should not be instantiable (utility class)
-        try {
-            var constructor = PciDssRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("PciDssRules should have a no-args constructor");
-        }
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -160,7 +149,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules
         // Then: Should not enforce (only PRODUCTION enforces PCI-DSS)
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -179,7 +168,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -195,7 +184,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -214,7 +203,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw (PCI-DSS rules install independently)
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -233,7 +222,7 @@ class PciDssRulesTest {
 
         // When: Installing PCI-DSS rules
         // Then: Should pass network security validation
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -248,11 +237,11 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing PCI-DSS rules multiple times
-        PciDssRules.install(ctx);
-        PciDssRules.install(ctx);
+        new PciDssRules().install(ctx);
+        new PciDssRules().install(ctx);
 
         // Then: Should be idempotent (no errors)
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -270,7 +259,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -288,7 +277,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -306,7 +295,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -324,7 +313,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -343,7 +332,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -361,7 +350,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -379,7 +368,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -397,7 +386,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -415,7 +404,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -434,7 +423,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -452,7 +441,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -488,7 +477,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -502,7 +491,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -510,7 +499,7 @@ class PciDssRulesTest {
         // Given: Different topology types with PCI-DSS
         TopologyType[] topologies = {
             TopologyType.JENKINS_SERVICE,
-            TopologyType.JENKINS_SINGLE_NODE
+            TopologyType.JENKINS_SERVICE
         };
 
         for (TopologyType topology : topologies) {
@@ -519,13 +508,13 @@ class PciDssRulesTest {
 
             DeploymentContext cfc = DeploymentContext.from(stack);
             IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-            RuntimeType runtime = (topology == TopologyType.JENKINS_SINGLE_NODE)
+            RuntimeType runtime = (topology == TopologyType.JENKINS_SERVICE)
                 ? RuntimeType.EC2 : RuntimeType.FARGATE;
 
             SystemContext ctx = SystemContext.start(stack, topology, runtime,
                     SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> PciDssRules.install(ctx),
+            assertDoesNotThrow(() -> new PciDssRules().install(ctx),
                 "PCI-DSS rules should work with topology: " + topology);
         }
     }
@@ -547,7 +536,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -566,7 +555,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -584,7 +573,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -603,7 +592,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -622,7 +611,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -642,7 +631,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -660,7 +649,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -680,7 +669,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -699,7 +688,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -718,7 +707,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -736,7 +725,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -755,7 +744,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -774,7 +763,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -793,7 +782,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -813,7 +802,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -832,7 +821,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -851,7 +840,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -870,7 +859,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -889,7 +878,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -908,7 +897,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -927,7 +916,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -946,7 +935,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -965,7 +954,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -984,7 +973,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1003,7 +992,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1018,12 +1007,12 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing PCI-DSS rules multiple times
-        PciDssRules.install(ctx);
-        PciDssRules.install(ctx);
-        PciDssRules.install(ctx);
+        new PciDssRules().install(ctx);
+        new PciDssRules().install(ctx);
+        new PciDssRules().install(ctx);
 
         // Then: Should be fully idempotent
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1050,7 +1039,7 @@ class PciDssRulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     profile, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> PciDssRules.install(ctx),
+            assertDoesNotThrow(() -> new PciDssRules().install(ctx),
                 "PCI-DSS rules should work with profile: " + profile);
         }
     }
@@ -1072,7 +1061,7 @@ class PciDssRulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, runtime,
                     SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> PciDssRules.install(ctx),
+            assertDoesNotThrow(() -> new PciDssRules().install(ctx),
                 "PCI-DSS rules should work with runtime: " + runtime);
         }
     }
@@ -1103,7 +1092,7 @@ class PciDssRulesTest {
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // This should pass STAGING profile rules
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1126,7 +1115,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1149,7 +1138,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1172,7 +1161,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1189,7 +1178,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1205,7 +1194,7 @@ class PciDssRulesTest {
         IAMProfile iamProfile1 = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
         SystemContext ctx1 = SystemContext.start(stack1, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile1, cfc1);
-        assertDoesNotThrow(() -> PciDssRules.install(ctx1));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx1));
 
         // Test SEVEN_YEARS
         App app2 = new App();
@@ -1216,7 +1205,7 @@ class PciDssRulesTest {
         IAMProfile iamProfile2 = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
         SystemContext ctx2 = SystemContext.start(stack2, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile2, cfc2);
-        assertDoesNotThrow(() -> PciDssRules.install(ctx2));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx2));
 
         // Test EIGHT_YEARS
         App app3 = new App();
@@ -1227,7 +1216,7 @@ class PciDssRulesTest {
         IAMProfile iamProfile3 = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
         SystemContext ctx3 = SystemContext.start(stack3, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile3, cfc3);
-        assertDoesNotThrow(() -> PciDssRules.install(ctx3));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx3));
 
         // Test NINE_YEARS
         App app4 = new App();
@@ -1238,7 +1227,7 @@ class PciDssRulesTest {
         IAMProfile iamProfile4 = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
         SystemContext ctx4 = SystemContext.start(stack4, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile4, cfc4);
-        assertDoesNotThrow(() -> PciDssRules.install(ctx4));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx4));
     }
 
     @Test
@@ -1264,7 +1253,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     // ========== Individual Branch Coverage Tests ==========
@@ -1286,7 +1275,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance violations
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1305,7 +1294,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance violations
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1327,7 +1316,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw - SSO with MFA is valid
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1350,7 +1339,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should pass MFA validation via SSO
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1378,7 +1367,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance violation for missing TLS
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1404,7 +1393,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should pass all validations and return empty error list
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1432,7 +1421,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance warning
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1460,7 +1449,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance warning
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1488,7 +1477,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance warning
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1516,7 +1505,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance warning
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1544,7 +1533,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance warning
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1572,7 +1561,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance warning
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1600,7 +1589,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance warning
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1628,7 +1617,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should not throw, but will generate compliance warning
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1656,7 +1645,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // VPC should be empty - will generate compliance violation
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1683,7 +1672,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // ALB security group should be empty - will generate compliance violation
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1710,7 +1699,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // EFS security group should be empty - will generate compliance violation
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1738,7 +1727,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should generate compliance warning for disabled EBS encryption
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1766,7 +1755,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should generate compliance warning for disabled EFS at-rest encryption
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1794,7 +1783,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should generate compliance warning for disabled S3 encryption
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     @Test
@@ -1822,7 +1811,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should generate compliance warning for missing TLS certificate
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     // ========== Parameterized Tests for Branch Coverage ==========
@@ -1884,8 +1873,8 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        PciDssRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
@@ -1957,8 +1946,8 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        PciDssRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
@@ -2030,8 +2019,8 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        PciDssRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
@@ -2105,8 +2094,8 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        PciDssRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
@@ -2161,7 +2150,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2204,7 +2193,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2228,7 +2217,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2263,7 +2252,7 @@ class PciDssRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Both modes should not throw - ADVISORY logs warnings, ENFORCE logs errors
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     // ========================================
@@ -2298,7 +2287,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2352,8 +2341,8 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        SecurityRules.install(builder.getSystemContext());
-        PciDssRules.install(builder.getSystemContext());
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
@@ -2418,7 +2407,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2442,7 +2431,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2501,7 +2490,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2543,7 +2532,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2574,7 +2563,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2616,7 +2605,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2664,7 +2653,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2738,7 +2727,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     // ========================================
@@ -2798,7 +2787,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2852,7 +2841,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2906,7 +2895,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -2968,7 +2957,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -3012,7 +3001,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -3063,7 +3052,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -3117,7 +3106,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -3173,7 +3162,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -3227,7 +3216,7 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 
     /**
@@ -3334,6 +3323,6 @@ class PciDssRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 secProfile, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> PciDssRules.install(ctx));
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
 }

@@ -1,8 +1,10 @@
 package com.cloudforgeci.api.core.rules;
 
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.ComplianceMode;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
@@ -30,20 +32,27 @@ import java.util.logging.Logger;
  *
  * Note: HIPAA distinguishes between "Required" and "Addressable" specifications.
  * This validator enforces both for maximum protection of PHI (Protected Health Information).
+ *
+ * @since 3.1.0
  */
-public final class HipaaRules {
+@ComplianceFramework(
+    value = "HIPAA",
+    priority = 10,
+    displayName = "HIPAA Security Rule",
+    description = "Validates HIPAA Security Rule requirements for PHI protection"
+)
+public class HipaaRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(HipaaRules.class.getName());
 
     // HIPAA requires 6 years retention for documentation
     private static final int HIPAA_MIN_RETENTION_DAYS = 365 * 6; // 2190 days
 
-    private HipaaRules() {}
-
     /**
      * Install HIPAA compliance validation rules for production and staging environments.
      * HIPAA applies to any environment that processes PHI.
      */
-    public static void install(SystemContext ctx) {
+    @Override
+    public void install(SystemContext ctx) {
         // HIPAA enforcement for production and staging (PHI may exist in both)
         if (ctx.security != SecurityProfile.PRODUCTION && ctx.security != SecurityProfile.STAGING) {
             LOG.info("HIPAA validation rules enforced for PRODUCTION and STAGING profiles only");
@@ -116,7 +125,7 @@ public final class HipaaRules {
      * §164.308(a)(1) - Security Management Process.
      * Risk analysis, risk management, sanction policy, information system activity review.
      */
-    private static List<ComplianceRule> validateSecurityManagement(SystemContext ctx) {
+    private List<ComplianceRule> validateSecurityManagement(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -159,7 +168,7 @@ public final class HipaaRules {
      * §164.308(a)(4) - Information Access Management.
      * Access authorization, access establishment and modification.
      */
-    private static List<ComplianceRule> validateAccessManagement(SystemContext ctx) {
+    private List<ComplianceRule> validateAccessManagement(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // §164.308(a)(4)(ii)(C) - Access Establishment and Modification
@@ -185,7 +194,7 @@ public final class HipaaRules {
      * Physical Safeguards - Infrastructure level controls.
      * §164.310 - Facility Access Controls, Workstation Security, Device and Media Controls.
      */
-    private static List<ComplianceRule> validatePhysicalSafeguards(SystemContext ctx) {
+    private List<ComplianceRule> validatePhysicalSafeguards(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -229,7 +238,7 @@ public final class HipaaRules {
      * §164.312(a)(1) - Access Control.
      * Unique user identification, emergency access, automatic logoff, encryption and decryption.
      */
-    private static List<ComplianceRule> validateAccessControls(SystemContext ctx) {
+    private List<ComplianceRule> validateAccessControls(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // §164.312(a)(2)(i) - Unique User Identification (Required)
@@ -238,7 +247,7 @@ public final class HipaaRules {
             rules.add(ComplianceRule.fail(
                 "HIPAA-164.312(a)(2)(i)-Auth",
                 "Unique user identification required for PHI access (HIPAA §164.312(a)(2)(i))",
-                "Configure authMode = 'alb-oidc' or 'jenkins-oidc' to identify and authenticate users."
+                "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to identify and authenticate users."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -268,7 +277,7 @@ public final class HipaaRules {
      * §164.312(b) - Audit Controls (Required).
      * Hardware, software, and procedural mechanisms to record and examine activity.
      */
-    private static List<ComplianceRule> validateAuditControls(SystemContext ctx) {
+    private List<ComplianceRule> validateAuditControls(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -328,7 +337,7 @@ public final class HipaaRules {
      * §164.312(c)(1) - Integrity (Required).
      * Policies and procedures to protect ePHI from improper alteration or destruction.
      */
-    private static List<ComplianceRule> validateIntegrityControls(SystemContext ctx) {
+    private List<ComplianceRule> validateIntegrityControls(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -360,7 +369,7 @@ public final class HipaaRules {
      * §164.312(d) - Person or Entity Authentication (Required).
      * Procedures to verify that a person or entity seeking access to ePHI is the one claimed.
      */
-    private static List<ComplianceRule> validateAuthenticationControls(SystemContext ctx) {
+    private List<ComplianceRule> validateAuthenticationControls(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // §164.312(d) - Authentication (Required)
@@ -369,7 +378,7 @@ public final class HipaaRules {
             rules.add(ComplianceRule.fail(
                 "HIPAA-164.312(d)-Auth",
                 "Authentication required for all users accessing ePHI (HIPAA §164.312(d))",
-                "Configure authMode = 'alb-oidc' or 'jenkins-oidc' with strong authentication mechanism."
+                "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' with strong authentication mechanism."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -379,7 +388,7 @@ public final class HipaaRules {
         }
 
         // Multi-factor authentication (Addressable - but highly recommended)
-        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode)) {
+        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
             // Check if using Cognito with MFA (compliant) or SSO (requires ssoInstanceArn)
             boolean usingCognitoWithMfa = Boolean.TRUE.equals(ctx.cfc.cognitoAutoProvision())
                                        && Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled());
@@ -409,7 +418,7 @@ public final class HipaaRules {
      * §164.312(e)(1) - Transmission Security (Required).
      * Technical security measures to guard against unauthorized access to ePHI during transmission.
      */
-    private static List<ComplianceRule> validateTransmissionSecurity(SystemContext ctx) {
+    private List<ComplianceRule> validateTransmissionSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -469,7 +478,7 @@ public final class HipaaRules {
      * §164.316(b)(2)(i) - Retention Requirements.
      * Retain documentation for 6 years from the date of creation or last use.
      */
-    private static List<ComplianceRule> validateRetentionRequirements(SystemContext ctx) {
+    private List<ComplianceRule> validateRetentionRequirements(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -502,7 +511,7 @@ public final class HipaaRules {
      * Check if log retention meets HIPAA requirement (6 years).
      * §164.316(b)(2)(i): Retain documentation for 6 years.
      */
-    private static boolean isRetentionSufficient(RetentionDays retention) {
+    private boolean isRetentionSufficient(RetentionDays retention) {
         // HIPAA requires 6 years (2190 days)
         // CloudWatch RetentionDays enum doesn't have 6-year option
         // TWO_YEARS (730 days) does NOT meet HIPAA requirement
@@ -524,7 +533,7 @@ public final class HipaaRules {
     /**
      * Generate HIPAA Security Rule compliance report.
      */
-    public static String generateComplianceReport(SystemContext ctx) {
+    public String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
         report.append("\n=== HIPAA Security Rule Compliance Report == = \n\n");
 

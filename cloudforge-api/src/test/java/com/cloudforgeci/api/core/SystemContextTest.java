@@ -1,10 +1,10 @@
 package com.cloudforgeci.api.core;
 
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.ec2.Vpc;
@@ -204,7 +204,7 @@ public class SystemContextTest {
 
     // Try to start with different topology
     assertThrows(IllegalStateException.class, () -> {
-      SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
+      SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
     });
   }
 

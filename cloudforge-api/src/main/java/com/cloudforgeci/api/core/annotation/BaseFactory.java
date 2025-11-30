@@ -1,5 +1,9 @@
 package com.cloudforgeci.api.core.annotation;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
@@ -50,7 +54,7 @@ public abstract class BaseFactory extends Construct {
     /**
      * Get the appropriate security profile configuration based on the security profile.
      */
-    private SecurityProfileConfiguration getSecurityProfileConfiguration(com.cloudforgeci.api.interfaces.SecurityProfile securityProfile) {
+    private SecurityProfileConfiguration getSecurityProfileConfiguration(SecurityProfile securityProfile) {
         return switch (securityProfile) {
             case DEV -> new com.cloudforgeci.api.core.security.DevSecurityProfileConfiguration(cfc);
             case STAGING -> new com.cloudforgeci.api.core.security.StagingSecurityProfileConfiguration(cfc);

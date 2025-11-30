@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -200,7 +200,7 @@ class FargateRuntimeConfigurationTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
@@ -364,7 +364,7 @@ class FargateRuntimeConfigurationTest {
         // Given: Different topology types
         TopologyType[] topologies = {
             TopologyType.JENKINS_SERVICE,
-            TopologyType.JENKINS_SINGLE_NODE
+            TopologyType.JENKINS_SERVICE
         };
 
         int counter = 0;

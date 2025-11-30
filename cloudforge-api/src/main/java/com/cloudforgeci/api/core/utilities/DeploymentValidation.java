@@ -1,4 +1,4 @@
-package com.cloudforgeci.api.core.utilities;
+package com.cloudforge.core.utilities;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import jakarta.validation.Constraint;

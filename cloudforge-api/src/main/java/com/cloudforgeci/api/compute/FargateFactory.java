@@ -1,23 +1,21 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforgeci.api.storage.ContainerFactory;
+import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.efs.AccessPoint;
-import software.amazon.awscdk.services.efs.AccessPointOptions;
-import software.amazon.awscdk.services.efs.Acl;
-import software.amazon.awscdk.services.efs.PosixUser;
 import software.amazon.awscdk.services.iam.Role;
 import software.constructs.Construct;
 
 import java.util.List;
 
-import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_HOME;
-import static com.cloudforgeci.api.interfaces.Constants.Jenkins.JENKINS_PATH;
+// Removed static imports - now using ApplicationSpec
 
 /**
  * Factory for creating Fargate-based Jenkins compute infrastructure.
@@ -73,8 +71,50 @@ public class FargateFactory extends BaseFactory {
   @DeploymentContext("minInstanceCapacity")
   private Integer minInstanceCapacity;
 
+  @DeploymentContext("maxInstanceCapacity")
+  private Integer maxInstanceCapacity;
+
+  @DeploymentContext("cpuTargetUtilization")
+  private Integer cpuTargetUtilization;
+
   @DeploymentContext("networkMode")
   private String networkMode;
+
+  @DeploymentContext("healthCheckGracePeriod")
+  private Integer healthCheckGracePeriod;
+
+  @com.cloudforge.core.annotation.SystemContext("fargateExecutionRole")
+  private Role fargateExecutionRole;
+
+  @com.cloudforge.core.annotation.SystemContext("fargateTaskRole")
+  private Role fargateTaskRole;
+
+  @com.cloudforge.core.annotation.SystemContext("applicationSpec")
+  private com.cloudforge.core.interfaces.ApplicationSpec applicationSpec;
+
+  @com.cloudforge.core.annotation.SystemContext("efs")
+  private software.amazon.awscdk.services.efs.FileSystem efs;
+
+  @com.cloudforge.core.annotation.SystemContext("vpc")
+  private software.amazon.awscdk.services.ec2.Vpc vpc;
+
+  @com.cloudforge.core.annotation.SystemContext("albSg")
+  private SecurityGroup albSg;
+
+  @com.cloudforge.core.annotation.SystemContext("efsSg")
+  private SecurityGroup efsSg;
+
+  @com.cloudforge.core.annotation.SystemContext("ap")
+  private AccessPoint ap;
+
+  @DeploymentContext("authMode")
+  private String authMode;
+
+  @DeploymentContext("stackName")
+  private String stackName;
+
+  @DeploymentContext("region")
+  private String region;
 
   /**
    * Creates a new FargateFactory instance.
@@ -84,20 +124,30 @@ public class FargateFactory extends BaseFactory {
    */
   public FargateFactory(Construct scope, String id) {
     super(scope, id);
-    // bastionCidr, cpu, memory, minInstanceCapacity, and networkMode are automatically injected by BaseFactory
+    // All fields are automatically injected by BaseFactory
   }
 
   @Override
   public void create() {
+    // Set scaling configuration in SystemContext slots so topology can wire auto-scaling
+    if (minInstanceCapacity != null) {
+      ctx.minInstanceCapacity.set(minInstanceCapacity);
+    }
+    if (maxInstanceCapacity != null) {
+      ctx.maxInstanceCapacity.set(maxInstanceCapacity);
+    }
+    if (cpuTargetUtilization != null) {
+      ctx.cpuTargetUtilization.set(cpuTargetUtilization);
+    }
+
     // Use IAM roles from SystemContext created by IAM configuration system
     // These roles are security-profile aware and provide consistent permissions
-    Role executionRole = ctx.fargateExecutionRole.get()
-            .orElseThrow(() -> new IllegalStateException(
-                    "Fargate execution role not found - IAM configuration should have created it"));
-
-    Role taskRole = ctx.fargateTaskRole.get()
-            .orElseThrow(() -> new IllegalStateException(
-                    "Fargate task role not found - IAM configuration should have created it"));
+    if (fargateExecutionRole == null) {
+      throw new IllegalStateException("Fargate execution role not found - IAM configuration should have created it");
+    }
+    if (fargateTaskRole == null) {
+      throw new IllegalStateException("Fargate task role not found - IAM configuration should have created it");
+    }
 
     // Check if ECS Exec should be enabled based on bastionCidr configuration
     boolean enableEcsExec = bastionCidr != null && !bastionCidr.isBlank();
@@ -105,18 +155,25 @@ public class FargateFactory extends BaseFactory {
     FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task")
             .cpu(cpu)
             .memoryLimitMiB(memory)
-            .executionRole(executionRole)
-            .taskRole(taskRole)
+            .executionRole(fargateExecutionRole)
+            .taskRole(fargateTaskRole)
             .build();
-    AccessPoint ap = ctx.efs.get().orElseThrow().addAccessPoint("JenkinsAp", AccessPointOptions.builder()
-            .path(JENKINS_PATH)
-            .posixUser(PosixUser.builder().uid("1000").gid("1000").build())
-            .createAcl(Acl.builder().ownerUid("1000").ownerGid("1000").permissions("750").build())
-            .build());
-    ctx.ap.set(ap);
-    Cluster cluster = Cluster.Builder.create(this, "Cluster").vpc(ctx.vpc.get().orElseThrow()).build();
+
+    // Validate that EFS and Access Point are available (created by EfsFactory)
+    if (efs == null) {
+      throw new IllegalStateException("EFS not available - EfsFactory should have created it");
+    }
+    if (ap == null) {
+      throw new IllegalStateException("EFS Access Point not available - EfsFactory should have created it");
+    }
+
+    if (vpc == null) {
+      throw new IllegalStateException("VPC not available");
+    }
+
+    Cluster cluster = Cluster.Builder.create(this, "Cluster").vpc(vpc).build();
     SecurityGroup serviceSg = SecurityGroup.Builder.create(this, getNode().getId() + "SvcSg")
-            .vpc(ctx.vpc.get().orElseThrow())
+            .vpc(vpc)
             .allowAllOutbound(true).build();
     ctx.fargateServiceSg.set(serviceSg);
     // Determine subnet type and public IP assignment based on network mode
@@ -139,32 +196,96 @@ public class FargateFactory extends BaseFactory {
                     .build())  // Prevents stuck deployments and enables automatic rollback
             .build();
 
+    // Set health check grace period (critical for slow-starting apps like GitLab)
+    // Must be set on the underlying CfnService after FargateService creation
+    int gracePeriodSeconds = healthCheckGracePeriod != null ? healthCheckGracePeriod : 300;
+    CfnService cfnService = (CfnService) service.getNode().getDefaultChild();
+    cfnService.setHealthCheckGracePeriodSeconds(gracePeriodSeconds);
+
+    // Add dependency on Cognito client secret Custom Resource if it exists
+    // This ensures the secret is created in Secrets Manager BEFORE ECS tries to pull it
+    ctx.cognitoClientSecretResourceInternal.get().ifPresent(secretResource -> {
+        service.getNode().addDependency(secretResource);
+    });
+
     // Set task definition in context first (needed by ContainerFactory)
     // Note: EFS permissions are handled by IAMRules based on security profile
     ctx.fargateTaskDef.set(taskDef);
 
     // Add EFS volume to task definition (needed by ContainerFactory)
+    String volumeName = applicationSpec != null ? applicationSpec.volumeName() : "jenkinsHome";
     ctx.fargateTaskDef.get().orElseThrow().addVolume(Volume.builder()
-            .name(JENKINS_HOME)
+            .name(volumeName)
             .efsVolumeConfiguration(EfsVolumeConfiguration.builder()
-                    .fileSystemId(ctx.efs.get().orElseThrow().getFileSystemId())
+                    .fileSystemId(efs.getFileSystemId())
                     .transitEncryption("ENABLED")
                     .authorizationConfig(AuthorizationConfig.builder()
-                            .accessPointId(ctx.ap.get().orElseThrow().getAccessPointId())
+                            .accessPointId(ap.getAccessPointId())
                             .iam("ENABLED")
                             .build())
                     .build())
             .build());
 
     // Create container (now that task definition and volume are available)
-    ContainerFactory containerFactory = new ContainerFactory(this, getNode().getId() + "Container", ContainerImage.fromRegistry("jenkins/jenkins:lts"));
+    // Get container image from ApplicationSpec or use default
+    String containerImage = applicationSpec != null ? applicationSpec.defaultContainerImage() : "jenkins/jenkins:lts";
+    ContainerFactory containerFactory = new ContainerFactory(this, getNode().getId() + "Container", ContainerImage.fromRegistry(containerImage));
     containerFactory.create();
 
     // Now set the service in context after container is created
     ctx.fargateService.set(service);
 
+    // Configure security group rules (migrated from JenkinsBootstrap)
+    configureSecurityGroupRules(serviceSg);
+
+    // Create CloudFormation output for application URL (migrated from JenkinsBootstrap)
+    createApplicationUrlOutput();
+
     // Note: Auto-scaling is handled by JenkinsServiceTopologyConfiguration
     // to avoid conflicts with duplicate auto-scaling configuration
+  }
+
+  /**
+   * Configure security group rules for Fargate service.
+   * Allows EFS access from Fargate and HTTP traffic from ALB.
+   *
+   * <p>This logic was migrated from JenkinsBootstrap to consolidate
+   * Fargate-specific configuration in one place.</p>
+   */
+  private void configureSecurityGroupRules(SecurityGroup serviceSg) {
+    // Allow NFS traffic from Fargate service to EFS
+    if (efsSg != null) {
+      efsSg.addIngressRule(serviceSg, Port.tcp(2049), "NFS_from_Fargate_service", false);
+    }
+
+    // Allow HTTP traffic from ALB to Fargate service
+    if (albSg != null) {
+      int appPort = applicationSpec != null ? applicationSpec.applicationPort() : 8080;
+      serviceSg.addIngressRule(albSg, Port.tcp(appPort), "HTTP_from_ALB", false);
+    }
+  }
+
+  /**
+   * Create CloudFormation output for application URL.
+   * Uses applicationId from ApplicationSpec to create generic output.
+   *
+   * <p>This logic was migrated from JenkinsBootstrap and made generic
+   * to support any application type.</p>
+   */
+  private void createApplicationUrlOutput() {
+    // Only create output if ALB is available
+    if (ctx.alb.get().isEmpty()) {
+      return;
+    }
+
+    String appId = applicationSpec != null ? applicationSpec.applicationId() : "application";
+    String outputId = appId.substring(0, 1).toUpperCase() + appId.substring(1) + "Url";
+    String description = appId.substring(0, 1).toUpperCase() + appId.substring(1) + " URL (ALB DNS)";
+
+    CfnOutput.Builder.create(this, outputId)
+            .description(description)
+            .value("http://" + ctx.alb.get().get().getLoadBalancerDnsName())
+            .build();
   }
 
 }

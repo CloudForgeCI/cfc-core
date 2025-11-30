@@ -1,8 +1,11 @@
 package com.cloudforgeci.api.core.rules;
 
+
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.ComplianceMode;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,16 +34,28 @@ import java.util.logging.Logger;
  * - CC7.3: Environmental Protections (Availability)
  * - CC8.1: Change Management
  */
-public final class Soc2Rules {
+@ComplianceFramework(
+    value = "SOC2",
+    priority = 40,
+    displayName = "SOC 2",
+    description = "Validates SOC 2 Trust Services Criteria for service organizations"
+)
+public class Soc2Rules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(Soc2Rules.class.getName());
 
-    private Soc2Rules() {}
 
     /**
      * Install SOC 2 compliance validation rules.
      * SOC 2 applies to production and staging environments serving customers.
      */
-    public static void install(SystemContext ctx) {
+        /** 
+     * Install SOC 2 compliance validation rules. 
+     * SOC 2 applies to production and staging environments serving customers. 
+     * 
+     * @since 3.1.0 
+     */ 
+    @Override 
+    public void install(SystemContext ctx) {
         // SOC 2 typically applies to production and staging
         if (ctx.security != SecurityProfile.PRODUCTION && ctx.security != SecurityProfile.STAGING) {
             LOG.info("SOC 2 validation rules typically apply to PRODUCTION and STAGING profiles");
@@ -109,7 +124,7 @@ public final class Soc2Rules {
      * The entity implements logical access security software, infrastructure, and architectures
      * over protected information assets to protect them from security events.
      */
-    private static List<ComplianceRule> validateAccessControls(SystemContext ctx) {
+    private List<ComplianceRule> validateAccessControls(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -134,7 +149,7 @@ public final class Soc2Rules {
             rules.add(ComplianceRule.fail(
                 "SOC2-CC6.2-Auth",
                 "User authentication required for customer-facing systems",
-                "Configure authMode = 'alb-oidc' or 'jenkins-oidc' to authenticate users."
+                "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to authenticate users."
             ));
         } else {
             rules.add(ComplianceRule.pass("SOC2-CC6.2-Auth", "User authentication enabled"));
@@ -159,7 +174,7 @@ public final class Soc2Rules {
      * CC6.6 & CC6.7: Network Segmentation and Data Transmission.
      * The entity implements network segmentation and encrypts data in transmission.
      */
-    private static List<ComplianceRule> validateNetworkSecurity(SystemContext ctx) {
+    private List<ComplianceRule> validateNetworkSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -227,7 +242,7 @@ public final class Soc2Rules {
      * The entity monitors system components and the operation of those components
      * for anomalies indicative of malicious acts, natural disasters, and errors.
      */
-    private static List<ComplianceRule> validateSystemMonitoring(SystemContext ctx) {
+    private List<ComplianceRule> validateSystemMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -298,7 +313,7 @@ public final class Soc2Rules {
      * tests, approves, and implements changes to infrastructure, data, software,
      * and procedures to meet its objectives.
      */
-    private static List<ComplianceRule> validateChangeManagement(SystemContext ctx) {
+    private List<ComplianceRule> validateChangeManagement(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -340,7 +355,7 @@ public final class Soc2Rules {
      * The entity maintains, monitors, and evaluates system availability.
      * (Only validated if organization claims Availability criteria)
      */
-    private static List<ComplianceRule> validateAvailability(SystemContext ctx) {
+    private List<ComplianceRule> validateAvailability(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -403,7 +418,7 @@ public final class Soc2Rules {
      * The entity protects confidential information to meet commitments and system requirements.
      * (Only validated if organization claims Confidentiality criteria)
      */
-    private static List<ComplianceRule> validateConfidentiality(SystemContext ctx) {
+    private List<ComplianceRule> validateConfidentiality(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -460,7 +475,7 @@ public final class Soc2Rules {
     /**
      * Generate SOC 2 Trust Services Criteria compliance report.
      */
-    public static String generateComplianceReport(SystemContext ctx) {
+    public String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
         report.append("\n=== SOC 2 Trust Services Criteria Compliance Report == = \n\n");
 

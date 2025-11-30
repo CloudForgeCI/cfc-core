@@ -1,7 +1,11 @@
 package com.cloudforgeci.api.examples;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,10 +63,10 @@ class SecurityProfileExampleTest {
 
         // Start SystemContext before creating any factories
         com.cloudforgeci.api.core.SystemContext.start(stack,
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.FARGATE,
             SecurityProfile.DEV,
-            com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+            com.cloudforge.core.enums.IAMProfile.MINIMAL,
             DeploymentContext.from(stack));
 
         testCfc = DeploymentContext.from(app);
@@ -118,10 +122,10 @@ class SecurityProfileExampleTest {
             boolean hasSecurityProfileConfigField = false;
 
             for (var field : fields) {
-                if (field.isAnnotationPresent(com.cloudforgeci.api.core.annotation.SystemContext.class)) {
+                if (field.isAnnotationPresent(com.cloudforge.core.annotation.SystemContext.class)) {
                     hasSystemContextField = true;
                 }
-                if (field.isAnnotationPresent(com.cloudforgeci.api.core.annotation.DeploymentContext.class)) {
+                if (field.isAnnotationPresent(com.cloudforge.core.annotation.DeploymentContext.class)) {
                     hasDeploymentContextField = true;
                 }
                 if (field.getType().equals(SecurityProfileConfiguration.class)) {

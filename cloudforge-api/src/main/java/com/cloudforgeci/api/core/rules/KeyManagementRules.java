@@ -1,7 +1,9 @@
 package com.cloudforgeci.api.core.rules;
 
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,15 +31,22 @@ import java.util.logging.Logger;
  *
  * <h2>Usage</h2>
  * <pre>{@code
- * // Install key management validation
- * KeyManagementRules.install(ctx);
+ * // Automatically loaded via FrameworkLoader (v2.0 pattern)
+ * // Or manually: new KeyManagementRules().install(ctx);
  * }</pre>
+ *
+ * @since 3.1.0
  */
-public final class KeyManagementRules {
+@ComplianceFramework(
+    value = "KeyManagement",
+    priority = -10,
+    alwaysLoad = true,
+    displayName = "Key Management & Encryption",
+    description = "Cross-framework key management and encryption validation"
+)
+public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(KeyManagementRules.class.getName());
-
-    private KeyManagementRules() {}
 
     /**
      * Install key management validation rules.
@@ -45,7 +54,8 @@ public final class KeyManagementRules {
      *
      * @param ctx System context
      */
-    public static void install(SystemContext ctx) {
+    @Override
+    public void install(SystemContext ctx) {
         // Key management is critical for production and staging
         if (ctx.security == SecurityProfile.DEV) {
             LOG.info("Key management validation rules are advisory for DEV environments");
@@ -101,7 +111,7 @@ public final class KeyManagementRules {
      *   <li>Key policies follow least privilege</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateKmsKeyManagement(SystemContext ctx) {
+    private List<ComplianceRule> validateKmsKeyManagement(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -174,7 +184,7 @@ public final class KeyManagementRules {
      *   <li>Strong cipher suites</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateCertificateManagement(SystemContext ctx) {
+    private List<ComplianceRule> validateCertificateManagement(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Certificate must exist for HTTPS
@@ -244,7 +254,7 @@ public final class KeyManagementRules {
      *   <li>No hardcoded credentials</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateSecretsManagement(SystemContext ctx) {
+    private List<ComplianceRule> validateSecretsManagement(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -316,7 +326,7 @@ public final class KeyManagementRules {
     /**
      * Helper method to safely get boolean settings from deployment context.
      */
-    private static boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
+    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
         try {
             String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
             return Boolean.parseBoolean(value);

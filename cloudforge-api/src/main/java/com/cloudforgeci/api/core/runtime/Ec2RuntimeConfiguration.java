@@ -1,8 +1,9 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
@@ -52,7 +53,6 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
 
     // AutoScalingGroup is only required for JENKINS_SERVICE topology when maxInstanceCapacity > 1
     // When maxInstanceCapacity <= 1, JenkinsFactory creates a single instance instead of ASG
-    // JENKINS_SINGLE_NODE forbids AutoScalingGroup
     if (c.topology == TopologyType.JENKINS_SERVICE && c.cfc.maxInstanceCapacity() != null && c.cfc.maxInstanceCapacity() > 1) {
         rules.add(require("asg", x -> x.asg));
     }
@@ -115,7 +115,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     // ── 2a) Auto Scaling Configuration - EC2 runtime (when ASG is available) ────
     // Apply scaling policies to Auto Scaling Group ONLY for PRODUCTION security profile
     // DEV and STAGING profiles have auto-scaling disabled in their security configurations
-    boolean isProduction = c.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION;
+    boolean isProduction = c.security == SecurityProfile.PRODUCTION;
 
     if (isProduction) {
       LOG.info("PRODUCTION profile - setting up scaling policy callback");

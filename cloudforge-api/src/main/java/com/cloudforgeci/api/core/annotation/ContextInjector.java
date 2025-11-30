@@ -1,5 +1,12 @@
 package com.cloudforgeci.api.core.annotation;
 
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.annotation.SecurityProfileConfiguration;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import software.constructs.Construct;
 
 import java.lang.reflect.Field;
@@ -231,7 +238,7 @@ public final class ContextInjector {
      * Get the appropriate security profile configuration based on the security profile.
      */
     private static com.cloudforgeci.api.interfaces.SecurityProfileConfiguration getSecurityProfileConfiguration(
-            com.cloudforgeci.api.interfaces.SecurityProfile securityProfile,
+            SecurityProfile securityProfile,
             com.cloudforgeci.api.core.DeploymentContext deploymentContext) {
         return switch (securityProfile) {
             case DEV -> new com.cloudforgeci.api.core.security.DevSecurityProfileConfiguration(deploymentContext);

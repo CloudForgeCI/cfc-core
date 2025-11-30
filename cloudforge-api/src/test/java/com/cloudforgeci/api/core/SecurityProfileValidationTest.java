@@ -3,9 +3,10 @@ package com.cloudforgeci.api.core;
 import com.cloudforgeci.api.core.security.DevSecurityProfileConfiguration;
 import com.cloudforgeci.api.core.security.ProductionSecurityProfileConfiguration;
 import com.cloudforgeci.api.core.security.StagingSecurityProfileConfiguration;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
@@ -182,8 +183,8 @@ class SecurityProfileValidationTest {
         var productionConfig = new ProductionSecurityProfileConfiguration();
 
         // When & Then
-        assertTrue(devConfig instanceof com.cloudforgeci.api.interfaces.SecurityProfileConfiguration);
-        assertTrue(stagingConfig instanceof com.cloudforgeci.api.interfaces.SecurityProfileConfiguration);
-        assertTrue(productionConfig instanceof com.cloudforgeci.api.interfaces.SecurityProfileConfiguration);
+        assertTrue(devConfig instanceof SecurityProfileConfiguration);
+        assertTrue(stagingConfig instanceof SecurityProfileConfiguration);
+        assertTrue(productionConfig instanceof SecurityProfileConfiguration);
     }
 }
