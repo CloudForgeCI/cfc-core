@@ -76,6 +76,10 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                 .build();
 
         // Add standard CloudWatch permissions
+        // Use stackName for application-aware log paths
+        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? "/aws/*/" + c.stackName + "*"
+                : "/aws/*";
         ec2Role.addToPolicy(PolicyStatement.Builder.create()
                 .sid("StandardCloudWatchLogs")
                 .actions(List.of(
@@ -87,7 +91,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "logs:PutRetentionPolicy"
                 ))
                 .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/jenkins*"
+                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:" + appLogPattern
                 ))
                 .build());
 
@@ -117,6 +121,10 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
         }
 
         // Add S3 permissions for backup/restore (if needed)
+        // Use stackName for application-aware S3 bucket patterns
+        String backupBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-backup-*"
+                : "*-backup-*";
         ec2Role.addToPolicy(PolicyStatement.Builder.create()
                 .sid("StandardS3Backup")
                 .actions(List.of(
@@ -126,8 +134,8 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "s3:ListBucket"
                 ))
                 .resources(List.of(
-                        "arn:aws:s3:::jenkins-backup-*",
-                        "arn:aws:s3:::jenkins-backup-*/*"
+                        "arn:aws:s3:::" + backupBucketPattern,
+                        "arn:aws:s3:::" + backupBucketPattern + "/*"
                 ))
                 .build());
 
@@ -166,6 +174,10 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
         }
 
         // Add standard CloudWatch permissions
+        // Use stackName for application-aware log paths
+        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? "/aws/*/" + c.stackName + "*"
+                : "/aws/*";
         taskRole.addToPolicy(PolicyStatement.Builder.create()
                 .sid("StandardCloudWatchLogs")
                 .actions(List.of(
@@ -177,7 +189,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "logs:PutRetentionPolicy"
                 ))
                 .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/ecs/jenkins*"
+                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:" + appLogPattern
                 ))
                 .build());
 
@@ -193,6 +205,10 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                 .build());
 
         // Add S3 permissions for backup/restore
+        // Use stackName for application-aware S3 bucket patterns
+        String backupBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-backup-*"
+                : "*-backup-*";
         taskRole.addToPolicy(PolicyStatement.Builder.create()
                 .sid("StandardS3Backup")
                 .actions(List.of(
@@ -202,8 +218,8 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "s3:ListBucket"
                 ))
                 .resources(List.of(
-                        "arn:aws:s3:::jenkins-backup-*",
-                        "arn:aws:s3:::jenkins-backup-*/*"
+                        "arn:aws:s3:::" + backupBucketPattern,
+                        "arn:aws:s3:::" + backupBucketPattern + "/*"
                 ))
                 .build());
 

@@ -83,6 +83,9 @@ public class JenkinsOidcIntegration implements OidcIntegration {
         String jenkinsUrl = config.getApplicationUrl();
 
         // Build Jenkins Configuration as Code (JCasC) YAML
+        // Reference: https://github.com/jenkinsci/oic-auth-plugin/blob/master/docs/configuration/README.md
+        // serverConfiguration contains ONLY wellKnown (or manual) - nothing else
+        // clientId, clientSecret, userNameField etc. go at the oic level
         StringBuilder jcascConfig = new StringBuilder();
         jcascConfig.append("# Jenkins OIDC Configuration\n");
         jcascConfig.append("# Jenkins Configuration as Code (JCasC)\n");
@@ -93,34 +96,38 @@ public class JenkinsOidcIntegration implements OidcIntegration {
         jcascConfig.append("# Added by CloudForge\n");
         jcascConfig.append("\n");
         jcascConfig.append("jenkins:\n");
-
-        // Add Jenkins URL configuration if available (required for email notifications, PR status, BUILD_URL)
-        if (jenkinsUrl != null && !jenkinsUrl.isEmpty()) {
-            jcascConfig.append("  # Configure Jenkins root URL for reverse proxy\n");
-            jcascConfig.append("  location:\n");
-            jcascConfig.append(String.format("    url: \"%s\"\n", jenkinsUrl));
-            jcascConfig.append("\n");
-        }
-
         jcascConfig.append("  securityRealm:\n");
         jcascConfig.append("    oic:\n");
+        jcascConfig.append("      serverConfiguration:\n");
+        // Use manual configuration to support Cognito's custom logout URL format
+        // Reference: https://github.com/jenkinsci/oic-auth-plugin/issues/95
+        jcascConfig.append("        manual:\n");
+        jcascConfig.append(String.format("          authorizationServerUrl: \"%s\"\n", config.getAuthorizationEndpoint()));
+        jcascConfig.append(String.format("          tokenServerUrl: \"%s\"\n", config.getTokenEndpoint()));
+        jcascConfig.append(String.format("          userInfoServerUrl: \"%s\"\n", config.getUserInfoEndpoint()));
+        jcascConfig.append(String.format("          jwksServerUrl: \"%s\"\n", config.getJwksUri()));
+        jcascConfig.append(String.format("          issuer: \"%s\"\n", config.getIssuerUrl()));
+        jcascConfig.append(String.format("          scopes: \"%s\"\n", config.getScopes()));
+        // Configure Cognito logout with pre-formatted URL including required parameters
+        String logoutEndpoint = config.getLogoutEndpoint();
+        if (logoutEndpoint != null && !logoutEndpoint.isEmpty() && jenkinsUrl != null) {
+            String cognitoLogoutUrl = logoutEndpoint + "?client_id=" + config.getClientId()
+                + "&logout_uri=" + jenkinsUrl + "/";
+            jcascConfig.append(String.format("          endSessionUrl: \"%s\"\n", cognitoLogoutUrl));
+        }
         jcascConfig.append(String.format("      clientId: \"%s\"\n", config.getClientId()));
         jcascConfig.append("      clientSecret: \"${JENKINS_OIDC_CLIENT_SECRET}\"\n");
-        jcascConfig.append(String.format("      wellKnownOpenIDConfigurationUrl: \"%s/.well-known/openid-configuration\"\n", config.getIssuerUrl()));
-        jcascConfig.append(String.format("      tokenServerUrl: \"%s\"\n", config.getTokenEndpoint()));
-        jcascConfig.append(String.format("      authorizationServerUrl: \"%s\"\n", config.getAuthorizationEndpoint()));
-        jcascConfig.append(String.format("      userInfoServerUrl: \"%s\"\n", config.getUserInfoEndpoint()));
-        jcascConfig.append(String.format("      userNameField: \"%s\"\n", config.getUsernameClaim()));
+        jcascConfig.append(String.format("      userNameField: %s\n", sanitizeJmesPath(config.getUsernameClaim())));
         jcascConfig.append("      fullNameFieldName: \"name\"\n");
         jcascConfig.append("      emailFieldName: \"email\"\n");
-        jcascConfig.append(String.format("      groupsFieldName: \"%s\"\n", config.getGroupsClaim()));
-        jcascConfig.append(String.format("      scopes: \"%s\"\n", config.getScopes()));
+        jcascConfig.append(String.format("      groupsFieldName: %s\n", sanitizeJmesPath(config.getGroupsClaim())));
         jcascConfig.append("      disableSslVerification: false\n");
         jcascConfig.append("      logoutFromOpenidProvider: true\n");
-        jcascConfig.append("      postLogoutRedirectUrl: \"\"\n");
-        jcascConfig.append("      escapeHatchEnabled: false\n");
-        jcascConfig.append("      escapeHatchUsername: \"admin\"\n");
-        jcascConfig.append("      escapeHatchSecret: \"admin\"\n");
+        if (jenkinsUrl != null) {
+            jcascConfig.append(String.format("      postLogoutRedirectUrl: \"%s/\"\n", jenkinsUrl));
+        } else {
+            jcascConfig.append("      postLogoutRedirectUrl: \"\"\n");
+        }
         jcascConfig.append("\n");
         jcascConfig.append("  authorizationStrategy:\n");
 
@@ -149,9 +156,16 @@ public class JenkinsOidcIntegration implements OidcIntegration {
             jcascConfig.append("      allowAnonymousRead: false\n");
         }
         jcascConfig.append("\n");
-        jcascConfig.append("# Configure audit trail for compliance\n");
+        jcascConfig.append("# Configure Jenkins URL and audit trail\n");
         jcascConfig.append("unclassified:\n");
-        jcascConfig.append("  auditTrail:\n");
+
+        // Add Jenkins URL configuration if available (required for email notifications, PR status, BUILD_URL)
+        if (jenkinsUrl != null && !jenkinsUrl.isEmpty()) {
+            jcascConfig.append("  location:\n");
+            jcascConfig.append(String.format("    url: \"%s\"\n", jenkinsUrl));
+        }
+
+        jcascConfig.append("  audit-trail:\n");
         jcascConfig.append("    logBuildCause: true\n");
         jcascConfig.append("    pattern: \".*/.*\"\n");
         jcascConfig.append("    loggers:\n");
@@ -240,22 +254,37 @@ public class JenkinsOidcIntegration implements OidcIntegration {
             commands.add("");
         }
 
+        // Use manual configuration to support Cognito's custom logout URL format
+        // Reference: https://github.com/jenkinsci/oic-auth-plugin/issues/95
         commands.add("  securityRealm:");
         commands.add("    oic:");
+        commands.add("      serverConfiguration:");
+        commands.add("        manual:");
+        commands.add("          authorizationServerUrl: \"" + config.getAuthorizationEndpoint() + "\"");
+        commands.add("          tokenServerUrl: \"" + config.getTokenEndpoint() + "\"");
+        commands.add("          userInfoServerUrl: \"" + config.getUserInfoEndpoint() + "\"");
+        commands.add("          jwksServerUrl: \"" + config.getJwksUri() + "\"");
+        commands.add("          issuer: \"" + config.getIssuerUrl() + "\"");
+        commands.add("          scopes: \"" + config.getScopes() + "\"");
+        // Configure Cognito logout with pre-formatted URL including required parameters
+        String logoutEndpointEc2 = config.getLogoutEndpoint();
+        if (logoutEndpointEc2 != null && !logoutEndpointEc2.isEmpty() && jenkinsUrl != null) {
+            String cognitoLogoutUrlEc2 = logoutEndpointEc2 + "?client_id=" + config.getClientId() + "&logout_uri=" + jenkinsUrl + "/";
+            commands.add("          endSessionUrl: \"" + cognitoLogoutUrlEc2 + "\"");
+        }
         commands.add("      clientId: \"" + config.getClientId() + "\"");
         commands.add("      clientSecret: \"${JENKINS_OIDC_CLIENT_SECRET}\"");
-        commands.add("      wellKnownOpenIDConfigurationUrl: \"" + config.getIssuerUrl() + "/.well-known/openid-configuration\"");
-        commands.add("      tokenServerUrl: \"" + config.getTokenEndpoint() + "\"");
-        commands.add("      authorizationServerUrl: \"" + config.getAuthorizationEndpoint() + "\"");
-        commands.add("      userInfoServerUrl: \"" + config.getUserInfoEndpoint() + "\"");
         commands.add("      userNameField: \"" + config.getUsernameClaim() + "\"");
         commands.add("      fullNameFieldName: \"name\"");
         commands.add("      emailFieldName: \"email\"");
         commands.add("      groupsFieldName: \"" + config.getGroupsClaim() + "\"");
-        commands.add("      scopes: \"" + config.getScopes() + "\"");
         commands.add("      disableSslVerification: false");
         commands.add("      logoutFromOpenidProvider: true");
-        commands.add("      postLogoutRedirectUrl: \"\"");
+        if (jenkinsUrl != null) {
+            commands.add("      postLogoutRedirectUrl: \"" + jenkinsUrl + "/\"");
+        } else {
+            commands.add("      postLogoutRedirectUrl: \"\"");
+        }
         commands.add("      escapeHatchEnabled: true");
         commands.add("      escapeHatchUsername: \"admin\"");
         commands.add("      escapeHatchSecret: \"admin\"");
@@ -335,9 +364,9 @@ public class JenkinsOidcIntegration implements OidcIntegration {
 
     @Override
     public String getContainerStartupCommand() {
-        // Return a script that installs plugins before starting Jenkins
-        // Note: This will be executed via sh -c by ContainerFactory, so return the command directly
-        return "jenkins-plugin-cli --plugins configuration-as-code oic-auth matrix-auth audit-trail && exec /usr/local/bin/jenkins.sh";
+        // Install required plugins using jenkins-plugin-cli, then start Jenkins
+        // This ensures plugins are installed even if Jenkins home already exists
+        return "jenkins-plugin-cli --plugins configuration-as-code oic-auth matrix-auth audit-trail && /usr/local/bin/jenkins.sh";
     }
 
     @Override
@@ -382,5 +411,34 @@ public class JenkinsOidcIntegration implements OidcIntegration {
                 - Verify OIDC plugin installed: Manage Jenkins > Manage Plugins
                 - Test OIDC endpoints are accessible from Jenkins container
                 """;
+    }
+
+    /**
+     * Sanitizes OIDC claim names to be valid JMESPath expressions.
+     *
+     * <p>The Jenkins OIDC plugin uses JMESPath to extract claim values from OIDC tokens.
+     * However, Cognito uses claim names with colons (e.g., "cognito:username", "cognito:groups")
+     * which are invalid in bare JMESPath identifier syntax.</p>
+     *
+     * <p>JMESPath requires quoted identifiers for names with special characters.
+     * The syntax is: "identifier-with-special-chars"</p>
+     *
+     * @param claimName the claim name from OIDC configuration
+     * @return sanitized claim name that's valid JMESPath, properly quoted for YAML
+     */
+    private String sanitizeJmesPath(String claimName) {
+        if (claimName == null || claimName.isEmpty()) {
+            return claimName;
+        }
+
+        // JMESPath quoted identifier syntax: "name" for names with special chars like colons
+        // In YAML, we need to wrap in single quotes to preserve the double quotes
+        // Result in YAML: '"cognito:groups"' which JMESPath parses as identifier "cognito:groups"
+        if (claimName.contains(":") || claimName.contains("-") || claimName.contains(" ")) {
+            return "'\"" + claimName + "\"'";
+        }
+
+        // For simple claim names, just quote for YAML
+        return "\"" + claimName + "\"";
     }
 }

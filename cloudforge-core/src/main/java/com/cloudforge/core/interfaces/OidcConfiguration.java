@@ -80,6 +80,18 @@ public interface OidcConfiguration {
     String getJwksUri();
 
     /**
+     * Returns the OIDC logout endpoint.
+     *
+     * <p>For Cognito, this is: https://{domain}.auth.{region}.amazoncognito.com/logout</p>
+     * <p>The full logout URL requires client_id and logout_uri parameters.</p>
+     *
+     * @return logout endpoint URL (may be null if not supported)
+     */
+    default String getLogoutEndpoint() {
+        return null;
+    }
+
+    /**
      * Returns the OAuth 2.0 client ID.
      *
      * <p>This is the application identifier registered with the OIDC provider.</p>

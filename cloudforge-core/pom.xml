@@ -14,8 +14,6 @@
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <java.version>21</java.version>
-    <cdk.version>2.152.0</cdk.version>
-    <constructs.version>10.3.0</constructs.version>
   </properties>
 
   <scm>
@@ -26,34 +24,34 @@
 
 
   <dependencies>
-    <!-- Jakarta Validation API for validators -->
+    <!-- Jackson annotations for JSON serialization (version from parent BOM) -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+    </dependency>
+
+    <!-- Jakarta Validation API for validators (version from parent BOM) -->
     <dependency>
       <groupId>jakarta.validation</groupId>
       <artifactId>jakarta.validation-api</artifactId>
-      <version>3.0.2</version>
     </dependency>
 
-    <!-- JUnit 5 for testing -->
+    <!-- JUnit 5 for testing (version and scope from parent BOM) -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
     </dependency>
 
-    <!-- Hibernate Validator for Jakarta Bean Validation implementation -->
+    <!-- Hibernate Validator for Jakarta Bean Validation implementation (version and scope from parent BOM) -->
     <dependency>
       <groupId>org.hibernate.validator</groupId>
       <artifactId>hibernate-validator</artifactId>
-      <version>8.0.1.Final</version>
-      <scope>test</scope>
     </dependency>
 
-    <!-- Expression Language implementation required by Hibernate Validator -->
+    <!-- Expression Language implementation required by Hibernate Validator (version and scope from parent BOM) -->
     <dependency>
       <groupId>org.glassfish</groupId>
       <artifactId>jakarta.el</artifactId>
-      <version>4.0.2</version>
-      <scope>test</scope>
     </dependency>
   </dependencies>
 

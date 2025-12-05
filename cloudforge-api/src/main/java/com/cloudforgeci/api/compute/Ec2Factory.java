@@ -101,6 +101,12 @@ public class Ec2Factory extends BaseFactory {
   @DeploymentContext("retainStorage")
   private Boolean retainStorage;
 
+  @DeploymentContext("instanceType")
+  private String instanceType;
+
+  @DeploymentContext("enableEncryption")
+  private Boolean enableEncryption;
+
   public Ec2Factory(Construct scope, String id) {
     super(scope, id);
     // All fields are automatically injected by BaseFactory
@@ -249,9 +255,23 @@ public class Ec2Factory extends BaseFactory {
 
   private LaunchTemplate createLaunchTemplate(Role ec2Role, SecurityGroup instanceSg, UserData userData) {
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
+
+    // Determine instance type with priority: DeploymentConfig > ApplicationSpec > default
+    String instanceTypeStr;
+    if (instanceType != null && !instanceType.isEmpty()) {
+      instanceTypeStr = instanceType;
+    } else if (applicationSpec != null) {
+      instanceTypeStr = applicationSpec.defaultInstanceType();
+    } else {
+      instanceTypeStr = "t3.micro";  // Fallback default
+    }
+
+    // Parse instance type string (e.g., "t3.micro" -> InstanceClass.T3, InstanceSize.MICRO)
+    InstanceType parsedInstanceType = parseInstanceType(instanceTypeStr);
+
     LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, appId + "Lt")
             .machineImage(MachineImage.latestAmazonLinux2023())
-            .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
+            .instanceType(parsedInstanceType)
             .securityGroup(instanceSg)
             .role(ec2Role)
             .userData(userData);
@@ -267,12 +287,22 @@ public class Ec2Factory extends BaseFactory {
       LOG.info("EBS data volumes will be DESTROYED with instances (retainStorage = false)");
     }
 
+    // Determine encryption setting with priority: DeploymentConfig > SecurityProfile default
+    // For production deployments, encryption defaults to true
+    boolean encrypt;
+    if (enableEncryption != null) {
+      encrypt = enableEncryption;
+    } else {
+      // Default: encrypt for PRODUCTION and STAGING, optional for DEV
+      encrypt = (security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING);
+    }
+
     // Add block devices
     ltBuilder.blockDevices(List.of(
             BlockDevice.builder()
                     .deviceName("/dev/xvda")
                     .volume(BlockDeviceVolume.ebs(20, EbsDeviceOptions.builder()
-                            .encrypted(true)
+                            .encrypted(encrypt)
                             .volumeType(EbsDeviceVolumeType.STANDARD)
                             .deleteOnTermination(true)  // Always delete root volume
                             .build()))
@@ -286,7 +316,7 @@ public class Ec2Factory extends BaseFactory {
               BlockDevice.builder()
                       .deviceName(ebsDeviceName)
                       .volume(BlockDeviceVolume.ebs(100, EbsDeviceOptions.builder()
-                              .encrypted(true)
+                              .encrypted(encrypt)
                               .volumeType(EbsDeviceVolumeType.STANDARD)
                               .deleteOnTermination(deleteDataVolume)  // Respect retainStorage setting
                               .build()))
@@ -295,6 +325,62 @@ public class Ec2Factory extends BaseFactory {
     }
 
     return ltBuilder.build();
+  }
+
+  /**
+   * Parse EC2 instance type from string (e.g., "t3.micro").
+   *
+   * @param instanceTypeStr Instance type string (e.g., "t3.micro", "m5.large")
+   * @return Parsed InstanceType
+   */
+  private static InstanceType parseInstanceType(String instanceTypeStr) {
+    // Extract class and size from instance type (e.g., "t3.micro")
+    String[] parts = instanceTypeStr.split("\\.");
+    if (parts.length < 2) {
+      return InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO);
+    }
+
+    InstanceClass instanceClass = parseInstanceClass(parts[0]);
+    InstanceSize instanceSize = parseInstanceSize(parts[1]);
+
+    return InstanceType.of(instanceClass, instanceSize);
+  }
+
+  /**
+   * Parse instance class from string.
+   */
+  private static InstanceClass parseInstanceClass(String className) {
+    return switch (className.toLowerCase()) {
+      case "t3" -> InstanceClass.BURSTABLE3;
+      case "t4g" -> InstanceClass.BURSTABLE4_GRAVITON;
+      case "m5" -> InstanceClass.M5;
+      case "m6g" -> InstanceClass.MEMORY6_GRAVITON;
+      case "r5" -> InstanceClass.R5;
+      case "r6g" -> InstanceClass.MEMORY6_GRAVITON;
+      case "c5" -> InstanceClass.COMPUTE5;
+      case "c6g" -> InstanceClass.COMPUTE6_GRAVITON2;
+      default -> InstanceClass.BURSTABLE3;
+    };
+  }
+
+  /**
+   * Parse instance size from string.
+   */
+  private static InstanceSize parseInstanceSize(String size) {
+    return switch (size.toLowerCase()) {
+      case "micro" -> InstanceSize.MICRO;
+      case "small" -> InstanceSize.SMALL;
+      case "medium" -> InstanceSize.MEDIUM;
+      case "large" -> InstanceSize.LARGE;
+      case "xlarge" -> InstanceSize.XLARGE;
+      case "2xlarge" -> InstanceSize.XLARGE2;
+      case "4xlarge" -> InstanceSize.XLARGE4;
+      case "8xlarge" -> InstanceSize.XLARGE8;
+      case "12xlarge" -> InstanceSize.XLARGE12;
+      case "16xlarge" -> InstanceSize.XLARGE16;
+      case "24xlarge" -> InstanceSize.XLARGE24;
+      default -> InstanceSize.MICRO;
+    };
   }
 
   private AutoScalingGroup createAutoScalingGroup(LaunchTemplate launchTemplate) {

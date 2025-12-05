@@ -74,6 +74,10 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                 .build();
 
         // Add minimal CloudWatch permissions for basic monitoring
+        // Use stackName for application-aware log paths
+        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? "/aws/*/" + c.stackName + "*"
+                : "/aws/*";
         ec2Role.addToPolicy(PolicyStatement.Builder.create()
                 .sid("MinimalCloudWatchLogs")
                 .actions(List.of(
@@ -84,7 +88,7 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                         "logs:DescribeLogStreams"
                 ))
                 .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/jenkins*"
+                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:" + appLogPattern
                 ))
                 .build());
 
@@ -122,6 +126,10 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
         }
 
         // Add minimal CloudWatch permissions
+        // Use stackName for application-aware log paths
+        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? "/aws/*/" + c.stackName + "*"
+                : "/aws/*";
         taskRole.addToPolicy(PolicyStatement.Builder.create()
                 .sid("MinimalCloudWatchLogs")
                 .actions(List.of(
@@ -130,7 +138,7 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                         "logs:PutLogEvents"
                 ))
                 .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/ecs/jenkins*"
+                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:" + appLogPattern
                 ))
                 .build());
 

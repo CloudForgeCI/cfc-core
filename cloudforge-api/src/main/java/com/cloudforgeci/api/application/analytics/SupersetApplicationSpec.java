@@ -182,11 +182,12 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
             environment.put("DATABASE_PORT", String.valueOf(dbConn.port()));
             environment.put("DATABASE_DB", dbConn.databaseName());
             environment.put("DATABASE_USER", dbConn.username());
-            // Password retrieved from Secrets Manager at runtime
-            environment.put("DATABASE_PASSWORD", "{{resolve:secretsmanager:" + dbConn.passwordSecretArn() + ":SecretString:password}}");
+            // Password is injected via ECS secret as GITLAB_DATABASE_PASSWORD
+            // Don't set DATABASE_PASSWORD here - it will be set by ECS from Secrets Manager
 
-            // Build SQLAlchemy connection string
-            String password = "{{resolve:secretsmanager:" + dbConn.passwordSecretArn() + ":SecretString:password}}";
+            // Build SQLAlchemy connection string using environment variable for password
+            // Password will be injected at runtime by ECS from Secrets Manager
+            String password = "${GITLAB_DATABASE_PASSWORD}";
             String sqlalchemyUri = String.format(
                 "postgresql://%s:%s@%s:%d/%s",
                 dbConn.username(),

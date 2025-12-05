@@ -328,9 +328,9 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
     private List<ComplianceRule> validateInternationalTransfers(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        // Check if using multi-region
+        // Check if using EU region
         String region = ctx.cfc.region();
-        boolean isEuRegion = region != null && (region.startsWith("eu-") || region.equals("us-east-1"));
+        boolean isEuRegion = region != null && region.startsWith("eu-");
 
         // International transfer safeguards
         boolean internationalTransferSafeguards = getBooleanSetting(ctx, "gdprInternationalTransferSafeguards", false);

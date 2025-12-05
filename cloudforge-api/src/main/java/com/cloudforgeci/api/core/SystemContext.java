@@ -109,6 +109,7 @@ public final class SystemContext extends Construct {
   public final Slot<String> cognitoAuthorizationEndpoint = new Slot<>();
   public final Slot<String> cognitoTokenEndpoint = new Slot<>();
   public final Slot<String> cognitoUserInfoEndpoint = new Slot<>();
+  public final Slot<String> cognitoLogoutEndpoint = new Slot<>();
   public final Slot<String> cognitoClientId = new Slot<>();
   public final Slot<String> cognitoClientSecretName = new Slot<>();
   public final Slot<String> cognitoUserPoolId = new Slot<>();
@@ -123,6 +124,7 @@ public final class SystemContext extends Construct {
   public final Slot<software.amazon.awscdk.services.rds.DatabaseInstance> rdsDatabase = new Slot<>();
   public final Slot<software.amazon.awscdk.services.secretsmanager.Secret> dbCredentials = new Slot<>();
   public final Slot<com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection> dbConnection = new Slot<>();
+  public final Slot<SecurityGroup> dbSecurityGroup = new Slot<>();
 
   // INTERNAL USE ONLY: Cognito client secret Custom Resource (for CDK dependency tracking)
   // This is used internally to ensure ECS tasks don't start before the secret is created in Secrets Manager.

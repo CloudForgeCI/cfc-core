@@ -157,8 +157,9 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
             environment.put("MB_DB_PORT", String.valueOf(dbConn.port()));
             environment.put("MB_DB_DBNAME", dbConn.databaseName());
             environment.put("MB_DB_USER", dbConn.username());
-            // Password retrieved from Secrets Manager at runtime
-            environment.put("MB_DB_PASS", "{{resolve:secretsmanager:" + dbConn.passwordSecretArn() + ":SecretString:password}}");
+            // Password is injected via ECS secret as GITLAB_DATABASE_PASSWORD
+            // Metabase will read it as MB_DB_PASS when ECS injects it
+            // Don't set it here - ContainerFactory adds it as an ECS secret
         } else {
             // Fallback to H2 embedded database (single instance only)
             // NOTE: H2 is embedded and cannot support multiple instances - use RDS for production

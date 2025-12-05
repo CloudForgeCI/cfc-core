@@ -1,16 +1,333 @@
-# CloudForge OIDC Integration Framework
+# CloudForge OIDC Authentication Guide
 
-This directory contains the universal OIDC integration framework for CloudForge 3.0.0, enabling application-level authentication with AWS Cognito and IAM Identity Center.
+This guide covers authentication configuration for CloudForge applications, including AWS Cognito integration and application-level OIDC setup.
 
-## Overview
+## Authentication Modes
 
-CloudForge provides a flexible OIDC integration system that allows containerized applications to authenticate users against AWS authentication services. This framework separates OIDC configuration (provider-specific) from OIDC integration (application-specific), enabling any application to work with any OIDC provider.
+CloudForge supports three authentication modes:
 
-## Architecture
+| Mode | Description | How it Works |
+|------|-------------|--------------|
+| `none` | No authentication | Application handles its own auth (default admin login) |
+| `alb-oidc` | ALB-level authentication | AWS ALB authenticates users before requests reach the application |
+| `application-oidc` | Application-level authentication | Application handles OIDC directly (e.g., Jenkins oic-auth plugin) |
+
+### Mode Comparison
+
+| Feature | `none` | `alb-oidc` | `application-oidc` |
+|---------|--------|------------|-------------------|
+| **Authentication Point** | Application | Load Balancer | Application |
+| **Requires HTTPS** | No | Yes | No (recommended) |
+| **Public Pages** | Yes | No (all authenticated) | Yes |
+| **Group/Role Mapping** | N/A | Limited | Full |
+| **Application Plugin Required** | No | No | Yes |
+| **Logout from Provider** | N/A | Automatic | Configurable |
+
+---
+
+## Quick Start
+
+### Option 1: Cognito with Application-Level OIDC (Recommended for Jenkins)
+
+```json
+{
+  "authMode": "application-oidc",
+  "oidcProvider": "cognito",
+  "cognitoAutoProvision": true,
+  "cognitoUserPoolName": "my-app-users",
+  "cognitoDomainPrefix": "my-app-auth",
+  "cognitoMfaEnabled": true,
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "Admins",
+  "cognitoUserGroupName": "Users",
+  "cognitoInitialAdminEmail": "admin@example.com"
+}
+```
+
+### Option 2: ALB-Level OIDC (Works with Any Application)
+
+```json
+{
+  "authMode": "alb-oidc",
+  "oidcProvider": "cognito",
+  "cognitoAutoProvision": true,
+  "cognitoUserPoolName": "my-app-users",
+  "cognitoDomainPrefix": "my-app-auth",
+  "cognitoMfaEnabled": true
+}
+```
+
+### Option 3: External OIDC Provider
+
+```json
+{
+  "authMode": "application-oidc",
+  "oidcProvider": "external",
+  "oidcIssuer": "https://your-domain.okta.com",
+  "oidcAuthorizationEndpoint": "https://your-domain.okta.com/oauth2/v1/authorize",
+  "oidcTokenEndpoint": "https://your-domain.okta.com/oauth2/v1/token",
+  "oidcUserInfoEndpoint": "https://your-domain.okta.com/oauth2/v1/userinfo",
+  "oidcClientId": "client-id-from-provider",
+  "oidcClientSecretName": "my-app/oidc/client-secret"
+}
+```
+
+---
+
+## Configuration Reference
+
+### Core Authentication Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `authMode` | String | `none` | Authentication mode: `none`, `alb-oidc`, or `application-oidc` |
+| `oidcProvider` | String | `cognito` | OIDC provider: `cognito`, `identity-center`, or `external` |
+
+### Cognito Auto-Provisioning
+
+Used when `cognitoAutoProvision: true` to create a new Cognito User Pool.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `cognitoAutoProvision` | Boolean | `false` | Create a new Cognito User Pool automatically |
+| `cognitoUserPoolName` | String | `{stackName}-users` | Name for the Cognito User Pool |
+| `cognitoDomainPrefix` | String | `{stackName}-auth` | Domain prefix for Cognito Hosted UI |
+| `cognitoMfaEnabled` | Boolean | `false` | Enable Multi-Factor Authentication |
+| `cognitoMfaMethod` | String | `TOTP` | MFA method: `TOTP` (authenticator app) or `SMS` |
+| `cognitoCreateGroups` | Boolean | `true` | Create user groups for role-based access |
+| `cognitoAdminGroupName` | String | `Admins` | Name of the admin group |
+| `cognitoUserGroupName` | String | `Users` | Name of the standard user group |
+| `cognitoInitialAdminEmail` | String | - | Email for initial admin user (auto-created) |
+| `cognitoInitialAdminPhone` | String | - | Phone number for SMS MFA (if using SMS) |
+
+### Existing Cognito User Pool
+
+Connect to a pre-existing Cognito User Pool instead of creating one.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cognitoUserPoolId` | String | Existing User Pool ID (e.g., `us-west-2_abcdef123`) |
+| `cognitoAppClientId` | String | Existing App Client ID |
+| `cognitoUserPoolDomain` | String | Existing domain prefix or custom domain |
+
+### External OIDC Provider
+
+Use with Okta, Auth0, Azure AD, or any OIDC-compliant provider.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `oidcIssuer` | String | OIDC issuer URL (e.g., `https://your-domain.okta.com`) |
+| `oidcAuthorizationEndpoint` | String | OAuth2 authorization endpoint |
+| `oidcTokenEndpoint` | String | OAuth2 token endpoint |
+| `oidcUserInfoEndpoint` | String | OIDC userinfo endpoint |
+| `oidcClientId` | String | OAuth2 client ID |
+| `oidcClientSecretName` | String | AWS Secrets Manager secret name for client secret |
+
+### IAM Identity Center
+
+For enterprise SSO with AWS IAM Identity Center.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ssoInstanceArn` | String | IAM Identity Center instance ARN |
+| `oidcIssuer` | String | Identity Center issuer URL |
+
+---
+
+## Application Support Matrix
+
+### Tested Applications
+
+| Application | `alb-oidc` | `application-oidc` | OIDC Plugin | Status |
+|-------------|-----------|-------------------|-------------|--------|
+| **Jenkins** | ✅ Tested | ✅ Tested | `oic-auth` | Production Ready |
+| **GitLab** | ✅ Tested | ⏳ Planned | Built-in OmniAuth | ALB-OIDC Ready |
+| **Grafana** | ✅ Tested | ⏳ Planned | Built-in generic_oauth | ALB-OIDC Ready |
+
+### Untested Applications
+
+The following applications have OIDC support but have not been fully tested with CloudForge:
+
+| Application | Expected Support | OIDC Method |
+|-------------|-----------------|-------------|
+| **Gitea** | `application-oidc` | Built-in OAuth2 |
+| **SonarQube** | `application-oidc` | OIDC Plugin |
+| **Harbor** | `application-oidc` | harbor.yml config |
+| **Nexus** | `application-oidc` | OIDC Plugin (Pro) |
+| **Mattermost** | `application-oidc` | config.json |
+| **Superset** | `application-oidc` | superset_config.py |
+| **Metabase** | `application-oidc` | Environment variables |
+
+---
+
+## Jenkins OIDC Integration
+
+Jenkins has full support for both authentication modes.
+
+### ALB-OIDC Mode
+
+With `authMode: "alb-oidc"`, authentication happens at the AWS Application Load Balancer:
+
+1. User accesses Jenkins URL
+2. ALB redirects to Cognito login
+3. User authenticates with Cognito
+4. ALB validates token and forwards request to Jenkins
+5. Jenkins sees user as authenticated via `X-Amzn-Oidc-*` headers
+
+**Pros:**
+- Works without any Jenkins plugins
+- All requests are authenticated
+- Simple configuration
+
+**Cons:**
+- Cannot have public pages
+- Limited role mapping
+- Requires HTTPS
+
+### Application-OIDC Mode (Recommended)
+
+With `authMode: "application-oidc"`, Jenkins handles authentication directly:
+
+1. User accesses Jenkins URL
+2. Jenkins redirects to Cognito login
+3. User authenticates with Cognito
+4. Cognito redirects back to Jenkins with authorization code
+5. Jenkins exchanges code for tokens and creates session
+6. Group-based permissions applied from Cognito groups
+
+**Pros:**
+- Full group/role mapping from Cognito
+- Can have public pages if needed
+- Application controls auth flow
+- Proper logout from Cognito
+
+**Cons:**
+- Requires oic-auth plugin
+- More configuration options
+
+### Jenkins JCasC Configuration
+
+CloudForge automatically generates Jenkins Configuration as Code (JCasC) for OIDC:
+
+```yaml
+jenkins:
+  securityRealm:
+    oic:
+      serverConfiguration:
+        manual:
+          authorizationServerUrl: "https://{domain}.auth.{region}.amazoncognito.com/oauth2/authorize"
+          tokenServerUrl: "https://{domain}.auth.{region}.amazoncognito.com/oauth2/token"
+          userInfoServerUrl: "https://{domain}.auth.{region}.amazoncognito.com/oauth2/userInfo"
+          jwksServerUrl: "https://cognito-idp.{region}.amazonaws.com/{userPoolId}/.well-known/jwks.json"
+          issuer: "https://cognito-idp.{region}.amazonaws.com/{userPoolId}"
+          scopes: "openid profile email"
+          endSessionUrl: "https://{domain}.auth.{region}.amazoncognito.com/logout?client_id={clientId}&logout_uri={jenkinsUrl}/"
+      clientId: "{clientId}"
+      clientSecret: "${JENKINS_OIDC_CLIENT_SECRET}"
+      userNameField: "sub"
+      fullNameFieldName: "name"
+      emailFieldName: "email"
+      groupsFieldName: '"cognito:groups"'
+      disableSslVerification: false
+      logoutFromOpenidProvider: true
+      postLogoutRedirectUrl: "{jenkinsUrl}/"
+
+  authorizationStrategy:
+    projectMatrix:
+      permissions:
+        - "Overall/Administer:{adminGroup}"
+        - "Overall/Read:{adminGroup}"
+        - "Overall/Read:{userGroup}"
+        - "Job/Build:{userGroup}"
+        - "Job/Configure:{userGroup}"
+        - "Job/Create:{userGroup}"
+        - "Job/Read:{userGroup}"
+        - "Overall/Read:authenticated"
+```
+
+### Cognito Logout Integration
+
+CloudForge configures proper Cognito logout using manual server configuration with `endSessionUrl`. This ensures users are logged out of both Jenkins and Cognito when they click "Log out":
+
+```
+https://{domain}.auth.{region}.amazoncognito.com/logout?client_id={clientId}&logout_uri={jenkinsUrl}/
+```
+
+**Technical Note:** Cognito's logout endpoint requires `client_id` and `logout_uri` parameters that differ from the standard OIDC `end_session_endpoint` spec. CloudForge uses the oic-auth plugin's manual configuration mode to set the `endSessionUrl` with these parameters pre-formatted. Reference: [oic-auth-plugin#95](https://github.com/jenkinsci/oic-auth-plugin/issues/95)
+
+---
+
+## Cognito User Groups
+
+When `cognitoCreateGroups: true`, CloudForge creates user groups for role-based access:
+
+### Default Groups
+
+| Group | Jenkins Role | Permissions |
+|-------|--------------|-------------|
+| `{prefix}-Admin` | Administrator | Full access to all Jenkins features |
+| `{prefix}-User` | Developer | Build, configure, and create jobs |
+
+### Custom Group Names
+
+```json
+{
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "Jenkins-Admins",
+  "cognitoUserGroupName": "Jenkins-Developers"
+}
+```
+
+### Disabling Groups
+
+Set `cognitoCreateGroups: false` to grant all authenticated users full access:
+
+```json
+{
+  "cognitoCreateGroups": false
+}
+```
+
+This configures Jenkins with `loggedInUsersCanDoAnything` authorization.
+
+---
+
+## Multi-Factor Authentication
+
+### Enabling MFA
+
+```json
+{
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "TOTP"
+}
+```
+
+### MFA Methods
+
+| Method | Description | Requirements |
+|--------|-------------|--------------|
+| `TOTP` | Time-based One-Time Password | Authenticator app (Google Authenticator, Authy) |
+| `SMS` | SMS text messages | Phone number required, additional SMS costs |
+
+### Compliance Considerations
+
+MFA is **required** for certain compliance frameworks:
+
+| Framework | MFA Requirement |
+|-----------|----------------|
+| SOC 2 | Required for privileged access |
+| PCI-DSS | Required for all users accessing cardholder data |
+| HIPAA | Required for ePHI access |
+| GDPR | Recommended for personal data access |
+
+---
+
+## OIDC Architecture
 
 ### Core Interfaces
 
-#### 1. OidcConfiguration Interface
+#### OidcConfiguration Interface
 Defines OIDC provider configuration (Cognito, Identity Center, or any OIDC-compliant provider).
 
 **Key Methods**:
@@ -20,6 +337,7 @@ Defines OIDC provider configuration (Cognito, Identity Center, or any OIDC-compl
 - `getTokenEndpoint()` - OAuth2 token endpoint
 - `getUserInfoEndpoint()` - OIDC userinfo endpoint
 - `getJwksUri()` - JSON Web Key Set URI
+- `getLogoutEndpoint()` - OIDC logout endpoint (for Cognito)
 - `getClientId()` - OAuth2 client ID
 - `getClientSecretArn()` - AWS Secrets Manager ARN for client secret
 - `getRedirectUrl()` - OAuth2 redirect URI
@@ -27,7 +345,7 @@ Defines OIDC provider configuration (Cognito, Identity Center, or any OIDC-compl
 - `getGroupsClaim()` - OIDC claim for groups
 - `usePkce()` - Enable PKCE (Proof Key for Code Exchange)
 
-#### 2. OidcIntegration Interface
+#### OidcIntegration Interface
 Defines application-specific OIDC integration logic.
 
 **Key Methods**:
@@ -41,15 +359,18 @@ Defines application-specific OIDC integration logic.
 
 ### OIDC Providers
 
-#### Amazon Cognito (`CognitoOidcConfiguration`)
+#### Amazon Cognito
 **Standalone user directory with built-in OIDC support**
 
 **Endpoints**:
-- Custom domain: `https://{domain}/oauth2/authorize`
-- Cognito domain: `https://{domain}.auth.{region}.amazoncognito.com/oauth2/authorize`
+- Authorization: `https://{domain}.auth.{region}.amazoncognito.com/oauth2/authorize`
+- Token: `https://{domain}.auth.{region}.amazoncognito.com/oauth2/token`
+- UserInfo: `https://{domain}.auth.{region}.amazoncognito.com/oauth2/userInfo`
+- Logout: `https://{domain}.auth.{region}.amazoncognito.com/logout`
+- JWKS: `https://cognito-idp.{region}.amazonaws.com/{userPoolId}/.well-known/jwks.json`
 
 **Claims**:
-- Username: `cognito:username`
+- Username: `sub` (recommended) or `cognito:username`
 - Groups: `cognito:groups`
 
 **Use Cases**:
@@ -58,19 +379,7 @@ Defines application-specific OIDC integration logic.
 - Mobile/web app user management
 - Multi-tenant SaaS applications
 
-**Example Configuration**:
-```java
-OidcConfiguration config = new CognitoOidcConfiguration(
-    "us-east-1",                        // AWS region
-    "us-east-1_abcdef123",               // User Pool ID
-    "my-app",                            // Domain (or custom domain)
-    "client-id-from-cognito",            // Client ID
-    "arn:aws:secretsmanager:...",        // Client secret ARN
-    "https://myapp.example.com/callback"  // Redirect URL
-);
-```
-
-#### IAM Identity Center (`IdentityCenterOidcConfiguration`)
+#### IAM Identity Center
 **Enterprise SSO service - COMPLETELY SEPARATE from Cognito**
 
 **Endpoints**:
@@ -87,166 +396,13 @@ OidcConfiguration config = new CognitoOidcConfiguration(
 - B2B authentication
 - Multi-account AWS organization access
 
-**Example Configuration**:
-```java
-OidcConfiguration config = new IdentityCenterOidcConfiguration(
-    "us-east-1",                         // AWS region
-    "my-tenant",                         // Tenant ID
-    "d-1234567890",                      // Identity Store ID
-    "client-id-from-identity-center",    // Client ID
-    "arn:aws:secretsmanager:...",        // Client secret ARN
-    "https://myapp.example.com/callback"  // Redirect URL
-);
-```
-
 **IMPORTANT**: Cognito and IAM Identity Center are **two completely separate authentication systems**:
 - Different endpoints
 - Different claims
 - Different use cases
 - NOT interchangeable
 
-### Application Integrations
-
-#### 1. Grafana (`GrafanaOidcIntegration`)
-**Integration Method**: Environment variables via `generic_oauth` provider
-
-**Configuration**:
-- Uses Grafana's built-in generic OAuth support
-- Environment variables: `GF_AUTH_GENERIC_OAUTH_*`
-- Auto-create users on first login
-- Maps OIDC groups to Grafana roles
-
-**Files**:
-- Implementation: [GrafanaOidcIntegration.java](GrafanaOidcIntegration.java)
-- Environment file: `/etc/grafana/grafana-env.sh`
-
-**Key Features**:
-- PKCE support
-- Group/role mapping
-- Auto-user creation
-- Token refresh
-
-**Example UserData Commands**:
-```bash
-# Retrieve client secret from Secrets Manager
-export GRAFANA_OAUTH_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
-  --secret-id arn:aws:secretsmanager:... \
-  --query SecretString --output text)
-
-# Create Grafana environment file
-cat > /etc/grafana/grafana-env.sh <<'EOF'
-export GF_AUTH_GENERIC_OAUTH_ENABLED="true"
-export GF_AUTH_GENERIC_OAUTH_CLIENT_ID="client-id"
-export GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET="${GRAFANA_OAUTH_CLIENT_SECRET}"
-# ... additional configuration
-EOF
-
-# Restart Grafana
-docker restart grafana
-```
-
-#### 2. GitLab (`GitLabOidcIntegration`)
-**Integration Method**: Configuration file via `gitlab.rb` (OmniAuth)
-
-**Configuration**:
-- Uses GitLab's built-in OmniAuth OpenID Connect provider
-- Configuration file: `/etc/gitlab/gitlab.rb`
-- Auto-create and auto-link users
-- Group synchronization support
-
-**Files**:
-- Implementation: [GitLabOidcIntegration.java](GitLabOidcIntegration.java)
-- Configuration: `/etc/gitlab/gitlab.rb`
-
-**Key Features**:
-- Built-in OIDC discovery
-- Auto-link existing users
-- Group synchronization
-- Admin role assignment
-
-**Example gitlab.rb Configuration**:
-```ruby
-gitlab_rails['omniauth_enabled'] = true
-gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
-gitlab_rails['omniauth_block_auto_created_users'] = false
-gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']
-
-gitlab_rails['omniauth_providers'] = [
-  {
-    name: 'openid_connect',
-    label: 'AWS Cognito',
-    args: {
-      name: 'openid_connect',
-      scope: ['openid', 'profile', 'email'],
-      response_type: 'code',
-      issuer: 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_abcdef123',
-      discovery: true,
-      client_auth_method: 'query',
-      uid_field: 'cognito:username',
-      pkce: true,
-      client_options: {
-        identifier: 'client-id',
-        secret: 'client-secret',
-        redirect_uri: 'https://gitlab.example.com/users/auth/openid_connect/callback'
-      }
-    }
-  }
-]
-```
-
-#### 3. Jenkins (`JenkinsOidcIntegration`)
-**Integration Method**: Jenkins Configuration as Code (JCasC) via OIDC plugin
-
-**Configuration**:
-- Requires: OpenID Connect Authentication Plugin (`oic-auth`)
-- Configuration: Jenkins Configuration as Code YAML
-- Auto-create users on first login
-- Matrix-based authorization
-
-**Files**:
-- Implementation: [JenkinsOidcIntegration.java](JenkinsOidcIntegration.java)
-- Configuration: `/var/jenkins_home/casc_configs/oidc.yaml`
-- Plugin installer: `/tmp/install-oidc-plugin.sh`
-
-**Key Features**:
-- JCasC integration
-- Escape hatch for emergency access
-- Group/role mapping
-- Full user info synchronization
-
-**Example JCasC Configuration**:
-```yaml
-jenkins:
-  securityRealm:
-    oic:
-      clientId: "client-id"
-      clientSecret: "${JENKINS_OIDC_CLIENT_SECRET}"
-      wellKnownOpenIDConfigurationUrl: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_abcdef123/.well-known/openid-configuration"
-      tokenServerUrl: "https://my-app.auth.us-east-1.amazoncognito.com/oauth2/token"
-      authorizationServerUrl: "https://my-app.auth.us-east-1.amazoncognito.com/oauth2/authorize"
-      userInfoServerUrl: "https://my-app.auth.us-east-1.amazoncognito.com/oauth2/userInfo"
-      userNameField: "cognito:username"
-      fullNameFieldName: "name"
-      emailFieldName: "email"
-      groupsFieldName: "cognito:groups"
-      scopes: "openid profile email"
-      disableSslVerification: false
-      logoutFromOpenidProvider: true
-      escapeHatchEnabled: true
-      escapeHatchUsername: "admin"
-      escapeHatchSecret: "admin"
-
-  authorizationStrategy:
-    globalMatrix:
-      permissions:
-        - "Overall/Administer:authenticated"
-        - "Overall/Read:authenticated"
-```
-
-**IMPORTANT**: Jenkins requires manual plugin installation:
-1. Deploy Jenkins with OIDC configuration
-2. Run `/tmp/install-oidc-plugin.sh` to install the OIDC plugin
-3. Jenkins will restart and OIDC authentication will be active
+---
 
 ## Security Considerations
 
@@ -254,7 +410,7 @@ jenkins:
 All client secrets are stored in **AWS Secrets Manager** and retrieved at runtime:
 
 ```bash
-# Retrieve secret at EC2 instance startup
+# Retrieve secret at container/EC2 startup
 export APP_OIDC_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
   --secret-id arn:aws:secretsmanager:us-east-1:123456789012:secret:app-oidc-secret \
   --query SecretString --output text)
@@ -288,179 +444,192 @@ OIDC integration supports compliance requirements:
 - **PCI-DSS Req 8.2**: Multi-factor authentication support
 - **GDPR Art. 32**: Authentication security controls
 
-## Usage Example
+---
 
-### 1. Create OIDC Configuration
-```java
-// For Cognito
-OidcConfiguration cognitoConfig = new CognitoOidcConfiguration(
-    "us-east-1",
-    "us-east-1_abcdef123",
-    "my-app",
-    "cognito-client-id",
-    "arn:aws:secretsmanager:us-east-1:123456789012:secret:cognito-secret",
-    "https://myapp.example.com/callback"
-);
+## Security Best Practices
 
-// For IAM Identity Center
-OidcConfiguration identityCenterConfig = new IdentityCenterOidcConfiguration(
-    "us-east-1",
-    "my-tenant",
-    "d-1234567890",
-    "identity-center-client-id",
-    "arn:aws:secretsmanager:us-east-1:123456789012:secret:ic-secret",
-    "https://myapp.example.com/callback"
-);
-```
+### 1. Always Use HTTPS
 
-### 2. Get Application's OIDC Integration
-```java
-ApplicationSpec grafanaSpec = new GrafanaApplicationSpec();
-
-// Check if application supports OIDC
-if (grafanaSpec.supportsOidcIntegration()) {
-    OidcIntegration integration = grafanaSpec.getOidcIntegration();
-
-    // Get environment variables
-    Map<String, String> envVars = integration.getEnvironmentVariables(cognitoConfig);
-
-    // Get UserData commands
-    List<String> commands = integration.getUserDataCommands(cognitoConfig, ec2Context);
-
-    // Get post-deployment instructions
-    String instructions = integration.getPostDeploymentInstructions();
+```json
+{
+  "enableSsl": true,
+  "domain": "example.com",
+  "subdomain": "jenkins"
 }
 ```
 
-### 3. Deploy with OIDC
-The CloudForge deployment framework automatically integrates OIDC configuration into the deployment process:
+### 2. Enable MFA for Production
 
-```java
-// UserData script automatically includes OIDC setup
-UserDataBuilder builder = new UserDataBuilder();
-ApplicationSpec app = new GrafanaApplicationSpec();
-OidcConfiguration oidc = new CognitoOidcConfiguration(...);
-
-// Configure application
-app.configureUserData(builder, ec2Context);
-
-// Configure OIDC (if supported)
-if (app.supportsOidcIntegration()) {
-    OidcIntegration integration = app.getOidcIntegration();
-    List<String> oidcCommands = integration.getUserDataCommands(oidc, ec2Context);
-    builder.addCommands(oidcCommands.toArray(String[]::new));
+```json
+{
+  "securityProfile": "PRODUCTION",
+  "cognitoMfaEnabled": true
 }
-
-// Build final UserData script
-String userData = builder.build();
 ```
 
-## Application Support Matrix
+### 3. Use Group-Based Access Control
 
-| Application | OIDC Support | Integration Method | Auto-Create Users | Group Mapping | Status |
-|-------------|--------------|-------------------|-------------------|---------------|--------|
-| **Grafana** | ✅ Yes | Environment Variables | ✅ Yes | ✅ Yes | ✅ Implemented |
-| **GitLab** | ✅ Yes | Configuration File (gitlab.rb) | ✅ Yes | ✅ Yes | ✅ Implemented |
-| **Jenkins** | ✅ Yes | JCasC YAML | ✅ Yes | ✅ Yes | ✅ Implemented |
-| **Gitea** | ✅ Yes | Configuration File (app.ini) | ✅ Yes | ✅ Yes | ⏳ In Progress |
-| **Drone** | ⏳ Planned | Environment Variables | ✅ Yes | ❌ No | ⏳ Planned |
-| **Metabase** | ⏳ Planned | Environment Variables | ✅ Yes | ✅ Yes | ⏳ Planned |
-| **Superset** | ⏳ Planned | Configuration File (superset_config.py) | ✅ Yes | ✅ Yes | ⏳ Planned |
-| **Prometheus** | ❌ No | N/A - Uses external auth proxy | N/A | N/A | N/A |
-| **PostgreSQL** | ❌ No | Database - uses application auth | N/A | N/A | N/A |
-| **Redis** | ❌ No | Cache - uses application auth | N/A | N/A | N/A |
-| **Nexus** | ⏳ Planned | SAML/OIDC plugin | ✅ Yes | ✅ Yes | ⏳ Planned |
-| **Harbor** | ⏳ Planned | Configuration File (harbor.yml) | ✅ Yes | ✅ Yes | ⏳ Planned |
-| **Vault** | ❌ No | Enterprise feature only | N/A | N/A | N/A |
-| **Mattermost** | ⏳ Planned | Configuration File (config.json) | ✅ Yes | ✅ Yes | ⏳ Planned |
+```json
+{
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "Admins",
+  "cognitoUserGroupName": "Developers"
+}
+```
 
-## Future Applications
+### 4. Create Initial Admin User
 
-### Planned OIDC Integrations
-- **Gitea**: OIDC via app.ini configuration
-- **Drone**: OAuth2 via environment variables
-- **SonarQube**: OIDC plugin integration
-- **Nexus**: OIDC via security configuration
-- **Harbor**: OIDC via harbor.yml
-- **Artifactory**: OIDC via system.yaml
+```json
+{
+  "cognitoInitialAdminEmail": "admin@example.com"
+}
+```
 
-### Applications Using External Auth
-Some applications don't have native OIDC but can use reverse proxy authentication:
-- **Prometheus**: Use oauth2-proxy or nginx with OIDC
-- **Alertmanager**: Use oauth2-proxy
-- **Netdata**: Use oauth2-proxy
+This creates an admin user and sends them a temporary password via email.
+
+---
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### 1. Client Secret Not Found
-**Error**: "Secret not found" when retrieving from Secrets Manager
+#### "Required String parameter 'client_id' is not present"
 
-**Solution**: Verify IAM role has `secretsmanager:GetSecretValue` permission:
-```json
-{
-  "Effect": "Allow",
-  "Action": "secretsmanager:GetSecretValue",
-  "Resource": "arn:aws:secretsmanager:*:*:secret:*-oidc-*"
-}
+**Cause:** Cognito logout endpoint requires special parameters that the standard OIDC spec doesn't include.
+
+**Solution:** CloudForge 3.1.0+ handles this automatically using manual server configuration with `endSessionUrl`.
+
+#### "redirect_uri_mismatch"
+
+**Cause:** The callback URL doesn't match what's configured in Cognito.
+
+**Solution:** Verify the FQDN in your deployment context matches the Cognito app client callback URLs.
+
+#### "Invalid username claim"
+
+**Cause:** Cognito uses special claim names like `cognito:groups` that require JMESPath escaping.
+
+**Solution:** CloudForge automatically configures the correct claim names with proper escaping.
+
+#### Users Can Login But Have No Permissions
+
+**Cause:** User is not in any Cognito group.
+
+**Solution:** Add the user to the appropriate Cognito group (Admin or User).
+
+#### "Single entry map expected to configure a org.jenkinsci.plugins.oic.OicServerConfiguration"
+
+**Cause:** JCasC YAML structure is incorrect for the oic-auth plugin.
+
+**Solution:** CloudForge 3.1.0+ uses the correct manual configuration structure:
+```yaml
+serverConfiguration:
+  manual:
+    authorizationServerUrl: "..."
+    tokenServerUrl: "..."
+    # other fields at manual level
+clientId: "..."  # at oic level, not under serverConfiguration
 ```
 
-#### 2. Redirect URI Mismatch
-**Error**: "redirect_uri_mismatch" from OIDC provider
+### Debug Logging
 
-**Solution**:
-- Verify redirect URI in OIDC provider matches exactly
-- Include protocol (https://), hostname, and path
-- No trailing slashes unless provider has them
+Check Jenkins logs for OIDC issues:
 
-#### 3. Invalid Claims
-**Error**: "Invalid username claim" or "User not found"
+```bash
+# ECS/Fargate
+aws logs tail /aws/{stackName}/FARGATE/STAGING --follow
 
-**Solution**:
-- For Cognito: Use `cognito:username` and `cognito:groups`
-- For Identity Center: Use `preferred_username` and `groups`
-- Verify claim exists in token (check JWT at jwt.io)
+# EC2
+ssh ec2-user@{instance-ip} 'tail -f /var/log/jenkins/jenkins.log'
+```
 
-#### 4. Group Mapping Not Working
-**Error**: Users can login but don't have proper permissions
+### Verify OIDC Configuration
 
-**Solution**:
-- Verify groups claim is included in token scopes
-- Check application's group mapping configuration
-- Ensure OIDC provider sends groups claim
+Check the generated JCasC configuration:
 
-#### 5. PKCE Errors
-**Error**: "PKCE required" or "Invalid code verifier"
+```bash
+# Inside container
+cat /var/jenkins_home/casc_configs/oidc.yaml
+```
 
-**Solution**:
-- Ensure `usePkce() = true` in configuration
-- Verify OIDC provider supports PKCE
-- Check application properly generates code_challenge
+---
+
+## Architecture Diagrams
+
+### ALB-OIDC Flow
+
+```
+┌──────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
+│  User    │────▶│   ALB   │────▶│ Cognito │────▶│ Jenkins │
+└──────────┘     └─────────┘     └─────────┘     └─────────┘
+     │                │                │              │
+     │  1. Access URL │                │              │
+     │───────────────▶│                │              │
+     │                │ 2. Redirect    │              │
+     │◀───────────────│───────────────▶│              │
+     │                │                │              │
+     │ 3. Login at Cognito             │              │
+     │────────────────────────────────▶│              │
+     │                │                │              │
+     │ 4. Redirect back with token     │              │
+     │◀────────────────────────────────│              │
+     │                │                │              │
+     │                │ 5. Validate token              │
+     │                │◀───────────────│              │
+     │                │                │              │
+     │                │ 6. Forward with headers        │
+     │                │───────────────────────────────▶│
+```
+
+### Application-OIDC Flow
+
+```
+┌──────────┐     ┌─────────┐     ┌─────────┐
+│  User    │────▶│ Jenkins │────▶│ Cognito │
+└──────────┘     └─────────┘     └─────────┘
+     │                │                │
+     │  1. Access URL │                │
+     │───────────────▶│                │
+     │                │                │
+     │ 2. Redirect to Cognito          │
+     │◀───────────────│                │
+     │                │                │
+     │ 3. Login at Cognito             │
+     │────────────────────────────────▶│
+     │                │                │
+     │ 4. Callback with auth code      │
+     │◀────────────────────────────────│
+     │───────────────▶│                │
+     │                │                │
+     │                │ 5. Exchange code for tokens
+     │                │───────────────▶│
+     │                │◀───────────────│
+     │                │                │
+     │ 6. Session created              │
+     │◀───────────────│                │
+```
+
+---
 
 ## References
 
-### CloudForge Documentation
-- [ApplicationSpec Interface](../interfaces/ApplicationSpec.java)
-- [OidcConfiguration Interface](../interfaces/OidcConfiguration.java)
-- [OidcIntegration Interface](../interfaces/OidcIntegration.java)
-
 ### AWS Documentation
 - [Amazon Cognito User Pools](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-identity-pools.html)
+- [ALB OIDC Authentication](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html)
 - [IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html)
-- [AWS Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html)
+
+### Application Documentation
+- [Jenkins OIDC Plugin](https://plugins.jenkins.io/oic-auth/)
+- [Jenkins OIDC Plugin Configuration](https://github.com/jenkinsci/oic-auth-plugin/blob/master/docs/configuration/README.md)
+- [Jenkins Configuration as Code](https://plugins.jenkins.io/configuration-as-code/)
+- [GitLab OmniAuth](https://docs.gitlab.com/ee/administration/auth/oidc.html)
+- [Grafana OAuth](https://grafana.com/docs/grafana/latest/setup-grafana/configure-security/configure-authentication/generic-oauth/)
 
 ### OIDC Specifications
 - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - [OAuth 2.0 RFC 6749](https://tools.ietf.org/html/rfc6749)
 - [PKCE RFC 7636](https://tools.ietf.org/html/rfc7636)
 
-### Application-Specific OIDC Documentation
-- [Grafana Generic OAuth](https://grafana.com/docs/grafana/latest/setup-grafana/configure-security/configure-authentication/generic-oauth/)
-- [GitLab OmniAuth](https://docs.gitlab.com/ee/administration/auth/oidc.html)
-- [Jenkins OIDC Plugin](https://plugins.jenkins.io/oic-auth/)
-
 ---
 
-**CloudForge 3.0.0** - Universal Application Deployment with Enterprise Authentication
-*Making cloud infrastructure deployment painless and secure*
+**CloudForge 3.1.0** - Enterprise Authentication for Cloud Applications

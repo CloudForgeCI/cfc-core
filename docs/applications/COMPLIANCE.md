@@ -249,6 +249,9 @@ Automatically enforces compliance controls:
 - ✅ WAF protection for web applications
 - ✅ IAM least privilege roles
 - ✅ MFA enforcement (when using Cognito)
+- ✅ OIDC authentication with group-based access control
+
+**See Also**: [OIDC Authentication Guide](./OIDC.md) for detailed authentication configuration including MFA, group-based access control, and logout integration.
 
 ### Additional User Responsibilities
 

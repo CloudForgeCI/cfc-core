@@ -8,6 +8,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.IVpc;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.InstanceClass;
@@ -79,7 +80,7 @@ public class RdsFactory {
      * settings appropriate for the deployment security profile.</p>
      *
      * @param ctx System context with security profile and deployment settings
-     * @param requirement Database requirements from ApplicationSpec
+     * @param requirement Database requirements from ApplicationSpec (merged with DeploymentConfig)
      * @param vpc VPC to deploy database into
      * @param instanceId Logical ID for the database instance
      * @return Database connection information for application configuration
@@ -89,14 +90,47 @@ public class RdsFactory {
             DatabaseRequirement requirement,
             IVpc vpc,
             String instanceId) {
+        return createDatabase(ctx, requirement, vpc, instanceId, null, null, null);
+    }
+
+    /**
+     * Create RDS database instance with optional DeploymentConfig overrides.
+     *
+     * @param ctx System context with security profile and deployment settings
+     * @param requirement Database requirements (already merged with DeploymentConfig in ApplicationFactory)
+     * @param vpc VPC to deploy database into
+     * @param instanceId Logical ID for the database instance
+     * @param backupRetentionDaysOverride Optional backup retention days from DeploymentConfig
+     * @param multiAzOverride Optional Multi-AZ setting from DeploymentConfig
+     * @param enableEncryptionOverride Optional encryption setting from DeploymentConfig
+     * @return Database connection information for application configuration
+     */
+    public static DatabaseConnection createDatabase(
+            SystemContext ctx,
+            DatabaseRequirement requirement,
+            IVpc vpc,
+            String instanceId,
+            Integer backupRetentionDaysOverride,
+            Boolean multiAzOverride,
+            Boolean enableEncryptionOverride) {
 
         Construct scope = ctx;
         String stackName = ctx.stackName;
         SecurityProfile security = ctx.security;
 
-        // Create KMS key for encryption
+        // Determine encryption setting with priority: DeploymentConfig > SecurityProfile default
+        // For production deployments, encryption defaults to true
+        boolean enableEncryption;
+        if (enableEncryptionOverride != null) {
+            enableEncryption = enableEncryptionOverride;
+        } else {
+            // Default: encrypt for PRODUCTION and STAGING, optional for DEV
+            enableEncryption = (security != SecurityProfile.DEV);
+        }
+
+        // Create KMS key for encryption if enabled
         IKey encryptionKey = null;
-        if (security != SecurityProfile.DEV) {
+        if (enableEncryption) {
             encryptionKey = Key.Builder.create(scope, instanceId + "EncryptionKey")
                 .description("RDS encryption key for " + stackName + "-" + instanceId)
                 .enableKeyRotation(true)
@@ -145,12 +179,17 @@ public class RdsFactory {
             .removalPolicy(RemovalPolicy.DESTROY)
             .build();
 
-        // Determine backup retention based on security profile
-        int backupRetention = switch (security) {
-            case PRODUCTION -> 30;  // 30 days for production
-            case STAGING -> 14;     // 14 days for staging
-            case DEV -> 7;          // 7 days minimum for dev
-        };
+        // Determine backup retention based on DeploymentConfig override or security profile
+        int backupRetention;
+        if (backupRetentionDaysOverride != null) {
+            backupRetention = backupRetentionDaysOverride;
+        } else {
+            backupRetention = switch (security) {
+                case PRODUCTION -> 30;  // 30 days for production
+                case STAGING -> 14;     // 14 days for staging
+                case DEV -> 7;          // 7 days minimum for dev
+            };
+        }
 
         // Parse instance type from instance class
         InstanceType instanceType = parseInstanceType(requirement.instanceClass());
@@ -167,8 +206,8 @@ public class RdsFactory {
             .parameterGroup(parameterGroup)
 
             // Security configurations
-            .storageEncrypted(security != SecurityProfile.DEV)
-            .storageEncryptionKey(encryptionKey)
+            .storageEncrypted(enableEncryption)
+            // Note: AWS CDK 2.x uses default RDS KMS key when storageEncrypted is true
             .publiclyAccessible(false)  // NEVER publicly accessible
             .deletionProtection(security == SecurityProfile.PRODUCTION)
             .autoMinorVersionUpgrade(security == SecurityProfile.PRODUCTION)
@@ -179,14 +218,15 @@ public class RdsFactory {
             .preferredMaintenanceWindow("sun:04:00-sun:05:00")
             .copyTagsToSnapshot(true)
 
-            // Multi-AZ for production (high availability)
-            .multiAz(security == SecurityProfile.PRODUCTION)
+            // Multi-AZ: DeploymentConfig override > security profile default
+            .multiAz(multiAzOverride != null ? multiAzOverride : (security == SecurityProfile.PRODUCTION))
 
             // Storage configuration
             .allocatedStorage(requirement.allocatedStorageGB())
             .maxAllocatedStorage(requirement.allocatedStorageGB() * 2)  // Auto-scaling up to 2x
             .storageType(StorageType.GP3)
-            .iops(3000)  // GP3 default
+            // Note: IOPS can only be specified for GP3 when storage >= 400GB
+            // For smaller storage sizes, GP3 uses baseline performance (3000 IOPS, 125 MB/s)
 
             // CloudWatch Logs exports (audit logging)
             .cloudwatchLogsExports(getCloudWatchLogsExports(requirement.engine()))
@@ -211,6 +251,17 @@ public class RdsFactory {
         }
 
         DatabaseInstance instance = instanceBuilder.build();
+
+        // Store database instance and its security group in SystemContext
+        ctx.rdsDatabase.set(instance);
+        ctx.dbCredentials.set(databaseSecret);
+
+        // Get the security group from the database instance connections
+        // RDS automatically creates a security group - we need to store it for Fargate to add ingress rules
+        if (!instance.getConnections().getSecurityGroups().isEmpty()) {
+            SecurityGroup dbSg = (SecurityGroup) instance.getConnections().getSecurityGroups().get(0);
+            ctx.dbSecurityGroup.set(dbSg);
+        }
 
         // Return connection information for application
         // Determine port based on engine (CDK Token can't be parsed to int)

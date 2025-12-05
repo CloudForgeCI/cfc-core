@@ -182,8 +182,9 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
             environment.put("POSTGRESQL_PORT", String.valueOf(dbConn.port()));
             environment.put("POSTGRESQL_DATABASE", dbConn.databaseName());
             environment.put("POSTGRESQL_USERNAME", dbConn.username());
-            // Password retrieved from Secrets Manager at runtime
-            environment.put("POSTGRESQL_PASSWORD", "{{resolve:secretsmanager:" + dbConn.passwordSecretArn() + ":SecretString:password}}");
+            // Password is injected via ECS secret as GITLAB_DATABASE_PASSWORD
+            // Harbor will read it as POSTGRESQL_PASSWORD when ECS injects it
+            // Don't set it here - ContainerFactory adds it as an ECS secret
             environment.put("POSTGRESQL_SSLMODE", "require");
         } else {
             // NOTE: Harbor REQUIRES a database - this should never happen

@@ -228,6 +228,51 @@ public interface ApplicationSpec {
         return null;
     }
 
+    /**
+     * Returns the list of supported authentication modes for this application.
+     *
+     * <p>CloudForge supports three authentication modes:</p>
+     * <ul>
+     *   <li><b>application-oidc</b>: OIDC authentication integrated within the application (requires getOidcIntegration() != null)</li>
+     *   <li><b>alb-oidc</b>: OIDC authentication at ALB level (works for all applications)</li>
+     *   <li><b>none</b>: No authentication (public access or manually configured)</li>
+     * </ul>
+     *
+     * <p>The list is ordered by preference. The first mode is the recommended default.</p>
+     *
+     * <p>Default behavior:</p>
+     * <ul>
+     *   <li>If application has OIDC integration → ["application-oidc", "alb-oidc", "none"]</li>
+     *   <li>If application claims OIDC support but lacks integration → ["alb-oidc", "none"]</li>
+     *   <li>If application doesn't support OIDC → ["none"]</li>
+     * </ul>
+     *
+     * @return List of supported auth modes in order of preference (never null, never empty)
+     */
+    default List<String> getSupportedAuthModes() {
+        if (getOidcIntegration() != null) {
+            // Application has working OIDC integration - prefer application-oidc
+            return List.of("application-oidc", "alb-oidc", "none");
+        } else if (supportsOidcIntegration()) {
+            // Application claims OIDC support but doesn't implement it - use alb-oidc
+            return List.of("alb-oidc", "none");
+        } else {
+            // No OIDC support at all
+            return List.of("none");
+        }
+    }
+
+    /**
+     * Returns the recommended (default) authentication mode for this application.
+     *
+     * <p>This is the first mode from {@link #getSupportedAuthModes()}.</p>
+     *
+     * @return the recommended auth mode (e.g., "application-oidc", "alb-oidc", "none")
+     */
+    default String getRecommendedAuthMode() {
+        return getSupportedAuthModes().get(0);
+    }
+
     // ========== Plugin Metadata Methods ==========
 
     /**
@@ -338,5 +383,25 @@ public interface ApplicationSpec {
             return true; // Default to supported
         }
         return annotation.supportsEc2();
+    }
+
+    /**
+     * Get the recommended health check grace period for this application.
+     *
+     * <p>The grace period is how long ECS/ALB waits before starting health checks
+     * after a container starts. Applications with longer initialization times
+     * (like GitLab) need longer grace periods.</p>
+     *
+     * <p>Default values:</p>
+     * <ul>
+     *   <li>Most applications: 300 seconds (5 minutes)</li>
+     *   <li>GitLab: 600 seconds (10 minutes) - due to database migrations and initialization</li>
+     *   <li>Other database-heavy apps may also need longer periods</li>
+     * </ul>
+     *
+     * @return recommended health check grace period in seconds
+     */
+    default int defaultHealthCheckGracePeriod() {
+        return 300; // Default 5 minutes for most applications
     }
 }

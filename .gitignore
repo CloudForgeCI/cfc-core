@@ -22,7 +22,7 @@ pom.xml.versionsBackup
 aws-credentials.json
 aws-config.json
 credentials
-config
+/config
 
 # Environment files with secrets
 .env

@@ -42,10 +42,11 @@ public class FlowLogFactory extends BaseFactory {
         }
 
         // Create flow log log group with security profile-based settings
+        // Note: logGroupName is intentionally omitted to allow CloudFormation to auto-generate unique names
+        // This prevents naming conflicts when deploying multiple stacks with the same security profile
         LogGroup logGroup = LogGroup.Builder.create(this, "VpcFlowLogsGroup")
                     .retention(config.getFlowLogRetentionDays())
                     .removalPolicy(config.getLogRemovalPolicy())
-                    .logGroupName("/aws/vpc/flowlogs/" + security.name().toLowerCase())
                     .build();
 
         // Create flow log options with security profile-based traffic type

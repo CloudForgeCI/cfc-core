@@ -59,16 +59,13 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Install PCI-DSS validation rules for production environments.
+     * Install PCI-DSS compliance validation rules.
+     * PCI-DSS applies to environments processing cardholder data.
      * Only enforced when security profile is PRODUCTION.
+     *
+     * @since 3.1.0
      */
-        /** 
-     * Install PCI-DSS compliance validation rules. 
-     * PCI-DSS applies to environments processing cardholder data. 
-     * 
-     * @since 3.1.0 
-     */ 
-    @Override 
+    @Override
     public void install(SystemContext ctx) {
         if (ctx.security != SecurityProfile.PRODUCTION) {
             LOG.info("PCI-DSS validation rules only enforced for PRODUCTION security profile");

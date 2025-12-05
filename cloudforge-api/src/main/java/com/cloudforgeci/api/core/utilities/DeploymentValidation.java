@@ -24,30 +24,9 @@ public @interface DeploymentValidation {
         public boolean isValid(DeploymentContext c, ConstraintValidatorContext ctx) {
             if (c == null) return true;
 
-            // 1) CFN+ACM region rule (if using CloudFront and an ARN is provided)
-  /*          if ("cloudfront".equals("") {//c.frontDoor()) && c.acmArn() != null && !c.acmArn().isBlank()) {
-                String[] parts = c.acmArn().split(":");
-                if (parts.length < 4 || !"us-east-1".equals(parts[3])) {
-                    ctx.disableDefaultConstraintViolation();
-                    ctx.buildConstraintViolationWithTemplate("CloudFront certificates must be in us-east-1")
-                            .addPropertyNode("acmArn").addConstraintViolation();
-                    return false;
-                }
-            }*/
-
-            // 2) If domain present, hostedZoneId should also be present (Route 53 path)
-            if (c.domain() != null && !c.domain().isBlank()) {
-  /*              if (c.hostedZoneId() == null || c.hostedZoneId().isBlank()) {
-                    ctx.disableDefaultConstraintViolation();
-                    ctx.buildConstraintViolationWithTemplate("hostedZoneId required when domain is set")
-                            .addPropertyNode("hostedZoneId").addConstraintViolation();*/
-                    return false;
- //               }
-            }
-
-            // 3) Runtime vs compute coherence
-//            if ("jenkins-fargate".equals(c.runtime()) && !"fargate".equals(c.compute())) return fail(ctx,"compute must be 'fargate' for jenkins-fargate","compute");
-//            if ("jenkins-ec2".equals(c.runtime())     && !"ec2".equals(c.compute()))       return fail(ctx,"compute must be 'ec2' for jenkins-ec2","compute");
+            // Validation rules are currently disabled for CloudForge 3.0 plugin architecture
+            // Domain and SSL validation is now handled by DomainFactory and CertificateFactory
+            // Runtime vs compute coherence is now handled by ApplicationFactory and deployment context
 
             return true;
         }

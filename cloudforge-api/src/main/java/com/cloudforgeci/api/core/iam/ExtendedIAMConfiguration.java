@@ -106,16 +106,23 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
         }
 
         // Add S3 permissions for development
+        // Use stackName for application-aware S3 bucket patterns
+        String devBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-dev-*"
+                : "*-dev-*";
+        String backupBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-backup-*"
+                : "*-backup-*";
         ec2Role.addToPolicy(PolicyStatement.Builder.create()
                 .sid("ExtendedS3Access")
                 .actions(List.of(
                         "s3:*"
                 ))
                 .resources(List.of(
-                        "arn:aws:s3:::jenkins-dev-*",
-                        "arn:aws:s3:::jenkins-dev-*/*",
-                        "arn:aws:s3:::jenkins-backup-*",
-                        "arn:aws:s3:::jenkins-backup-*/*"
+                        "arn:aws:s3:::" + devBucketPattern,
+                        "arn:aws:s3:::" + devBucketPattern + "/*",
+                        "arn:aws:s3:::" + backupBucketPattern,
+                        "arn:aws:s3:::" + backupBucketPattern + "/*"
                 ))
                 .build());
 
@@ -193,16 +200,23 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
                 .build());
 
         // Add extended S3 permissions
+        // Use stackName for application-aware S3 bucket patterns
+        String devBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-dev-*"
+                : "*-dev-*";
+        String backupBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-backup-*"
+                : "*-backup-*";
         taskRole.addToPolicy(PolicyStatement.Builder.create()
                 .sid("ExtendedS3Access")
                 .actions(List.of(
                         "s3:*"
                 ))
                 .resources(List.of(
-                        "arn:aws:s3:::jenkins-dev-*",
-                        "arn:aws:s3:::jenkins-dev-*/*",
-                        "arn:aws:s3:::jenkins-backup-*",
-                        "arn:aws:s3:::jenkins-backup-*/*"
+                        "arn:aws:s3:::" + devBucketPattern,
+                        "arn:aws:s3:::" + devBucketPattern + "/*",
+                        "arn:aws:s3:::" + backupBucketPattern,
+                        "arn:aws:s3:::" + backupBucketPattern + "/*"
                 ))
                 .build());
 

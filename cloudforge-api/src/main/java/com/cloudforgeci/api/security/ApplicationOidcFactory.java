@@ -161,8 +161,8 @@ public class ApplicationOidcFactory extends BaseFactory {
     @DeploymentContext("fqdn")
     private String fqdn;
 
-    @DeploymentContext("sslEnabled")
-    private Boolean sslEnabled;
+    @DeploymentContext("enableSsl")
+    private Boolean enableSsl;
 
     // User group configuration for Cognito
     @DeploymentContext("cognitoCreateGroups")
@@ -304,6 +304,7 @@ public class ApplicationOidcFactory extends BaseFactory {
         String authEndpoint = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com/oauth2/authorize";
         String tokenEndpoint = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com/oauth2/token";
         String userInfoEndpoint = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com/oauth2/userInfo";
+        String logoutEndpoint = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com/logout";
 
         LOG.info("Using Cognito User Pool: " + effectiveUserPoolId);
         LOG.info("Cognito Domain: " + effectiveDomainPrefix);
@@ -343,6 +344,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             authEndpoint,
             tokenEndpoint,
             userInfoEndpoint,
+            logoutEndpoint,
             effectiveClientId,
             buildClientSecretArn("Cognito"),
             "sub",
@@ -401,12 +403,16 @@ public class ApplicationOidcFactory extends BaseFactory {
         LOG.info("  Developer Group: " + developerGroup);
         LOG.info("  Viewer Group: " + viewerGroup);
 
+        // For external providers, logout endpoint is typically null (not standardized)
+        String logoutEndpoint = null;
+
         return new SimplifiedOidcConfiguration(
             providerType,
             oidcIssuer,
             oidcAuthorizationEndpoint,
             oidcTokenEndpoint,
             oidcUserInfoEndpoint,
+            logoutEndpoint,
             oidcClientId,
             buildClientSecretArn(providerType.toLowerCase().replace(" ", "-")),
             "sub",  // Standard OIDC claim for username
@@ -448,7 +454,7 @@ public class ApplicationOidcFactory extends BaseFactory {
      * Priority: Custom FQDN > ALB DNS name
      */
     private String buildApplicationUrl() {
-        boolean useHttps = Boolean.TRUE.equals(sslEnabled);
+        boolean useHttps = Boolean.TRUE.equals(enableSsl);
         String protocol = useHttps ? "https://" : "http://";
 
         // Priority 1: Use custom FQDN if configured
@@ -499,7 +505,7 @@ public class ApplicationOidcFactory extends BaseFactory {
         String placeholderValue = "PLACEHOLDER-UPDATE-WITH-ACTUAL-CLIENT-SECRET";
         String description = "OIDC client secret for " + appId + " application-level authentication (" + config.getProviderType() + ")";
 
-        LOG.info("Setting up OIDC client secret in Secrets Manager: " + secretName);
+        LOG.info("Setting up OIDC client secret in Secrets Manager for application: " + appId);
 
         // Simple approach: Create secret if it doesn't exist, leave alone if it does
         // The ignoreErrorCodesMatching handles the "already exists" case gracefully
@@ -557,10 +563,9 @@ public class ApplicationOidcFactory extends BaseFactory {
             LOG.info("Non-production mode: OIDC client secret will be DESTROYED with stack");
         }
 
-        LOG.warning("IMPORTANT: Update the client secret after deployment with your actual OIDC provider secret:");
-        LOG.warning("  aws secretsmanager put-secret-value \\");
-        LOG.warning("    --secret-id " + secretName + " \\");
-        LOG.warning("    --secret-string \"YOUR_ACTUAL_CLIENT_SECRET_FROM_OIDC_PROVIDER\"");
+        LOG.warning("IMPORTANT: Update the client secret after deployment with your actual OIDC provider secret");
+        LOG.warning("  Use AWS Console > Secrets Manager or AWS CLI to update the secret value");
+        LOG.warning("  Secret name pattern: " + appId + "/oidc/client-secret");
 
         // Store the Custom Resource in SystemContext for dependency tracking
         // This ensures ECS tasks don't start before the secret is created
@@ -576,6 +581,7 @@ public class ApplicationOidcFactory extends BaseFactory {
         private final String authorizationEndpoint;
         private final String tokenEndpoint;
         private final String userInfoEndpoint;
+        private final String logoutEndpoint;
         private final String clientId;
         private final String clientSecretArn;
         private final String usernameClaim;
@@ -589,8 +595,8 @@ public class ApplicationOidcFactory extends BaseFactory {
 
         public SimplifiedOidcConfiguration(String providerType, String issuerUrl,
                                           String authorizationEndpoint, String tokenEndpoint,
-                                          String userInfoEndpoint, String clientId,
-                                          String clientSecretArn, String usernameClaim,
+                                          String userInfoEndpoint, String logoutEndpoint,
+                                          String clientId, String clientSecretArn, String usernameClaim,
                                           String groupsClaim, String scopes, String applicationUrl,
                                           boolean groupsEnabled, String adminGroupName,
                                           String developerGroupName, String viewerGroupName) {
@@ -599,6 +605,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             this.authorizationEndpoint = authorizationEndpoint;
             this.tokenEndpoint = tokenEndpoint;
             this.userInfoEndpoint = userInfoEndpoint;
+            this.logoutEndpoint = logoutEndpoint;
             this.clientId = clientId;
             this.clientSecretArn = clientSecretArn;
             this.usernameClaim = usernameClaim;
@@ -625,6 +632,9 @@ public class ApplicationOidcFactory extends BaseFactory {
 
         @Override
         public String getUserInfoEndpoint() { return userInfoEndpoint; }
+
+        @Override
+        public String getLogoutEndpoint() { return logoutEndpoint; }
 
         @Override
         public String getClientId() { return clientId; }

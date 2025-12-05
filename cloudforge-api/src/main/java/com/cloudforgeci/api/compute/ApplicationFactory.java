@@ -77,6 +77,33 @@ public class ApplicationFactory extends BaseFactory {
     @com.cloudforge.core.annotation.DeploymentContext("provisionDatabase")
     private Boolean provisionDatabase;
 
+    @com.cloudforge.core.annotation.DeploymentContext("databaseEngine")
+    private String databaseEngine;
+
+    @com.cloudforge.core.annotation.DeploymentContext("databaseVersion")
+    private String databaseVersion;
+
+    @com.cloudforge.core.annotation.DeploymentContext("databaseInstanceClass")
+    private String databaseInstanceClass;
+
+    @com.cloudforge.core.annotation.DeploymentContext("databaseAllocatedStorageGB")
+    private Integer databaseAllocatedStorageGB;
+
+    @com.cloudforge.core.annotation.DeploymentContext("databaseName")
+    private String databaseName;
+
+    @com.cloudforge.core.annotation.DeploymentContext("databaseBackupRetentionDays")
+    private Integer databaseBackupRetentionDays;
+
+    @com.cloudforge.core.annotation.DeploymentContext("databaseMultiAz")
+    private Boolean databaseMultiAz;
+
+    @com.cloudforge.core.annotation.DeploymentContext("enableEncryption")
+    private Boolean enableEncryption;
+
+    @com.cloudforge.core.annotation.DeploymentContext("enableAutoScaling")
+    private Boolean enableAutoScaling;
+
     public ApplicationFactory(Construct scope, String id, RuntimeType runtime, ApplicationSpec applicationSpec) {
         super(scope, id);
         this.runtime = runtime;
@@ -183,12 +210,31 @@ public class ApplicationFactory extends BaseFactory {
                         software.amazon.awscdk.services.ec2.IVpc vpc = ctx.vpc.get()
                             .orElseThrow(() -> new IllegalStateException("VPC not available for database provisioning"));
 
-                        // Create RDS database instance
+                        // Merge DeploymentConfig values with ApplicationSpec defaults
+                        // Priority: DeploymentConfig > ApplicationSpec
+                        DatabaseRequirement mergedReq = DatabaseRequirement.required(
+                            databaseEngine != null ? databaseEngine : dbReq.engine(),
+                            databaseVersion != null ? databaseVersion : dbReq.version()
+                        )
+                        .withInstanceClass(databaseInstanceClass != null ? databaseInstanceClass : dbReq.instanceClass())
+                        .withStorage(databaseAllocatedStorageGB != null ? databaseAllocatedStorageGB : dbReq.allocatedStorageGB())
+                        .withDatabaseName(databaseName != null ? databaseName : dbReq.databaseName());
+
+                        LOG.info("Database configuration (DeploymentConfig overrides applied):");
+                        LOG.info("  Engine: " + mergedReq.engine() + " " + mergedReq.version());
+                        LOG.info("  Instance: " + mergedReq.instanceClass());
+                        LOG.info("  Storage: " + mergedReq.allocatedStorageGB() + " GB");
+                        LOG.info("  Database: " + mergedReq.databaseName());
+
+                        // Create RDS database instance with merged configuration
                         DatabaseConnection dbConnection = RdsFactory.createDatabase(
                             ctx,
-                            dbReq,
+                            mergedReq,
                             vpc,
-                            applicationSpec.applicationId() + "-db"
+                            applicationSpec.applicationId() + "-db",
+                            databaseBackupRetentionDays,  // DeploymentConfig override
+                            databaseMultiAz,              // DeploymentConfig override
+                            enableEncryption              // DeploymentConfig override
                         );
 
                         // Store database connection in SystemContext for use by ContainerFactory

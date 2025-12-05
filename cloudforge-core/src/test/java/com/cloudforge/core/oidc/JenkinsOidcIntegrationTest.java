@@ -117,7 +117,11 @@ class JenkinsOidcIntegrationTest {
     @Test
     void testConfigurationContainsEndpoints() {
         String config = integration.getConfigurationFile(cognitoConfig);
-        assertTrue(config.contains("tokenServerUrl") || config.contains("authorizationServerUrl"));
+        // Implementation uses manual configuration with explicit endpoints for Cognito logout support
+        assertTrue(config.contains("manual:"));
+        assertTrue(config.contains("authorizationServerUrl:"));
+        assertTrue(config.contains("tokenServerUrl:"));
+        assertTrue(config.contains("userInfoServerUrl:"));
     }
 
     @Test
@@ -138,6 +142,7 @@ class JenkinsOidcIntegrationTest {
         assertNotNull(command);
         assertTrue(command.contains("jenkins-plugin-cli"));
         assertTrue(command.contains("jenkins.sh"));
+        assertTrue(command.contains("oic-auth"));
     }
 
     @Test

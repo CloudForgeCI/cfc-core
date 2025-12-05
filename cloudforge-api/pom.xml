@@ -24,12 +24,12 @@
   </properties>
 
   <dependencies>
-    <!-- Dependency on cloudforge-core for interfaces and enums -->
+    <!-- Dependency on cloudforge-core for interfaces and enums (version from parent BOM) -->
     <dependency>
       <groupId>com.cloudforgeci</groupId>
       <artifactId>cloudforge-core</artifactId>
-      <version>${project.version}</version>
     </dependency>
+    <!-- AWS CDK dependencies (versions from parent BOM) -->
     <dependency>
       <groupId>software.amazon.awscdk</groupId>
       <artifactId>aws-cdk-lib</artifactId>
@@ -38,25 +38,27 @@
       <groupId>software.constructs</groupId>
       <artifactId>constructs</artifactId>
     </dependency>
+    <!-- JUnit 5 for testing (version and scope from parent BOM) -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
     </dependency>
+    <!-- Hibernate Validator for Jakarta Bean Validation (version from parent BOM, scope overridden to compile) -->
     <dependency>
       <groupId>org.hibernate.validator</groupId>
       <artifactId>hibernate-validator</artifactId>
-      <version>8.0.1.Final</version>
+      <scope>compile</scope>
     </dependency>
+    <!-- Jakarta EL API (version from parent BOM) -->
     <dependency>
       <groupId>jakarta.el</groupId>
       <artifactId>jakarta.el-api</artifactId>
-      <version>5.0.0</version>
     </dependency>
+    <!-- Expression Language implementation (version from parent BOM, scope overridden to compile) -->
     <dependency>
       <groupId>org.glassfish</groupId>
       <artifactId>jakarta.el</artifactId>
-      <version>4.0.2</version>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
 

@@ -1,6 +1,8 @@
 package com.cloudforgeci.samples.app;
 
 import com.cloudforgeci.api.compute.ApplicationLoader;
+import com.cloudforge.core.config.ApplicationInfo;
+import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
@@ -13,11 +15,16 @@ import com.cloudforgeci.samples.launchers.ApplicationFargateStack;
 // Auto-discovery via ApplicationLoader - no need to import all ApplicationSpecs manually
 import com.cloudforge.core.interfaces.ApplicationSpec;
 
+// Configuration Introspection imports
+import com.cloudforge.core.config.ConfigFieldInfo;
+import com.cloudforge.core.config.ConfigurationIntrospector;
+import com.cloudforge.core.config.DefaultValueResolver;
+import com.cloudforge.core.config.ValidationResult;
+import com.cloudforge.core.annotation.FieldTag;
+
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Environment;
-
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -256,7 +263,7 @@ public class InteractiveDeployer {
                 config.securityProfile == SecurityProfile.PRODUCTION);
 
             if (enableOidc) {
-                configureOidcAuthentication(config);
+                configureOidcAuthentication(config, config.applicationId);
             } else {
                 config.oidcProvider = "none";
             }
@@ -346,8 +353,21 @@ public class InteractiveDeployer {
      * Two completely separate authentication systems:
      * 1. Amazon Cognito - Standalone user directory
      * 2. IAM Identity Center - Enterprise SSO
+     *
+     * Delegates to ApplicationSpec to determine supported auth modes (single source of truth).
      */
-    private static void configureOidcAuthentication(DeploymentConfig config) {
+    private static void configureOidcAuthentication(DeploymentConfig config, String applicationId) {
+        // Get supported auth modes from ApplicationSpec (single source of truth)
+        ApplicationSpec appSpec = APPLICATION_REGISTRY.get(applicationId);
+        if (appSpec == null) {
+            LOG.warning("ApplicationSpec not found for: " + applicationId);
+            config.oidcProvider = "none";
+            return;
+        }
+
+        List<String> supportedAuthModes = appSpec.getSupportedAuthModes();
+        String recommendedAuthMode = appSpec.getRecommendedAuthMode();
+
         System.out.println("\n📋 OIDC Provider Selection:");
         System.out.println("============================");
         System.out.println("Choose OIDC provider:");
@@ -362,13 +382,50 @@ public class InteractiveDeployer {
             new String[]{"cognito", "identity-center", "external-idp"}, "cognito");
 
         switch (config.oidcProvider) {
-            case "cognito" -> configureCognitoOidc(config);
-            case "identity-center" -> configureIdentityCenterOidc(config);
-            case "external-idp" -> configureExternalOidc(config);
+            case "cognito" -> configureCognitoOidc(config, supportedAuthModes, recommendedAuthMode);
+            case "identity-center" -> configureIdentityCenterOidc(config, supportedAuthModes, recommendedAuthMode);
+            case "external-idp" -> configureExternalOidc(config, supportedAuthModes, recommendedAuthMode);
         }
     }
 
-    private static void configureCognitoOidc(DeploymentConfig config) {
+    /**
+     * Helper to select authMode from ApplicationSpec-provided supported modes.
+     * Delegates all logic to the library (single source of truth).
+     */
+    private static void selectAuthMode(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
+        // Filter out "none" since we're already configuring OIDC
+        List<String> oidcAuthModes = supportedAuthModes.stream()
+            .filter(mode -> !mode.equals("none"))
+            .toList();
+
+        if (oidcAuthModes.isEmpty()) {
+            // Application doesn't support OIDC at all
+            config.authMode = "none";
+            System.out.println("\n⚠️  Application doesn't support OIDC authentication");
+            return;
+        }
+
+        if (oidcAuthModes.size() == 1) {
+            // Only one OIDC mode supported - use it automatically
+            config.authMode = oidcAuthModes.get(0);
+            System.out.println("\n✅ Using " + config.authMode + " (only OIDC mode supported by this application)");
+        } else {
+            // Multiple modes supported - let user choose
+            System.out.println("\n🔧 Authentication Mode:");
+            System.out.println("======================");
+            System.out.println("Choose where OIDC authentication happens:");
+            System.out.println("  1. alb-oidc - Authentication at ALB (works for all applications)");
+            System.out.println("  2. application-oidc - Authentication within the application (deeper integration)");
+            System.out.println("");
+            System.out.println("Recommendation: " + recommendedAuthMode);
+            System.out.println("");
+
+            config.authMode = promptChoice("Authentication Mode",
+                oidcAuthModes.toArray(String[]::new), recommendedAuthMode);
+        }
+    }
+
+    private static void configureCognitoOidc(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
         System.out.println("\n🔐 Amazon Cognito Configuration:");
         System.out.println("=================================");
 
@@ -418,11 +475,11 @@ public class InteractiveDeployer {
             System.out.println("\n✅ Existing Cognito configuration captured");
         }
 
-        // Set authMode for application-level OIDC authentication
-        config.authMode = "application-oidc";
+        // Delegate authMode selection to library (single source of truth)
+        selectAuthMode(config, supportedAuthModes, recommendedAuthMode);
     }
 
-    private static void configureIdentityCenterOidc(DeploymentConfig config) {
+    private static void configureIdentityCenterOidc(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
         System.out.println("\n📝 IAM Identity Center Configuration:");
         System.out.println("======================================");
         System.out.println("⚠️  IAM Identity Center is COMPLETELY SEPARATE from Cognito");
@@ -447,11 +504,11 @@ public class InteractiveDeployer {
         System.out.println("   aws secretsmanager put-secret-value --secret-id " + config.oidcClientSecretName +
             " --secret-string 'YOUR_CLIENT_SECRET'");
 
-        // Set authMode for application-level OIDC authentication
-        config.authMode = "application-oidc";
+        // Delegate authMode selection to library (single source of truth)
+        selectAuthMode(config, supportedAuthModes, recommendedAuthMode);
     }
 
-    private static void configureExternalOidc(DeploymentConfig config) {
+    private static void configureExternalOidc(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
         System.out.println("\n📝 External Identity Provider Configuration:");
         System.out.println("==============================================");
         System.out.println("Configure your IdP application with:");
@@ -467,10 +524,10 @@ public class InteractiveDeployer {
         config.oidcClientSecretName = promptOptional("Client Secret Name in Secrets Manager",
             config.applicationId + "/oidc/client-secret");
 
-        // Set authMode for application-level OIDC authentication
-        config.authMode = "application-oidc";
-
         System.out.println("\n✅ External IdP configuration captured");
+
+        // Delegate authMode selection to library (single source of truth)
+        selectAuthMode(config, supportedAuthModes, recommendedAuthMode);
     }
 
     /**
@@ -505,10 +562,12 @@ public class InteractiveDeployer {
                 System.out.println("AWS Config has account-level singleton resources (Recorder + Delivery Channel).");
                 System.out.println("Only ONE stack per region should create these resources.");
                 config.createConfigInfrastructure = promptYesNo("Create Config Infrastructure (first stack in region)", true);
+            } else {
+                config.createConfigInfrastructure = false; // No infrastructure if Config disabled
             }
         } else {
             config.awsConfigEnabled = false;
-            config.createConfigInfrastructure = true; // Default for other profiles
+            config.createConfigInfrastructure = false; // No infrastructure for non-production profiles
         }
 
         // Truth table: GuardDuty for PRODUCTION/STAGING
@@ -565,25 +624,29 @@ public class InteractiveDeployer {
     }
 
     /**
-     * DATABASE CONFIGURATION (CloudForge 3.0+)
-     * - Configures RDS database provisioning for applications with database support
+     * DATABASE CONFIGURATION (CloudForge 3.1+ with Configuration Introspection)
+     * - Automatically discovers and prompts for database fields using @ConfigField annotations
+     * - Application-aware: only shows relevant fields based on ApplicationSpec capabilities
      * - Enables automated database remediation (opt-in)
      */
     private static void configureDatabaseOptions(DeploymentConfig config) {
-        // Database provisioning for applications with OPTIONAL database support
-        // (Applications with REQUIRED databases always get RDS)
-        String[] appsWithOptionalDatabase = {"metabase", "grafana"};
-        boolean hasOptionalDb = Arrays.asList(appsWithOptionalDatabase).contains(config.applicationId);
+        // Discover database configuration fields for this application
+        List<ConfigFieldInfo> databaseFields = ConfigurationIntrospector.discoverVisibleFields(
+            config.applicationSpec, config, "database"
+        );
 
-        if (hasOptionalDb) {
+        if (!databaseFields.isEmpty()) {
             System.out.println("\n💾 Database Configuration:");
             System.out.println("=========================");
-            System.out.println("This application supports both embedded and RDS databases:");
+            System.out.println("This application supports RDS database provisioning:");
             System.out.println("  • Embedded (H2/SQLite): FREE, single instance only");
             System.out.println("  • RDS (PostgreSQL): ~$15-30/month, supports HA/scaling");
             System.out.println("");
-            config.provisionDatabase = promptYesNo("Provision RDS database for high availability",
-                config.securityProfile == SecurityProfile.PRODUCTION);
+
+            // Prompt for each discovered field
+            for (ConfigFieldInfo field : databaseFields) {
+                promptForField(field, config);
+            }
         }
 
         // Database remediations (only if AWS Config is enabled)
@@ -629,6 +692,96 @@ public class InteractiveDeployer {
         }
     }
 
+    /**
+     * Generic field prompting using Configuration Introspection metadata.
+     *
+     * <p>Automatically determines the correct prompt type based on field metadata:</p>
+     * <ul>
+     *   <li>Boolean fields → Yes/No prompt</li>
+     *   <li>Fields with allowedValues → Choice prompt</li>
+     *   <li>Integer/Double fields with min/max → Numeric validation</li>
+     *   <li>String fields with pattern → Pattern validation</li>
+     *   <li>Required fields → Required prompt</li>
+     *   <li>Optional fields → Optional prompt</li>
+     * </ul>
+     *
+     * <p>Features:</p>
+     * <ul>
+     *   <li>Smart defaults from ApplicationSpec via DefaultValueResolver</li>
+     *   <li>Field validation using ConfigFieldInfo.validate()</li>
+     *   <li>Tag-based warnings (DESTRUCTIVE, BILLING_IMPACT, IMMUTABLE)</li>
+     * </ul>
+     */
+    private static void promptForField(ConfigFieldInfo field, DeploymentConfig config) {
+        // Get smart default from ApplicationSpec or FrameworkRules
+        Object defaultValue = DefaultValueResolver.resolveWithFallback(
+            field, config.applicationSpec, null, config
+        );
+
+        // Show field description
+        if (!field.description().isEmpty()) {
+            System.out.println("\n" + field.description());
+        }
+
+        // Show warnings for tagged fields
+        if (field.hasTag(FieldTag.DESTRUCTIVE)) {
+            System.out.println("⚠️  WARNING: Changing this may require resource replacement (potential data loss)");
+        }
+        if (field.hasTag(FieldTag.BILLING_IMPACT)) {
+            System.out.println("💰 This setting impacts AWS costs");
+        }
+        if (field.hasTag(FieldTag.IMMUTABLE)) {
+            System.out.println("🔒 Cannot be changed after creation");
+        }
+
+        // Prompt based on field type
+        Object value;
+        if (field.type() == boolean.class || field.type() == Boolean.class) {
+            // Boolean field → Yes/No prompt
+            boolean defaultBool = defaultValue instanceof Boolean ? (Boolean) defaultValue : false;
+            value = promptYesNo(field.displayName(), defaultBool);
+        } else if (field.allowedValues().length > 0) {
+            // Enum-like field → Choice prompt
+            String defaultStr = defaultValue != null ? defaultValue.toString() : field.allowedValues()[0];
+            value = promptChoice(field.displayName(), field.allowedValues(), defaultStr);
+        } else if (field.type() == int.class || field.type() == Integer.class) {
+            // Integer field → Numeric validation
+            int defaultInt = defaultValue instanceof Number ? ((Number) defaultValue).intValue() : 0;
+            int min = (int) field.min();
+            int max = (int) field.max();
+
+            if (min != Integer.MIN_VALUE || max != Integer.MAX_VALUE) {
+                value = promptIntWithValidation(field.displayName(), defaultInt, min, max);
+            } else {
+                value = promptIntWithValidation(field.displayName(), defaultInt, Integer.MIN_VALUE, Integer.MAX_VALUE);
+            }
+        } else if (field.type() == String.class) {
+            // String field
+            String defaultStr = defaultValue != null ? defaultValue.toString() : "";
+
+            if (field.required()) {
+                value = promptRequired(field.displayName(), defaultStr);
+            } else {
+                value = promptOptional(field.displayName(), defaultStr);
+            }
+        } else {
+            // Unsupported type - skip
+            LOG.warning("Unsupported field type for introspection: " + field.type().getSimpleName());
+            return;
+        }
+
+        // Validate the value
+        ValidationResult validation = field.validate(value, config);
+        if (validation.isError()) {
+            System.out.println("❌ Validation failed: " + validation.getMessage());
+            System.out.println("   Using default value instead");
+            value = defaultValue;
+        }
+
+        // Set the value using reflection
+        field.setValue(config, value);
+    }
+
     private static void selectComplianceFrameworks(DeploymentConfig config) {
         System.out.println("\n📋 Select Compliance Frameworks:");
         System.out.println("================================");
@@ -664,13 +817,16 @@ public class InteractiveDeployer {
         System.out.println("\n⚙️  Advanced Configuration:");
         System.out.println("==========================");
 
-        // Health Check Configuration
+        // Health Check Configuration - Use introspection to discover and prompt all fields
         System.out.println("\n🏥 Health Check Configuration:");
-        config.healthCheckGracePeriod = promptIntWithValidation("Health Check Grace Period (seconds)", 300, 60, 900);
-        config.healthCheckInterval = promptIntWithValidation("Health Check Interval (seconds)", 30, 5, 300);
-        config.healthCheckTimeout = promptIntWithValidation("Health Check Timeout (seconds)", 5, 2, 60);
-        config.healthyThreshold = promptIntWithValidation("Healthy Threshold Count", 2, 1, 10);
-        config.unhealthyThreshold = promptIntWithValidation("Unhealthy Threshold Count", 3, 1, 10);
+
+        List<ConfigFieldInfo> healthCheckFields = ConfigurationIntrospector.discoverVisibleFields(
+            config.applicationSpec, config, "resources"
+        );
+
+        for (ConfigFieldInfo field : healthCheckFields) {
+            promptForField(field, config);
+        }
 
         // Region Configuration
         System.out.println("\n🌍 Region Configuration:");
@@ -814,6 +970,168 @@ public class InteractiveDeployer {
     // DEPLOYMENT LOGIC
     // ============================================================================
 
+    /**
+     * Shows a comprehensive configuration summary before deployment.
+     *
+     * <p>Displays all configured values grouped by category, highlighting:</p>
+     * <ul>
+     *   <li>Application and runtime configuration</li>
+     *   <li>Network and domain settings</li>
+     *   <li>Resource allocation</li>
+     *   <li>Security and compliance settings</li>
+     *   <li>Database configuration (if applicable)</li>
+     *   <li>Fields with BILLING_IMPACT or DESTRUCTIVE tags</li>
+     * </ul>
+     */
+    private static void showConfigurationSummary(DeploymentConfig config) {
+        System.out.println("\n╔═══════════════════════════════════════════════════════════════╗");
+        System.out.println("║            📋 Configuration Summary                           ║");
+        System.out.println("╚═══════════════════════════════════════════════════════════════╝");
+        System.out.println();
+
+        // Get application friendly name
+        String appDisplayName = config.applicationId;
+        for (List<ApplicationInfo> apps : APPLICATION_CATEGORIES.values()) {
+            for (ApplicationInfo app : apps) {
+                if (app.id.equals(config.applicationId)) {
+                    appDisplayName = app.name;
+                    break;
+                }
+            }
+        }
+
+        // Basic Configuration
+        System.out.println("🎯 Application & Environment");
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        System.out.println("  Application:        " + appDisplayName + " (" + config.applicationId + ")");
+        System.out.println("  Stack Name:         " + config.stackName);
+        System.out.println("  Environment:        " + config.environment);
+        System.out.println("  Runtime:            " + config.runtime);
+        System.out.println("  Security Profile:   " + config.securityProfile);
+        System.out.println();
+
+        // Domain Configuration
+        if (config.domain != null && !config.domain.isEmpty()) {
+            System.out.println("🌐 Domain & SSL");
+            System.out.println("═══════════════════════════════════════════════════════════════");
+            System.out.println("  Domain:             " + config.domain);
+            if (config.subdomain != null && !config.subdomain.isEmpty()) {
+                System.out.println("  Subdomain:          " + config.subdomain);
+                System.out.println("  FQDN:               " + config.subdomain + "." + config.domain);
+            } else {
+                System.out.println("  FQDN:               " + config.domain);
+            }
+            System.out.println("  SSL Enabled:        " + (config.enableSsl ? "✓ Yes" : "✗ No"));
+            System.out.println();
+        }
+
+        // OIDC Authentication
+        if (config.supportsOidc && !config.oidcProvider.equals("none")) {
+            System.out.println("🔐 OIDC Authentication");
+            System.out.println("═══════════════════════════════════════════════════════════════");
+            System.out.println("  Provider:           " + config.oidcProvider);
+            System.out.println("  Auth Mode:          " + config.authMode);
+            if (config.oidcProvider.equals("cognito") && config.cognitoAutoProvision) {
+                System.out.println("  Cognito:            Auto-provisioning");
+                System.out.println("  Domain Prefix:      " + config.cognitoDomainPrefix);
+                System.out.println("  MFA Enabled:        " + (config.cognitoMfaEnabled ? "✓ Yes" : "✗ No"));
+            }
+            System.out.println();
+        }
+
+        // Resource Configuration
+        System.out.println("💻 Resources & Scaling");
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        if (config.runtime == RuntimeType.EC2) {
+            System.out.println("  Instance Type:      " + config.instanceType + " 💰");
+        } else {
+            System.out.println("  CPU:                " + config.cpu + " units");
+            System.out.println("  Memory:             " + config.memory + " MB");
+        }
+        System.out.println("  Min Capacity:       " + config.minInstanceCapacity);
+        System.out.println("  Max Capacity:       " + config.maxInstanceCapacity);
+        System.out.println("  Auto Scaling:       " + (config.enableAutoScaling ? "✓ Enabled" : "✗ Disabled"));
+        System.out.println();
+
+        // Network Configuration
+        System.out.println("🌐 Network & Security");
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        System.out.println("  Network Mode:       " + config.networkMode);
+        System.out.println("  WAF Protection:     " + (config.wafEnabled ? "✓ Enabled" : "✗ Disabled"));
+        System.out.println("  Region:             " + config.region);
+        System.out.println();
+
+        // Database Configuration (using introspection)
+        List<ConfigFieldInfo> databaseFields = ConfigurationIntrospector.discoverFields(
+            config.applicationSpec, "database"
+        );
+        if (!databaseFields.isEmpty() && config.provisionDatabase) {
+            System.out.println("💾 Database Configuration");
+            System.out.println("═══════════════════════════════════════════════════════════════");
+            for (ConfigFieldInfo field : databaseFields) {
+                Object value = field.getValue(config);
+                if (value != null) {
+                    String displayValue = value.toString();
+                    String warning = "";
+
+                    if (field.hasTag(FieldTag.BILLING_IMPACT)) {
+                        warning = " 💰";
+                    }
+                    if (field.hasTag(FieldTag.DESTRUCTIVE)) {
+                        warning = " ⚠️";
+                    }
+                    if (field.hasTag(FieldTag.IMMUTABLE)) {
+                        warning = " 🔒";
+                    }
+
+                    System.out.printf("  %-20s %s%s%n", field.displayName() + ":", displayValue, warning);
+                }
+            }
+            System.out.println();
+        }
+
+        // Compliance Configuration
+        System.out.println("🔧 Compliance & Monitoring");
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        System.out.println("  Monitoring:         " + (config.enableMonitoring ? "✓ Enabled" : "✗ Disabled"));
+        System.out.println("  Encryption:         " + (config.enableEncryption ? "✓ Enabled" : "✗ Disabled"));
+        System.out.println("  AWS Config:         " + (config.awsConfigEnabled ? "✓ Enabled" : "✗ Disabled"));
+        System.out.println("  GuardDuty:          " + (config.guardDutyEnabled ? "✓ Enabled 💰" : "✗ Disabled"));
+        System.out.println("  Audit Manager:      " + (config.auditManagerEnabled ? "✓ Enabled" : "✗ Disabled"));
+        if (config.auditManagerEnabled && config.complianceFrameworks != null && !config.complianceFrameworks.isEmpty()) {
+            System.out.println("  Frameworks:         " + config.complianceFrameworks);
+        }
+        if (config.enableMonitoring) {
+            System.out.println("  Log Retention:      " + config.logRetentionDays + " days");
+        }
+        System.out.println();
+
+        // Cost Impact Warnings
+        List<String> costImpactItems = new ArrayList<>();
+        if (config.runtime == RuntimeType.EC2) {
+            costImpactItems.add("EC2 Instance: " + config.instanceType);
+        } else {
+            costImpactItems.add("Fargate: " + config.cpu + " CPU / " + config.memory + " MB");
+        }
+        if (config.guardDutyEnabled) {
+            costImpactItems.add("GuardDuty (~$30-100/month)");
+        }
+        if (config.provisionDatabase) {
+            costImpactItems.add("RDS Database (~$15-100/month)");
+        }
+
+        if (!costImpactItems.isEmpty()) {
+            System.out.println("💰 Cost Impact Summary");
+            System.out.println("═══════════════════════════════════════════════════════════════");
+            for (String item : costImpactItems) {
+                System.out.println("  • " + item);
+            }
+            System.out.println();
+        }
+
+        System.out.println("═══════════════════════════════════════════════════════════════");
+    }
+
     private static void deployInfrastructure(DeploymentConfig config, String deploymentOption) {
         deployInfrastructure(config, deploymentOption, true);
     }
@@ -827,9 +1145,8 @@ public class InteractiveDeployer {
                  ", topology=" + cfcContext.get("topology") +
                  ", stackName=" + cfcContext.get("stackName"));
 
-        System.out.println("\n📋 Deployment Configuration:");
-        System.out.println("============================");
-        printConfiguration(config);
+        // Show comprehensive configuration summary
+        showConfigurationSummary(config);
 
         System.out.println("\n🚀 Deployment Options:");
         System.out.println("========================");
@@ -1138,6 +1455,18 @@ public class InteractiveDeployer {
         config.oidcClientId = extractValue(content, "oidcClientId");
         config.oidcClientSecretName = extractValue(content, "oidcClientSecretName");
 
+        // Database configuration
+        config.provisionDatabase = extractBoolValue(content, "provisionDatabase", false);
+        config.databaseEngine = extractStringValue(content, "databaseEngine", "postgres");
+        config.databaseVersion = extractStringValue(content, "databaseVersion", "15");
+        config.databaseInstanceClass = extractStringValue(content, "databaseInstanceClass", "db.t3.small");
+        config.databaseAllocatedStorageGB = extractIntValue(content, "databaseAllocatedStorageGB", 20);
+        config.databaseMultiAz = extractBoolValue(content, "databaseMultiAz", false);
+        config.databaseName = extractStringValue(content, "databaseName", "appdb");
+        config.databaseBackupRetentionDays = extractIntValue(content, "databaseBackupRetentionDays", 7);
+        config.enableRdsDeletionProtectionRemediation = extractBoolValue(content, "enableRdsDeletionProtectionRemediation", false);
+        config.enableRdsAutoMinorVersionUpgradeRemediation = extractBoolValue(content, "enableRdsAutoMinorVersionUpgradeRemediation", false);
+
         // Compliance configuration
         config.enableMonitoring = extractBoolValue(content, "enableMonitoring", true);
         config.enableEncryption = extractBoolValue(content, "enableEncryption", true);
@@ -1147,9 +1476,15 @@ public class InteractiveDeployer {
         config.auditManagerEnabled = extractBoolValue(content, "auditManagerEnabled", false);
         config.complianceFrameworks = extractStringValue(content, "complianceFrameworks", "");
         config.logRetentionDays = extractStringValue(content, "logRetentionDays", "7");
+        config.enableS3VersioningRemediation = extractBoolValue(content, "enableS3VersioningRemediation", false);
+        config.enableCloudTrailBucketAccessRemediation = extractBoolValue(content, "enableCloudTrailBucketAccessRemediation", false);
 
         // Debug: Print what was loaded for key fields
         System.out.println("\n📖 Loaded from deployment-context.json:");
+        System.out.println("  provisionDatabase: " + config.provisionDatabase);
+        System.out.println("  databaseEngine: " + config.databaseEngine);
+        System.out.println("  enableEncryption: " + config.enableEncryption);
+        System.out.println("  enableAutoScaling: " + config.enableAutoScaling);
         System.out.println("  complianceFrameworks: '" + config.complianceFrameworks + "'");
         System.out.println("  logRetentionDays: '" + config.logRetentionDays + "'");
         System.out.println("  region: '" + config.region + "'");
@@ -1537,133 +1872,7 @@ public class InteractiveDeployer {
     }
 
     // ============================================================================
-    // DATA CLASSES
-    // ============================================================================
-
-    static class DeploymentConfig {
-        // Basic configuration
-        String stackName;
-        String environment;
-        String applicationId;
-        String applicationName;
-
-        @JsonIgnore
-        ApplicationSpec applicationSpec;
-
-        // Application metadata
-        boolean supportsFargate;
-        boolean supportsEc2;
-        boolean supportsOidc;
-
-        // Domain configuration
-        String domain;
-        String subdomain;
-        boolean enableSsl;
-
-        // Runtime configuration
-        RuntimeType runtime;
-        TopologyType topology;
-        SecurityProfile securityProfile;
-
-        // Network configuration
-        String networkMode;
-        boolean wafEnabled;
-        boolean cloudfrontEnabled;
-
-        // Resource configuration
-        int minInstanceCapacity = 1;
-        int maxInstanceCapacity = 1;
-        int cpuTargetUtilization = 60;
-        int cpu = 1024;
-        int memory = 2048;
-        String instanceType = "t3.micro";
-
-        // OIDC configuration
-        String oidcProvider = "none";
-        String authMode = "none";
-        boolean cognitoAutoProvision = false;
-        String cognitoUserPoolName = null;
-        String cognitoDomainPrefix = null;
-        boolean cognitoMfaEnabled = false;
-        boolean cognitoCreateGroups = true;
-        String cognitoAdminGroupName = null;
-        String cognitoUserGroupName = null;
-        String cognitoInitialAdminEmail = null;
-        String cognitoInitialAdminPhone = null;
-        String cognitoUserPoolId = null;
-        String cognitoAppClientId = null;
-        String oidcIssuer = null;
-        String oidcAuthorizationEndpoint = null;
-        String oidcTokenEndpoint = null;
-        String oidcUserInfoEndpoint = null;
-        String oidcClientId = null;
-        String oidcClientSecretName = null;
-
-        // Database configuration
-        boolean provisionDatabase = false;
-        boolean enableRdsDeletionProtectionRemediation = false;
-        boolean enableRdsAutoMinorVersionUpgradeRemediation = false;
-
-        // Compliance configuration
-        boolean enableMonitoring = true;
-        boolean enableEncryption = true;
-        boolean awsConfigEnabled = false;
-        boolean createConfigInfrastructure = true;
-        boolean guardDutyEnabled = false;
-        boolean auditManagerEnabled = false;
-        String complianceFrameworks = "";
-        String logRetentionDays = "7";
-        boolean enableS3VersioningRemediation = false;
-        boolean enableCloudTrailBucketAccessRemediation = false;
-
-        // Health check configuration
-        int healthCheckGracePeriod = 300;
-        int healthCheckInterval = 30;
-        int healthCheckTimeout = 5;
-        int healthyThreshold = 2;
-        int unhealthyThreshold = 3;
-
-        // Region configuration
-        String region = "us-east-1";
-        String[] availabilityZones;
-        boolean enableAutoScaling = false;
-    }
-
-    static class ApplicationInfo {
-        String id;
-        String name;
-        String description;
-        boolean supportsFargate;
-        boolean supportsEc2;
-        boolean supportsOidc;
-        int minCpu;          // Minimum CPU units (Fargate)
-        int minMemory;       // Minimum memory MB (Fargate)
-        String minInstanceType;  // Minimum instance type (EC2)
-
-        ApplicationInfo(String id, String name, String description, boolean supportsFargate, boolean supportsEc2, boolean supportsOidc) {
-            this.id = id;
-            this.name = name;
-            this.description = description;
-            this.supportsFargate = supportsFargate;
-            this.supportsEc2 = supportsEc2;
-            this.supportsOidc = supportsOidc;
-            // Set default requirements
-            this.minCpu = 1024;
-            this.minMemory = 2048;
-            this.minInstanceType = "t3.micro";
-        }
-
-        ApplicationInfo(String id, String name, String description, boolean supportsFargate, boolean supportsEc2, boolean supportsOidc,
-                        int minCpu, int minMemory, String minInstanceType) {
-            this.id = id;
-            this.name = name;
-            this.description = description;
-            this.supportsFargate = supportsFargate;
-            this.supportsEc2 = supportsEc2;
-            this.supportsOidc = supportsOidc;
-            this.minCpu = minCpu;
-            this.minMemory = minMemory;
-            this.minInstanceType = minInstanceType;
-        }
-    }
+    // DATA CLASSES - Now imported from cloudforge-core library (contract layer)
+    // DeploymentConfig: com.cloudforge.core.config.DeploymentConfig
+    // ApplicationInfo: com.cloudforge.core.config.ApplicationInfo
 }

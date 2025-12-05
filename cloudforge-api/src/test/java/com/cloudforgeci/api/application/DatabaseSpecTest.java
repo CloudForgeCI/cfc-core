@@ -50,7 +50,7 @@ public class DatabaseSpecTest {
             Arguments.of(new GrafanaApplicationSpec(), RequirementType.OPTIONAL, "postgres", "14", "grafana", 7, true, false),
 
             // REQUIRED databases (must have external RDS)
-            Arguments.of(new GitLabApplicationSpec(), RequirementType.REQUIRED, "postgres", "14", "gitlabhq_production", 30, true, true),
+            Arguments.of(new GitLabApplicationSpec(), RequirementType.REQUIRED, "postgres", "16", "gitlabhq_production", 30, true, true),
             Arguments.of(new MattermostApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "mattermost", 14, true, true),
             Arguments.of(new SupersetApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "superset", 14, true, true),
             Arguments.of(new HarborApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "registry", 30, true, true)
@@ -240,11 +240,15 @@ public class DatabaseSpecTest {
         assertEquals(dbName, env.get("MB_DB_DBNAME"), "Should use RDS database name");
         assertEquals(username, env.get("MB_DB_USER"), "Should use RDS username");
 
-        // Password should use Secrets Manager dynamic reference
+        // Password is now injected via ECS secret, not in environment variables
+        // The test framework doesn't create ECS containers, so password won't be in env
+        // Just verify that MB_DB_PASS is not set with the old CloudFormation resolve syntax
         String password = env.get("MB_DB_PASS");
-        assertNotNull(password, "Password should be configured");
-        assertTrue(password.contains("secretsmanager"), "Should use Secrets Manager");
-        assertTrue(password.contains(passwordSecretArn), "Should reference correct secret ARN");
+        if (password != null) {
+            assertFalse(password.contains("{{resolve:secretsmanager"),
+                "Should not use CloudFormation resolve syntax (doesn't work in containers)");
+        }
+        // Note: In production, ContainerFactory adds MB_DB_PASS as an ECS secret from Secrets Manager
     }
 
     @ParameterizedTest(name = "{index}: Testing {6} RDS connection")
@@ -272,7 +276,11 @@ public class DatabaseSpecTest {
         assertTrue(omnibusConfig.contains("gitlab_rails['db_port'] = " + port), "Should configure RDS port");
         assertTrue(omnibusConfig.contains("gitlab_rails['db_database'] = '" + dbName + "'"), "Should configure database name");
         assertTrue(omnibusConfig.contains("gitlab_rails['db_username'] = '" + username + "'"), "Should configure username");
-        assertTrue(omnibusConfig.contains("secretsmanager"), "Should use Secrets Manager for password");
+        // Password should use ENV variable (injected by ECS from Secrets Manager)
+        assertTrue(omnibusConfig.contains("ENV['GITLAB_DATABASE_PASSWORD']"),
+            "Should use ENV variable for password (injected by ECS from Secrets Manager)");
+        assertFalse(omnibusConfig.contains("{{resolve:secretsmanager"),
+            "Should not use CloudFormation resolve syntax (doesn't work in containers)");
     }
 
     @ParameterizedTest(name = "{index}: Testing {6} RDS connection")
@@ -298,7 +306,11 @@ public class DatabaseSpecTest {
         assertTrue(dataSource.contains(endpoint), "Should include RDS endpoint");
         assertTrue(dataSource.contains(dbName), "Should include database name");
         assertTrue(dataSource.contains("sslmode=require"), "Should require SSL");
-        assertTrue(dataSource.contains("secretsmanager"), "Should use Secrets Manager for password");
+        // Password should use ENV variable placeholder (actual value injected by ECS from Secrets Manager)
+        assertTrue(dataSource.contains("${GITLAB_DATABASE_PASSWORD}"),
+            "Should use ENV variable placeholder for password");
+        assertFalse(dataSource.contains("{{resolve:secretsmanager"),
+            "Should not use CloudFormation resolve syntax (doesn't work in containers)");
     }
 
     // ========== Plugin Annotation Tests ==========

@@ -184,7 +184,8 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
 
             // Build PostgreSQL connection string
             // Format: postgres://user:password@host:port/database?sslmode=require
-            String password = "{{resolve:secretsmanager:" + dbConn.passwordSecretArn() + ":SecretString:password}}";
+            // Password is injected via ECS secret as GITLAB_DATABASE_PASSWORD
+            String password = "${GITLAB_DATABASE_PASSWORD}";
             String dataSource = String.format(
                 "postgres://%s:%s@%s:%d/%s?sslmode=require&connect_timeout=10",
                 dbConn.username(),

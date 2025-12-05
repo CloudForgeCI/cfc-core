@@ -440,7 +440,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         if (cognitoInitialAdminEmail != null && !cognitoInitialAdminEmail.isEmpty() &&
             (cognitoCreateGroups == null || !cognitoCreateGroups)) {
             // Groups disabled but admin email provided - create user without group attachment
-            createInitialAdminUser(userPool, null);
+            createInitialAdminUser(userPool, null, null);
         }
 
         // Create custom domain for hosted UI
@@ -453,9 +453,11 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         LOG.info("User Pool domain created: " + cognitoDomainPrefix + ".auth." + region + ".amazoncognito.com");
 
-        // Construct redirect URL
+        // Construct redirect URL and logout URL
         String redirectUrl = constructRedirectUrl();
+        String logoutUrl = constructLogoutRedirectUrl();
         LOG.info("Redirect URL: " + redirectUrl);
+        LOG.info("Logout URL: " + logoutUrl);
 
         // Create App Client for ALB OIDC authentication
         UserPoolClient appClient = UserPoolClient.Builder.create(this, "AppClient")
@@ -474,6 +476,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                                 OAuthScope.PROFILE
                         ))
                         .callbackUrls(List.of(redirectUrl))
+                        .logoutUrls(List.of(logoutUrl))
                         .build())
                 // Token validity
                 .idTokenValidity(software.amazon.awscdk.Duration.hours(1))
@@ -561,8 +564,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 throw new IllegalArgumentException("cognitoDomainPrefix is required");
             }
 
-            // Construct redirect URL
+            // Construct redirect URL and logout URL
             String redirectUrl = constructRedirectUrl();
+            String logoutUrl = constructLogoutRedirectUrl();
 
             // Create new App Client
             UserPoolClient appClient = UserPoolClient.Builder.create(this, "AppClient")
@@ -575,6 +579,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                                     .build())
                             .scopes(List.of(OAuthScope.OPENID, OAuthScope.EMAIL, OAuthScope.PROFILE))
                             .callbackUrls(List.of(redirectUrl))
+                            .logoutUrls(List.of(logoutUrl))
                             .build())
                     .preventUserExistenceErrors(true)
                     .build();
@@ -597,21 +602,52 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     }
 
     /**
-     * Construct redirect URL based on domain configuration.
+     * Construct redirect URL based on domain configuration and auth mode.
+     *
+     * <p>For ALB-OIDC: Uses /oauth2/idpresponse (ALB handles the callback)</p>
+     * <p>For Application-OIDC: Uses application-specific callback path (e.g., /securityRealm/finishLogin for Jenkins)</p>
      */
     private String constructRedirectUrl() {
+        // Determine the callback path based on authMode
+        String callbackPath;
+        if ("application-oidc".equals(authMode)) {
+            // For application-level OIDC, use the application's callback path
+            // Jenkins uses /securityRealm/finishLogin
+            // TODO: Get callback path from ApplicationSpec when other apps need different paths
+            callbackPath = "/securityRealm/finishLogin";
+            LOG.info("Using application-oidc callback path: " + callbackPath);
+        } else {
+            // For ALB-level OIDC, use the standard ALB callback path
+            callbackPath = "/oauth2/idpresponse";
+        }
+
+        return constructBaseUrl() + callbackPath;
+    }
+
+    /**
+     * Construct logout redirect URL - where Cognito redirects after logout.
+     * This is typically the application root URL.
+     */
+    private String constructLogoutRedirectUrl() {
+        return constructBaseUrl() + "/";
+    }
+
+    /**
+     * Construct the base URL from domain configuration.
+     */
+    private String constructBaseUrl() {
         if (fqdn != null && !fqdn.isEmpty()) {
-            return "https://" + fqdn + "/oauth2/idpresponse";
+            return "https://" + fqdn;
         } else if (domain != null && !domain.isEmpty()) {
             if (subdomain != null && !subdomain.isEmpty()) {
-                return "https://" + subdomain + "." + domain + "/oauth2/idpresponse";
+                return "https://" + subdomain + "." + domain;
             } else {
-                return "https://" + domain + "/oauth2/idpresponse";
+                return "https://" + domain;
             }
         } else {
             // No domain configured - ALB DNS will be used (must update callback URL after deployment)
             LOG.warning("No domain configured - callback URL will need to be updated after deployment");
-            return "https://example.com/oauth2/idpresponse";  // Placeholder
+            return "https://example.com";  // Placeholder
         }
     }
 
@@ -624,12 +660,14 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         String authEndpoint = "https://" + domainPrefix + ".auth." + region + ".amazoncognito.com/oauth2/authorize";
         String tokenEndpoint = "https://" + domainPrefix + ".auth." + region + ".amazoncognito.com/oauth2/token";
         String userInfoEndpoint = "https://" + domainPrefix + ".auth." + region + ".amazoncognito.com/oauth2/userInfo";
+        String logoutEndpoint = "https://" + domainPrefix + ".auth." + region + ".amazoncognito.com/logout";
 
         LOG.info("Exporting OIDC endpoints to DeploymentContext:");
         LOG.info("  Issuer: " + issuer);
         LOG.info("  Authorization: [REDACTED]");
         LOG.info("  Token: [REDACTED]");
         LOG.info("  UserInfo: [REDACTED]");
+        LOG.info("  Logout: [REDACTED]");
         LOG.info("  Client ID: [REDACTED]");
         LOG.info("  Secret Name: " + (secretName != null ? "[REDACTED]" : "null"));
 
@@ -638,6 +676,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         ctx.cognitoAuthorizationEndpoint.set(authEndpoint);
         ctx.cognitoTokenEndpoint.set(tokenEndpoint);
         ctx.cognitoUserInfoEndpoint.set(userInfoEndpoint);
+        ctx.cognitoLogoutEndpoint.set(logoutEndpoint);
         ctx.cognitoClientId.set(clientId);
         ctx.cognitoClientSecretName.set(secretName);
         ctx.cognitoUserPoolId.set(userPoolId);
@@ -666,7 +705,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         LOG.info("Creating user groups: " + adminGroupName + ", " + userGroupName);
 
         // Create admin group
-        CfnUserPoolGroup.Builder.create(this, "AdminGroup")
+        CfnUserPoolGroup adminGroup = CfnUserPoolGroup.Builder.create(this, "AdminGroup")
                 .userPoolId(userPool.getUserPoolId())
                 .groupName(adminGroupName)
                 .description("Jenkins administrators with full access")
@@ -674,7 +713,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .build();
 
         // Create user group
-        CfnUserPoolGroup.Builder.create(this, "UserGroup")
+        CfnUserPoolGroup userGroup = CfnUserPoolGroup.Builder.create(this, "UserGroup")
                 .userPoolId(userPool.getUserPoolId())
                 .groupName(userGroupName)
                 .description("Jenkins users with standard access")
@@ -685,7 +724,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         // Create initial admin user if email provided
         if (cognitoInitialAdminEmail != null && !cognitoInitialAdminEmail.isEmpty()) {
-            createInitialAdminUser(userPool, adminGroupName);
+            createInitialAdminUser(userPool, adminGroupName, adminGroup);
         }
     }
 
@@ -693,7 +732,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * Create initial admin user with temporary password.
      * User will be required to change password on first login.
      */
-    private void createInitialAdminUser(UserPool userPool, String adminGroupName) {
+    private void createInitialAdminUser(UserPool userPool, String adminGroupName, CfnUserPoolGroup adminGroup) {
         LOG.info("Creating initial admin user: " + cognitoInitialAdminEmail);
 
         // Build user attributes list
@@ -732,15 +771,16 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .build();
 
         // Add user to admin group if group name provided
-        if (adminGroupName != null && !adminGroupName.isEmpty()) {
+        if (adminGroupName != null && !adminGroupName.isEmpty() && adminGroup != null) {
             CfnUserPoolUserToGroupAttachment groupAttachment = CfnUserPoolUserToGroupAttachment.Builder.create(this, "InitialAdminGroupAttachment")
                     .userPoolId(userPool.getUserPoolId())
                     .username(cognitoInitialAdminEmail)
                     .groupName(adminGroupName)
                     .build();
 
-            // Ensure user is created before adding to group
+            // Ensure user and group are created before adding to group
             groupAttachment.getNode().addDependency(adminUser);
+            groupAttachment.getNode().addDependency(adminGroup);
 
             LOG.info("Initial admin user created: " + cognitoInitialAdminEmail);
             LOG.info("  - User will receive email with temporary password");
@@ -903,10 +943,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     private String storeCognitoClientSecret(UserPool userPool, UserPoolClient appClient) {
         String secretName = stackName + "/" + "jenkins" + "/oidc/client-secret";
 
-        LOG.info("Storing Cognito client secret in Secrets Manager: " + secretName);
+        LOG.info("Storing Cognito client secret in Secrets Manager for stack: " + stackName);
 
-        // Use AWS SDK Custom Resource to retrieve the client secret from Cognito
-        // AND write it to Secrets Manager in a single Custom Resource
+        // Use Custom Resource to retrieve the client secret from Cognito
         // The client secret is only available via DescribeUserPoolClient API call
         AwsSdkCall getSecretCall = AwsSdkCall.builder()
                 .service("CognitoIdentityServiceProvider")
@@ -925,10 +964,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .onUpdate(getSecretCall)
                 .policy(AwsCustomResourcePolicy.fromSdkCalls(
                         software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of(
-                                    userPool.getUserPoolArn(),
-                                    "arn:aws:secretsmanager:" + region + ":" + Stack.of(this).getAccount() + ":secret:" + secretName + "*"
-                                ))
+                                .resources(List.of(userPool.getUserPoolArn()))
                                 .build()
                 ))
                 .build();
@@ -938,52 +974,25 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // Get the client secret value from the Custom Resource
         String clientSecretValue = secretManager.getResponseField("UserPoolClient.ClientSecret");
 
-        // Write secret using Custom Resource to handle "already exists" gracefully
-        // CDK's Secret construct throws AlreadyExists error, but Custom Resource can ignore it
-        AwsSdkCall putSecretCall = AwsSdkCall.builder()
-                .service("SecretsManager")
-                .action("putSecretValue")
-                .parameters(java.util.Map.of(
-                        "SecretId", secretName,
-                        "SecretString", clientSecretValue
-                ))
-                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecretValue-" + stackName))
-                .region(region)
-                .ignoreErrorCodesMatching("ResourceNotFoundException")  // Create if doesn't exist
+        // Create the secret using CDK Secret construct (same pattern as RDS)
+        // This automatically gets the complete ARN with suffix
+        software.amazon.awscdk.services.secretsmanager.Secret cognitoSecret =
+            software.amazon.awscdk.services.secretsmanager.Secret.Builder.create(this, "CognitoClientSecret")
+                .secretName(secretName)
+                .description("Cognito User Pool Client Secret for application-level OIDC authentication")
+                .secretStringValue(software.amazon.awscdk.SecretValue.unsafePlainText(clientSecretValue))
+                .removalPolicy(securityProfileConfig.getSecurityProfile() == SecurityProfile.PRODUCTION ?
+                    RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
                 .build();
 
-        // Create secret on first deployment - ignore if already exists
-        AwsSdkCall createSecretFallback = AwsSdkCall.builder()
-                .service("SecretsManager")
-                .action("createSecret")
-                .parameters(java.util.Map.of(
-                        "Name", secretName,
-                        "Description", "Cognito User Pool Client Secret for application-level OIDC authentication",
-                        "SecretString", clientSecretValue
-                ))
-                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecretValue-" + stackName))
-                .region(region)
-                .ignoreErrorCodesMatching("ResourceExistsException")  // If exists, leave it alone
-                .build();
+        cognitoSecret.getNode().addDependency(secretManager);
 
-        AwsCustomResource secretWriter = AwsCustomResource.Builder.create(this, "CognitoClientSecretWriter")
-                .onCreate(createSecretFallback)
-                .onUpdate(putSecretCall)  // Update existing secret value on stack updates
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
-                                .build()
-                ))
-                .build();
+        LOG.info("Cognito client secret created in Secrets Manager");
 
-        secretWriter.getNode().addDependency(secretManager);
+        // Store the secret in SystemContext for dependency tracking
+        ctx.cognitoClientSecretResourceInternal.set(cognitoSecret);
 
-        LOG.info("Cognito client secret will be stored in Secrets Manager: " + secretName);
-
-        // Store the Custom Resource in SystemContext for dependency tracking
-        // This ensures ECS tasks don't start before the secret is created
-        ctx.cognitoClientSecretResourceInternal.set(secretWriter);
-
-        return secretName;
+        // Return the COMPLETE ARN with suffix (same as RDS pattern)
+        return cognitoSecret.getSecretArn();
     }
 }

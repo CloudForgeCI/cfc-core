@@ -1,5 +1,7 @@
 package com.cloudforgeci.samples.app;
 
+import com.cloudforge.core.config.DeploymentConfig;
+import com.cloudforge.core.config.ApplicationInfo;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
@@ -23,8 +25,8 @@ class InteractiveDeployerTest {
     /**
      * Helper method to access buildCfcContext via reflection since it's private.
      */
-    private Map<String, Object> buildCfcContext(InteractiveDeployer.DeploymentConfig config) throws Exception {
-        var method = InteractiveDeployer.class.getDeclaredMethod("buildCfcContext", InteractiveDeployer.DeploymentConfig.class);
+    private Map<String, Object> buildCfcContext(DeploymentConfig config) throws Exception {
+        var method = InteractiveDeployer.class.getDeclaredMethod("buildCfcContext", DeploymentConfig.class);
         method.setAccessible(true);
         return (Map<String, Object>) method.invoke(null, config);
     }
@@ -32,8 +34,8 @@ class InteractiveDeployerTest {
     /**
      * Helper to create minimal config.
      */
-    private InteractiveDeployer.DeploymentConfig createMinimalConfig() {
-        InteractiveDeployer.DeploymentConfig config = new InteractiveDeployer.DeploymentConfig();
+    private DeploymentConfig createMinimalConfig() {
+        DeploymentConfig config = new DeploymentConfig();
         config.stackName = "test-stack";
         config.environment = "dev";
         config.applicationId = "jenkins";
@@ -48,7 +50,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_BasicFields() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = new InteractiveDeployer.DeploymentConfig();
+        DeploymentConfig config = new DeploymentConfig();
         config.stackName = "test-stack";
         config.environment = "dev";
         config.applicationId = "grafana";
@@ -71,7 +73,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_DomainConfiguration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.domain = "example.com";
         config.subdomain = "ci";
         config.enableSsl = true;
@@ -88,7 +90,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_EmptyDomainConfiguration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.domain = "";
         config.subdomain = "";
         config.enableSsl = false;
@@ -105,7 +107,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_ResourceConfiguration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.cpu = 2048;
         config.memory = 4096;
         config.minInstanceCapacity = 2;
@@ -126,7 +128,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_EC2Configuration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.runtime = RuntimeType.EC2;
         config.instanceType = "t3.medium";
 
@@ -141,7 +143,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_ComplianceConfiguration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.enableMonitoring = true;
         config.enableEncryption = true;
         config.awsConfigEnabled = true;
@@ -166,7 +168,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_NetworkConfiguration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.networkMode = "private-with-nat";
         config.wafEnabled = true;
         config.cloudfrontEnabled = true;
@@ -183,7 +185,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_OidcConfiguration_Cognito() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.oidcProvider = "cognito";
         config.cognitoAutoProvision = true;
         config.cognitoUserPoolName = "test-pool";
@@ -212,7 +214,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_OidcConfiguration_IdentityCenter() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.oidcProvider = "identity-center";
         config.oidcIssuer = "https://my-tenant.awsapps.com/start";
         config.oidcAuthorizationEndpoint = "https://my-tenant.awsapps.com/start/oauth2/authorize";
@@ -237,7 +239,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_OidcConfiguration_None() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.oidcProvider = "none";
 
         // When
@@ -250,7 +252,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_HealthCheckConfiguration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.healthCheckGracePeriod = 600;
         config.healthCheckInterval = 60;
         config.healthCheckTimeout = 10;
@@ -271,7 +273,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_RegionConfiguration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.region = "us-west-2";
         config.availabilityZones = new String[]{"us-west-2a", "us-west-2b"};
 
@@ -286,7 +288,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_ScalingConfiguration() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.minInstanceCapacity = 1;
         config.maxInstanceCapacity = 3;
         config.enableAutoScaling = true;
@@ -305,7 +307,7 @@ class InteractiveDeployerTest {
     @Test
     void testApplicationInfo_AllFields() {
         // Given & When
-        InteractiveDeployer.ApplicationInfo app = new InteractiveDeployer.ApplicationInfo(
+        ApplicationInfo app = new ApplicationInfo(
             "grafana",
             "Grafana",
             "Metrics visualization platform",
@@ -326,7 +328,7 @@ class InteractiveDeployerTest {
     @Test
     void testApplicationInfo_DatabaseNoOidc() {
         // Given & When
-        InteractiveDeployer.ApplicationInfo app = new InteractiveDeployer.ApplicationInfo(
+        ApplicationInfo app = new ApplicationInfo(
             "postgresql",
             "PostgreSQL",
             "Relational database",
@@ -345,7 +347,7 @@ class InteractiveDeployerTest {
     @Test
     void testDeploymentConfig_Defaults() {
         // Given & When
-        InteractiveDeployer.DeploymentConfig config = new InteractiveDeployer.DeploymentConfig();
+        DeploymentConfig config = new DeploymentConfig();
 
         // Then - verify default values
         assertEquals(1, config.minInstanceCapacity);
@@ -375,7 +377,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_ApplicationMetadata() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.applicationId = "gitlab";
         config.supportsFargate = true;
         config.supportsEc2 = true;
@@ -394,7 +396,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_EnvironmentRename() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.environment = "staging";
 
         // When
@@ -408,7 +410,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_NullValues() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.cognitoUserPoolName = null;
         config.cognitoAdminGroupName = null;
         config.oidcIssuer = null;
@@ -425,7 +427,7 @@ class InteractiveDeployerTest {
     @Test
     void testBuildCfcContext_ConfigInfrastructure() throws Exception {
         // Given
-        InteractiveDeployer.DeploymentConfig config = createMinimalConfig();
+        DeploymentConfig config = createMinimalConfig();
         config.awsConfigEnabled = true;
         config.createConfigInfrastructure = false;
 
@@ -435,5 +437,73 @@ class InteractiveDeployerTest {
         // Then
         assertEquals(true, context.get("awsConfigEnabled"));
         assertEquals(false, context.get("createConfigInfrastructure"));
+    }
+
+    @Test
+    void testHealthCheckGracePeriod_ApplicationSpecDefaults() {
+        // Test that application-specific health check grace periods are properly
+        // exposed via ApplicationSpec.defaultHealthCheckGracePeriod()
+
+        // Load GitLab application spec
+        var gitlabSpecOpt = com.cloudforgeci.api.compute.ApplicationLoader.findById("gitlab");
+        assertTrue(gitlabSpecOpt.isPresent(), "GitLab ApplicationSpec should be loaded");
+
+        var gitlabSpec = gitlabSpecOpt.get();
+
+        // GitLab requires 900s due to database migrations and initialization
+        assertEquals(900, gitlabSpec.defaultHealthCheckGracePeriod(),
+            "GitLab should have 900s health check grace period");
+
+        // Load Jenkins application spec
+        var jenkinsSpecOpt = com.cloudforgeci.api.compute.ApplicationLoader.findById("jenkins");
+        assertTrue(jenkinsSpecOpt.isPresent(), "Jenkins ApplicationSpec should be loaded");
+
+        var jenkinsSpec = jenkinsSpecOpt.get();
+
+        // Jenkins uses default 300s
+        assertEquals(300, jenkinsSpec.defaultHealthCheckGracePeriod(),
+            "Jenkins should use default 300s health check grace period");
+    }
+
+    @Test
+    void testHealthCheckConfiguration_DefaultValueResolver() {
+        // Test that DefaultValueResolver correctly pulls application-specific defaults
+        // from ApplicationSpec when using @ConfigField(defaultFrom="defaultHealthCheckGracePeriod")
+
+        // Given - GitLab deployment config
+        DeploymentConfig gitlabConfig = createMinimalConfig();
+        gitlabConfig.applicationId = "gitlab";
+
+        var gitlabSpecOpt = com.cloudforgeci.api.compute.ApplicationLoader.findById("gitlab");
+        assertTrue(gitlabSpecOpt.isPresent(), "GitLab ApplicationSpec should be loaded");
+        gitlabConfig.applicationSpec = gitlabSpecOpt.get();
+
+        // When - Using ConfigurationIntrospector to discover health check fields
+        var healthCheckFields = com.cloudforge.core.config.ConfigurationIntrospector
+            .discoverVisibleFields(gitlabConfig.applicationSpec, gitlabConfig, "resources");
+
+        // Then - Should find all health check fields
+        assertFalse(healthCheckFields.isEmpty(), "Should discover health check fields in resources category");
+
+        // Find the healthCheckGracePeriod field
+        var gracePeriodField = healthCheckFields.stream()
+            .filter(f -> f.fieldName().equals("healthCheckGracePeriod"))
+            .findFirst();
+
+        assertTrue(gracePeriodField.isPresent(), "Should find healthCheckGracePeriod field");
+
+        // Verify defaultFrom attribute is set correctly
+        assertEquals("defaultHealthCheckGracePeriod", gracePeriodField.get().defaultFrom(),
+            "Field should use defaultFrom='defaultHealthCheckGracePeriod'");
+
+        // Verify DefaultValueResolver resolves to 600 for GitLab
+        Object resolvedDefault = com.cloudforge.core.config.DefaultValueResolver.resolve(
+            gracePeriodField.get(),
+            gitlabConfig.applicationSpec,
+            null
+        );
+
+        assertEquals(900, resolvedDefault,
+            "DefaultValueResolver should resolve GitLab health check grace period to 900s");
     }
 }

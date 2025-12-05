@@ -142,8 +142,9 @@ public class GrafanaApplicationSpec implements ApplicationSpec, DatabaseSpec {
             environment.put("GF_DATABASE_HOST", dbConn.endpoint() + ":" + dbConn.port());
             environment.put("GF_DATABASE_NAME", dbConn.databaseName());
             environment.put("GF_DATABASE_USER", dbConn.username());
-            // Password retrieved from Secrets Manager at runtime
-            environment.put("GF_DATABASE_PASSWORD", "{{resolve:secretsmanager:" + dbConn.passwordSecretArn() + ":SecretString:password}}");
+            // Password is injected via ECS secret as GITLAB_DATABASE_PASSWORD
+            // Grafana will read it as GF_DATABASE_PASSWORD when ECS injects it
+            // Don't set it here - ContainerFactory adds it as an ECS secret
             environment.put("GF_DATABASE_SSL_MODE", "require");
         } else {
             // Fallback to SQLite embedded database (single instance only)

@@ -118,9 +118,9 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     @Override
     public DatabaseRequirement databaseRequirement() {
-        // GitLab REQUIRES PostgreSQL for production deployments
+        // GitLab REQUIRES PostgreSQL 16+ for production deployments
         // Embedded PostgreSQL only suitable for dev/staging (single instance)
-        return DatabaseRequirement.required("postgres", "14")
+        return DatabaseRequirement.required("postgres", "16")
             .withInstanceClass("db.t3.medium")
             .withStorage(50)
             .withDatabaseName("gitlabhq_production");
@@ -147,7 +147,9 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     @Override
     public String healthCheckPath() {
-        // GitLab's sign-in page is the best health check endpoint
+        // Use /users/sign_in for health checks - this ensures Rails is actually responding
+        // This returns 200 when GitLab is fully initialized
+        // Combined with 600s grace period, this prevents premature health check failures
         return "/users/sign_in";
     }
 
@@ -182,6 +184,13 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
         omnibusConfig.append("nginx['listen_https'] = false; ");
         omnibusConfig.append("gitlab_rails['gitlab_shell_ssh_port'] = 22; ");
 
+        // Redis configuration - enable embedded Redis for caching and background jobs
+        omnibusConfig.append("redis['enable'] = true; ");
+
+        // Monitoring whitelist - allow health checks from ALB without token
+        // This allows /-/health, /-/readiness, /-/liveness to be accessed from any IP
+        omnibusConfig.append("gitlab_rails['monitoring_whitelist'] = ['0.0.0.0/0', '::/0']; ");
+
         // Database configuration
         if (dbConn != null) {
             // Use RDS PostgreSQL for production multi-instance deployments
@@ -192,9 +201,9 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
             omnibusConfig.append(String.format("gitlab_rails['db_database'] = '%s'; ", dbConn.databaseName()));
             omnibusConfig.append(String.format("gitlab_rails['db_username'] = '%s'; ", dbConn.username()));
 
-            // Password retrieved from Secrets Manager at runtime
-            String password = "{{resolve:secretsmanager:" + dbConn.passwordSecretArn() + ":SecretString:password}}";
-            omnibusConfig.append(String.format("gitlab_rails['db_password'] = '%s'; ", password));
+            // Password is injected via ECS secret as GITLAB_DATABASE_PASSWORD environment variable
+            // ContainerFactory adds this to ecsSecrets from Secrets Manager
+            omnibusConfig.append("gitlab_rails['db_password'] = ENV['GITLAB_DATABASE_PASSWORD']; ");
         } else {
             // Fallback to embedded PostgreSQL (single instance only)
             // NOTE: Embedded PostgreSQL cannot support multiple instances
@@ -291,6 +300,16 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
     @Override
     public OidcIntegration getOidcIntegration() {
         return new GitLabOidcIntegration();
+    }
+
+    @Override
+    public int defaultHealthCheckGracePeriod() {
+        // GitLab requires longer grace period due to:
+        // - Database migrations on startup
+        // - Asset compilation
+        // - Service initialization (PostgreSQL, Redis, Puma/Unicorn)
+        // - First-time setup can take 15+ minutes
+        return 900; // 15 minutes
     }
 
     @Override

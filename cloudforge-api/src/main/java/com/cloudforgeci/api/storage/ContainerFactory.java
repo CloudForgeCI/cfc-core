@@ -5,6 +5,7 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.logs.LogGroup;
@@ -55,13 +56,116 @@ public class ContainerFactory extends BaseFactory {
         // Each application can define its own environment configuration
         Map<String, String> environment = new HashMap<>();
         if (applicationSpec != null) {
-            // All applications use the standard 3-parameter method
-            // Applications implementing DatabaseSpec have overloaded this to check for database connection internally
-            environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+            // Check if application implements DatabaseSpec and has database connection
+            if (applicationSpec instanceof DatabaseSpec) {
+                ctx.dbConnection.get().ifPresentOrElse(
+                    dbConn -> {
+                        // Pass database connection to applications that support it (GitLab, Mattermost, etc.)
+                        LOG.info("Database connection available - configuring " + applicationSpec.applicationId() + " with RDS");
+                        // Use reflection to call the 4-parameter method if it exists
+                        try {
+                            java.lang.reflect.Method method = applicationSpec.getClass().getMethod(
+                                "containerEnvironmentVariables",
+                                String.class, boolean.class, String.class, DatabaseSpec.DatabaseConnection.class
+                            );
+                            @SuppressWarnings("unchecked")
+                            Map<String, String> dbEnv = (Map<String, String>) method.invoke(
+                                applicationSpec, fqdn, sslEnabled, authMode, dbConn
+                            );
+                            environment.putAll(dbEnv);
+                        } catch (NoSuchMethodException e) {
+                            // Application doesn't have 4-parameter method, use standard 3-parameter
+                            LOG.info("Application " + applicationSpec.applicationId() + " doesn't support database connection parameter");
+                            environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                        } catch (Exception e) {
+                            LOG.warning("Error calling containerEnvironmentVariables with database connection: " + e.getMessage());
+                            environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                        }
+                    },
+                    () -> {
+                        // No database connection - use embedded database fallback
+                        LOG.info("No database connection - " + applicationSpec.applicationId() + " will use embedded database");
+                        environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                    }
+                );
+            } else {
+                // Standard applications without database support
+                environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+            }
         }
 
         // Collect ECS secrets (from Secrets Manager) to be mounted as environment variables
         Map<String, software.amazon.awscdk.services.ecs.Secret> ecsSecrets = new HashMap<>();
+
+        // Add database password from Secrets Manager for applications with external database
+        if (applicationSpec instanceof DatabaseSpec) {
+            ctx.dbConnection.get().ifPresent(dbConn -> {
+                LOG.info("Adding database password secret for " + applicationSpec.applicationId());
+
+                // Extract secret name from ARN
+                // ARN format: arn:aws:secretsmanager:region:account:secret:name-randomsuffix
+                String secretArn = dbConn.passwordSecretArn();
+                ISecret dbSecret = Secret.fromSecretCompleteArn(this, "DatabasePasswordSecret", secretArn);
+
+                // Grant task execution role permission to read the secret
+                if (fargateTaskDef.getExecutionRole() != null) {
+                    fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
+                        software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                            .sid("AllowReadDatabasePassword")
+                            .effect(software.amazon.awscdk.services.iam.Effect.ALLOW)
+                            .actions(java.util.List.of(
+                                "secretsmanager:GetSecretValue",
+                                "secretsmanager:DescribeSecret"
+                            ))
+                            .resources(java.util.List.of(secretArn))
+                            .build()
+                    );
+                    LOG.info("  ✅ Added IAM policy for database password secret access");
+                }
+
+                // Map password to application-specific environment variable names
+                // Different applications expect different env var names for the database password
+                String appId = applicationSpec.applicationId();
+                switch (appId) {
+                    case "gitlab":
+                        ecsSecrets.put("GITLAB_DATABASE_PASSWORD",
+                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                        LOG.info("  ✅ Database password mapped to GITLAB_DATABASE_PASSWORD");
+                        break;
+                    case "metabase":
+                        ecsSecrets.put("MB_DB_PASS",
+                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                        LOG.info("  ✅ Database password mapped to MB_DB_PASS");
+                        break;
+                    case "grafana":
+                        ecsSecrets.put("GF_DATABASE_PASSWORD",
+                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                        LOG.info("  ✅ Database password mapped to GF_DATABASE_PASSWORD");
+                        break;
+                    case "harbor":
+                        ecsSecrets.put("POSTGRESQL_PASSWORD",
+                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                        LOG.info("  ✅ Database password mapped to POSTGRESQL_PASSWORD");
+                        break;
+                    case "superset":
+                        ecsSecrets.put("DATABASE_PASSWORD",
+                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                        LOG.info("  ✅ Database password mapped to DATABASE_PASSWORD");
+                        break;
+                    case "mattermost":
+                        // Mattermost uses connection string with password embedded
+                        ecsSecrets.put("GITLAB_DATABASE_PASSWORD",
+                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                        LOG.info("  ✅ Database password mapped to GITLAB_DATABASE_PASSWORD (for connection string)");
+                        break;
+                    default:
+                        // Fallback - use generic name
+                        ecsSecrets.put("DATABASE_PASSWORD",
+                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                        LOG.info("  ✅ Database password mapped to DATABASE_PASSWORD (default)");
+                }
+            });
+        }
 
         // Add OIDC environment variables if application-oidc mode is enabled
         if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
@@ -77,31 +181,18 @@ public class ContainerFactory extends BaseFactory {
                     LOG.info("  Added " + oidcEnv.size() + " OIDC environment variables for " + applicationSpec.applicationId());
 
                     // Add OIDC client secret from Secrets Manager if available
-                    String clientSecretName = oidcConfig.getClientSecretArn();
-                    if (clientSecretName != null && !clientSecretName.isEmpty()) {
-                        LOG.info("  Mounting OIDC client secret from Secrets Manager: " + clientSecretName);
+                    String clientSecretArn = oidcConfig.getClientSecretArn();
+                    if (clientSecretArn != null && !clientSecretArn.isEmpty()) {
+                        LOG.info("  Mounting OIDC client secret from Secrets Manager for application: " + applicationSpec.applicationId());
 
-                        // Construct the full secret ARN manually
-                        // Format: arn:aws:secretsmanager:region:account:secret:name
-                        // Use Stack.of() to get the stack's environment
-                        software.amazon.awscdk.Stack stack = software.amazon.awscdk.Stack.of(this);
-                        String secretArn = String.format(
-                            "arn:aws:secretsmanager:%s:%s:secret:%s*",
-                            stack.getRegion(),
-                            stack.getAccount(),
-                            clientSecretName
-                        );
+                        // clientSecretArn contains COMPLETE ARN with suffix (same as RDS pattern)
+                        // Example: arn:aws:secretsmanager:region:account:secret:name-AbCd12
 
-                        LOG.info("  Constructed secret ARN: " + secretArn);
-
-                        // Import the secret by name
-                        ISecret clientSecret = Secret.fromSecretNameV2(this, "OidcClientSecret", clientSecretName);
+                        // Import secret using complete ARN (same pattern as database password)
+                        ISecret clientSecret = Secret.fromSecretCompleteArn(this, "OidcClientSecret", clientSecretArn);
 
                         // Grant the ECS task execution role permission to read the secret
-                        // This is required for ECS to pull the secret value at container startup
                         if (fargateTaskDef.getExecutionRole() != null) {
-                            // Add explicit policy statement with manually constructed ARN
-                            // This ensures the IAM permission is created in CloudFormation
                             fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
                                 software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
                                     .sid("AllowReadOidcClientSecret")
@@ -110,20 +201,22 @@ public class ContainerFactory extends BaseFactory {
                                         "secretsmanager:GetSecretValue",
                                         "secretsmanager:DescribeSecret"
                                     ))
-                                    .resources(java.util.List.of(secretArn))
+                                    .resources(java.util.List.of(clientSecretArn))
                                     .build()
                             );
 
-                            LOG.info("  ✅ Added explicit IAM policy for secret access with ARN: " + secretArn);
+                            LOG.info("  ✅ Added IAM policy for secret access");
                         } else {
                             LOG.warning("  ⚠️  Task execution role not found - cannot grant secret read permission");
                         }
 
                         // Add as ECS secret (mounted as environment variable at runtime)
-                        ecsSecrets.put("JENKINS_OIDC_CLIENT_SECRET",
+                        // Use application-specific naming for the secret environment variable
+                        String secretEnvVar = applicationSpec.applicationId().toUpperCase() + "_OIDC_CLIENT_SECRET";
+                        ecsSecrets.put(secretEnvVar,
                                       software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
 
-                        LOG.info("  ✅ OIDC client secret will be available as JENKINS_OIDC_CLIENT_SECRET environment variable");
+                        LOG.info("  ✅ OIDC client secret will be available as " + secretEnvVar + " environment variable");
                     } else {
                         LOG.warning("  ⚠️  Client secret ARN not found in OIDC config - secret will not be mounted");
                     }
@@ -183,10 +276,11 @@ public class ContainerFactory extends BaseFactory {
 
                     // Create startup command that writes OIDC config and starts application
                     // Uses sh -c to execute multi-line script
+                    // Note: No chown needed - container runs as containerUser so files created are already owned correctly
                     String fullCommand = String.format(
                         "mkdir -p $(dirname %s) && " +
-                        "cat > %s <<'EOFCASC'\n%s\nEOFCASC && " +
-                        "exec %s",
+                        "cat > %s <<'EOFCASC'\n%s\nEOFCASC\n" +
+                        "%s",
                         configFilePath,
                         configFilePath,
                         configFileContent,

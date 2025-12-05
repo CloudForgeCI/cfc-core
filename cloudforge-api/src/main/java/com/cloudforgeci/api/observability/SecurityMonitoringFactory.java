@@ -219,7 +219,10 @@ public class SecurityMonitoringFactory extends BaseFactory {
         Metric failedLoginMetric = Metric.Builder.create()
                 .namespace("CWLogs")
                 .metricName("FailedLoginAttempts")
-                .dimensionsMap(Map.of("Environment", security.name()))
+                .dimensionsMap(Map.of(
+                        "Environment", security.name(),
+                        "ApplicationId", appId
+                ))
                 .statistic("Sum")
                 .period(Duration.minutes(5))
                 .build();

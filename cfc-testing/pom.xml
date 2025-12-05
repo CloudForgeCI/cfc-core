@@ -74,6 +74,8 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
+                    <!-- Force recompile when dependencies change (e.g., cloudforge-core) -->
+                    <useIncrementalCompilation>false</useIncrementalCompilation>
                 </configuration>
             </plugin>
             <plugin>

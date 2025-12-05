@@ -14,6 +14,7 @@ import software.amazon.awscdk.services.iam.Role;
 import software.constructs.Construct;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 // Removed static imports - now using ApplicationSpec
 
@@ -58,6 +59,8 @@ import java.util.List;
  * @see DeploymentContext#networkMode()
  */
 public class FargateFactory extends BaseFactory {
+
+  private static final Logger LOG = Logger.getLogger(FargateFactory.class.getName());
 
   @DeploymentContext("bastionCidr")
   private String bastionCidr;
@@ -198,7 +201,9 @@ public class FargateFactory extends BaseFactory {
 
     // Set health check grace period (critical for slow-starting apps like GitLab)
     // Must be set on the underlying CfnService after FargateService creation
-    int gracePeriodSeconds = healthCheckGracePeriod != null ? healthCheckGracePeriod : 300;
+    // Priority: deployment context > application spec > default (300)
+    int defaultGracePeriod = applicationSpec != null ? applicationSpec.defaultHealthCheckGracePeriod() : 300;
+    int gracePeriodSeconds = healthCheckGracePeriod != null ? healthCheckGracePeriod : defaultGracePeriod;
     CfnService cfnService = (CfnService) service.getNode().getDefaultChild();
     cfnService.setHealthCheckGracePeriodSeconds(gracePeriodSeconds);
 
@@ -263,6 +268,15 @@ public class FargateFactory extends BaseFactory {
       int appPort = applicationSpec != null ? applicationSpec.applicationPort() : 8080;
       serviceSg.addIngressRule(albSg, Port.tcp(appPort), "HTTP_from_ALB", false);
     }
+
+    // Allow database traffic from Fargate service to RDS (for applications with external database)
+    ctx.dbSecurityGroup.get().ifPresent(dbSg -> {
+      ctx.dbConnection.get().ifPresent(dbConn -> {
+        int dbPort = dbConn.port();
+        dbSg.addIngressRule(serviceSg, Port.tcp(dbPort), "Database_from_Fargate_service", false);
+        LOG.info("Added security group rule: Fargate -> RDS on port " + dbPort);
+      });
+    });
   }
 
   /**
