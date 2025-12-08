@@ -243,6 +243,12 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         LOG.info("Creating/Importing Cognito User Pool: " + userPoolName);
         LOG.info("Domain prefix: " + cognitoDomainPrefix);
         LOG.info("User Pool removal policy: " + userPoolRemovalPolicy + " (isProduction = " + isProduction + ")");
+
+        // Ensure securityProfileConfig is available - it should always be injected by BaseFactory
+        if (securityProfileConfig == null) {
+            throw new IllegalStateException("SecurityProfileConfiguration not injected - ensure SystemContext is properly initialized");
+        }
+
         LOG.info("Security Profile: " + securityProfileConfig.getSecurityProfile());
         LOG.info("Profile-aware authentication settings:");
         LOG.info("  - MFA Required: " + securityProfileConfig.isMfaRequired());

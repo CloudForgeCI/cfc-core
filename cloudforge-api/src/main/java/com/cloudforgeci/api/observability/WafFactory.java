@@ -103,7 +103,7 @@ public class WafFactory extends BaseFactory {
         // Create WAF WebACL
         String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
 
-        CfnWebACL webAcl = CfnWebACL.Builder.create(this, "WafWebACL")
+        CfnWebACL webAcl = CfnWebACL.Builder.create(this, getNode().getId() + "-WebACL")
                 .scope("REGIONAL")  // REGIONAL for ALB (CLOUDFRONT for CloudFront distributions)
                 .defaultAction(CfnWebACL.DefaultActionProperty.builder()
                         .allow(CfnWebACL.AllowActionProperty.builder().build())  // Allow by default, block specific threats
@@ -129,7 +129,7 @@ public class WafFactory extends BaseFactory {
 
         String albArn = ctx.alb.get().orElseThrow().getLoadBalancerArn();
 
-        CfnWebACLAssociation.Builder.create(this, "WafAlbAssociation")
+        CfnWebACLAssociation.Builder.create(this, getNode().getId() + "-Association")
                 .resourceArn(albArn)
                 .webAclArn(webAcl.getAttrArn())
                 .build();
