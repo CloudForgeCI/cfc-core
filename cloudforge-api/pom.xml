@@ -42,23 +42,24 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
     </dependency>
-    <!-- Hibernate Validator for Jakarta Bean Validation (version from parent BOM, scope overridden to compile) -->
+    <!-- Hibernate Validator for Jakarta Bean Validation (version from parent BOM) -->
     <dependency>
       <groupId>org.hibernate.validator</groupId>
       <artifactId>hibernate-validator</artifactId>
-      <scope>compile</scope>
+      <scope>test</scope>
     </dependency>
     <!-- Jakarta EL API (version from parent BOM) -->
     <dependency>
       <groupId>jakarta.el</groupId>
       <artifactId>jakarta.el-api</artifactId>
     </dependency>
-    <!-- Expression Language implementation (version from parent BOM, scope overridden to compile) -->
+    <!-- Expression Language implementation (version from parent BOM) -->
     <dependency>
       <groupId>org.glassfish</groupId>
       <artifactId>jakarta.el</artifactId>
-      <scope>compile</scope>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 
