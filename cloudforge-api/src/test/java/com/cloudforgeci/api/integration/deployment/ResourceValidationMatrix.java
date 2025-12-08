@@ -19,24 +19,11 @@ import java.util.*;
 public class ResourceValidationMatrix {
 
     private final Template template;
-    private final Map<String, Integer> actualResourceCounts;
     private final List<String> validationErrors;
 
     public ResourceValidationMatrix(Template template) {
         this.template = template;
-        this.actualResourceCounts = new HashMap<>();
         this.validationErrors = new ArrayList<>();
-
-        // Parse template to count actual resources
-        countActualResources();
-    }
-
-    /**
-     * Count all resources in the template by type.
-     */
-    private void countActualResources() {
-        // Template doesn't provide direct access to resource counts
-        // We'll validate on-demand instead
     }
 
     /**

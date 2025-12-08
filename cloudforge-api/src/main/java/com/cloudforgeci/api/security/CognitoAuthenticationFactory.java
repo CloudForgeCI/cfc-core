@@ -237,7 +237,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 : stackName + "-users";
 
         // Determine removal policy based on security profile (injected via annotation)
-        boolean isProduction = (securityProfileConfig != null && securityProfileConfig.getClass().getSimpleName().contains("Production"));
+        boolean isProduction = (securityProfileConfig != null && securityProfileConfig.getSecurityProfile() == SecurityProfile.PRODUCTION);
         RemovalPolicy userPoolRemovalPolicy = isProduction ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
 
         LOG.info("Creating/Importing Cognito User Pool: " + userPoolName);
@@ -761,22 +761,6 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         ctx.cognitoClientSecretName.set(secretName);
         ctx.cognitoUserPoolId.set(userPoolId);
         ctx.cognitoDomainPrefix.set(domainPrefix);
-
-        // Export SAML endpoints for applications that use SAML authentication (e.g., Mattermost)
-        // Cognito automatically provides SAML 2.0 IdP endpoints for any User Pool
-        String samlMetadataUrl = issuer + "/saml2/idp/metadata";
-        String samlSsoUrl = issuer + "/saml2/idp/SSO";
-        String samlLogoutUrl = issuer + "/saml2/logout";
-
-        ctx.samlIdpMetadataUrl.set(samlMetadataUrl);
-        ctx.samlIdpSsoUrl.set(samlSsoUrl);
-        ctx.samlIdpLogoutUrl.set(samlLogoutUrl);
-        ctx.samlIdpEntityId.set(issuer);
-        ctx.samlProviderType.set("cognito");
-
-        LOG.info("SAML endpoints also exported for SAML-based applications:");
-        LOG.info("  SAML Metadata URL: " + samlMetadataUrl);
-        LOG.info("  SAML SSO URL: " + samlSsoUrl);
 
         LOG.info("OIDC endpoints exported - OidcAuthenticationFactory will use these for ALB configuration");
     }
