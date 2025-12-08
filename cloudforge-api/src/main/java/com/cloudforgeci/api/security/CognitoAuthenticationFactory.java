@@ -991,14 +991,19 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .region(region)
                 .build();
 
+        // Use scoped ARN pattern for least-privilege SSM access
+        // Pattern: arn:aws:ssm:REGION:*:parameter/cloudforge/shared/REGION/stack/STACKNAME/*
+        String ssmArnPattern = "arn:aws:ssm:" + region + ":*:parameter/cloudforge/shared/" + region + "/stack/" + this.stackName + "/*";
+
         AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, "UserPoolArnSSMWriter")
                 .onCreate(putParameterCall)
                 .onUpdate(putParameterCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
+                .policy(AwsCustomResourcePolicy.fromStatements(List.of(
+                        software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                                .actions(List.of("ssm:PutParameter"))
+                                .resources(List.of(ssmArnPattern))
                                 .build()
-                ))
+                )))
                 .build();
 
         ssmWriter.getNode().addDependency(userPool);

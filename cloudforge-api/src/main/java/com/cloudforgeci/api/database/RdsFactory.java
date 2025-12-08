@@ -413,21 +413,55 @@ public class RdsFactory {
 
     /**
      * Create parameter group with optimized settings for the database engine.
+     *
+     * <p>Parameters are engine-specific:</p>
+     * <ul>
+     *   <li><b>PostgreSQL:</b> log_statement, log_connections, log_disconnections</li>
+     *   <li><b>MySQL/MariaDB:</b> general_log, slow_query_log, log_output</li>
+     * </ul>
      */
     private static IParameterGroup createParameterGroup(
             Construct scope, String id, String engine, String version) {
 
         IInstanceEngine instanceEngine = getEngine(engine, version);
+        Map<String, String> parameters = getEngineParameters(engine);
 
         return ParameterGroup.Builder.create(scope, id + "ParameterGroup")
             .engine(instanceEngine)
             .description("Optimized parameter group for " + id)
-            .parameters(Map.of(
-                "log_statement", "ddl",  // Log DDL statements for audit
-                "log_connections", "1",   // Log connection attempts
-                "log_disconnections", "1" // Log disconnections
-            ))
+            .parameters(parameters)
             .build();
+    }
+
+    /**
+     * Get engine-specific parameter group settings.
+     *
+     * <p>Each database engine has different parameter names for audit logging.</p>
+     *
+     * @param engine Database engine name
+     * @return Map of parameter name to value
+     */
+    private static Map<String, String> getEngineParameters(String engine) {
+        return switch (engine.toLowerCase()) {
+            case "postgres", "postgresql" -> Map.of(
+                "log_statement", "ddl",       // Log DDL statements for audit
+                "log_connections", "1",       // Log connection attempts
+                "log_disconnections", "1"     // Log disconnections
+            );
+            case "mysql" -> Map.of(
+                "general_log", "1",           // Enable general query log
+                "slow_query_log", "1",        // Enable slow query log
+                "log_output", "FILE",         // Log to files (for CloudWatch export)
+                "long_query_time", "2"        // Log queries taking > 2 seconds
+            );
+            case "mariadb" -> Map.of(
+                "general_log", "1",           // Enable general query log
+                "slow_query_log", "1",        // Enable slow query log
+                "log_output", "FILE",         // Log to files (for CloudWatch export)
+                "long_query_time", "2"        // Log queries taking > 2 seconds
+            );
+            default -> Map.of();  // Empty for unsupported engines
+        };
     }
 
     /**

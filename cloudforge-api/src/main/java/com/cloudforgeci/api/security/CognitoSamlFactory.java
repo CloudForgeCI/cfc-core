@@ -253,6 +253,10 @@ public class CognitoSamlFactory extends BaseFactory {
                 .ignoreErrorCodesMatching("ResourceNotFoundException")
                 .build();
 
+        // Use scoped ARN pattern for least-privilege (secretName is known at synth time)
+        // Pattern: arn:aws:secretsmanager:REGION:*:secret:STACKNAME/APP_ID/saml/*
+        String secretArnPattern = "arn:aws:secretsmanager:" + region + ":*:secret:" + stackName + "/" + appId + "/saml/*";
+
         AwsCustomResource samlConfigSecret = AwsCustomResource.Builder.create(this, "CognitoSamlIdpConfig")
                 .onCreate(createSecretCall)
                 .onUpdate(updateSecretCall)
@@ -264,7 +268,7 @@ public class CognitoSamlFactory extends BaseFactory {
                                         "secretsmanager:PutSecretValue",
                                         "secretsmanager:DeleteSecret"
                                 ))
-                                .resources(List.of("*"))
+                                .resources(List.of(secretArnPattern))
                                 .build()
                 )))
                 .build();

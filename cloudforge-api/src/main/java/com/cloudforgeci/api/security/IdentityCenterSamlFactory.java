@@ -349,6 +349,10 @@ public class IdentityCenterSamlFactory extends BaseFactory {
                 .build();
 
         // Single custom resource that creates, updates, and deletes
+        // Use scoped ARN pattern for least-privilege (secretName is known at synth time)
+        // Pattern: arn:aws:secretsmanager:REGION:*:secret:STACKNAME/APP_ID/saml/*
+        String secretArnPattern = "arn:aws:secretsmanager:" + region + ":*:secret:" + stackName + "/" + appId + "/saml/*";
+
         AwsCustomResource.Builder.create(this, "SamlIdpConfig")
                 .onCreate(createSecretCall)
                 .onUpdate(updateSecretCall)
@@ -360,7 +364,7 @@ public class IdentityCenterSamlFactory extends BaseFactory {
                             "secretsmanager:PutSecretValue",
                             "secretsmanager:DeleteSecret"
                         ))
-                        .resources(List.of("*"))  // CreateSecret needs * for new secrets
+                        .resources(List.of(secretArnPattern))
                         .build()
                 )))
                 .build();
