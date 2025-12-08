@@ -36,7 +36,7 @@ import java.util.logging.Logger;
  * // Or manually: new IncidentResponseRules().install(ctx);
  * }</pre>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 @ComplianceFramework(
     value = "IncidentResponse",

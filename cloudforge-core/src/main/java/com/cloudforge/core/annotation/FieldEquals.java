@@ -23,7 +23,7 @@ import java.lang.annotation.Target;
  * }</pre>
  *
  * @see VisibilityCondition
- * @since 3.1.0
+ * @since 3.0.0
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({}) // Only used within @VisibilityCondition

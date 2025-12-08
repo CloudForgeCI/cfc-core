@@ -32,11 +32,11 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     public StagingSecurityProfileConfiguration(DeploymentContext deploymentContext) {
         this.deploymentContext = deploymentContext;
         java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(getClass().getName());
-        LOG.severe("=== STAGING profile constructor called == = ");
-        LOG.severe("deploymentContext = " + (deploymentContext != null ? "NOT NULL" : "NULL"));
+        LOG.fine("=== STAGING profile constructor called ===");
+        LOG.fine("deploymentContext = " + (deploymentContext != null ? "NOT NULL" : "NULL"));
         if (deploymentContext != null) {
-            LOG.severe("logRetentionDays = " + deploymentContext.logRetentionDays());
-            LOG.severe("guardDutyEnabled = " + deploymentContext.guardDutyEnabled());
+            LOG.fine("logRetentionDays = " + deploymentContext.logRetentionDays());
+            LOG.fine("guardDutyEnabled = " + deploymentContext.guardDutyEnabled());
         }
     }
 

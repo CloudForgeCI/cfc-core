@@ -32,7 +32,7 @@ import java.util.Map;
  * public int fargateMemory = 2048;
  * }</pre>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 public class FargateCpuMemoryValidator implements FieldValidator {
 

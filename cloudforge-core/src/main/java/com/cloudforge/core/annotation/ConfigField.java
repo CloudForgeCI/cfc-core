@@ -123,7 +123,7 @@ import java.lang.annotation.Target;
  * @see com.cloudforge.core.config.DeploymentConfig
  * @see com.cloudforge.core.interfaces.ApplicationSpec
  * @see com.cloudforge.core.interfaces.FrameworkRules
- * @since 3.1.0
+ * @since 3.0.0
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)

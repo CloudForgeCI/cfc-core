@@ -84,15 +84,15 @@ public final class ApplicationServiceTopologyConfiguration implements TopologyCo
     Integer maxCap = c.maxInstanceCapacity.get().orElse(null);
     Integer minCap = c.minInstanceCapacity.get().orElse(null);
     boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1;
-    LOG.severe("=== ApplicationServiceTopologyConfiguration.wire() called ===");
-    LOG.severe("minCap=" + minCap + ", maxCap=" + maxCap + ", scale=" + scale);
-    LOG.severe("fargateService present: " + c.fargateService.get().isPresent());
-    LOG.severe("alb present: " + c.alb.get().isPresent());
+    LOG.fine("=== ApplicationServiceTopologyConfiguration.wire() called ===");
+    LOG.fine("minCap=" + minCap + ", maxCap=" + maxCap + ", scale=" + scale);
+    LOG.fine("fargateService present: " + c.fargateService.get().isPresent());
+    LOG.fine("alb present: " + c.alb.get().isPresent());
     if (scale) {
       // Fargate autoscaling - use service.autoScaleTaskCount() directly
       // Check if callback has already been registered to prevent multiple registrations
       if (!c.fargateAutoscalingCallbackRegistered.get().isPresent()) {
-        LOG.severe("Registering Fargate auto-scaling callback with whenBoth");
+        LOG.fine("Registering Fargate auto-scaling callback with whenBoth");
         whenBoth(c.fargateService, c.alb, (service, alb) -> {
           // Check if Fargate autoscaling has already been configured (inside callback to prevent multiple executions)
           if (c.fargateAutoscalingConfigured.get().isPresent()) {

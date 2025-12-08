@@ -21,7 +21,7 @@ package com.cloudforge.core.annotation;
  *   💰 BILLING_IMPACT: Estimated +$132/month
  * </pre>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 public enum FieldTag {
 

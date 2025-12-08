@@ -1,14 +1,11 @@
 package com.cloudforgeci.api.core.iam;
 
-import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
-
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforgeci.api.interfaces.IAMConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
-import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;

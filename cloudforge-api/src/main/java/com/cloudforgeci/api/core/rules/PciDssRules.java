@@ -63,7 +63,7 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
      * PCI-DSS applies to environments processing cardholder data.
      * Only enforced when security profile is PRODUCTION.
      *
-     * @since 3.1.0
+     * @since 3.0.0
      */
     @Override
     public void install(SystemContext ctx) {
@@ -655,7 +655,7 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
      */
     public String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== PCI-DSS Compliance Report == = \n\n");
+        report.append("\n=== PCI-DSS Compliance Report ===\n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

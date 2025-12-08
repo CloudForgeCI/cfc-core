@@ -75,7 +75,7 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
     private static final List<String> EC2_LOG_PATHS = List.of(
         "/var/log/gitlab/gitlab-rails/production.log",
         "/var/log/gitlab/gitlab-rails/api_json.log",
-        "/var/log/gitlab/unicorn/unicorn_stderr.log",
+        "/var/log/gitlab/puma/puma_stderr.log",  // Puma replaced Unicorn in GitLab 13.0+
         "/var/log/userdata.log"
     );
 

@@ -36,7 +36,7 @@ import java.util.logging.Logger;
  * "complianceFrameworks": "ISO-27001"
  * }</pre>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 @ComplianceFramework(
     value = "ISO-27001",

@@ -497,7 +497,7 @@ This creates an admin user and sends them a temporary password via email.
 
 **Cause:** Cognito logout endpoint requires special parameters that the standard OIDC spec doesn't include.
 
-**Solution:** CloudForge 3.1.0+ handles this automatically using manual server configuration with `endSessionUrl`.
+**Solution:** CloudForge 3.0.0+ handles this automatically using manual server configuration with `endSessionUrl`.
 
 #### "redirect_uri_mismatch"
 
@@ -521,7 +521,7 @@ This creates an admin user and sends them a temporary password via email.
 
 **Cause:** JCasC YAML structure is incorrect for the oic-auth plugin.
 
-**Solution:** CloudForge 3.1.0+ uses the correct manual configuration structure:
+**Solution:** CloudForge 3.0.0+ uses the correct manual configuration structure:
 ```yaml
 serverConfiguration:
   manual:
@@ -632,4 +632,4 @@ cat /var/jenkins_home/casc_configs/oidc.yaml
 
 ---
 
-**CloudForge 3.1.0** - Enterprise Authentication for Cloud Applications
+**CloudForge 3.0.0** - Enterprise Authentication for Cloud Applications

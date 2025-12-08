@@ -5,7 +5,7 @@ package com.cloudforge.core.config;
  *
  * <p>Immutable value object representing success or failure with optional error message.</p>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 public class ValidationResult {
 

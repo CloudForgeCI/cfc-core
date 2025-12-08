@@ -19,13 +19,13 @@ import java.util.logging.Logger;
  * Security rules installation and compliance framework orchestration.
  *
  * <p>This class coordinates security profile configuration and compliance framework
- * validation. Starting in v3.1.0, it uses auto-discovery to load compliance frameworks,
+ * validation. Starting in v3.0.0, it uses auto-discovery to load compliance frameworks,
  * enabling plugin-based extensibility.</p>
  *
  * <h2>Version History:</h2>
  * <ul>
  *   <li><strong>v3.0.0:</strong> Hardcoded framework loading</li>
- *   <li><strong>v3.1.0:</strong> Auto-discovery via {@link FrameworkLoader} with backward compatibility</li>
+ *   <li><strong>v3.0.0:</strong> Auto-discovery via {@link FrameworkLoader} with backward compatibility</li>
  *   <li><strong>v4.0.0 (future):</strong> Pure plugin-based architecture</li>
  * </ul>
  *
@@ -86,7 +86,7 @@ public final class SecurityRules {
         .map(String::toUpperCase)
         .collect(java.util.stream.Collectors.toSet());
 
-    // Discover all available compliance frameworks (v3.1.0 plugin architecture)
+    // Discover all available compliance frameworks (v3.0.0 plugin architecture)
     List<FrameworkRules<SystemContext>> allFrameworks = FrameworkLoader.discover();
 
     LOG.info("Discovered " + allFrameworks.size() + " compliance frameworks");

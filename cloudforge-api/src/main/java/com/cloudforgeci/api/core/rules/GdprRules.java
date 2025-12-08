@@ -43,14 +43,10 @@ public class GdprRules implements FrameworkRules<SystemContext> {
      * Install GDPR compliance validation rules.
      * GDPR applies when processing personal data of EU residents.
      * Only enforced for PRODUCTION and STAGING environments.
+     *
+     * @since 3.0.0
      */
-        /** 
-     * Install GDPR compliance validation rules. 
-     * GDPR applies when processing personal data of EU residents. 
-     * 
-     * @since 3.1.0 
-     */ 
-    @Override 
+    @Override
     public void install(SystemContext ctx) {
         // Only enforce GDPR validation for production and staging
         if (ctx.security != SecurityProfile.PRODUCTION && ctx.security != SecurityProfile.STAGING) {
@@ -459,7 +455,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
      */
     public String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== GDPR Technical Safeguards Compliance Report == = \n\n");
+        report.append("\n=== GDPR Technical Safeguards Compliance Report ===\n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

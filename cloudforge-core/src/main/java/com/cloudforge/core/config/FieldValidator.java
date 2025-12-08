@@ -37,7 +37,7 @@ package com.cloudforge.core.config;
  * }
  * }</pre>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 public interface FieldValidator {
 

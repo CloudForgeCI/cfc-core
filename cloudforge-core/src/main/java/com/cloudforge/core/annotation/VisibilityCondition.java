@@ -97,7 +97,7 @@ package com.cloudforge.core.annotation;
  * with detailed error messages including position and expected tokens.</p>
  *
  * @see com.cloudforge.core.annotation.ConfigField
- * @since 3.1.0
+ * @since 3.0.0
  */
 public final class VisibilityCondition {
 

@@ -18,13 +18,13 @@ public final class TopologyRules {
   private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(TopologyRules.class.getName());
 
   public static void install(SystemContext ctx) {
-    LOG.severe("=== TopologyRules.install() called for topology: " + ctx.topology + " ===");
+    LOG.fine("=== TopologyRules.install() called for topology: " + ctx.topology + " ===");
     final TopologyConfiguration p = switch (ctx.topology) {
       case JENKINS_SERVICE     -> new JenkinsServiceTopologyConfiguration();
       case S3_WEBSITE          -> new S3WebsiteTopologyConfiguration();
       case APPLICATION_SERVICE -> new ApplicationServiceTopologyConfiguration();
     };
-    LOG.severe("Topology configuration created: " + p.getClass().getSimpleName());
+    LOG.fine("Topology configuration created: " + p.getClass().getSimpleName());
 
     // Install ApplicationSpec for JENKINS_SERVICE topology (hardcoded for backward compatibility)
     if (ctx.topology == com.cloudforge.core.enums.TopologyType.JENKINS_SERVICE) {
@@ -41,12 +41,12 @@ public final class TopologyRules {
       return errs;
     });
 
-    LOG.severe("Registering topology wire() callback with ctx.once() for: " + p.kind());
+    LOG.fine("Registering topology wire() callback with ctx.once() for: " + p.kind());
     ctx.once("ProfileWiring:Topology:" + p.kind(), () -> {
-      LOG.severe("=== EXECUTING topology.wire() for " + p.kind() + " ===");
+      LOG.fine("=== EXECUTING topology.wire() for " + p.kind() + " ===");
       p.wire(ctx);
-      LOG.severe("=== COMPLETED topology.wire() for " + p.kind() + " ===");
+      LOG.fine("=== COMPLETED topology.wire() for " + p.kind() + " ===");
     });
-    LOG.severe("TopologyRules.install() completed");
+    LOG.fine("TopologyRules.install() completed");
   }
 }

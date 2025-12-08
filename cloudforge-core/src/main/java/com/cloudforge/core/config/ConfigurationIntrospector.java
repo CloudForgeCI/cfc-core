@@ -28,7 +28,7 @@ import java.util.List;
  *     .toList();
  * }</pre>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 public class ConfigurationIntrospector {
 

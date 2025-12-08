@@ -139,7 +139,7 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
 |----------|-------|
 | EBS Device | `/dev/xvdh` |
 | Data Path | `/var/opt/gitlab` |
-| Log Paths | `/var/log/gitlab/gitlab-rails/production.log`, `/var/log/gitlab/gitlab-rails/api_json.log`, `/var/log/gitlab/unicorn/unicorn_stderr.log`, `/var/log/userdata.log` |
+| Log Paths | `/var/log/gitlab/gitlab-rails/production.log`, `/var/log/gitlab/gitlab-rails/api_json.log`, `/var/log/gitlab/puma/puma_stderr.log`, `/var/log/userdata.log` |
 
 ---
 

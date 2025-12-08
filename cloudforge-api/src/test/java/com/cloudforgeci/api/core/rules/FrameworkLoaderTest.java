@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for FrameworkLoader plugin discovery system.
  *
  * <p>Tests the automatic discovery and loading of compliance frameworks
- * via the v3.1.0 plugin architecture.</p>
+ * via the v3.0.0 plugin architecture.</p>
  */
 class FrameworkLoaderTest {
 

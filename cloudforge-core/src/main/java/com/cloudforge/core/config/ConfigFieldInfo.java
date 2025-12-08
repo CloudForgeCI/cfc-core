@@ -13,7 +13,7 @@ import java.util.List;
  * <p>Encapsulates all information from {@link ConfigField} annotation plus
  * reflection metadata needed for prompting, validation, and value assignment.</p>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 public record ConfigFieldInfo(
     String fieldName,

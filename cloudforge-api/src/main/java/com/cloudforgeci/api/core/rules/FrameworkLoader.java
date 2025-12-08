@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  * }
  * }</pre>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 public final class FrameworkLoader {
     private static final Logger LOG = Logger.getLogger(FrameworkLoader.class.getName());

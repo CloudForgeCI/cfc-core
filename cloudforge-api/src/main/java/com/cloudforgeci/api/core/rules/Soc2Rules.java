@@ -47,14 +47,10 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
     /**
      * Install SOC 2 compliance validation rules.
      * SOC 2 applies to production and staging environments serving customers.
+     *
+     * @since 3.0.0
      */
-        /** 
-     * Install SOC 2 compliance validation rules. 
-     * SOC 2 applies to production and staging environments serving customers. 
-     * 
-     * @since 3.1.0 
-     */ 
-    @Override 
+    @Override
     public void install(SystemContext ctx) {
         // SOC 2 typically applies to production and staging
         if (ctx.security != SecurityProfile.PRODUCTION && ctx.security != SecurityProfile.STAGING) {
@@ -477,7 +473,7 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
      */
     public String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== SOC 2 Trust Services Criteria Compliance Report == = \n\n");
+        report.append("\n=== SOC 2 Trust Services Criteria Compliance Report ===\n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

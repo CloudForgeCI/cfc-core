@@ -69,7 +69,7 @@ import java.util.Map;
  * @see DatabaseSpec
  * @see DatabaseRequirement
  * @see DatabaseConnection
- * @since 3.1.0
+ * @since 3.0.0
  */
 public class RdsFactory {
 

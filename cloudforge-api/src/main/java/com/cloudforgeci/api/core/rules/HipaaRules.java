@@ -33,7 +33,7 @@ import java.util.logging.Logger;
  * Note: HIPAA distinguishes between "Required" and "Addressable" specifications.
  * This validator enforces both for maximum protection of PHI (Protected Health Information).
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 @ComplianceFramework(
     value = "HIPAA",
@@ -535,7 +535,7 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
      */
     public String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== HIPAA Security Rule Compliance Report == = \n\n");
+        report.append("\n=== HIPAA Security Rule Compliance Report ===\n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

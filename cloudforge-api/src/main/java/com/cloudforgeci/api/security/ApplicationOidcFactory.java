@@ -98,7 +98,7 @@ import java.util.logging.Logger;
  *   <li>Application-specific setup (see application logs for instructions)</li>
  * </ol>
  *
- * @since 3.1.0
+ * @since 3.0.0
  */
 public class ApplicationOidcFactory extends BaseFactory {
 
