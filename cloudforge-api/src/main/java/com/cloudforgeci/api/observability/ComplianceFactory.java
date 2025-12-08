@@ -3957,20 +3957,18 @@ public class ComplianceFactory extends BaseFactory {
             getLifecycleRulesForEnabledFrameworks();
 
         // Create bucket WITHOUT specifying bucketName - CloudFormation generates unique name
-        // NOTE: Compliance buckets (CloudTrail, Config, Audit Manager) should always be retained
-        // for audit purposes, even in STAGING. Only DEV profile allows auto-delete.
-        boolean isComplianceBucket = auditManagerEnabled || awsConfigEnabled;
-        boolean shouldRetain = security == SecurityProfile.PRODUCTION ||
-                               (security == SecurityProfile.STAGING && isComplianceBucket);
+        // Only PRODUCTION buckets are retained for audit purposes.
+        // DEV and STAGING buckets can be auto-deleted with their contents.
+        boolean shouldRetain = security == SecurityProfile.PRODUCTION;
+        boolean shouldAutoDelete = !shouldRetain;
 
         Bucket bucket = Bucket.Builder.create(this, id)
                 // NO bucketName specified - CloudFormation auto-generates unique name
                 .encryption(BucketEncryption.S3_MANAGED)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
                 .removalPolicy(shouldRetain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
-                // IMPORTANT: autoDeleteObjects requires s3:GetBucketTagging which can conflict
-                // with restrictive bucket policies (e.g., CloudTrail buckets). Disable for compliance buckets.
-                .autoDeleteObjects(!shouldRetain && security == SecurityProfile.DEV)
+                // Enable autoDeleteObjects for non-production so CloudFormation can delete bucket contents
+                .autoDeleteObjects(shouldAutoDelete)
                 .versioned(true)  // Required for compliance (SOC2/PCI-DSS/HIPAA)
                 .lifecycleRules(lifecycleRules)  // Compliance-driven retention policies
                 .build();

@@ -99,6 +99,9 @@ public class CognitoSamlFactory extends BaseFactory {
     @com.cloudforge.core.annotation.SystemContext("securityProfileConfig")
     private com.cloudforgeci.api.interfaces.SecurityProfileConfiguration securityProfileConfig;
 
+    @SystemContext("alb")
+    private software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer alb;
+
     public CognitoSamlFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -333,7 +336,7 @@ public class CognitoSamlFactory extends BaseFactory {
     }
 
     /**
-     * Construct the site URL from domain configuration.
+     * Construct the site URL from domain configuration or ALB DNS name.
      */
     private String constructSiteUrl() {
         String protocol = (enableSsl != null && enableSsl) ? "https" : "http";
@@ -347,9 +350,16 @@ public class CognitoSamlFactory extends BaseFactory {
             return protocol + "://" + domain;
         }
 
+        // For OIDC modes without custom domain, use ALB DNS name with Private CA
+        if (alb != null) {
+            String albDnsName = alb.getLoadBalancerDnsName();
+            LOG.info("No custom domain configured - using ALB DNS name: " + albDnsName);
+            return protocol + "://" + albDnsName;
+        }
+
         // Fallback - should not happen in production
         String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
-        LOG.warning("No domain configured - using placeholder URL");
+        LOG.warning("No domain or ALB configured - using placeholder URL");
         return "https://" + appId + ".example.com";
     }
 }

@@ -171,6 +171,12 @@ public class ApplicationOidcFactory extends BaseFactory {
     @DeploymentContext("fqdn")
     private String fqdn;
 
+    @DeploymentContext("domain")
+    private String domain;
+
+    @DeploymentContext("subdomain")
+    private String subdomain;
+
     @DeploymentContext("enableSsl")
     private Boolean enableSsl;
 
@@ -586,25 +592,46 @@ public class ApplicationOidcFactory extends BaseFactory {
     }
 
     /**
-     * Build application URL from FQDN or ALB DNS name.
-     * Priority: Custom FQDN > ALB DNS name
+     * Build application URL from domain configuration.
+     * Priority: fqdn > subdomain.domain > domain > ALB DNS name (with Private CA)
+     *
+     * <p>For application-oidc mode, the application URL is used for OIDC redirect URLs.
+     * When using ALB DNS name with enableSsl=true, HTTPS is used with AWS Private CA certificate.</p>
      */
     private String buildApplicationUrl() {
-        boolean useHttps = Boolean.TRUE.equals(enableSsl);
-        String protocol = useHttps ? "https://" : "http://";
-
-        // Priority 1: Use custom FQDN if configured
+        // Priority 1: Use custom FQDN if configured (always HTTPS for custom domains)
         if (fqdn != null && !fqdn.isEmpty()) {
-            return protocol + fqdn;
+            return "https://" + fqdn;
         }
 
-        // Priority 2: Use ALB DNS name if available
+        // Priority 2: Use subdomain.domain if both are configured
+        if (domain != null && !domain.isEmpty()) {
+            if (subdomain != null && !subdomain.isEmpty()) {
+                return "https://" + subdomain + "." + domain;
+            }
+            // Priority 3: Use domain only
+            return "https://" + domain;
+        }
+
+        // Priority 4: Use ALB DNS name if available
+        // With enableSsl=true: uses HTTPS with Private CA certificate
+        // Without enableSsl: uses HTTP (not recommended for OIDC)
         if (alb != null) {
-            return protocol + alb.getLoadBalancerDnsName();
+            boolean useHttps = Boolean.TRUE.equals(enableSsl);
+            String protocol = useHttps ? "https://" : "http://";
+            String albUrl = protocol + alb.getLoadBalancerDnsName();
+            LOG.info("Using ALB DNS name for application URL: " + albUrl);
+            if (useHttps) {
+                LOG.info("HTTPS enabled with AWS Private CA certificate");
+                LOG.warning("NOTE: Private CA certificates are not trusted by browsers. Users will see certificate warnings.");
+            } else {
+                LOG.warning("HTTP is not recommended for OIDC. Set enableSsl=true for HTTPS with Private CA.");
+            }
+            return albUrl;
         }
 
         // No URL available
-        LOG.warning("No application URL available - neither FQDN nor ALB configured");
+        LOG.warning("No application URL available - neither FQDN, domain, nor ALB configured");
         return null;
     }
 

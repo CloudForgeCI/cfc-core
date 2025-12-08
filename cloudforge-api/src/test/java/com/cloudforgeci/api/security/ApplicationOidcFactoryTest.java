@@ -149,6 +149,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcEnabled");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://example.okta.com");
         cfcContext.put("oidcAuthorizationEndpoint", "https://example.okta.com/oauth2/v1/authorize");
         cfcContext.put("oidcTokenEndpoint", "https://example.okta.com/oauth2/v1/token");
@@ -183,6 +184,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcNoSpec");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);
@@ -207,6 +209,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcUnsupported");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);
@@ -234,6 +237,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcNullIntegration");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);
@@ -263,6 +267,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcCognito");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("cognitoAutoProvision", true);
         cfcContext.put("cognitoUserPoolId", "us-east-1_TestPool123");
         cfcContext.put("cognitoUserPoolDomain", "test-auth");
@@ -299,6 +304,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcCognitoGroups");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("cognitoAutoProvision", true);
         cfcContext.put("cognitoUserPoolId", "us-east-1_TestPool123");
         cfcContext.put("cognitoUserPoolDomain", "test-auth");
@@ -338,6 +344,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcCognitoIncomplete");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("cognitoAutoProvision", true);
         // Missing cognitoUserPoolId and other Cognito details
         stack.getNode().setContext("cfc", cfcContext);
@@ -368,6 +375,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcOkta");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://dev-12345.okta.com");
         cfcContext.put("oidcAuthorizationEndpoint", "https://dev-12345.okta.com/oauth2/v1/authorize");
         cfcContext.put("oidcTokenEndpoint", "https://dev-12345.okta.com/oauth2/v1/token");
@@ -400,6 +408,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcAuth0");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://example.auth0.com");
         cfcContext.put("oidcAuthorizationEndpoint", "https://example.auth0.com/authorize");
         cfcContext.put("oidcTokenEndpoint", "https://example.auth0.com/oauth/token");
@@ -432,6 +441,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcIdentityCenter");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://portal.sso.us-east-1.amazonaws.com/saml/assertion/abc123");
         cfcContext.put("oidcAuthorizationEndpoint", "https://my-company.awsapps.com/start/oauth2/authorize");
         cfcContext.put("oidcTokenEndpoint", "https://my-company.awsapps.com/start/oauth2/token");
@@ -464,6 +474,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcManualIncomplete");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://example.okta.com");
         // Missing other required endpoints
         stack.getNode().setContext("cfc", cfcContext);
@@ -492,6 +503,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcNoConfig");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         // No Cognito or manual OIDC configuration
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -521,6 +533,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcFqdn");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("fqdn", "app.example.com");
         cfcContext.put("sslEnabled", true);
         cfcContext.put("oidcIssuer", "https://example.okta.com");
@@ -555,6 +568,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcFqdnHttp");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("fqdn", "app-dev.example.com");
         cfcContext.put("sslEnabled", false);
         cfcContext.put("oidcIssuer", "https://example.okta.com");
@@ -591,6 +605,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcProduction");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://example.okta.com");
         cfcContext.put("oidcAuthorizationEndpoint", "https://example.okta.com/oauth2/v1/authorize");
         cfcContext.put("oidcTokenEndpoint", "https://example.okta.com/oauth2/v1/token");
@@ -623,6 +638,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcDev");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://example.okta.com");
         cfcContext.put("oidcAuthorizationEndpoint", "https://example.okta.com/oauth2/v1/authorize");
         cfcContext.put("oidcTokenEndpoint", "https://example.okta.com/oauth2/v1/token");
@@ -655,6 +671,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcStaging");
         cfcContext.put("securityProfile", "STAGING");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://example.okta.com");
         cfcContext.put("oidcAuthorizationEndpoint", "https://example.okta.com/oauth2/v1/authorize");
         cfcContext.put("oidcTokenEndpoint", "https://example.okta.com/oauth2/v1/token");
@@ -689,6 +706,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcCustomGroups");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("cognitoAutoProvision", true);
         cfcContext.put("cognitoUserPoolId", "us-east-1_TestPool123");
         cfcContext.put("cognitoUserPoolDomain", "test-auth");
@@ -728,6 +746,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcDefaultGroups");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("oidcIssuer", "https://example.okta.com");
         cfcContext.put("oidcAuthorizationEndpoint", "https://example.okta.com/oauth2/v1/authorize");
         cfcContext.put("oidcTokenEndpoint", "https://example.okta.com/oauth2/v1/token");
@@ -762,6 +781,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcDefaultRegion");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("cognitoAutoProvision", true);
         cfcContext.put("cognitoUserPoolId", "us-east-1_TestPool123");
         cfcContext.put("cognitoUserPoolDomain", "test-auth");
@@ -797,6 +817,7 @@ class ApplicationOidcFactoryTest {
         cfcContext.put("stackName", "TestAppOidcCustomRegion");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
         cfcContext.put("cognitoAutoProvision", true);
         cfcContext.put("cognitoUserPoolId", "eu-west-1_TestPool456");
         cfcContext.put("cognitoUserPoolDomain", "test-auth");

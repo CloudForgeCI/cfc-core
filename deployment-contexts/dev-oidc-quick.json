@@ -1,0 +1,35 @@
+{
+  "description": "Quick OIDC development setup - no domain required, uses Private CA for HTTPS",
+  "stackName": "CloudForge-Dev-OIDC",
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "dev",
+  "region": "us-east-1",
+
+  "networkMode": "private-with-nat",
+  "wafEnabled": false,
+
+  "authMode": "alb-oidc",
+  "enableSsl": true,
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "cloudforge-dev-quick",
+  "cognitoMfaEnabled": false,
+
+  "awsConfigEnabled": false,
+  "guardDutyEnabled": false,
+  "logRetentionDays": 30,
+
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
+  "enableAutoScaling": false,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "retainStorage": false,
+
+  "_comments": {
+    "private_ca": "No domain/subdomain configured - CloudForge provisions AWS Private CA certificate for ALB DNS name",
+    "browser_warning": "Users will see browser certificate warnings (expected for Private CA)",
+    "cost": "Private CA costs ~$400/month while stack exists, auto-deleted on stack destroy"
+  }
+}

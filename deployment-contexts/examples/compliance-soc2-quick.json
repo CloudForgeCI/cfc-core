@@ -1,0 +1,50 @@
+{
+  "description": "SOC2 compliance testing - no domain required, uses Private CA",
+  "stackName": "App-SOC2-Quick",
+  "applicationId": "REPLACE_WITH_APP_ID",
+  "applicationName": "SOC2 Quick Test",
+  "environment": "staging",
+
+  "runtime": "fargate",
+  "securityProfile": "staging",
+  "topology": "application-service",
+
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "soc2-quick-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+
+  "cpu": 1024,
+  "memory": 2048,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 2,
+  "enableAutoScaling": true,
+
+  "complianceFrameworks": "SOC2",
+  "complianceMode": "advisory",
+  "scopeConfigRulesToDeployment": true,
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "wafEnabled": true,
+  "flowLogsEnabled": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "365",
+
+  "_comments": {
+    "purpose": "Test SOC2 compliance rules without domain infrastructure",
+    "ssl": "Private CA certificate issued for ALB DNS name",
+    "cost": "Includes ~$400/month Private CA + compliance services",
+    "compliance": "Private CA meets SOC2 encryption requirements (TLS 1.2+)",
+    "controls": "CC6.1 (encryption), CC6.6 (network), CC6.7 (TLS), CC7.2 (audit)"
+  }
+}

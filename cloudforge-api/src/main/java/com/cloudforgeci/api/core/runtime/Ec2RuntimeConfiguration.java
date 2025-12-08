@@ -6,8 +6,13 @@ import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
+import software.amazon.awscdk.services.acmpca.CertificateAuthority;
+import software.amazon.awscdk.services.acmpca.CfnCertificate;
+import software.amazon.awscdk.services.acmpca.CfnCertificateAuthority;
+import software.amazon.awscdk.services.acmpca.CfnCertificateAuthorityActivation;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
+import software.amazon.awscdk.services.certificatemanager.PrivateCertificate;
 import software.amazon.awscdk.services.ec2.ISecurityGroup;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
@@ -153,24 +158,86 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
       return; // ← CRITICAL: prevents creating cert/https/redirect
     }
 
-    // ── 4) SSL + DOMAIN/FQDN → ACM + HTTPS + HTTP default redirect ─────────────
-    if (!wantSslDns) return; // SSL requested but no host → fall back to HTTP-only silently
+    // ── 4) SSL → ACM certificate (public with domain) OR Private CA (without domain) ─────────────
+    // 4a) Create certificate - either public (with domain) or private (without domain)
+    if (wantSslDns) {
+      // Path A: Public ACM certificate with DNS validation
+      whenBoth(c.zone, c.alb, (zone, alb) -> {
+        if (c.cert.get().isPresent()) return;
 
-    // 4a) Create certificate first
-    whenBoth(c.zone, c.alb, (zone, alb) -> {
-      if (c.cert.get().isPresent()) return;
+        String certDomain = fqdn != null ? fqdn : domain;
 
-      String certDomain = fqdn != null ? fqdn : domain;
+        Certificate cert = Certificate.Builder
+                .create(c, "HttpsCert")
+                .domainName(certDomain)
+                .validation(CertificateValidation.fromDns(zone))
+                .build();
 
-      Certificate cert = Certificate.Builder
-              .create(c, "HttpsCert")
-              .domainName(certDomain)
-              .validation(CertificateValidation.fromDns(zone))
-              .build();
+        cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+        c.cert.set(cert);
+      });
+    } else {
+      // Path B: Private CA certificate for ALB DNS name (no custom domain required)
+      // This enables HTTPS for application-oidc/alb-oidc without a custom domain
+      c.alb.onSet(alb -> {
+        if (c.cert.get().isPresent()) return;
 
-      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
-      c.cert.set(cert);
-    });
+        LOG.info("Creating Private CA certificate for ALB DNS name (no custom domain configured)");
+        String albDnsName = alb.getLoadBalancerDnsName();
+
+        // Create a Private Certificate Authority (short-lived, for this stack only)
+        CfnCertificateAuthority privateCa = CfnCertificateAuthority.Builder.create(c, "PrivateCA")
+                .type("ROOT")
+                .keyAlgorithm("RSA_2048")
+                .signingAlgorithm("SHA256WITHRSA")
+                .subject(CfnCertificateAuthority.SubjectProperty.builder()
+                        .commonName("CloudForge Private CA")
+                        .organization("CloudForge")
+                        .organizationalUnit("Infrastructure")
+                        .build())
+                .build();
+        privateCa.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        // Issue a ROOT CA certificate using the CA's own CSR
+        // This creates the self-signed root certificate for CA activation
+        CfnCertificate rootCaCert = CfnCertificate.Builder.create(c, "RootCACertificate")
+                .certificateAuthorityArn(privateCa.getAttrArn())
+                .certificateSigningRequest(privateCa.getAttrCertificateSigningRequest())
+                .signingAlgorithm("SHA256WITHRSA")
+                .templateArn("arn:aws:acm-pca:::template/RootCACertificate/V1")
+                .validity(CfnCertificate.ValidityProperty.builder()
+                        .type("YEARS")
+                        .value(10)
+                        .build())
+                .build();
+        rootCaCert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        // Activate the CA with the self-signed root certificate
+        CfnCertificateAuthorityActivation caActivation = CfnCertificateAuthorityActivation.Builder.create(c, "PrivateCAActivation")
+                .certificateAuthorityArn(privateCa.getAttrArn())
+                .certificate(rootCaCert.getAttrCertificate())
+                .status("ACTIVE")
+                .build();
+        caActivation.addDependency(rootCaCert);
+
+        // Create a private certificate for the ALB DNS name
+        PrivateCertificate privateCert = PrivateCertificate.Builder.create(c, "PrivateHttpsCert")
+                .domainName(albDnsName)
+                .certificateAuthority(CertificateAuthority.fromCertificateAuthorityArn(
+                        c, "ImportedPrivateCA", privateCa.getAttrArn()))
+                .build();
+
+        // Ensure proper dependency ordering
+        privateCert.getNode().addDependency(caActivation);
+        privateCert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        c.cert.set(privateCert);
+        c.privateCa.set(privateCa);
+
+        LOG.info("Private CA certificate created for: " + albDnsName);
+        LOG.warning("NOTE: Private CA certificates are NOT trusted by browsers. Users will see certificate warnings.");
+      });
+    }
 
     // 4b) Create HTTPS listener with certificate
     // Use TLS 1.2+ policy for PCI-DSS compliance (Requirement 4.1)

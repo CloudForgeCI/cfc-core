@@ -179,6 +179,7 @@ class CognitoSamlFactoryTest {
     void testFactorySkipsWhenCognitoAutoProvisionDisabled() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("cognitoAutoProvision", false);
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -197,6 +198,7 @@ class CognitoSamlFactoryTest {
     void testFactorySkipsApplicationNotSupportingOidc() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("cognitoAutoProvision", true);
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -217,6 +219,7 @@ class CognitoSamlFactoryTest {
     void testFactorySkipsOidcApplicationType() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("cognitoAutoProvision", true);
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -244,6 +247,7 @@ class CognitoSamlFactoryTest {
     void testSecurityProfileRemovalPolicy(String profile, String description) {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("cognitoAutoProvision", true);
         context.put("stackName", "TestCognitoSaml");
         context.put("region", "us-east-1");
@@ -269,13 +273,13 @@ class CognitoSamlFactoryTest {
 
     @ParameterizedTest
     @CsvSource({
-        "example.com,app,true",
-        "example.com,app,false",
-        "example.com,,true"
+        "example.com,app",
+        "example.com,"
     })
-    void testSiteUrlConstruction(String domain, String subdomain, boolean ssl) {
+    void testSiteUrlConstruction(String domain, String subdomain) {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("cognitoAutoProvision", true);
         context.put("stackName", "TestSiteUrl");
         context.put("region", "us-east-1");
@@ -283,7 +287,6 @@ class CognitoSamlFactoryTest {
         if (subdomain != null && !subdomain.isEmpty()) {
             context.put("subdomain", subdomain);
         }
-        context.put("enableSsl", ssl);
 
         String stackId = "CognitoSamlUrl-" + domain.replace(".", "") + "-" + (subdomain != null ? subdomain : "nosub");
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -305,6 +308,7 @@ class CognitoSamlFactoryTest {
     void testFqdnOverridesDomainSubdomain() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("cognitoAutoProvision", true);
         context.put("stackName", "TestFqdn");
         context.put("region", "us-east-1");

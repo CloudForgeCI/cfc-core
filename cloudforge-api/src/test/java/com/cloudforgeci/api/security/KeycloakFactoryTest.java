@@ -133,6 +133,7 @@ class KeycloakFactoryTest {
     void testFactorySkipsNonCognitoSamlProvider() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito");  // Not cognito-saml
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -149,6 +150,7 @@ class KeycloakFactoryTest {
     void testFactorySkipsIdentityCenterProvider() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "identity-center");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -190,6 +192,7 @@ class KeycloakFactoryTest {
     void testFactoryWithSecurityProfiles(String profile, String description) {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
         context.put("stackName", "TestKeycloak");
 
@@ -212,6 +215,7 @@ class KeycloakFactoryTest {
     void testFactorySkipsNullApplicationSpec() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -230,6 +234,7 @@ class KeycloakFactoryTest {
     void testFactorySkipsApplicationNotSupportingOidc() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -251,6 +256,7 @@ class KeycloakFactoryTest {
     void testFactoryWithCompleteInfrastructure() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
         context.put("stackName", "TestKeycloakInfra");
         context.put("region", "us-east-1");
@@ -277,6 +283,7 @@ class KeycloakFactoryTest {
     void testKeycloakNotDeployedMultipleTimes() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
         context.put("stackName", "TestKeycloakSingleton");
 

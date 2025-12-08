@@ -598,13 +598,27 @@ public final class DeploymentContext {
         if (enableSsl) {
             if (fqdn == null || fqdn.isBlank()) {
                 if (domain == null || domain.isBlank()) {
-                    errs.add("enableSsl=true but neither 'fqdn' nor 'domain' provided.");
+                    // OIDC modes can use Private CA with ALB DNS name (no custom domain required)
+                    boolean isOidcMode = "alb-oidc".equals(authMode) || "application-oidc".equals(authMode);
+                    if (!isOidcMode) {
+                        errs.add("enableSsl=true but neither 'fqdn' nor 'domain' provided.");
+                    }
                 }
             }
         }
 
+        // OIDC modes require HTTPS (enableSsl=true)
+        // When no custom domain is configured, AWS Private CA is used for the ALB DNS name
         if ("alb-oidc".equals(authMode) && !enableSsl) {
-            errs.add("authMode=alb-oidc requires HTTPS listener; set enableSsl=true and provide fqdn/domain.");
+            errs.add("authMode=alb-oidc requires HTTPS; set enableSsl=true. " +
+                    "A custom domain (fqdn/domain) is recommended but not required - " +
+                    "without a domain, AWS Private CA will be used for the ALB DNS name.");
+        }
+
+        if ("application-oidc".equals(authMode) && !enableSsl) {
+            errs.add("authMode=application-oidc requires HTTPS; set enableSsl=true. " +
+                    "A custom domain (fqdn/domain) is recommended but not required - " +
+                    "without a domain, AWS Private CA will be used for the ALB DNS name.");
         }
 
         // Cross-axis sanity (context level; rules will also validate)

@@ -17,11 +17,14 @@ CloudForge supports three authentication modes:
 | Feature | `none` | `alb-oidc` | `application-oidc` |
 |---------|--------|------------|-------------------|
 | **Authentication Point** | Application | Load Balancer | Application |
-| **Requires HTTPS** | No | Yes | No (recommended) |
+| **Requires HTTPS** | No | Yes | Yes |
+| **Requires Custom Domain** | No | No* | No* |
 | **Public Pages** | Yes | No (all authenticated) | Yes |
 | **Group/Role Mapping** | N/A | Limited | Full |
 | **Application Plugin Required** | No | No | Yes |
 | **Logout from Provider** | N/A | Automatic | Configurable |
+
+\* When no custom domain is configured, CloudForge automatically provisions an AWS Private CA certificate for the ALB DNS name. This enables HTTPS without requiring a registered domain. Note: Private CA certificates are not trusted by browsers, so users will see certificate warnings.
 
 ---
 
@@ -450,6 +453,7 @@ OIDC integration supports compliance requirements:
 
 ### 1. Always Use HTTPS
 
+**Option A: With Custom Domain (Recommended for Production)**
 ```json
 {
   "enableSsl": true,
@@ -457,6 +461,21 @@ OIDC integration supports compliance requirements:
   "subdomain": "jenkins"
 }
 ```
+
+**Option B: Without Custom Domain (Using Private CA)**
+```json
+{
+  "enableSsl": true,
+  "authMode": "alb-oidc"
+}
+```
+
+When `enableSsl: true` is set without a domain, CloudForge provisions an AWS Private CA certificate for the ALB DNS name. This is useful for:
+- Development/testing environments
+- Quick deployments without domain registration
+- Internal applications where browser warnings are acceptable
+
+**Note:** Private CA certificates cost ~$400/month per CA. The CA is automatically deleted when the stack is destroyed (RemovalPolicy.DESTROY).
 
 ### 2. Enable MFA for Production
 
@@ -503,7 +522,16 @@ This creates an admin user and sends them a temporary password via email.
 
 **Cause:** The callback URL doesn't match what's configured in Cognito.
 
-**Solution:** Verify the FQDN in your deployment context matches the Cognito app client callback URLs.
+**Solution:** Verify the FQDN in your deployment context matches the Cognito app client callback URLs. If using Private CA without a custom domain, ensure `enableSsl: true` is set so the callback URL uses HTTPS with the ALB DNS name.
+
+#### Browser shows "Your connection is not private" warning
+
+**Cause:** Using AWS Private CA certificate without a custom domain.
+
+**Solution:** This is expected behavior when using Private CA. The certificate is valid but not trusted by browsers because it's issued by a private CA, not a public CA like Let's Encrypt or DigiCert. Options:
+1. Click "Advanced" → "Proceed to site" to continue (acceptable for dev/test)
+2. Import the Private CA root certificate into your browser/system trust store
+3. Use a custom domain with public DNS validation for production
 
 #### "Invalid username claim"
 

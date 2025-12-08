@@ -42,6 +42,7 @@ class SubdomainConfig(Enum):
 class AuthMode(Enum):
     NONE = "none"
     ALB_OIDC = "alb-oidc"
+    APPLICATION_OIDC = "application-oidc"
 
 class NetworkMode(Enum):
     PUBLIC_NO_NAT = "public-no-nat"
@@ -67,17 +68,23 @@ class TestConfiguration:
 
         CloudForge 3.0.0 supports only APPLICATION_SERVICE topology with EC2/FARGATE runtimes.
         All configurations using APPLICATION_SERVICE are valid as long as they meet basic requirements.
+
+        CloudForge 3.1.0 adds Private CA support for OIDC modes without custom domain:
+        - alb-oidc and application-oidc can use ALB DNS name with AWS Private CA certificate
+        - SSL is required for OIDC modes (enableSsl=true) but domain is optional
         """
-        # SSL requires domain
+        # SSL requires domain UNLESS using OIDC auth mode (which can use Private CA with ALB DNS)
+        is_oidc_mode = self.auth_mode in (AuthMode.ALB_OIDC, AuthMode.APPLICATION_OIDC)
         if self.ssl_config == SSLConfig.SSL_ENABLED and self.domain_config == DomainConfig.NO_DOMAIN:
-            return False
+            if not is_oidc_mode:
+                return False
 
         # Subdomain requires domain
         if self.subdomain_config == SubdomainConfig.WITH_SUBDOMAIN and self.domain_config == DomainConfig.NO_DOMAIN:
             return False
 
-        # ALB-OIDC authentication requires a domain (for redirect URIs)
-        if self.auth_mode == AuthMode.ALB_OIDC and self.domain_config == DomainConfig.NO_DOMAIN:
+        # OIDC authentication requires SSL (but NOT necessarily a domain - Private CA can be used)
+        if is_oidc_mode and self.ssl_config == SSLConfig.SSL_DISABLED:
             return False
 
         return True
@@ -137,6 +144,11 @@ class ResourceType(Enum):
     NAT_GATEWAY = "AWS::EC2::NatGateway"
     ELASTIC_IP = "AWS::EC2::EIP"
     VPC_ENDPOINT = "AWS::EC2::VPCEndpoint"
+
+    # Private CA (for OIDC without custom domain)
+    PRIVATE_CA = "AWS::ACMPCA::CertificateAuthority"
+    PRIVATE_CA_CERTIFICATE = "AWS::ACMPCA::Certificate"
+    PRIVATE_CERTIFICATE = "AWS::CertificateManager::Certificate"  # Private cert from PCA
 
 class TruthTableGenerator:
     def __init__(self, output_dir: str):
@@ -206,6 +218,11 @@ class TruthTableGenerator:
             ResourceType.NAT_GATEWAY: ["VpcFactory.java"],
             ResourceType.ELASTIC_IP: ["VpcFactory.java"],
             ResourceType.VPC_ENDPOINT: ["VpcFactory.java"],
+
+            # Private CA (for OIDC without custom domain)
+            ResourceType.PRIVATE_CA: ["FargateRuntimeConfiguration.java", "Ec2RuntimeConfiguration.java"],
+            ResourceType.PRIVATE_CA_CERTIFICATE: ["FargateRuntimeConfiguration.java", "Ec2RuntimeConfiguration.java"],
+            ResourceType.PRIVATE_CERTIFICATE: ["FargateRuntimeConfiguration.java", "Ec2RuntimeConfiguration.java"],
         }
     
     def generate_expected_resources(self, config: TestConfiguration) -> Set[ResourceType]:
@@ -268,8 +285,19 @@ class TruthTableGenerator:
             else:
                 resources.add(ResourceType.HTTP_LISTENER)
         else:
-            # No domain but still need HTTP listener for ALB
-            resources.add(ResourceType.HTTP_LISTENER)
+            # No domain - check if OIDC mode (uses Private CA for SSL)
+            is_oidc_mode = config.auth_mode in (AuthMode.ALB_OIDC, AuthMode.APPLICATION_OIDC)
+            if is_oidc_mode and config.ssl_config == SSLConfig.SSL_ENABLED:
+                # OIDC without domain uses AWS Private CA
+                resources.update([
+                    ResourceType.PRIVATE_CA,
+                    ResourceType.PRIVATE_CA_CERTIFICATE,
+                    ResourceType.PRIVATE_CERTIFICATE,
+                    ResourceType.HTTPS_LISTENER,
+                    ResourceType.HTTP_LISTENER,  # For redirect
+                ])
+            else:
+                resources.add(ResourceType.HTTP_LISTENER)
         
         # Security profile-specific resources
         if config.security_profile == SecurityProfile.STAGING:
@@ -286,7 +314,7 @@ class TruthTableGenerator:
             ])
 
         # Authentication-specific resources
-        if config.auth_mode == AuthMode.ALB_OIDC:
+        if config.auth_mode in (AuthMode.ALB_OIDC, AuthMode.APPLICATION_OIDC):
             resources.update([
                 ResourceType.COGNITO_USER_POOL,
                 ResourceType.COGNITO_USER_POOL_CLIENT,

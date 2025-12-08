@@ -186,6 +186,7 @@ class ApplicationSamlFactoryTest {
         // Given: application-oidc auth mode with SAML application
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
         context.put("stackName", "TestSamlApp");
 
@@ -209,6 +210,7 @@ class ApplicationSamlFactoryTest {
     void testFactorySkipsNullApplicationSpec() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -227,6 +229,7 @@ class ApplicationSamlFactoryTest {
     void testFactorySkipsApplicationNotSupportingOidc() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -248,6 +251,7 @@ class ApplicationSamlFactoryTest {
         // Given: Application that uses OIDC (not SAML)
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -274,6 +278,7 @@ class ApplicationSamlFactoryTest {
     void testSamlProviderRouting(String provider, String description) {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", provider);
         context.put("stackName", "TestProvider");
 
@@ -294,6 +299,7 @@ class ApplicationSamlFactoryTest {
     void testUnknownSamlProviderSkipsProcessing() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "unknown-provider");
         context.put("stackName", "TestUnknown");
 
@@ -321,6 +327,7 @@ class ApplicationSamlFactoryTest {
     void testFactoryWithSecurityProfiles(String profile, String description) {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
         context.put("stackName", "TestProfile");
 
@@ -344,6 +351,7 @@ class ApplicationSamlFactoryTest {
         // Given: Multiple SAML applications in same stack
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("oidcProvider", "cognito-saml");
         context.put("stackName", "TestMultiSaml");
 

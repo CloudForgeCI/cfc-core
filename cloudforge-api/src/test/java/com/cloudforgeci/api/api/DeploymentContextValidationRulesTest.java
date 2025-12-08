@@ -236,19 +236,18 @@ class DeploymentContextValidationRulesTest {
     class CombinedValidationScenarios {
 
         @Test
-        @DisplayName("Multiple validation errors should all be reported")
-        void multipleValidationErrors() {
+        @DisplayName("SSL without domain in non-OIDC mode should fail")
+        void sslWithoutDomainInNonOidcMode() {
             Map<String, Object> config = new LinkedHashMap<>();
-            config.put("enableSsl", true);  // No domain/fqdn - ERROR 1
-            config.put("authMode", "alb-oidc");  // Requires SSL but enableSsl has no domain - ERROR 2
-            // Both errors should be present
+            config.put("enableSsl", true);  // No domain/fqdn
+            config.put("authMode", "none");  // Non-OIDC mode requires domain for SSL
 
             InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
             Throwable cause = ex.getTargetException();
             assertInstanceOf(IllegalArgumentException.class, cause);
             String message = cause.getMessage();
 
-            // Should contain both validation errors
+            // Should mention SSL domain requirement
             assertTrue(message.contains("enableSsl") || message.contains("fqdn") || message.contains("domain"),
                     "Should mention SSL domain requirement");
         }

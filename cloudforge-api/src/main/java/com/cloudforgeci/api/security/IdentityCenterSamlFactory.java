@@ -92,6 +92,9 @@ public class IdentityCenterSamlFactory extends BaseFactory {
     @SystemContext("applicationSpec")
     private ApplicationSpec applicationSpec;
 
+    @SystemContext("alb")
+    private software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer alb;
+
     public IdentityCenterSamlFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -460,7 +463,7 @@ public class IdentityCenterSamlFactory extends BaseFactory {
     }
 
     /**
-     * Construct the site URL from domain configuration.
+     * Construct the site URL from domain configuration or ALB DNS name.
      */
     private String constructSiteUrl() {
         String protocol = (enableSsl != null && enableSsl) ? "https" : "http";
@@ -474,8 +477,15 @@ public class IdentityCenterSamlFactory extends BaseFactory {
             return protocol + "://" + domain;
         }
 
+        // For OIDC modes without custom domain, use ALB DNS name with Private CA
+        if (alb != null) {
+            String albDnsName = alb.getLoadBalancerDnsName();
+            LOG.info("No custom domain configured - using ALB DNS name: " + albDnsName);
+            return protocol + "://" + albDnsName;
+        }
+
         // Fallback - should not happen in production
-        LOG.warning("No domain configured - using placeholder URL");
+        LOG.warning("No domain or ALB configured - using placeholder URL");
         return "https://" + applicationSpec.applicationId() + ".example.com";
     }
 }

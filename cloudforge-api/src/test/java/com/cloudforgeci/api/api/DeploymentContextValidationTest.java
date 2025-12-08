@@ -38,6 +38,6 @@ public class DeploymentContextValidationTest {
         assertNotNull(cause, "Expected a cause exception");
         assertInstanceOf(IllegalArgumentException.class, cause);
         assertNotNull(cause.getMessage());
-        assertTrue(cause.getMessage().contains("requires HTTPS listener"));
+        assertTrue(cause.getMessage().contains("requires HTTPS"));
     }
 }

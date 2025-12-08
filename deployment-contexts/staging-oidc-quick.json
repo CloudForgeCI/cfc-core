@@ -1,0 +1,41 @@
+{
+  "description": "Quick OIDC staging setup with compliance testing - no domain required",
+  "stackName": "CloudForge-Staging-OIDC",
+  "runtime": "fargate",
+  "topology": "jenkins-service",
+  "securityProfile": "staging",
+  "region": "us-east-1",
+
+  "networkMode": "private-with-nat",
+  "wafEnabled": true,
+
+  "authMode": "application-oidc",
+  "enableSsl": true,
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "cloudforge-staging-quick",
+  "cognitoMfaEnabled": true,
+
+  "complianceFrameworks": "SOC2",
+  "complianceMode": "advisory",
+  "awsConfigEnabled": true,
+  "scopeConfigRulesToDeployment": true,
+  "guardDutyEnabled": true,
+  "cloudTrailEnabled": true,
+  "flowLogsEnabled": true,
+  "logRetentionDays": 365,
+
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 2,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 70,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "retainStorage": false,
+
+  "_comments": {
+    "private_ca": "No domain configured - uses AWS Private CA for HTTPS with ALB DNS name",
+    "compliance": "Full compliance rules execute with Private CA certificate (same as public CA)",
+    "testing": "Ideal for testing compliance rules in lower environments without domain setup"
+  }
+}

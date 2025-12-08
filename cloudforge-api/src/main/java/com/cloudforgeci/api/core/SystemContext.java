@@ -107,6 +107,7 @@ public final class SystemContext extends Construct {
   // Certificate Properties
   public final Slot<ApplicationListener> https = new Slot<>();
   public final Slot<software.amazon.awscdk.services.certificatemanager.ICertificate> cert = new Slot<>();
+  public final Slot<software.amazon.awscdk.services.acmpca.CfnCertificateAuthority> privateCa = new Slot<>();
 
   // Identity Center Properties (for auto-provisioned OIDC)
   public final Slot<software.amazon.awscdk.CustomResource> identityCenter = new Slot<>();

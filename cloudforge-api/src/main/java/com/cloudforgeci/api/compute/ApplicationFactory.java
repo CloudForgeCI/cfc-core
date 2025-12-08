@@ -169,19 +169,20 @@ public class ApplicationFactory extends BaseFactory {
                 }
             }
 
-            // Create security factories BEFORE infrastructure factories
-            // This ensures ApplicationOidcFactory runs and populates ctx.applicationOidcConfig
-            // before ContainerFactory (created by createInfrastructureFactories) tries to use it
+            // Create infrastructure factories FIRST (VPC, ALB, EFS, Logging)
+            // This ensures the ALB exists before security factories try to reference it
+            // for OIDC callback URLs (CognitoAuthenticationFactory needs ALB DNS name)
+            infrastructure = ctx.createInfrastructureFactories(this, id);
+
+            // Create security factories AFTER infrastructure factories
+            // CognitoAuthenticationFactory needs the ALB to be created first so it can
+            // use the ALB DNS name in callback URLs when no custom domain is configured
             try {
                 ctx.createSecurityFactories(this, id);
             } catch (Exception e) {
                 LOG.log(Level.SEVERE, "*** CRITICAL: Exception in createSecurityFactories() ***", e);
                 throw e;
             }
-
-            // Use orchestration layer to create infrastructure factories
-            // This must run AFTER createSecurityFactories() so ApplicationOidcFactory has already populated applicationOidcConfig
-            infrastructure = ctx.createInfrastructureFactories(this, id);
 
             // Provision database if required by the application
             // MUST run AFTER createInfrastructureFactories() so VPC is available

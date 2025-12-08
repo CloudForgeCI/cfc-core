@@ -22,10 +22,41 @@ Before deploying, update these fields in any example:
 | Field | Description | Example |
 |-------|-------------|---------|
 | `stackName` | Unique CloudFormation stack name | `MyCompany-Jenkins-Prod` |
-| `domain` | Your domain (production) | `example.com` |
-| `subdomain` | Service subdomain | `jenkins` |
+| `domain` | Your domain (or omit for Private CA) | `example.com` |
+| `subdomain` | Service subdomain (or omit for Private CA) | `jenkins` |
 | `cognitoDomainPrefix` | Globally unique Cognito prefix | `mycompany-jenkins-prod` |
 | `region` | AWS region | `us-east-1` |
+
+### SSL Certificate Options
+
+**Option A: Custom Domain (public certificate)**
+```json
+{
+  "domain": "example.com",
+  "subdomain": "jenkins",
+  "enableSsl": true
+  // Public ACM certificate via DNS validation
+}
+```
+
+**Option B: No Domain (Private CA certificate)**
+
+For rapid deployment without domain setup, omit `domain` and `subdomain`. The system automatically creates an AWS Private CA and issues a certificate for the ALB DNS name:
+
+```json
+{
+  "enableSsl": true,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true
+  // No domain/subdomain - Private CA certificate issued for ALB DNS name
+}
+```
+
+> **Private CA Notes:**
+> - Only created when no domain is configured AND `enableSsl: true`
+> - Costs ~$400/month (auto-deleted with stack via RemovalPolicy.DESTROY)
+> - Browser shows certificate warnings (not publicly trusted)
+> - Fully compliant with HIPAA, PCI-DSS, SOC2, GDPR (encryption requirements met)
 
 ## Examples by Application
 
@@ -34,6 +65,7 @@ Before deploying, update these fields in any example:
 |------|-------------|----------|
 | [jenkins-dev.json](jenkins-dev.json) | Development | Minimal, no auth |
 | [jenkins-dev-auth.json](jenkins-dev-auth.json) | Development | With Cognito OIDC |
+| [jenkins-dev-quick.json](jenkins-dev-quick.json) | Development | **No domain** - Private CA, Cognito OIDC |
 | [jenkins-production.json](jenkins-production.json) | Production | SOC2, HA, build agents |
 
 ### Mattermost
@@ -69,6 +101,15 @@ Before deploying, update these fields in any example:
 | [sonarqube-production.json](sonarqube-production.json) | Production | ALB-OIDC |
 
 ## Examples by Compliance Framework
+
+### No Domain Quick Start (Private CA)
+
+Test compliance rules without domain infrastructure:
+
+| File | Description |
+|------|-------------|
+| [compliance-soc2-quick.json](compliance-soc2-quick.json) | SOC2 staging - **no domain required** |
+| [compliance-hipaa-quick.json](compliance-hipaa-quick.json) | HIPAA staging - **no domain required** |
 
 ### SOC2
 | File | Description |

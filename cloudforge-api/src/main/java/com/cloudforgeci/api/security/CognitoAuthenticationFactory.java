@@ -2,9 +2,9 @@ package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.RemovalPolicy;
-import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
 import software.amazon.awscdk.customresources.AwsSdkCall;
@@ -125,19 +125,22 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @DeploymentContext("oidcClientSecretName")
     private String oidcClientSecretName;
 
-    @com.cloudforge.core.annotation.SystemContext("securityProfileConfig")
+    @SystemContext("securityProfileConfig")
     private com.cloudforgeci.api.interfaces.SecurityProfileConfiguration securityProfileConfig;
 
-    @com.cloudforge.core.annotation.SystemContext("applicationSpec")
+    @SystemContext("applicationSpec")
     private com.cloudforge.core.interfaces.ApplicationSpec applicationSpec;
 
-    @com.cloudforge.core.annotation.SystemContext("cognitoUserPool")
+    @SystemContext("alb")
+    private ApplicationLoadBalancer alb;
+
+    @SystemContext("cognitoUserPool")
     private UserPool cognitoUserPool;
 
-    @com.cloudforge.core.annotation.SystemContext("cognitoUserPoolClient")
+    @SystemContext("cognitoUserPoolClient")
     private UserPoolClient cognitoUserPoolClient;
 
-    @com.cloudforge.core.annotation.SystemContext("cognitoUserPoolDomain")
+    @SystemContext("cognitoUserPoolDomain")
     private UserPoolDomain cognitoUserPoolDomain;
 
     public CognitoAuthenticationFactory(Construct scope, String id) {
@@ -718,21 +721,42 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
     /**
      * Construct the base URL from domain configuration.
+     * Priority: fqdn > subdomain.domain > domain > ALB DNS name (with Private CA)
+     *
+     * <p>When no custom domain is configured, the ALB DNS name is used with HTTPS.
+     * This requires AWS Private CA which is automatically provisioned by FargateRuntimeConfiguration
+     * when enableSsl=true but no domain is configured.</p>
+     *
+     * <p><b>Note:</b> Private CA certificates are not trusted by browsers (users will see warnings),
+     * but they enable HTTPS for OIDC callbacks without requiring a custom domain.</p>
      */
     private String constructBaseUrl() {
+        // Priority 1: Fully qualified domain name
         if (fqdn != null && !fqdn.isEmpty()) {
             return "https://" + fqdn;
-        } else if (domain != null && !domain.isEmpty()) {
+        }
+
+        // Priority 2: Domain with optional subdomain
+        if (domain != null && !domain.isEmpty()) {
             if (subdomain != null && !subdomain.isEmpty()) {
                 return "https://" + subdomain + "." + domain;
-            } else {
-                return "https://" + domain;
             }
-        } else {
-            // No domain configured - ALB DNS will be used (must update callback URL after deployment)
-            LOG.warning("No domain configured - callback URL will need to be updated after deployment");
-            return "https://example.com";  // Placeholder
+            return "https://" + domain;
         }
+
+        // Priority 3: ALB DNS name with HTTPS (requires Private CA certificate)
+        // This is used when enableSsl=true but no custom domain is configured
+        if (alb != null) {
+            String albUrl = "https://" + alb.getLoadBalancerDnsName();
+            LOG.info("Using ALB DNS name for callback URL with Private CA certificate: " + albUrl);
+            LOG.warning("NOTE: Private CA certificates are not trusted by browsers. Users will see certificate warnings.");
+            return albUrl;
+        }
+
+        // ALB not yet available - use placeholder that will be resolved at deploy time
+        LOG.warning("ALB not yet available - callback URL will use placeholder");
+        LOG.warning("Ensure enableSsl=true is set for HTTPS callback URLs");
+        return "https://placeholder.invalid";
     }
 
     /**
@@ -1123,4 +1147,5 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // Return the COMPLETE ARN with suffix (same as RDS pattern)
         return cognitoSecret.getSecretArn();
     }
+
 }

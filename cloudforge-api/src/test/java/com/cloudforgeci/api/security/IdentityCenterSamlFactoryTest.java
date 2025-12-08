@@ -186,6 +186,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactorySkipsWhenAutoProvisionDisabled() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", false);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
 
@@ -203,6 +204,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactorySkipsWhenAutoProvisionNull() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         // autoProvisionIdentityCenter not set
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
 
@@ -222,6 +224,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactoryThrowsWhenSsoInstanceArnMissing() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         // ssoInstanceArn not set
 
@@ -243,6 +246,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactoryThrowsWhenSsoInstanceArnEmpty() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", "");
 
@@ -266,6 +270,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactorySkipsNullApplicationSpec() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
 
@@ -285,6 +290,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactorySkipsApplicationNotSupportingOidc() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
 
@@ -306,6 +312,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactorySkipsApplicationWithNullOidcIntegration() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
 
@@ -327,6 +334,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactorySkipsOidcOnlyApplication() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
 
@@ -355,6 +363,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactoryWithSecurityProfiles(String profile, String description) {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
         context.put("stackName", "TestIdentityCenter");
@@ -380,13 +389,13 @@ class IdentityCenterSamlFactoryTest {
 
     @ParameterizedTest
     @CsvSource({
-        "example.com,app,true",
-        "example.com,app,false",
-        "example.com,,true"
+        "example.com,app",
+        "example.com,"
     })
-    void testSiteUrlConstruction(String domain, String subdomain, boolean ssl) {
+    void testSiteUrlConstruction(String domain, String subdomain) {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
         context.put("stackName", "TestSiteUrl");
@@ -395,7 +404,6 @@ class IdentityCenterSamlFactoryTest {
         if (subdomain != null && !subdomain.isEmpty()) {
             context.put("subdomain", subdomain);
         }
-        context.put("enableSsl", ssl);
 
         String stackId = "IdCenterUrl-" + domain.replace(".", "") + "-" + (subdomain != null ? subdomain : "nosub");
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -417,6 +425,7 @@ class IdentityCenterSamlFactoryTest {
     void testFqdnOverridesDomainSubdomain() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
         context.put("stackName", "TestFqdn");
@@ -445,6 +454,7 @@ class IdentityCenterSamlFactoryTest {
     void testInitialAdminEmailOutput() {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
         context.put("stackName", "TestAdmin");
@@ -474,6 +484,7 @@ class IdentityCenterSamlFactoryTest {
     void testFactoryWithDifferentRegions(String region) {
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "application-oidc");
+        context.put("enableSsl", true);
         context.put("autoProvisionIdentityCenter", true);
         context.put("ssoInstanceArn", TEST_SSO_INSTANCE_ARN);
         context.put("stackName", "TestRegion");
