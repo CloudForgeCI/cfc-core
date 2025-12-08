@@ -298,7 +298,7 @@ public class ContainerFactory extends BaseFactory {
                                 String secretEnvVar = appId.toUpperCase() + "_OIDC_CLIENT_SECRET";
                                 ecsSecrets.put(secretEnvVar,
                                               software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
-                                LOG.info("  ✅ OIDC client secret mapped to " + secretEnvVar + " (default)");
+                                LOG.info("  ✅ OIDC client secret mapped to env var (default)");
                         }
                     } else {
                         LOG.warning("  ⚠️  Client secret ARN not found in OIDC config - secret will not be mounted");

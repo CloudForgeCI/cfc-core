@@ -1040,7 +1040,6 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         String secretName = stackName + "/" + appId + "/oidc/client-secret";
 
         LOG.info("Storing Cognito client secret in Secrets Manager for application: " + appId);
-        LOG.info("  Secret name: " + secretName);
 
         // Use Custom Resource to retrieve the client secret from Cognito
         // The client secret is only available via DescribeUserPoolClient API call

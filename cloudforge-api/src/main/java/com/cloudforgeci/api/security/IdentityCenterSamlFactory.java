@@ -365,7 +365,7 @@ public class IdentityCenterSamlFactory extends BaseFactory {
                 )))
                 .build();
 
-        LOG.info("SAML IdP configuration stored in Secrets Manager: " + secretName);
+        LOG.info("SAML IdP configuration stored in Secrets Manager");
         LOG.info("Secret will be deleted on stack deletion (ForceDeleteWithoutRecovery=true)");
 
         // Store the secret name in SystemContext for the application to use

@@ -199,7 +199,7 @@ public class CognitoSamlFactory extends BaseFactory {
     private void storeIdpCertificate(String userPoolId, String metadataUrl, String appId) {
         String secretName = stackName + "/" + appId + "/saml/cognito-idp-cert";
 
-        LOG.info("Storing Cognito SAML IdP certificate in Secrets Manager: " + secretName);
+        LOG.info("Storing Cognito SAML IdP certificate in Secrets Manager");
 
         // Determine removal policy based on security profile
         boolean isProduction = (securityProfileConfig != null &&
@@ -270,7 +270,6 @@ public class CognitoSamlFactory extends BaseFactory {
                 .build();
 
         LOG.info("Cognito SAML IdP configuration stored in Secrets Manager");
-        LOG.info("  Secret name: " + secretName);
         LOG.info("  Removal policy: " + removalPolicy);
 
         // Store the secret name in SystemContext
