@@ -6,11 +6,15 @@ import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
+import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import software.amazon.awscdk.services.ecs.*;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.secretsmanager.ISecret;
 import software.amazon.awscdk.services.secretsmanager.Secret;
+import software.amazon.awscdk.services.ssm.StringParameter;
 import software.constructs.Construct;
 
 import java.util.HashMap;
@@ -32,6 +36,43 @@ public class ContainerFactory extends BaseFactory {
     @DeploymentContext("authMode")
     private String authMode;
 
+    // ========== Optional Port Configuration ==========
+    // These flags control which optional ports are exposed for applications
+    // Ports are NOT exposed by default - must be explicitly enabled
+
+    @DeploymentContext("enableAgents")
+    private Boolean enableAgents;
+
+    @DeploymentContext("enableSsh")
+    private Boolean enableSsh;
+
+    @DeploymentContext("enableSmtp")
+    private Boolean enableSmtp;
+
+    @DeploymentContext("enableSmtps")
+    private Boolean enableSmtps;
+
+    @DeploymentContext("enableClustering")
+    private Boolean enableClustering;
+
+    @DeploymentContext("enableDockerRegistry")
+    private Boolean enableDockerRegistry;
+
+    @DeploymentContext("enableMetrics")
+    private Boolean enableMetrics;
+
+    @DeploymentContext("enableNotary")
+    private Boolean enableNotary;
+
+    @DeploymentContext("enableTrivy")
+    private Boolean enableTrivy;
+
+    @DeploymentContext("enableSentinel")
+    private Boolean enableSentinel;
+
+    @DeploymentContext("enableCluster")
+    private Boolean enableCluster;
+
     @SystemContext("fargateTaskDef")
     private TaskDefinition fargateTaskDef;
 
@@ -40,6 +81,18 @@ public class ContainerFactory extends BaseFactory {
 
     @SystemContext("applicationSpec")
     private ApplicationSpec applicationSpec;
+
+    @SystemContext("dbConnection")
+    private DatabaseSpec.DatabaseConnection dbConnection;
+
+    @SystemContext("dbDatasourceParameter")
+    private StringParameter dbDatasourceParameter;
+
+    @SystemContext("applicationOidcConfig")
+    private OidcConfiguration applicationOidcConfig;
+
+    @SystemContext("samlIdpMetadataUrl")
+    private String samlIdpMetadataUrl;
 
     public ContainerFactory(Construct scope, String id, ContainerImage image) {
         super(scope, id);
@@ -57,37 +110,32 @@ public class ContainerFactory extends BaseFactory {
         Map<String, String> environment = new HashMap<>();
         if (applicationSpec != null) {
             // Check if application implements DatabaseSpec and has database connection
-            if (applicationSpec instanceof DatabaseSpec) {
-                ctx.dbConnection.get().ifPresentOrElse(
-                    dbConn -> {
-                        // Pass database connection to applications that support it (GitLab, Mattermost, etc.)
-                        LOG.info("Database connection available - configuring " + applicationSpec.applicationId() + " with RDS");
-                        // Use reflection to call the 4-parameter method if it exists
-                        try {
-                            java.lang.reflect.Method method = applicationSpec.getClass().getMethod(
-                                "containerEnvironmentVariables",
-                                String.class, boolean.class, String.class, DatabaseSpec.DatabaseConnection.class
-                            );
-                            @SuppressWarnings("unchecked")
-                            Map<String, String> dbEnv = (Map<String, String>) method.invoke(
-                                applicationSpec, fqdn, sslEnabled, authMode, dbConn
-                            );
-                            environment.putAll(dbEnv);
-                        } catch (NoSuchMethodException e) {
-                            // Application doesn't have 4-parameter method, use standard 3-parameter
-                            LOG.info("Application " + applicationSpec.applicationId() + " doesn't support database connection parameter");
-                            environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
-                        } catch (Exception e) {
-                            LOG.warning("Error calling containerEnvironmentVariables with database connection: " + e.getMessage());
-                            environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
-                        }
-                    },
-                    () -> {
-                        // No database connection - use embedded database fallback
-                        LOG.info("No database connection - " + applicationSpec.applicationId() + " will use embedded database");
-                        environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
-                    }
-                );
+            if (applicationSpec instanceof DatabaseSpec && dbConnection != null) {
+                // Pass database connection to applications that support it (GitLab, Mattermost, etc.)
+                LOG.info("Database connection available - configuring " + applicationSpec.applicationId() + " with RDS");
+                // Use reflection to call the 4-parameter method if it exists
+                try {
+                    java.lang.reflect.Method method = applicationSpec.getClass().getMethod(
+                        "containerEnvironmentVariables",
+                        String.class, boolean.class, String.class, DatabaseSpec.DatabaseConnection.class
+                    );
+                    @SuppressWarnings("unchecked")
+                    Map<String, String> dbEnv = (Map<String, String>) method.invoke(
+                        applicationSpec, fqdn, sslEnabled, authMode, dbConnection
+                    );
+                    environment.putAll(dbEnv);
+                } catch (NoSuchMethodException e) {
+                    // Application doesn't have 4-parameter method, use standard 3-parameter
+                    LOG.info("Application " + applicationSpec.applicationId() + " doesn't support database connection parameter");
+                    environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                } catch (Exception e) {
+                    LOG.warning("Error calling containerEnvironmentVariables with database connection: " + e.getMessage());
+                    environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                }
+            } else if (applicationSpec instanceof DatabaseSpec) {
+                // No database connection - use embedded database fallback
+                LOG.info("No database connection - " + applicationSpec.applicationId() + " will use embedded database");
+                environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
             } else {
                 // Standard applications without database support
                 environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
@@ -98,91 +146,104 @@ public class ContainerFactory extends BaseFactory {
         Map<String, software.amazon.awscdk.services.ecs.Secret> ecsSecrets = new HashMap<>();
 
         // Add database password from Secrets Manager for applications with external database
-        if (applicationSpec instanceof DatabaseSpec) {
-            ctx.dbConnection.get().ifPresent(dbConn -> {
-                LOG.info("Adding database password secret for " + applicationSpec.applicationId());
+        if (applicationSpec instanceof DatabaseSpec && dbConnection != null) {
+            LOG.info("Adding database password secret for " + applicationSpec.applicationId());
 
-                // Extract secret name from ARN
-                // ARN format: arn:aws:secretsmanager:region:account:secret:name-randomsuffix
-                String secretArn = dbConn.passwordSecretArn();
-                ISecret dbSecret = Secret.fromSecretCompleteArn(this, "DatabasePasswordSecret", secretArn);
+            // Extract secret name from ARN
+            // ARN format: arn:aws:secretsmanager:region:account:secret:name-randomsuffix
+            String secretArn = dbConnection.passwordSecretArn();
+            ISecret dbSecret = Secret.fromSecretCompleteArn(this, "DatabasePasswordSecret", secretArn);
 
-                // Grant task execution role permission to read the secret
-                if (fargateTaskDef.getExecutionRole() != null) {
-                    fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
-                        software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
-                            .sid("AllowReadDatabasePassword")
-                            .effect(software.amazon.awscdk.services.iam.Effect.ALLOW)
-                            .actions(java.util.List.of(
-                                "secretsmanager:GetSecretValue",
-                                "secretsmanager:DescribeSecret"
-                            ))
-                            .resources(java.util.List.of(secretArn))
-                            .build()
-                    );
-                    LOG.info("  ✅ Added IAM policy for database password secret access");
-                }
+            // Grant task execution role permission to read the secret
+            if (fargateTaskDef.getExecutionRole() != null) {
+                fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
+                    PolicyStatement.Builder.create()
+                        .sid("AllowReadDatabasePassword")
+                        .effect(Effect.ALLOW)
+                        .actions(List.of(
+                            "secretsmanager:GetSecretValue",
+                            "secretsmanager:DescribeSecret"
+                        ))
+                        .resources(List.of(secretArn))
+                        .build()
+                );
+                LOG.info("  ✅ Added IAM policy for database password secret access");
+            }
 
-                // Map password to application-specific environment variable names
-                // Different applications expect different env var names for the database password
-                String appId = applicationSpec.applicationId();
-                switch (appId) {
-                    case "gitlab":
-                        ecsSecrets.put("GITLAB_DATABASE_PASSWORD",
-                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
-                        LOG.info("  ✅ Database password mapped to GITLAB_DATABASE_PASSWORD");
-                        break;
-                    case "metabase":
-                        ecsSecrets.put("MB_DB_PASS",
-                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
-                        LOG.info("  ✅ Database password mapped to MB_DB_PASS");
-                        break;
-                    case "grafana":
-                        ecsSecrets.put("GF_DATABASE_PASSWORD",
-                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
-                        LOG.info("  ✅ Database password mapped to GF_DATABASE_PASSWORD");
-                        break;
-                    case "harbor":
-                        ecsSecrets.put("POSTGRESQL_PASSWORD",
-                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
-                        LOG.info("  ✅ Database password mapped to POSTGRESQL_PASSWORD");
-                        break;
-                    case "superset":
-                        ecsSecrets.put("DATABASE_PASSWORD",
-                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
-                        LOG.info("  ✅ Database password mapped to DATABASE_PASSWORD");
-                        break;
-                    case "mattermost":
-                        // Mattermost uses connection string with password embedded
-                        ecsSecrets.put("GITLAB_DATABASE_PASSWORD",
-                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
-                        LOG.info("  ✅ Database password mapped to GITLAB_DATABASE_PASSWORD (for connection string)");
-                        break;
-                    default:
-                        // Fallback - use generic name
-                        ecsSecrets.put("DATABASE_PASSWORD",
-                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
-                        LOG.info("  ✅ Database password mapped to DATABASE_PASSWORD (default)");
-                }
-            });
+            // Map password to application-specific environment variable names
+            // Different applications expect different env var names for the database password
+            String appId = applicationSpec.applicationId();
+            switch (appId) {
+                case "gitlab":
+                    ecsSecrets.put("GITLAB_DATABASE_PASSWORD",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to GITLAB_DATABASE_PASSWORD");
+                    break;
+                case "metabase":
+                    ecsSecrets.put("MB_DB_PASS",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to MB_DB_PASS");
+                    break;
+                case "grafana":
+                    ecsSecrets.put("GF_DATABASE_PASSWORD",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to GF_DATABASE_PASSWORD");
+                    break;
+                case "harbor":
+                    ecsSecrets.put("POSTGRESQL_PASSWORD",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to POSTGRESQL_PASSWORD");
+                    break;
+                case "superset":
+                    ecsSecrets.put("SUPERSET_DATABASE_PASSWORD",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to SUPERSET_DATABASE_PASSWORD");
+                    break;
+                case "mattermost":
+                    // Mattermost is distroless (Go binary, no shell) - cannot use shell variable substitution
+                    // RdsFactory creates an SSM Parameter with the complete datasource URL
+                    // The SSM parameter value uses CloudFormation dynamic reference to resolve the password
+                    if (dbDatasourceParameter != null) {
+                        // Grant read permission to the task execution role
+                        if (fargateTaskDef.getExecutionRole() != null) {
+                            dbDatasourceParameter.grantRead(fargateTaskDef.getExecutionRole());
+                        }
+
+                        // Inject as ECS secret from SSM Parameter Store
+                        ecsSecrets.put("MM_SQLSETTINGS_DATASOURCE",
+                            software.amazon.awscdk.services.ecs.Secret.fromSsmParameter(dbDatasourceParameter));
+                        LOG.info("  ✅ Complete datasource URL mapped to MM_SQLSETTINGS_DATASOURCE from SSM Parameter");
+                    } else {
+                        LOG.warning("  ⚠️  Datasource SSM parameter not found - Mattermost database connection not configured");
+                        LOG.warning("  ⚠️  Mattermost REQUIRES a database - deployment will fail without it");
+                    }
+                    break;
+                default:
+                    // Fallback - use generic name
+                    ecsSecrets.put("DATABASE_PASSWORD",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to DATABASE_PASSWORD (default)");
+            }
         }
 
         // Add OIDC environment variables if application-oidc mode is enabled
         if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
             LOG.info("ContainerFactory: application-oidc mode detected for " + applicationSpec.applicationId());
-            LOG.info("  Checking if applicationOidcConfig is available...");
 
-            ctx.applicationOidcConfig.get().ifPresent(oidcConfig -> {
+            if (applicationOidcConfig != null) {
                 LOG.info("  ✅ applicationOidcConfig found!");
                 OidcIntegration oidcIntegration = applicationSpec.getOidcIntegration();
                 if (oidcIntegration != null) {
-                    Map<String, String> oidcEnv = oidcIntegration.getEnvironmentVariables(oidcConfig);
+                    Map<String, String> oidcEnv = oidcIntegration.getEnvironmentVariables(applicationOidcConfig);
                     environment.putAll(oidcEnv);
                     LOG.info("  Added " + oidcEnv.size() + " OIDC environment variables for " + applicationSpec.applicationId());
 
                     // Add OIDC client secret from Secrets Manager if available
-                    String clientSecretArn = oidcConfig.getClientSecretArn();
-                    if (clientSecretArn != null && !clientSecretArn.isEmpty()) {
+                    // Skip for Identity Center SAML - uses IAM authentication, not client secrets
+                    String clientSecretArn = applicationOidcConfig.getClientSecretArn();
+                    boolean isIdentityCenterSaml = oidcIntegration.supportsIdentityCenterSaml() &&
+                                                   "identity-center".equals(applicationOidcConfig.getProviderType());
+                    if (clientSecretArn != null && !clientSecretArn.isEmpty() && !isIdentityCenterSaml) {
                         LOG.info("  Mounting OIDC client secret from Secrets Manager for application: " + applicationSpec.applicationId());
 
                         // clientSecretArn contains COMPLETE ARN with suffix (same as RDS pattern)
@@ -194,14 +255,14 @@ public class ContainerFactory extends BaseFactory {
                         // Grant the ECS task execution role permission to read the secret
                         if (fargateTaskDef.getExecutionRole() != null) {
                             fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
-                                software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                                PolicyStatement.Builder.create()
                                     .sid("AllowReadOidcClientSecret")
-                                    .effect(software.amazon.awscdk.services.iam.Effect.ALLOW)
-                                    .actions(java.util.List.of(
+                                    .effect(Effect.ALLOW)
+                                    .actions(List.of(
                                         "secretsmanager:GetSecretValue",
                                         "secretsmanager:DescribeSecret"
                                     ))
-                                    .resources(java.util.List.of(clientSecretArn))
+                                    .resources(List.of(clientSecretArn))
                                     .build()
                             );
 
@@ -211,21 +272,41 @@ public class ContainerFactory extends BaseFactory {
                         }
 
                         // Add as ECS secret (mounted as environment variable at runtime)
-                        // Use application-specific naming for the secret environment variable
-                        String secretEnvVar = applicationSpec.applicationId().toUpperCase() + "_OIDC_CLIENT_SECRET";
-                        ecsSecrets.put(secretEnvVar,
-                                      software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
-
-                        LOG.info("  ✅ OIDC client secret will be available as " + secretEnvVar + " environment variable");
+                        // Map to application-specific environment variable names
+                        // Different applications expect different env var names for OIDC client secret
+                        String appId = applicationSpec.applicationId();
+                        switch (appId) {
+                            case "mattermost":
+                                // Mattermost uses GitLab OAuth provider for generic OIDC
+                                ecsSecrets.put("MM_GITLABSETTINGS_SECRET",
+                                              software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
+                                LOG.info("  ✅ OIDC client secret mapped to MM_GITLABSETTINGS_SECRET");
+                                break;
+                            case "jenkins":
+                                // Jenkins CasC expects JENKINS_OIDC_CLIENT_SECRET placeholder
+                                ecsSecrets.put("JENKINS_OIDC_CLIENT_SECRET",
+                                              software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
+                                LOG.info("  ✅ OIDC client secret mapped to JENKINS_OIDC_CLIENT_SECRET");
+                                break;
+                            case "gitlab":
+                                ecsSecrets.put("GITLAB_OIDC_CLIENT_SECRET",
+                                              software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
+                                LOG.info("  ✅ OIDC client secret mapped to GITLAB_OIDC_CLIENT_SECRET");
+                                break;
+                            default:
+                                // Generic naming: <APP>_OIDC_CLIENT_SECRET
+                                String secretEnvVar = appId.toUpperCase() + "_OIDC_CLIENT_SECRET";
+                                ecsSecrets.put(secretEnvVar,
+                                              software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
+                                LOG.info("  ✅ OIDC client secret mapped to " + secretEnvVar + " (default)");
+                        }
                     } else {
                         LOG.warning("  ⚠️  Client secret ARN not found in OIDC config - secret will not be mounted");
                     }
                 } else {
                     LOG.warning("  ⚠️  OidcIntegration is null!");
                 }
-            });
-
-            if (!ctx.applicationOidcConfig.get().isPresent()) {
+            } else {
                 LOG.severe("  ❌ applicationOidcConfig NOT FOUND in SystemContext!");
                 LOG.severe("  This means ApplicationOidcFactory did not run or failed to set the config");
             }
@@ -258,64 +339,217 @@ public class ContainerFactory extends BaseFactory {
             LOG.info("Container will have " + ecsSecrets.size() + " secret(s) mounted as environment variables");
         }
 
+        // Track whether we need an init container for SAML certificate
+        // Uses OidcIntegration interface methods for application-specific paths
+        boolean needsSamlCertInit = false;
+        String samlMetadataUrl = null;
+        String samlCertVolumeName = "saml-cert";
+        String samlCertMountPath = null;
+        String samlCertPath = null;
+        String samlCertEnvVar = null;
+
         // Add entrypoint/command override for application-oidc mode
         // This creates the OIDC config file before starting the application
         if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
             LOG.info("ContainerFactory: Configuring OIDC entrypoint wrapper...");
 
-            ctx.applicationOidcConfig.get().ifPresent(oidcConfig -> {
+            if (applicationOidcConfig != null) {
                 OidcIntegration oidcIntegration = applicationSpec.getOidcIntegration();
                 if (oidcIntegration != null) {
-                    String configFileContent = oidcIntegration.getConfigurationFile(oidcConfig);
+                    String configFileContent = oidcIntegration.getConfigurationFile(applicationOidcConfig);
                     String configFilePath = oidcIntegration.getConfigurationFilePath();
                     String startupCommand = oidcIntegration.getContainerStartupCommand();
 
                     LOG.info("  Config file path: " + configFilePath);
                     LOG.info("  Startup command: " + startupCommand);
                     LOG.info("  Config file length: " + (configFileContent != null ? configFileContent.length() + " chars" : "NULL"));
+                    LOG.info("  Is distroless: " + oidcIntegration.isDistroless());
 
-                    // Create startup command that writes OIDC config and starts application
-                    // Uses sh -c to execute multi-line script
-                    // Note: No chown needed - container runs as containerUser so files created are already owned correctly
-                    String fullCommand = String.format(
-                        "mkdir -p $(dirname %s) && " +
-                        "cat > %s <<'EOFCASC'\n%s\nEOFCASC\n" +
-                        "%s",
-                        configFilePath,
-                        configFilePath,
-                        configFileContent,
-                        startupCommand
-                    );
+                    // Check if we need to write a config file at startup
+                    // Some apps (Metabase) use environment variables only - no config file needed
+                    boolean needsConfigFile = configFileContent != null && configFilePath != null;
 
-                    LOG.info("  Full command length: " + fullCommand.length() + " chars");
-                    LOG.info("  Command preview (first 800 chars):");
-                    LOG.info(fullCommand.substring(0, Math.min(800, fullCommand.length())));
+                    // Check if the container is distroless (no shell available) OR doesn't need config file
+                    if (oidcIntegration.isDistroless() || !needsConfigFile) {
+                        // Distroless containers have no /bin/sh - cannot use shell wrapper
+                        // Or app uses environment variables only (like Metabase) - no config file to write
+                        if (oidcIntegration.isDistroless()) {
+                            LOG.info("  ⚠️  Distroless container detected - skipping shell wrapper");
+                        } else {
+                            LOG.info("  ⚠️  No config file needed - using environment variables only");
+                        }
+                        LOG.info("  Configuration will be done via environment variables only");
 
-                    List<String> command = List.of(
-                        "/bin/sh",
-                        "-c",
-                        fullCommand
-                    );
+                        // For distroless, just set the startup command directly (no shell wrapper)
+                        // All configuration is already in environment variables
+                        List<String> command = List.of(startupCommand);
+                        containerOptionsBuilder.command(command);
+                        LOG.info("✅ Configured direct startup command for distroless " + applicationSpec.applicationId());
+                    } else {
+                        // Normal container with shell - use wrapper to write config file
+                        // Create startup command that writes OIDC config and starts application
+                        // Uses sh -c to execute multi-line script
+                        // Note: No chown needed - container runs as containerUser so files created are already owned correctly
+                        String fullCommand = String.format(
+                            "mkdir -p $(dirname %s) && " +
+                            "cat > %s <<'EOFCASC'\n%s\nEOFCASC\n" +
+                            "%s",
+                            configFilePath,
+                            configFilePath,
+                            configFileContent,
+                            startupCommand
+                        );
 
-                    containerOptionsBuilder.command(command);
-                    LOG.info("✅ Configured OIDC entrypoint wrapper for " + applicationSpec.applicationId());
+                        LOG.info("  Full command length: " + fullCommand.length() + " chars");
+                        LOG.info("  Command preview (first 800 chars):");
+                        LOG.info(fullCommand.substring(0, Math.min(800, fullCommand.length())));
+
+                        List<String> command = List.of(
+                            "/bin/sh",
+                            "-c",
+                            fullCommand
+                        );
+
+                        containerOptionsBuilder.command(command);
+                        LOG.info("✅ Configured OIDC entrypoint wrapper for " + applicationSpec.applicationId());
+                    }
                 } else {
                     LOG.severe("❌ OidcIntegration is NULL - cannot configure entrypoint!");
                 }
-            });
-
-            if (!ctx.applicationOidcConfig.get().isPresent()) {
+            } else {
                 LOG.severe("❌ applicationOidcConfig NOT PRESENT - entrypoint wrapper NOT configured!");
             }
+        }
+
+        // Check if we need SAML certificate init container
+        // Uses OidcIntegration.needsSamlCertificate() to determine if app needs SAML cert
+        if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+            OidcIntegration oidcIntegration = applicationSpec.getOidcIntegration();
+
+            if (oidcIntegration != null && oidcIntegration.needsSamlCertificate()) {
+                // Get the SAML metadata URL from annotated field (set by CognitoSamlFactory)
+                if (samlIdpMetadataUrl != null) {
+                    samlMetadataUrl = samlIdpMetadataUrl;
+                    needsSamlCertInit = true;
+
+                    // Get application-specific SAML certificate paths from OidcIntegration
+                    samlCertMountPath = oidcIntegration.getSamlCertificateMountPath();
+                    samlCertPath = oidcIntegration.getSamlCertificateFilePath();
+                    samlCertEnvVar = oidcIntegration.getSamlCertificateEnvVar();
+
+                    LOG.info(applicationSpec.applicationId() + " SAML: Will create init container to fetch IdP certificate");
+                    LOG.info("  Metadata URL: " + samlMetadataUrl);
+                    LOG.info("  Certificate mount path: " + samlCertMountPath);
+                    LOG.info("  Certificate file path: " + samlCertPath);
+
+                    // Add the certificate file path to environment using app-specific env var
+                    if (samlCertEnvVar != null) {
+                        environment.put(samlCertEnvVar, samlCertPath);
+                        LOG.info("  Certificate env var: " + samlCertEnvVar + "=" + samlCertPath);
+                    }
+
+                    // Add a volume for the SAML certificate
+                    fargateTaskDef.addVolume(software.amazon.awscdk.services.ecs.Volume.builder()
+                        .name(samlCertVolumeName)
+                        .build());
+                    LOG.info("  ✅ Added shared volume '" + samlCertVolumeName + "' for SAML certificate");
+                } else {
+                    LOG.warning(applicationSpec.applicationId() + " SAML: No metadata URL available - certificate cannot be fetched");
+                }
+            }
+        }
+
+        // Create init container for SAML certificate if needed
+        final String finalSamlMetadataUrl = samlMetadataUrl;
+        if (needsSamlCertInit && finalSamlMetadataUrl != null) {
+            // Create init container that fetches SAML IdP certificate from metadata URL
+            // Uses alpine/curl image with xmllint to parse the metadata XML
+            String initCommand = String.format(
+                "set -e; " +
+                "echo 'Fetching SAML IdP certificate from metadata URL...'; " +
+                "curl -s '%s' > /tmp/metadata.xml; " +
+                "echo 'Extracting X509Certificate from metadata...'; " +
+                // Extract the certificate using grep and sed (simpler than xmllint)
+                "grep -oP '(?<=<ds:X509Certificate>)[^<]+' /tmp/metadata.xml | head -1 > /tmp/cert.b64; " +
+                "echo '-----BEGIN CERTIFICATE-----' > %s; " +
+                "cat /tmp/cert.b64 >> %s; " +
+                "echo '' >> %s; " +  // Ensure newline before END
+                "echo '-----END CERTIFICATE-----' >> %s; " +
+                "chmod 644 %s; " +
+                "echo 'SAML IdP certificate saved to %s'; " +
+                "cat %s",
+                finalSamlMetadataUrl,
+                samlCertPath, samlCertPath, samlCertPath, samlCertPath, samlCertPath,
+                samlCertPath, samlCertPath
+            );
+
+            ContainerDefinition initContainer = fargateTaskDef.addContainer("SamlCertInit",
+                ContainerDefinitionOptions.builder()
+                    .containerName("saml-cert-init")
+                    .image(ContainerImage.fromRegistry("alpine/curl:latest"))
+                    .essential(false)  // Init container - not essential after completion
+                    .command(List.of("/bin/sh", "-c", initCommand))
+                    .logging(LogDriver.awsLogs(AwsLogDriverProps.builder()
+                        .logGroup(logs)
+                        .streamPrefix("saml-init")
+                        .build()))
+                    .build());
+
+            // Mount the shared volume for the certificate
+            initContainer.addMountPoints(MountPoint.builder()
+                .containerPath(samlCertMountPath)
+                .sourceVolume(samlCertVolumeName)
+                .readOnly(false)
+                .build());
+
+            LOG.info("  ✅ Created SAML certificate init container");
         }
 
         ContainerDefinition container = fargateTaskDef.addContainer(getNode().getId() + "Container",
                 containerOptionsBuilder.build());
 
+        // Add dependency on init container after main container is created
+        final String finalSamlCertMountPath = samlCertMountPath;
+        if (needsSamlCertInit && finalSamlMetadataUrl != null) {
+            // Get the init container we created earlier
+            ContainerDefinition initContainer = fargateTaskDef.findContainer("saml-cert-init");
+            if (initContainer != null) {
+                container.addContainerDependencies(ContainerDependency.builder()
+                    .container(initContainer)
+                    .condition(ContainerDependencyCondition.SUCCESS)
+                    .build());
+                LOG.info("  ✅ Configured main container to depend on SAML init container");
+
+                // Also mount the shared volume on the main container
+                // Use the same mount path as init container
+                container.addMountPoints(MountPoint.builder()
+                    .containerPath(finalSamlCertMountPath)
+                    .sourceVolume(samlCertVolumeName)
+                    .readOnly(true)  // Main container only reads the certificate
+                    .build());
+                LOG.info("  ✅ Mounted SAML certificate volume at " + finalSamlCertMountPath);
+            }
+        }
+
         container.addPortMappings(PortMapping
                 .builder()
                 .containerPort(appPort)
                 .build());
+
+        // Add optional port mappings based on deployment configuration
+        // These ports are NOT exposed by default - must be explicitly enabled
+        if (applicationSpec != null) {
+            for (ApplicationSpec.OptionalPort optionalPort : applicationSpec.optionalPorts()) {
+                if (isOptionalPortEnabled(optionalPort.configKey())) {
+                    container.addPortMappings(PortMapping.builder()
+                        .containerPort(optionalPort.port())
+                        .protocol(optionalPort.protocol().equals("udp") ? Protocol.UDP : Protocol.TCP)
+                        .build());
+                    LOG.info("  ✅ Added optional port mapping: " + optionalPort.port() + "/" +
+                             optionalPort.protocol() + " (" + optionalPort.service() + ")");
+                }
+            }
+        }
 
         container.addMountPoints(MountPoint
                 .builder()
@@ -324,6 +558,30 @@ public class ContainerFactory extends BaseFactory {
                 .readOnly(false)
                 .build());
         ctx.container.set(container);
+    }
+
+    /**
+     * Check if an optional port is enabled based on the config key.
+     * Maps config keys like "enableSmtp" to the corresponding annotated field.
+     */
+    private boolean isOptionalPortEnabled(String configKey) {
+        return switch (configKey) {
+            case "enableAgents" -> Boolean.TRUE.equals(enableAgents);
+            case "enableSsh" -> Boolean.TRUE.equals(enableSsh);
+            case "enableSmtp" -> Boolean.TRUE.equals(enableSmtp);
+            case "enableSmtps" -> Boolean.TRUE.equals(enableSmtps);
+            case "enableClustering" -> Boolean.TRUE.equals(enableClustering);
+            case "enableDockerRegistry" -> Boolean.TRUE.equals(enableDockerRegistry);
+            case "enableMetrics" -> Boolean.TRUE.equals(enableMetrics);
+            case "enableNotary" -> Boolean.TRUE.equals(enableNotary);
+            case "enableTrivy" -> Boolean.TRUE.equals(enableTrivy);
+            case "enableSentinel" -> Boolean.TRUE.equals(enableSentinel);
+            case "enableCluster" -> Boolean.TRUE.equals(enableCluster);
+            default -> {
+                LOG.warning("Unknown optional port config key: " + configKey);
+                yield false;
+            }
+        };
     }
 
 }

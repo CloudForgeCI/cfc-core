@@ -83,6 +83,13 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
     }
 
     @Override
+    public java.util.List<OptionalPort> optionalPorts() {
+        // SonarQube typically doesn't need additional ports exposed
+        // Metrics are available on primary port /api/system/health and /api/monitoring/*
+        return java.util.List.of();
+    }
+
+    @Override
     public String containerDataPath() {
         return "/opt/sonarqube/data";
     }

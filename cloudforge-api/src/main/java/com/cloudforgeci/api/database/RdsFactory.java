@@ -205,12 +205,15 @@ public class RdsFactory {
             .credentials(Credentials.fromSecret(databaseSecret))
             .parameterGroup(parameterGroup)
 
+            .removalPolicy(security == SecurityProfile.PRODUCTION ?
+                RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+
             // Security configurations
             .storageEncrypted(enableEncryption)
-            // Note: AWS CDK 2.x uses default RDS KMS key when storageEncrypted is true
-            .publiclyAccessible(false)  // NEVER publicly accessible
+            .publiclyAccessible(false)
             .deletionProtection(security == SecurityProfile.PRODUCTION)
             .autoMinorVersionUpgrade(security == SecurityProfile.PRODUCTION)
+            .iamAuthentication(security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING)
 
             // Backup configurations
             .backupRetention(Duration.days(backupRetention))
@@ -218,22 +221,14 @@ public class RdsFactory {
             .preferredMaintenanceWindow("sun:04:00-sun:05:00")
             .copyTagsToSnapshot(true)
 
-            // Multi-AZ: DeploymentConfig override > security profile default
             .multiAz(multiAzOverride != null ? multiAzOverride : (security == SecurityProfile.PRODUCTION))
 
             // Storage configuration
             .allocatedStorage(requirement.allocatedStorageGB())
-            .maxAllocatedStorage(requirement.allocatedStorageGB() * 2)  // Auto-scaling up to 2x
+            .maxAllocatedStorage(requirement.allocatedStorageGB() * 2)
             .storageType(StorageType.GP3)
-            // Note: IOPS can only be specified for GP3 when storage >= 400GB
-            // For smaller storage sizes, GP3 uses baseline performance (3000 IOPS, 125 MB/s)
 
-            // CloudWatch Logs exports (audit logging)
-            .cloudwatchLogsExports(getCloudWatchLogsExports(requirement.engine()))
-
-            // Removal policy
-            .removalPolicy(security == SecurityProfile.PRODUCTION ?
-                RemovalPolicy.SNAPSHOT : RemovalPolicy.DESTROY);
+            .cloudwatchLogsExports(getCloudWatchLogsExports(requirement.engine()));
 
         // Conditionally enable Performance Insights for PRODUCTION only
         if (security == SecurityProfile.PRODUCTION) {
@@ -266,12 +261,63 @@ public class RdsFactory {
         // Return connection information for application
         // Determine port based on engine (CDK Token can't be parsed to int)
         int port = getDefaultPort(requirement.engine());
+        String username = requirement.databaseName() + "admin";
+
+        // Store connection string components in SystemContext for applications that need complete URLs
+        // This is especially needed for distroless containers like Mattermost that can't do shell substitution
+        ctx.dbConnectionStringComponents.set(Map.of(
+            "host", instance.getDbInstanceEndpointAddress(),
+            "port", String.valueOf(port),
+            "database", requirement.databaseName(),
+            "username", username,
+            "engine", requirement.engine()
+        ));
+
+        // Create SSM Parameter for PostgreSQL datasource URL (for distroless containers like Mattermost)
+        // Only create if the application requires it - indicated by instanceId containing "mattermost"
+        // Uses CloudFormation dynamic reference to resolve the password from Secrets Manager at deploy time
+        // Format: postgres://user:password@host:port/database?sslmode=require&connect_timeout=10
+        boolean needsDatasourceParam = instanceId.toLowerCase().contains("mattermost");
+        if (needsDatasourceParam && ("postgres".equals(requirement.engine()) || "postgresql".equals(requirement.engine()))) {
+            // Build the datasource URL using Fn.join and dynamic reference for the password
+            // The dynamic reference {{resolve:secretsmanager:ARN:SecretString:password}} is resolved by CloudFormation
+            String datasourceUrl = software.amazon.awscdk.Fn.join("", java.util.List.of(
+                "postgres://",
+                username,
+                ":",
+                // Dynamic reference to password - CloudFormation resolves this at deploy time
+                "{{resolve:secretsmanager:",
+                databaseSecret.getSecretArn(),
+                ":SecretString:password}}",
+                "@",
+                instance.getDbInstanceEndpointAddress(),
+                ":",
+                String.valueOf(port),
+                "/",
+                requirement.databaseName(),
+                "?sslmode=require&connect_timeout=10"
+            ));
+
+            // Store datasource URL in SSM Parameter Store
+            // SSM parameters can contain dynamic references that get resolved
+            software.amazon.awscdk.services.ssm.StringParameter datasourceParam =
+                software.amazon.awscdk.services.ssm.StringParameter.Builder
+                    .create(scope, instanceId + "DatasourceUrl")
+                    .parameterName("/" + stackName + "/" + instanceId + "/datasource-url")
+                    .stringValue(datasourceUrl)
+                    .description("PostgreSQL datasource URL for " + instanceId + " (distroless container)")
+                    .build();
+
+            // Store the parameter object in SystemContext for ContainerFactory to use directly
+            // This avoids parameter lookup issues at synth time
+            ctx.dbDatasourceParameter.set(datasourceParam);
+        }
 
         return new DatabaseConnection(
             instance.getDbInstanceEndpointAddress(),
             port,
             requirement.databaseName(),
-            requirement.databaseName() + "admin",
+            username,
             databaseSecret.getSecretArn(),
             requirement.engine(),
             requirement.version(),

@@ -175,7 +175,7 @@ public class CustomSecurityPolicyRules implements FrameworkRules<SystemContext> 
         }
 
         // DP-002.2: Encryption in Transit (TLS/SSL)
-        boolean sslEnabled = getBooleanSetting(ctx, "sslEnabled", false);
+        boolean sslEnabled = getBooleanSetting(ctx, "enableSsl", false);
         if (ctx.security == SecurityProfile.PRODUCTION && !sslEnabled) {
             rules.add(ComplianceRule.fail(
                 "ACME-DP-002.2",

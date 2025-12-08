@@ -6,6 +6,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.observability.ComplianceFactory;
 import com.cloudforgeci.api.observability.FlowLogFactory;
 import com.cloudforgeci.api.observability.GuardDutyFactory;
+import com.cloudforgeci.api.storage.BackupFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.assertions.Match;
@@ -700,6 +701,62 @@ class PciDssComplianceExtendedTest extends IntegrationTestBase {
                     "Value", Match.anyValue()
                 ))
             )
+        )));
+    }
+
+    // ========== PCI-DSS Backup Requirements ==========
+
+    @Test
+    void testPciDssEfsProtectedByBackupPlan() {
+        // Given: Complete infrastructure with backup
+        builder.createCompleteInfrastructure();
+
+        BackupFactory backupFactory = new BackupFactory(stack, "Backup");
+        backupFactory.create();
+
+        synthesizeTemplate();
+
+        // Then: Verify EFS is protected by backup plan (PCI-DSS requirement)
+        // AWS Config rule: efs-resources-protected-by-backup-plan
+        assertEfsProtectedByBackupPlan();
+    }
+
+    @Test
+    void testPciDssBackupVaultLockEnabled() {
+        // Given: PRODUCTION infrastructure with backup
+        builder.createCompleteInfrastructure();
+
+        BackupFactory backupFactory = new BackupFactory(stack, "Backup");
+        backupFactory.create();
+
+        synthesizeTemplate();
+
+        // Then: Verify backup vault has lock configuration (PCI-DSS data protection)
+        // Vault lock prevents recovery points from being deleted before retention expires
+        assertBackupVaultLockConfigured();
+    }
+
+    @Test
+    void testPciDssBackupRetentionCompliance() {
+        // Given: Complete infrastructure with backup
+        builder.createCompleteInfrastructure();
+
+        BackupFactory backupFactory = new BackupFactory(stack, "Backup");
+        backupFactory.create();
+
+        synthesizeTemplate();
+
+        // Then: Verify backup plan has retention configured
+        template.hasResourceProperties("AWS::Backup::BackupPlan", Match.objectLike(Map.of(
+            "BackupPlan", Match.objectLike(Map.of(
+                "BackupPlanRule", Match.arrayWith(
+                    Match.objectLike(Map.of(
+                        "Lifecycle", Match.objectLike(Map.of(
+                            "DeleteAfterDays", Match.anyValue()
+                        ))
+                    ))
+                )
+            ))
         )));
     }
 }

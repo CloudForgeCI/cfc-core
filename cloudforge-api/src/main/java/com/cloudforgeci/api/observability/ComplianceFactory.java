@@ -111,6 +111,9 @@ public class ComplianceFactory extends BaseFactory {
     @DeploymentContext("scopeConfigRulesToDeployment")
     private Boolean scopeConfigRulesToDeployment;
 
+    @DeploymentContext("provisionDatabase")
+    private Boolean provisionDatabase;
+
     @DeploymentContext("deploymentId")
     private String deploymentId;
 
@@ -126,6 +129,13 @@ public class ComplianceFactory extends BaseFactory {
     private CfnCondition soc2Condition;
     private CfnCondition hipaaCondition;
     private CfnCondition gdprCondition;
+    private CfnCondition databaseProvisionedCondition;
+
+    // Combined conditions for RDS rules (framework AND database)
+    private CfnCondition pciDssRdsCondition;
+    private CfnCondition soc2RdsCondition;
+    private CfnCondition hipaaRdsCondition;
+    private CfnCondition gdprRdsCondition;
 
     // CloudTrail and bucket for S3 data event configuration
     private Trail trail;
@@ -267,8 +277,33 @@ public class ComplianceFactory extends BaseFactory {
                 .expression(Fn.conditionEquals(enableGdpr ? "true" : "false", "true"))
                 .build();
 
+        // Create condition for database provisioning
+        // RDS Config rules should only deploy when a database is actually provisioned
+        boolean dbProvisioned = (provisionDatabase != null && provisionDatabase);
+        databaseProvisionedCondition = CfnCondition.Builder.create(this, "DatabaseProvisioned")
+                .expression(Fn.conditionEquals(dbProvisioned ? "true" : "false", "true"))
+                .build();
+
+        // Create combined conditions for RDS rules (framework AND database)
+        // These ensure RDS Config rules only deploy when both the framework is enabled AND a database is provisioned
+        pciDssRdsCondition = CfnCondition.Builder.create(this, "EnablePciDssRdsRules")
+                .expression(Fn.conditionAnd(pciDssCondition, databaseProvisionedCondition))
+                .build();
+
+        soc2RdsCondition = CfnCondition.Builder.create(this, "EnableSoc2RdsRules")
+                .expression(Fn.conditionAnd(soc2Condition, databaseProvisionedCondition))
+                .build();
+
+        hipaaRdsCondition = CfnCondition.Builder.create(this, "EnableHipaaRdsRules")
+                .expression(Fn.conditionAnd(hipaaCondition, databaseProvisionedCondition))
+                .build();
+
+        gdprRdsCondition = CfnCondition.Builder.create(this, "EnableGdprRdsRules")
+                .expression(Fn.conditionAnd(gdprCondition, databaseProvisionedCondition))
+                .build();
+
         LOG.info("CloudFormation conditions created: PCI-DSS = " + enablePciDss + ", SOC2 = " + enableSoc2 +
-                 ", HIPAA = " + enableHipaa + ", GDPR = " + enableGdpr);
+                 ", HIPAA = " + enableHipaa + ", GDPR = " + enableGdpr + ", Database = " + dbProvisioned);
     }
 
     /**
@@ -472,8 +507,14 @@ public class ComplianceFactory extends BaseFactory {
 
         // Map framework names to AWS Conformance Pack SSM document names
         // These are the actual document names in AWS Systems Manager
+        // NOTE: Use "ExcludingGlobalResourceTypes" for non-us-east-1 regions
+        // The "IncludingGlobalResourceTypes" version has CloudFront rules that only work in us-east-1
+        String pciDssTemplate = "us-east-1".equals(this.region)
+            ? "AWSConformancePacks-OperationalBestPracticesforPCIDSSv4IncludingGlobalResourceTypes"
+            : "AWSConformancePacks-OperationalBestPracticesforPCIDSSv4ExcludingGlobalResourceTypes";
+
         Map<String, String> frameworkToTemplate = Map.of(
-            "PCIDSS", "AWSConformancePacks-OperationalBestPracticesforPCIDSSv4IncludingGlobalResourceTypes",
+            "PCIDSS", pciDssTemplate,
             "HIPAA", "AWSConformancePacks-OperationalBestPracticesforHIPAASecurity"
             // Note: SOC2 and GDPR don't have dedicated AWS-managed conformance packs
             // SOC2 controls are covered by individual Config rules deployed separately
@@ -489,7 +530,8 @@ public class ComplianceFactory extends BaseFactory {
                 continue;
             }
 
-            String conformancePackName = "CloudForge-" + normalizedFramework + "-" + security.name();
+            // Use stack name instead of security profile to avoid conflicts when switching profiles
+            String conformancePackName = "CloudForge-" + normalizedFramework + "-" + this.stackName;
 
             LOG.info("  Deploying Conformance Pack: " + conformancePackName);
             LOG.info("    SSM Document: " + templateName);
@@ -1861,7 +1903,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         rdsEncryptionEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rdsEncryptionEnabled.addOverride("Condition", pciDssCondition.getLogicalId());
+        rdsEncryptionEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
         rdsEncryptionEnabled.getNode().addDependency(recorder);
 
         CfnConfigRule rdsPublicAccessCheck = CfnConfigRule.Builder.create(this, "PciDssRdsPublicAccess")
@@ -1873,7 +1915,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         rdsPublicAccessCheck.addOverride("DeletionPolicy", "Delete");
-        rdsPublicAccessCheck.addOverride("Condition", pciDssCondition.getLogicalId());
+        rdsPublicAccessCheck.addOverride("Condition", pciDssRdsCondition.getLogicalId());
         rdsPublicAccessCheck.getNode().addDependency(recorder);
 
         CfnConfigRule rdsBackupEnabled = CfnConfigRule.Builder.create(this, "PciDssRdsBackup")
@@ -1885,7 +1927,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         rdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        rdsBackupEnabled.addOverride("Condition", pciDssCondition.getLogicalId());
+        rdsBackupEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
         rdsBackupEnabled.getNode().addDependency(recorder);
 
         CfnConfigRule rdsAutoUpgrade = CfnConfigRule.Builder.create(this, "PciDssRdsAutoUpgrade")
@@ -1897,7 +1939,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         rdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        rdsAutoUpgrade.addOverride("Condition", pciDssCondition.getLogicalId());
+        rdsAutoUpgrade.addOverride("Condition", pciDssRdsCondition.getLogicalId());
         rdsAutoUpgrade.getNode().addDependency(recorder);
         createRdsAutoMinorVersionUpgradeRemediation(rdsAutoUpgrade);
 
@@ -1910,7 +1952,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         rdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        rdsLoggingEnabled.addOverride("Condition", pciDssCondition.getLogicalId());
+        rdsLoggingEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
         rdsLoggingEnabled.getNode().addDependency(recorder);
 
         // Requirement 4: Encrypt transmission
@@ -2072,7 +2114,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         soc2RdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        soc2RdsBackupEnabled.addOverride("Condition", soc2Condition.getLogicalId());
+        soc2RdsBackupEnabled.addOverride("Condition", soc2RdsCondition.getLogicalId());
         soc2RdsBackupEnabled.getNode().addDependency(recorder);
 
         // CC6.1: Logical Access Security Controls
@@ -2085,7 +2127,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         soc2RdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        soc2RdsPublicAccess.addOverride("Condition", soc2Condition.getLogicalId());
+        soc2RdsPublicAccess.addOverride("Condition", soc2RdsCondition.getLogicalId());
         soc2RdsPublicAccess.getNode().addDependency(recorder);
 
         // CC6.1: Encryption Controls
@@ -2098,7 +2140,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         soc2RdsEncryption.addOverride("DeletionPolicy", "Delete");
-        soc2RdsEncryption.addOverride("Condition", soc2Condition.getLogicalId());
+        soc2RdsEncryption.addOverride("Condition", soc2RdsCondition.getLogicalId());
         soc2RdsEncryption.getNode().addDependency(recorder);
 
         // CC7.2: System Monitoring
@@ -2111,7 +2153,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         soc2RdsLogging.addOverride("DeletionPolicy", "Delete");
-        soc2RdsLogging.addOverride("Condition", soc2Condition.getLogicalId());
+        soc2RdsLogging.addOverride("Condition", soc2RdsCondition.getLogicalId());
         soc2RdsLogging.getNode().addDependency(recorder);
 
         // CC7.1: System Operations
@@ -2124,7 +2166,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         soc2RdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        soc2RdsAutoUpgrade.addOverride("Condition", soc2Condition.getLogicalId());
+        soc2RdsAutoUpgrade.addOverride("Condition", soc2RdsCondition.getLogicalId());
         soc2RdsAutoUpgrade.getNode().addDependency(recorder);
         createRdsAutoMinorVersionUpgradeRemediation(soc2RdsAutoUpgrade);
 
@@ -2138,7 +2180,7 @@ public class ComplianceFactory extends BaseFactory {
                             .build())
                     .build();
             rdsMultiAz.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            rdsMultiAz.addOverride("Condition", soc2Condition.getLogicalId());
+            rdsMultiAz.addOverride("Condition", soc2RdsCondition.getLogicalId());
             rdsMultiAz.getNode().addDependency(recorder);
 
             CfnConfigRule soc2RdsDeletionProtection = CfnConfigRule.Builder.create(this, "Soc2RdsDeletionProtection")
@@ -2150,7 +2192,7 @@ public class ComplianceFactory extends BaseFactory {
                             .build())
                     .build();
             soc2RdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-            soc2RdsDeletionProtection.addOverride("Condition", soc2Condition.getLogicalId());
+            soc2RdsDeletionProtection.addOverride("Condition", soc2RdsCondition.getLogicalId());
             soc2RdsDeletionProtection.getNode().addDependency(recorder);
             createRdsDeletionProtectionRemediation(soc2RdsDeletionProtection);
 
@@ -2239,7 +2281,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         rdsSnapshotEncrypted.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rdsSnapshotEncrypted.addOverride("Condition", hipaaCondition.getLogicalId());
+        rdsSnapshotEncrypted.addOverride("Condition", hipaaRdsCondition.getLogicalId());
         rdsSnapshotEncrypted.getNode().addDependency(recorder);
 
         CfnConfigRule hipaaRdsEncryption = CfnConfigRule.Builder.create(this, "HipaaRdsEncryption")
@@ -2251,7 +2293,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         hipaaRdsEncryption.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsEncryption.addOverride("Condition", hipaaCondition.getLogicalId());
+        hipaaRdsEncryption.addOverride("Condition", hipaaRdsCondition.getLogicalId());
         hipaaRdsEncryption.getNode().addDependency(recorder);
 
         CfnConfigRule hipaaRdsPublicAccess = CfnConfigRule.Builder.create(this, "HipaaRdsPublicAccess")
@@ -2263,7 +2305,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         hipaaRdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsPublicAccess.addOverride("Condition", hipaaCondition.getLogicalId());
+        hipaaRdsPublicAccess.addOverride("Condition", hipaaRdsCondition.getLogicalId());
         hipaaRdsPublicAccess.getNode().addDependency(recorder);
 
         CfnConfigRule hipaaRdsBackupEnabled = CfnConfigRule.Builder.create(this, "HipaaRdsBackup")
@@ -2275,7 +2317,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         hipaaRdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsBackupEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
+        hipaaRdsBackupEnabled.addOverride("Condition", hipaaRdsCondition.getLogicalId());
         hipaaRdsBackupEnabled.getNode().addDependency(recorder);
 
         CfnConfigRule hipaaRdsAutoUpgrade = CfnConfigRule.Builder.create(this, "HipaaRdsAutoUpgrade")
@@ -2287,7 +2329,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         hipaaRdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsAutoUpgrade.addOverride("Condition", hipaaCondition.getLogicalId());
+        hipaaRdsAutoUpgrade.addOverride("Condition", hipaaRdsCondition.getLogicalId());
         hipaaRdsAutoUpgrade.getNode().addDependency(recorder);
         createRdsAutoMinorVersionUpgradeRemediation(hipaaRdsAutoUpgrade);
 
@@ -2300,7 +2342,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         hipaaRdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsLoggingEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
+        hipaaRdsLoggingEnabled.addOverride("Condition", hipaaRdsCondition.getLogicalId());
         hipaaRdsLoggingEnabled.getNode().addDependency(recorder);
 
         CfnConfigRule hipaaRdsDeletionProtection = CfnConfigRule.Builder.create(this, "HipaaRdsDeletionProtection")
@@ -2312,7 +2354,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         hipaaRdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsDeletionProtection.addOverride("Condition", hipaaCondition.getLogicalId());
+        hipaaRdsDeletionProtection.addOverride("Condition", hipaaRdsCondition.getLogicalId());
         hipaaRdsDeletionProtection.getNode().addDependency(recorder);
         createRdsDeletionProtectionRemediation(hipaaRdsDeletionProtection);
 
@@ -2440,7 +2482,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         gdprRdsEncryption.addOverride("DeletionPolicy", "Delete");
-        gdprRdsEncryption.addOverride("Condition", gdprCondition.getLogicalId());
+        gdprRdsEncryption.addOverride("Condition", gdprRdsCondition.getLogicalId());
         gdprRdsEncryption.getNode().addDependency(recorder);
 
         // Article 32(1)(b): Confidentiality
@@ -2453,7 +2495,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         gdprRdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        gdprRdsPublicAccess.addOverride("Condition", gdprCondition.getLogicalId());
+        gdprRdsPublicAccess.addOverride("Condition", gdprRdsCondition.getLogicalId());
         gdprRdsPublicAccess.getNode().addDependency(recorder);
         CfnConfigRule restrictedRdpCheck = CfnConfigRule.Builder.create(this, "GdprRestrictedRdp")
                 .configRuleName(this.stackName + "-gdpr-restricted-rdp")
@@ -2477,7 +2519,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         gdprRdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        gdprRdsBackupEnabled.addOverride("Condition", gdprCondition.getLogicalId());
+        gdprRdsBackupEnabled.addOverride("Condition", gdprRdsCondition.getLogicalId());
         gdprRdsBackupEnabled.getNode().addDependency(recorder);
 
         if (security == SecurityProfile.PRODUCTION) {
@@ -2516,7 +2558,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         gdprRdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        gdprRdsLoggingEnabled.addOverride("Condition", gdprCondition.getLogicalId());
+        gdprRdsLoggingEnabled.addOverride("Condition", gdprRdsCondition.getLogicalId());
         gdprRdsLoggingEnabled.getNode().addDependency(recorder);
 
         // Article 32(1)(a): Security of Processing - Automated Updates
@@ -2529,7 +2571,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         gdprRdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        gdprRdsAutoUpgrade.addOverride("Condition", gdprCondition.getLogicalId());
+        gdprRdsAutoUpgrade.addOverride("Condition", gdprRdsCondition.getLogicalId());
         gdprRdsAutoUpgrade.getNode().addDependency(recorder);
         createRdsAutoMinorVersionUpgradeRemediation(gdprRdsAutoUpgrade);
 
@@ -2543,7 +2585,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         gdprRdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-        gdprRdsDeletionProtection.addOverride("Condition", gdprCondition.getLogicalId());
+        gdprRdsDeletionProtection.addOverride("Condition", gdprRdsCondition.getLogicalId());
         gdprRdsDeletionProtection.getNode().addDependency(recorder);
         createRdsDeletionProtectionRemediation(gdprRdsDeletionProtection);
 
@@ -2619,7 +2661,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         rdsEncryptionEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rdsEncryptionEnabled.addOverride("Condition", pciDssCondition.getLogicalId());
+        rdsEncryptionEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
 
         // Requirement 4: Encrypt transmission
         CfnConfigRule elbTlsHttpsListenersOnly = CfnConfigRule.Builder.create(this, "PciDssElbTlsOnly")
@@ -2767,7 +2809,7 @@ public class ComplianceFactory extends BaseFactory {
                             .build())
                     .build();
             rdsMultiAz.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            rdsMultiAz.addOverride("Condition", soc2Condition.getLogicalId());
+            rdsMultiAz.addOverride("Condition", soc2RdsCondition.getLogicalId());
 
             CfnConfigRule elbDeletionProtection = CfnConfigRule.Builder.create(this, "Soc2ElbDeletionProtection")
                     .configRuleName(this.stackName + "-soc2-elb-deletion-protection")
@@ -2835,7 +2877,7 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         rdsSnapshotEncrypted.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rdsSnapshotEncrypted.addOverride("Condition", hipaaCondition.getLogicalId());
+        rdsSnapshotEncrypted.addOverride("Condition", hipaaRdsCondition.getLogicalId());
 
         // §164.312(a)(1): Access Control
         CfnConfigRule rootAccountMfaEnabled = CfnConfigRule.Builder.create(this, "HipaaRootMfaEnabled")
@@ -3208,8 +3250,9 @@ public class ComplianceFactory extends BaseFactory {
         Role role,
         String accountId
     ) {
+        // Use stack name instead of security profile to avoid conflicts when switching profiles
         String assessmentName = "audit-" + frameworkName.toLowerCase().replace("_", "-") +
-                                "-" + security.name().toLowerCase() + "-" + shortId;
+                                "-" + this.stackName + "-" + shortId;
         String constructId = "Assessment" + frameworkName.replace("-", "").replace("_", "");
 
         LOG.info("Creating assessment " + index + ": " + assessmentName);
@@ -3914,12 +3957,20 @@ public class ComplianceFactory extends BaseFactory {
             getLifecycleRulesForEnabledFrameworks();
 
         // Create bucket WITHOUT specifying bucketName - CloudFormation generates unique name
+        // NOTE: Compliance buckets (CloudTrail, Config, Audit Manager) should always be retained
+        // for audit purposes, even in STAGING. Only DEV profile allows auto-delete.
+        boolean isComplianceBucket = auditManagerEnabled || awsConfigEnabled;
+        boolean shouldRetain = security == SecurityProfile.PRODUCTION ||
+                               (security == SecurityProfile.STAGING && isComplianceBucket);
+
         Bucket bucket = Bucket.Builder.create(this, id)
                 // NO bucketName specified - CloudFormation auto-generates unique name
                 .encryption(BucketEncryption.S3_MANAGED)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
-                .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
-                .autoDeleteObjects(security != SecurityProfile.PRODUCTION)
+                .removalPolicy(shouldRetain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                // IMPORTANT: autoDeleteObjects requires s3:GetBucketTagging which can conflict
+                // with restrictive bucket policies (e.g., CloudTrail buckets). Disable for compliance buckets.
+                .autoDeleteObjects(!shouldRetain && security == SecurityProfile.DEV)
                 .versioned(true)  // Required for compliance (SOC2/PCI-DSS/HIPAA)
                 .lifecycleRules(lifecycleRules)  // Compliance-driven retention policies
                 .build();

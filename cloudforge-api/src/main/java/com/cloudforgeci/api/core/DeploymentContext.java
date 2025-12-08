@@ -120,6 +120,7 @@ import java.util.Map;
  *   <li>instanceType: EC2 type (default: t3.micro)</li>
  *   <li>cpu: Fargate vCPU units (default: 1024)</li>
  *   <li>memory: Fargate memory MiB (default: 2048)</li>
+ *   <li>containerImage: Override container image tag, e.g., "v1.2.3" or "2024.1" (default: uses tag from ApplicationSpec)</li>
  *   <li>minInstanceCapacity: Min instances (default: 1)</li>
  *   <li>maxInstanceCapacity: Max instances (default: 1)</li>
  *   <li>cpuTargetUtilization: CPU target % (default: 60)</li>
@@ -276,9 +277,10 @@ public final class DeploymentContext {
     private final Integer healthyThreshold;
     private final Integer unhealthyThreshold;
 
-    // Jenkins container size
+    // Container configuration
     private final int cpu;
     private final int memory;
+    private final String containerImage;  // Override container image tag (e.g., "v1.2.3" replaces ":latest")
 
     // Derived conveniences
     private final boolean enableSsl;
@@ -359,6 +361,7 @@ public final class DeploymentContext {
 
         this.cpu = intval("cpu", 1024);
         this.memory = intval("memory", 2048);
+        this.containerImage = str("containerImage", null);  // null = use ApplicationSpec.defaultContainerImage()
 
         this.minInstanceCapacity = intval("minInstanceCapacity", 1);
         this.maxInstanceCapacity = intval("maxInstanceCapacity", 1);
@@ -543,6 +546,7 @@ public final class DeploymentContext {
 
     public int cpu() { return cpu; }
     public int memory() { return memory; }
+    public String containerImage() { return containerImage; }
 
     public boolean enableSsl() { return enableSsl; }
     public boolean createZone() { return createZone; }

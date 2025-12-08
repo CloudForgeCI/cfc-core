@@ -322,4 +322,66 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         // Enable in staging to test RDS encryption process before production
         return false;
     }
+
+    // ==================== Authentication Configuration ====================
+
+    @Override
+    public boolean isMfaRequired() {
+        // MFA required in staging to test production-like security
+        return true;
+    }
+
+    @Override
+    public String getDefaultMfaMethod() {
+        // Test both MFA methods in staging
+        return "both";
+    }
+
+    @Override
+    public int getAccessTokenValidityHours() {
+        // Moderate token lifetime - balance security and testing convenience
+        return 2;
+    }
+
+    @Override
+    public int getIdTokenValidityHours() {
+        // Match access token
+        return 2;
+    }
+
+    @Override
+    public int getRefreshTokenValidityDays() {
+        // Weekly re-authentication
+        return 7;
+    }
+
+    @Override
+    public int getMinimumPasswordLength() {
+        // Production-like requirements
+        return 12;
+    }
+
+    @Override
+    public int getTempPasswordValidityDays() {
+        // Production-like urgency
+        return 3;
+    }
+
+    @Override
+    public boolean isSelfSignupEnabled() {
+        // Admin-controlled access like production
+        return false;
+    }
+
+    @Override
+    public boolean isPreventUserExistenceErrorsEnabled() {
+        // Test production security behavior
+        return true;
+    }
+
+    @Override
+    public boolean isAdvancedSecurityEnabled() {
+        // Optional for testing - can enable to test adaptive auth
+        return false;
+    }
 }

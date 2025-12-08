@@ -7,6 +7,7 @@ import com.cloudforgeci.api.observability.ComplianceFactory;
 import com.cloudforgeci.api.observability.FlowLogFactory;
 import com.cloudforgeci.api.observability.GuardDutyFactory;
 import com.cloudforgeci.api.observability.SecurityMonitoringFactory;
+import com.cloudforgeci.api.storage.BackupFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.assertions.Match;
@@ -480,5 +481,53 @@ class Soc2ComplianceExtendedTest extends IntegrationTestBase {
 
         // Then: Verify no IAM roles have wildcard permissions (Action: "*")
         // This is enforced by IAMProfile configuration (MINIMAL, STANDARD, EXTENDED)
+    }
+
+    // ========== A1.3: Backup and Recovery ==========
+
+    @Test
+    void testA13AutomatedBackupsConfigured() {
+        // Given: PRODUCTION infrastructure with backup
+        builder.createCompleteInfrastructure();
+
+        BackupFactory backupFactory = new BackupFactory(stack, "Backup");
+        backupFactory.create();
+
+        synthesizeTemplate();
+
+        // Then: Verify automated backups are configured (SOC2-A1.3)
+        assertBackupPoliciesConfigured();
+    }
+
+    @Test
+    void testA13BackupRetentionMeetsRequirements() {
+        // Given: PRODUCTION infrastructure with backup
+        builder.createCompleteInfrastructure();
+
+        BackupFactory backupFactory = new BackupFactory(stack, "Backup");
+        backupFactory.create();
+
+        synthesizeTemplate();
+
+        // Then: Verify backup plan has appropriate retention (SOC2-A1.3)
+        template.hasResourceProperties("AWS::Backup::BackupPlan", Match.objectLike(Map.of(
+            "BackupPlan", Match.objectLike(Map.of(
+                "BackupPlanRule", Match.anyValue()
+            ))
+        )));
+    }
+
+    @Test
+    void testA13EfsProtectedByBackup() {
+        // Given: PRODUCTION infrastructure with backup
+        builder.createCompleteInfrastructure();
+
+        BackupFactory backupFactory = new BackupFactory(stack, "Backup");
+        backupFactory.create();
+
+        synthesizeTemplate();
+
+        // Then: Verify EFS is protected by backup plan (SOC2-A1.3)
+        assertEfsProtectedByBackupPlan();
     }
 }

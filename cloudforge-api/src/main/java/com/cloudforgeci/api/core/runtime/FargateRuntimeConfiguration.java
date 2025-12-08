@@ -16,6 +16,7 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListener;
 import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListenerRule;
 import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate;
+import software.amazon.awscdk.services.elasticloadbalancingv2.SslPolicy;
 import software.constructs.IConstruct;
 
 import java.util.List;
@@ -188,10 +189,13 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
     whenBoth(c.cert, c.alb, (cert, alb) -> {
       if (c.https.get().isPresent()) return;
 
+      // Use TLS 1.2+ policy for PCI-DSS compliance (Requirement 4.1)
+      // RECOMMENDED_TLS enforces TLS 1.2 minimum with strong cipher suites
       ApplicationListener https = alb.addListener("Https",
               BaseApplicationListenerProps.builder()
                       .port(443)
                       .certificates(java.util.List.of(ListenerCertificate.fromCertificateManager(cert)))
+                      .sslPolicy(SslPolicy.RECOMMENDED_TLS)
                       .build());
 
       // Add explicit dependency: HTTPS listener depends on certificate

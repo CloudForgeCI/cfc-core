@@ -107,6 +107,9 @@ public class ApplicationOidcFactory extends BaseFactory {
     @DeploymentContext("authMode")
     private String authMode;
 
+    @DeploymentContext("oidcProvider")
+    private String oidcProvider;
+
     @DeploymentContext("stackName")
     private String stackName;
 
@@ -121,7 +124,7 @@ public class ApplicationOidcFactory extends BaseFactory {
     @DeploymentContext("cognitoUserPoolId")
     private String cognitoUserPoolId;
 
-    @DeploymentContext("cognitoUserPoolDomain")
+    @DeploymentContext("cognitoDomainPrefix")
     private String cognitoUserPoolDomain;
 
     @DeploymentContext("cognitoUserPoolClientId")
@@ -138,7 +141,14 @@ public class ApplicationOidcFactory extends BaseFactory {
     @DeploymentContext("region")
     private String region;
 
-    // Manual OIDC Configuration (Option 2 & 3)
+    // IAM Identity Center SAML Configuration (Option 2)
+    @DeploymentContext("autoProvisionIdentityCenter")
+    private Boolean autoProvisionIdentityCenter;
+
+    @DeploymentContext("ssoInstanceArn")
+    private String ssoInstanceArn;
+
+    // Manual OIDC Configuration (Option 3)
     @DeploymentContext("oidcIssuer")
     private String oidcIssuer;
 
@@ -263,15 +273,22 @@ public class ApplicationOidcFactory extends BaseFactory {
 
     /**
      * Build OidcConfiguration from deployment context.
-     * Priority: Cognito > Manual OIDC endpoints
+     * Priority: Cognito > Identity Center SAML > Manual OIDC endpoints
      */
     private OidcConfiguration buildOidcConfiguration() {
         // Option 1: Cognito (auto-provisioned or existing)
+        // For SAML apps (like Mattermost), buildCognitoConfiguration() returns SAML endpoints
+        // For OIDC apps, it returns OAuth2 endpoints - same User Pool, different endpoints
         if (Boolean.TRUE.equals(cognitoAutoProvision) || cognitoUserPoolId != null) {
             return buildCognitoConfiguration();
         }
 
-        // Option 2 & 3: Manual OIDC endpoints (IAM Identity Center or External)
+        // Option 2: IAM Identity Center SAML (auto-provisioned)
+        if (Boolean.TRUE.equals(autoProvisionIdentityCenter) && ssoInstanceArn != null) {
+            return buildIdentityCenterSamlConfiguration();
+        }
+
+        // Option 3: Manual OIDC endpoints (External IdP)
         if (oidcIssuer != null && !oidcIssuer.isEmpty()) {
             return buildManualOidcConfiguration();
         }
@@ -280,8 +297,12 @@ public class ApplicationOidcFactory extends BaseFactory {
     }
 
     /**
-     * Build OIDC configuration for Cognito User Pool.
-     * Prioritizes SystemContext values (exported by CognitoAuthenticationFactory) over DeploymentContext.
+     * Build configuration for Cognito User Pool.
+     *
+     * <p>For SAML apps (like Mattermost), returns SAML endpoints from the same User Pool.
+     * For OIDC apps, returns OAuth2 endpoints. Same User Pool supports both.</p>
+     *
+     * <p>Prioritizes SystemContext values (exported by CognitoAuthenticationFactory) over DeploymentContext.</p>
      */
     private OidcConfiguration buildCognitoConfiguration() {
         // Priority 1: SystemContext values (exported by CognitoAuthenticationFactory.create())
@@ -300,14 +321,47 @@ public class ApplicationOidcFactory extends BaseFactory {
         }
 
         String effectiveRegion = (region != null && !region.isEmpty()) ? region : "us-east-1";
-        String issuer = "https://cognito-idp." + effectiveRegion + ".amazonaws.com/" + effectiveUserPoolId;
-        String authEndpoint = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com/oauth2/authorize";
-        String tokenEndpoint = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com/oauth2/token";
-        String userInfoEndpoint = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com/oauth2/userInfo";
-        String logoutEndpoint = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com/logout";
+
+        // Check if application requires SAML authentication
+        // IMPORTANT: Only use SAML if oidcProvider is "cognito-saml" or "identity-center"
+        // Even if the app's integration returns "SAML" as auth type, we should use OIDC for "cognito" provider
+        boolean appRequiresSaml = "cognito-saml".equals(oidcProvider) ||
+            "identity-center".equals(oidcProvider);
+
+        // Cognito base URL for IdP endpoints
+        String cognitoIdpBase = "https://cognito-idp." + effectiveRegion + ".amazonaws.com/" + effectiveUserPoolId;
+        String cognitoAuthBase = "https://" + effectiveDomainPrefix + ".auth." + effectiveRegion + ".amazoncognito.com";
+
+        // Select endpoints based on app requirements (SAML vs OIDC)
+        String issuer;
+        String authEndpoint;
+        String tokenEndpoint;
+        String userInfoEndpoint;
+        String logoutEndpoint;
+        String providerType;
+
+        if (appRequiresSaml) {
+            // SAML endpoints from the same Cognito User Pool
+            LOG.info("Application requires SAML - using Cognito SAML endpoints");
+            providerType = "cognito";  // lowercase for MattermostSamlIntegration checks
+            issuer = cognitoIdpBase;
+            authEndpoint = cognitoIdpBase + "/saml2/idp/SSO";
+            tokenEndpoint = cognitoIdpBase + "/saml2/idp/metadata";  // Repurposed for metadata URL
+            userInfoEndpoint = cognitoIdpBase + "/saml2/idp/metadata";
+            logoutEndpoint = cognitoIdpBase + "/saml2/logout";
+        } else {
+            // OAuth2/OIDC endpoints
+            providerType = "Cognito";  // Capital C for OIDC path
+            issuer = cognitoIdpBase;
+            authEndpoint = cognitoAuthBase + "/oauth2/authorize";
+            tokenEndpoint = cognitoAuthBase + "/oauth2/token";
+            userInfoEndpoint = cognitoAuthBase + "/oauth2/userInfo";
+            logoutEndpoint = cognitoAuthBase + "/logout";
+        }
 
         LOG.info("Using Cognito User Pool: " + effectiveUserPoolId);
         LOG.info("Cognito Domain: " + effectiveDomainPrefix);
+        LOG.info("Auth Type: " + (appRequiresSaml ? "SAML" : "OIDC"));
         LOG.info("Client ID: [REDACTED]");
 
         String applicationUrl = buildApplicationUrl();
@@ -318,40 +372,122 @@ public class ApplicationOidcFactory extends BaseFactory {
         // Check if groups are enabled
         boolean groupsEnabled = (cognitoCreateGroups != null && cognitoCreateGroups);
 
-        // Get group names from deployment context or use defaults
-        // Cognito groups: "Jenkins-Admins" and "Jenkins-Users" are created by CognitoAuthenticationFactory
-        // Map to application roles: Admin -> admin privileges, User -> developer privileges
+        // Get group names from deployment context or use defaults based on app ID
+        String appId = applicationSpec != null ? applicationSpec.applicationId() : "App";
+        String appPrefix = appId.substring(0, 1).toUpperCase() + appId.substring(1);  // Capitalize first letter
         String adminGroup = (cognitoAdminGroupName != null && !cognitoAdminGroupName.isEmpty())
                 ? cognitoAdminGroupName
-                : "Jenkins-Admins";
+                : appPrefix + "-Admins";
         String developerGroup = (cognitoUserGroupName != null && !cognitoUserGroupName.isEmpty())
                 ? cognitoUserGroupName
-                : "Jenkins-Users";
-        String viewerGroup = "Jenkins-Viewers";  // Optional third group for read-only access
+                : appPrefix + "-Users";
+        String viewerGroup = appPrefix + "-Viewers";
 
         if (groupsEnabled) {
-            LOG.info("OIDC Group Mapping (Groups Enabled):");
+            LOG.info("Group Mapping (Groups Enabled):");
             LOG.info("  Admin Group: " + adminGroup);
             LOG.info("  Developer Group: " + developerGroup);
             LOG.info("  Viewer Group: " + viewerGroup);
         } else {
-            LOG.info("OIDC Group Mapping: Groups disabled - all authenticated users get full access");
+            LOG.info("Group Mapping: Groups disabled - all authenticated users get full access");
         }
 
         return new SimplifiedOidcConfiguration(
-            "Cognito",  // Capital C to match case-sensitive check in createOidcClientSecret()
+            providerType,
             issuer,
             authEndpoint,
             tokenEndpoint,
             userInfoEndpoint,
             logoutEndpoint,
             effectiveClientId,
-            buildClientSecretArn("Cognito"),
+            buildClientSecretArn(providerType),
             "sub",
             "cognito:groups",
-            "openid profile email",
+            appRequiresSaml ? "" : "openid profile email",  // Scopes not used for SAML
             applicationUrl,
             groupsEnabled,
+            adminGroup,
+            developerGroup,
+            viewerGroup
+        );
+    }
+
+    /**
+     * Build configuration for IAM Identity Center SAML.
+     *
+     * <p>This method reads SAML configuration from SystemContext, which is populated
+     * by IdentityCenterSamlFactory. Although this is SAML (not OIDC), we use the
+     * OidcConfiguration interface to pass the IdP URLs to the application's
+     * SAML integration (e.g., MattermostSamlIntegration).</p>
+     *
+     * <p>The key difference from OIDC is that we use SAML-specific URLs:</p>
+     * <ul>
+     *   <li>issuerUrl -> SAML IdP Entity ID</li>
+     *   <li>authorizationEndpoint -> SAML SSO URL</li>
+     *   <li>tokenEndpoint -> Not used (SAML doesn't have token endpoint)</li>
+     *   <li>userInfoEndpoint -> Not used (attributes come in SAML assertion)</li>
+     * </ul>
+     */
+    private OidcConfiguration buildIdentityCenterSamlConfiguration() {
+        // Read SAML configuration from SystemContext (set by IdentityCenterSamlFactory)
+        String samlSsoUrl = ctx.samlIdpSsoUrl.get().orElse(null);
+        String samlMetadataUrl = ctx.samlIdpMetadataUrl.get().orElse(null);
+        String samlEntityId = ctx.samlIdpEntityId.get().orElse("urn:amazon:webservices");
+        String samlConfigSecretArn = ctx.samlConfigSecretArn.get().orElse(null);
+        String siteUrl = ctx.samlSiteUrl.get().orElse(null);
+
+        // If SystemContext values not yet available, construct from ssoInstanceArn
+        if (samlSsoUrl == null && ssoInstanceArn != null) {
+            // Extract instance ID from ARN: arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx
+            String instanceId = ssoInstanceArn.substring(ssoInstanceArn.lastIndexOf("/") + 1);
+            String effectiveRegion = (region != null && !region.isEmpty()) ? region : "us-east-1";
+
+            samlSsoUrl = "https://portal.sso." + effectiveRegion + ".amazonaws.com/saml/assertion/" + instanceId;
+            samlMetadataUrl = "https://portal.sso." + effectiveRegion + ".amazonaws.com/saml/metadata/" + instanceId;
+
+            LOG.info("Constructed Identity Center SAML URLs from SSO Instance ARN");
+        }
+
+        if (samlSsoUrl == null) {
+            LOG.warning("Identity Center SAML configuration incomplete - SSO URL not available");
+            LOG.warning("IdentityCenterSamlFactory should set samlIdpSsoUrl in SystemContext");
+            return null;
+        }
+
+        LOG.info("Using IAM Identity Center SAML provider");
+        LOG.info("SAML SSO URL: " + samlSsoUrl);
+        LOG.info("SAML Metadata URL: " + (samlMetadataUrl != null ? samlMetadataUrl : "Not configured"));
+
+        String applicationUrl = siteUrl != null ? siteUrl : buildApplicationUrl();
+        if (applicationUrl != null) {
+            LOG.info("Application URL: " + applicationUrl);
+        }
+
+        // For Identity Center, use standard group names
+        String adminGroup = "Admins";
+        String developerGroup = "Users";
+        String viewerGroup = "Viewers";
+
+        LOG.info("SAML Group Mapping (configure in Identity Center):");
+        LOG.info("  Admin Group: " + adminGroup);
+        LOG.info("  User Group: " + developerGroup);
+
+        // Return configuration that MattermostSamlIntegration can use
+        // Note: tokenEndpoint and userInfoEndpoint are not used for SAML
+        return new SimplifiedOidcConfiguration(
+            "identity-center",  // Provider type - used by MattermostSamlIntegration to select correct URLs
+            samlEntityId,       // Issuer URL (IdP Entity ID)
+            samlSsoUrl,         // Authorization endpoint (SAML SSO URL)
+            samlMetadataUrl,    // Token endpoint (repurposed for metadata URL)
+            samlMetadataUrl,    // UserInfo endpoint (repurposed for metadata URL)
+            null,               // Logout endpoint
+            "identity-center",  // Client ID (not used for SAML, but required by interface)
+            samlConfigSecretArn != null ? samlConfigSecretArn : buildClientSecretArn("identity-center"),
+            "preferred_username", // Username claim/attribute
+            "groups",           // Groups claim/attribute
+            "",                 // Scopes (not used for SAML)
+            applicationUrl,
+            true,               // Groups enabled
             adminGroup,
             developerGroup,
             viewerGroup
@@ -494,8 +630,15 @@ public class ApplicationOidcFactory extends BaseFactory {
         String secretName = config.getClientSecretArn();
 
         // Don't create secret for Cognito - CognitoAuthenticationFactory handles it
-        if ("Cognito".equals(config.getProviderType())) {
+        // Use equalsIgnoreCase because SAML apps use "cognito" (lowercase) while OIDC uses "Cognito"
+        if ("cognito".equalsIgnoreCase(config.getProviderType())) {
             LOG.info("Cognito client secret will be managed by CognitoAuthenticationFactory");
+            return;
+        }
+
+        // Don't create secret for Identity Center SAML - SAML doesn't use client secrets
+        if ("identity-center".equals(config.getProviderType())) {
+            LOG.info("Identity Center SAML does not require client secret - skipping");
             return;
         }
 

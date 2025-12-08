@@ -1,0 +1,54 @@
+{
+  "stackName": "Grafana-Production",
+  "applicationId": "grafana",
+  "applicationName": "Grafana",
+  "description": "Production Grafana with PostgreSQL",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "grafana",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "grafana-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "GrafanaAdmins",
+  "cognitoUserGroupName": "GrafanaViewers",
+
+  "instanceType": "t3.small",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 4,
+  "enableAutoScaling": true,
+
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "databaseVersion": "15",
+  "databaseInstanceClass": "db.t3.micro",
+  "databaseAllocatedStorageGB": 20,
+  "databaseMultiAz": true,
+  "databaseName": "grafana",
+  "databaseBackupRetentionDays": 30,
+
+  "complianceFrameworks": "SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "guardDutyEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "730",
+  "retainStorage": true
+}

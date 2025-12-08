@@ -255,4 +255,167 @@ public interface SecurityProfileConfiguration {
      * WARNING: Complex operation requiring snapshot recreation.
      */
     boolean isRdsEncryptionRemediationEnabled();
+
+    // ==================== Authentication Configuration ====================
+
+    /**
+     * Whether MFA (Multi-Factor Authentication) is required for user authentication.
+     *
+     * <p>MFA provides an additional layer of security by requiring users to provide
+     * a second form of verification beyond their password.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - MFA optional for development convenience</li>
+     *   <li>STAGING: true - MFA required to test production-like security</li>
+     *   <li>PRODUCTION: true - MFA required for compliance (PCI-DSS, HIPAA, SOC 2)</li>
+     * </ul>
+     *
+     * @return true if MFA should be required
+     */
+    boolean isMfaRequired();
+
+    /**
+     * Get the default MFA method for the security profile.
+     *
+     * <p>Available methods:</p>
+     * <ul>
+     *   <li>"totp" - Time-based One-Time Password (authenticator apps)</li>
+     *   <li>"sms" - SMS text message codes</li>
+     *   <li>"both" - Users can choose their preferred method</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: "totp" - Simple authenticator app</li>
+     *   <li>STAGING: "both" - Test all MFA methods</li>
+     *   <li>PRODUCTION: "both" - Maximum flexibility for users</li>
+     * </ul>
+     *
+     * @return MFA method: "totp", "sms", or "both"
+     */
+    String getDefaultMfaMethod();
+
+    /**
+     * Get the OAuth 2.0 access token validity duration in hours.
+     *
+     * <p>Shorter durations are more secure but require more frequent re-authentication.</p>
+     *
+     * <ul>
+     *   <li>DEV: 8 hours - Full workday without re-auth</li>
+     *   <li>STAGING: 2 hours - Balance security and convenience</li>
+     *   <li>PRODUCTION: 1 hour - Strict security, comply with PCI-DSS requirements</li>
+     * </ul>
+     *
+     * @return Access token validity in hours
+     */
+    int getAccessTokenValidityHours();
+
+    /**
+     * Get the OAuth 2.0 ID token validity duration in hours.
+     *
+     * <p>ID tokens contain user identity information and should have limited lifetime.</p>
+     *
+     * <ul>
+     *   <li>DEV: 8 hours - Match access token for simplicity</li>
+     *   <li>STAGING: 2 hours - Balance security and convenience</li>
+     *   <li>PRODUCTION: 1 hour - Minimize exposure window</li>
+     * </ul>
+     *
+     * @return ID token validity in hours
+     */
+    int getIdTokenValidityHours();
+
+    /**
+     * Get the OAuth 2.0 refresh token validity duration in days.
+     *
+     * <p>Refresh tokens allow obtaining new access tokens without re-authentication.
+     * Longer durations improve UX but increase risk if token is compromised.</p>
+     *
+     * <ul>
+     *   <li>DEV: 30 days - Long-lived for development convenience</li>
+     *   <li>STAGING: 7 days - Weekly re-authentication</li>
+     *   <li>PRODUCTION: 1 day - Daily re-authentication for maximum security</li>
+     * </ul>
+     *
+     * @return Refresh token validity in days
+     */
+    int getRefreshTokenValidityDays();
+
+    /**
+     * Get the minimum password length required for user accounts.
+     *
+     * <p>Longer passwords provide better security against brute-force attacks.</p>
+     *
+     * <ul>
+     *   <li>DEV: 8 - Minimum acceptable for testing</li>
+     *   <li>STAGING: 12 - Production-like requirements</li>
+     *   <li>PRODUCTION: 14 - Strong password policy (NIST 800-63B compliant)</li>
+     * </ul>
+     *
+     * @return Minimum password length
+     */
+    int getMinimumPasswordLength();
+
+    /**
+     * Get the temporary password validity duration in days.
+     *
+     * <p>Temporary passwords are issued to new users and must be changed on first login.
+     * Shorter durations reduce the window for password interception.</p>
+     *
+     * <ul>
+     *   <li>DEV: 7 days - Flexible for testing</li>
+     *   <li>STAGING: 3 days - Production-like urgency</li>
+     *   <li>PRODUCTION: 1 day - Immediate action required</li>
+     * </ul>
+     *
+     * @return Temporary password validity in days
+     */
+    int getTempPasswordValidityDays();
+
+    /**
+     * Whether self-service user registration is allowed.
+     *
+     * <p>Self-signup allows users to create their own accounts without admin intervention.
+     * This should be disabled in production for controlled access.</p>
+     *
+     * <ul>
+     *   <li>DEV: true - Allow easy account creation for testing</li>
+     *   <li>STAGING: false - Admin-controlled access like production</li>
+     *   <li>PRODUCTION: false - Strict access control, admins create accounts</li>
+     * </ul>
+     *
+     * @return true if self-service signup is allowed
+     */
+    boolean isSelfSignupEnabled();
+
+    /**
+     * Whether to prevent user existence errors in authentication responses.
+     *
+     * <p>When enabled, authentication errors don't reveal whether a username exists.
+     * This prevents username enumeration attacks but makes debugging harder.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Helpful error messages for debugging</li>
+     *   <li>STAGING: true - Test production security behavior</li>
+     *   <li>PRODUCTION: true - Prevent username enumeration</li>
+     * </ul>
+     *
+     * @return true if user existence errors should be prevented
+     */
+    boolean isPreventUserExistenceErrorsEnabled();
+
+    /**
+     * Whether advanced security features (risk-based authentication) should be enabled.
+     *
+     * <p>Advanced security includes adaptive authentication that analyzes login patterns
+     * and can block suspicious activity. Requires Cognito Plus tier.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not needed for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true - Recommended for threat detection (requires Plus tier)</li>
+     * </ul>
+     *
+     * @return true if advanced security features should be enabled
+     */
+    boolean isAdvancedSecurityEnabled();
 }

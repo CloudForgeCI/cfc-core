@@ -1,0 +1,65 @@
+{
+  "stackName": "App-HIPAA-Production",
+  "applicationId": "REPLACE_WITH_APP_ID",
+  "applicationName": "HIPAA Production Application",
+  "description": "Production environment with HIPAA + SOC2 compliance for healthcare",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "secure.healthcare.com",
+  "subdomain": "app",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "app-hipaa-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "Admins",
+  "cognitoUserGroupName": "ClinicalStaff",
+
+  "instanceType": "t3.medium",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 8,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 50,
+
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "databaseVersion": "15",
+  "databaseInstanceClass": "db.t3.medium",
+  "databaseAllocatedStorageGB": 100,
+  "databaseMultiAz": true,
+  "databaseBackupRetentionDays": 90,
+
+  "complianceFrameworks": "HIPAA,SOC2",
+  "complianceMode": "enforce",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "guardDutyAlertsConfigured": true,
+  "auditManagerEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+  "certificateExpirationMonitoring": true,
+
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailBucketAccessRemediation": true,
+  "enableCloudTrailLoggingRemediation": true,
+  "enableRdsDeletionProtectionRemediation": true,
+  "enableRdsAutoMinorVersionUpgradeRemediation": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "2190",
+  "retainStorage": true
+}

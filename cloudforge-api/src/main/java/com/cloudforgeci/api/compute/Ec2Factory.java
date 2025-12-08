@@ -5,6 +5,9 @@ import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.OidcConfiguration;
+import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -107,6 +110,43 @@ public class Ec2Factory extends BaseFactory {
   @DeploymentContext("enableEncryption")
   private Boolean enableEncryption;
 
+  // ========== Optional Port Configuration ==========
+  // These flags control which optional ports are exposed in security groups
+  // Ports are NOT exposed by default - must be explicitly enabled
+
+  @DeploymentContext("enableAgents")
+  private Boolean enableAgents;
+
+  @DeploymentContext("enableSsh")
+  private Boolean enableSsh;
+
+  @DeploymentContext("enableSmtp")
+  private Boolean enableSmtp;
+
+  @DeploymentContext("enableSmtps")
+  private Boolean enableSmtps;
+
+  @DeploymentContext("enableClustering")
+  private Boolean enableClustering;
+
+  @DeploymentContext("enableDockerRegistry")
+  private Boolean enableDockerRegistry;
+
+  @DeploymentContext("enableMetrics")
+  private Boolean enableMetrics;
+
+  @DeploymentContext("enableNotary")
+  private Boolean enableNotary;
+
+  @DeploymentContext("enableTrivy")
+  private Boolean enableTrivy;
+
+  @DeploymentContext("enableSentinel")
+  private Boolean enableSentinel;
+
+  @DeploymentContext("enableCluster")
+  private Boolean enableCluster;
+
   public Ec2Factory(Construct scope, String id) {
     super(scope, id);
     // All fields are automatically injected by BaseFactory
@@ -157,6 +197,18 @@ public class Ec2Factory extends BaseFactory {
 
   @SystemContext("ap")
   private software.amazon.awscdk.services.efs.AccessPoint ap;
+
+  @DeploymentContext("authMode")
+  private String authMode;
+
+  @DeploymentContext("fqdn")
+  private String fqdn;
+
+  @DeploymentContext("enableSsl")
+  private Boolean enableSsl;
+
+  @SystemContext("applicationOidcConfig")
+  private OidcConfiguration applicationOidcConfig;
 
   private void createEc2Infrastructure() {
     // Use existing IAM role created by IAM configuration (has CloudWatch Logs permissions)
@@ -210,7 +262,52 @@ public class Ec2Factory extends BaseFactory {
     // Add ingress rule from ALB security group
     instanceSg.addIngressRule(albSg, Port.tcp(appPort), "ALB_to_" + appId);
 
+    // Add security group rules for optional inbound ports
+    // These are NOT exposed by default - must be explicitly enabled via deployment config
+    if (applicationSpec != null) {
+      for (ApplicationSpec.OptionalPort optionalPort : applicationSpec.optionalPorts()) {
+        // Only add ingress rules for inbound ports that are enabled
+        if (optionalPort.inbound() && isOptionalPortEnabled(optionalPort.configKey())) {
+          Port port = optionalPort.protocol().equals("udp")
+              ? Port.udp(optionalPort.port())
+              : Port.tcp(optionalPort.port());
+          // Allow from anywhere for optional service ports (e.g., SSH, JNLP agents)
+          instanceSg.addIngressRule(
+              software.amazon.awscdk.services.ec2.Peer.anyIpv4(),
+              port,
+              optionalPort.service().replace(" ", "_") + "_inbound"
+          );
+          LOG.info("  ✅ Added security group rule for optional port: " +
+                   optionalPort.port() + "/" + optionalPort.protocol() +
+                   " (" + optionalPort.service() + ")");
+        }
+      }
+    }
+
     return instanceSg;
+  }
+
+  /**
+   * Check if an optional port is enabled based on the config key.
+   */
+  private boolean isOptionalPortEnabled(String configKey) {
+    return switch (configKey) {
+      case "enableAgents" -> Boolean.TRUE.equals(enableAgents);
+      case "enableSsh" -> Boolean.TRUE.equals(enableSsh);
+      case "enableSmtp" -> Boolean.TRUE.equals(enableSmtp);
+      case "enableSmtps" -> Boolean.TRUE.equals(enableSmtps);
+      case "enableClustering" -> Boolean.TRUE.equals(enableClustering);
+      case "enableDockerRegistry" -> Boolean.TRUE.equals(enableDockerRegistry);
+      case "enableMetrics" -> Boolean.TRUE.equals(enableMetrics);
+      case "enableNotary" -> Boolean.TRUE.equals(enableNotary);
+      case "enableTrivy" -> Boolean.TRUE.equals(enableTrivy);
+      case "enableSentinel" -> Boolean.TRUE.equals(enableSentinel);
+      case "enableCluster" -> Boolean.TRUE.equals(enableCluster);
+      default -> {
+        LOG.warning("Unknown optional port config key: " + configKey);
+        yield false;
+      }
+    };
   }
 
   private LogGroup createLogGroup() {
@@ -248,7 +345,51 @@ public class Ec2Factory extends BaseFactory {
     com.cloudforgeci.api.core.UserDataBuilderImpl builder =
         new com.cloudforgeci.api.core.UserDataBuilderImpl(ud);
 
-    applicationSpec.configureUserData(builder, ec2Context);
+    if (applicationSpec != null) {
+      applicationSpec.configureUserData(builder, ec2Context);
+    }
+
+    // Add OIDC integration commands if application-oidc mode is enabled
+    // This configures OIDC authentication (e.g., Jenkins OIDC plugin setup)
+    if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+      LOG.info("Ec2Factory: Configuring OIDC integration for EC2 UserData...");
+
+      if (applicationOidcConfig != null) {
+        OidcIntegration oidcIntegration = applicationSpec.getOidcIntegration();
+        if (oidcIntegration != null) {
+          LOG.info("  OIDC Integration: " + oidcIntegration.getIntegrationMethod());
+          LOG.info("  Auth Type: " + oidcIntegration.getAuthenticationType());
+
+          // Get OIDC UserData commands from the integration
+          List<String> oidcCommands = oidcIntegration.getUserDataCommands(applicationOidcConfig, ec2Context);
+
+          if (oidcCommands != null && !oidcCommands.isEmpty()) {
+            LOG.info("  Adding " + oidcCommands.size() + " OIDC configuration commands to UserData");
+
+            // Add marker comment for clarity
+            ud.addCommands("");
+            ud.addCommands("# ========================================");
+            ud.addCommands("# OIDC Integration Configuration");
+            ud.addCommands("# Added by Ec2Factory for " + applicationSpec.applicationId());
+            ud.addCommands("# ========================================");
+
+            // Add all OIDC commands
+            for (String command : oidcCommands) {
+              ud.addCommands(command);
+            }
+
+            LOG.info("✅ OIDC configuration commands added to UserData for " + applicationSpec.applicationId());
+          } else {
+            LOG.warning("⚠️  No OIDC commands returned from integration");
+          }
+        } else {
+          LOG.severe("❌ OidcIntegration is NULL - cannot configure OIDC!");
+        }
+      } else {
+        LOG.severe("❌ applicationOidcConfig NOT PRESENT - OIDC configuration NOT added to UserData!");
+        LOG.severe("   Make sure ApplicationOidcFactory runs before Ec2Factory");
+      }
+    }
 
     return ud;
   }

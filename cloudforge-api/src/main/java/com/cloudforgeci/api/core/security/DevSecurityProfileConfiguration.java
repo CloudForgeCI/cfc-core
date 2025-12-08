@@ -279,4 +279,66 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
         // Disabled for dev - encryption not required for development data
         return false;
     }
+
+    // ==================== Authentication Configuration ====================
+
+    @Override
+    public boolean isMfaRequired() {
+        // MFA optional for dev - convenience over security
+        return false;
+    }
+
+    @Override
+    public String getDefaultMfaMethod() {
+        // TOTP only for dev - simpler than SMS
+        return "totp";
+    }
+
+    @Override
+    public int getAccessTokenValidityHours() {
+        // Long token lifetime for dev convenience
+        return 8;
+    }
+
+    @Override
+    public int getIdTokenValidityHours() {
+        // Match access token for simplicity
+        return 8;
+    }
+
+    @Override
+    public int getRefreshTokenValidityDays() {
+        // Long-lived refresh tokens for dev
+        return 30;
+    }
+
+    @Override
+    public int getMinimumPasswordLength() {
+        // Minimum acceptable for testing
+        return 8;
+    }
+
+    @Override
+    public int getTempPasswordValidityDays() {
+        // Flexible for testing
+        return 7;
+    }
+
+    @Override
+    public boolean isSelfSignupEnabled() {
+        // Allow easy account creation for testing
+        return true;
+    }
+
+    @Override
+    public boolean isPreventUserExistenceErrorsEnabled() {
+        // Helpful error messages for debugging
+        return false;
+    }
+
+    @Override
+    public boolean isAdvancedSecurityEnabled() {
+        // Not needed for development
+        return false;
+    }
 }

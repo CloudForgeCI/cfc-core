@@ -207,7 +207,7 @@ class FargateFactoryTest {
 
         // Then: Should have reasonable number of fields
         assertTrue(fields.length >= 1, "Should have at least 1 field");
-        assertTrue(fields.length < 25, "Should not have too many fields");
+        assertTrue(fields.length < 50, "Should not have too many fields");
     }
 
     @Test

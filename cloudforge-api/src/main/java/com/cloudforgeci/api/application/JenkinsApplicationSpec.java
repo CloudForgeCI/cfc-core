@@ -81,6 +81,14 @@ public class JenkinsApplicationSpec implements ApplicationSpec {
     }
 
     @Override
+    public java.util.List<OptionalPort> optionalPorts() {
+        return java.util.List.of(
+            // Build agents - inbound connections from Jenkins agents
+            OptionalPort.inboundTcp(50000, "enableAgents", "JNLP Build Agents")
+        );
+    }
+
+    @Override
     public String containerDataPath() {
         return CONTAINER_DATA_PATH;
     }

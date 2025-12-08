@@ -414,8 +414,8 @@ class TruthTableGenerator:
             "smoke_test": {
                 "description": "Minimal test set covering basic functionality",
                 "configurations": [
-                    "FARGATE_JENKINS_SERVICE_DEV_with-domain_ssl-enabled_with-subdomain",
-                    "EC2_JENKINS_SINGLE_NODE_DEV_no-domain_ssl-disabled_no-subdomain",
+                    "FARGATE_APPLICATION_SERVICE_DEV_with-domain_ssl-enabled_with-subdomain",
+                    "EC2_APPLICATION_SERVICE_DEV_no-domain_ssl-disabled_no-subdomain",
                 ]
             },
             "ssl_regression": {

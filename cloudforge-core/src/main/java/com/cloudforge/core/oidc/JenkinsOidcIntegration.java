@@ -285,9 +285,9 @@ public class JenkinsOidcIntegration implements OidcIntegration {
         } else {
             commands.add("      postLogoutRedirectUrl: \"\"");
         }
-        commands.add("      escapeHatchEnabled: true");
-        commands.add("      escapeHatchUsername: \"admin\"");
-        commands.add("      escapeHatchSecret: \"admin\"");
+        // Disable escape hatch for security - OIDC-only authentication
+        // For emergency access, SSH into instance and retrieve initial admin password from logs
+        commands.add("      escapeHatchEnabled: false");
         commands.add("");
 
         // Check if group-based access control is enabled
@@ -354,10 +354,11 @@ public class JenkinsOidcIntegration implements OidcIntegration {
         commands.add("chown -R 1000:1000 /var/jenkins_home/casc_configs");
         commands.add("");
 
-        // Note about plugin installation
-        commands.add("# Note: Run /tmp/install-oidc-plugin.sh after Jenkins starts");
-        commands.add("echo 'Jenkins OIDC configuration created' >> /var/log/userdata.log");
-        commands.add("echo 'Run /tmp/install-oidc-plugin.sh to install OIDC plugin' >> /var/log/userdata.log");
+        // Execute plugin installation script in background
+        commands.add("# Execute OIDC plugin installation in background");
+        commands.add("echo 'Starting OIDC plugin installation in background...' >> /var/log/userdata.log");
+        commands.add("nohup /tmp/install-oidc-plugin.sh >> /var/log/jenkins-oidc-setup.log 2>&1 &");
+        commands.add("echo 'OIDC plugin installation script started (check /var/log/jenkins-oidc-setup.log for progress)' >> /var/log/userdata.log");
 
         return commands;
     }
@@ -370,46 +371,68 @@ public class JenkinsOidcIntegration implements OidcIntegration {
     }
 
     @Override
+    public boolean supportsCognito() {
+        // Full support - Jenkins OIDC plugin works with Cognito
+        return true;
+    }
+
+    @Override
+    public boolean supportsIdentityCenterSaml() {
+        // Jenkins uses OIDC, not SAML
+        // Identity Center can work via OIDC endpoints but not SAML
+        return false;
+    }
+
+    @Override
+    public String getAuthenticationType() {
+        return "OIDC";
+    }
+
+    @Override
     public String getPostDeploymentInstructions() {
         return """
                 Jenkins OIDC Integration Setup
                 ===============================
 
-                IMPORTANT: Manual steps required!
+                ✅ OIDC plugin installation is AUTOMATIC!
+                   - Plugin installation runs in background during EC2 boot
+                   - Jenkins will restart automatically after plugins are installed
+                   - Wait 5-10 minutes after deployment for setup to complete
 
-                1. Install the OIDC plugin:
-                   - SSH into the Jenkins EC2 instance
-                   - Run: /tmp/install-oidc-plugin.sh
-                   - Wait for Jenkins to restart
+                1. Verify OIDC configuration:
+                   - Access Jenkins at: https://{your-domain}
+                   - You should be redirected to your OIDC provider (Cognito/Identity Center)
+                   - If not visible yet, check setup logs (see below)
 
-                2. Verify OIDC configuration:
-                   - Access Jenkins at: https://{your-domain}:8080
-                   - You should see "Login with OpenID Connect" option
-
-                3. First login:
-                   - Click "Login with OpenID Connect"
-                   - Authenticate with your OIDC provider (Cognito or Identity Center)
+                2. First login:
+                   - Authenticate with your OIDC provider
                    - Jenkins will auto-create your user account
+                   - Your groups/roles will be synced automatically
 
-                4. Escape Hatch (Emergency Access):
-                   - If OIDC fails, you can still login with:
-                     Username: admin
-                     Password: admin
-                   - Change these credentials immediately!
-
-                5. Configure Authorization:
+                3. Configure Authorization:
                    - Go to Manage Jenkins > Configure Global Security
                    - Adjust matrix-based security as needed
                    - Map OIDC groups to Jenkins roles
 
+                🚨 Emergency Recovery (if OIDC fails):
+                   1. SSH into the Jenkins EC2 instance
+                   2. Retrieve the initial admin password:
+                      sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+                   3. Access Jenkins at: https://{your-domain}/login
+                   4. Login with username: admin, password: <from step 2>
+                   5. Fix OIDC configuration or disable it if needed
+
                 Configuration Files:
                 - OIDC Config: /var/jenkins_home/casc_configs/oidc.yaml
-                - Plugin Install Script: /tmp/install-oidc-plugin.sh
+                - Setup Progress: /var/log/jenkins-oidc-setup.log
+                - Initial Admin Password: /var/lib/jenkins/secrets/initialAdminPassword
 
                 Troubleshooting:
-                - Check logs: docker logs jenkins
+                - Check OIDC setup progress: sudo tail -f /var/log/jenkins-oidc-setup.log
+                - Check UserData logs: sudo tail -f /var/log/userdata.log
+                - Check Jenkins logs: sudo tail -f /var/lib/jenkins/logs/jenkins.log
                 - Verify OIDC plugin installed: Manage Jenkins > Manage Plugins
-                - Test OIDC endpoints are accessible from Jenkins container
+                - Test OIDC endpoints: curl -v https://{cognito-domain}/oauth2/authorize
                 """;
     }
 

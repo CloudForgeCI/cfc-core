@@ -70,6 +70,16 @@ public class RedisApplicationSpec implements ApplicationSpec {
     }
 
     @Override
+    public java.util.List<OptionalPort> optionalPorts() {
+        return java.util.List.of(
+            // Redis Cluster Bus - inbound for cluster node communication
+            OptionalPort.inboundTcp(16379, "enableCluster", "Cluster Bus"),
+            // Redis Sentinel - inbound for HA failover coordination
+            OptionalPort.inboundTcp(26379, "enableSentinel", "Sentinel")
+        );
+    }
+
+    @Override
     public String containerDataPath() {
         return CONTAINER_DATA_PATH;
     }
@@ -152,19 +162,23 @@ public class RedisApplicationSpec implements ApplicationSpec {
         }
 
         // Run Redis container
+        // NOTE: REDIS_PASSWORD should be set via EC2 instance metadata or Secrets Manager
         builder.addCommands(
+            "# Retrieve Redis password from Secrets Manager or use placeholder",
+            "REDIS_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-redis}/redis-password --query SecretString --output text 2>/dev/null || echo 'REPLACE_WITH_SECURE_PASSWORD')",
+            "",
             "# Run Redis container with persistence enabled",
             "docker run -d \\",
             "  --name redis \\",
             "  -p 6379:6379 \\",
             "  -v " + ec2DataPath() + ":/data \\",
             "  " + DEFAULT_IMAGE + " \\",
-            "  redis-server --appendonly yes --requirepass changeme",
+            "  redis-server --appendonly yes --requirepass \"$REDIS_PASSWORD\"",
             "echo 'Redis container started with AOF persistence' >> /var/log/userdata.log",
             "",
             "# Test Redis connection",
             "sleep 5",
-            "docker exec redis redis-cli -a changeme ping && \\",
+            "docker exec redis redis-cli -a \"$REDIS_PASSWORD\" ping && \\",
             "  echo 'Redis is responding' >> /var/log/userdata.log || \\",
             "  echo 'Redis not responding yet' >> /var/log/userdata.log"
         );

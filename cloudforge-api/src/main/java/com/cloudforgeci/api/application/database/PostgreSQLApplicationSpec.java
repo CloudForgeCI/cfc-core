@@ -160,13 +160,16 @@ public class PostgreSQLApplicationSpec implements ApplicationSpec {
 
         // Run PostgreSQL container
         builder.addCommands(
+            "# Generate secure PostgreSQL password",
+            "POSTGRES_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-postgresql}/password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
+            "echo \"Generated PostgreSQL password (save this): $POSTGRES_PASSWORD\" >> /var/log/userdata.log",
+            "",
             "# Run PostgreSQL container",
-            "# WARNING: Change POSTGRES_PASSWORD in production!",
             "docker run -d \\",
             "  --name postgresql \\",
             "  -p 5432:5432 \\",
             "  -v " + ec2DataPath() + ":/var/lib/postgresql/data \\",
-            "  -e POSTGRES_PASSWORD=changeme \\",
+            "  -e POSTGRES_PASSWORD=\"$POSTGRES_PASSWORD\" \\",
             "  -e POSTGRES_DB=cloudforge \\",
             "  -e POSTGRES_USER=cloudforge \\",
             "  " + DEFAULT_IMAGE,

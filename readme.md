@@ -147,6 +147,8 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 |----------|------|---------|-------------|
 | `authMode` | string | `"none"` | `"none"`, `"alb-oidc"`, or `"jenkins-oidc"` |
 
+> **⚠️ Note:** SAML authentication and Keycloak integration are in active development and may have breaking changes.
+
 #### Cognito Configuration (Simplest Authentication)
 
 | Property | Type | Default | Description |
@@ -225,6 +227,39 @@ CloudForge 3.0+ automatically provisions RDS databases for applications with dat
 | `enableS3VersioningRemediation` | boolean | `false` | Auto-enable S3 versioning on non-compliant buckets |
 | `scopeConfigRulesToDeployment` | boolean | `false` | Scope Config rules to stack resources (vs account-wide) |
 
+### AWS Backup (NEW in 3.0)
+
+Automated backup for EFS and RDS with security profile-based retention.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `automatedBackupEnabled` | boolean | profile | Enable AWS Backup (DEV: false, STAGING/PROD: true) |
+| `backupRetentionDays` | integer | profile | Backup retention (DEV: 0, STAGING: 14, PROD: 90) |
+| `crossRegionBackupEnabled` | boolean | profile | Enable cross-region backup copy (PROD only) |
+
+**Security Profile Defaults:**
+- **DEV:** Backups disabled (cost savings)
+- **STAGING:** 14-day retention, no cross-region
+- **PRODUCTION:** 90-day retention, cross-region copy, vault lock (prevents deletion)
+
+### Optional Application Ports
+
+Enable additional ports for applications that support them.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enableAgents` | boolean | `false` | JNLP build agents (Jenkins: 50000) |
+| `enableSsh` | boolean | `false` | Git SSH (GitLab: 22, Gitea: 2222) |
+| `enableSmtp` | boolean | `false` | SMTP email (Mattermost: 587) |
+| `enableSmtps` | boolean | `false` | SMTP TLS (Mattermost: 465) |
+| `enableClustering` | boolean | `false` | HA clustering (Mattermost: 8074-8075, Vault: 8201) |
+| `enableDockerRegistry` | boolean | `false` | Container registry (GitLab: 5050, Nexus: 5000-5002) |
+| `enableMetrics` | boolean | `false` | Prometheus metrics (GitLab: 9090) |
+| `enableNotary` | boolean | `false` | Notary content trust (Harbor: 4443) |
+| `enableTrivy` | boolean | `false` | Trivy scanner (Harbor: 8080) |
+| `enableSentinel` | boolean | `false` | Redis Sentinel (Redis: 26379) |
+| `enableCluster` | boolean | `false` | Redis Cluster bus (Redis: 16379) |
+
 ---
 
 ## 📋 Example Configurations
@@ -266,6 +301,131 @@ CloudForge 3.0+ automatically provisions RDS databases for applications with dat
 ```
 
 EC2 with auto-scaling, SSL, Cognito MFA, and custom domain.
+
+---
+
+## 🔌 Application-Specific Configurations
+
+CloudForge supports 14 applications. Set `applicationId` to deploy any application.
+
+### GitLab (CI/CD + Version Control)
+
+```json
+{
+  "applicationId": "gitlab",
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "gitlab",
+  "enableSsl": true,
+  "instanceType": "t3.large",
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "gitlab-auth",
+  "enableDockerRegistry": true,
+  "enableSsh": true,
+  "enableMetrics": true
+}
+```
+
+**Includes:** Container registry (port 5050), Git SSH (port 22), Prometheus metrics, OIDC SSO.
+
+### Mattermost (Team Collaboration)
+
+```json
+{
+  "applicationId": "mattermost",
+  "runtime": "fargate",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "chat",
+  "enableSsl": true,
+  "cpu": 2048,
+  "memory": 4096,
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "mattermost-auth",
+  "enableSmtp": true,
+  "enableClustering": true
+}
+```
+
+**Includes:** PostgreSQL RDS (required), SMTP email, high-availability clustering, OIDC/SAML SSO.
+
+### Grafana (Monitoring Dashboard)
+
+```json
+{
+  "applicationId": "grafana",
+  "runtime": "fargate",
+  "securityProfile": "staging",
+  "domain": "example.com",
+  "subdomain": "monitoring",
+  "enableSsl": true,
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "grafana-auth",
+  "provisionDatabase": false
+}
+```
+
+**Options:** `provisionDatabase: true` for PostgreSQL (production), `false` for embedded SQLite (dev).
+
+### Harbor (Container Registry)
+
+```json
+{
+  "applicationId": "harbor",
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "registry",
+  "enableSsl": true,
+  "instanceType": "t3.medium",
+  "enableDockerRegistry": true,
+  "enableNotary": true,
+  "enableTrivy": true
+}
+```
+
+**Includes:** PostgreSQL + Redis (required), Docker registry, Notary content trust, Trivy vulnerability scanning.
+
+### Vault (Secrets Management)
+
+```json
+{
+  "applicationId": "vault",
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "vault",
+  "enableSsl": true,
+  "instanceType": "t3.small",
+  "networkMode": "private-with-nat",
+  "enableClustering": true
+}
+```
+
+**Note:** Use private network for production secrets management.
+
+### Metabase (Analytics)
+
+```json
+{
+  "applicationId": "metabase",
+  "runtime": "fargate",
+  "securityProfile": "staging",
+  "domain": "example.com",
+  "subdomain": "analytics",
+  "enableSsl": true,
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "metabase-auth",
+  "provisionDatabase": true
+}
+```
+
+**Options:** `provisionDatabase: true` for PostgreSQL (production), `false` for embedded H2 (dev).
 
 ---
 

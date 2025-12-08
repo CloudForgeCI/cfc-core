@@ -3325,4 +3325,76 @@ class PciDssRulesTest {
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
+
+    // ==================== PCI-DSS 3.1 Backup and Data Protection Tests ====================
+
+    /**
+     * Tests PCI-DSS backup and data protection requirements.
+     *
+     * PCI-DSS Requirements:
+     * - 3.1: Protect stored cardholder data
+     * - 9.5: Protect media containing cardholder data
+     * - 12.10.1: Incident response plan with data recovery
+     *
+     * Test parameters:
+     * - profile: Security profile (DEV, STAGING, PRODUCTION)
+     * - backupEnabled: Whether automated backups are enabled
+     * - retentionDays: Backup retention period in days
+     * - crossRegion: Whether cross-region backup is enabled
+     * - vaultLock: Whether backup vault lock is enabled (prevents deletion)
+     * - efsProtected: Whether EFS is protected by backup plan
+     * - complianceMode: ENFORCE or ADVISORY
+     */
+    @ParameterizedTest
+    @CsvSource({
+        // PRODUCTION profile - full data protection
+        "PRODUCTION,true,90,true,true,true,ENFORCE",      // Full protection with vault lock
+        "PRODUCTION,true,90,true,false,true,ENFORCE",     // No vault lock
+        "PRODUCTION,true,90,false,true,true,ENFORCE",     // No cross-region
+        "PRODUCTION,true,365,true,true,true,ENFORCE",     // Extended retention (1 year)
+        "PRODUCTION,true,30,true,true,true,ENFORCE",      // Short retention
+        "PRODUCTION,true,90,true,true,false,ENFORCE",     // EFS not protected - gap
+        "PRODUCTION,false,0,false,false,false,ENFORCE",   // No backup - non-compliant
+
+        // STAGING profile - standard backup
+        "STAGING,true,14,false,false,true,ENFORCE",       // Standard staging
+        "STAGING,true,30,false,false,true,ENFORCE",       // Extended staging
+        "STAGING,false,0,false,false,false,ENFORCE",      // No backup staging
+
+        // DEV profile - minimal/no backup
+        "DEV,false,0,false,false,false,ENFORCE",          // No backup dev (default)
+        "DEV,true,7,false,false,true,ENFORCE",            // Optional dev backup
+
+        // ADVISORY mode variations
+        "PRODUCTION,true,90,true,true,true,ADVISORY",     // Full protection advisory
+        "PRODUCTION,false,0,false,false,false,ADVISORY",  // No backup advisory
+        "STAGING,true,14,false,false,true,ADVISORY"       // Staging advisory
+    })
+    void testPciDssBackupAndDataProtection(String profile, boolean backupEnabled, int retentionDays,
+                                            boolean crossRegion, boolean vaultLock, boolean efsProtected,
+                                            String complianceMode) {
+        // Given: Configuration for backup and data protection
+        App app = new App();
+        Stack stack = new Stack(app, "PciDssBackupTest-" + profile + "-" + backupEnabled);
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("appName", "pci-backup-test");
+        cfcContext.put("complianceFrameworks", "PCI-DSS");
+        cfcContext.put("complianceMode", complianceMode);
+        cfcContext.put("automatedBackupEnabled", String.valueOf(backupEnabled));
+        cfcContext.put("backupRetentionDays", String.valueOf(retentionDays));
+        cfcContext.put("crossRegionBackupEnabled", String.valueOf(crossRegion));
+        cfcContext.put("backupVaultLockEnabled", String.valueOf(vaultLock));
+        cfcContext.put("efsProtectedByBackup", String.valueOf(efsProtected));
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(secProfile);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                secProfile, iamProfile, cfc);
+
+        // When/Then: PCI-DSS rules should install without error
+        assertDoesNotThrow(() -> new PciDssRules().install(ctx));
+    }
 }

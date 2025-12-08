@@ -1,6 +1,6 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <version>3.0.0</version>
+    <version>3.0.0-SNAPSHOT</version>
 
     <artifactId>com.cloudforgeci.testing</artifactId>
     <groupId>core-testing</groupId>
@@ -11,29 +11,56 @@
         <maven.compiler.target>21</maven.compiler.target>
     </properties>
 
+    <!-- Import CloudForge BOM for centralized version management -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.cloudforgeci</groupId>
+                <artifactId>cfc-core</artifactId>
+                <version>3.0.0-SNAPSHOT</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
 <dependencies>
     <!-- CloudForge Core - contains enums, interfaces, and base models -->
+    <!-- Version managed by BOM -->
     <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-core</artifactId>
-        <version>3.0.0</version>
     </dependency>
 
     <!-- CloudForge API - contains factories and deployment logic -->
+    <!-- Version managed by BOM -->
     <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-api</artifactId>
-        <version>3.0.0</version>
     </dependency>
 
-    <!-- CDK Nag for compliance checks -->
+    <!-- AWS CDK - explicit dependency for IDE support -->
+    <!-- Version managed by BOM -->
+    <dependency>
+        <groupId>software.amazon.awscdk</groupId>
+        <artifactId>aws-cdk-lib</artifactId>
+    </dependency>
+
+    <!-- CDK Constructs -->
+    <!-- Version managed by BOM -->
+    <dependency>
+        <groupId>software.constructs</groupId>
+        <artifactId>constructs</artifactId>
+    </dependency>
+
+    <!-- CDK Nag for compliance checks (not in BOM - project-specific) -->
     <dependency>
         <groupId>io.github.cdklabs</groupId>
         <artifactId>cdknag</artifactId>
         <version>2.37.22</version>
     </dependency>
 
-    <!-- JUnit 5 for testing -->
+    <!-- JUnit 5 for testing (not in BOM - project-specific) -->
     <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter</artifactId>
@@ -41,11 +68,10 @@
         <scope>test</scope>
     </dependency>
 
-    <!-- Jackson for JSON serialization -->
+    <!-- Jackson for JSON serialization - version managed by BOM -->
     <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
-        <version>2.18.2</version>
     </dependency>
 </dependencies>
 

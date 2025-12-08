@@ -77,7 +77,7 @@ public class LoggingCwFactory extends BaseFactory {
             // Create log group with security profile-based settings
             String securityProfileName = (security != null) ? security.name().toLowerCase() : "unknown";
             String runtimeName = (runtime != null) ? runtime.name().toLowerCase() : "unknown";
-            String logGroupName = "/aws/jenkins/" + stackName + "/" + runtimeName + "/" + securityProfileName;
+            String logGroupName = "/aws/ecs/" + stackName + "/" + runtimeName + "/" + securityProfileName;
             LOG.info("LoggingCwFactory: Creating log group with name: " + logGroupName);
 
             // Use configurable log retention from DeploymentContext if monitoring is enabled

@@ -1,0 +1,57 @@
+{
+  "stackName": "Metabase-Production",
+  "applicationId": "metabase",
+  "applicationName": "Metabase Analytics",
+  "description": "Production Metabase with SOC2 compliance",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "analytics",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "metabase-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "MetabaseAdmins",
+  "cognitoUserGroupName": "MetabaseUsers",
+
+  "instanceType": "t3.medium",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 4,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 60,
+
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "databaseVersion": "15",
+  "databaseInstanceClass": "db.t3.medium",
+  "databaseAllocatedStorageGB": 50,
+  "databaseMultiAz": true,
+  "databaseName": "metabase",
+  "databaseBackupRetentionDays": 30,
+
+  "complianceFrameworks": "SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "auditManagerEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "730",
+  "retainStorage": true
+}

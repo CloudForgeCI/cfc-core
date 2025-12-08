@@ -273,6 +273,68 @@ public interface ApplicationSpec {
         return getSupportedAuthModes().get(0);
     }
 
+    // ========== Optional Ports (Security-Conscious) ==========
+
+    /**
+     * Optional service port that can be enabled via deployment configuration.
+     *
+     * <p>Ports are NOT exposed by default - must be explicitly enabled via the configKey
+     * in deployment configuration. This follows the principle of least privilege.</p>
+     *
+     * @param port The port number
+     * @param protocol The protocol ("tcp" or "udp")
+     * @param configKey The DeploymentContext key to enable this port (e.g., "enableSmtp")
+     * @param service Human-readable service name for logging/prompts
+     * @param inbound true if port accepts inbound connections (requires security group rule),
+     *                false if outbound only (container connects out, no SG rule needed)
+     */
+    record OptionalPort(int port, String protocol, String configKey, String service, boolean inbound) {
+        /**
+         * Convenience constructor for inbound TCP ports.
+         */
+        public static OptionalPort inboundTcp(int port, String configKey, String service) {
+            return new OptionalPort(port, "tcp", configKey, service, true);
+        }
+
+        /**
+         * Convenience constructor for outbound TCP ports (no security group rule needed).
+         */
+        public static OptionalPort outboundTcp(int port, String configKey, String service) {
+            return new OptionalPort(port, "tcp", configKey, service, false);
+        }
+    }
+
+    /**
+     * Returns optional ports that can be enabled via deployment configuration.
+     *
+     * <p>These ports are NOT exposed by default. Users must set the corresponding
+     * configKey to true in their deployment configuration to enable each port.</p>
+     *
+     * <p>Example implementation for Mattermost:</p>
+     * <pre>{@code
+     * @Override
+     * public List<OptionalPort> optionalPorts() {
+     *     return List.of(
+     *         OptionalPort.outboundTcp(587, "enableSmtp", "SMTP Email"),
+     *         OptionalPort.inboundTcp(8074, "enableClustering", "Cluster Gossip")
+     *     );
+     * }
+     * }</pre>
+     *
+     * <p>User enables in deployment-context.json:</p>
+     * <pre>{@code
+     * {
+     *   "enableSmtp": true,
+     *   "enableClustering": true
+     * }
+     * }</pre>
+     *
+     * @return list of optional ports (empty by default - most apps only need primary port)
+     */
+    default List<OptionalPort> optionalPorts() {
+        return List.of();
+    }
+
     // ========== Plugin Metadata Methods ==========
 
     /**

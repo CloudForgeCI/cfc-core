@@ -69,6 +69,14 @@ public class GiteaApplicationSpec implements ApplicationSpec {
     }
 
     @Override
+    public java.util.List<OptionalPort> optionalPorts() {
+        return java.util.List.of(
+            // Git over SSH - inbound for repository access (uses 2222 to avoid port 22 conflicts)
+            OptionalPort.inboundTcp(2222, "enableSsh", "Git SSH")
+        );
+    }
+
+    @Override
     public String containerDataPath() {
         return CONTAINER_DATA_PATH;
     }
@@ -151,20 +159,22 @@ public class GiteaApplicationSpec implements ApplicationSpec {
         }
 
         // Run Gitea container
+        // Note: SSH on port 2222 to avoid conflict with EC2 host SSHD on port 22
         builder.addCommands(
             "# Run Gitea container",
             "docker run -d \\",
             "  --name gitea \\",
-            "  -p 3000:3000 -p 22:22 \\",
+            "  -p 3000:3000 -p 2222:22 \\",
             "  -v " + ec2DataPath() + ":/data \\",
             "  -e USER_UID=" + uid + " \\",
             "  -e USER_GID=" + gid + " \\",
+            "  -e GITEA__server__SSH_PORT=2222 \\",
             "  " + DEFAULT_IMAGE,
             "echo 'Gitea container started' >> /var/log/userdata.log",
             "",
             "# Wait for Gitea to initialize",
             "sleep 30",
-            "echo 'Gitea should be available on port 3000' >> /var/log/userdata.log"
+            "echo 'Gitea should be available on port 3000 (HTTP) and 2222 (SSH)' >> /var/log/userdata.log"
         );
     }
 

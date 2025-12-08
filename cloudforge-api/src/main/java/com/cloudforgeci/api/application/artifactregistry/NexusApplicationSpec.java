@@ -96,6 +96,16 @@ public class NexusApplicationSpec implements ApplicationSpec {
     }
 
     @Override
+    public java.util.List<OptionalPort> optionalPorts() {
+        return java.util.List.of(
+            // Docker Registry - inbound for Docker image hosting (configurable port range)
+            OptionalPort.inboundTcp(5000, "enableDockerRegistry", "Docker Registry"),
+            OptionalPort.inboundTcp(5001, "enableDockerRegistry", "Docker Registry (hosted)"),
+            OptionalPort.inboundTcp(5002, "enableDockerRegistry", "Docker Registry (proxy)")
+        );
+    }
+
+    @Override
     public String containerDataPath() {
         return CONTAINER_DATA_PATH;
     }
@@ -208,13 +218,15 @@ public class NexusApplicationSpec implements ApplicationSpec {
 
     @Override
     public boolean supportsOidcIntegration() {
-        return true;
+        // Nexus Pro supports OIDC/SAML but no OidcIntegration implementation yet
+        // Return false until getOidcIntegration() returns a valid implementation
+        return false;
     }
 
     @Override
     public OidcIntegration getOidcIntegration() {
         // Nexus Pro supports OIDC/SAML
-        // For now, return null - implementation would require Nexus Pro license
+        // Requires Nexus Pro license for OIDC/SAML support
         return null;
     }
 

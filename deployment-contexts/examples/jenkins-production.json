@@ -1,0 +1,50 @@
+{
+  "stackName": "Jenkins-Production",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins CI",
+  "description": "Production Jenkins with SOC2 compliance and build agents",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "jenkins",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "jenkins-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "JenkinsAdmins",
+  "cognitoUserGroupName": "JenkinsDevelopers",
+
+  "instanceType": "t3.medium",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 4,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 60,
+
+  "enableAgents": true,
+
+  "complianceFrameworks": "SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "auditManagerEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "730",
+  "retainStorage": true
+}

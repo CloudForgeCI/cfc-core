@@ -37,13 +37,9 @@ import software.constructs.Construct;
  */
 public class ApplicationFargateStack extends Stack {
 
-    public ApplicationFargateStack(final Construct scope, final String id) {
-        this(scope, id, null, SecurityProfile.DEV, IAMProfile.EXTENDED, null);
-    }
-
-    public ApplicationFargateStack(final Construct scope, final String id, final StackProps props) {
-        this(scope, id, props, SecurityProfile.DEV, IAMProfile.EXTENDED, null);
-    }
+    // Note: Convenience constructors removed in CloudForge 3.0.0
+    // ApplicationSpec is required for all deployments. Use the full constructor
+    // or CloudForgeCommunitySample which loads applicationSpec from deployment context.
 
     public ApplicationFargateStack(final Construct scope, final String id, final StackProps props,
                                    final SecurityProfile security, final IAMProfile iamProfile,
@@ -51,7 +47,8 @@ public class ApplicationFargateStack extends Stack {
         super(scope, id, props);
 
         if (applicationSpec == null) {
-            throw new IllegalArgumentException("ApplicationSpec cannot be null");
+            throw new IllegalArgumentException("ApplicationSpec cannot be null. " +
+                "Use ApplicationLoader.findById(\"appName\") to get a valid ApplicationSpec.");
         }
 
         System.out.println("Creating Universal Application Fargate stack:");

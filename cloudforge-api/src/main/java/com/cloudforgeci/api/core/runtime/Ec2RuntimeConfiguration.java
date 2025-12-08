@@ -18,6 +18,7 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListener;
 import software.amazon.awscdk.services.elasticloadbalancingv2.FixedResponseOptions;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate;
+import software.amazon.awscdk.services.elasticloadbalancingv2.SslPolicy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -105,11 +106,14 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     // This prevents duplicate target group additions and centralizes the logic
     // whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> tg.addTarget(asg)); // REMOVED - handled by topology configuration
 
-    // ── 2) ALB SG -> Instance SG :8080 ──────────────────────────────────────────
+    // ── 2) ALB SG -> Instance SG (application port) ──────────────────────────────────────────
     whenBoth(c.alb, c.instanceSg, (alb, isg) -> {
       ISecurityGroup albSg = alb.getConnections().getSecurityGroups().get(0);
+      // Use application-specific port from ApplicationSpec, fallback to 8080 for legacy Jenkins
+      int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
+      String appId = c.applicationSpec.get().map(spec -> spec.applicationId()).orElse("app");
       isg.addIngressRule(Peer.securityGroupId(albSg.getSecurityGroupId()),
-              Port.tcp(8080), "ALB_to_Jenkins_8080", false);
+              Port.tcp(appPort), "ALB_to_" + appId + "_" + appPort, false);
     });
 
     // ── 2a) Auto Scaling Configuration - EC2 runtime (when ASG is available) ────
@@ -169,6 +173,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     });
 
     // 4b) Create HTTPS listener with certificate
+    // Use TLS 1.2+ policy for PCI-DSS compliance (Requirement 4.1)
     whenBoth(c.cert, c.alb, (cert, alb) -> {
       if (c.https.get().isPresent()) return;
 
@@ -179,6 +184,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                 BaseApplicationListenerProps.builder()
                         .port(443)
                         .certificates(List.of(ListenerCertificate.fromCertificateManager(cert)))
+                        .sslPolicy(SslPolicy.RECOMMENDED_TLS)
                         .defaultAction(ListenerAction.forward(List.of(c.albTargetGroup.get().orElseThrow())))
                         .build());
       } else {
@@ -187,6 +193,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                 BaseApplicationListenerProps.builder()
                         .port(443)
                         .certificates(List.of(ListenerCertificate.fromCertificateManager(cert)))
+                        .sslPolicy(SslPolicy.RECOMMENDED_TLS)
                         .defaultAction(ListenerAction.fixedResponse(200, FixedResponseOptions.builder()
                                 .contentType("text/plain")
                                 .messageBody("Jenkins is starting up...")

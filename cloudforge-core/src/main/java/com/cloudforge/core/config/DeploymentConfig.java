@@ -147,6 +147,8 @@ public class DeploymentConfig {
     /** Existing Cognito App Client ID */
     public String cognitoAppClientId = null;
 
+    // ========== OIDC Configuration ==========
+
     /** OIDC issuer URL */
     public String oidcIssuer = null;
 
@@ -165,18 +167,66 @@ public class DeploymentConfig {
     /** OIDC client secret name in Secrets Manager */
     public String oidcClientSecretName = null;
 
+    // ========== Optional Ports Configuration ==========
+    // These enable optional services on applications that support them.
+    // Ports are NOT exposed by default - must be explicitly enabled.
+
+    /** Enable JNLP build agent port (Jenkins: 50000) */
+    public boolean enableAgents = false;
+
+    /** Enable Git SSH port (GitLab: 22, Gitea: 2222) */
+    public boolean enableSsh = false;
+
+    /** Enable SMTP email port (Mattermost: 587) */
+    public boolean enableSmtp = false;
+
+    /** Enable SMTP TLS email port (Mattermost: 465) */
+    public boolean enableSmtps = false;
+
+    /** Enable clustering ports (Mattermost: 8074-8075, Vault: 8201) */
+    public boolean enableClustering = false;
+
+    /** Enable container registry port (GitLab: 5050, Nexus: 5000-5002) */
+    public boolean enableDockerRegistry = false;
+
+    /** Enable Prometheus metrics port (GitLab: 9090) */
+    public boolean enableMetrics = false;
+
+    /** Enable Notary content trust port (Harbor: 4443) */
+    public boolean enableNotary = false;
+
+    /** Enable Trivy vulnerability scanner port (Harbor: 8080) */
+    public boolean enableTrivy = false;
+
+    /** Enable Redis Sentinel port (Redis: 26379) */
+    public boolean enableSentinel = false;
+
+    /** Enable Redis Cluster bus port (Redis: 16379) */
+    public boolean enableCluster = false;
+
+    // ========== IAM Identity Center Configuration ==========
+
+    /** Auto-provision SAML application in IAM Identity Center */
+    public boolean autoProvisionIdentityCenter = false;
+
+    /** IAM Identity Center (SSO) Instance ARN */
+    public String ssoInstanceArn = null;
+
+    /** Identity Center group name for user assignment */
+    public String identityCenterGroupName = null;
+
     // ========== Database Configuration ==========
 
     /**
      * Provision RDS database for application.
      * Only shown for applications with optional database support (e.g., Metabase, Grafana).
-     * Applications requiring database (e.g., GitLab) always provision one.
+     * Applications requiring database (e.g., Mattermost, GitLab) always provision one.
      */
     @ConfigField(
         displayName = "Provision RDS Database",
         description = "Create managed RDS database for high availability and automatic backups",
         category = "database",
-        visibleWhen = "supportsDatabase",
+        visibleWhen = "supportsDatabase && !requiresDatabase",
         required = false,
         order = 10
     )

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Deployment Changeset Validator
 # Uses 'cdk deploy --no-execute' to create actual AWS CloudFormation changesets
@@ -97,13 +97,15 @@ create_deployment_context() {
     cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
   "deploymentType": "jenkins",
   "tier": "public",
   "domain": "$DOMAIN",
   "subdomain": "$subdomain",
   "enableSsl": "true",
   "runtime": "$runtime",
-  "topology": "JENKINS_SERVICE",
+  "topology": "APPLICATION_SERVICE",
   "securityProfile": "$security_profile",
   "networkMode": "$network_mode",
   "wafEnabled": "$waf_enabled",

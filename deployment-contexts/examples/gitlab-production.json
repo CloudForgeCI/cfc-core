@@ -1,0 +1,57 @@
+{
+  "stackName": "GitLab-Production",
+  "applicationId": "gitlab",
+  "applicationName": "GitLab",
+  "description": "Production GitLab with SSH, Registry, and Metrics",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "gitlab",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "gitlab-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+
+  "instanceType": "t3.large",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 4,
+  "enableAutoScaling": true,
+
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "databaseVersion": "16",
+  "databaseInstanceClass": "db.t3.large",
+  "databaseAllocatedStorageGB": 100,
+  "databaseMultiAz": true,
+  "databaseName": "gitlabhq_production",
+  "databaseBackupRetentionDays": 30,
+
+  "enableSsh": true,
+  "enableDockerRegistry": true,
+  "enableMetrics": true,
+
+  "complianceFrameworks": "SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "guardDutyEnabled": true,
+  "auditManagerEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "730",
+  "retainStorage": true,
+  "healthCheckGracePeriod": 900
+}

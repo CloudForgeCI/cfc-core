@@ -2,6 +2,9 @@ package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.services.ec2.Port;
@@ -104,8 +107,11 @@ public class FargateFactory extends BaseFactory {
   @com.cloudforge.core.annotation.SystemContext("albSg")
   private SecurityGroup albSg;
 
-  @com.cloudforge.core.annotation.SystemContext("efsSg")
+  @SystemContext("efsSg")
   private SecurityGroup efsSg;
+
+  @SystemContext("security")
+  private SecurityProfile security;
 
   @com.cloudforge.core.annotation.SystemContext("ap")
   private AccessPoint ap;
@@ -118,6 +124,46 @@ public class FargateFactory extends BaseFactory {
 
   @DeploymentContext("region")
   private String region;
+
+  @DeploymentContext("containerImage")
+  private String containerImage;
+
+  // ========== Optional Port Configuration ==========
+  // These flags control which optional ports are exposed in security groups
+  // Ports are NOT exposed by default - must be explicitly enabled
+
+  @DeploymentContext("enableAgents")
+  private Boolean enableAgents;
+
+  @DeploymentContext("enableSsh")
+  private Boolean enableSsh;
+
+  @DeploymentContext("enableSmtp")
+  private Boolean enableSmtp;
+
+  @DeploymentContext("enableSmtps")
+  private Boolean enableSmtps;
+
+  @DeploymentContext("enableClustering")
+  private Boolean enableClustering;
+
+  @DeploymentContext("enableDockerRegistry")
+  private Boolean enableDockerRegistry;
+
+  @DeploymentContext("enableMetrics")
+  private Boolean enableMetrics;
+
+  @DeploymentContext("enableNotary")
+  private Boolean enableNotary;
+
+  @DeploymentContext("enableTrivy")
+  private Boolean enableTrivy;
+
+  @DeploymentContext("enableSentinel")
+  private Boolean enableSentinel;
+
+  @DeploymentContext("enableCluster")
+  private Boolean enableCluster;
 
   /**
    * Creates a new FargateFactory instance.
@@ -174,7 +220,12 @@ public class FargateFactory extends BaseFactory {
       throw new IllegalStateException("VPC not available");
     }
 
-    Cluster cluster = Cluster.Builder.create(this, "Cluster").vpc(vpc).build();
+    // Enable Container Insights for PRODUCTION/STAGING profiles (PCI-DSS compliance)
+    boolean enableContainerInsights = security != SecurityProfile.DEV;
+    Cluster cluster = Cluster.Builder.create(this, "Cluster")
+            .vpc(vpc)
+            .containerInsights(enableContainerInsights)
+            .build();
     SecurityGroup serviceSg = SecurityGroup.Builder.create(this, getNode().getId() + "SvcSg")
             .vpc(vpc)
             .allowAllOutbound(true).build();
@@ -233,8 +284,14 @@ public class FargateFactory extends BaseFactory {
 
     // Create container (now that task definition and volume are available)
     // Get container image from ApplicationSpec or use default
-    String containerImage = applicationSpec != null ? applicationSpec.defaultContainerImage() : "jenkins/jenkins:lts";
-    ContainerFactory containerFactory = new ContainerFactory(this, getNode().getId() + "Container", ContainerImage.fromRegistry(containerImage));
+    String image = applicationSpec != null ? applicationSpec.defaultContainerImage() : "jenkins/jenkins:lts";
+    // Allow DeploymentContext.containerImage to override the tag portion (after ':')
+    if (this.containerImage != null && !this.containerImage.isBlank()) {
+        int colonIndex = image.lastIndexOf(':');
+        String baseImage = colonIndex > 0 ? image.substring(0, colonIndex) : image;
+        image = baseImage + ":" + this.containerImage;
+    }
+    ContainerFactory containerFactory = new ContainerFactory(this, getNode().getId() + "Container", ContainerImage.fromRegistry(image));
     containerFactory.create();
 
     // Now set the service in context after container is created
@@ -277,6 +334,52 @@ public class FargateFactory extends BaseFactory {
         LOG.info("Added security group rule: Fargate -> RDS on port " + dbPort);
       });
     });
+
+    // Add security group rules for optional inbound ports
+    // These are NOT exposed by default - must be explicitly enabled via deployment config
+    if (applicationSpec != null) {
+      for (ApplicationSpec.OptionalPort optionalPort : applicationSpec.optionalPorts()) {
+        // Only add ingress rules for inbound ports that are enabled
+        if (optionalPort.inbound() && isOptionalPortEnabled(optionalPort.configKey())) {
+          Port port = optionalPort.protocol().equals("udp")
+              ? Port.udp(optionalPort.port())
+              : Port.tcp(optionalPort.port());
+          // Allow from anywhere for optional service ports (e.g., SSH, JNLP agents)
+          serviceSg.addIngressRule(
+              software.amazon.awscdk.services.ec2.Peer.anyIpv4(),
+              port,
+              optionalPort.service().replace(" ", "_") + "_inbound",
+              false
+          );
+          LOG.info("  ✅ Added security group rule for optional port: " +
+                   optionalPort.port() + "/" + optionalPort.protocol() +
+                   " (" + optionalPort.service() + ")");
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if an optional port is enabled based on the config key.
+   */
+  private boolean isOptionalPortEnabled(String configKey) {
+    return switch (configKey) {
+      case "enableAgents" -> Boolean.TRUE.equals(enableAgents);
+      case "enableSsh" -> Boolean.TRUE.equals(enableSsh);
+      case "enableSmtp" -> Boolean.TRUE.equals(enableSmtp);
+      case "enableSmtps" -> Boolean.TRUE.equals(enableSmtps);
+      case "enableClustering" -> Boolean.TRUE.equals(enableClustering);
+      case "enableDockerRegistry" -> Boolean.TRUE.equals(enableDockerRegistry);
+      case "enableMetrics" -> Boolean.TRUE.equals(enableMetrics);
+      case "enableNotary" -> Boolean.TRUE.equals(enableNotary);
+      case "enableTrivy" -> Boolean.TRUE.equals(enableTrivy);
+      case "enableSentinel" -> Boolean.TRUE.equals(enableSentinel);
+      case "enableCluster" -> Boolean.TRUE.equals(enableCluster);
+      default -> {
+        LOG.warning("Unknown optional port config key: " + configKey);
+        yield false;
+      }
+    };
   }
 
   /**

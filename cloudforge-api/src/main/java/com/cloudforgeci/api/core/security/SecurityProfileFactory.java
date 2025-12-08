@@ -76,7 +76,7 @@ public class SecurityProfileFactory extends BaseFactory {
         LogGroup logGroup = LogGroup.Builder.create(this, "SecurityProfileLogs")
                 .retention(config.getLogRetentionDays())
                 .removalPolicy(config.getLogRemovalPolicy())
-                .logGroupName("/aws/jenkins/" + stackName + "/" + runtime.name().toLowerCase() + "/" + security.name().toLowerCase())
+                .logGroupName("/aws/ecs/" + stackName + "/" + runtime.name().toLowerCase() + "/" + security.name().toLowerCase())
                 .build();
 
         ctx.logs.set(logGroup);

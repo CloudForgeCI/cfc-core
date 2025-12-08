@@ -51,7 +51,7 @@ public class DatabaseSpecTest {
 
             // REQUIRED databases (must have external RDS)
             Arguments.of(new GitLabApplicationSpec(), RequirementType.REQUIRED, "postgres", "16", "gitlabhq_production", 30, true, true),
-            Arguments.of(new MattermostApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "mattermost", 14, true, true),
+            Arguments.of(new MattermostApplicationSpec(), RequirementType.REQUIRED, "postgres", "14", "mattermost", 14, true, true),
             Arguments.of(new SupersetApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "superset", 14, true, true),
             Arguments.of(new HarborApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "registry", 30, true, true)
         );
@@ -299,18 +299,12 @@ public class DatabaseSpecTest {
         // Should use PostgreSQL driver
         assertEquals("postgres", env.get("MM_SQLSETTINGS_DRIVERNAME"), "Should use PostgreSQL driver");
 
-        // Should configure connection string
-        String dataSource = env.get("MM_SQLSETTINGS_DATASOURCE");
-        assertNotNull(dataSource, "Should have data source connection string");
-        assertTrue(dataSource.startsWith("postgres://"), "Should use PostgreSQL protocol");
-        assertTrue(dataSource.contains(endpoint), "Should include RDS endpoint");
-        assertTrue(dataSource.contains(dbName), "Should include database name");
-        assertTrue(dataSource.contains("sslmode=require"), "Should require SSL");
-        // Password should use ENV variable placeholder (actual value injected by ECS from Secrets Manager)
-        assertTrue(dataSource.contains("${GITLAB_DATABASE_PASSWORD}"),
-            "Should use ENV variable placeholder for password");
-        assertFalse(dataSource.contains("{{resolve:secretsmanager"),
-            "Should not use CloudFormation resolve syntax (doesn't work in containers)");
+        // NOTE: Mattermost is distroless (no shell) so it can't do env var substitution.
+        // The MM_SQLSETTINGS_DATASOURCE is NOT set here - it's injected by ContainerFactory
+        // from an SSM Parameter that RdsFactory creates with the complete connection string.
+        // This is because the password needs to be resolved at runtime via dynamic reference.
+        assertNull(env.get("MM_SQLSETTINGS_DATASOURCE"),
+            "Datasource should NOT be set here - it's injected by ContainerFactory from SSM");
     }
 
     // ========== Plugin Annotation Tests ==========

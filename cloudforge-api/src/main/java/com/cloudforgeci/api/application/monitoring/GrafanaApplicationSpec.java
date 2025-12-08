@@ -135,6 +135,12 @@ public class GrafanaApplicationSpec implements ApplicationSpec, DatabaseSpec {
             environment.put("GF_SERVER_DOMAIN", fqdn);
         }
 
+        // Proxy/Load Balancer configuration - CRITICAL for ALB deployments
+        // Trust X-Forwarded-* headers from ALB for proper IP logging
+        environment.put("GF_SERVER_ENFORCE_DOMAIN", "false");  // Allow ALB health checks
+        // Protocol detection from X-Forwarded-Proto header (ALB sets this)
+        environment.put("GF_SERVER_PROTOCOL", "http");  // ALB handles HTTPS termination
+
         // Database configuration
         if (dbConn != null) {
             // Use RDS PostgreSQL for production multi-instance deployments
@@ -220,12 +226,16 @@ public class GrafanaApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
         // Run Grafana container
         builder.addCommands(
+            "# Generate secure admin password",
+            "GF_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-grafana}/admin-password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
+            "echo \"Generated Grafana admin password (save this): $GF_ADMIN_PASSWORD\" >> /var/log/userdata.log",
+            "",
             "# Run Grafana container",
             "docker run -d \\",
             "  --name grafana \\",
             "  -p 3000:3000 \\",
             "  -v " + ec2DataPath() + ":/var/lib/grafana \\",
-            "  -e GF_SECURITY_ADMIN_PASSWORD=admin \\",
+            "  -e GF_SECURITY_ADMIN_PASSWORD=\"$GF_ADMIN_PASSWORD\" \\",
             "  -e GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource \\",
             "  " + DEFAULT_IMAGE,
             "echo 'Grafana container started' >> /var/log/userdata.log",
@@ -233,7 +243,7 @@ public class GrafanaApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "# Wait for Grafana to start",
             "sleep 15",
             "echo 'Grafana should be available on port 3000' >> /var/log/userdata.log",
-            "echo 'Default credentials: admin/admin' >> /var/log/userdata.log"
+            "echo 'Admin password was logged above - store it securely' >> /var/log/userdata.log"
         );
     }
 

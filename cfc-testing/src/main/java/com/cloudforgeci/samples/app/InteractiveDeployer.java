@@ -203,6 +203,16 @@ public class InteractiveDeployer {
         config.supportsEc2 = selectedApp.supportsEc2;
         config.supportsOidc = selectedApp.supportsOidc;
 
+        // Auto-enable database provisioning for applications that require it
+        if (config.applicationSpec instanceof com.cloudforge.core.interfaces.DatabaseSpec dbSpec) {
+            var dbRequirement = dbSpec.databaseRequirement();
+            if (dbRequirement != null &&
+                dbRequirement.type() == com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement.RequirementType.REQUIRED) {
+                config.provisionDatabase = true;
+                System.out.println("ℹ️  " + config.applicationName + " requires a database - auto-enabling RDS provisioning");
+            }
+        }
+
         // ========== SECURITY PROFILE (determines many defaults) ==========
         System.out.println("\n🔒 Security Profile Selection:");
         System.out.println("================================");
@@ -351,10 +361,11 @@ public class InteractiveDeployer {
      * Configure OIDC authentication with application-level integration.
      *
      * Two completely separate authentication systems:
-     * 1. Amazon Cognito - Standalone user directory
-     * 2. IAM Identity Center - Enterprise SSO
+     * 1. Amazon Cognito - Standalone user directory (OIDC)
+     * 2. IAM Identity Center - Enterprise SSO (SAML for apps that support it)
      *
      * Delegates to ApplicationSpec to determine supported auth modes (single source of truth).
+     * Uses OidcIntegration.supportsCognito() and supportsIdentityCenterSaml() to filter options.
      */
     private static void configureOidcAuthentication(DeploymentConfig config, String applicationId) {
         // Get supported auth modes from ApplicationSpec (single source of truth)
@@ -368,22 +379,80 @@ public class InteractiveDeployer {
         List<String> supportedAuthModes = appSpec.getSupportedAuthModes();
         String recommendedAuthMode = appSpec.getRecommendedAuthMode();
 
-        System.out.println("\n📋 OIDC Provider Selection:");
-        System.out.println("============================");
-        System.out.println("Choose OIDC provider:");
-        System.out.println("  1. Amazon Cognito - Standalone user directory (auto-provision)");
-        System.out.println("  2. IAM Identity Center - Enterprise SSO (manual configuration)");
-        System.out.println("  3. External IdP - Okta, Auth0, etc. (manual OIDC endpoints)");
+        // Check OidcIntegration capabilities to filter provider options
+        boolean supportsCognito = true;  // Default for apps without OidcIntegration
+        boolean supportsIdentityCenterSaml = false;  // Default: most apps don't support SAML
+        String authType = "OIDC";
+
+        if (appSpec.supportsOidcIntegration()) {
+            var oidcIntegration = appSpec.getOidcIntegration();
+            if (oidcIntegration != null) {
+                supportsCognito = oidcIntegration.supportsCognito();
+                supportsIdentityCenterSaml = oidcIntegration.supportsIdentityCenterSaml();
+                authType = oidcIntegration.getAuthenticationType();
+            }
+        }
+
+        // Build list of available providers based on capabilities
+        List<String> availableProviders = new java.util.ArrayList<>();
+        List<String> providerDescriptions = new java.util.ArrayList<>();
+
+        // For SAML apps, only show SAML providers (not OIDC)
+        // For OIDC apps, only show OIDC providers (not SAML)
+        if (supportsCognito && "OIDC".equals(authType)) {
+            availableProviders.add("cognito");
+            providerDescriptions.add("Amazon Cognito - Standalone user directory (OIDC)");
+        }
+
+        // For SAML apps (Mattermost, Metabase), offer Cognito SAML instead of Identity Center
+        // Cognito SAML has full API support - no manual console steps required
+        if (supportsIdentityCenterSaml && "SAML".equals(authType)) {
+            availableProviders.add("cognito-saml");
+            providerDescriptions.add("Cognito SAML - Full API support, group sync (recommended for SAML apps)");
+        }
+
+        // External IdP is always available as fallback
+        availableProviders.add("external-idp");
+        providerDescriptions.add("External IdP - Okta, Auth0, etc. (manual OIDC endpoints)");
+
+        System.out.println("\n📋 OIDC/SAML Provider Selection:");
+        System.out.println("=================================");
+        System.out.println("Application: " + applicationId);
+        System.out.println("Auth Type: " + authType);
         System.out.println("");
-        System.out.println("⚠️  Cognito and Identity Center are two completely separate systems");
+        System.out.println("Available providers for this application:");
+        for (int i = 0; i < availableProviders.size(); i++) {
+            System.out.println("  " + (i + 1) + ". " + providerDescriptions.get(i));
+        }
+
+        // Show why some options are unavailable
+        if ("SAML".equals(authType)) {
+            System.out.println("");
+            System.out.println("ℹ️  This application requires SAML authentication");
+            System.out.println("   Cognito OIDC is not available (use Cognito SAML instead)");
+        } else if ("OIDC".equals(authType)) {
+            System.out.println("");
+            System.out.println("ℹ️  This application uses OIDC authentication");
+            System.out.println("   Cognito SAML is not available (use Cognito OIDC instead)");
+        }
         System.out.println("");
 
+        // Determine default provider based on auth type
+        String defaultProvider;
+        if ("SAML".equals(authType) && supportsIdentityCenterSaml) {
+            defaultProvider = "cognito-saml";  // SAML apps default to cognito-saml
+        } else if ("OIDC".equals(authType) && supportsCognito) {
+            defaultProvider = "cognito";  // OIDC apps default to cognito
+        } else {
+            defaultProvider = "external-idp";  // Fallback
+        }
+
         config.oidcProvider = promptChoice("OIDC Provider",
-            new String[]{"cognito", "identity-center", "external-idp"}, "cognito");
+            availableProviders.toArray(String[]::new), defaultProvider);
 
         switch (config.oidcProvider) {
             case "cognito" -> configureCognitoOidc(config, supportedAuthModes, recommendedAuthMode);
-            case "identity-center" -> configureIdentityCenterOidc(config, supportedAuthModes, recommendedAuthMode);
+            case "cognito-saml" -> configureCognitoSaml(config, supportedAuthModes, recommendedAuthMode);
             case "external-idp" -> configureExternalOidc(config, supportedAuthModes, recommendedAuthMode);
         }
     }
@@ -479,33 +548,83 @@ public class InteractiveDeployer {
         selectAuthMode(config, supportedAuthModes, recommendedAuthMode);
     }
 
-    private static void configureIdentityCenterOidc(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
-        System.out.println("\n📝 IAM Identity Center Configuration:");
-        System.out.println("======================================");
-        System.out.println("⚠️  IAM Identity Center is COMPLETELY SEPARATE from Cognito");
+    /**
+     * Configure Cognito SAML authentication.
+     * Cognito User Pool acts as SAML 2.0 Identity Provider.
+     * Used for applications that need SAML for group sync (Mattermost, Metabase).
+     *
+     * <p><b>Cognito SAML Endpoints:</b></p>
+     * <ul>
+     *   <li>SSO URL: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/SSO</li>
+     *   <li>Metadata: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/metadata</li>
+     * </ul>
+     */
+    private static void configureCognitoSaml(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
+        System.out.println("\n📝 Cognito SAML Configuration:");
+        System.out.println("================================");
+        System.out.println("✅ Cognito User Pool will act as SAML 2.0 Identity Provider");
         System.out.println("");
-        System.out.println("Prerequisites:");
-        System.out.println("  1. Create OIDC application in IAM Identity Center console");
-        System.out.println("  2. Select 'OAuth 2.0' application type");
-        System.out.println("  3. Configure redirect URL (will be shown after domain configuration)");
-        System.out.println("  4. Copy OIDC endpoints and client ID");
+        System.out.println("Cognito SAML provides:");
+        System.out.println("  • Full API support - no manual console steps required");
+        System.out.println("  • Automatic SAML attribute mapping");
+        System.out.println("  • Group sync support for team/channel membership");
         System.out.println("");
 
-        config.oidcIssuer = promptRequired("OIDC Issuer URL", "");
-        config.oidcAuthorizationEndpoint = promptRequired("Authorization Endpoint URL", "");
-        config.oidcTokenEndpoint = promptRequired("Token Endpoint URL", "");
-        config.oidcUserInfoEndpoint = promptRequired("UserInfo Endpoint URL", "");
-        config.oidcClientId = promptRequired("Client ID", "");
-        config.oidcClientSecretName = promptOptional("Client Secret Name in Secrets Manager",
-            config.applicationId + "/oidc/client-secret");
+        boolean autoProvision = promptYesNo("Auto-provision new Cognito User Pool", true);
 
-        System.out.println("\n✅ IAM Identity Center configuration captured");
-        System.out.println("⚠️  Store client secret in Secrets Manager after deployment:");
-        System.out.println("   aws secretsmanager put-secret-value --secret-id " + config.oidcClientSecretName +
-            " --secret-string 'YOUR_CLIENT_SECRET'");
+        if (autoProvision) {
+            config.cognitoAutoProvision = true;
 
-        // Delegate authMode selection to library (single source of truth)
-        selectAuthMode(config, supportedAuthModes, recommendedAuthMode);
+            System.out.println("\n⚠️  Domain prefix must be globally unique across ALL AWS accounts");
+            System.out.println("   Example: " + config.applicationId + "-auth-mycompany-prod");
+            config.cognitoDomainPrefix = promptRequired("Cognito Domain Prefix (globally unique)",
+                config.stackName + "-auth");
+
+            config.cognitoUserPoolName = promptOptional("User Pool Name", config.stackName + "-users");
+            config.cognitoMfaEnabled = promptYesNo("Enable MFA (Multi-Factor Authentication)",
+                config.securityProfile == SecurityProfile.PRODUCTION);
+
+            // User Groups for SAML group sync
+            System.out.println("\n👥 User Groups Configuration (for SAML group sync):");
+            config.cognitoCreateGroups = promptYesNo("Create admin and user groups", true);
+
+            if (config.cognitoCreateGroups) {
+                config.cognitoAdminGroupName = promptOptional("Admin Group Name", config.applicationId + "-Admins");
+                config.cognitoUserGroupName = promptOptional("User Group Name", config.applicationId + "-Users");
+            }
+
+            // Initial Admin User
+            System.out.println("\n👤 Initial Admin User:");
+            boolean createAdmin = promptYesNo("Create initial admin user", true);
+            if (createAdmin) {
+                config.cognitoInitialAdminEmail = promptRequired("Admin email address", "");
+                if (config.cognitoMfaEnabled) {
+                    config.cognitoInitialAdminPhone = promptOptional("Admin phone number (E.164 format, e.g., +12025551234)", "");
+                }
+
+                System.out.println("   ✅ Admin user will be created with temporary password");
+                System.out.println("   📧 User will receive email with password reset instructions");
+            }
+
+            System.out.println("\n✅ Cognito SAML IdP auto-provisioning configured");
+            System.out.println("ℹ️  SAML endpoints will be auto-generated after deployment:");
+            System.out.println("   • SSO URL: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/SSO");
+            System.out.println("   • Metadata: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/metadata");
+        } else {
+            // Use existing User Pool
+            config.cognitoUserPoolId = promptRequired("Cognito User Pool ID (e.g., us-east-1_abc123xyz)", "");
+            config.cognitoAppClientId = promptOptional("App Client ID (leave empty to create new)", "");
+            config.cognitoDomainPrefix = promptRequired("Cognito Domain Prefix", "");
+
+            System.out.println("\n✅ Existing Cognito SAML configuration captured");
+            System.out.println("ℹ️  SAML endpoints (use these in your application):");
+            System.out.println("   • SSO URL: https://cognito-idp.{region}.amazonaws.com/" + config.cognitoUserPoolId + "/saml2/idp/SSO");
+            System.out.println("   • Metadata: https://cognito-idp.{region}.amazonaws.com/" + config.cognitoUserPoolId + "/saml2/idp/metadata");
+        }
+
+        // For SAML apps, use application-oidc mode (auth happens at application level)
+        config.authMode = "application-oidc";
+        System.out.println("\n✅ Using application-oidc mode (SAML authentication at application level)");
     }
 
     private static void configureExternalOidc(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
@@ -828,6 +947,9 @@ public class InteractiveDeployer {
             promptForField(field, config);
         }
 
+        // Optional Ports Configuration - Only show if application has optional ports
+        configureOptionalPorts(config);
+
         // Region Configuration
         System.out.println("\n🌍 Region Configuration:");
         config.region = promptChoice("AWS Region",
@@ -845,6 +967,86 @@ public class InteractiveDeployer {
             String defaultAz = config.region + "a";
             config.availabilityZones = new String[]{defaultAz};
             System.out.println("ℹ️  Single-AZ deployment: " + defaultAz);
+        }
+    }
+
+    /**
+     * Configure optional ports for applications that support them.
+     *
+     * <p>Optional ports are NOT exposed by default - users must explicitly enable them.
+     * This follows security-conscious design where unused ports stay closed.</p>
+     *
+     * <p>Examples:</p>
+     * <ul>
+     *   <li>Jenkins: JNLP agents port (50000)</li>
+     *   <li>GitLab: SSH (22), Container Registry (5050), Metrics (9090)</li>
+     *   <li>Mattermost: SMTP (587/465), Clustering (8074-8075)</li>
+     *   <li>Redis: Sentinel (26379), Cluster Bus (16379)</li>
+     * </ul>
+     */
+    private static void configureOptionalPorts(DeploymentConfig config) {
+        if (config.applicationSpec == null) {
+            return;
+        }
+
+        List<ApplicationSpec.OptionalPort> optionalPorts = config.applicationSpec.optionalPorts();
+        if (optionalPorts == null || optionalPorts.isEmpty()) {
+            return;
+        }
+
+        System.out.println("\n🔌 Optional Ports Configuration:");
+        System.out.println("=================================");
+        System.out.println("The following optional service ports can be enabled for " + config.applicationName + ".");
+        System.out.println("⚠️  Ports are NOT exposed by default for security. Only enable what you need.");
+        System.out.println("");
+
+        // Group ports by configKey to avoid duplicate prompts
+        Map<String, List<ApplicationSpec.OptionalPort>> portsByConfigKey = new java.util.LinkedHashMap<>();
+        for (ApplicationSpec.OptionalPort port : optionalPorts) {
+            portsByConfigKey.computeIfAbsent(port.configKey(), k -> new java.util.ArrayList<>()).add(port);
+        }
+
+        for (Map.Entry<String, List<ApplicationSpec.OptionalPort>> entry : portsByConfigKey.entrySet()) {
+            String configKey = entry.getKey();
+            List<ApplicationSpec.OptionalPort> ports = entry.getValue();
+
+            // Build description from all ports with this config key
+            StringBuilder description = new StringBuilder();
+            for (int i = 0; i < ports.size(); i++) {
+                ApplicationSpec.OptionalPort port = ports.get(i);
+                if (i > 0) description.append(", ");
+                description.append(port.service())
+                          .append(" (")
+                          .append(port.port())
+                          .append("/")
+                          .append(port.protocol())
+                          .append(port.inbound() ? " inbound" : " outbound")
+                          .append(")");
+            }
+
+            // Use first port's service name for the prompt
+            String promptLabel = "Enable " + ports.get(0).service();
+            boolean enabled = promptYesNo(promptLabel + " - " + description, false);
+
+            // Set the appropriate config field based on configKey
+            switch (configKey) {
+                case "enableAgents" -> config.enableAgents = enabled;
+                case "enableSsh" -> config.enableSsh = enabled;
+                case "enableSmtp" -> config.enableSmtp = enabled;
+                case "enableSmtps" -> config.enableSmtps = enabled;
+                case "enableClustering" -> config.enableClustering = enabled;
+                case "enableDockerRegistry" -> config.enableDockerRegistry = enabled;
+                case "enableMetrics" -> config.enableMetrics = enabled;
+                case "enableNotary" -> config.enableNotary = enabled;
+                case "enableTrivy" -> config.enableTrivy = enabled;
+                case "enableSentinel" -> config.enableSentinel = enabled;
+                case "enableCluster" -> config.enableCluster = enabled;
+                default -> LOG.warning("Unknown optional port config key: " + configKey);
+            }
+
+            if (enabled) {
+                System.out.println("  ✅ " + description + " will be exposed");
+            }
         }
     }
 
@@ -1025,16 +1227,28 @@ public class InteractiveDeployer {
             System.out.println();
         }
 
-        // OIDC Authentication
+        // OIDC/SAML Authentication
         if (config.supportsOidc && !config.oidcProvider.equals("none")) {
-            System.out.println("🔐 OIDC Authentication");
+            System.out.println("🔐 Authentication");
             System.out.println("═══════════════════════════════════════════════════════════════");
             System.out.println("  Provider:           " + config.oidcProvider);
             System.out.println("  Auth Mode:          " + config.authMode);
             if (config.oidcProvider.equals("cognito") && config.cognitoAutoProvision) {
-                System.out.println("  Cognito:            Auto-provisioning");
+                System.out.println("  Cognito:            Auto-provisioning (OIDC)");
                 System.out.println("  Domain Prefix:      " + config.cognitoDomainPrefix);
                 System.out.println("  MFA Enabled:        " + (config.cognitoMfaEnabled ? "✓ Yes" : "✗ No"));
+                if (config.cognitoInitialAdminEmail != null && !config.cognitoInitialAdminEmail.isEmpty()) {
+                    System.out.println("  Initial Admin:      " + config.cognitoInitialAdminEmail);
+                }
+            }
+            if (config.oidcProvider.equals("cognito-saml") && config.cognitoAutoProvision) {
+                System.out.println("  Cognito:            Auto-provisioning (SAML IdP)");
+                System.out.println("  Domain Prefix:      " + config.cognitoDomainPrefix);
+                System.out.println("  SAML Enabled:       ✓ Yes (group sync supported)");
+                System.out.println("  MFA Enabled:        " + (config.cognitoMfaEnabled ? "✓ Yes" : "✗ No"));
+                if (config.cognitoInitialAdminEmail != null && !config.cognitoInitialAdminEmail.isEmpty()) {
+                    System.out.println("  Initial Admin:      " + config.cognitoInitialAdminEmail);
+                }
             }
             System.out.println();
         }
@@ -1366,6 +1580,7 @@ public class InteractiveDeployer {
             System.out.println("  logRetentionDays: " + context.get("logRetentionDays"));
             System.out.println("  region: " + context.get("region"));
             System.out.println("  auditManagerEnabled: " + context.get("auditManagerEnabled"));
+            System.out.println("  cognitoInitialAdminEmail: " + context.get("cognitoInitialAdminEmail"));
 
             LOG.info("Deployment context saved to deployment-context.json");
         } catch (IOException e) {
@@ -1454,6 +1669,11 @@ public class InteractiveDeployer {
         config.oidcUserInfoEndpoint = extractValue(content, "oidcUserInfoEndpoint");
         config.oidcClientId = extractValue(content, "oidcClientId");
         config.oidcClientSecretName = extractValue(content, "oidcClientSecretName");
+
+        // IAM Identity Center configuration
+        config.autoProvisionIdentityCenter = extractBoolValue(content, "autoProvisionIdentityCenter", false);
+        config.ssoInstanceArn = extractValue(content, "ssoInstanceArn");
+        config.identityCenterGroupName = extractValue(content, "identityCenterGroupName");
 
         // Database configuration
         config.provisionDatabase = extractBoolValue(content, "provisionDatabase", false);

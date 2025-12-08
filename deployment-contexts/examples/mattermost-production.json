@@ -1,0 +1,59 @@
+{
+  "stackName": "Mattermost-Production",
+  "applicationId": "mattermost",
+  "applicationName": "Mattermost",
+  "description": "Production Mattermost with SOC2 compliance",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "chat",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "mattermost-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "MattermostAdmins",
+  "cognitoUserGroupName": "MattermostUsers",
+
+  "instanceType": "t3.medium",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 4,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 60,
+
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "databaseVersion": "15",
+  "databaseInstanceClass": "db.t3.medium",
+  "databaseAllocatedStorageGB": 50,
+  "databaseMultiAz": true,
+  "databaseName": "mattermost",
+  "databaseBackupRetentionDays": 30,
+
+  "enableSmtp": true,
+
+  "complianceFrameworks": "SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "auditManagerEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "730",
+  "retainStorage": true
+}

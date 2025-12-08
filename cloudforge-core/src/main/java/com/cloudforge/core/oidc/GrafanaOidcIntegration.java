@@ -150,6 +150,24 @@ public class GrafanaOidcIntegration implements OidcIntegration {
     }
 
     @Override
+    public boolean supportsCognito() {
+        // Full support - Grafana generic_oauth works with Cognito OIDC
+        return true;
+    }
+
+    @Override
+    public boolean supportsIdentityCenterSaml() {
+        // Grafana supports SAML but this integration uses OIDC
+        // For SAML, create a GrafanaSamlIntegration class
+        return false;
+    }
+
+    @Override
+    public String getAuthenticationType() {
+        return "OIDC";
+    }
+
+    @Override
     public String getPostDeploymentInstructions() {
         return """
                 Grafana OIDC Integration Completed

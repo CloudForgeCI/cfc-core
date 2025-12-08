@@ -179,6 +179,24 @@ public class GitLabOidcIntegration implements OidcIntegration {
     }
 
     @Override
+    public boolean supportsCognito() {
+        // Full support - GitLab OmniAuth works with Cognito OIDC
+        return true;
+    }
+
+    @Override
+    public boolean supportsIdentityCenterSaml() {
+        // GitLab supports SAML (Premium/Ultimate) but this integration uses OIDC
+        // For SAML, create a GitLabSamlIntegration class
+        return false;
+    }
+
+    @Override
+    public String getAuthenticationType() {
+        return "OIDC";
+    }
+
+    @Override
     public String getPostDeploymentInstructions() {
         return """
                 GitLab OIDC Integration Completed

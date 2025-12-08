@@ -259,8 +259,9 @@ public class AlbFactory extends BaseFactory {
                                                      boolean isProduction, String region) {
         if (!isProduction) {
             // DEV/STAGING: Create bucket without SSM tracking (will be deleted with stack)
-            LOG.info("Non-production mode: Creating ALB logs bucket without SSM tracking");
-            return createAlbLogsBucket(bucketName, removalPolicy, false);
+            // autoDeleteObjects=true ensures bucket contents are emptied before deletion
+            LOG.info("Non-production mode: Creating ALB logs bucket without SSM tracking (auto-delete enabled)");
+            return createAlbLogsBucket(bucketName, removalPolicy, true);
         }
 
         // PRODUCTION: Create bucket WITHOUT explicit name and track ARN in SSM

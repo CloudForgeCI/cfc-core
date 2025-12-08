@@ -5,10 +5,10 @@ import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityConfiguration;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
+import com.cloudforgeci.api.observability.WafFactory;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 
@@ -63,8 +63,8 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
 
         // WAF Configuration - respects deployment context override
         // WafFactory will only create WAF if config.isWafEnabled() returns true
-        com.cloudforgeci.api.observability.WafFactory wafFactory =
-            new com.cloudforgeci.api.observability.WafFactory(c, "DevWaf");
+        // NOTE: Use stack-specific ID to avoid conflicts when switching security profiles
+        WafFactory wafFactory = new WafFactory(c, c.stackName + "-Waf");
         wafFactory.create();
 
         // Development security settings - minimal restrictions
@@ -79,11 +79,12 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
                 false
             );
 
-            // Allow Jenkins port from anywhere for development
+            // Allow application port from anywhere for development
+            int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
             instanceSg.addIngressRule(
                 Peer.anyIpv4(),
-                Port.tcp(8080),
-                "Jenkins_from_anywhere_(DEV)",
+                Port.tcp(appPort),
+                "App_from_anywhere_(DEV)",
                 false
             );
         });
@@ -134,9 +135,10 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
 
         // Fargate security group - allow from ALB
         whenBoth(c.vpc, c.fargateServiceSg, (vpc, fargateSg) -> {
+            int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
             fargateSg.addIngressRule(
                 Peer.securityGroupId(c.albSg.get().orElseThrow().getSecurityGroupId()),
-                Port.tcp(8080),
+                Port.tcp(appPort),
                 "HTTP from ALB (DEV)",
                 false
             );

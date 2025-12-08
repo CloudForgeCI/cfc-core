@@ -18,6 +18,7 @@ import com.cloudforgeci.api.observability.FlowLogFactory;
 import com.cloudforgeci.api.storage.EfsFactory;
 import com.cloudforgeci.api.observability.AlarmFactory;
 import com.cloudforgeci.api.database.RdsFactory;
+import com.cloudforgeci.api.storage.BackupFactory;
 import software.constructs.Construct;
 
 import java.util.logging.Level;
@@ -275,6 +276,15 @@ public class ApplicationFactory extends BaseFactory {
                     // TODO: Implement createSingleEc2Instance for universal applications
                     LOG.warning("Single instance EC2 deployment not yet implemented for universal applications");
                 }
+            }
+
+            // Create AWS Backup infrastructure (after EFS and RDS are available)
+            try {
+                BackupFactory backupFactory = new BackupFactory(this, id + "Backup");
+                backupFactory.create();
+            } catch (Exception e) {
+                LOG.log(Level.SEVERE, "*** CRITICAL: Exception in BackupFactory ***", e);
+                throw e;
             }
 
             try {

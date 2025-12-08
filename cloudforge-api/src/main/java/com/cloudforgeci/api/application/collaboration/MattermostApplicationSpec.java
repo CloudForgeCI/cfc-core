@@ -9,16 +9,22 @@ import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforge.core.interfaces.UserDataBuilder;
+import com.cloudforge.core.oidc.MattermostOidcIntegration;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Mattermost Team Collaboration ApplicationSpec implementation.
+ * Mattermost Enterprise Edition ApplicationSpec implementation.
  *
  * <p>Mattermost is an open-source, self-hosted team collaboration platform
  * similar to Slack.</p>
+ *
+ * <p><strong>Edition Information:</strong></p>
+ * <p>This uses the Enterprise Edition image which runs in free mode by default.
+ * Enterprise features (AD/LDAP group sync, compliance exports, etc.) are unlocked
+ * by applying a license through System Console > Edition and License.</p>
  *
  * <p><strong>Key Features:</strong></p>
  * <ul>
@@ -29,20 +35,21 @@ import java.util.Map;
  *   <li>End-to-end encryption (E2EE)</li>
  * </ul>
  *
+ * <p><strong>Enterprise Features (require license):</strong></p>
+ * <ul>
+ *   <li>AD/LDAP group sync for automatic team/channel membership</li>
+ *   <li>SAML 2.0 with group synchronization</li>
+ *   <li>Compliance exports and eDiscovery</li>
+ *   <li>Advanced access controls and permissions</li>
+ *   <li>High availability clustering</li>
+ * </ul>
+ *
  * <p><strong>Compliance Use Cases:</strong></p>
  * <ul>
  *   <li>SOC2: Audit logs for team communications</li>
  *   <li>HIPAA: Secure messaging for healthcare teams</li>
  *   <li>GDPR: Data residency and user data controls</li>
  *   <li>FERPA: Secure communications for educational institutions</li>
- * </ul>
- *
- * <p><strong>Fintech Applications:</strong></p>
- * <ul>
- *   <li>Secure team communications for financial services</li>
- *   <li>Integration with trading platforms and alerts</li>
- *   <li>Compliance-friendly messaging alternative to Slack</li>
- *   <li>Bot integrations for payment notifications</li>
  * </ul>
  *
  * <p><strong>Database Requirements:</strong></p>
@@ -52,15 +59,16 @@ import java.util.Map;
  *   <li>Recommended: PostgreSQL with db.t3.small or larger</li>
  * </ul>
  *
- * <p><strong>Security Note:</strong></p>
- * <ul>
- *   <li>Enable SAML/OIDC for SSO</li>
- *   <li>Configure data retention policies</li>
- *   <li>Enable audit logging</li>
- *   <li>Use TLS/SSL for all connections</li>
- * </ul>
+ * <p><strong>Licensing:</strong></p>
+ * <p>To activate Enterprise features:</p>
+ * <ol>
+ *   <li>Go to System Console > Edition and License</li>
+ *   <li>Upload your license file or start a trial</li>
+ *   <li>Enterprise features become available immediately</li>
+ * </ol>
  *
  * @see <a href="https://docs.mattermost.com/">Mattermost Documentation</a>
+ * @see <a href="https://docs.mattermost.com/about/editions-and-offerings.html">Editions and Offerings</a>
  */
 @ApplicationPlugin(
     value = "mattermost",
@@ -72,7 +80,7 @@ import java.util.Map;
     defaultInstanceType = "t3.small",
     supportsFargate = true,
     supportsEc2 = true,
-    supportsOidc = false,
+    supportsOidc = true,
     supportsDatabase = true,
     requiresDatabase = true
 )
@@ -80,7 +88,10 @@ import java.util.Map;
 public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     private static final String APPLICATION_ID = "mattermost";
-    private static final String DEFAULT_IMAGE = "mattermost/mattermost-team-edition:latest";
+    // Enterprise Edition runs in free mode without a license
+    // Users can activate enterprise features by uploading a license
+    // Same database schema as Team Edition - no migration needed
+    private static final String DEFAULT_IMAGE = "mattermost/mattermost-enterprise-edition:latest";
     private static final int APPLICATION_PORT = 8065;
     private static final String CONTAINER_DATA_PATH = "/mattermost/data";
     private static final String EFS_DATA_PATH = "/mattermost";
@@ -110,6 +121,18 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
     }
 
     @Override
+    public java.util.List<OptionalPort> optionalPorts() {
+        return java.util.List.of(
+            // Email - outbound connections to SMTP servers
+            OptionalPort.outboundTcp(587, "enableSmtp", "SMTP Email (STARTTLS)"),
+            OptionalPort.outboundTcp(465, "enableSmtps", "SMTP Email (TLS)"),
+            // Clustering - inbound for high availability deployments
+            OptionalPort.inboundTcp(8074, "enableClustering", "Cluster Gossip"),
+            OptionalPort.inboundTcp(8075, "enableClustering", "Cluster Gossip")
+        );
+    }
+
+    @Override
     public String containerDataPath() {
         return CONTAINER_DATA_PATH;
     }
@@ -131,8 +154,9 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
 
     @Override
     public DatabaseRequirement databaseRequirement() {
-        // Mattermost REQUIRES PostgreSQL or MySQL for all deployments
-        return DatabaseRequirement.required("postgres", "13")
+        // Mattermost 11.x REQUIRES PostgreSQL 14+ or MySQL 8.0+ for all deployments
+        // See: https://docs.mattermost.com/install/software-hardware-requirements.html
+        return DatabaseRequirement.required("postgres", "14")
             .withInstanceClass("db.t3.small")
             .withStorage(30)
             .withDatabaseName("mattermost");
@@ -177,24 +201,23 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
             environment.put("MM_SERVICESETTINGS_SITEURL", siteUrl);
         }
 
-        // Database configuration (REQUIRED for Mattermost)
-        if (dbConn != null) {
-            // Use RDS PostgreSQL
-            environment.put("MM_SQLSETTINGS_DRIVERNAME", "postgres");
+        // Proxy/Load Balancer configuration - CRITICAL for ALB deployments
+        // Trust X-Forwarded-For and X-Real-IP headers from ALB
+        // Without this, Mattermost shows internal IPs in security audit logs
+        environment.put("MM_SERVICESETTINGS_TRUSTEDPROXYIPHEADER", "X-Forwarded-For,X-Real-IP");
+        // Forward the original client IP from ALB
+        environment.put("MM_SERVICESETTINGS_FORWARD80TO443", "false");  // ALB handles HTTPS termination
+        // Enable using websocket headers through proxy
+        environment.put("MM_SERVICESETTINGS_WEBSOCKETURL", "");  // Auto-derive from SiteURL
 
-            // Build PostgreSQL connection string
-            // Format: postgres://user:password@host:port/database?sslmode=require
-            // Password is injected via ECS secret as GITLAB_DATABASE_PASSWORD
-            String password = "${GITLAB_DATABASE_PASSWORD}";
-            String dataSource = String.format(
-                "postgres://%s:%s@%s:%d/%s?sslmode=require&connect_timeout=10",
-                dbConn.username(),
-                password,
-                dbConn.endpoint(),
-                dbConn.port(),
-                dbConn.databaseName()
-            );
-            environment.put("MM_SQLSETTINGS_DATASOURCE", dataSource);
+        // Database configuration (REQUIRED for Mattermost)
+        // NOTE: Mattermost is distroless (no shell) so we can't use env var substitution
+        // The MM_SQLSETTINGS_DATASOURCE is injected by ContainerFactory from an SSM Parameter
+        // that RdsFactory creates with the complete connection string (including password via dynamic reference)
+        if (dbConn != null) {
+            // Use RDS PostgreSQL - just set the driver name
+            // The full datasource URL is injected as MM_SQLSETTINGS_DATASOURCE by ContainerFactory
+            environment.put("MM_SQLSETTINGS_DRIVERNAME", "postgres");
         } else {
             // NOTE: Mattermost REQUIRES a database - this should never happen
             // Set placeholder that will fail fast if database is missing
@@ -281,6 +304,9 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
 
         // Run Mattermost container
         builder.addCommands(
+            "# Retrieve database credentials from Secrets Manager",
+            "MM_DB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-mattermost}/db-password --query SecretString --output text 2>/dev/null || echo 'CONFIGURE_DB_PASSWORD')",
+            "",
             "# Run Mattermost container",
             "# Note: Requires PostgreSQL database",
             "docker run -d \\",
@@ -292,7 +318,7 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
             "  -v /opt/mattermost/plugins:/mattermost/plugins \\",
             "  -v /opt/mattermost/client/plugins:/mattermost/client/plugins \\",
             "  -e MM_SQLSETTINGS_DRIVERNAME=postgres \\",
-            "  -e MM_SQLSETTINGS_DATASOURCE='postgres://mattermost:changeme@postgres:5432/mattermost?sslmode=disable&connect_timeout=10' \\",
+            "  -e MM_SQLSETTINGS_DATASOURCE=\"postgres://mattermost:$MM_DB_PASSWORD@postgres:5432/mattermost?sslmode=disable&connect_timeout=10\" \\",
             "  -e MM_SERVICESETTINGS_SITEURL=http://mattermost.example.com \\",
             "  " + DEFAULT_IMAGE,
             "echo 'Mattermost container started' >> /var/log/userdata.log",
@@ -341,9 +367,11 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
 
     @Override
     public OidcIntegration getOidcIntegration() {
-        // Mattermost has built-in OIDC support
-        // Implementation would configure config.json with OIDC settings
-        return null;
+        // Return OIDC integration by default
+        // For SAML support (cognito-saml or identity-center), use MattermostSamlIntegration
+        // OIDC: Simple OAuth 2.0 flow, works directly with Cognito
+        // SAML: Requires AD/LDAP for group sync, supports cognito-saml (Keycloak) or identity-center
+        return new MattermostOidcIntegration();
     }
 
     @Override

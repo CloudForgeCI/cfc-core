@@ -95,6 +95,18 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
     }
 
     @Override
+    public java.util.List<OptionalPort> optionalPorts() {
+        return java.util.List.of(
+            // Git over SSH - inbound for repository access
+            OptionalPort.inboundTcp(22, "enableSsh", "Git SSH"),
+            // Container Registry - inbound for Docker image hosting
+            OptionalPort.inboundTcp(5050, "enableRegistry", "Container Registry"),
+            // Prometheus metrics - inbound for monitoring integration
+            OptionalPort.inboundTcp(9090, "enableMetrics", "Prometheus Metrics")
+        );
+    }
+
+    @Override
     public String containerDataPath() {
         return CONTAINER_DATA_PATH;
     }
@@ -183,6 +195,15 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
         omnibusConfig.append("nginx['listen_port'] = 80; ");
         omnibusConfig.append("nginx['listen_https'] = false; ");
         omnibusConfig.append("gitlab_rails['gitlab_shell_ssh_port'] = 22; ");
+
+        // Trust X-Forwarded-* headers from ALB for proper IP logging
+        // Without this, GitLab shows internal container IPs in audit logs
+        omnibusConfig.append("nginx['real_ip_header'] = 'X-Forwarded-For'; ");
+        omnibusConfig.append("nginx['real_ip_recursive'] = 'on'; ");
+        // Trust all private IP ranges (ALB uses VPC internal IPs)
+        omnibusConfig.append("nginx['real_ip_trusted_addresses'] = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']; ");
+        // Detect HTTPS from ALB via X-Forwarded-Proto
+        omnibusConfig.append("nginx['proxy_set_headers'] = { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' }; ");
 
         // Redis configuration - enable embedded Redis for caching and background jobs
         omnibusConfig.append("redis['enable'] = true; ");

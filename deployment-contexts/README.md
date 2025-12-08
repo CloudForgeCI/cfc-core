@@ -374,6 +374,47 @@ jq '.instanceType = "t3.small"' deployment-context.json
 jq '.createConfigInfrastructure = false' deployment-context.json
 ```
 
+## Application-Specific Templates
+
+### 7. **gitlab-production.json** - GitLab with Container Registry
+- **Use Case**: Full GitLab deployment with CI/CD and container registry
+- **Runtime**: EC2 (t3.large minimum for GitLab)
+- **Network**: Private with NAT
+- **Authentication**: Cognito OIDC
+- **Ports**: Container registry (5050), Git SSH (22), Prometheus metrics (9090)
+
+**Configuration highlights:**
+```json
+{
+  "applicationId": "gitlab",
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "instanceType": "t3.large",
+  "enableDockerRegistry": true,
+  "enableSsh": true,
+  "enableMetrics": true
+}
+```
+
+### 8. **mattermost-production.json** - Team Collaboration
+- **Use Case**: Secure team messaging with HIPAA-compliant options
+- **Runtime**: Fargate
+- **Database**: PostgreSQL RDS (required)
+- **Authentication**: Cognito OIDC or SAML *(SAML in development)*
+- **Ports**: SMTP (587), Clustering (8074-8075)
+
+### 9. **harbor-production.json** - Enterprise Container Registry
+- **Use Case**: Private Docker registry with vulnerability scanning
+- **Runtime**: EC2 (storage-intensive workload)
+- **Database**: PostgreSQL + Redis (required)
+- **Ports**: Registry (443), Notary (4443), Trivy (8080)
+
+### 10. **vault-production.json** - Secrets Management
+- **Use Case**: HashiCorp Vault for secrets and PKI
+- **Runtime**: EC2 (recommended for auto-unseal)
+- **Network**: Private with NAT (required for production secrets)
+- **Ports**: Clustering (8201)
+
 ## Additional Resources
 
 - [Full Deployment Guide](../docs/compliance/DEPLOYMENT_GUIDE.md)

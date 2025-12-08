@@ -1,14 +1,14 @@
 package com.cloudforgeci.api.core.security;
 
-import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
-
+import com.cloudforge.core.enums.TopologyType;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforgeci.api.interfaces.Rule;
 import com.cloudforgeci.api.interfaces.SecurityConfiguration;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforgeci.api.interfaces.Rule;
+import com.cloudforgeci.api.observability.ComplianceFactory;
+import com.cloudforgeci.api.observability.WafFactory;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 
@@ -64,8 +64,8 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
 
         // WAF Configuration - respects deployment context override
         // WafFactory will only create WAF if config.isWafEnabled() returns true
-        com.cloudforgeci.api.observability.WafFactory wafFactory =
-            new com.cloudforgeci.api.observability.WafFactory(c, "StagingWaf");
+        // NOTE: Use stack-specific ID to avoid conflicts when switching security profiles
+        WafFactory wafFactory = new WafFactory(c, c.stackName + "-Waf");
         wafFactory.create();
 
         // Create hosted zone if domain is provided
@@ -84,12 +84,13 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
                     false
                 );
 
-                // Jenkins port only from ALB security group
+                // Application port only from ALB security group
                 if (c.albSg.get().isPresent()) {
+                    int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
                     instanceSg.addIngressRule(
                         Peer.securityGroupId(c.albSg.get().orElseThrow().getSecurityGroupId()),
-                        Port.tcp(8080),
-                        "Jenkins from ALB (STAGING)",
+                        Port.tcp(appPort),
+                        "App from ALB (STAGING)",
                         false
                     );
                 }
@@ -142,9 +143,10 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
 
         // Fargate security group - allow from ALB only
         whenBoth(c.vpc, c.fargateServiceSg, (vpc, fargateSg) -> {
+            int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
             fargateSg.addIngressRule(
                 Peer.securityGroupId(c.albSg.get().orElseThrow().getSecurityGroupId()),
-                Port.tcp(8080),
+                Port.tcp(appPort),
                 "HTTP from ALB (STAGING)",
                 false
             );
@@ -167,8 +169,9 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
 
         // Create ComplianceFactory for CloudTrail and AWS Config
         // This factory will check security profile configuration and create resources accordingly
-        com.cloudforgeci.api.observability.ComplianceFactory complianceFactory =
-            new com.cloudforgeci.api.observability.ComplianceFactory(c, "StagingCompliance");
+        // NOTE: Use profile-agnostic ID to avoid resource conflicts when switching security profiles
+        // The stack name is already part of the scope hierarchy, ensuring multi-stack isolation
+        ComplianceFactory complianceFactory = new ComplianceFactory(c, c.stackName + "-Compliance");
         complianceFactory.create();
 
         // Configure logging retention (moderate for staging)

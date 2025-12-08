@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Comprehensive Synthesis Test for All Security Profiles
 # Tests EC2 and Fargate runtimes across DEV, STAGING, PRODUCTION security profiles
@@ -76,6 +76,8 @@ create_deployment_context() {
     cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
   "healthCheckTimeout": "5",
   "memory": "2048",
   "enableMonitoring": "true",
@@ -91,7 +93,7 @@ create_deployment_context() {
   "unhealthyThreshold": "3",
   "healthyThreshold": "2",
   "networkMode": "public-no-nat",
-  "topology": "JENKINS_SERVICE",
+  "topology": "APPLICATION_SERVICE",
   "instanceType": "t3.micro",
   "minInstanceCapacity": "2",
   "runtime": "$runtime",

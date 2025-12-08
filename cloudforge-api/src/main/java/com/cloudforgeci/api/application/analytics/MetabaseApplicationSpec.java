@@ -9,6 +9,7 @@ import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforge.core.interfaces.UserDataBuilder;
+import com.cloudforge.core.oidc.MetabaseSamlIntegration;
 
 import java.util.HashMap;
 import java.util.List;
@@ -60,7 +61,7 @@ import java.util.Map;
     defaultInstanceType = "t3.small",
     supportsFargate = true,
     supportsEc2 = true,
-    supportsOidc = false,
+    supportsOidc = true,
     supportsDatabase = true,
     requiresDatabase = false
 )
@@ -68,8 +69,17 @@ import java.util.Map;
 public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     private static final String APPLICATION_ID = "metabase";
-    private static final String DEFAULT_IMAGE = "metabase/metabase:latest";
+    // Use Enterprise image - defaults to OSS features without license token
+    // License token unlocks Pro/Enterprise features (SAML, advanced permissions, audit logging)
+    private static final String DEFAULT_IMAGE = "metabase/metabase-enterprise:latest";
     private static final int APPLICATION_PORT = 3000;
+
+    /**
+     * The Secrets Manager secret name for Metabase Pro/Enterprise license token.
+     * Store the license token in this secret to unlock SAML, advanced permissions, audit logging, etc.
+     * The secret can be updated in AWS Console without redeploying the stack.
+     */
+    public static final String LICENSE_SECRET_SUFFIX = "/metabase/license-token";
     private static final String CONTAINER_DATA_PATH = "/metabase-data";
     private static final String EFS_DATA_PATH = "/metabase";
     private static final String VOLUME_NAME = "metabaseData";
@@ -149,6 +159,11 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
             environment.put("MB_SITE_URL", siteUrl);
         }
 
+        // Proxy/Load Balancer configuration - CRITICAL for ALB deployments
+        // Trust X-Forwarded-* headers from ALB for proper IP logging and HTTPS detection
+        environment.put("MB_JETTY_HOST", "0.0.0.0");  // Listen on all interfaces for ALB health checks
+        // Metabase automatically trusts X-Forwarded-* headers when MB_SITE_URL is set
+
         // Database configuration
         if (dbConn != null) {
             // Use RDS PostgreSQL for production multi-instance deployments
@@ -157,8 +172,8 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
             environment.put("MB_DB_PORT", String.valueOf(dbConn.port()));
             environment.put("MB_DB_DBNAME", dbConn.databaseName());
             environment.put("MB_DB_USER", dbConn.username());
-            // Password is injected via ECS secret as GITLAB_DATABASE_PASSWORD
-            // Metabase will read it as MB_DB_PASS when ECS injects it
+            // Password is injected via ECS secret as METABASE_DATABASE_PASSWORD
+            // which maps to MB_DB_PASS environment variable
             // Don't set it here - ContainerFactory adds it as an ECS secret
         } else {
             // Fallback to H2 embedded database (single instance only)
@@ -292,7 +307,7 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "     -e MB_DB_DBNAME=metabase \\",
             "     -e MB_DB_PORT=5432 \\",
             "     -e MB_DB_USER=metabase \\",
-            "     -e MB_DB_PASS=changeme \\",
+            "     -e MB_DB_PASS=$MB_DB_PASS \\",
             "     -e MB_DB_HOST=postgres.example.com \\",
             "     metabase/metabase",
             "================================================================================",
@@ -307,9 +322,45 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     @Override
     public OidcIntegration getOidcIntegration() {
-        // Metabase Enterprise has SAML/OIDC support
-        // Open-source version supports JWT for embedding
-        return null;
+        // Metabase does NOT support native OIDC - uses SAML instead
+        // SAML is only available in Metabase Pro/Enterprise editions
+        // Open-source version supports JWT for embedding only
+        return new MetabaseSamlIntegration();
+    }
+
+    /**
+     * Get the Secrets Manager secret name for the Metabase license token.
+     *
+     * <p>The license token enables Pro/Enterprise features:</p>
+     * <ul>
+     *   <li>SAML/SSO authentication</li>
+     *   <li>Advanced permissions and sandboxing</li>
+     *   <li>Audit logging</li>
+     *   <li>Row-level permissions</li>
+     *   <li>Interactive embedding</li>
+     * </ul>
+     *
+     * <p><b>To add a license:</b></p>
+     * <ol>
+     *   <li>Go to AWS Secrets Manager in the AWS Console</li>
+     *   <li>Find the secret: {stackName}/metabase/license-token</li>
+     *   <li>Update the secret value with your Metabase license token</li>
+     *   <li>Restart the ECS task or wait for next deployment</li>
+     * </ol>
+     *
+     * @param stackName the CloudFormation stack name
+     * @return the full secret name for the license token
+     */
+    public String getLicenseSecretName(String stackName) {
+        return stackName + LICENSE_SECRET_SUFFIX;
+    }
+
+    /**
+     * Get the environment variable name for the Metabase license token.
+     * @return MB_PREMIUM_EMBEDDING_TOKEN
+     */
+    public String getLicenseEnvVarName() {
+        return "MB_PREMIUM_EMBEDDING_TOKEN";
     }
 
     @Override

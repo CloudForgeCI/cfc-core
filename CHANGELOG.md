@@ -6,6 +6,51 @@ All notable changes to CloudForge Community Core are documented here.
 
 ### Added
 
+**AWS Backup Infrastructure (NEW)**
+- BackupFactory for EFS and RDS automated backups
+- Daily backup schedules with configurable retention (DEV: disabled, STAGING: 14 days, PRODUCTION: 90 days)
+- Backup vault lock for PRODUCTION (prevents manual deletion - PCI-DSS compliance)
+- Cross-region backup copy support for disaster recovery
+- AwsRegion enum with DR region pairs and geographic areas for data residency
+
+**SAML Authentication (NEW) - ⚠️ IN DEVELOPMENT**
+- SAML 2.0 integration framework for enterprise IdPs
+- MattermostSamlIntegration for AD/LDAP group sync
+- MetabaseSamlIntegration with group mapping
+- ApplicationSamlFactory for application-level SAML configuration
+- CognitoSamlFactory for Cognito + Keycloak SAML bridge
+- IdentityCenterSamlFactory for AWS IAM Identity Center SAML
+- KeycloakFactory for Keycloak IdP deployment
+
+> **Note:** SAML authentication and Keycloak integration are still in active development.
+> These features may have breaking changes in future releases.
+
+**PCI-DSS Compliance Enhancements**
+- TLS 1.2+ SSL policy on ALB HTTPS listeners (SslPolicy.RECOMMENDED_TLS)
+- RDS IAM database authentication for STAGING/PRODUCTION profiles
+- ECS Container Insights enabled for STAGING/PRODUCTION profiles
+- Backup vault lock to prevent recovery point deletion
+
+**Configuration Introspection (NEW)**
+- @ConfigField annotation for field metadata
+- ConfigurationIntrospector for automatic field discovery
+- VisibilityExpressionEvaluator for conditional field visibility
+- Support for field tags (DESTRUCTIVE, BILLING_IMPACT, IMMUTABLE)
+- Category-based field organization
+
+### Changed
+
+- VpcFactory now reads flowlogs dynamically from context (fixes flow logs not being created)
+- ComplianceFactory S3 buckets use appropriate removal policies for compliance buckets
+- Security profile configurations now support deployment context overrides
+
+### Fixed
+
+- VPC Flow Logs not being created due to annotation injection timing
+- S3 auto-delete permission errors on compliance buckets
+- AWS Backup vault/plan name validation (2-50 chars, alphanumeric with hyphens/underscores)
+
+
 **Plugin System (NEW)**
 - Universal ApplicationSpec plugin system for custom applications
 - Compliance framework plugin system for custom validators

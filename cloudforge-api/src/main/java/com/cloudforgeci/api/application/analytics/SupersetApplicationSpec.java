@@ -174,6 +174,15 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
         // Superset secret key for session encryption
         environment.put("SUPERSET_SECRET_KEY", "CHANGE_THIS_TO_A_LONG_RANDOM_STRING");
 
+        // Proxy/Load Balancer configuration - CRITICAL for ALB deployments
+        // Trust X-Forwarded-* headers from ALB for proper IP logging and HTTPS detection
+        environment.put("ENABLE_PROXY_FIX", "True");
+        environment.put("PROXY_FIX_X_FOR", "1");  // Number of proxies to trust for X-Forwarded-For
+        environment.put("PROXY_FIX_X_PROTO", "1");  // Trust X-Forwarded-Proto
+        environment.put("PROXY_FIX_X_HOST", "1");  // Trust X-Forwarded-Host
+        environment.put("PROXY_FIX_X_PORT", "1");  // Trust X-Forwarded-Port
+        environment.put("PROXY_FIX_X_PREFIX", "1");  // Trust X-Forwarded-Prefix
+
         // Database configuration (REQUIRED for Superset)
         if (dbConn != null) {
             // Use RDS PostgreSQL for metadata storage
@@ -187,7 +196,7 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
             // Build SQLAlchemy connection string using environment variable for password
             // Password will be injected at runtime by ECS from Secrets Manager
-            String password = "${GITLAB_DATABASE_PASSWORD}";
+            String password = "${SUPERSET_DATABASE_PASSWORD}";
             String sqlalchemyUri = String.format(
                 "postgresql://%s:%s@%s:%d/%s",
                 dbConn.username(),
@@ -289,8 +298,8 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "# Flask App Builder configuration",
             "ROW_LIMIT = 5000",
             "",
-            "# Flask Secret Key - CHANGE THIS!",
-            "SECRET_KEY = 'changeme_use_a_secure_random_key'",
+            "# Flask Secret Key - retrieved from environment",
+            "SECRET_KEY = os.environ.get('SUPERSET_SECRET_KEY', 'CHANGE_THIS_IN_PRODUCTION')",
             "",
             "# SQLAlchemy database URI for Superset metadata",
             "SQLALCHEMY_DATABASE_URI = 'sqlite:////app/superset_home/superset.db'",
@@ -308,13 +317,18 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
         // Run Superset container
         builder.addCommands(
+            "# Generate secure secret key and admin password",
+            "SUPERSET_SECRET_KEY=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-superset}/secret-key --query SecretString --output text 2>/dev/null || openssl rand -base64 32)",
+            "SUPERSET_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-superset}/admin-password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
+            "echo \"Generated Superset admin password (save this): $SUPERSET_ADMIN_PASSWORD\" >> /var/log/userdata.log",
+            "",
             "# Run Superset container",
             "docker run -d \\",
             "  --name superset \\",
             "  -p 8088:8088 \\",
             "  -v " + ec2DataPath() + ":/app/superset_home \\",
             "  -v /opt/superset/config:/app/docker \\",
-            "  -e SUPERSET_SECRET_KEY=changeme_use_a_secure_random_key \\",
+            "  -e SUPERSET_SECRET_KEY=\"$SUPERSET_SECRET_KEY\" \\",
             "  " + DEFAULT_IMAGE,
             "",
             "# Wait for container to start",
@@ -323,13 +337,13 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "# Initialize Superset database",
             "docker exec superset superset db upgrade",
             "",
-            "# Create admin user",
+            "# Create admin user with generated password",
             "docker exec superset superset fab create-admin \\",
             "  --username admin \\",
             "  --firstname Admin \\",
             "  --lastname User \\",
             "  --email admin@example.com \\",
-            "  --password admin",
+            "  --password \"$SUPERSET_ADMIN_PASSWORD\"",
             "",
             "# Initialize Superset",
             "docker exec superset superset init",
@@ -367,12 +381,14 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "   - Configure CORS if embedding dashboards",
             "",
             "6. Production configuration:",
+            "   # Retrieve secrets from Secrets Manager:",
+            "   DB_PASS=$(aws secretsmanager get-secret-value --secret-id superset/db-password --query SecretString --output text)",
             "   docker run -d \\",
             "     --name superset \\",
-            "     -e SUPERSET_SECRET_KEY='your-production-key' \\",
+            "     -e SUPERSET_SECRET_KEY=$(openssl rand -base64 32) \\",
             "     -e DATABASE_DB=superset \\",
             "     -e DATABASE_HOST=postgres.example.com \\",
-            "     -e DATABASE_PASSWORD=changeme \\",
+            "     -e DATABASE_PASSWORD=$DB_PASS \\",
             "     -e DATABASE_USER=superset \\",
             "     apache/superset",
             "================================================================================",
@@ -382,13 +398,14 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     @Override
     public boolean supportsOidcIntegration() {
-        return true;
+        // Superset supports OIDC via Flask-AppBuilder but requires custom configuration
+        // The @ApplicationPlugin annotation sets supportsOidc = false to match this
+        return false;
     }
 
     @Override
     public OidcIntegration getOidcIntegration() {
-        // Superset supports OIDC via Flask-AppBuilder
-        // Implementation would configure superset_config.py with OIDC settings
+        // OIDC not supported - requires custom superset_config.py configuration
         return null;
     }
 

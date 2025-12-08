@@ -108,6 +108,16 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
     }
 
     @Override
+    public java.util.List<OptionalPort> optionalPorts() {
+        return java.util.List.of(
+            // Notary - inbound for content trust and image signing
+            OptionalPort.inboundTcp(4443, "enableNotary", "Notary (Content Trust)"),
+            // Trivy - inbound for vulnerability scanning API
+            OptionalPort.inboundTcp(8080, "enableTrivy", "Trivy Scanner")
+        );
+    }
+
+    @Override
     public String containerDataPath() {
         return CONTAINER_DATA_PATH;
     }
@@ -174,6 +184,14 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
             environment.put("HARBOR_HOSTNAME", fqdn);
             environment.put("HARBOR_EXTERNAL_URL", (sslEnabled ? "https://" : "http://") + fqdn);
         }
+
+        // Proxy/Load Balancer configuration - CRITICAL for ALB deployments
+        // Trust X-Forwarded-* headers from ALB for proper IP logging and HTTPS detection
+        // Harbor's nginx config handles this, but we set the external URL correctly above
+        // which tells Harbor it's behind a reverse proxy
+        environment.put("HTTP_PROXY", "");  // Don't use outbound proxy
+        environment.put("HTTPS_PROXY", "");  // Don't use outbound proxy
+        // Harbor detects ALB by checking X-Forwarded-Proto header automatically
 
         // Database configuration (REQUIRED for Harbor)
         if (dbConn != null) {
@@ -264,6 +282,11 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
         // Download and configure Harbor
         builder.addCommands(
+            "# Retrieve Harbor passwords from Secrets Manager or generate secure defaults",
+            "HARBOR_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-harbor}/admin-password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
+            "HARBOR_DB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-harbor}/db-password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
+            "echo \"Generated Harbor admin password (save this): $HARBOR_ADMIN_PASSWORD\" >> /var/log/userdata.log",
+            "",
             "# Download Harbor installer",
             "cd /opt",
             "curl -L https://github.com/goharbor/harbor/releases/download/v2.9.0/harbor-offline-installer-v2.9.0.tgz -o harbor.tgz",
@@ -286,12 +309,12 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "#   certificate: /data/cert/server.crt",
             "#   private_key: /data/cert/server.key",
             "",
-            "# Harbor admin password (CHANGE THIS!)",
-            "harbor_admin_password: Harbor12345",
+            "# Harbor admin password - retrieve from Secrets Manager",
+            "harbor_admin_password: $HARBOR_ADMIN_PASSWORD",
             "",
             "# Database configuration",
             "database:",
-            "  password: root123",
+            "  password: $HARBOR_DB_PASSWORD",
             "  max_idle_conns: 100",
             "  max_open_conns: 900",
             "",
@@ -317,20 +340,21 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "",
             "echo 'Harbor installation complete' >> /var/log/userdata.log",
             "echo 'Access Harbor at http://harbor.example.com' >> /var/log/userdata.log",
-            "echo 'Default credentials: admin / Harbor12345' >> /var/log/userdata.log",
-            "echo 'IMPORTANT: Change the admin password immediately!' >> /var/log/userdata.log"
+            "echo 'Admin password was logged above - store it securely' >> /var/log/userdata.log"
         );
     }
 
     @Override
     public boolean supportsOidcIntegration() {
-        return true;
+        // Harbor has built-in OIDC support but no OidcIntegration implementation yet
+        // Return false until getOidcIntegration() returns a valid implementation
+        return false;
     }
 
     @Override
     public OidcIntegration getOidcIntegration() {
         // Harbor has built-in OIDC support
-        // Implementation would configure harbor.yml with OIDC settings
+        // TODO: Implement HarborOidcIntegration to configure harbor.yml with OIDC settings
         return null;
     }
 

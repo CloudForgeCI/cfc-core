@@ -9,6 +9,7 @@ import software.amazon.awscdk.services.ec2.*;
 import software.constructs.Construct;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Factory for creating VPC (Virtual Private Cloud) infrastructure.
@@ -57,6 +58,8 @@ import java.util.List;
  */
 public final class VpcFactory extends BaseFactory {
 
+    private static final Logger LOG = Logger.getLogger(VpcFactory.class.getName());
+
     @SystemContext("topology")
     private TopologyType topology;
 
@@ -65,9 +68,6 @@ public final class VpcFactory extends BaseFactory {
 
     @DeploymentContext("networkMode")
     private String networkMode;
-
-    @SystemContext("flowlogs")
-    private FlowLogOptions flowlogs;
 
     public VpcFactory(Construct scope, String id) {
         super(scope, id);
@@ -91,10 +91,13 @@ public final class VpcFactory extends BaseFactory {
         // Create VPC with basic configuration
         Vpc vpc = createVpc();
 
-        // Add flow logs if configured (injected via annotation)
-        if (flowlogs != null) {
-            vpc.addFlowLog("VpcFlowlog", flowlogs);
-        }
+        // Add flow logs if configured
+        // NOTE: Read from ctx.flowlogs.get() directly rather than using injected field,
+        // because FlowLogFactory.create() may have set the value after VpcFactory was constructed
+        ctx.flowlogs.get().ifPresent(flowLogOptions -> {
+            vpc.addFlowLog("VpcFlowlog", flowLogOptions);
+            LOG.info("VPC Flow Logs enabled with options: " + flowLogOptions);
+        });
 
         // Store VPC in SystemContext
         ctx.vpc.set(vpc);
