@@ -523,7 +523,7 @@ class ComplianceTruthTableGenerator:
                         <li><strong>Logging:</strong> <code>cloudTrailEnabled</code>, <code>flowLogsEnabled</code>, <code>albAccessLoggingEnabled</code></li>
                         <li><strong>Monitoring:</strong> <code>guardDutyEnabled</code>, <code>securityMonitoringEnabled</code>, <code>awsConfigEnabled</code></li>
                         <li><strong>Network:</strong> <code>networkMode</code> (private-with-nat for compliance, public-no-nat for dev)</li>
-                        <li><strong>Authentication:</strong> <code>authMode</code> (alb-oidc, jenkins-oidc, or none)</li>
+                        <li><strong>Authentication:</strong> <code>authMode</code> (alb-oidc, application-oidc, or none)</li>
                     </ul>
                 </div>
             </div>

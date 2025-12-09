@@ -143,9 +143,9 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 
 ### Authentication
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `authMode` | string | `"none"` | `"none"`, `"alb-oidc"`, or `"jenkins-oidc"` |
+| Property | Type | Default | Description                                     |
+|----------|------|---------|-------------------------------------------------|
+| `authMode` | string | `"none"` | `"none"`, `"alb-oidc"`, or `"application-oidc"` |
 
 > **⚠️ Note:** SAML authentication and Keycloak integration are in active development and may have breaking changes.
 
