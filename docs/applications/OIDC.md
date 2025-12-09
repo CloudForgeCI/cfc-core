@@ -157,9 +157,12 @@ The following applications have OIDC support but have not been fully tested with
 | **SonarQube** | `application-oidc` | OIDC Plugin |
 | **Harbor** | `application-oidc` | harbor.yml config |
 | **Nexus** | `application-oidc` | OIDC Plugin (Pro) |
-| **Mattermost** | `application-oidc` | config.json |
+| **Mattermost Team** | `application-oidc` | GitLab OAuth (MM_GITLABSETTINGS_*) |
+| **Mattermost Enterprise** | `application-oidc` | Native OIDC (MM_OPENIDSETTINGS_*) |
 | **Superset** | `application-oidc` | superset_config.py |
 | **Metabase** | `application-oidc` | Environment variables |
+
+> **Mattermost Note:** Team Edition uses GitLab OAuth provider (no single logout). Enterprise Edition uses native OpenID Connect with discovery endpoint and single logout support.
 
 ---
 

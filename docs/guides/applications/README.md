@@ -16,7 +16,10 @@ Comprehensive guides for deploying applications with CloudForge, including detai
 
 | Application | Status | Guide |
 |-------------|--------|-------|
-| **Mattermost** | Verified | [Mattermost Guide](mattermost.md) |
+| **Mattermost Team** | Verified | [Mattermost Guide](mattermost.md) |
+| **Mattermost Enterprise** | Verified | [Mattermost Guide](mattermost.md) |
+
+> **Mattermost Editions:** Team Edition is free (uses GitLab OAuth, no single logout). Enterprise Edition requires a license for full features (native OIDC with single logout). See the [Mattermost Guide](mattermost.md) for details.
 
 ### Analytics & Business Intelligence
 

@@ -199,7 +199,8 @@ public class ContainerFactory extends BaseFactory {
                                   software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
                     LOG.info("  ✅ Database password mapped to SUPERSET_DATABASE_PASSWORD");
                     break;
-                case "mattermost":
+                case "mattermost-enterprise":
+                case "mattermost-team":
                     // Mattermost is distroless (Go binary, no shell) - cannot use shell variable substitution
                     // RdsFactory creates an SSM Parameter with the complete datasource URL
                     // The SSM parameter value uses CloudFormation dynamic reference to resolve the password
@@ -276,8 +277,14 @@ public class ContainerFactory extends BaseFactory {
                         // Different applications expect different env var names for OIDC client secret
                         String appId = applicationSpec.applicationId();
                         switch (appId) {
-                            case "mattermost":
-                                // Mattermost uses GitLab OAuth provider for generic OIDC
+                            case "mattermost-enterprise":
+                                // Mattermost Enterprise - native OpenID Connect
+                                ecsSecrets.put("MM_OPENIDSETTINGS_SECRET",
+                                              software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
+                                LOG.info("  ✅ OIDC client secret mapped to MM_OPENIDSETTINGS_SECRET");
+                                break;
+                            case "mattermost-team":
+                                // Mattermost Team Edition (free) - GitLab OAuth
                                 ecsSecrets.put("MM_GITLABSETTINGS_SECRET",
                                               software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
                                 LOG.info("  ✅ OIDC client secret mapped to MM_GITLABSETTINGS_SECRET");

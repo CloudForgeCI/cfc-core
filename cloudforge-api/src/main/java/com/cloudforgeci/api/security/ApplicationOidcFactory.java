@@ -6,6 +6,8 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
+import com.cloudforgeci.api.util.CfnStringUtils;
+import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
@@ -616,11 +618,16 @@ public class ApplicationOidcFactory extends BaseFactory {
         // Priority 4: Use ALB DNS name if available
         // With enableSsl=true: uses HTTPS with Private CA certificate
         // Without enableSsl: uses HTTP (not recommended for OIDC)
+        // IMPORTANT: ALB DNS names contain mixed case (e.g., nJjqXp6M1K6T) but Cognito
+        // callback URLs are case-sensitive. We must lowercase the DNS name.
+        // See: https://github.com/aws/aws-cdk/issues/11171
         if (alb != null) {
             boolean useHttps = Boolean.TRUE.equals(enableSsl);
             String protocol = useHttps ? "https://" : "http://";
-            String albUrl = protocol + alb.getLoadBalancerDnsName();
-            LOG.info("Using ALB DNS name for application URL: " + albUrl);
+            // Lowercase the ALB DNS name for Cognito callback URL compatibility
+            String lowercaseDns = CfnStringUtils.toLowerCase(alb.getLoadBalancerDnsName());
+            String albUrl = Fn.join("", List.of(protocol, lowercaseDns));
+            LOG.info("Using ALB DNS name for application URL (lowercased): " + albUrl);
             if (useHttps) {
                 LOG.info("HTTPS enabled with AWS Private CA certificate");
                 LOG.warning("NOTE: Private CA certificates are not trusted by browsers. Users will see certificate warnings.");

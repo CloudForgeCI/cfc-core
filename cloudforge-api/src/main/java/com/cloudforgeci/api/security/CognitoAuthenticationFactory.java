@@ -4,6 +4,8 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforgeci.api.util.CfnStringUtils;
+import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
@@ -686,7 +688,10 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             callbackPath = "/oauth2/idpresponse";
         }
 
-        return constructBaseUrl() + callbackPath;
+        // Use Fn.join to properly concatenate when base URL may be a CloudFormation token
+        // (e.g., when using ALB DNS name without custom domain)
+        String baseUrl = constructBaseUrl();
+        return Fn.join("", List.of(baseUrl, callbackPath));
     }
 
     /**
@@ -716,7 +721,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * This is typically the application root URL.
      */
     private String constructLogoutRedirectUrl() {
-        return constructBaseUrl() + "/";
+        // Use Fn.join to properly concatenate when base URL may be a CloudFormation token
+        String baseUrl = constructBaseUrl();
+        return Fn.join("", List.of(baseUrl, "/"));
     }
 
     /**
@@ -746,9 +753,14 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         // Priority 3: ALB DNS name with HTTPS (requires Private CA certificate)
         // This is used when enableSsl=true but no custom domain is configured
+        // IMPORTANT: ALB DNS names contain mixed case (e.g., nJjqXp6M1K6T) but Cognito
+        // callback URLs are case-sensitive. We must lowercase the DNS name.
+        // See: https://github.com/aws/aws-cdk/issues/11171
         if (alb != null) {
-            String albUrl = "https://" + alb.getLoadBalancerDnsName();
-            LOG.info("Using ALB DNS name for callback URL with Private CA certificate: " + albUrl);
+            // Lowercase the ALB DNS name for Cognito callback URL compatibility
+            String lowercaseDns = CfnStringUtils.toLowerCase(alb.getLoadBalancerDnsName());
+            String albUrl = Fn.join("", List.of("https://", lowercaseDns));
+            LOG.info("Using ALB DNS name for callback URL with Private CA certificate (lowercased): " + albUrl);
             LOG.warning("NOTE: Private CA certificates are not trusted by browsers. Users will see certificate warnings.");
             return albUrl;
         }

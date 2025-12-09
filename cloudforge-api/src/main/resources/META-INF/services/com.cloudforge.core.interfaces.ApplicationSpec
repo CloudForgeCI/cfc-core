@@ -30,3 +30,4 @@ com.cloudforgeci.api.application.secrets.VaultApplicationSpec
 
 # Collaboration
 com.cloudforgeci.api.application.collaboration.MattermostApplicationSpec
+com.cloudforgeci.api.application.collaboration.MattermostTeamApplicationSpec

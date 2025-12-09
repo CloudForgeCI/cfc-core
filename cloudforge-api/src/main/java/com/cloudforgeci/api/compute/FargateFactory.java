@@ -7,6 +7,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
@@ -226,6 +227,10 @@ public class FargateFactory extends BaseFactory {
             .vpc(vpc)
             .containerInsights(enableContainerInsights)
             .build();
+
+    // Apply removal policy - RETAIN for production, DESTROY for dev/staging
+    cluster.applyRemovalPolicy(
+            security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY);
     SecurityGroup serviceSg = SecurityGroup.Builder.create(this, getNode().getId() + "SvcSg")
             .vpc(vpc)
             .allowAllOutbound(true).build();

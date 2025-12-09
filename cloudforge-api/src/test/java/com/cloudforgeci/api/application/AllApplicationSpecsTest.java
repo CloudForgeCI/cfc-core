@@ -8,6 +8,7 @@ import com.cloudforgeci.api.application.artifactregistry.NexusApplicationSpec;
 import com.cloudforgeci.api.application.cicd.DroneApplicationSpec;
 import com.cloudforgeci.api.application.cicd.GitLabApplicationSpec;
 import com.cloudforgeci.api.application.collaboration.MattermostApplicationSpec;
+import com.cloudforgeci.api.application.collaboration.MattermostTeamApplicationSpec;
 import com.cloudforgeci.api.application.database.PostgreSQLApplicationSpec;
 import com.cloudforgeci.api.application.database.RedisApplicationSpec;
 import com.cloudforgeci.api.application.monitoring.GrafanaApplicationSpec;
@@ -205,10 +206,17 @@ class AllApplicationSpecsTest {
     }
 
     @Test
-    void testMattermostApplicationId() {
+    void testMattermostEnterpriseApplicationId() {
         MattermostApplicationSpec mattermost = new MattermostApplicationSpec();
-        assertEquals("mattermost", mattermost.applicationId());
+        assertEquals("mattermost-enterprise", mattermost.applicationId());
         assertEquals(8065, mattermost.applicationPort());
+    }
+
+    @Test
+    void testMattermostTeamApplicationId() {
+        MattermostTeamApplicationSpec mattermostTeam = new MattermostTeamApplicationSpec();
+        assertEquals("mattermost-team", mattermostTeam.applicationId());
+        assertEquals(8065, mattermostTeam.applicationPort());
     }
 
     @Test

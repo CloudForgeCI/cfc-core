@@ -5,7 +5,9 @@ import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcIntegration;
+import com.cloudforgeci.api.util.CfnStringUtils;
 import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
 import software.amazon.awscdk.customresources.AwsSdkCall;
@@ -478,10 +480,14 @@ public class IdentityCenterSamlFactory extends BaseFactory {
         }
 
         // For OIDC modes without custom domain, use ALB DNS name with Private CA
+        // IMPORTANT: ALB DNS names contain mixed case but Cognito callback URLs are case-sensitive.
+        // See: https://github.com/aws/aws-cdk/issues/11171
         if (alb != null) {
-            String albDnsName = alb.getLoadBalancerDnsName();
-            LOG.info("No custom domain configured - using ALB DNS name: " + albDnsName);
-            return protocol + "://" + albDnsName;
+            // Lowercase the ALB DNS name for callback URL compatibility
+            String lowercaseDns = CfnStringUtils.toLowerCase(alb.getLoadBalancerDnsName());
+            String albUrl = Fn.join("", java.util.List.of(protocol, "://", lowercaseDns));
+            LOG.info("No custom domain configured - using ALB DNS name (lowercased): " + albUrl);
+            return albUrl;
         }
 
         // Fallback - should not happen in production

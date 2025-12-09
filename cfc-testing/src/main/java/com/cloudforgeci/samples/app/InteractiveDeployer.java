@@ -492,6 +492,17 @@ public class InteractiveDeployer {
             config.authMode = promptChoice("Authentication Mode",
                 oidcAuthModes.toArray(String[]::new), recommendedAuthMode);
         }
+
+                // OIDC requires SSL - auto-enable if not already set
+        if (!config.enableSsl) {
+            config.enableSsl = true;
+            if (config.domain == null || config.domain.isEmpty()) {
+                System.out.println("\n🔒 SSL automatically enabled (OIDC requires HTTPS)");
+                System.out.println("   Using AWS Private CA for ALB DNS name (~$400/month, auto-deleted with stack)");
+            } else {
+                System.out.println("\n🔒 SSL automatically enabled (OIDC requires HTTPS)");
+            }
+        }
     }
 
     private static void configureCognitoOidc(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {

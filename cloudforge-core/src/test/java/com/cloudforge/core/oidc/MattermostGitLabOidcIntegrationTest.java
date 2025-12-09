@@ -1,12 +1,10 @@
 package com.cloudforge.core.oidc;
 
-import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.Map;
@@ -14,21 +12,21 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Test suite for MattermostOidcIntegration.
+ * Test suite for MattermostGitLabOidcIntegration.
  *
- * Tests Mattermost OIDC integration including:
+ * Tests Mattermost GitLab OAuth integration for Team Edition including:
  * - Environment variable generation
- * - Native OpenID Connect configuration
+ * - GitLab OAuth configuration (no discovery endpoint)
  * - Site URL derivation
  * - Provider-specific button text
  */
-class MattermostOidcIntegrationTest {
+class MattermostGitLabOidcIntegrationTest {
 
-    private MattermostOidcIntegration integration;
+    private MattermostGitLabOidcIntegration integration;
 
     @BeforeEach
     void setUp() {
-        integration = new MattermostOidcIntegration();
+        integration = new MattermostGitLabOidcIntegration();
     }
 
     // ========== Basic Properties Tests ==========
@@ -42,8 +40,8 @@ class MattermostOidcIntegrationTest {
     void testGetIntegrationMethod() {
         String method = integration.getIntegrationMethod();
         assertNotNull(method);
-        assertTrue(method.contains("OpenID Connect"));
-        assertTrue(method.contains("MM_OPENIDSETTINGS"));
+        assertTrue(method.contains("GitLab OAuth"));
+        assertTrue(method.contains("MM_GITLABSETTINGS"));
     }
 
     @Test
@@ -53,7 +51,7 @@ class MattermostOidcIntegrationTest {
 
     @Test
     void testGetOidcCallbackPath() {
-        assertEquals("/signup/openid/complete", integration.getOidcCallbackPath());
+        assertEquals("/signup/gitlab/complete", integration.getOidcCallbackPath());
     }
 
     @Test
@@ -63,7 +61,7 @@ class MattermostOidcIntegrationTest {
 
     @Test
     void testSupportsIdentityCenterSaml() {
-        // OIDC integration doesn't support Identity Center SAML
+        // GitLab OAuth integration doesn't support Identity Center SAML
         assertFalse(integration.supportsIdentityCenterSaml());
     }
 
@@ -86,22 +84,36 @@ class MattermostOidcIntegrationTest {
     // ========== Environment Variables Tests ==========
 
     @Test
-    void testEnvironmentVariablesContainOpenIdSettings() {
+    void testEnvironmentVariablesContainGitLabSettings() {
         OidcConfiguration config = createMockConfig();
         Map<String, String> env = integration.getEnvironmentVariables(config);
 
         assertNotNull(env);
-        assertEquals("true", env.get("MM_OPENIDSETTINGS_ENABLE"));
-        assertEquals("test-client-id", env.get("MM_OPENIDSETTINGS_ID"));
+        assertEquals("true", env.get("MM_GITLABSETTINGS_ENABLE"));
+        assertEquals("test-client-id", env.get("MM_GITLABSETTINGS_ID"));
     }
 
     @Test
-    void testEnvironmentVariablesContainDiscoveryEndpoint() {
+    void testEnvironmentVariablesContainEndpoints() {
         OidcConfiguration config = createMockConfig();
         Map<String, String> env = integration.getEnvironmentVariables(config);
 
-        assertEquals("https://auth.example.com/.well-known/openid-configuration",
-                     env.get("MM_OPENIDSETTINGS_DISCOVERYENDPOINT"));
+        assertEquals("https://auth.example.com/oauth2/authorize",
+                     env.get("MM_GITLABSETTINGS_AUTHENDPOINT"));
+        assertEquals("https://auth.example.com/oauth2/token",
+                     env.get("MM_GITLABSETTINGS_TOKENENDPOINT"));
+        assertEquals("https://auth.example.com/oauth2/userInfo",
+                     env.get("MM_GITLABSETTINGS_USERAPIENDPOINT"));
+    }
+
+    @Test
+    void testEnvironmentVariablesDoNotContainDiscoveryEndpoint() {
+        // GitLab OAuth doesn't use discovery endpoint (manual configuration)
+        OidcConfiguration config = createMockConfig();
+        Map<String, String> env = integration.getEnvironmentVariables(config);
+
+        assertFalse(env.containsKey("MM_GITLABSETTINGS_DISCOVERYENDPOINT"));
+        assertFalse(env.containsKey("MM_OPENIDSETTINGS_DISCOVERYENDPOINT"));
     }
 
     @Test
@@ -109,7 +121,7 @@ class MattermostOidcIntegrationTest {
         OidcConfiguration config = createMockConfig();
         Map<String, String> env = integration.getEnvironmentVariables(config);
 
-        assertEquals("openid profile email", env.get("MM_OPENIDSETTINGS_SCOPE"));
+        assertEquals("openid profile email", env.get("MM_GITLABSETTINGS_SCOPE"));
     }
 
     @Test
@@ -126,7 +138,7 @@ class MattermostOidcIntegrationTest {
         OidcConfiguration config = createMockConfig();
         Map<String, String> env = integration.getEnvironmentVariables(config);
 
-        assertFalse(env.containsKey("MM_OPENIDSETTINGS_SECRET"),
+        assertFalse(env.containsKey("MM_GITLABSETTINGS_SECRET"),
                 "Client secret should NOT be in environment variables");
     }
 
@@ -142,7 +154,7 @@ class MattermostOidcIntegrationTest {
         OidcConfiguration config = createMockConfigWithProvider(providerType);
         Map<String, String> env = integration.getEnvironmentVariables(config);
 
-        assertEquals(expectedText, env.get("MM_OPENIDSETTINGS_BUTTONTEXT"));
+        assertEquals(expectedText, env.get("MM_GITLABSETTINGS_BUTTONTEXT"));
     }
 
     @Test
@@ -150,7 +162,7 @@ class MattermostOidcIntegrationTest {
         OidcConfiguration config = createMockConfig();
         Map<String, String> env = integration.getEnvironmentVariables(config);
 
-        assertEquals("#FF9900", env.get("MM_OPENIDSETTINGS_BUTTONCOLOR"));
+        assertEquals("#FF9900", env.get("MM_GITLABSETTINGS_BUTTONCOLOR"));
     }
 
     // ========== Site URL Derivation Tests ==========
@@ -163,7 +175,7 @@ class MattermostOidcIntegrationTest {
                 "https://auth.example.com/oauth2/token",
                 "https://auth.example.com/oauth2/userInfo",
                 "https://auth.example.com",
-                "https://mattermost.example.com/signup/openid/complete",
+                "https://mattermost.example.com/signup/gitlab/complete",
                 "https://custom-site.example.com",  // applicationUrl
                 null,
                 "cognito"
@@ -181,7 +193,7 @@ class MattermostOidcIntegrationTest {
                 "https://auth.example.com/oauth2/token",
                 "https://auth.example.com/oauth2/userInfo",
                 "https://auth.example.com",
-                "https://mattermost.example.com/signup/openid/complete",
+                "https://mattermost.example.com/signup/gitlab/complete",
                 null,  // No applicationUrl
                 null,
                 "cognito"
@@ -200,7 +212,7 @@ class MattermostOidcIntegrationTest {
 
         assertNotNull(commands);
         assertFalse(commands.isEmpty());
-        assertTrue(commands.stream().anyMatch(cmd -> cmd.contains("OIDC")));
+        assertTrue(commands.stream().anyMatch(cmd -> cmd.contains("GitLab OAuth")));
     }
 
     // ========== Post-Deployment Instructions Tests ==========
@@ -211,8 +223,8 @@ class MattermostOidcIntegrationTest {
 
         assertNotNull(instructions);
         assertTrue(instructions.contains("Mattermost"));
-        assertTrue(instructions.contains("Cognito"));
-        assertTrue(instructions.contains("OIDC"));
+        assertTrue(instructions.contains("Team Edition"));
+        assertTrue(instructions.contains("single logout"));
     }
 
     // ========== Helper Methods ==========
@@ -228,7 +240,7 @@ class MattermostOidcIntegrationTest {
                 "https://auth.example.com/oauth2/token",
                 "https://auth.example.com/oauth2/userInfo",
                 "https://auth.example.com",
-                "https://mattermost.example.com/signup/openid/complete",
+                "https://mattermost.example.com/signup/gitlab/complete",
                 "https://mattermost.example.com",
                 null,
                 providerType
