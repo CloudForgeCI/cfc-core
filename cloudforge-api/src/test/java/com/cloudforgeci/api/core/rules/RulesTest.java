@@ -13,15 +13,4 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class RulesTest {
 
-    @Test
-    void testRulesCannotBeInstantiated() {
-        // The Rules class should not be instantiable (utility class)
-        try {
-            var constructor = Rules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()),
-                "Rules should have a private constructor");
-        } catch (NoSuchMethodException e) {
-            fail("Rules should have a private constructor");
-        }
-    }
 }

@@ -1,7 +1,10 @@
 package com.cloudforgeci.api.core.rules;
 
+
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,11 +41,16 @@ import java.util.logging.Logger;
  * cannot be fully automated. Infrastructure validation ensures technical readiness,
  * but organizations must maintain separate legal documentation and processes.</p>
  */
-public final class GdprOrganizationalRules {
+@ComplianceFramework(
+    value = "GDPR-Organizational",
+    priority = 35,
+    displayName = "GDPR Organizational Requirements",
+    description = "Validates GDPR organizational and data protection requirements"
+)
+public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(GdprOrganizationalRules.class.getName());
 
-    private GdprOrganizationalRules() {}
 
     /**
      * Install GDPR organizational validation rules.
@@ -50,7 +58,8 @@ public final class GdprOrganizationalRules {
      *
      * @param ctx System context
      */
-    public static void install(SystemContext ctx) {
+        @Override
+    public void install(SystemContext ctx) {
         // Only apply if GDPR is in compliance frameworks
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
         if (complianceFrameworks == null || !complianceFrameworks.toUpperCase().contains("GDPR")) {
@@ -114,7 +123,7 @@ public final class GdprOrganizationalRules {
      *   <li>Article 13 - Information to be provided when collecting data</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateLawfulnessOfProcessing(SystemContext ctx) {
+    private List<ComplianceRule> validateLawfulnessOfProcessing(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Legal basis documented
@@ -190,7 +199,7 @@ public final class GdprOrganizationalRules {
      *   <li>Article 21 - Right to object</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateDataSubjectRights(SystemContext ctx) {
+    private List<ComplianceRule> validateDataSubjectRights(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Data subject request procedures
@@ -262,7 +271,7 @@ public final class GdprOrganizationalRules {
      *   <li>Article 35(7) - DPIA must assess: necessity, proportionality, risks, safeguards</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateDataProtectionImpactAssessment(SystemContext ctx) {
+    private List<ComplianceRule> validateDataProtectionImpactAssessment(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // DPIA conducted
@@ -316,12 +325,12 @@ public final class GdprOrganizationalRules {
      *   <li>Article 49 - Derogations for specific situations</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateInternationalTransfers(SystemContext ctx) {
+    private List<ComplianceRule> validateInternationalTransfers(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        // Check if using multi-region
+        // Check if using EU region
         String region = ctx.cfc.region();
-        boolean isEuRegion = region != null && (region.startsWith("eu-") || region.equals("us-east-1"));
+        boolean isEuRegion = region != null && region.startsWith("eu-");
 
         // International transfer safeguards
         boolean internationalTransferSafeguards = getBooleanSetting(ctx, "gdprInternationalTransferSafeguards", false);
@@ -373,7 +382,7 @@ public final class GdprOrganizationalRules {
      *   <li>Article 30 - Records of processing activities</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateDataRetention(SystemContext ctx) {
+    private List<ComplianceRule> validateDataRetention(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Data retention policy

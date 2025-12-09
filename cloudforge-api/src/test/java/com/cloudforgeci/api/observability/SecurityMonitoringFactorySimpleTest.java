@@ -1,5 +1,9 @@
 package com.cloudforgeci.api.observability;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,10 +36,10 @@ class SecurityMonitoringFactorySimpleTest {
                 Stack stack = new Stack(app, "TestStack");
                 // Start SystemContext before creating factory
                 com.cloudforgeci.api.core.SystemContext.start(stack,
-                    com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-                    com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
-                    com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
-                    com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+                    TopologyType.JENKINS_SERVICE,
+                    RuntimeType.FARGATE,
+                    SecurityProfile.DEV,
+                    com.cloudforge.core.enums.IAMProfile.MINIMAL,
                     com.cloudforgeci.api.core.DeploymentContext.from(stack));
                 SecurityMonitoringFactory factory = new SecurityMonitoringFactory(stack, "TestSecurityMonitoring");
 
@@ -210,7 +214,7 @@ class SecurityMonitoringFactorySimpleTest {
         void getHighCpuThresholdShouldExistAsPrivateMethod() {
             assertDoesNotThrow(() -> {
                 Method method = SecurityMonitoringFactory.class.getDeclaredMethod("getHighCpuThreshold",
-                    com.cloudforgeci.api.interfaces.SecurityProfile.class);
+                    SecurityProfile.class);
                 assertTrue(java.lang.reflect.Modifier.isPrivate(method.getModifiers()),
                     "getHighCpuThreshold should be private");
                 assertEquals(double.class, method.getReturnType(),
@@ -223,7 +227,7 @@ class SecurityMonitoringFactorySimpleTest {
         void getHighMemoryThresholdShouldExistAsPrivateMethod() {
             assertDoesNotThrow(() -> {
                 Method method = SecurityMonitoringFactory.class.getDeclaredMethod("getHighMemoryThreshold",
-                    com.cloudforgeci.api.interfaces.SecurityProfile.class);
+                    SecurityProfile.class);
                 assertTrue(java.lang.reflect.Modifier.isPrivate(method.getModifiers()),
                     "getHighMemoryThreshold should be private");
                 assertEquals(double.class, method.getReturnType(),
@@ -236,7 +240,7 @@ class SecurityMonitoringFactorySimpleTest {
         void getHighNetworkThresholdShouldExistAsPrivateMethod() {
             assertDoesNotThrow(() -> {
                 Method method = SecurityMonitoringFactory.class.getDeclaredMethod("getHighNetworkThreshold",
-                    com.cloudforgeci.api.interfaces.SecurityProfile.class);
+                    SecurityProfile.class);
                 assertTrue(java.lang.reflect.Modifier.isPrivate(method.getModifiers()),
                     "getHighNetworkThreshold should be private");
                 assertEquals(double.class, method.getReturnType(),
@@ -257,10 +261,10 @@ class SecurityMonitoringFactorySimpleTest {
                 Stack stack = new Stack(app, "TestStack");
                 // Start SystemContext before creating factories
                 com.cloudforgeci.api.core.SystemContext.start(stack,
-                    com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-                    com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
-                    com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
-                    com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+                    TopologyType.JENKINS_SERVICE,
+                    RuntimeType.FARGATE,
+                    SecurityProfile.DEV,
+                    com.cloudforge.core.enums.IAMProfile.MINIMAL,
                     com.cloudforgeci.api.core.DeploymentContext.from(stack));
 
                 SecurityMonitoringFactory factory1 = new SecurityMonitoringFactory(stack, "Factory1");
@@ -287,10 +291,10 @@ class SecurityMonitoringFactorySimpleTest {
                         App app = new App();
                         Stack stack = new Stack(app, "TestStack1");
                         com.cloudforgeci.api.core.SystemContext.start(stack,
-                            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-                            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
-                            com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
-                            com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+                            TopologyType.JENKINS_SERVICE,
+                            RuntimeType.FARGATE,
+                            SecurityProfile.DEV,
+                            com.cloudforge.core.enums.IAMProfile.MINIMAL,
                             com.cloudforgeci.api.core.DeploymentContext.from(stack));
                         SecurityMonitoringFactory factory = new SecurityMonitoringFactory(stack, "ThreadSafeFactory1");
                         assertNotNull(factory, "Factory should be created");
@@ -302,10 +306,10 @@ class SecurityMonitoringFactorySimpleTest {
                         App app = new App();
                         Stack stack = new Stack(app, "TestStack2");
                         com.cloudforgeci.api.core.SystemContext.start(stack,
-                            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-                            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
-                            com.cloudforgeci.api.interfaces.SecurityProfile.DEV,
-                            com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+                            TopologyType.JENKINS_SERVICE,
+                            RuntimeType.FARGATE,
+                            SecurityProfile.DEV,
+                            com.cloudforge.core.enums.IAMProfile.MINIMAL,
                             com.cloudforgeci.api.core.DeploymentContext.from(stack));
                         SecurityMonitoringFactory factory = new SecurityMonitoringFactory(stack, "ThreadSafeFactory2");
                         assertNotNull(factory, "Factory should be created");

@@ -2,10 +2,10 @@ package com.cloudforgeci.api.api;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -348,17 +348,17 @@ class SystemContextErrorHandlingTest {
         }
 
         @Test
-        @DisplayName("JENKINS_SINGLE_NODE topology should work with EC2 runtime")
+        @DisplayName("JENKINS_SERVICE topology should work with EC2 runtime")
         void jenkinsSingleNodeWithEc2() {
             Stack singleNodeStack = new Stack(app, "SingleNodeStack");
             DeploymentContext singleNodeCfc = DeploymentContext.from(singleNodeStack);
 
             SystemContext ctx = assertDoesNotThrow(() -> {
-                return SystemContext.start(singleNodeStack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+                return SystemContext.start(singleNodeStack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                         SecurityProfile.DEV, IAMProfile.MINIMAL, singleNodeCfc);
-            }, "JENKINS_SINGLE_NODE with EC2 should succeed");
+            }, "JENKINS_SERVICE with EC2 should succeed");
 
-            assertEquals(TopologyType.JENKINS_SINGLE_NODE, ctx.topology);
+            assertEquals(TopologyType.JENKINS_SERVICE, ctx.topology);
             assertEquals(RuntimeType.EC2, ctx.runtime);
         }
 

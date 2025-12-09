@@ -1,11 +1,16 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
+import software.amazon.awscdk.services.acmpca.CertificateAuthority;
+import software.amazon.awscdk.services.acmpca.CfnCertificate;
+import software.amazon.awscdk.services.acmpca.CfnCertificateAuthority;
+import software.amazon.awscdk.services.acmpca.CfnCertificateAuthorityActivation;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
+import software.amazon.awscdk.services.certificatemanager.PrivateCertificate;
 import software.amazon.awscdk.services.ecs.CfnService;
 import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationTargetGroupsProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
@@ -16,6 +21,7 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListener;
 import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListenerRule;
 import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate;
+import software.amazon.awscdk.services.elasticloadbalancingv2.SslPolicy;
 import software.constructs.IConstruct;
 
 import java.util.List;
@@ -120,13 +126,17 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
         int healthyThreshold = c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2;
         int unhealthyThreshold = c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3;
 
+        // Get application-specific configuration from ApplicationSpec
+        int applicationPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
+        String healthCheckPath = c.applicationSpec.get().map(spec -> spec.healthCheckPath()).orElse("/");
+
         ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "FargateHttpTargetGroup")
                 .vpc(c.vpc.get().orElseThrow())
-                .port(8080)
+                .port(applicationPort)
                 .protocol(ApplicationProtocol.HTTP)
                 .targets(java.util.List.of(svc))
                 .healthCheck(HealthCheck.builder()
-                        .path("/login").healthyHttpCodes("200-299")
+                        .path(healthCheckPath).healthyHttpCodes("200-399")
                         .interval(software.amazon.awscdk.Duration.seconds(interval))
                         .timeout(software.amazon.awscdk.Duration.seconds(timeout))
                         .healthyThresholdCount(healthyThreshold).unhealthyThresholdCount(unhealthyThreshold)
@@ -154,40 +164,116 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       return; // ← CRITICAL: prevents creating cert/https/redirect that detach the HTTP TG
     }
 
-    // ── 2) SSL + DOMAIN/FQDN → ACM + HTTPS + HTTP default redirect ─────────────
-    if (!wantSslDns) {
-      return; // SSL requested but no host → fall back to HTTP-only silently
+    // ── 2) SSL MODE ─────────────────────────────────────────────────────────────
+    // Two paths:
+    // A) SSL + custom domain → Use ACM public certificate with DNS validation
+    // B) SSL + no domain → Use AWS Private CA certificate for ALB DNS name
+    //    (Required for application-oidc/alb-oidc without custom domain)
+
+    if (!ssl) {
+      return; // No SSL requested
     }
 
-    // 2a) Create certificate first
-    whenBoth(c.zone, c.alb, (zone, alb) -> {
-      if (c.cert.get().isPresent()) {
-        return;
-      }
-      String certDomain = fqdn != null ? fqdn : domain;
-      if (certDomain == null || certDomain.isBlank()) {
-        LOG.warning("*** FargateRuntimeConfiguration: Certificate creation skipped - no domain available ***");
-        return;
-      }
+    // 2a) Create certificate - either public (with domain) or private (without domain)
+    if (wantSslDns) {
+      // Path A: Public ACM certificate with DNS validation
+      whenBoth(c.zone, c.alb, (zone, alb) -> {
+        if (c.cert.get().isPresent()) {
+          return;
+        }
+        String certDomain = fqdn != null ? fqdn : domain;
+        if (certDomain == null || certDomain.isBlank()) {
+          LOG.warning("*** FargateRuntimeConfiguration: Certificate creation skipped - no domain available ***");
+          return;
+        }
 
-      Certificate cert = Certificate.Builder
-              .create(c, "HttpsCert")
-              .domainName(certDomain)
-              .validation(CertificateValidation.fromDns(zone))
-              .build();
+        Certificate cert = Certificate.Builder
+                .create(c, "HttpsCert")
+                .domainName(certDomain)
+                .validation(CertificateValidation.fromDns(zone))
+                .build();
 
-      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
-      c.cert.set(cert);
-    });
+        cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+        c.cert.set(cert);
+      });
+    } else {
+      // Path B: Private CA certificate for ALB DNS name (no custom domain required)
+      // This enables HTTPS for application-oidc/alb-oidc without a custom domain
+      c.alb.onSet(alb -> {
+        if (c.cert.get().isPresent()) {
+          return;
+        }
+
+        LOG.info("Creating Private CA certificate for ALB DNS name (no custom domain configured)");
+        String albDnsName = alb.getLoadBalancerDnsName();
+
+        // Create a Private Certificate Authority (short-lived, for this stack only)
+        CfnCertificateAuthority privateCa = CfnCertificateAuthority.Builder.create(c, "PrivateCA")
+                .type("ROOT")
+                .keyAlgorithm("RSA_2048")
+                .signingAlgorithm("SHA256WITHRSA")
+                .subject(CfnCertificateAuthority.SubjectProperty.builder()
+                        .commonName("CloudForge Private CA")
+                        .organization("CloudForge")
+                        .organizationalUnit("Infrastructure")
+                        .build())
+                .build();
+        privateCa.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        // Issue a ROOT CA certificate using the CA's own CSR
+        // This creates the self-signed root certificate for CA activation
+        CfnCertificate rootCaCert = CfnCertificate.Builder.create(c, "RootCACertificate")
+                .certificateAuthorityArn(privateCa.getAttrArn())
+                .certificateSigningRequest(privateCa.getAttrCertificateSigningRequest())
+                .signingAlgorithm("SHA256WITHRSA")
+                .templateArn("arn:aws:acm-pca:::template/RootCACertificate/V1")
+                .validity(CfnCertificate.ValidityProperty.builder()
+                        .type("YEARS")
+                        .value(10)
+                        .build())
+                .build();
+        rootCaCert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        // Activate the CA with the self-signed root certificate
+        CfnCertificateAuthorityActivation caActivation = CfnCertificateAuthorityActivation.Builder.create(c, "PrivateCAActivation")
+                .certificateAuthorityArn(privateCa.getAttrArn())
+                .certificate(rootCaCert.getAttrCertificate())
+                .status("ACTIVE")
+                .build();
+        caActivation.addDependency(rootCaCert);
+
+        // Create a private certificate for the ALB DNS name
+        // Note: PrivateCertificate requires the CA ARN
+        PrivateCertificate privateCert = PrivateCertificate.Builder.create(c, "PrivateHttpsCert")
+                .domainName(albDnsName)
+                .certificateAuthority(CertificateAuthority.fromCertificateAuthorityArn(
+                        c, "ImportedPrivateCA", privateCa.getAttrArn()))
+                .build();
+
+        // Ensure proper dependency ordering
+        privateCert.getNode().addDependency(caActivation);
+        privateCert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        c.cert.set(privateCert);
+        c.privateCa.set(privateCa);
+
+        LOG.info("Private CA certificate created for: " + albDnsName);
+        LOG.warning("NOTE: Private CA certificates are NOT trusted by browsers. Users will see certificate warnings.");
+        LOG.warning("For Cognito OIDC, ensure your IdP is configured to trust this Private CA.");
+      });
+    }
 
     // 2b) Create HTTPS listener with certificate
     whenBoth(c.cert, c.alb, (cert, alb) -> {
       if (c.https.get().isPresent()) return;
 
+      // Use TLS 1.2+ policy for PCI-DSS compliance (Requirement 4.1)
+      // RECOMMENDED_TLS enforces TLS 1.2 minimum with strong cipher suites
       ApplicationListener https = alb.addListener("Https",
               BaseApplicationListenerProps.builder()
                       .port(443)
                       .certificates(java.util.List.of(ListenerCertificate.fromCertificateManager(cert)))
+                      .sslPolicy(SslPolicy.RECOMMENDED_TLS)
                       .build());
 
       // Add explicit dependency: HTTPS listener depends on certificate
@@ -215,13 +301,17 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       int healthyThreshold = c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2;
       int unhealthyThreshold = c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3;
 
+      // Get application-specific configuration from ApplicationSpec
+      int applicationPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
+      String healthCheckPath = c.applicationSpec.get().map(spec -> spec.healthCheckPath()).orElse("/");
+
       ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "FargateHttpsTargetGroup")
               .vpc(c.vpc.get().orElseThrow())
-              .port(8080)
+              .port(applicationPort)
               .protocol(ApplicationProtocol.HTTP)
               .targets(java.util.List.of(svc))
                 .healthCheck(HealthCheck.builder()
-                        .path("/login").healthyHttpCodes("200-299")
+                        .path(healthCheckPath).healthyHttpCodes("200-399")
                         .interval(software.amazon.awscdk.Duration.seconds(interval))
                         .timeout(software.amazon.awscdk.Duration.seconds(timeout))
                         .healthyThresholdCount(healthyThreshold).unhealthyThresholdCount(unhealthyThreshold)

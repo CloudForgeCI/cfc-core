@@ -1,0 +1,52 @@
+{
+  "description": "HIPAA compliance testing - no domain required, uses Private CA",
+  "stackName": "App-HIPAA-Quick",
+  "applicationId": "REPLACE_WITH_APP_ID",
+  "applicationName": "HIPAA Quick Test",
+  "environment": "staging",
+
+  "runtime": "fargate",
+  "securityProfile": "staging",
+  "topology": "application-service",
+
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "hipaa-quick-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+
+  "cpu": 1024,
+  "memory": 2048,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 2,
+  "enableAutoScaling": true,
+
+  "complianceFrameworks": "SOC2,HIPAA",
+  "complianceMode": "advisory",
+  "scopeConfigRulesToDeployment": true,
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "cloudTrailEnabled": true,
+  "wafEnabled": true,
+  "flowLogsEnabled": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "2190",
+
+  "_comments": {
+    "purpose": "Test HIPAA compliance rules without domain infrastructure",
+    "ssl": "Private CA certificate issued for ALB DNS name",
+    "cost": "Includes ~$400/month Private CA + compliance services",
+    "compliance": "Private CA meets HIPAA transmission security (164.312(e))",
+    "log_retention": "2190 days (6 years) per HIPAA requirement 164.316(b)(2)(i)",
+    "controls": "164.312(a) encryption, 164.312(b) audit, 164.312(d) auth, 164.312(e) transmission"
+  }
+}

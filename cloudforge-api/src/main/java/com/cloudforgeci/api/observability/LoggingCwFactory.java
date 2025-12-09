@@ -1,11 +1,11 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.core.annotation.SystemContext;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforgeci.api.core.util.RetentionDaysConverter;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
@@ -77,7 +77,7 @@ public class LoggingCwFactory extends BaseFactory {
             // Create log group with security profile-based settings
             String securityProfileName = (security != null) ? security.name().toLowerCase() : "unknown";
             String runtimeName = (runtime != null) ? runtime.name().toLowerCase() : "unknown";
-            String logGroupName = "/aws/jenkins/" + stackName + "/" + runtimeName + "/" + securityProfileName;
+            String logGroupName = "/aws/ecs/" + stackName + "/" + runtimeName + "/" + securityProfileName;
             LOG.info("LoggingCwFactory: Creating log group with name: " + logGroupName);
 
             // Use configurable log retention from DeploymentContext if monitoring is enabled

@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.network;
 
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.assertions.Template;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -48,7 +48,7 @@ public class VpcFactoryIntegrationTest {
 
     @Test
     void createsVpcWithFargateRuntime() {
-        // Only test FARGATE runtime since EC2 + JENKINS_SINGLE_NODE has conflicting requirements
+        // Only test FARGATE runtime since EC2 + JENKINS_SERVICE has conflicting requirements
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder("VpcTestFARGATE", SecurityProfile.DEV, RuntimeType.FARGATE);
         builder.createCompleteInfrastructure();
 

@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.core.iam;
 
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
 
 import java.util.List;
 import java.util.Map;
@@ -161,7 +161,7 @@ public final class PermissionMatrix {
         }
 
         // Add topology-specific permissions
-        if (topology == TopologyType.JENKINS_SERVICE || topology == TopologyType.JENKINS_SINGLE_NODE) {
+        if (topology == TopologyType.JENKINS_SERVICE) {
             permissions.addAll(EFS_PERMISSIONS.get(iamProfile));
             permissions.addAll(ALB_PERMISSIONS.get(iamProfile));
         }

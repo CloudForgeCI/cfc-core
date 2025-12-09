@@ -1,8 +1,11 @@
 package com.cloudforgeci.api.core.rules;
 
+
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.ComplianceMode;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,17 +29,25 @@ import java.util.logging.Logger;
  * privacy policies) that must be implemented at the application and business process level.
  * This validator covers infrastructure-level technical safeguards only.
  */
-public final class GdprRules {
+@ComplianceFramework(
+    value = "GDPR",
+    priority = 30,
+    displayName = "GDPR",
+    description = "Validates GDPR technical safeguards for personal data protection"
+)
+public class GdprRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(GdprRules.class.getName());
 
-    private GdprRules() {}
 
     /**
      * Install GDPR compliance validation rules.
      * GDPR applies when processing personal data of EU residents.
      * Only enforced for PRODUCTION and STAGING environments.
+     *
+     * @since 3.0.0
      */
-    public static void install(SystemContext ctx) {
+    @Override
+    public void install(SystemContext ctx) {
         // Only enforce GDPR validation for production and staging
         if (ctx.security != SecurityProfile.PRODUCTION && ctx.security != SecurityProfile.STAGING) {
             LOG.info("GDPR validation rules only enforced for PRODUCTION and STAGING profiles");
@@ -101,7 +112,7 @@ public final class GdprRules {
      * Implement appropriate technical and organizational measures to ensure that, by default,
      * only personal data necessary for each specific purpose is processed.
      */
-    private static List<ComplianceRule> validateDataProtectionByDesign(SystemContext ctx) {
+    private List<ComplianceRule> validateDataProtectionByDesign(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -193,7 +204,7 @@ public final class GdprRules {
      * Article 30: Records of Processing Activities.
      * Maintain records of all processing activities including security measures.
      */
-    private static List<ComplianceRule> validateProcessingRecords(SystemContext ctx) {
+    private List<ComplianceRule> validateProcessingRecords(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -260,7 +271,7 @@ public final class GdprRules {
      * (c) ability to restore availability and access in timely manner
      * (d) process for regularly testing, assessing, evaluating effectiveness
      */
-    private static List<ComplianceRule> validateSecurityMeasures(SystemContext ctx) {
+    private List<ComplianceRule> validateSecurityMeasures(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -305,7 +316,7 @@ public final class GdprRules {
             rules.add(ComplianceRule.fail(
                 "GDPR-AUTHENTICATION",
                 "Authentication required to ensure confidentiality (GDPR Art. 32(1)(b))",
-                "Authentication mode is 'none'. Configure authMode = 'alb-oidc' or 'jenkins-oidc' to control access to personal data."
+                "Authentication mode is 'none'. Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to control access to personal data."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -367,7 +378,7 @@ public final class GdprRules {
      * Article 33: Notification of Personal Data Breach.
      * Ability to detect and respond to data breaches within 72 hours.
      */
-    private static List<ComplianceRule> validateBreachDetection(SystemContext ctx) {
+    private List<ComplianceRule> validateBreachDetection(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -442,9 +453,9 @@ public final class GdprRules {
     /**
      * Generate GDPR technical safeguards compliance report.
      */
-    public static String generateComplianceReport(SystemContext ctx) {
+    public String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== GDPR Technical Safeguards Compliance Report == = \n\n");
+        report.append("\n=== GDPR Technical Safeguards Compliance Report ===\n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")

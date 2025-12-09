@@ -7,6 +7,7 @@ Complete documentation for deploying and managing secure, compliant Jenkins infr
 ## 📖 Table of Contents
 
 - [Quick Start](#quick-start)
+- [Applications & Plugins](#applications--plugins)
 - [Setup & Configuration](#setup--configuration)
 - [Compliance & Security](#compliance--security)
 - [Advanced Topics](#advanced-topics)
@@ -29,6 +30,44 @@ cd cloudforge-sample
 mvn clean package
 cdk deploy --context cfc=@deployment-context.json
 ```
+
+---
+
+## 🔌 Applications & Plugins
+
+### Application Guides
+
+Comprehensive guides for each application with deployment-context examples:
+
+| Application | Status | Guide |
+|-------------|--------|-------|
+| **Jenkins** | Verified | [Jenkins Guide](guides/applications/jenkins.md) |
+| **Mattermost** | Verified | [Mattermost Guide](guides/applications/mattermost.md) |
+| **Metabase** | Verified | [Metabase Guide](guides/applications/metabase.md) |
+| **GitLab** | Available | [GitLab Guide](guides/applications/gitlab.md) |
+| **Grafana** | Available | [Grafana Guide](guides/applications/grafana.md) |
+| **Harbor** | Available | [Harbor Guide](guides/applications/harbor.md) |
+| **Nexus** | Available | [Nexus Guide](guides/applications/nexus.md) |
+| **SonarQube** | Plugin | [SonarQube Guide](guides/applications/sonarqube.md) |
+
+**[All Application Guides](guides/applications/)** | **[Deployment Context Examples](../deployment-contexts/examples/)**
+
+### Application Catalog
+
+| Document | Description |
+|----------|-------------|
+| **[Application Catalog](applications/README.md)** | Complete catalog of 14 built-in applications |
+| **[Application Compliance](applications/COMPLIANCE.md)** | Compliance requirements for each application |
+| **[OIDC Integration](applications/OIDC.md)** | Application-level OIDC authentication (Grafana, GitLab, Jenkins) |
+
+### Plugin System
+
+| Document | Description |
+|----------|-------------|
+| **[Plugin Ecosystem](plugins/PLUGIN-ECOSYSTEM.md)** | Overview of built-in applications and plugin architecture |
+| **[Plugin System Guide](plugins/PLUGIN-SYSTEM.md)** | Core architecture and development patterns |
+| **[Application Plugin Guide](plugins/APPLICATION-PLUGIN-GUIDE.md)** | Build custom application plugins |
+| **[Compliance Plugin Guide](plugins/COMPLIANCE-PLUGIN-GUIDE.md)** | Build custom compliance framework validators |
 
 ---
 
@@ -128,10 +167,15 @@ cdk deploy --context cfc=@deployment-context.json
 
 ## 🎯 Documentation by Use Case
 
+### "I want to deploy an application"
+1. [Application Guides](guides/applications/) - Comprehensive guides for each app
+2. [Deployment Context Examples](../deployment-contexts/examples/) - Ready-to-use JSON configs
+3. [Interactive Deployer](guides/INTERACTIVE_DEPLOYER.md) - CLI deployment tool
+
 ### "I want to deploy Jenkins quickly"
-1. [Quick Start Guide](compliance/QUICK_START_GUIDE.md)
-2. [Sample Project](https://github.com/CloudForgeCI/cloudforge-sample)
-3. [Interactive Deployer](guides/INTERACTIVE_DEPLOYER.md)
+1. [Jenkins Guide](guides/applications/jenkins.md)
+2. [Jenkins Dev Example](../deployment-contexts/examples/jenkins-dev.json)
+3. [Quick Start Guide](compliance/QUICK_START_GUIDE.md)
 
 ### "I need SOC2 compliance"
 1. [SOC2 Configuration Example](../README.md#soc-2-compliance-simplest)
@@ -177,5 +221,5 @@ Found a documentation error or want to improve something?
 
 ---
 
-**Last Updated:** 2025-11-18
-**Documentation Version:** 2.0.6
+**Last Updated:** 2025-12-07
+**Documentation Version:** 3.0.0

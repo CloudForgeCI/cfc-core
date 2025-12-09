@@ -1,7 +1,9 @@
 package com.cloudforgeci.api.core.rules;
 
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,15 +31,22 @@ import java.util.logging.Logger;
  *
  * <h2>Usage</h2>
  * <pre>{@code
- * // Install threat protection validation
- * ThreatProtectionRules.install(ctx);
+ * // Automatically loaded via FrameworkLoader (v2.0 pattern)
+ * // Or manually: new ThreatProtectionRules().install(ctx);
  * }</pre>
+ *
+ * @since 3.0.0
  */
-public final class ThreatProtectionRules {
+@ComplianceFramework(
+    value = "ThreatProtection",
+    priority = 0,
+    alwaysLoad = true,
+    displayName = "Threat Protection",
+    description = "Cross-framework threat protection and malware defense validation"
+)
+public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(ThreatProtectionRules.class.getName());
-
-    private ThreatProtectionRules() {}
 
     /**
      * Install threat protection validation rules.
@@ -45,7 +54,8 @@ public final class ThreatProtectionRules {
      *
      * @param ctx System context
      */
-    public static void install(SystemContext ctx) {
+    @Override
+    public void install(SystemContext ctx) {
         LOG.info("Installing threat protection compliance validation rules for " + ctx.security);
 
         ctx.getNode().addValidation(() -> {
@@ -99,7 +109,7 @@ public final class ThreatProtectionRules {
      * <p>PRODUCTION + FARGATE: GuardDuty runtime protection + immutable containers satisfy anti-malware requirements.
      * EC2: Traditional anti-malware software required unless using immutable AMI approach.</p>
      */
-    private static List<ComplianceRule> validateMalwareProtection(SystemContext ctx) {
+    private List<ComplianceRule> validateMalwareProtection(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
@@ -200,7 +210,7 @@ public final class ThreatProtectionRules {
      *   <li>11.4.3: Generate alerts for detected intrusions</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateIntrusionDetection(SystemContext ctx) {
+    private List<ComplianceRule> validateIntrusionDetection(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -314,7 +324,7 @@ public final class ThreatProtectionRules {
      *   <li>11.5.3: Alert on unauthorized modifications</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateFileIntegrityMonitoring(SystemContext ctx) {
+    private List<ComplianceRule> validateFileIntegrityMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Check which compliance frameworks are enabled
@@ -383,7 +393,7 @@ public final class ThreatProtectionRules {
      *   <li>Runtime security monitoring</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateContainerSecurity(SystemContext ctx) {
+    private List<ComplianceRule> validateContainerSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Check which compliance frameworks are enabled
@@ -434,7 +444,7 @@ public final class ThreatProtectionRules {
     /**
      * Helper method to safely get boolean settings from deployment context.
      */
-    private static boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
+    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
         try {
             String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
             return Boolean.parseBoolean(value);
@@ -450,7 +460,7 @@ public final class ThreatProtectionRules {
      * Infrastructure requirements are technical services that must be deployed (GuardDuty, WAF, etc.)
      * Advisory recommendations are configuration/operational items (alert setup, scanning config, etc.)
      */
-    private static boolean isInfrastructureRequirement(SystemContext ctx, String ruleDescription) {
+    private boolean isInfrastructureRequirement(SystemContext ctx, String ruleDescription) {
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
         boolean requiresPciDss = complianceFrameworks != null &&
             complianceFrameworks.toUpperCase().contains("PCI-DSS");

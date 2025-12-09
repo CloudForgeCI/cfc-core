@@ -2,10 +2,10 @@ package com.cloudforgeci.api.core.annotation;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -136,16 +136,16 @@ public class ContextInjectionTest {
      */
     private static class AnnotatedTestFactory extends BaseFactory {
 
-        @com.cloudforgeci.api.core.annotation.DeploymentContext("region")
+        @com.cloudforge.core.annotation.DeploymentContext("region")
         private String region;
 
-        @com.cloudforgeci.api.core.annotation.DeploymentContext("env")
+        @com.cloudforge.core.annotation.DeploymentContext("env")
         private String environment;
 
-        @com.cloudforgeci.api.core.annotation.SystemContext("security")
+        @com.cloudforge.core.annotation.SystemContext("security")
         private SecurityProfile securityProfile;
 
-        @com.cloudforgeci.api.core.annotation.SystemContext("runtime")
+        @com.cloudforge.core.annotation.SystemContext("runtime")
         private RuntimeType runtime;
 
         public AnnotatedTestFactory(Construct scope, String id) {
@@ -180,16 +180,16 @@ public class ContextInjectionTest {
      */
     private static class StandaloneClass extends Construct {
 
-        @com.cloudforgeci.api.core.annotation.DeploymentContext("region")
+        @com.cloudforge.core.annotation.DeploymentContext("region")
         private String region;
 
-        @com.cloudforgeci.api.core.annotation.DeploymentContext("env")
+        @com.cloudforge.core.annotation.DeploymentContext("env")
         private String environment;
 
-        @com.cloudforgeci.api.core.annotation.SystemContext("security")
+        @com.cloudforge.core.annotation.SystemContext("security")
         private SecurityProfile securityProfile;
 
-        @com.cloudforgeci.api.core.annotation.SystemContext("topology")
+        @com.cloudforge.core.annotation.SystemContext("topology")
         private TopologyType topology;
 
         public StandaloneClass(Construct scope) {

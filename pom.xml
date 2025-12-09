@@ -1,31 +1,63 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <version>2.0.6</version>
-  <parent>
-    <groupId>com.cloudforgeci</groupId>
-    <artifactId>cloudforge</artifactId>
-    <version>1.1.1</version>
-  </parent>
+
+  <groupId>com.cloudforgeci</groupId>
   <artifactId>cfc-core</artifactId>
-  <name>CloudForge Core</name>
+  <version>3.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
+  <name>CloudForge Core BOM</name>
+  <description>Bill of Materials (BOM) for CloudForge infrastructure deployment libraries</description>
+  <url>https://github.com/CloudForgeCI/cfc-core</url>
+
   <properties>
-    <build.plugins.plugin.version>3.13.0</build.plugins.plugin.version>
-    <cdk.version>2.152.0</cdk.version>
-    <constructs.version>10.3.0</constructs.version>
-    <jupiter.version>5.12.2</jupiter.version>
+    <!-- Build Properties -->
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <java.version>21</java.version>
     <build.version.suffix></build.version.suffix> <!-- Blank by default -->
+
+    <!-- AWS CDK Versions -->
+    <cdk.version>2.232.1</cdk.version>
+    <constructs.version>10.3.0</constructs.version>
+
+    <!-- Core Library Versions -->
+    <jackson.version>2.19.4</jackson.version>
+    <jakarta.validation.version>3.0.2</jakarta.validation.version>
+
+    <!-- Test Dependency Versions -->
+    <jupiter.version>5.12.2</jupiter.version>
+    <hibernate.validator.version>8.0.1.Final</hibernate.validator.version>
+    <jakarta.el.version>4.0.2</jakarta.el.version>
+
+    <!-- Plugin Versions -->
+    <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
+    <maven.source.plugin.version>3.3.0</maven.source.plugin.version>
+    <maven.javadoc.plugin.version>3.7.0</maven.javadoc.plugin.version>
+    <maven.gpg.plugin.version>3.2.4</maven.gpg.plugin.version>
+    <maven.deploy.plugin.version>3.1.1</maven.deploy.plugin.version>
+    <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
+    <cyclonedx.plugin.version>2.8.2</cyclonedx.plugin.version>
+    <owasp.plugin.version>12.1.0</owasp.plugin.version>
+    <central.publishing.plugin.version>0.9.0</central.publishing.plugin.version>
+    <flatten.plugin.version>1.7.3</flatten.plugin.version>
   </properties>
 
   <dependencyManagement>
     <dependencies>
+      <!-- CloudForge Modules -->
+      <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-api</artifactId>
         <version>${project.version}</version>
-        <type>jar</type>
       </dependency>
+
+      <!-- AWS CDK Dependencies -->
       <dependency>
         <groupId>software.amazon.awscdk</groupId>
         <artifactId>aws-cdk-lib</artifactId>
@@ -36,11 +68,59 @@
         <artifactId>constructs</artifactId>
         <version>${constructs.version}</version>
       </dependency>
+
+      <!-- Jackson JSON Processing -->
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-annotations</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-core</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.datatype</groupId>
+        <artifactId>jackson-datatype-jsr310</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+
+      <!-- Jakarta Validation API -->
+      <dependency>
+        <groupId>jakarta.validation</groupId>
+        <artifactId>jakarta.validation-api</artifactId>
+        <version>${jakarta.validation.version}</version>
+      </dependency>
+
+      <!-- Test Dependencies -->
       <dependency>
         <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter</artifactId>
         <version>${jupiter.version}</version>
         <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.hibernate.validator</groupId>
+        <artifactId>hibernate-validator</artifactId>
+        <version>${hibernate.validator.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish</groupId>
+        <artifactId>jakarta.el</artifactId>
+        <version>${jakarta.el.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>jakarta.el</groupId>
+        <artifactId>jakarta.el-api</artifactId>
+        <version>5.0.0</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -52,8 +132,8 @@
   </scm>
 
   <modules>
-    <module>cloudforge-api</module>
     <module>cloudforge-core</module>
+    <module>cloudforge-api</module>
     <!-- cfc-testing is intentionally excluded - it's an independent consumer module -->
     <!-- cfc-testing depends on cloudforge-core but is not part of the reactor build -->
   </modules>
@@ -249,29 +329,65 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>${build.plugins.plugin.version}</version>
+          <version>${maven.compiler.plugin.version}</version>
           <configuration>
-            <source>21</source>
-            <target>21</target>
+            <source>${maven.compiler.source}</source>
+            <target>${maven.compiler.target}</target>
           </configuration>
         </plugin>
         <!-- Maven Source Plugin -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-source-plugin</artifactId>
-          <version>3.3.0</version>
+          <version>${maven.source.plugin.version}</version>
         </plugin>
         <!-- Maven Javadoc Plugin -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-javadoc-plugin</artifactId>
-          <version>3.7.0</version>
+          <version>${maven.javadoc.plugin.version}</version>
         </plugin>
         <!-- Maven GPG Plugin -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-gpg-plugin</artifactId>
-          <version>3.2.4</version>
+          <version>${maven.gpg.plugin.version}</version>
+        </plugin>
+        <!-- Maven Deploy Plugin -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>${maven.deploy.plugin.version}</version>
+        </plugin>
+        <!-- JaCoCo Code Coverage Plugin -->
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>${jacoco.plugin.version}</version>
+        </plugin>
+        <!-- CycloneDX SBOM Plugin -->
+        <plugin>
+          <groupId>org.cyclonedx</groupId>
+          <artifactId>cyclonedx-maven-plugin</artifactId>
+          <version>${cyclonedx.plugin.version}</version>
+        </plugin>
+        <!-- OWASP Dependency-Check Plugin -->
+        <plugin>
+          <groupId>org.owasp</groupId>
+          <artifactId>dependency-check-maven</artifactId>
+          <version>${owasp.plugin.version}</version>
+        </plugin>
+        <!-- Central Publishing Plugin -->
+        <plugin>
+          <groupId>org.sonatype.central</groupId>
+          <artifactId>central-publishing-maven-plugin</artifactId>
+          <version>${central.publishing.plugin.version}</version>
+        </plugin>
+        <!-- Flatten Maven Plugin -->
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>flatten-maven-plugin</artifactId>
+          <version>${flatten.plugin.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>

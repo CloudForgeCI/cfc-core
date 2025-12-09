@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Master Validation System for CloudForge Core
 # Orchestrates comprehensive resource validation, truth table generation, and drift detection
@@ -237,10 +237,11 @@ EOF
     echo ""
 
     # Define minimal test configurations
+    # CloudForge 3.0.0: JENKINS_SINGLE_NODE removed, using APPLICATION_SERVICE
     local smoke_configs=(
-        "FARGATE,JENKINS_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain"
-        "EC2,JENKINS_SINGLE_NODE,DEV,no-domain,ssl-disabled,no-subdomain"
-        "FARGATE,JENKINS_SERVICE,PRODUCTION,with-domain,ssl-enabled,with-subdomain"
+        "FARGATE,APPLICATION_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain"
+        "EC2,APPLICATION_SERVICE,DEV,no-domain,ssl-disabled,no-subdomain"
+        "FARGATE,APPLICATION_SERVICE,PRODUCTION,with-domain,ssl-enabled,with-subdomain"
     )
 
     local passed=0
@@ -278,16 +279,24 @@ EOF
         cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
-  "context": {
-    "runtime": "$runtime",
-    "topology": "$topology",
-    "securityProfile": "$security",
-    "domain": "$domain_value",
-    "subdomain": "$subdomain_value",
-    "enableSsl": "$ssl_value",
-    "createZone": true,
-    "stackName": "$stack_name"
-  }
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
+  "runtime": "$runtime",
+  "topology": "$topology",
+  "securityProfile": "$security",
+  "domain": "$domain_value",
+  "subdomain": "$subdomain_value",
+  "enableSsl": "$ssl_value",
+  "createZone": "true",
+  "networkMode": "public-no-nat",
+  "tier": "public",
+  "memory": "2048",
+  "cpu": "1024",
+  "minInstanceCapacity": "1",
+  "maxInstanceCapacity": "3",
+  "env": "dev",
+  "region": "us-east-1",
+  "enableEncryption": "true"
 }
 EOF
 

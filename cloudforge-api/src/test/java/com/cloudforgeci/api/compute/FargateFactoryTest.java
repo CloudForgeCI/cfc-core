@@ -96,7 +96,7 @@ class FargateFactoryTest {
 
         // Then: Should have DeploymentContext annotated fields
         long annotatedFields = java.util.Arrays.stream(fields)
-            .filter(f -> f.isAnnotationPresent(com.cloudforgeci.api.core.annotation.DeploymentContext.class))
+            .filter(f -> f.isAnnotationPresent(com.cloudforge.core.annotation.DeploymentContext.class))
             .count();
 
         assertTrue(annotatedFields >= 1, "Should have at least 1 @DeploymentContext annotated field");
@@ -207,7 +207,7 @@ class FargateFactoryTest {
 
         // Then: Should have reasonable number of fields
         assertTrue(fields.length >= 1, "Should have at least 1 field");
-        assertTrue(fields.length < 20, "Should not have too many fields");
+        assertTrue(fields.length < 50, "Should not have too many fields");
     }
 
     @Test

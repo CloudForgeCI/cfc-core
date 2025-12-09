@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Deployment Dry-Run Tracker
 # Performs CDK deploy --dry-run tests and tracks deployment timing metrics
@@ -96,6 +96,8 @@ create_deployment_context() {
     cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
   "healthCheckTimeout": "5",
   "memory": "2048",
   "enableMonitoring": "true",
@@ -112,7 +114,7 @@ create_deployment_context() {
   "unhealthyThreshold": "3",
   "healthyThreshold": "2",
   "networkMode": "$network_mode",
-  "topology": "JENKINS_SERVICE",
+  "topology": "APPLICATION_SERVICE",
   "instanceType": "t3.micro",
   "minInstanceCapacity": "2",
   "runtime": "$runtime",

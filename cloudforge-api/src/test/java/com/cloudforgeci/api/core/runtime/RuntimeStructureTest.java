@@ -2,7 +2,7 @@ package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforgeci.api.interfaces.Rule;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

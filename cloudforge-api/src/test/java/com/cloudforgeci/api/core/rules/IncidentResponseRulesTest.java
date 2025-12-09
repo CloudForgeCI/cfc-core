@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,7 +51,7 @@ class IncidentResponseRulesTest {
 
         // When: Installing incident response rules
         // Then: Should not throw (advisory for DEV)
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -66,7 +66,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
@@ -91,19 +91,8 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
 
-    }
-
-    @Test
-    void testIncidentResponseRulesCannotBeInstantiated() {
-        // The IncidentResponseRules class should not be instantiable (utility class)
-        try {
-            var constructor = IncidentResponseRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("IncidentResponseRules should have a private constructor");
-        }
     }
 
     @Test
@@ -118,7 +107,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        IncidentResponseRules.install(ctx);
+        new IncidentResponseRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -143,7 +132,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -166,7 +155,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -188,7 +177,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -213,7 +202,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -235,7 +224,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -258,7 +247,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -273,7 +262,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -299,7 +288,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -314,7 +303,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -337,7 +326,7 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing incident response rules
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -358,7 +347,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -379,7 +368,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -400,7 +389,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -422,7 +411,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -443,7 +432,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -464,7 +453,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -485,7 +474,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -506,7 +495,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -527,7 +516,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -548,7 +537,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -569,7 +558,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -590,7 +579,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -611,7 +600,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -632,7 +621,7 @@ class IncidentResponseRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -647,8 +636,8 @@ class IncidentResponseRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing rules multiple times
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
-        assertDoesNotThrow(() -> IncidentResponseRules.install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
+        assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx));
     }
 
     @Test
@@ -663,7 +652,7 @@ class IncidentResponseRulesTest {
             SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     profile, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> IncidentResponseRules.install(ctx),
+            assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx),
                 "IncidentResponseRules should not throw for security profile: " + profile);
         }
     }
@@ -680,12 +669,12 @@ class IncidentResponseRulesTest {
 
             TopologyType topology = runtime == RuntimeType.FARGATE
                 ? TopologyType.JENKINS_SERVICE
-                : TopologyType.JENKINS_SINGLE_NODE;
+                : TopologyType.JENKINS_SERVICE;
 
             SystemContext ctx = SystemContext.start(stack, topology, runtime,
                     SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> IncidentResponseRules.install(ctx),
+            assertDoesNotThrow(() -> new IncidentResponseRules().install(ctx),
                 "IncidentResponseRules should not throw for runtime: " + runtime);
         }
     }
@@ -738,7 +727,7 @@ class IncidentResponseRulesTest {
             "TestIRPlan", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        IncidentResponseRules.install(builder.getSystemContext());
+        new IncidentResponseRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // IMPORTANT: For IncidentResponseRules, organizational controls (plan, team, testing)
@@ -810,7 +799,7 @@ class IncidentResponseRulesTest {
             "TestDR", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        IncidentResponseRules.install(builder.getSystemContext());
+        new IncidentResponseRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // IMPORTANT: PRODUCTION security profile ALWAYS enables both backup and cross-region
@@ -879,7 +868,7 @@ class IncidentResponseRulesTest {
             "TestBackup", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        IncidentResponseRules.install(builder.getSystemContext());
+        new IncidentResponseRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // IMPORTANT: PRODUCTION security profile ALWAYS enables both backup and cross-region
@@ -947,7 +936,7 @@ class IncidentResponseRulesTest {
             "TestForensic", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        IncidentResponseRules.install(builder.getSystemContext());
+        new IncidentResponseRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // IMPORTANT: Only CLOUDTRAIL-LOG-VALIDATION is an infrastructure requirement (blocking).
@@ -1067,7 +1056,7 @@ class IncidentResponseRulesTest {
             "TestIRComprehensive", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        IncidentResponseRules.install(builder.getSystemContext());
+        new IncidentResponseRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         // IMPORTANT: PRODUCTION security profile ALWAYS enables:

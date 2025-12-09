@@ -1,12 +1,12 @@
-# CloudForge CI — Core Libraries
+# CloudForge 3.0.0 — Universal Application Deployment Platform
 
-**Enterprise-ready Jenkins CI/CD infrastructure on AWS using CDK**
+**Enterprise-ready application deployment infrastructure on AWS using CDK**
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.cloudforgeci/cloudforge-api)](https://central.sonatype.com/artifact/com.cloudforgeci/cloudforge-api)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 
-Deploy secure, compliant Jenkins infrastructure on AWS in minutes. Built-in support for SOC2, HIPAA, PCI-DSS, and GDPR with automated remediation.
+Deploy secure, compliant application infrastructure on AWS in minutes. **14 applications across 8 categories**: CI/CD (Jenkins, GitLab, Drone), Version Control (Gitea), Monitoring (Grafana, Prometheus), Databases (PostgreSQL, Redis), Secrets Management (Vault), Artifact Registry (Nexus, Harbor), Collaboration (Mattermost), and Analytics (Metabase, Superset). Built-in OIDC authentication (Cognito, IAM Identity Center) and compliance support (SOC2, HIPAA, PCI-DSS, GDPR) with automated remediation.
 
 **📈 [Live Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** — Coverage, validation, compliance truth tables & drift detection
 
@@ -19,11 +19,22 @@ Deploy secure, compliant Jenkins infrastructure on AWS in minutes. Built-in supp
 - **[Sample Project](https://github.com/CloudForgeCI/cloudforge-sample)** - Complete working example
 - **[Interactive Deployer](docs/guides/INTERACTIVE_DEPLOYER.md)** - User-friendly CLI deployment tool
 
+### 🔌 Plugin System
+- **[Plugin Ecosystem Overview](docs/plugins/PLUGIN-ECOSYSTEM.md)** - 14 built-in applications + custom plugins
+- **[Plugin System Guide](docs/plugins/PLUGIN-SYSTEM.md)** - Architecture and development
+- **[Application Plugin Guide](docs/plugins/APPLICATION-PLUGIN-GUIDE.md)** - Build custom application plugins
+- **[Compliance Plugin Guide](docs/plugins/COMPLIANCE-PLUGIN-GUIDE.md)** - Build compliance framework plugins
+- **[Plugin Examples](cfc-testing/PLUGIN-EXAMPLES.md)** - SonarQube + custom compliance examples
+
 ### 🔐 Security & Authentication
+- **[OIDC Integration Guide](docs/applications/OIDC.md)** - Application-level OIDC (Grafana, GitLab, Jenkins)
 - **[Identity Center Setup](docs/setup/AWS_IDENTITY_CENTER_SETUP.md)** - Enterprise SSO with ALB-OIDC (Okta, Auth0)
 - **[Cognito MFA Setup](docs/setup/COGNITO_MFA_COMPLIANCE_SETUP.md)** - AWS Cognito user pools with MFA for compliance
 - **[IAM Best Practices](docs/guides/IAM_RULES.md)** - IAM security rules and policies
 - **[Security Hardening](SECURITY.md)** - Security best practices
+
+### 💾 Database (RDS) Integration
+- **[Database Deployment Guide](docs/databases/DATABASE-DEPLOYMENT-GUIDE.md)** - RDS provisioning, compliance, and automated remediation
 
 ### ✅ Compliance
 - **[Compliance Overview](docs/compliance/README.md)** - Complete compliance documentation hub
@@ -132,9 +143,11 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 
 ### Authentication
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `authMode` | string | `"none"` | `"none"`, `"alb-oidc"`, or `"jenkins-oidc"` |
+| Property | Type | Default | Description                                     |
+|----------|------|---------|-------------------------------------------------|
+| `authMode` | string | `"none"` | `"none"`, `"alb-oidc"`, or `"application-oidc"` |
+
+> **⚠️ Note:** SAML authentication and Keycloak integration are in active development and may have breaking changes.
 
 #### Cognito Configuration (Simplest Authentication)
 
@@ -179,6 +192,21 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 | `retainStorage` | boolean | `false` | Keep EFS/EBS on stack deletion |
 | `existingFileSystemId` | string | - | Reuse existing EFS (disaster recovery) |
 
+### Database (RDS)
+
+CloudForge 3.0+ automatically provisions RDS databases for applications with database requirements.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `provisionDatabase` | boolean | auto | **Optional DB apps only** (Metabase, Grafana). `true` = RDS PostgreSQL, `false` = embedded DB (H2/SQLite) |
+| `enableRdsDeletionProtectionRemediation` | boolean | `false` | Auto-enable RDS deletion protection (HIPAA, SOC2, GDPR) |
+| `enableRdsAutoMinorVersionUpgradeRemediation` | boolean | `false` | Auto-enable RDS security patches (PCI-DSS, SOC2, HIPAA, GDPR) |
+
+**Applications with database requirements:**
+- **REQUIRED:** GitLab, Mattermost, Harbor, Superset (always provision RDS)
+- **OPTIONAL:** Metabase, Grafana (choose RDS or embedded)
+- See [DATABASE-DEPLOYMENT-GUIDE.md](docs/databases/DATABASE-DEPLOYMENT-GUIDE.md) for full details
+
 ### Monitoring & Compliance
 
 | Property | Type | Default | Description |
@@ -189,6 +217,8 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 | `createConfigInfrastructure` | boolean | `false` | Create Config Recorder (account-level) |
 | `complianceFrameworks` | string | - | `"SOC2"`, `"HIPAA"`, `"PCI-DSS"`, `"GDPR"` (comma-separated) |
 | `auditManagerEnabled` | boolean | `false` | Enable AWS Audit Manager |
+| `enableS3VersioningRemediation` | boolean | `false` | Auto-enable S3 versioning (SOC2, GDPR) |
+| `enableCloudTrailBucketAccessRemediation` | boolean | `false` | Auto-enable CloudTrail bucket logging (PCI-DSS, HIPAA) |
 
 ### Compliance Remediation
 
@@ -196,6 +226,39 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 |----------|------|---------|-------------|
 | `enableS3VersioningRemediation` | boolean | `false` | Auto-enable S3 versioning on non-compliant buckets |
 | `scopeConfigRulesToDeployment` | boolean | `false` | Scope Config rules to stack resources (vs account-wide) |
+
+### AWS Backup (NEW in 3.0)
+
+Automated backup for EFS and RDS with security profile-based retention.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `automatedBackupEnabled` | boolean | profile | Enable AWS Backup (DEV: false, STAGING/PROD: true) |
+| `backupRetentionDays` | integer | profile | Backup retention (DEV: 0, STAGING: 14, PROD: 90) |
+| `crossRegionBackupEnabled` | boolean | profile | Enable cross-region backup copy (PROD only) |
+
+**Security Profile Defaults:**
+- **DEV:** Backups disabled (cost savings)
+- **STAGING:** 14-day retention, no cross-region
+- **PRODUCTION:** 90-day retention, cross-region copy, vault lock (prevents deletion)
+
+### Optional Application Ports
+
+Enable additional ports for applications that support them.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enableAgents` | boolean | `false` | JNLP build agents (Jenkins: 50000) |
+| `enableSsh` | boolean | `false` | Git SSH (GitLab: 22, Gitea: 2222) |
+| `enableSmtp` | boolean | `false` | SMTP email (Mattermost: 587) |
+| `enableSmtps` | boolean | `false` | SMTP TLS (Mattermost: 465) |
+| `enableClustering` | boolean | `false` | HA clustering (Mattermost: 8074-8075, Vault: 8201) |
+| `enableDockerRegistry` | boolean | `false` | Container registry (GitLab: 5050, Nexus: 5000-5002) |
+| `enableMetrics` | boolean | `false` | Prometheus metrics (GitLab: 9090) |
+| `enableNotary` | boolean | `false` | Notary content trust (Harbor: 4443) |
+| `enableTrivy` | boolean | `false` | Trivy scanner (Harbor: 8080) |
+| `enableSentinel` | boolean | `false` | Redis Sentinel (Redis: 26379) |
+| `enableCluster` | boolean | `false` | Redis Cluster bus (Redis: 16379) |
 
 ---
 
@@ -238,6 +301,131 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 ```
 
 EC2 with auto-scaling, SSL, Cognito MFA, and custom domain.
+
+---
+
+## 🔌 Application-Specific Configurations
+
+CloudForge supports 14 applications. Set `applicationId` to deploy any application.
+
+### GitLab (CI/CD + Version Control)
+
+```json
+{
+  "applicationId": "gitlab",
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "gitlab",
+  "enableSsl": true,
+  "instanceType": "t3.large",
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "gitlab-auth",
+  "enableDockerRegistry": true,
+  "enableSsh": true,
+  "enableMetrics": true
+}
+```
+
+**Includes:** Container registry (port 5050), Git SSH (port 22), Prometheus metrics, OIDC SSO.
+
+### Mattermost (Team Collaboration)
+
+```json
+{
+  "applicationId": "mattermost",
+  "runtime": "fargate",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "chat",
+  "enableSsl": true,
+  "cpu": 2048,
+  "memory": 4096,
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "mattermost-auth",
+  "enableSmtp": true,
+  "enableClustering": true
+}
+```
+
+**Includes:** PostgreSQL RDS (required), SMTP email, high-availability clustering, OIDC/SAML SSO.
+
+### Grafana (Monitoring Dashboard)
+
+```json
+{
+  "applicationId": "grafana",
+  "runtime": "fargate",
+  "securityProfile": "staging",
+  "domain": "example.com",
+  "subdomain": "monitoring",
+  "enableSsl": true,
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "grafana-auth",
+  "provisionDatabase": false
+}
+```
+
+**Options:** `provisionDatabase: true` for PostgreSQL (production), `false` for embedded SQLite (dev).
+
+### Harbor (Container Registry)
+
+```json
+{
+  "applicationId": "harbor",
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "registry",
+  "enableSsl": true,
+  "instanceType": "t3.medium",
+  "enableDockerRegistry": true,
+  "enableNotary": true,
+  "enableTrivy": true
+}
+```
+
+**Includes:** PostgreSQL + Redis (required), Docker registry, Notary content trust, Trivy vulnerability scanning.
+
+### Vault (Secrets Management)
+
+```json
+{
+  "applicationId": "vault",
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "vault",
+  "enableSsl": true,
+  "instanceType": "t3.small",
+  "networkMode": "private-with-nat",
+  "enableClustering": true
+}
+```
+
+**Note:** Use private network for production secrets management.
+
+### Metabase (Analytics)
+
+```json
+{
+  "applicationId": "metabase",
+  "runtime": "fargate",
+  "securityProfile": "staging",
+  "domain": "example.com",
+  "subdomain": "analytics",
+  "enableSsl": true,
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "metabase-auth",
+  "provisionDatabase": true
+}
+```
+
+**Options:** `provisionDatabase: true` for PostgreSQL (production), `false` for embedded H2 (dev).
 
 ---
 

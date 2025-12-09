@@ -1,0 +1,22 @@
+{
+  "stackName": "Mattermost-Dev",
+  "applicationId": "mattermost",
+  "applicationName": "Mattermost Dev",
+  "description": "Mattermost development environment",
+  "environment": "development",
+
+  "runtime": "fargate",
+  "securityProfile": "dev",
+  "topology": "application-service",
+
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+
+  "authMode": "none",
+
+  "cpu": 1024,
+  "memory": 2048,
+
+  "enableMonitoring": true,
+  "logRetentionDays": "7"
+}

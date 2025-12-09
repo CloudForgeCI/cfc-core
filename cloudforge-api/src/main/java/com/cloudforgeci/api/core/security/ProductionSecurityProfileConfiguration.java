@@ -2,10 +2,10 @@ package com.cloudforgeci.api.core.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.util.RetentionDaysConverter;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -409,5 +409,68 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         // 3. Updating application connection strings
         // Enable manually with proper planning
         return false;
+    }
+
+    // ==================== Authentication Configuration ====================
+
+    @Override
+    public boolean isMfaRequired() {
+        // MFA required for production - compliance requirement (PCI-DSS, HIPAA, SOC 2)
+        return true;
+    }
+
+    @Override
+    public String getDefaultMfaMethod() {
+        // Both methods available - maximum flexibility for users
+        return "both";
+    }
+
+    @Override
+    public int getAccessTokenValidityHours() {
+        // Strict token lifetime for production security (PCI-DSS compliant)
+        return 1;
+    }
+
+    @Override
+    public int getIdTokenValidityHours() {
+        // Minimize exposure window
+        return 1;
+    }
+
+    @Override
+    public int getRefreshTokenValidityDays() {
+        // Daily re-authentication for maximum security
+        return 1;
+    }
+
+    @Override
+    public int getMinimumPasswordLength() {
+        // Strong password policy (NIST 800-63B compliant)
+        return 14;
+    }
+
+    @Override
+    public int getTempPasswordValidityDays() {
+        // Immediate action required
+        return 1;
+    }
+
+    @Override
+    public boolean isSelfSignupEnabled() {
+        // Strict access control - admins must create accounts
+        return false;
+    }
+
+    @Override
+    public boolean isPreventUserExistenceErrorsEnabled() {
+        // Prevent username enumeration attacks
+        return true;
+    }
+
+    @Override
+    public boolean isAdvancedSecurityEnabled() {
+        // Recommended for threat detection (requires Cognito Plus tier)
+        // Risk-based adaptive authentication detects suspicious login patterns
+        return true;
     }
 }

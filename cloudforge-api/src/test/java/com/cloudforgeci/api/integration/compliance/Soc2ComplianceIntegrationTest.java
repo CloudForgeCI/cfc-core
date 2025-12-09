@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.integration.compliance;
 
 import com.cloudforgeci.api.integration.IntegrationTestBase;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.observability.ComplianceFactory;
 import com.cloudforgeci.api.observability.FlowLogFactory;
 import com.cloudforgeci.api.observability.GuardDutyFactory;

@@ -16,21 +16,10 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class IAMRulesTest {
 
-    @Test
-    void testIAMRulesCannotBeInstantiated() {
-        // The IAMRules class should not be instantiable (utility class)
-        try {
-            var constructor = IAMRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()),
-                "IAMRules should have a private constructor");
-        } catch (NoSuchMethodException e) {
-            fail("IAMRules should have a private constructor");
-        }
-    }
 
     @Test
     void testInstallHandlesNullContextGracefully() {
         // This tests that the install method requires a non-null context
-        assertThrows(NullPointerException.class, () -> IAMRules.install(null));
+        assertThrows(NullPointerException.class, () -> new IAMRules().install(null));
     }
 }

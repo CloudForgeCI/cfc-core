@@ -187,42 +187,100 @@ class ComplianceTruthTableParser:
         return true_count >= false_count
 
     def parse_all_frameworks(self):
-        """Parse all compliance framework test files"""
-        test_files = [
-            # Compliance Frameworks
-            ("HIPAA",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/HipaaRulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/HipaaRules.java"),
-            ("PCI-DSS",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/PciDssRulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java"),
-            ("GDPR",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/GdprRulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/GdprRules.java"),
-            ("SOC2",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/Soc2RulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java"),
-            # Security Rule Classes
-            ("Threat Protection",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/ThreatProtectionRulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ThreatProtectionRules.java"),
-            ("Incident Response",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/IncidentResponseRulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/IncidentResponseRules.java"),
-            ("Advanced Monitoring",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/AdvancedMonitoringRulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AdvancedMonitoringRules.java"),
-            ("Database Security",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/DatabaseSecurityRulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/DatabaseSecurityRules.java"),
-            ("Key Management",
-             "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/KeyManagementRulesTest.java",
-             "cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/KeyManagementRules.java"),
-        ]
+        """
+        Parse all compliance framework test files.
 
+        Auto-discovers *RulesTest.java files in the rules directory,
+        supporting the v2.0 plugin architecture without manual registration.
+        """
+        # Auto-discover all *RulesTest.java files
+        rules_test_dir = os.path.join(
+            self.project_root,
+            "cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules"
+        )
+
+        if not os.path.exists(rules_test_dir):
+            print(f"WARNING: Rules test directory not found: {rules_test_dir}")
+            return
+
+        # Scan for all *RulesTest.java files
+        # Exclude utility/infrastructure test files that aren't compliance frameworks
+        excluded_test_files = {
+            "SecurityRulesTest.java",         # Main security rules coordinator
+            "IAMRulesTest.java",              # IAM configuration tests, not a framework
+            "RuntimeRulesTest.java",          # Runtime configuration tests
+            "TopologyRulesTest.java",         # Topology configuration tests
+            "RulesTest.java",                 # Generic rules test base class
+            "FrameworkLoaderTest.java",       # Framework loader unit tests
+        }
+
+        test_files = []
+        for filename in sorted(os.listdir(rules_test_dir)):
+            if not filename.endswith("RulesTest.java"):
+                continue
+
+            # Skip excluded test files
+            if filename in excluded_test_files:
+                continue
+
+            # Extract framework name from filename
+            framework_class = filename.replace("RulesTest.java", "")
+
+            # Convert to display name with special cases
+            display_name = self._format_framework_name(framework_class)
+
+            test_file_path = f"cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/{filename}"
+            source_file_path = f"cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/{framework_class}Rules.java"
+
+            test_files.append((display_name, test_file_path, source_file_path))
+
+        print(f"📂 Discovered {len(test_files)} framework test files via auto-discovery")
+
+        # Parse each discovered framework
         for name, test_file, source_file in test_files:
             framework = self.parse_test_file(test_file, name, source_file)
-            self.frameworks.append(framework)
+
+            # Only include frameworks that have parameterized tests
+            # (Some test files like HipaaOrganizationalRulesTest only have @Test, not @ParameterizedTest)
+            if len(framework.parameterized_tests) > 0:
+                self.frameworks.append(framework)
+            else:
+                print(f"   ⊘ Skipping {name} (no parameterized tests found)")
+
+    def _format_framework_name(self, class_name: str) -> str:
+        """
+        Format framework class name to human-readable display name.
+
+        Examples:
+            HipaaRules -> HIPAA
+            PciDssRules -> PCI-DSS
+            Iso27001Rules -> ISO 27001
+            ThreatProtectionRules -> Threat Protection
+        """
+        # Special cases for acronyms and formatted names
+        special_cases = {
+            "Hipaa": "HIPAA",
+            "HipaaOrganizational": "HIPAA Organizational",
+            "PciDss": "PCI-DSS",
+            "Gdpr": "GDPR",
+            "GdprOrganizational": "GDPR Organizational",
+            "Soc2": "SOC2",
+            "Iso27001": "ISO 27001",
+            "ThreatProtection": "Threat Protection",
+            "IncidentResponse": "Incident Response",
+            "AdvancedMonitoring": "Advanced Monitoring",
+            "DatabaseSecurity": "Database Security",
+            "KeyManagement": "Key Management",
+        }
+
+        if class_name in special_cases:
+            return special_cases[class_name]
+
+        # Default: Insert spaces before capitals
+        # Example: "FedRampRules" -> "Fed Ramp"
+        import re
+        spaced = re.sub(r'([A-Z])', r' \1', class_name).strip()
+        return spaced
 
 class ComplianceTruthTableGenerator:
     def __init__(self, project_root: str, output_dir: str):
@@ -465,7 +523,7 @@ class ComplianceTruthTableGenerator:
                         <li><strong>Logging:</strong> <code>cloudTrailEnabled</code>, <code>flowLogsEnabled</code>, <code>albAccessLoggingEnabled</code></li>
                         <li><strong>Monitoring:</strong> <code>guardDutyEnabled</code>, <code>securityMonitoringEnabled</code>, <code>awsConfigEnabled</code></li>
                         <li><strong>Network:</strong> <code>networkMode</code> (private-with-nat for compliance, public-no-nat for dev)</li>
-                        <li><strong>Authentication:</strong> <code>authMode</code> (alb-oidc, jenkins-oidc, or none)</li>
+                        <li><strong>Authentication:</strong> <code>authMode</code> (alb-oidc, application-oidc, or none)</li>
                     </ul>
                 </div>
             </div>

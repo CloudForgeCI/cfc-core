@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.ingress;
 
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.assertions.Template;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

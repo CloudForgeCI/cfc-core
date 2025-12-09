@@ -1,10 +1,13 @@
 package com.cloudforgeci.api.core.iam;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.IAMProfile;
+import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforgeci.api.interfaces.IAMConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
-import com.cloudforgeci.api.interfaces.RuntimeType;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
@@ -42,7 +45,7 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
         rules.add(require("vpc", x -> x.vpc));
 
         // Instance security group is only required for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
 
@@ -102,16 +105,23 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
         }
 
         // Add S3 permissions for development
+        // Use stackName for application-aware S3 bucket patterns
+        String devBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-dev-*"
+                : "*-dev-*";
+        String backupBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-backup-*"
+                : "*-backup-*";
         ec2Role.addToPolicy(PolicyStatement.Builder.create()
                 .sid("ExtendedS3Access")
                 .actions(List.of(
                         "s3:*"
                 ))
                 .resources(List.of(
-                        "arn:aws:s3:::jenkins-dev-*",
-                        "arn:aws:s3:::jenkins-dev-*/*",
-                        "arn:aws:s3:::jenkins-backup-*",
-                        "arn:aws:s3:::jenkins-backup-*/*"
+                        "arn:aws:s3:::" + devBucketPattern,
+                        "arn:aws:s3:::" + devBucketPattern + "/*",
+                        "arn:aws:s3:::" + backupBucketPattern,
+                        "arn:aws:s3:::" + backupBucketPattern + "/*"
                 ))
                 .build());
 
@@ -189,16 +199,23 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
                 .build());
 
         // Add extended S3 permissions
+        // Use stackName for application-aware S3 bucket patterns
+        String devBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-dev-*"
+                : "*-dev-*";
+        String backupBucketPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? c.stackName.toLowerCase() + "-backup-*"
+                : "*-backup-*";
         taskRole.addToPolicy(PolicyStatement.Builder.create()
                 .sid("ExtendedS3Access")
                 .actions(List.of(
                         "s3:*"
                 ))
                 .resources(List.of(
-                        "arn:aws:s3:::jenkins-dev-*",
-                        "arn:aws:s3:::jenkins-dev-*/*",
-                        "arn:aws:s3:::jenkins-backup-*",
-                        "arn:aws:s3:::jenkins-backup-*/*"
+                        "arn:aws:s3:::" + devBucketPattern,
+                        "arn:aws:s3:::" + devBucketPattern + "/*",
+                        "arn:aws:s3:::" + backupBucketPattern,
+                        "arn:aws:s3:::" + backupBucketPattern + "/*"
                 ))
                 .build());
 

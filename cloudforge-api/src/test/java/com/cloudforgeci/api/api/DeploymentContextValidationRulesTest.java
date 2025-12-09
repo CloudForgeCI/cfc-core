@@ -186,27 +186,28 @@ class DeploymentContextValidationRulesTest {
     class TopologyRuntimeCompatibilityRules {
 
         @Test
-        @DisplayName("JENKINS_SINGLE_NODE requires EC2 runtime")
-        void jenkinsSingleNodeRequiresEc2() {
-            Map<String, Object> config = new LinkedHashMap<>();
-            config.put("topology", "single-node");
-            config.put("runtime", "fargate");
-
-            InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
-            Throwable cause = ex.getTargetException();
-            assertInstanceOf(IllegalArgumentException.class, cause);
-            assertTrue(cause.getMessage().contains("JENKINS_SINGLE_NODE"), "Error should mention JENKINS_SINGLE_NODE");
-            assertTrue(cause.getMessage().contains("EC2"), "Error should mention EC2 requirement");
-        }
-
-        @Test
-        @DisplayName("JENKINS_SINGLE_NODE with EC2 should succeed")
-        void jenkinsSingleNodeWithEc2Succeeds() throws Exception {
+        @DisplayName("Unknown topology 'single-node' should fail with clear error")
+        void unknownTopologySingleNodeFails() {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("topology", "single-node");
             config.put("runtime", "ec2");
 
-            assertDoesNotThrow(() -> fromMap(config), "JENKINS_SINGLE_NODE with EC2 should succeed");
+            InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
+            Throwable cause = ex.getTargetException();
+            assertInstanceOf(IllegalArgumentException.class, cause);
+            assertTrue(cause.getMessage().contains("Unknown topology"), "Error should mention unknown topology");
+            assertTrue(cause.getMessage().contains("single-node") || cause.getMessage().contains("JENKINS_SINGLE_NODE"),
+                    "Error should mention single-node or JENKINS_SINGLE_NODE");
+        }
+
+        @Test
+        @DisplayName("JENKINS_SERVICE with EC2 should succeed")
+        void jenkinsServiceWithEc2Succeeds() throws Exception {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("topology", "jenkins-service");
+            config.put("runtime", "ec2");
+
+            assertDoesNotThrow(() -> fromMap(config), "JENKINS_SERVICE with EC2 should succeed");
         }
 
         @Test
@@ -217,16 +218,6 @@ class DeploymentContextValidationRulesTest {
             config.put("runtime", "fargate");
 
             assertDoesNotThrow(() -> fromMap(config), "JENKINS_SERVICE with FARGATE should succeed");
-        }
-
-        @Test
-        @DisplayName("JENKINS_SERVICE with EC2 should succeed")
-        void jenkinsServiceWithEc2Succeeds() throws Exception {
-            Map<String, Object> config = new LinkedHashMap<>();
-            config.put("topology", "service");
-            config.put("runtime", "ec2");
-
-            assertDoesNotThrow(() -> fromMap(config), "JENKINS_SERVICE with EC2 should succeed");
         }
 
         @Test
@@ -245,19 +236,18 @@ class DeploymentContextValidationRulesTest {
     class CombinedValidationScenarios {
 
         @Test
-        @DisplayName("Multiple validation errors should all be reported")
-        void multipleValidationErrors() {
+        @DisplayName("SSL without domain in non-OIDC mode should fail")
+        void sslWithoutDomainInNonOidcMode() {
             Map<String, Object> config = new LinkedHashMap<>();
-            config.put("enableSsl", true);  // No domain/fqdn - ERROR 1
-            config.put("authMode", "alb-oidc");  // Requires SSL but enableSsl has no domain - ERROR 2
-            // Both errors should be present
+            config.put("enableSsl", true);  // No domain/fqdn
+            config.put("authMode", "none");  // Non-OIDC mode requires domain for SSL
 
             InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
             Throwable cause = ex.getTargetException();
             assertInstanceOf(IllegalArgumentException.class, cause);
             String message = cause.getMessage();
 
-            // Should contain both validation errors
+            // Should mention SSL domain requirement
             assertTrue(message.contains("enableSsl") || message.contains("fqdn") || message.contains("domain"),
                     "Should mention SSL domain requirement");
         }
@@ -431,19 +421,20 @@ class DeploymentContextValidationRulesTest {
         }
 
         @Test
-        @DisplayName("Topology/runtime validation error should mention both values")
-        void topologyRuntimeErrorMentionsBoth() {
+        @DisplayName("Unknown topology error should be clear and mention valid options")
+        void unknownTopologyErrorMentionsValidOptions() {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("topology", "single-node");
-            config.put("runtime", "fargate");
+            config.put("runtime", "ec2");
 
             InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
             Throwable cause = ex.getTargetException();
 
             String message = cause.getMessage();
-            assertTrue(message.contains("SINGLE_NODE") || message.contains("single-node"),
-                    "Should mention topology");
-            assertTrue(message.contains("EC2"), "Should mention required runtime");
+            assertTrue(message.contains("Unknown topology") || message.contains("unknown topology"),
+                    "Should indicate topology is unknown");
+            assertTrue(message.contains("single-node"),
+                    "Should mention the invalid value provided");
         }
     }
 }

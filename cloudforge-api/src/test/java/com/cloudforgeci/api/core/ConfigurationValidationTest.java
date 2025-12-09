@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.core;
 
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -333,9 +333,9 @@ class ConfigurationValidationTest {
             Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.PRODUCTION),
 
             // EC2 + Single Node combinations
-            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.DEV),
-            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.STAGING),
-            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.PRODUCTION),
+            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.DEV),
+            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.STAGING),
+            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.PRODUCTION),
 
             // Fargate + Service combinations
             Arguments.of(RuntimeType.FARGATE, TopologyType.JENKINS_SERVICE, SecurityProfile.DEV),

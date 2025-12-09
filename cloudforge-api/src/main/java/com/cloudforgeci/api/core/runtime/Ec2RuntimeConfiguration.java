@@ -1,12 +1,18 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
+import software.amazon.awscdk.services.acmpca.CertificateAuthority;
+import software.amazon.awscdk.services.acmpca.CfnCertificate;
+import software.amazon.awscdk.services.acmpca.CfnCertificateAuthority;
+import software.amazon.awscdk.services.acmpca.CfnCertificateAuthorityActivation;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
+import software.amazon.awscdk.services.certificatemanager.PrivateCertificate;
 import software.amazon.awscdk.services.ec2.ISecurityGroup;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
@@ -17,6 +23,7 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListener;
 import software.amazon.awscdk.services.elasticloadbalancingv2.FixedResponseOptions;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate;
+import software.amazon.awscdk.services.elasticloadbalancingv2.SslPolicy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,7 +59,6 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
 
     // AutoScalingGroup is only required for JENKINS_SERVICE topology when maxInstanceCapacity > 1
     // When maxInstanceCapacity <= 1, JenkinsFactory creates a single instance instead of ASG
-    // JENKINS_SINGLE_NODE forbids AutoScalingGroup
     if (c.topology == TopologyType.JENKINS_SERVICE && c.cfc.maxInstanceCapacity() != null && c.cfc.maxInstanceCapacity() > 1) {
         rules.add(require("asg", x -> x.asg));
     }
@@ -105,17 +111,20 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     // This prevents duplicate target group additions and centralizes the logic
     // whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> tg.addTarget(asg)); // REMOVED - handled by topology configuration
 
-    // ── 2) ALB SG -> Instance SG :8080 ──────────────────────────────────────────
+    // ── 2) ALB SG -> Instance SG (application port) ──────────────────────────────────────────
     whenBoth(c.alb, c.instanceSg, (alb, isg) -> {
       ISecurityGroup albSg = alb.getConnections().getSecurityGroups().get(0);
+      // Use application-specific port from ApplicationSpec, fallback to 8080 for legacy Jenkins
+      int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
+      String appId = c.applicationSpec.get().map(spec -> spec.applicationId()).orElse("app");
       isg.addIngressRule(Peer.securityGroupId(albSg.getSecurityGroupId()),
-              Port.tcp(8080), "ALB_to_Jenkins_8080", false);
+              Port.tcp(appPort), "ALB_to_" + appId + "_" + appPort, false);
     });
 
     // ── 2a) Auto Scaling Configuration - EC2 runtime (when ASG is available) ────
     // Apply scaling policies to Auto Scaling Group ONLY for PRODUCTION security profile
     // DEV and STAGING profiles have auto-scaling disabled in their security configurations
-    boolean isProduction = c.security == com.cloudforgeci.api.interfaces.SecurityProfile.PRODUCTION;
+    boolean isProduction = c.security == SecurityProfile.PRODUCTION;
 
     if (isProduction) {
       LOG.info("PRODUCTION profile - setting up scaling policy callback");
@@ -149,26 +158,89 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
       return; // ← CRITICAL: prevents creating cert/https/redirect
     }
 
-    // ── 4) SSL + DOMAIN/FQDN → ACM + HTTPS + HTTP default redirect ─────────────
-    if (!wantSslDns) return; // SSL requested but no host → fall back to HTTP-only silently
+    // ── 4) SSL → ACM certificate (public with domain) OR Private CA (without domain) ─────────────
+    // 4a) Create certificate - either public (with domain) or private (without domain)
+    if (wantSslDns) {
+      // Path A: Public ACM certificate with DNS validation
+      whenBoth(c.zone, c.alb, (zone, alb) -> {
+        if (c.cert.get().isPresent()) return;
 
-    // 4a) Create certificate first
-    whenBoth(c.zone, c.alb, (zone, alb) -> {
-      if (c.cert.get().isPresent()) return;
+        String certDomain = fqdn != null ? fqdn : domain;
 
-      String certDomain = fqdn != null ? fqdn : domain;
+        Certificate cert = Certificate.Builder
+                .create(c, "HttpsCert")
+                .domainName(certDomain)
+                .validation(CertificateValidation.fromDns(zone))
+                .build();
 
-      Certificate cert = Certificate.Builder
-              .create(c, "HttpsCert")
-              .domainName(certDomain)
-              .validation(CertificateValidation.fromDns(zone))
-              .build();
+        cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+        c.cert.set(cert);
+      });
+    } else {
+      // Path B: Private CA certificate for ALB DNS name (no custom domain required)
+      // This enables HTTPS for application-oidc/alb-oidc without a custom domain
+      c.alb.onSet(alb -> {
+        if (c.cert.get().isPresent()) return;
 
-      cert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
-      c.cert.set(cert);
-    });
+        LOG.info("Creating Private CA certificate for ALB DNS name (no custom domain configured)");
+        String albDnsName = alb.getLoadBalancerDnsName();
+
+        // Create a Private Certificate Authority (short-lived, for this stack only)
+        CfnCertificateAuthority privateCa = CfnCertificateAuthority.Builder.create(c, "PrivateCA")
+                .type("ROOT")
+                .keyAlgorithm("RSA_2048")
+                .signingAlgorithm("SHA256WITHRSA")
+                .subject(CfnCertificateAuthority.SubjectProperty.builder()
+                        .commonName("CloudForge Private CA")
+                        .organization("CloudForge")
+                        .organizationalUnit("Infrastructure")
+                        .build())
+                .build();
+        privateCa.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        // Issue a ROOT CA certificate using the CA's own CSR
+        // This creates the self-signed root certificate for CA activation
+        CfnCertificate rootCaCert = CfnCertificate.Builder.create(c, "RootCACertificate")
+                .certificateAuthorityArn(privateCa.getAttrArn())
+                .certificateSigningRequest(privateCa.getAttrCertificateSigningRequest())
+                .signingAlgorithm("SHA256WITHRSA")
+                .templateArn("arn:aws:acm-pca:::template/RootCACertificate/V1")
+                .validity(CfnCertificate.ValidityProperty.builder()
+                        .type("YEARS")
+                        .value(10)
+                        .build())
+                .build();
+        rootCaCert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        // Activate the CA with the self-signed root certificate
+        CfnCertificateAuthorityActivation caActivation = CfnCertificateAuthorityActivation.Builder.create(c, "PrivateCAActivation")
+                .certificateAuthorityArn(privateCa.getAttrArn())
+                .certificate(rootCaCert.getAttrCertificate())
+                .status("ACTIVE")
+                .build();
+        caActivation.addDependency(rootCaCert);
+
+        // Create a private certificate for the ALB DNS name
+        PrivateCertificate privateCert = PrivateCertificate.Builder.create(c, "PrivateHttpsCert")
+                .domainName(albDnsName)
+                .certificateAuthority(CertificateAuthority.fromCertificateAuthorityArn(
+                        c, "ImportedPrivateCA", privateCa.getAttrArn()))
+                .build();
+
+        // Ensure proper dependency ordering
+        privateCert.getNode().addDependency(caActivation);
+        privateCert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
+
+        c.cert.set(privateCert);
+        c.privateCa.set(privateCa);
+
+        LOG.info("Private CA certificate created for: " + albDnsName);
+        LOG.warning("NOTE: Private CA certificates are NOT trusted by browsers. Users will see certificate warnings.");
+      });
+    }
 
     // 4b) Create HTTPS listener with certificate
+    // Use TLS 1.2+ policy for PCI-DSS compliance (Requirement 4.1)
     whenBoth(c.cert, c.alb, (cert, alb) -> {
       if (c.https.get().isPresent()) return;
 
@@ -179,6 +251,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                 BaseApplicationListenerProps.builder()
                         .port(443)
                         .certificates(List.of(ListenerCertificate.fromCertificateManager(cert)))
+                        .sslPolicy(SslPolicy.RECOMMENDED_TLS)
                         .defaultAction(ListenerAction.forward(List.of(c.albTargetGroup.get().orElseThrow())))
                         .build());
       } else {
@@ -187,6 +260,7 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
                 BaseApplicationListenerProps.builder()
                         .port(443)
                         .certificates(List.of(ListenerCertificate.fromCertificateManager(cert)))
+                        .sslPolicy(SslPolicy.RECOMMENDED_TLS)
                         .defaultAction(ListenerAction.fixedResponse(200, FixedResponseOptions.builder()
                                 .contentType("text/plain")
                                 .messageBody("Jenkins is starting up...")

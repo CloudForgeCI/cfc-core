@@ -10,6 +10,7 @@
   "subdomain": "jenkins",
   "enableSsl": true,
   "createZone": false,
+  "_domain_note": "Domain is optional - remove domain/subdomain/createZone for Private CA (meets SOC2 encryption requirements)",
 
   "networkMode": "private-with-nat",
   "wafEnabled": true,

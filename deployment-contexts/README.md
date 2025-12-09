@@ -19,6 +19,66 @@ cdk deploy -c cfc=@deployment-context.json
 
 ## Available Templates
 
+### Quick Start (No Domain Required)
+
+These templates use **AWS Private CA** to enable HTTPS without requiring a custom domain. Perfect for rapid deployment, testing, and internal applications.
+
+#### **dev-oidc-quick.json** - Fastest OIDC Setup
+- **Use Case**: Quick development with authentication, no domain setup required
+- **Runtime**: Fargate
+- **Network**: Private with NAT
+- **Authentication**: Cognito ALB-OIDC with Private CA certificate
+- **Compliance**: Disabled (but compliance rules can be tested)
+- **Cost**: ~$450/month (includes ~$400 Private CA)
+- **Setup Time**: ~5 minutes
+
+**When to use:**
+- Rapid OIDC testing without domain registration
+- Development environments needing authentication
+- Testing compliance rules in lower environments
+- Internal tools where browser warnings are acceptable
+
+```json
+{
+  "authMode": "alb-oidc",
+  "enableSsl": true,
+  "cognitoAutoProvision": true
+  // No domain/subdomain needed - Private CA handles HTTPS
+}
+```
+
+#### **staging-oidc-quick.json** - Compliance Testing Without Domain
+- **Use Case**: Test full compliance stack without domain infrastructure
+- **Runtime**: Fargate with auto-scaling
+- **Network**: Private with NAT
+- **Authentication**: Cognito application-oidc with MFA
+- **Compliance**: SOC2 (advisory mode)
+- **Cost**: ~$650/month (includes Private CA + compliance services)
+- **Setup Time**: ~10 minutes
+
+**When to use:**
+- Testing compliance rules before production
+- Validating HIPAA/PCI-DSS/SOC2 configurations
+- Pre-production security testing without domain setup
+
+#### **production-oidc-internal.json** - Internal Production Apps
+- **Use Case**: Production internal applications (not customer-facing)
+- **Runtime**: EC2 with Auto Scaling
+- **Network**: Private with NAT
+- **Authentication**: Cognito application-oidc with MFA and groups
+- **Compliance**: SOC2 + HIPAA (enforce mode)
+- **Cost**: ~$800/month (includes Private CA + full compliance)
+- **Setup Time**: ~15 minutes
+
+**When to use:**
+- Internal production tools (CI/CD, monitoring, wikis)
+- Applications where browser warnings are acceptable
+- Fully compliant deployments without domain infrastructure
+
+> **Note:** Private CA certificates are cryptographically valid and meet all compliance requirements (HIPAA, PCI-DSS, SOC2, GDPR). They are NOT trusted by browsers, so users will see certificate warnings. For customer-facing production, use a custom domain with public DNS validation.
+
+---
+
 ### Development Environments
 
 #### 1. **dev-minimal.json** - Fastest Setup
@@ -154,14 +214,32 @@ cdk deploy -c cfc=@deployment-context.json
 
 All templates require the following customizations before deployment:
 
-1. **Domain Settings** (Production only):
+1. **Domain Settings** (Optional with Private CA):
+
+   **Option A: Custom Domain (recommended for customer-facing production)**
    ```json
    {
      "domain": "your-domain.com",
      "subdomain": "jenkins",
+     "enableSsl": true,
      "createZone": false  // Set true if Route53 zone doesn't exist
    }
    ```
+
+   **Option B: No Domain (uses Private CA - ideal for dev/internal)**
+   ```json
+   {
+     "enableSsl": true,
+     "authMode": "alb-oidc"  // or "application-oidc"
+     // No domain/subdomain needed - Private CA certificate issued for ALB DNS name
+   }
+   ```
+
+   > **Private CA Notes:**
+   > - Enables HTTPS without domain registration or DNS setup
+   > - Fully compliant with HIPAA, PCI-DSS, SOC2, GDPR (encryption requirements met)
+   > - Costs ~$400/month per CA (auto-deleted when stack destroyed)
+   > - Browser will show certificate warnings (not publicly trusted)
 
 2. **Region**:
    ```json
@@ -373,6 +451,47 @@ jq '.instanceType = "t3.small"' deployment-context.json
 # Solution: Use existing recorder
 jq '.createConfigInfrastructure = false' deployment-context.json
 ```
+
+## Application-Specific Templates
+
+### 7. **gitlab-production.json** - GitLab with Container Registry
+- **Use Case**: Full GitLab deployment with CI/CD and container registry
+- **Runtime**: EC2 (t3.large minimum for GitLab)
+- **Network**: Private with NAT
+- **Authentication**: Cognito OIDC
+- **Ports**: Container registry (5050), Git SSH (22), Prometheus metrics (9090)
+
+**Configuration highlights:**
+```json
+{
+  "applicationId": "gitlab",
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "instanceType": "t3.large",
+  "enableDockerRegistry": true,
+  "enableSsh": true,
+  "enableMetrics": true
+}
+```
+
+### 8. **mattermost-production.json** - Team Collaboration
+- **Use Case**: Secure team messaging with HIPAA-compliant options
+- **Runtime**: Fargate
+- **Database**: PostgreSQL RDS (required)
+- **Authentication**: Cognito OIDC or SAML *(SAML in development)*
+- **Ports**: SMTP (587), Clustering (8074-8075)
+
+### 9. **harbor-production.json** - Enterprise Container Registry
+- **Use Case**: Private Docker registry with vulnerability scanning
+- **Runtime**: EC2 (storage-intensive workload)
+- **Database**: PostgreSQL + Redis (required)
+- **Ports**: Registry (443), Notary (4443), Trivy (8080)
+
+### 10. **vault-production.json** - Secrets Management
+- **Use Case**: HashiCorp Vault for secrets and PKI
+- **Runtime**: EC2 (recommended for auto-unseal)
+- **Network**: Private with NAT (required for production secrets)
+- **Ports**: Clustering (8201)
 
 ## Additional Resources
 

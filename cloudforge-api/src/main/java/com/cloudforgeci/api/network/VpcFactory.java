@@ -1,14 +1,15 @@
 package com.cloudforgeci.api.network;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.core.annotation.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
 import software.amazon.awscdk.services.ec2.*;
 import software.constructs.Construct;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Factory for creating VPC (Virtual Private Cloud) infrastructure.
@@ -57,6 +58,8 @@ import java.util.List;
  */
 public final class VpcFactory extends BaseFactory {
 
+    private static final Logger LOG = Logger.getLogger(VpcFactory.class.getName());
+
     @SystemContext("topology")
     private TopologyType topology;
 
@@ -89,9 +92,12 @@ public final class VpcFactory extends BaseFactory {
         Vpc vpc = createVpc();
 
         // Add flow logs if configured
-        if (ctx.flowlogs.get().isPresent()) {
-            vpc.addFlowLog("VpcFlowlog", ctx.flowlogs.get().orElseThrow());
-        }
+        // NOTE: Read from ctx.flowlogs.get() directly rather than using injected field,
+        // because FlowLogFactory.create() may have set the value after VpcFactory was constructed
+        ctx.flowlogs.get().ifPresent(flowLogOptions -> {
+            vpc.addFlowLog("VpcFlowlog", flowLogOptions);
+            LOG.info("VPC Flow Logs enabled with options: " + flowLogOptions);
+        });
 
         // Store VPC in SystemContext
         ctx.vpc.set(vpc);

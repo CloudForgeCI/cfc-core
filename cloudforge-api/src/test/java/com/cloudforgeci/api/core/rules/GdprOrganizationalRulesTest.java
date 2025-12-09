@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -47,7 +47,7 @@ class GdprOrganizationalRulesTest {
 
         // When: Installing GDPR organizational rules
         // Then: Should not throw (rules are skipped)
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -68,21 +68,10 @@ class GdprOrganizationalRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing GDPR organizational rules
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
-    }
-
-    @Test
-    void testGdprOrganizationalRulesCannotBeInstantiated() {
-        // The GdprOrganizationalRules class should not be instantiable (utility class)
-        try {
-            var constructor = GdprOrganizationalRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("GdprOrganizationalRules should have a private constructor");
-        }
     }
 
     @Test
@@ -103,7 +92,7 @@ class GdprOrganizationalRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing GDPR organizational rules
-        GdprOrganizationalRules.install(ctx);
+        new GdprOrganizationalRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -125,7 +114,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -144,7 +133,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -163,7 +152,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -182,7 +171,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -201,7 +190,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -220,7 +209,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -239,7 +228,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -258,7 +247,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -278,7 +267,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -297,7 +286,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -316,7 +305,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -335,7 +324,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -353,7 +342,7 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -372,6 +361,6 @@ class GdprOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprOrganizationalRules().install(ctx));
     }
 }

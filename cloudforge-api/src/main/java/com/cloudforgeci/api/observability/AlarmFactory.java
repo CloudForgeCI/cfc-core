@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.cloudwatch.*;
 import software.amazon.awscdk.services.cloudwatch.actions.SnsAction;

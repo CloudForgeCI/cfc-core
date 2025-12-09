@@ -1,0 +1,44 @@
+{
+  "stackName": "App-SOC2-Staging",
+  "applicationId": "REPLACE_WITH_APP_ID",
+  "applicationName": "SOC2 Staging Application",
+  "description": "Staging environment with SOC2 compliance controls",
+  "environment": "staging",
+
+  "runtime": "fargate",
+  "securityProfile": "staging",
+  "topology": "application-service",
+
+  "domain": "staging.example.com",
+  "subdomain": "app",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "app-staging-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+
+  "cpu": 1024,
+  "memory": 2048,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 2,
+  "enableAutoScaling": true,
+
+  "complianceFrameworks": "SOC2",
+  "complianceMode": "advisory",
+  "scopeConfigRulesToDeployment": true,
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "wafEnabled": true,
+  "enableFlowlogs": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "365"
+}

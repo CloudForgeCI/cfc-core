@@ -1,0 +1,31 @@
+{
+  "stackName": "Jenkins-Dev-Auth",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins Dev",
+  "description": "Jenkins with Cognito OIDC authentication",
+  "environment": "development",
+
+  "runtime": "fargate",
+  "securityProfile": "dev",
+  "topology": "application-service",
+
+  "domain": "dev.example.com",
+  "subdomain": "jenkins",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "jenkins-dev-CHANGEME",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "JenkinsAdmins",
+  "cognitoUserGroupName": "JenkinsDevelopers",
+
+  "cpu": 1024,
+  "memory": 2048,
+
+  "enableMonitoring": true,
+  "logRetentionDays": "30"
+}

@@ -10,15 +10,30 @@ import com.cloudforgeci.api.core.security.ProductionSecurityProfileConfiguration
 import com.cloudforgeci.api.interfaces.SecurityConfiguration;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
+import com.cloudforge.core.interfaces.FrameworkRules;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.logging.Logger;
 
+/**
+ * Security rules installation and compliance framework orchestration.
+ *
+ * <p>This class coordinates security profile configuration and compliance framework
+ * validation. Starting in v3.0.0, it uses auto-discovery to load compliance frameworks,
+ * enabling plugin-based extensibility.</p>
+ *
+ * <h2>Version History:</h2>
+ * <ul>
+ *   <li><strong>v3.0.0:</strong> Hardcoded framework loading</li>
+ *   <li><strong>v3.0.0:</strong> Auto-discovery via {@link FrameworkLoader} with backward compatibility</li>
+ *   <li><strong>v4.0.0 (future):</strong> Pure plugin-based architecture</li>
+ * </ul>
+ *
+ * @since 3.0.0
+ */
 public final class SecurityRules {
   private static final Logger LOG = Logger.getLogger(SecurityRules.class.getName());
 
-  private SecurityRules() {}
 
   public static void install(SystemContext ctx) {
 
@@ -57,50 +72,45 @@ public final class SecurityRules {
     }
 
     // Get enabled compliance frameworks (comma-separated list)
-    String frameworks = ctx.cfc.complianceFrameworks();
-    if (frameworks == null || frameworks.trim().isEmpty()) {
+    String frameworksConfig = ctx.cfc.complianceFrameworks();
+    if (frameworksConfig == null || frameworksConfig.trim().isEmpty()) {
       LOG.info("No compliance frameworks specified - skipping validation");
       return;
     }
 
-    LOG.info("Installing compliance validation for: " + frameworks);
+    LOG.info("Installing compliance validation for: " + frameworksConfig);
 
-    // Install framework-specific validators
-    if (frameworks.contains("PCI-DSS")) {
-      PciDssRules.install(ctx);
-      LOG.info("  - PCI-DSS v3.2.1 validator enabled");
+    // Parse enabled frameworks into a set for fast lookup
+    Set<String> enabledFrameworks = Arrays.stream(frameworksConfig.split(","))
+        .map(String::trim)
+        .map(String::toUpperCase)
+        .collect(java.util.stream.Collectors.toSet());
+
+    // Discover all available compliance frameworks (v3.0.0 plugin architecture)
+    List<FrameworkRules<SystemContext>> allFrameworks = FrameworkLoader.discover();
+
+    LOG.info("Discovered " + allFrameworks.size() + " compliance frameworks");
+
+    // Install frameworks in priority order
+    int installedCount = 0;
+    for (FrameworkRules<SystemContext> framework : allFrameworks) {
+      boolean shouldInstall = framework.alwaysLoad() ||
+                             enabledFrameworks.contains(framework.frameworkId().toUpperCase());
+
+      if (shouldInstall) {
+        try {
+          framework.install(ctx);
+          installedCount++;
+          LOG.info("  ✓ " + framework.displayName() + " (priority=" + framework.priority() + ")");
+        } catch (Exception e) {
+          LOG.severe("  ✗ Failed to install " + framework.frameworkId() + ": " + e.getMessage());
+          throw new RuntimeException("Failed to install compliance framework: " + framework.frameworkId(), e);
+        }
+      } else {
+        LOG.fine("  - Skipping " + framework.frameworkId() + " (not enabled)");
+      }
     }
-    if (frameworks.contains("HIPAA")) {
-      HipaaRules.install(ctx);
-      HipaaOrganizationalRules.install(ctx);
-      LOG.info("  - HIPAA Security Rule validator enabled");
-    }
-    if (frameworks.contains("SOC2")) {
-      Soc2Rules.install(ctx);
-      LOG.info("  - SOC 2 Trust Services Criteria validator enabled");
-    }
-    if (frameworks.contains("GDPR")) {
-      GdprRules.install(ctx);
-      GdprOrganizationalRules.install(ctx);
-      LOG.info("  - GDPR Technical Safeguards validator enabled");
-    }
 
-    // Install cross-framework validators (apply to all frameworks)
-    KeyManagementRules.install(ctx);
-    LOG.info("  - Key Management validator enabled");
-
-    AdvancedMonitoringRules.install(ctx);
-    LOG.info("  - Advanced Monitoring validator enabled");
-
-    IncidentResponseRules.install(ctx);
-    LOG.info("  - Incident Response & DR validator enabled");
-
-    ThreatProtectionRules.install(ctx);
-    LOG.info("  - Threat Protection validator enabled");
-
-    DatabaseSecurityRules.install(ctx);
-    LOG.info("  - Database Security validator enabled");
-
-    LOG.info("Multi-framework compliance validation enabled");
+    LOG.info("Successfully installed " + installedCount + " compliance framework validators");
   }
 }

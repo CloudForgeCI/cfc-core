@@ -1,11 +1,13 @@
 package com.cloudforgeci.api.core.security;
 
-import com.cloudforgeci.api.interfaces.RuntimeType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforgeci.api.interfaces.Rule;
 import com.cloudforgeci.api.interfaces.SecurityConfiguration;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforgeci.api.interfaces.Rule;
+import com.cloudforgeci.api.observability.ComplianceFactory;
+import com.cloudforgeci.api.observability.WafFactory;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 
@@ -43,7 +45,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         rules.add(require("vpc", x -> x.vpc));
 
         // Instance security group is only required for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
 
@@ -69,7 +71,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // Production security settings - maximum restrictions
 
         // Instance security group - only for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
                 // SSH only from specific bastion host or VPN CIDR (configurable via bastionCidr)
                 instanceSg.addIngressRule(
@@ -79,12 +81,13 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
                     false
                 );
 
-                // Jenkins port only from ALB security group
+                // Application port only from ALB security group
                 if (c.albSg.get().isPresent()) {
+                    int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
                     instanceSg.addIngressRule(
                         Peer.securityGroupId(c.albSg.get().orElseThrow().getSecurityGroupId()),
-                        Port.tcp(8080),
-                        "Jenkins_from_ALB_(PRODUCTION)",
+                        Port.tcp(appPort),
+                        "App_from_ALB_(PRODUCTION)",
                         false
                     );
                 }
@@ -122,7 +125,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
         // EFS security group - allow NFS from appropriate security group based on runtime
         whenBoth(c.vpc, c.efsSg, (vpc, efsSg) -> {
-            if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.FARGATE) {
+            if (c.runtime == RuntimeType.FARGATE) {
                 // For Fargate, allow NFS from Fargate service security group
                 if (c.fargateServiceSg.get().isPresent()) {
                     efsSg.addIngressRule(
@@ -135,10 +138,13 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             } else {
                 // For EC2, allow NFS from instance security group
                 if (c.instanceSg.get().isPresent()) {
+                    String appId = (c.applicationSpec != null && c.applicationSpec.get().isPresent())
+                        ? c.applicationSpec.get().orElseThrow().applicationId()
+                        : "app";
                     efsSg.addIngressRule(
                         Peer.securityGroupId(c.instanceSg.get().orElseThrow().getSecurityGroupId()),
                         Port.tcp(2049),
-                        "NFS_from_Jenkins_instances_(PRODUCTION)",
+                        "NFS_from_" + appId + "_instances_(PRODUCTION)",
                         false
                     );
                 }
@@ -147,9 +153,11 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
         // Fargate security group - minimal access
         whenBoth(c.vpc, c.fargateServiceSg, (vpc, fargateSg) -> {
+            // Use application-specific port from ApplicationSpec, fallback to 8080 for legacy Jenkins
+            int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
             fargateSg.addIngressRule(
                 Peer.securityGroupId(c.albSg.get().orElseThrow().getSecurityGroupId()),
-                Port.tcp(8080),
+                Port.tcp(appPort),
                 "HTTP_from_ALB_(PRODUCTION)",
                 false
             );
@@ -190,8 +198,9 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
         // Create ComplianceFactory for CloudTrail and AWS Config
         // This factory will check security profile configuration and create resources accordingly
-        com.cloudforgeci.api.observability.ComplianceFactory complianceFactory =
-            new com.cloudforgeci.api.observability.ComplianceFactory(c, "ProductionCompliance");
+        // NOTE: Use profile-agnostic ID to avoid resource conflicts when switching security profiles
+        // The stack name is already part of the scope hierarchy, ensuring multi-stack isolation
+        ComplianceFactory complianceFactory = new ComplianceFactory(c, c.stackName + "-Compliance");
         complianceFactory.create();
 
         // Create GuardDuty threat detection (enabled by PRODUCTION profile by default)
@@ -302,7 +311,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         if (!c.efsSg.get().isPresent()) {
             throw new IllegalStateException("EFS Security Group required for ProductionSecurityConfiguration");
         }
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2 && !c.instanceSg.get().isPresent()) {
+        if (c.runtime == RuntimeType.EC2 && !c.instanceSg.get().isPresent()) {
             throw new IllegalStateException("Instance Security Group required for EC2 runtime in ProductionSecurityConfiguration");
         }
 
@@ -313,8 +322,8 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
         // WAF Configuration - centralized WAF handling
         // Create WafFactory to set up Web Application Firewall protection
-        com.cloudforgeci.api.observability.WafFactory wafFactory =
-            new com.cloudforgeci.api.observability.WafFactory(c, "ProductionWaf");
+        // NOTE: Use stack-specific ID to avoid conflicts when switching security profiles
+        WafFactory wafFactory = new WafFactory(c, c.stackName + "-Waf");
         wafFactory.create();
 
         // CloudFront Configuration - centralized CDN handling

@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class IAMRules {
-  private IAMRules() {}
 
   public static void install(SystemContext ctx) {
     final IAMConfiguration p = switch (ctx.iamProfile) {

@@ -1,5 +1,9 @@
 package com.cloudforgeci.api.observability;
 
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -181,11 +185,11 @@ class ObservabilityStructureTest {
                 SecurityMonitoringFactory.class.getDeclaredMethod("createUnusualTrafficPatternAlarm",
                     software.amazon.awscdk.services.sns.Topic.class);
                 SecurityMonitoringFactory.class.getDeclaredMethod("getHighCpuThreshold",
-                    com.cloudforgeci.api.interfaces.SecurityProfile.class);
+                    SecurityProfile.class);
                 SecurityMonitoringFactory.class.getDeclaredMethod("getHighMemoryThreshold",
-                    com.cloudforgeci.api.interfaces.SecurityProfile.class);
+                    SecurityProfile.class);
                 SecurityMonitoringFactory.class.getDeclaredMethod("getHighNetworkThreshold",
-                    com.cloudforgeci.api.interfaces.SecurityProfile.class);
+                    SecurityProfile.class);
             }, "Should have all expected private helper methods");
         }
     }

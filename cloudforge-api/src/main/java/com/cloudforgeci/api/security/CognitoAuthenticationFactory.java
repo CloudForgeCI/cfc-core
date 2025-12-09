@@ -1,18 +1,25 @@
 package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforgeci.api.util.CfnStringUtils;
+import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
 import software.amazon.awscdk.customresources.AwsSdkCall;
 import software.amazon.awscdk.customresources.PhysicalResourceId;
+import software.amazon.awscdk.customresources.SdkCallsPolicyOptions;
 import software.amazon.awscdk.services.cognito.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.actions.*;
+import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.secretsmanager.Secret;
+import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.constructs.Construct;
 
 import java.util.List;
@@ -120,6 +127,24 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @DeploymentContext("oidcClientSecretName")
     private String oidcClientSecretName;
 
+    @SystemContext("securityProfileConfig")
+    private com.cloudforgeci.api.interfaces.SecurityProfileConfiguration securityProfileConfig;
+
+    @SystemContext("applicationSpec")
+    private com.cloudforge.core.interfaces.ApplicationSpec applicationSpec;
+
+    @SystemContext("alb")
+    private ApplicationLoadBalancer alb;
+
+    @SystemContext("cognitoUserPool")
+    private UserPool cognitoUserPool;
+
+    @SystemContext("cognitoUserPoolClient")
+    private UserPoolClient cognitoUserPoolClient;
+
+    @SystemContext("cognitoUserPoolDomain")
+    private UserPoolDomain cognitoUserPoolDomain;
+
     public CognitoAuthenticationFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -127,9 +152,22 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @Override
     public void create() {
         // Only configure Cognito if authMode is OIDC-based
-        if (!"alb-oidc".equals(authMode) && !"jenkins-oidc".equals(authMode)) {
+        if (!"alb-oidc".equals(authMode) && !"jenkins-oidc".equals(authMode) && !"application-oidc".equals(authMode)) {
             LOG.info("Cognito authentication not applicable (authMode = " + authMode + ")");
             return;
+        }
+
+        // Validate application supports Cognito (for application-oidc mode)
+        if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+            var oidcIntegration = applicationSpec.getOidcIntegration();
+            if (oidcIntegration != null && !oidcIntegration.supportsCognito()) {
+                LOG.warning("Application '" + applicationSpec.applicationId() + "' does not support Cognito");
+                LOG.warning("  Auth type: " + oidcIntegration.getAuthenticationType());
+                LOG.warning("  Supports Cognito: false");
+                LOG.warning("  Supports Identity Center SAML: " + oidcIntegration.supportsIdentityCenterSaml());
+                LOG.warning("Skipping Cognito setup - use Identity Center SAML instead");
+                return;
+            }
         }
 
         // Check if Cognito auto-provisioning is enabled
@@ -191,28 +229,54 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             LOG.warning("Cognito domain prefix sanitized: '" + cognitoDomainPrefix + "' -> '" + sanitizedDomainPrefix + "'");
         }
 
-        // Use sanitized prefix
-        cognitoDomainPrefix = sanitizedDomainPrefix;
+        // Make domain prefix stack-scoped to avoid conflicts between multiple stacks
+        String stackScopedPrefix = sanitizedDomainPrefix + "-" + stackName.toLowerCase()
+                .replaceAll("[^a-z0-9-]", "-")
+                .replaceAll("-+", "-")
+                .replaceAll("^-|-$", "");
+
+        // Use stack-scoped prefix
+        cognitoDomainPrefix = stackScopedPrefix;
+
+        LOG.info("Cognito domain prefix scoped to stack: '" + sanitizedDomainPrefix + "' -> '" + stackScopedPrefix + "'");
 
         // Set default user pool name
         String userPoolName = (cognitoUserPoolName != null && !cognitoUserPoolName.isEmpty())
                 ? cognitoUserPoolName
                 : stackName + "-users";
 
-        // Determine removal policy based on security profile
-        var securityProfile = ctx.securityProfileConfig.get().orElse(null);
-        boolean isProduction = (securityProfile != null && securityProfile.getClass().getSimpleName().contains("Production"));
+        // Determine removal policy based on security profile (injected via annotation)
+        boolean isProduction = (securityProfileConfig != null && securityProfileConfig.getSecurityProfile() == SecurityProfile.PRODUCTION);
         RemovalPolicy userPoolRemovalPolicy = isProduction ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
 
         LOG.info("Creating/Importing Cognito User Pool: " + userPoolName);
         LOG.info("Domain prefix: " + cognitoDomainPrefix);
         LOG.info("User Pool removal policy: " + userPoolRemovalPolicy + " (isProduction = " + isProduction + ")");
 
+        // Ensure securityProfileConfig is available - it should always be injected by BaseFactory
+        if (securityProfileConfig == null) {
+            throw new IllegalStateException("SecurityProfileConfiguration not injected - ensure SystemContext is properly initialized");
+        }
+
+        LOG.info("Security Profile: " + securityProfileConfig.getSecurityProfile());
+        LOG.info("Profile-aware authentication settings:");
+        LOG.info("  - MFA Required: " + securityProfileConfig.isMfaRequired());
+        LOG.info("  - Default MFA Method: " + securityProfileConfig.getDefaultMfaMethod());
+        LOG.info("  - Password Min Length: " + securityProfileConfig.getMinimumPasswordLength());
+        LOG.info("  - Temp Password Validity: " + securityProfileConfig.getTempPasswordValidityDays() + " days");
+        LOG.info("  - Access Token Validity: " + securityProfileConfig.getAccessTokenValidityHours() + " hours");
+        LOG.info("  - ID Token Validity: " + securityProfileConfig.getIdTokenValidityHours() + " hours");
+        LOG.info("  - Refresh Token Validity: " + securityProfileConfig.getRefreshTokenValidityDays() + " days");
+        LOG.info("  - Self-Signup Enabled: " + securityProfileConfig.isSelfSignupEnabled());
+        LOG.info("  - Prevent User Existence Errors: " + securityProfileConfig.isPreventUserExistenceErrorsEnabled());
+        LOG.info("  - Advanced Security: " + securityProfileConfig.isAdvancedSecurityEnabled());
+
         // Determine which MFA methods to enable based on cognitoMfaMethod
-        // Valid values: "totp", "sms", "both" (default: "both")
+        // Valid values: "totp", "sms", "both"
+        // Use deployment context override if provided, otherwise use profile default
         String mfaMethod = (cognitoMfaMethod != null && !cognitoMfaMethod.isEmpty())
                 ? cognitoMfaMethod.toLowerCase()
-                : "both";
+                : securityProfileConfig.getDefaultMfaMethod();
 
         boolean enableTotp = false;
         boolean enableSms = false;
@@ -326,14 +390,15 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // Create User Pool with strong security configuration
         UserPool.Builder userPoolBuilder = UserPool.Builder.create(this, "UserPool")
                 .userPoolName(userPoolName)
-                // Password policy - PCI-DSS and HIPAA compliant
+                // Password policy - profile-aware (stricter in production)
                 .passwordPolicy(PasswordPolicy.builder()
-                        .minLength(12)
+                        .minLength(securityProfileConfig.getMinimumPasswordLength())
                         .requireUppercase(true)
                         .requireLowercase(true)
                         .requireDigits(true)
                         .requireSymbols(true)
-                        .tempPasswordValidity(software.amazon.awscdk.Duration.days(3))
+                        .tempPasswordValidity(software.amazon.awscdk.Duration.days(
+                            securityProfileConfig.getTempPasswordValidityDays()))
                         .build())
                 // Email verification required
                 .signInAliases(SignInAliases.builder()
@@ -357,16 +422,21 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             LOG.info("Auto-verification enabled for email only (TOTP MFA)");
         }
 
+        // Determine MFA setting: use deployment context override, then security profile default
+        boolean mfaRequired = (cognitoMfaEnabled != null) ? cognitoMfaEnabled : securityProfileConfig.isMfaRequired();
+
         userPoolBuilder
-                // MFA configuration
-                .mfa(cognitoMfaEnabled != null && cognitoMfaEnabled ? Mfa.REQUIRED : Mfa.OPTIONAL)
+                // MFA configuration - profile-aware (required in staging/production)
+                .mfa(mfaRequired ? Mfa.REQUIRED : Mfa.OPTIONAL)
                 .mfaSecondFactor(mfaSecondFactor)
                 // Account recovery
                 .accountRecovery(AccountRecovery.EMAIL_ONLY)
-                // Advanced security features disabled (Plus plan required for AUDIT/ENFORCED modes)
-                // .advancedSecurityMode(AdvancedSecurityMode.AUDIT)
-                // Self-service account recovery
-                .selfSignUpEnabled(false)  // Admins must create users for security
+                // Advanced security features - profile-aware (enabled in production, requires Plus tier)
+                // Note: Uncomment when Cognito Plus tier is available
+                // .advancedSecurityMode(securityProfileConfig.isAdvancedSecurityEnabled() ?
+                //     AdvancedSecurityMode.ENFORCED : AdvancedSecurityMode.OFF)
+                // Self-service signup - profile-aware (disabled in staging/production)
+                .selfSignUpEnabled(securityProfileConfig.isSelfSignupEnabled())
                 // Removal policy - RETAIN for production, DESTROY for dev/staging
                 .removalPolicy(userPoolRemovalPolicy);
 
@@ -420,7 +490,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         if (cognitoInitialAdminEmail != null && !cognitoInitialAdminEmail.isEmpty() &&
             (cognitoCreateGroups == null || !cognitoCreateGroups)) {
             // Groups disabled but admin email provided - create user without group attachment
-            createInitialAdminUser(userPool, null);
+            createInitialAdminUser(userPool, null, null);
         }
 
         // Create custom domain for hosted UI
@@ -433,9 +503,11 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         LOG.info("User Pool domain created: " + cognitoDomainPrefix + ".auth." + region + ".amazoncognito.com");
 
-        // Construct redirect URL
+        // Construct redirect URL and logout URL
         String redirectUrl = constructRedirectUrl();
+        String logoutUrl = constructLogoutRedirectUrl();
         LOG.info("Redirect URL: " + redirectUrl);
+        LOG.info("Logout URL: " + logoutUrl);
 
         // Create App Client for ALB OIDC authentication
         UserPoolClient appClient = UserPoolClient.Builder.create(this, "AppClient")
@@ -454,27 +526,38 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                                 OAuthScope.PROFILE
                         ))
                         .callbackUrls(List.of(redirectUrl))
+                        .logoutUrls(List.of(logoutUrl))
                         .build())
-                // Token validity
-                .idTokenValidity(software.amazon.awscdk.Duration.hours(1))
-                .accessTokenValidity(software.amazon.awscdk.Duration.hours(1))
-                .refreshTokenValidity(software.amazon.awscdk.Duration.days(30))
-                // Prevent user existence errors (security best practice)
-                .preventUserExistenceErrors(true)
+                // Token validity - profile-aware (stricter in production)
+                .idTokenValidity(software.amazon.awscdk.Duration.hours(
+                    securityProfileConfig.getIdTokenValidityHours()))
+                .accessTokenValidity(software.amazon.awscdk.Duration.hours(
+                    securityProfileConfig.getAccessTokenValidityHours()))
+                .refreshTokenValidity(software.amazon.awscdk.Duration.days(
+                    securityProfileConfig.getRefreshTokenValidityDays()))
+                // Prevent user existence errors - profile-aware (enabled in staging/production)
+                .preventUserExistenceErrors(securityProfileConfig.isPreventUserExistenceErrorsEnabled())
                 .build();
 
         LOG.info("App Client created: " + appClient.getUserPoolClientId());
 
-        // Note: Cognito manages its own client secret internally
-        // We don't need to create a Secrets Manager secret for Cognito authentication
-        // The client secret is only needed for external OIDC providers (via IAM Identity Center)
-        LOG.info("Cognito User Pool will manage client secret internally");
-        LOG.info("Client secret retrieval command:");
-        LOG.info("  aws cognito-idp describe-user-pool-client --user-pool-id [REDACTED] --client-id [REDACTED]");
+        // Note: For ALB-level OIDC (alb-oidc), Cognito manages client secret internally
+        // For application-level OIDC (application-oidc), we need to store secret in Secrets Manager
+        // so the application container can retrieve it at runtime
+        String secretName = null;
+
+        // Check if we need to store the client secret for application-level OIDC
+        if ("application-oidc".equals(authMode)) {
+            LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
+            secretName = storeCognitoClientSecret(userPool, appClient);
+        } else {
+            LOG.info("ALB-level OIDC - Cognito will manage client secret internally");
+            LOG.info("Client secret retrieval command:");
+            LOG.info("  aws cognito-idp describe-user-pool-client --user-pool-id [REDACTED] --client-id [REDACTED]");
+        }
 
         // Export OIDC endpoints to SystemContext for OidcAuthenticationFactory to use
-        // Pass null for secretName since Cognito doesn't use Secrets Manager
-        exportOidcEndpoints(userPool.getUserPoolId(), appClient.getUserPoolClientId(), cognitoDomainPrefix, null);
+        exportOidcEndpoints(userPool.getUserPoolId(), appClient.getUserPoolClientId(), cognitoDomainPrefix, secretName);
 
         // Export CDK objects for native ALB Cognito authentication
         ctx.cognitoUserPool.set(userPool);
@@ -522,9 +605,18 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
             LOG.info("Imported and exported Cognito CDK objects to SystemContext");
 
+            // For application-oidc mode, we need to store the client secret in Secrets Manager
+            // so the application container can retrieve it at runtime
+            String secretName = null;
+            if ("application-oidc".equals(authMode)) {
+                LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
+                // For existing user pool with existing client, we need the secret to be provided externally
+                // or we retrieve it using Custom Resource
+                secretName = storeCognitoClientSecret(userPool, appClient);
+            }
+
             // Export OIDC endpoints
-            // Pass null for secretName since Cognito manages client secret internally
-            exportOidcEndpoints(cognitoUserPoolId, cognitoAppClientId, cognitoDomainPrefix, null);
+            exportOidcEndpoints(cognitoUserPoolId, cognitoAppClientId, cognitoDomainPrefix, secretName);
         } else {
             LOG.info("Creating new App Client for existing User Pool");
 
@@ -534,8 +626,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 throw new IllegalArgumentException("cognitoDomainPrefix is required");
             }
 
-            // Construct redirect URL
+            // Construct redirect URL and logout URL
             String redirectUrl = constructRedirectUrl();
+            String logoutUrl = constructLogoutRedirectUrl();
 
             // Create new App Client
             UserPoolClient appClient = UserPoolClient.Builder.create(this, "AppClient")
@@ -548,6 +641,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                                     .build())
                             .scopes(List.of(OAuthScope.OPENID, OAuthScope.EMAIL, OAuthScope.PROFILE))
                             .callbackUrls(List.of(redirectUrl))
+                            .logoutUrls(List.of(logoutUrl))
                             .build())
                     .preventUserExistenceErrors(true)
                     .build();
@@ -563,29 +657,118 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             ctx.cognitoUserPoolDomain.set(userPoolDomain);
             LOG.info("Exported Cognito CDK objects to SystemContext");
 
+            // For application-oidc mode, we need to store the client secret in Secrets Manager
+            // so the application container can retrieve it at runtime
+            String secretName = null;
+            if ("application-oidc".equals(authMode)) {
+                LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
+                secretName = storeCognitoClientSecret(userPool, appClient);
+            }
+
             // Export OIDC endpoints
-            // Pass null for secretName since Cognito manages client secret internally
-            exportOidcEndpoints(cognitoUserPoolId, appClient.getUserPoolClientId(), cognitoDomainPrefix, null);
+            exportOidcEndpoints(cognitoUserPoolId, appClient.getUserPoolClientId(), cognitoDomainPrefix, secretName);
         }
     }
 
     /**
-     * Construct redirect URL based on domain configuration.
+     * Construct redirect URL based on domain configuration and auth mode.
+     *
+     * <p>For ALB-OIDC: Uses /oauth2/idpresponse (ALB handles the callback)</p>
+     * <p>For Application-OIDC: Uses application-specific callback path (e.g., /securityRealm/finishLogin for Jenkins)</p>
      */
     private String constructRedirectUrl() {
-        if (fqdn != null && !fqdn.isEmpty()) {
-            return "https://" + fqdn + "/oauth2/idpresponse";
-        } else if (domain != null && !domain.isEmpty()) {
-            if (subdomain != null && !subdomain.isEmpty()) {
-                return "https://" + subdomain + "." + domain + "/oauth2/idpresponse";
-            } else {
-                return "https://" + domain + "/oauth2/idpresponse";
-            }
+        // Determine the callback path based on authMode
+        String callbackPath;
+        if ("application-oidc".equals(authMode)) {
+            // For application-level OIDC, get the callback path from the application's OidcIntegration
+            callbackPath = getApplicationCallbackPath();
+            LOG.info("Using application-oidc callback path: " + callbackPath);
         } else {
-            // No domain configured - ALB DNS will be used (must update callback URL after deployment)
-            LOG.warning("No domain configured - callback URL will need to be updated after deployment");
-            return "https://example.com/oauth2/idpresponse";  // Placeholder
+            // For ALB-level OIDC, use the standard ALB callback path
+            callbackPath = "/oauth2/idpresponse";
         }
+
+        // Use Fn.join to properly concatenate when base URL may be a CloudFormation token
+        // (e.g., when using ALB DNS name without custom domain)
+        String baseUrl = constructBaseUrl();
+        return Fn.join("", List.of(baseUrl, callbackPath));
+    }
+
+    /**
+     * Get the application-specific callback path from the OidcIntegration.
+     * Returns default Jenkins path if not available.
+     */
+    private String getApplicationCallbackPath() {
+        // Try to get from SystemContext.applicationSpec if available
+        if (ctx != null && ctx.applicationSpec != null && ctx.applicationSpec.get().isPresent()) {
+            var appSpec = ctx.applicationSpec.get().orElse(null);
+            if (appSpec != null && appSpec.supportsOidcIntegration()) {
+                var integration = appSpec.getOidcIntegration();
+                if (integration != null) {
+                    String callbackPath = integration.getOidcCallbackPath();
+                    LOG.info("Retrieved callback path from ApplicationSpec: " + callbackPath);
+                    return callbackPath;
+                }
+            }
+        }
+        // Fallback to Jenkins default
+        LOG.warning("Could not retrieve callback path from ApplicationSpec, using Jenkins default");
+        return "/securityRealm/finishLogin";
+    }
+
+    /**
+     * Construct logout redirect URL - where Cognito redirects after logout.
+     * This is typically the application root URL.
+     */
+    private String constructLogoutRedirectUrl() {
+        // Use Fn.join to properly concatenate when base URL may be a CloudFormation token
+        String baseUrl = constructBaseUrl();
+        return Fn.join("", List.of(baseUrl, "/"));
+    }
+
+    /**
+     * Construct the base URL from domain configuration.
+     * Priority: fqdn > subdomain.domain > domain > ALB DNS name (with Private CA)
+     *
+     * <p>When no custom domain is configured, the ALB DNS name is used with HTTPS.
+     * This requires AWS Private CA which is automatically provisioned by FargateRuntimeConfiguration
+     * when enableSsl=true but no domain is configured.</p>
+     *
+     * <p><b>Note:</b> Private CA certificates are not trusted by browsers (users will see warnings),
+     * but they enable HTTPS for OIDC callbacks without requiring a custom domain.</p>
+     */
+    private String constructBaseUrl() {
+        // Priority 1: Fully qualified domain name
+        if (fqdn != null && !fqdn.isEmpty()) {
+            return "https://" + fqdn;
+        }
+
+        // Priority 2: Domain with optional subdomain
+        if (domain != null && !domain.isEmpty()) {
+            if (subdomain != null && !subdomain.isEmpty()) {
+                return "https://" + subdomain + "." + domain;
+            }
+            return "https://" + domain;
+        }
+
+        // Priority 3: ALB DNS name with HTTPS (requires Private CA certificate)
+        // This is used when enableSsl=true but no custom domain is configured
+        // IMPORTANT: ALB DNS names contain mixed case (e.g., nJjqXp6M1K6T) but Cognito
+        // callback URLs are case-sensitive. We must lowercase the DNS name.
+        // See: https://github.com/aws/aws-cdk/issues/11171
+        if (alb != null) {
+            // Lowercase the ALB DNS name for Cognito callback URL compatibility
+            String lowercaseDns = CfnStringUtils.toLowerCase(alb.getLoadBalancerDnsName());
+            String albUrl = Fn.join("", List.of("https://", lowercaseDns));
+            LOG.info("Using ALB DNS name for callback URL with Private CA certificate (lowercased): " + albUrl);
+            LOG.warning("NOTE: Private CA certificates are not trusted by browsers. Users will see certificate warnings.");
+            return albUrl;
+        }
+
+        // ALB not yet available - use placeholder that will be resolved at deploy time
+        LOG.warning("ALB not yet available - callback URL will use placeholder");
+        LOG.warning("Ensure enableSsl=true is set for HTTPS callback URLs");
+        return "https://placeholder.invalid";
     }
 
     /**
@@ -597,12 +780,14 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         String authEndpoint = "https://" + domainPrefix + ".auth." + region + ".amazoncognito.com/oauth2/authorize";
         String tokenEndpoint = "https://" + domainPrefix + ".auth." + region + ".amazoncognito.com/oauth2/token";
         String userInfoEndpoint = "https://" + domainPrefix + ".auth." + region + ".amazoncognito.com/oauth2/userInfo";
+        String logoutEndpoint = "https://" + domainPrefix + ".auth." + region + ".amazoncognito.com/logout";
 
         LOG.info("Exporting OIDC endpoints to DeploymentContext:");
         LOG.info("  Issuer: " + issuer);
         LOG.info("  Authorization: [REDACTED]");
         LOG.info("  Token: [REDACTED]");
         LOG.info("  UserInfo: [REDACTED]");
+        LOG.info("  Logout: [REDACTED]");
         LOG.info("  Client ID: [REDACTED]");
         LOG.info("  Secret Name: " + (secretName != null ? "[REDACTED]" : "null"));
 
@@ -611,6 +796,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         ctx.cognitoAuthorizationEndpoint.set(authEndpoint);
         ctx.cognitoTokenEndpoint.set(tokenEndpoint);
         ctx.cognitoUserInfoEndpoint.set(userInfoEndpoint);
+        ctx.cognitoLogoutEndpoint.set(logoutEndpoint);
         ctx.cognitoClientId.set(clientId);
         ctx.cognitoClientSecretName.set(secretName);
         ctx.cognitoUserPoolId.set(userPoolId);
@@ -639,7 +825,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         LOG.info("Creating user groups: " + adminGroupName + ", " + userGroupName);
 
         // Create admin group
-        CfnUserPoolGroup.Builder.create(this, "AdminGroup")
+        CfnUserPoolGroup adminGroup = CfnUserPoolGroup.Builder.create(this, "AdminGroup")
                 .userPoolId(userPool.getUserPoolId())
                 .groupName(adminGroupName)
                 .description("Jenkins administrators with full access")
@@ -647,7 +833,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .build();
 
         // Create user group
-        CfnUserPoolGroup.Builder.create(this, "UserGroup")
+        CfnUserPoolGroup userGroup = CfnUserPoolGroup.Builder.create(this, "UserGroup")
                 .userPoolId(userPool.getUserPoolId())
                 .groupName(userGroupName)
                 .description("Jenkins users with standard access")
@@ -658,7 +844,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         // Create initial admin user if email provided
         if (cognitoInitialAdminEmail != null && !cognitoInitialAdminEmail.isEmpty()) {
-            createInitialAdminUser(userPool, adminGroupName);
+            createInitialAdminUser(userPool, adminGroupName, adminGroup);
         }
     }
 
@@ -666,7 +852,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * Create initial admin user with temporary password.
      * User will be required to change password on first login.
      */
-    private void createInitialAdminUser(UserPool userPool, String adminGroupName) {
+    private void createInitialAdminUser(UserPool userPool, String adminGroupName, CfnUserPoolGroup adminGroup) {
         LOG.info("Creating initial admin user: " + cognitoInitialAdminEmail);
 
         // Build user attributes list
@@ -705,15 +891,16 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .build();
 
         // Add user to admin group if group name provided
-        if (adminGroupName != null && !adminGroupName.isEmpty()) {
+        if (adminGroupName != null && !adminGroupName.isEmpty() && adminGroup != null) {
             CfnUserPoolUserToGroupAttachment groupAttachment = CfnUserPoolUserToGroupAttachment.Builder.create(this, "InitialAdminGroupAttachment")
                     .userPoolId(userPool.getUserPoolId())
                     .username(cognitoInitialAdminEmail)
                     .groupName(adminGroupName)
                     .build();
 
-            // Ensure user is created before adding to group
+            // Ensure user and group are created before adding to group
             groupAttachment.getNode().addDependency(adminUser);
+            groupAttachment.getNode().addDependency(adminGroup);
 
             LOG.info("Initial admin user created: " + cognitoInitialAdminEmail);
             LOG.info("  - User will receive email with temporary password");
@@ -785,7 +972,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                         )
                         .build());
 
-                    LOG.info("Native Cognito authentication configured successfully");
+                    LOG.info("✅ Native Cognito authentication configured successfully");
                     LOG.info("  User Pool ID: " + ctx.cognitoUserPoolId.get().orElse("N/A"));
                     LOG.info("  Target Group: " + targetGroup.getTargetGroupName());
                     LOG.info("  Priority: 1 (authenticate then forward to target group)");
@@ -793,8 +980,8 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     LOG.info("  Scopes: openid, email, profile");
                     LOG.info("  Benefits: No Secrets Manager required, simplified configuration");
                 } else {
-                    LOG.warning("Cognito CDK objects not available in SystemContext");
-                    LOG.warning("ALB authentication cannot be configured - check Cognito setup");
+                    LOG.severe("❌ Cognito CDK objects not available in SystemContext");
+                    LOG.severe("ALB authentication cannot be configured - check Cognito setup");
                 }
             });
         });
@@ -811,8 +998,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * @param userPool The UserPool to track
      */
     private void storeUserPoolArnInSSM(UserPool userPool) {
-        // Check if we have access to security profile via context
-        var securityProfileConfig = ctx.securityProfileConfig.get().orElse(null);
+        // Check if we have access to security profile (injected via annotation)
         if (securityProfileConfig == null || securityProfileConfig.getSecurityProfile() != SecurityProfile.PRODUCTION) {
             LOG.fine("Non-production mode: Skipping SSM tracking for User Pool");
             return;
@@ -841,18 +1027,137 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .region(region)
                 .build();
 
+        // Use scoped ARN pattern for least-privilege SSM access
+        // Pattern: arn:aws:ssm:REGION:*:parameter/cloudforge/shared/REGION/stack/STACKNAME/*
+        String ssmArnPattern = "arn:aws:ssm:" + region + ":*:parameter/cloudforge/shared/" + region + "/stack/" + this.stackName + "/*";
+
         AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, "UserPoolArnSSMWriter")
                 .onCreate(putParameterCall)
                 .onUpdate(putParameterCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
+                .policy(AwsCustomResourcePolicy.fromStatements(List.of(
+                        software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                                .actions(List.of("ssm:PutParameter"))
+                                .resources(List.of(ssmArnPattern))
                                 .build()
-                ))
+                )))
                 .build();
 
         ssmWriter.getNode().addDependency(userPool);
 
         LOG.info("User Pool ARN will be tracked in SSM: " + ssmParameterName);
     }
+
+    /**
+     * Store Cognito User Pool Client Secret in AWS Secrets Manager.
+     *
+     * <p>This is required for application-level OIDC authentication where the application
+     * needs to retrieve the client secret at runtime. For ALB-level OIDC, Cognito manages
+     * the secret internally and this method is not called.</p>
+     *
+     * <p>The client secret is retrieved from the Cognito User Pool Client and stored directly
+     * in Secrets Manager using a Custom Resource Lambda. This ensures the secret value never
+     * appears in the CloudFormation template (avoiding the security issue with unsafePlainText).</p>
+     *
+     * <p>The Custom Resource uses a Lambda function that:
+     * 1. Calls DescribeUserPoolClient to get the client secret
+     * 2. Calls PutSecretValue to store it in Secrets Manager
+     * This keeps the secret value within AWS and out of CloudFormation.</p>
+     *
+     * @param userPool The Cognito User Pool
+     * @param appClient The Cognito User Pool Client
+     * @return The Secrets Manager secret ARN
+     */
+    private String storeCognitoClientSecret(IUserPool userPool, IUserPoolClient appClient) {
+        // Determine application ID for secret path
+        String appId = "jenkins"; // Default for backward compatibility with alb-oidc mode
+        if (applicationSpec != null) {
+            appId = applicationSpec.applicationId();
+        }
+
+        String secretName = stackName + "/" + appId + "/oidc/client-secret";
+
+        LOG.info("Storing Cognito client secret in Secrets Manager for application: " + appId);
+
+        // First, create an empty secret in Secrets Manager
+        // The Custom Resource will populate it with the actual client secret value
+        Secret cognitoSecret = Secret.Builder.create(this, "CognitoClientSecret")
+                .secretName(secretName)
+                .description("Cognito User Pool Client Secret for application-level OIDC authentication")
+                // Generate a placeholder - will be replaced by Custom Resource
+                .generateSecretString(SecretStringGenerator.builder()
+                    .generateStringKey("placeholder")
+                    .secretStringTemplate("{}")
+                    .build())
+                .removalPolicy(securityProfileConfig.getSecurityProfile() == SecurityProfile.PRODUCTION ?
+                    RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                .build();
+
+        // Use Custom Resource to retrieve the client secret from Cognito and store it in Secrets Manager
+        // This keeps the secret value within AWS - it never appears in the CloudFormation template
+        //
+        // SECURITY: We use a two-step Custom Resource approach:
+        // 1. First CR fetches the secret from Cognito (DescribeUserPoolClient)
+        // 2. Second CR stores it in Secrets Manager (PutSecretValue)
+        // This ensures the secret value is passed between CRs at runtime, never in CloudFormation.
+        AwsSdkCall getSecretCall = AwsSdkCall.builder()
+                .service("CognitoIdentityServiceProvider")
+                .action("describeUserPoolClient")
+                .parameters(java.util.Map.of(
+                        "UserPoolId", userPool.getUserPoolId(),
+                        "ClientId", appClient.getUserPoolClientId()
+                ))
+                .outputPaths(List.of("UserPoolClient.ClientSecret"))
+                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecretFetch-" + stackName))
+                .region(region)
+                .build();
+
+        // Step 1: Fetch the client secret from Cognito
+        AwsCustomResource secretFetcher = AwsCustomResource.Builder.create(this, "CognitoClientSecretFetcher")
+                .onCreate(getSecretCall)
+                .onUpdate(getSecretCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                        SdkCallsPolicyOptions.builder()
+                                .resources(List.of(userPool.getUserPoolArn()))
+                                .build()
+                ))
+                .build();
+
+        secretFetcher.getNode().addDependency(appClient);
+
+        // Step 2: Store the secret value in Secrets Manager using PutSecretValue
+        // This Custom Resource takes the output from the fetcher and stores it
+        AwsSdkCall storeSecretCall = AwsSdkCall.builder()
+                .service("SecretsManager")
+                .action("putSecretValue")
+                .parameters(java.util.Map.of(
+                        "SecretId", cognitoSecret.getSecretArn(),
+                        "SecretString", secretFetcher.getResponseField("UserPoolClient.ClientSecret")
+                ))
+                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecretStore-" + stackName))
+                .region(region)
+                .build();
+
+        AwsCustomResource secretStorer = AwsCustomResource.Builder.create(this, "CognitoClientSecretStorer")
+                .onCreate(storeSecretCall)
+                .onUpdate(storeSecretCall)
+                .policy(AwsCustomResourcePolicy.fromStatements(List.of(
+                    PolicyStatement.Builder.create()
+                        .actions(List.of("secretsmanager:PutSecretValue"))
+                        .resources(List.of(cognitoSecret.getSecretArn()))
+                        .build()
+                )))
+                .build();
+
+        secretStorer.getNode().addDependency(secretFetcher);
+        secretStorer.getNode().addDependency(cognitoSecret);
+
+        LOG.info("Cognito client secret will be stored in Secrets Manager via Custom Resource");
+
+        // Store the secret in SystemContext for dependency tracking
+        ctx.cognitoClientSecretResourceInternal.set(cognitoSecret);
+
+        // Return the COMPLETE ARN with suffix (same as RDS pattern)
+        return cognitoSecret.getSecretArn();
+    }
+
 }

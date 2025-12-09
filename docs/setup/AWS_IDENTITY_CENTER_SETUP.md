@@ -99,6 +99,8 @@ Cognito has better OIDC support and is simpler to set up. See the Cognito sectio
 
 #### Option B: Identity Center (Advanced)
 
+> **⚠️ Note:** SAML integration with Identity Center is in active development and may have breaking changes.
+
 If you need Identity Center:
 
 **Via Console:**

@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,7 +51,7 @@ class AdvancedMonitoringRulesTest {
 
         // When: Installing advanced monitoring rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -66,7 +66,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing advanced monitoring rules
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
@@ -90,7 +90,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing advanced monitoring rules
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
 
     }
 
@@ -112,7 +112,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing advanced monitoring rules
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
 
     }
 
@@ -135,19 +135,8 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing advanced monitoring rules
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
 
-    }
-
-    @Test
-    void testAdvancedMonitoringRulesCannotBeInstantiated() {
-        // The AdvancedMonitoringRules class should not be instantiable (utility class)
-        try {
-            var constructor = AdvancedMonitoringRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("AdvancedMonitoringRules should have a private constructor");
-        }
     }
 
     @Test
@@ -169,7 +158,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing advanced monitoring rules
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
 
     }
 
@@ -185,7 +174,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing advanced monitoring rules
-        AdvancedMonitoringRules.install(ctx);
+        new AdvancedMonitoringRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -211,7 +200,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure CloudWatch metrics
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -234,7 +223,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure X-Ray tracing
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -257,7 +246,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure Log Insights queries
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -280,7 +269,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure dashboards
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -303,7 +292,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure Application Insights
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -326,7 +315,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure metric filters
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -348,7 +337,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure Container Insights
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -372,7 +361,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure performance monitoring
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -388,7 +377,7 @@ class AdvancedMonitoringRulesTest {
                     profile, iamProfile, cfc);
 
             // When/Then: Should not throw for any security profile
-            assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx),
+            assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx),
                 "AdvancedMonitoringRules should not throw for security profile: " + profile);
         }
     }
@@ -405,13 +394,13 @@ class AdvancedMonitoringRulesTest {
 
             TopologyType topology = runtime == RuntimeType.FARGATE
                 ? TopologyType.JENKINS_SERVICE
-                : TopologyType.JENKINS_SINGLE_NODE;
+                : TopologyType.JENKINS_SERVICE;
 
             SystemContext ctx = SystemContext.start(stack, topology, runtime,
                     SecurityProfile.DEV, iamProfile, cfc);
 
             // When/Then: Should not throw for any runtime type
-            assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx),
+            assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx),
                 "AdvancedMonitoringRules should not throw for runtime: " + runtime);
         }
     }
@@ -428,8 +417,8 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing rules multiple times
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
 
         // Then: Should be idempotent (no errors on repeated calls)
     }
@@ -454,7 +443,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure anomaly detection
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -477,7 +466,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure composite alarms
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -495,11 +484,11 @@ class AdvancedMonitoringRulesTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SINGLE_NODE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure EC2-specific monitoring
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     @Test
@@ -525,7 +514,7 @@ class AdvancedMonitoringRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When/Then: Should configure custom alarm thresholds
-        assertDoesNotThrow(() -> AdvancedMonitoringRules.install(ctx));
+        assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
     }
 
     // ==================== EXPANDED PARAMETERIZED TRUTH TABLE TESTS ====================
@@ -572,7 +561,7 @@ class AdvancedMonitoringRulesTest {
             "TestSecHub", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        AdvancedMonitoringRules.install(builder.getSystemContext());
+        new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;
@@ -647,7 +636,7 @@ class AdvancedMonitoringRulesTest {
             "TestInspector", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        AdvancedMonitoringRules.install(builder.getSystemContext());
+        new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;
@@ -719,7 +708,7 @@ class AdvancedMonitoringRulesTest {
             "TestMacie", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        AdvancedMonitoringRules.install(builder.getSystemContext());
+        new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;
@@ -789,7 +778,7 @@ class AdvancedMonitoringRulesTest {
             "TestCentralized", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        AdvancedMonitoringRules.install(builder.getSystemContext());
+        new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;
@@ -885,7 +874,7 @@ class AdvancedMonitoringRulesTest {
             "TestAMComprehensive", secProfile, RuntimeType.FARGATE, customContext);
 
         builder.createMinimalInfrastructure();
-        AdvancedMonitoringRules.install(builder.getSystemContext());
+        new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;

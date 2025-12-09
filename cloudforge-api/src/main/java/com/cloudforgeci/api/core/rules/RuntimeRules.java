@@ -15,7 +15,6 @@ import java.util.logging.Logger;
 public final class RuntimeRules {
     private static final Logger LOG = Logger.getLogger(RuntimeRules.class.getName());
 
-  private RuntimeRules() {}
 
   public static void install(SystemContext ctx) {
 

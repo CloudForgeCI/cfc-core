@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
 import software.amazon.awscdk.services.ec2.FlowLogOptions;
 import software.amazon.awscdk.services.logs.LogGroup;
@@ -42,10 +42,11 @@ public class FlowLogFactory extends BaseFactory {
         }
 
         // Create flow log log group with security profile-based settings
+        // Note: logGroupName is intentionally omitted to allow CloudFormation to auto-generate unique names
+        // This prevents naming conflicts when deploying multiple stacks with the same security profile
         LogGroup logGroup = LogGroup.Builder.create(this, "VpcFlowLogsGroup")
                     .retention(config.getFlowLogRetentionDays())
                     .removalPolicy(config.getLogRemovalPolicy())
-                    .logGroupName("/aws/vpc/flowlogs/" + security.name().toLowerCase())
                     .build();
 
         // Create flow log options with security profile-based traffic type

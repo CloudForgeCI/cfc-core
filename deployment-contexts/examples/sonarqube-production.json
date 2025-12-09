@@ -1,0 +1,40 @@
+{
+  "stackName": "SonarQube-Production",
+  "applicationId": "sonarqube",
+  "applicationName": "SonarQube",
+  "description": "Production SonarQube code quality server",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "sonar",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "sonarqube-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+
+  "instanceType": "t3.medium",
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 2,
+
+  "complianceFrameworks": "SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "guardDutyEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "730",
+  "retainStorage": true
+}

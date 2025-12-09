@@ -1,20 +1,25 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.DeploymentContext;
 import software.amazon.awscdk.services.guardduty.CfnDetector;
 import software.constructs.Construct;
 
 import java.util.logging.Logger;
 
 /**
- * Factory for enabling AWS GuardDuty threat detection.
+ * Factory for AWS GuardDuty threat detection and compliance automation.
  *
- * GuardDuty is an account-level service that monitors for malicious activity and unauthorized behavior.
- * Required for PCI-DSS Requirement 11.4 (Intrusion Detection/Prevention Systems).
+ * <p>GuardDuty automatically enables for compliance frameworks requiring threat detection:
+ * <ul>
+ *   <li>SOC2 (Common Criteria CC7.2 - Threat detection and response)</li>
+ *   <li>PCI-DSS Requirement 11.4 (Intrusion Detection/Prevention Systems)</li>
+ * </ul>
  *
- * Note: GuardDuty has monthly costs based on analyzed data volume (CloudTrail, VPC Flow Logs, DNS logs).
- * Typical cost: $30-100/month depending on usage.
+ * <p><b>Auto-Enablement:</b> When {@code complianceFrameworks} contains "SOC2" or "PCI-DSS",
+ * GuardDuty detector is automatically created without manual configuration.
+ *
+ * <p><b>Cost:</b> $30-100/month based on CloudTrail, VPC Flow Logs, and DNS log volume.
  */
 public class GuardDutyFactory extends BaseFactory {
 
@@ -32,64 +37,73 @@ public class GuardDutyFactory extends BaseFactory {
     @DeploymentContext("createGuardDutyDetector")
     private Boolean createGuardDutyDetector;
 
+    @DeploymentContext("complianceFrameworks")
+    private String complianceFrameworks;
+
     public GuardDutyFactory(Construct scope, String id) {
         super(scope, id);
     }
 
     @Override
     public void create() {
-        // Check if GuardDuty should be enabled
+        boolean autoEnable = shouldAutoEnableForCompliance();
+
         var securityProfileConfig = ctx.securityProfileConfig.get().orElse(null);
         if (securityProfileConfig != null && guardDutyEnabled == null) {
-            // Inherit from security profile if not explicitly set
             guardDutyEnabled = securityProfileConfig.isGuardDutyEnabled();
-            LOG.info("GuardDuty setting inherited from security profile: " + guardDutyEnabled);
+            LOG.info("GuardDuty inherited from security profile: " + guardDutyEnabled);
+            // If security profile enables GuardDuty and createGuardDutyDetector not explicitly set, enable it
+            if (Boolean.TRUE.equals(guardDutyEnabled) && createGuardDutyDetector == null) {
+                createGuardDutyDetector = true;
+            }
+        }
+
+        if (autoEnable && guardDutyEnabled == null) {
+            guardDutyEnabled = true;
+            createGuardDutyDetector = true;
+            LOG.info("GuardDuty auto-enabled for " + complianceFrameworks + " compliance");
         }
 
         if (Boolean.FALSE.equals(guardDutyEnabled)) {
-            LOG.info("GuardDuty is disabled");
-            LOG.info("  Note: GuardDuty is required for PCI-DSS Req 11.4 (threat detection)");
-            LOG.info("  Enable by setting guardDutyEnabled = true or using PRODUCTION security profile");
+            LOG.info("GuardDuty disabled (required for PCI-DSS Req 11.4, SOC2 CC7.2)");
             return;
         }
 
-        LOG.info("Enabling GuardDuty for threat detection");
-
-        // Validate region is available
         if (region == null || region.isEmpty() || region.contains("$")) {
-            LOG.warning("GuardDuty enabled but region is not available - skipping GuardDuty setup");
-            LOG.warning("  Set 'region' in deployment context to enable GuardDuty");
+            LOG.warning("GuardDuty enabled but region unavailable - skipping setup");
             return;
         }
 
-        // Enable GuardDuty using AWS SDK custom resource
         enableGuardDuty();
+        LOG.info("GuardDuty enabled: " + region + " (CloudTrail, VPC Flow, DNS monitoring)");
+    }
 
-        LOG.info("GuardDuty enabled successfully");
-        LOG.info("  Region: " + region);
-        LOG.info("  Monitoring: CloudTrail events, VPC Flow Logs, DNS logs");
-        LOG.info("  Cost: ~$30-100/month based on data volume");
-        LOG.info("  Compliance: Satisfies PCI-DSS Req 11.4, HIPAA §164.308(a)(1)(ii)(D)");
+    /**
+     * Determines if GuardDuty should be auto-enabled based on compliance frameworks.
+     * GuardDuty is required for:
+     * - SOC2 (Common Criteria CC7.2 - Threat detection and response)
+     * - PCI-DSS Requirement 11.4 (Intrusion Detection/Prevention Systems)
+     *
+     * @return true if compliance frameworks require GuardDuty
+     */
+    private boolean shouldAutoEnableForCompliance() {
+        if (complianceFrameworks == null || complianceFrameworks.isEmpty()) {
+            return false;
+        }
+
+        String frameworks = complianceFrameworks.toUpperCase();
+        return frameworks.contains("SOC2") || frameworks.contains("PCI-DSS") || frameworks.contains("PCIDSS");
     }
 
     private void enableGuardDuty() {
-        // GuardDuty detector is account-region singleton - only one per account per region
-        // Only create if explicitly requested via createGuardDutyDetector flag
-
         if (Boolean.TRUE.equals(createGuardDutyDetector)) {
             CfnDetector.Builder.create(this, "GuardDutyDetector")
                     .enable(true)
                     .findingPublishingFrequency("FIFTEEN_MINUTES")
                     .build();
-
-            LOG.info("GuardDuty detector creation enabled via createGuardDutyDetector = true");
-            LOG.info("  Note: If detector already exists in account-region, deployment will fail");
-            LOG.info("  This is expected - only set createGuardDutyDetector = true for first deployment in account-region");
+            LOG.info("GuardDuty detector created (account-region singleton)");
         } else {
-            LOG.info("GuardDuty detector creation skipped (createGuardDutyDetector not set)");
-            LOG.info("  Validation will check for existing GuardDuty detector");
-            LOG.info("  To create detector: set createGuardDutyDetector = true in deployment context");
-            LOG.info("  Or enable manually: aws guardduty create-detector --enable --region " + region);
+            LOG.info("GuardDuty detector creation skipped - set createGuardDutyDetector=true or use existing detector");
         }
     }
 }

@@ -1,6 +1,10 @@
 package com.cloudforgeci.api.observability;
 
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
+import com.cloudforge.core.enums.SecurityProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -38,10 +42,10 @@ class SecurityMonitoringFactoryThresholdTest {
 
         // Start SystemContext before creating factory
         com.cloudforgeci.api.core.SystemContext.start(stack,
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.FARGATE,
             SecurityProfile.DEV,
-            com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL,
+            com.cloudforge.core.enums.IAMProfile.MINIMAL,
             com.cloudforgeci.api.core.DeploymentContext.from(stack));
 
         // Create a factory instance for testing

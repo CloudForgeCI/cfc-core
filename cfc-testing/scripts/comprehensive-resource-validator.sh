@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Comprehensive Resource Validation System
 # Creates a truth table of expected resources for every configuration combination
@@ -36,7 +36,8 @@ echo ""
 
 # Configuration matrix
 RUNTIMES=("EC2" "FARGATE")
-TOPOLOGIES=("JENKINS_SINGLE_NODE" "JENKINS_SERVICE")
+# CloudForge 3.0.0: JENKINS_SINGLE_NODE removed, APPLICATION_SERVICE added
+TOPOLOGIES=("JENKINS_SERVICE" "APPLICATION_SERVICE")
 SECURITY_PROFILES=("DEV" "STAGING" "PRODUCTION")
 DOMAIN_CONFIGS=("with-domain" "no-domain")
 SSL_CONFIGS=("ssl-enabled" "ssl-disabled")
@@ -82,26 +83,20 @@ initialize_truth_table() {
                             if [[ "$runtime" == "FARGATE" ]]; then
                                 expected+=",ECSCluster,ECSService,FargateTaskDefinition"
                             else
-                                # EC2 runtime
-                                if [[ "$topology" == "JENKINS_SERVICE" ]]; then
-                                    # SERVICE topology uses AutoScalingGroup, not individual EC2Instances
-                                    expected+=",AutoScalingGroup"
-                                else
-                                    # SINGLE_NODE topology uses individual EC2Instances
-                                    expected+=",EC2Instances"
-                                fi
+                                # EC2 runtime - both JENKINS_SERVICE and APPLICATION_SERVICE use AutoScalingGroup
+                                expected+=",AutoScalingGroup"
                             fi
 
-                            # Add topology-specific resources
-                            if [[ "$topology" == "JENKINS_SERVICE" ]]; then
+                            # Add topology-specific resources - both topologies use ALB
+                            if [[ "$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE" ]]; then
                                 expected+=",ApplicationLoadBalancer,TargetGroups"
                             fi
 
                             # Add EFS for persistent storage
                             # EFS is available for all configurations
                             expected+=",EFSFileSystem"
-                            # EFSAccessPoint is only for FARGATE and EC2 SINGLE_NODE (not EC2 SERVICE with ASG)
-                            if [[ "$runtime" == "FARGATE" ]] || [[ "$topology" == "JENKINS_SINGLE_NODE" ]]; then
+                            # EFSAccessPoint is only for FARGATE
+                            if [[ "$runtime" == "FARGATE" ]]; then
                                 expected+=",EFSAccessPoint"
                             fi
                             
@@ -119,7 +114,7 @@ initialize_truth_table() {
                                 fi
                             else
                                 # No domain means only HTTP listener (if ALB exists)
-                                if [[ "$topology" == "JENKINS_SERVICE" ]]; then
+                                if [[ "$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE" ]]; then
                                     expected+=",HTTPListener"
                                 fi
                             fi
@@ -132,7 +127,7 @@ initialize_truth_table() {
                                 "STAGING")
                                     expected+=",CloudTrail,ConfigRules"
                                     # ALB access logging (creates S3 bucket)
-                                    if [[ "$topology" == "JENKINS_SERVICE" ]]; then
+                                    if [[ "$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE" ]]; then
                                         expected+=",S3Bucket"
                                     fi
                                     # OIDC authentication with Cognito (requires HTTPS/SSL + domain)
@@ -147,7 +142,7 @@ initialize_truth_table() {
                                 "PRODUCTION")
                                     expected+=",WAFWebACL,CloudTrail,ConfigRules"
                                     # ALB access logging (creates S3 bucket)
-                                    if [[ "$topology" == "JENKINS_SERVICE" ]]; then
+                                    if [[ "$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE" ]]; then
                                         expected+=",S3Bucket"
                                     fi
                                     # OIDC authentication with Cognito (requires HTTPS/SSL + domain)
@@ -158,25 +153,20 @@ initialize_truth_table() {
                                     if [[ "$domain_config" == "with-domain" && "$ssl_config" == "ssl-enabled" ]]; then
                                         expected+=",CognitoUserPool,CognitoUserPoolClient,CognitoUserPoolDomain"
                                     fi
-                                    # AutoScaling only for EC2 + JENKINS_SERVICE topology
+                                    # AutoScaling only for EC2 topologies
                                     # Fargate uses ECS Service auto-scaling, not EC2 AutoScaling policies
-                                    if [[ "$runtime" == "EC2" && "$topology" == "JENKINS_SERVICE" ]]; then
+                                    if [[ "$runtime" == "EC2" && ("$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE") ]]; then
                                         expected+=",AutoScaling"
                                     fi
                                     ;;
                             esac
-                            
+
                             # Skip invalid combinations
                             if [[ "$ssl_config" == "ssl-enabled" && "$domain_config" == "no-domain" ]]; then
                                 expected="INVALID_COMBINATION"
                             fi
 
                             if [[ "$subdomain_config" == "with-subdomain" && "$domain_config" == "no-domain" ]]; then
-                                expected="INVALID_COMBINATION"
-                            fi
-
-                            # FARGATE + JENKINS_SINGLE_NODE is not a supported combination
-                            if [[ "$runtime" == "FARGATE" && "$topology" == "JENKINS_SINGLE_NODE" ]]; then
                                 expected="INVALID_COMBINATION"
                             fi
                             
@@ -258,6 +248,8 @@ create_deployment_context() {
     cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
   "healthCheckTimeout": "5",
   "memory": "2048",
   "enableMonitoring": "true",

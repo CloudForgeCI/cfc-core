@@ -1,13 +1,13 @@
 package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.DeploymentContext;
 import software.amazon.awscdk.services.route53.IHostedZone;
 import software.constructs.Construct;
 
 public class CertificateFactory extends BaseFactory {
 
-    @com.cloudforgeci.api.core.annotation.SystemContext("zone")
+    @com.cloudforge.core.annotation.SystemContext("zone")
     private IHostedZone zone;
 
     @DeploymentContext("enableSsl")

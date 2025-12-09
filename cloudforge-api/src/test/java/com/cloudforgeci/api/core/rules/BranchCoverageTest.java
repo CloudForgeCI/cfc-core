@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -50,7 +50,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -77,7 +77,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     @Test
@@ -106,7 +106,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> Soc2Rules.install(ctx));
+        assertDoesNotThrow(() -> new Soc2Rules().install(ctx));
     }
 
     // ========== GdprRules Branch Coverage ==========
@@ -134,7 +134,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -161,7 +161,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -187,7 +187,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     @Test
@@ -213,7 +213,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> GdprRules.install(ctx));
+        assertDoesNotThrow(() -> new GdprRules().install(ctx));
     }
 
     // ========== HipaaRules Branch Coverage ==========
@@ -243,7 +243,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -271,7 +271,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -298,7 +298,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     @Test
@@ -324,7 +324,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
 
     // ========== SecurityRules Branch Coverage ==========
@@ -347,7 +347,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     @Test
@@ -368,7 +368,7 @@ class BranchCoverageTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     /*

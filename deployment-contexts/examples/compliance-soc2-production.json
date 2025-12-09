@@ -1,0 +1,56 @@
+{
+  "stackName": "App-SOC2-Production",
+  "applicationId": "REPLACE_WITH_APP_ID",
+  "applicationName": "SOC2 Production Application",
+  "description": "Production environment with full SOC2 compliance",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "app",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "app-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "Admins",
+  "cognitoUserGroupName": "Users",
+
+  "instanceType": "t3.medium",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 6,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 60,
+
+  "complianceFrameworks": "SOC2",
+  "complianceMode": "enforce",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "guardDutyEnabled": true,
+  "guardDutyAlertsConfigured": true,
+  "auditManagerEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+  "certificateExpirationMonitoring": true,
+
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailBucketAccessRemediation": true,
+  "enableRdsDeletionProtectionRemediation": true,
+  "enableRdsAutoMinorVersionUpgradeRemediation": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "730",
+  "retainStorage": true
+}

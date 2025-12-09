@@ -1,6 +1,10 @@
 package com.cloudforgeci.api.core.iam;
 
-import com.cloudforgeci.api.interfaces.IAMProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+
+import com.cloudforge.core.enums.IAMProfile;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -279,9 +283,9 @@ class PermissionMatrixTest {
         // When: Getting getRequiredPermissions method
         var method = PermissionMatrix.class.getDeclaredMethod(
             "getRequiredPermissions",
-            com.cloudforgeci.api.interfaces.TopologyType.class,
-            com.cloudforgeci.api.interfaces.RuntimeType.class,
-            com.cloudforgeci.api.interfaces.IAMProfile.class
+            TopologyType.class,
+            RuntimeType.class,
+            com.cloudforge.core.enums.IAMProfile.class
         );
 
         // Then: Should exist and be public static
@@ -295,9 +299,9 @@ class PermissionMatrixTest {
         // When: Getting getRequiredPermissions method
         var method = PermissionMatrix.class.getDeclaredMethod(
             "getRequiredPermissions",
-            com.cloudforgeci.api.interfaces.TopologyType.class,
-            com.cloudforgeci.api.interfaces.RuntimeType.class,
-            com.cloudforgeci.api.interfaces.IAMProfile.class
+            TopologyType.class,
+            RuntimeType.class,
+            com.cloudforge.core.enums.IAMProfile.class
         );
 
         // Then: Should return List
@@ -308,8 +312,8 @@ class PermissionMatrixTest {
     void testGetRequiredPermissionsEc2Minimal() {
         // When: Getting required permissions for EC2 minimal
         List<String> permissions = PermissionMatrix.getRequiredPermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.EC2,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.EC2,
             IAMProfile.MINIMAL
         );
 
@@ -323,8 +327,8 @@ class PermissionMatrixTest {
     void testGetRequiredPermissionsFargateMinimal() {
         // When: Getting required permissions for Fargate minimal
         List<String> permissions = PermissionMatrix.getRequiredPermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.FARGATE,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.FARGATE,
             IAMProfile.MINIMAL
         );
 
@@ -338,8 +342,8 @@ class PermissionMatrixTest {
     void testGetRequiredPermissionsS3Website() {
         // When: Getting required permissions for S3 website
         List<String> permissions = PermissionMatrix.getRequiredPermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.S3_WEBSITE,
-            com.cloudforgeci.api.interfaces.RuntimeType.EC2,
+            TopologyType.S3_WEBSITE,
+            RuntimeType.EC2,
             IAMProfile.MINIMAL
         );
 
@@ -353,8 +357,8 @@ class PermissionMatrixTest {
         // When: Getting validatePermissions method
         var method = PermissionMatrix.class.getDeclaredMethod(
             "validatePermissions",
-            com.cloudforgeci.api.interfaces.TopologyType.class,
-            com.cloudforgeci.api.interfaces.RuntimeType.class,
+            TopologyType.class,
+            RuntimeType.class,
             IAMProfile.class,
             List.class
         );
@@ -369,15 +373,15 @@ class PermissionMatrixTest {
     void testValidatePermissionsValid() {
         // Given: Complete required permissions
         List<String> required = PermissionMatrix.getRequiredPermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.EC2,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.EC2,
             IAMProfile.MINIMAL
         );
 
         // When: Validating with all required permissions
         var result = PermissionMatrix.validatePermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.EC2,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.EC2,
             IAMProfile.MINIMAL,
             required
         );
@@ -395,8 +399,8 @@ class PermissionMatrixTest {
 
         // When: Validating with missing permissions
         var result = PermissionMatrix.validatePermissions(
-            com.cloudforgeci.api.interfaces.TopologyType.JENKINS_SERVICE,
-            com.cloudforgeci.api.interfaces.RuntimeType.EC2,
+            TopologyType.JENKINS_SERVICE,
+            RuntimeType.EC2,
             IAMProfile.MINIMAL,
             incomplete
         );

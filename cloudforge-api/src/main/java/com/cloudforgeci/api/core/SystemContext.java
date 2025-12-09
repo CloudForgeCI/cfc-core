@@ -1,10 +1,10 @@
 package com.cloudforgeci.api.core;
 
 import com.cloudforgeci.api.core.rules.Rules;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.network.VpcFactory;
 import com.cloudforgeci.api.ingress.AlbFactory;
@@ -13,11 +13,17 @@ import com.cloudforgeci.api.observability.LoggingCwFactory;
 import com.cloudforgeci.api.observability.GuardDutyFactory;
 import com.cloudforgeci.api.compute.FargateFactory;
 import com.cloudforgeci.api.storage.ContainerFactory;
-import com.cloudforgeci.api.application.JenkinsBootstrap;
 import com.cloudforgeci.api.observability.AlarmFactory;
 import com.cloudforgeci.api.compute.Ec2Factory;
 // Note: S3BucketFactory, CloudFrontFactory, and Ec2InstanceFactory will be created later
 import com.cloudforgeci.api.network.DomainFactory;
+import com.cloudforgeci.api.security.ApplicationOidcFactory;
+import com.cloudforgeci.api.security.ApplicationSamlFactory;
+import com.cloudforgeci.api.security.CertificateFactory;
+import com.cloudforgeci.api.security.CognitoAuthenticationFactory;
+import com.cloudforgeci.api.security.IdentityCenterFactory;
+import com.cloudforgeci.api.security.IdentityCenterSamlFactory;
+import com.cloudforgeci.api.security.OidcAuthenticationFactory;
 
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.ec2.FlowLogOptions;
@@ -59,6 +65,9 @@ public final class SystemContext extends Construct {
   // Security Profile Configuration
   public final Slot<SecurityProfileConfiguration> securityProfileConfig = new Slot<>();
 
+  // Application Specification
+  public final Slot<com.cloudforge.core.interfaces.ApplicationSpec> applicationSpec = new Slot<>();
+
   // Common slots
   public final Slot<software.amazon.awscdk.services.ec2.Vpc> vpc = new Slot<>();
   public final Slot<software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer> alb = new Slot<>();
@@ -98,6 +107,7 @@ public final class SystemContext extends Construct {
   // Certificate Properties
   public final Slot<ApplicationListener> https = new Slot<>();
   public final Slot<software.amazon.awscdk.services.certificatemanager.ICertificate> cert = new Slot<>();
+  public final Slot<software.amazon.awscdk.services.acmpca.CfnCertificateAuthority> privateCa = new Slot<>();
 
   // Identity Center Properties (for auto-provisioned OIDC)
   public final Slot<software.amazon.awscdk.CustomResource> identityCenter = new Slot<>();
@@ -107,6 +117,7 @@ public final class SystemContext extends Construct {
   public final Slot<String> cognitoAuthorizationEndpoint = new Slot<>();
   public final Slot<String> cognitoTokenEndpoint = new Slot<>();
   public final Slot<String> cognitoUserInfoEndpoint = new Slot<>();
+  public final Slot<String> cognitoLogoutEndpoint = new Slot<>();
   public final Slot<String> cognitoClientId = new Slot<>();
   public final Slot<String> cognitoClientSecretName = new Slot<>();
   public final Slot<String> cognitoUserPoolId = new Slot<>();
@@ -116,6 +127,36 @@ public final class SystemContext extends Construct {
   public final Slot<software.amazon.awscdk.services.cognito.IUserPool> cognitoUserPool = new Slot<>();
   public final Slot<software.amazon.awscdk.services.cognito.IUserPoolClient> cognitoUserPoolClient = new Slot<>();
   public final Slot<software.amazon.awscdk.services.cognito.IUserPoolDomain> cognitoUserPoolDomain = new Slot<>();
+
+  // Database Properties (RDS)
+  public final Slot<software.amazon.awscdk.services.rds.DatabaseInstance> rdsDatabase = new Slot<>();
+  public final Slot<software.amazon.awscdk.services.secretsmanager.Secret> dbCredentials = new Slot<>();
+  public final Slot<com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection> dbConnection = new Slot<>();
+  public final Slot<SecurityGroup> dbSecurityGroup = new Slot<>();
+  // Connection string components for distroless containers (Mattermost) that can't do shell substitution
+  public final Slot<java.util.Map<String, String>> dbConnectionStringComponents = new Slot<>();
+  // SSM Parameter containing the complete datasource URL (for distroless containers)
+  // Store the actual parameter object to avoid lookup issues
+  public final Slot<software.amazon.awscdk.services.ssm.StringParameter> dbDatasourceParameter = new Slot<>();
+
+  // INTERNAL USE ONLY: Cognito client secret Custom Resource (for CDK dependency tracking)
+  // This is used internally to ensure ECS tasks don't start before the secret is created in Secrets Manager.
+  // Do not use this field directly - it is managed automatically by CognitoAuthenticationFactory.
+  public final Slot<software.constructs.IConstruct> cognitoClientSecretResourceInternal = new Slot<>();
+
+  // Application-level OIDC configuration (for application-oidc mode)
+  // Built by ApplicationOidcFactory and used by ApplicationSpec implementations
+  public final Slot<com.cloudforge.core.interfaces.OidcConfiguration> applicationOidcConfig = new Slot<>();
+
+  // INTERNAL USE ONLY: Application OIDC client secret Custom Resource (for CDK dependency tracking)
+  // This is used internally to ensure ECS tasks don't start before the secret is created in Secrets Manager.
+  // Do not use this field directly - it is managed automatically by ApplicationOidcFactory.
+  public final Slot<software.constructs.IConstruct> applicationOidcClientSecretResource = new Slot<>();
+
+  // Keycloak SAML Bridge Deployment Tracking (for cognito-saml provider)
+  // Tracks whether Keycloak has been deployed in this stack (shared by all SAML apps)
+  public final Slot<Boolean> keycloakDeployed = new Slot<>();
+  public final Slot<String> keycloakServiceUrl = new Slot<>(); // e.g., https://auth.example.com
 
   // SSL Configuration Properties
   public final Slot<Boolean> sslEnabled = new Slot<>();
@@ -137,10 +178,21 @@ public final class SystemContext extends Construct {
   public final Slot<Integer> memory = new Slot<>();
 
   // Authentication Configuration Properties (used in SecurityProfile)
-  public final Slot<String> authMode = new Slot<>(); // "none" | "alb-oidc" | "jenkins-oidc"
+  public final Slot<String> authMode = new Slot<>(); // "none" | "alb-oidc" | "jenkins-oidc" | "application-oidc"
   public final Slot<String> ssoInstanceArn = new Slot<>();
   public final Slot<String> ssoGroupId = new Slot<>();
   public final Slot<String> ssoTargetAccountId = new Slot<>();
+
+  // SAML Configuration (used by CognitoSamlFactory for Cognito SAML IdP)
+  // These slots are provider-agnostic and work with Cognito SAML
+  public final Slot<String> samlSiteUrl = new Slot<>();           // SP site URL (Entity ID)
+  public final Slot<String> samlAcsUrl = new Slot<>();            // Assertion Consumer Service URL
+  public final Slot<String> samlIdpMetadataUrl = new Slot<>();    // IdP SAML metadata URL
+  public final Slot<String> samlIdpSsoUrl = new Slot<>();         // IdP SSO endpoint URL
+  public final Slot<String> samlIdpEntityId = new Slot<>();       // IdP Entity ID (issuer)
+  public final Slot<String> samlIdpLogoutUrl = new Slot<>();      // IdP SLO endpoint URL
+  public final Slot<String> samlProviderType = new Slot<>();      // Provider type: "cognito"
+  public final Slot<String> samlConfigSecretArn = new Slot<>();   // Secrets Manager ARN for IdP config
 
   // Storage Configuration Properties (used in IAMConfiguration)
   public final Slot<String> artifactsBucket = new Slot<>();
@@ -373,25 +425,42 @@ public final class SystemContext extends Construct {
   public void createSecurityFactories(Construct scope, String idPrefix) {
     // Create Cognito authentication factory (auto-provisions Cognito User Pool if configured)
     // This must run BEFORE OidcAuthenticationFactory so endpoints are available
-    com.cloudforgeci.api.security.CognitoAuthenticationFactory cognitoFactory =
-        new com.cloudforgeci.api.security.CognitoAuthenticationFactory(scope, idPrefix + "Cognito");
+    CognitoAuthenticationFactory cognitoFactory = new CognitoAuthenticationFactory(scope, idPrefix + "Cognito");
     cognitoFactory.create();
 
-    // Create Identity Center factory (auto-provisions if configured)
-    com.cloudforgeci.api.security.IdentityCenterFactory identityCenterFactory =
-        new com.cloudforgeci.api.security.IdentityCenterFactory(scope, idPrefix + "IdentityCenter");
+    // Create Identity Center factory (creates placeholder secret for manual OIDC setup)
+    IdentityCenterFactory identityCenterFactory = new IdentityCenterFactory(scope, idPrefix + "IdentityCenter");
     identityCenterFactory.create();
+
+    // Create Identity Center SAML factory (auto-provisions SAML app if autoProvisionIdentityCenter = true)
+    // This creates a SAML 2.0 application in IAM Identity Center for Mattermost, etc.
+    IdentityCenterSamlFactory identityCenterSamlFactory = new IdentityCenterSamlFactory(scope, idPrefix + "IdentityCenterSaml");
+    identityCenterSamlFactory.create();
 
     // Create OIDC authentication factory (configures ALB OIDC if authMode = alb-oidc)
     // This checks for Cognito endpoints first, then IAM Identity Center, then manual config
-    com.cloudforgeci.api.security.OidcAuthenticationFactory oidcFactory =
-        new com.cloudforgeci.api.security.OidcAuthenticationFactory(scope, idPrefix + "OidcAuth");
+    OidcAuthenticationFactory oidcFactory = new OidcAuthenticationFactory(scope, idPrefix + "OidcAuth");
     oidcFactory.create();
+
+    // Create Application OIDC factory (configures application-level OIDC if authMode = application-oidc)
+    // This handles OIDC integration within the application itself (Jenkins, GitLab, etc.)
+    ApplicationOidcFactory applicationOidcFactory = new ApplicationOidcFactory(scope, idPrefix + "ApplicationOidc");
+    applicationOidcFactory.create();
+
+    // Create Application SAML factory (configures application-level SAML if authMode = application-oidc)
+    // This handles SAML integration for applications that require SAML authentication
+    // - cognito-saml: Deploys Keycloak as SAML bridge to Cognito (works with ANY SAML-enabled app)
+    // - identity-center: Uses IAM Identity Center SAML (configured by IdentityCenterSamlFactory)
+    ApplicationSamlFactory applicationSamlFactory = new ApplicationSamlFactory(scope, idPrefix + "ApplicationSaml");
+    applicationSamlFactory.create();
+
+    // NOTE: ComplianceFactory is now created by security profile configurations
+    // (ProductionSecurityConfiguration, StagingSecurityConfiguration) to avoid duplicates
+    // and ensure proper integration with security profile settings.
 
     // Create Certificate LAST so it's deleted FIRST during stack teardown
     // This prevents "Certificate in use" errors when deleting the HTTPS listener
-    com.cloudforgeci.api.security.CertificateFactory certificateFactory =
-        new com.cloudforgeci.api.security.CertificateFactory(scope, idPrefix + "Certificate");
+    CertificateFactory certificateFactory = new CertificateFactory(scope, idPrefix + "Certificate");
     certificateFactory.create();
   }
 
@@ -539,15 +608,13 @@ public final class SystemContext extends Construct {
         software.amazon.awscdk.services.ecs.ContainerImage.fromRegistry("jenkins/jenkins:lts"));
     container.create();
 
-    // Create Jenkins bootstrap
-    JenkinsBootstrap bootstrap = new JenkinsBootstrap(scope, id + "Bootstrap");
-    bootstrap.create();
+    // JenkinsBootstrap removed - logic migrated to FargateFactory (security groups, CFN output)
 
     // Create alarms
     AlarmFactory alarms = new AlarmFactory(scope, id + "Alarms", null);
     alarms.create();
 
-    return new JenkinsSpecificFactories(fargate, container, bootstrap, alarms, null, null);
+    return new JenkinsSpecificFactories(fargate, container, alarms, null, null);
   }
 
   /**
@@ -576,7 +643,7 @@ public final class SystemContext extends Construct {
     AlarmFactory alarms = new AlarmFactory(scope, id + "Alarms", null);
     alarms.create();
 
-    return new JenkinsSpecificFactories(null, null, null, alarms, ec2, singleInstance);
+    return new JenkinsSpecificFactories(null, null, alarms, ec2, singleInstance);
   }
 
   /**
@@ -630,11 +697,11 @@ public final class SystemContext extends Construct {
 
   /**
    * Container for Jenkins-specific factories.
+   * Note: JenkinsBootstrap removed - logic migrated to FargateFactory
    */
   public record JenkinsSpecificFactories(
       FargateFactory fargate,
       ContainerFactory container,
-      JenkinsBootstrap bootstrap,
       AlarmFactory alarms,
       Ec2Factory ec2,
       Object singleInstance

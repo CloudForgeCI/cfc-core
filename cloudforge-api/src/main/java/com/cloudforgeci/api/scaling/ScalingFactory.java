@@ -2,7 +2,7 @@ package com.cloudforgeci.api.scaling;
 
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
-import com.cloudforgeci.api.core.annotation.DeploymentContext;
+import com.cloudforge.core.annotation.DeploymentContext;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -21,6 +21,9 @@ public class ScalingFactory extends BaseFactory {
   @DeploymentContext("cpuTargetUtilization")
   private Integer cpuTargetUtilization;
 
+  @DeploymentContext("enableAutoScaling")
+  private Boolean enableAutoScaling;
+
   public ScalingFactory(Construct scope, String id) {
     super(scope, id);
   }
@@ -33,6 +36,11 @@ public class ScalingFactory extends BaseFactory {
   }
 
   public void scale(final FargateService service) {
+    // Check if auto-scaling is explicitly disabled
+    if (Boolean.FALSE.equals(enableAutoScaling)) {
+      return; // Auto-scaling explicitly disabled
+    }
+
     // Only enable scaling if maxInstanceCapacity > 1
     // Use injected DeploymentContext values via annotations
     if (maxInstanceCapacity == null || maxInstanceCapacity <= 1) {
@@ -59,6 +67,11 @@ public class ScalingFactory extends BaseFactory {
   }
 
   public void scale(final AutoScalingGroup asg) {
+    // Check if auto-scaling is explicitly disabled
+    if (Boolean.FALSE.equals(enableAutoScaling)) {
+      return; // Auto-scaling explicitly disabled
+    }
+
     // Use injected cpuTargetUtilization or default to 60%
     int targetUtilization = cpuTargetUtilization != null ? cpuTargetUtilization : 60;
 

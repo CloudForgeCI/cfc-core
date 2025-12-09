@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Enhanced Synthesis Test for All Security Profiles with OIDC Authentication
 # Covers EC2, Fargate, DEV/STAGING/PRODUCTION with multiple auth modes
@@ -84,6 +84,8 @@ create_deployment_context() {
     cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
   "healthCheckTimeout": "5",
   "memory": "2048",
   "enableMonitoring": "true",
@@ -100,7 +102,7 @@ create_deployment_context() {
   "unhealthyThreshold": "3",
   "healthyThreshold": "2",
   "networkMode": "$network_mode",
-  "topology": "JENKINS_SERVICE",
+  "topology": "APPLICATION_SERVICE",
   "instanceType": "t3.micro",
   "minInstanceCapacity": "2",
   "runtime": "$runtime",

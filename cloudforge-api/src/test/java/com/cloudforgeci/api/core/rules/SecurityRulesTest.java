@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.TopologyType;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -47,7 +47,7 @@ class SecurityRulesTest {
 
         // When: Installing security rules
         // Then: Should not throw
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
 
         // And: Security profile config should be set
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -65,7 +65,7 @@ class SecurityRulesTest {
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // When: Installing security rules
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
 
         // Then: Security profile config should be set
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -83,21 +83,10 @@ class SecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing security rules
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
 
         // Then: Security profile config should be set
         assertTrue(ctx.securityProfileConfig.get().isPresent());
-    }
-
-    @Test
-    void testSecurityRulesCannotBeInstantiated() {
-        // The SecurityRules class should not be instantiable (utility class)
-        try {
-            var constructor = SecurityRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("SecurityRules should have a private constructor");
-        }
     }
 
     @Test
@@ -119,7 +108,7 @@ class SecurityRulesTest {
 
         // When: Installing security rules
         // Then: Should skip compliance validation
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     @Test
@@ -139,7 +128,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
     }
 
@@ -160,7 +149,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
     }
 
@@ -181,7 +170,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
     }
 
@@ -202,7 +191,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
     }
 
@@ -223,7 +212,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
     }
 
@@ -245,7 +234,7 @@ class SecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Should skip compliance when frameworks is empty
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     @Test
@@ -258,7 +247,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
     }
 
@@ -272,7 +261,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
     }
 
@@ -286,7 +275,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
-        SecurityRules.install(ctx);
+        new SecurityRules().install(ctx);
 
         assertTrue(ctx.securityProfileConfig.get().isPresent());
         assertNotNull(ctx.securityProfileConfig.get().get());
@@ -302,7 +291,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        SecurityRules.install(ctx);
+        new SecurityRules().install(ctx);
 
         assertTrue(ctx.securityProfileConfig.get().isPresent());
         assertNotNull(ctx.securityProfileConfig.get().get());
@@ -318,7 +307,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        SecurityRules.install(ctx);
+        new SecurityRules().install(ctx);
 
         assertTrue(ctx.securityProfileConfig.get().isPresent());
         assertNotNull(ctx.securityProfileConfig.get().get());
@@ -335,16 +324,16 @@ class SecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // First install should work
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
 
         // Second install on same context should also work (idempotent)
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     @Test
     void testSecurityRulesHandlesNullContext() {
         // This tests that the install method requires a non-null context
-        assertThrows(NullPointerException.class, () -> SecurityRules.install(null));
+        assertThrows(NullPointerException.class, () -> new SecurityRules().install(null));
     }
 
     @Test
@@ -365,7 +354,7 @@ class SecurityRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // Cross-framework validators (KeyManagement, AdvancedMonitoring, etc.) should be installed
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     @Test
@@ -385,7 +374,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     @Test
@@ -405,7 +394,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     @Test
@@ -425,7 +414,7 @@ class SecurityRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> SecurityRules.install(ctx));
+        assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
 
     @Test
@@ -441,7 +430,7 @@ class SecurityRulesTest {
             SystemContext ctx = SystemContext.start(stack, topology, RuntimeType.FARGATE,
                     SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-            assertDoesNotThrow(() -> SecurityRules.install(ctx),
+            assertDoesNotThrow(() -> new SecurityRules().install(ctx),
                 "SecurityRules.install should work with topology: " + topology);
         }
     }

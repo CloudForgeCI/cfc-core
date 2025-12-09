@@ -1,10 +1,14 @@
 package com.cloudforgeci.api.core.security;
 
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforgeci.api.interfaces.Rule;
 import com.cloudforgeci.api.interfaces.SecurityConfiguration;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforgeci.api.interfaces.Rule;
+import com.cloudforgeci.api.observability.ComplianceFactory;
+import com.cloudforgeci.api.observability.WafFactory;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 
@@ -42,7 +46,7 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
         rules.add(require("vpc", x -> x.vpc));
 
         // Instance security group is only required for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
 
@@ -58,13 +62,19 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
         // Configure observability based on security profile
         configureObservability(c);
 
+        // WAF Configuration - respects deployment context override
+        // WafFactory will only create WAF if config.isWafEnabled() returns true
+        // NOTE: Use stack-specific ID to avoid conflicts when switching security profiles
+        WafFactory wafFactory = new WafFactory(c, c.stackName + "-Waf");
+        wafFactory.create();
+
         // Create hosted zone if domain is provided
         createHostedZone(c);
 
         // Staging security settings - moderate restrictions
 
         // Instance security group - only for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
                 // SSH only from VPC CIDR
                 instanceSg.addIngressRule(
@@ -74,12 +84,13 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
                     false
                 );
 
-                // Jenkins port only from ALB security group
+                // Application port only from ALB security group
                 if (c.albSg.get().isPresent()) {
+                    int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
                     instanceSg.addIngressRule(
                         Peer.securityGroupId(c.albSg.get().orElseThrow().getSecurityGroupId()),
-                        Port.tcp(8080),
-                        "Jenkins from ALB (STAGING)",
+                        Port.tcp(appPort),
+                        "App from ALB (STAGING)",
                         false
                     );
                 }
@@ -104,7 +115,7 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
 
         // EFS security group - allow NFS from appropriate security group based on runtime
         whenBoth(c.vpc, c.efsSg, (vpc, efsSg) -> {
-            if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.FARGATE) {
+            if (c.runtime == RuntimeType.FARGATE) {
                 // For Fargate, allow NFS from Fargate service security group
                 if (c.fargateServiceSg.get().isPresent()) {
                     efsSg.addIngressRule(
@@ -117,10 +128,13 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
             } else {
                 // For EC2, allow NFS from instance security group
                 if (c.instanceSg.get().isPresent()) {
+                    String appId = (c.applicationSpec != null && c.applicationSpec.get().isPresent())
+                        ? c.applicationSpec.get().orElseThrow().applicationId()
+                        : "app";
                     efsSg.addIngressRule(
                         Peer.securityGroupId(c.instanceSg.get().orElseThrow().getSecurityGroupId()),
                         Port.tcp(2049),
-                        "NFS_from_Jenkins_instances_(STAGING)",
+                        "NFS_from_" + appId + "_instances_(STAGING)",
                         false
                     );
                 }
@@ -129,9 +143,10 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
 
         // Fargate security group - allow from ALB only
         whenBoth(c.vpc, c.fargateServiceSg, (vpc, fargateSg) -> {
+            int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
             fargateSg.addIngressRule(
                 Peer.securityGroupId(c.albSg.get().orElseThrow().getSecurityGroupId()),
-                Port.tcp(8080),
+                Port.tcp(appPort),
                 "HTTP from ALB (STAGING)",
                 false
             );
@@ -154,8 +169,9 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
 
         // Create ComplianceFactory for CloudTrail and AWS Config
         // This factory will check security profile configuration and create resources accordingly
-        com.cloudforgeci.api.observability.ComplianceFactory complianceFactory =
-            new com.cloudforgeci.api.observability.ComplianceFactory(c, "StagingCompliance");
+        // NOTE: Use profile-agnostic ID to avoid resource conflicts when switching security profiles
+        // The stack name is already part of the scope hierarchy, ensuring multi-stack isolation
+        ComplianceFactory complianceFactory = new ComplianceFactory(c, c.stackName + "-Compliance");
         complianceFactory.create();
 
         // Configure logging retention (moderate for staging)

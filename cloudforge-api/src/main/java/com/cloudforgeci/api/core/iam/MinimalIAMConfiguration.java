@@ -1,10 +1,11 @@
 package com.cloudforgeci.api.core.iam;
 
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.IAMProfile;
 import com.cloudforgeci.api.interfaces.IAMConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
-import com.cloudforgeci.api.interfaces.RuntimeType;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
@@ -42,7 +43,7 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
         rules.add(require("vpc", x -> x.vpc));
 
         // Instance security group is only required for EC2 runtime
-        if (c.runtime == com.cloudforgeci.api.interfaces.RuntimeType.EC2) {
+        if (c.runtime == RuntimeType.EC2) {
             rules.add(require("instance security group", x -> x.instanceSg));
         }
 
@@ -70,6 +71,10 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                 .build();
 
         // Add minimal CloudWatch permissions for basic monitoring
+        // Use stackName for application-aware log paths
+        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? "/aws/*/" + c.stackName + "*"
+                : "/aws/*";
         ec2Role.addToPolicy(PolicyStatement.Builder.create()
                 .sid("MinimalCloudWatchLogs")
                 .actions(List.of(
@@ -80,7 +85,7 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                         "logs:DescribeLogStreams"
                 ))
                 .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/jenkins*"
+                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:" + appLogPattern
                 ))
                 .build());
 
@@ -118,6 +123,10 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
         }
 
         // Add minimal CloudWatch permissions
+        // Use stackName for application-aware log paths
+        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
+                ? "/aws/*/" + c.stackName + "*"
+                : "/aws/*";
         taskRole.addToPolicy(PolicyStatement.Builder.create()
                 .sid("MinimalCloudWatchLogs")
                 .actions(List.of(
@@ -126,7 +135,7 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                         "logs:PutLogEvents"
                 ))
                 .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:/aws/ecs/jenkins*"
+                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:" + appLogPattern
                 ))
                 .build());
 

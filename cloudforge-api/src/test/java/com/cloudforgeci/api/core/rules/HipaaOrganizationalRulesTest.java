@@ -2,11 +2,11 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.core.iam.IAMProfileMapper;
-import com.cloudforgeci.api.interfaces.IAMProfile;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -47,7 +47,7 @@ class HipaaOrganizationalRulesTest {
 
         // When: Installing HIPAA organizational rules
         // Then: Should not throw (rules are skipped)
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -68,21 +68,10 @@ class HipaaOrganizationalRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA organizational rules
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
 
         // Then: Validation should be added
         assertNotNull(ctx.getNode());
-    }
-
-    @Test
-    void testHipaaOrganizationalRulesCannotBeInstantiated() {
-        // The HipaaOrganizationalRules class should not be instantiable (utility class)
-        try {
-            var constructor = HipaaOrganizationalRules.class.getDeclaredConstructor();
-            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
-        } catch (NoSuchMethodException e) {
-            fail("HipaaOrganizationalRules should have a private constructor");
-        }
     }
 
     @Test
@@ -103,7 +92,7 @@ class HipaaOrganizationalRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Installing HIPAA organizational rules
-        HipaaOrganizationalRules.install(ctx);
+        new HipaaOrganizationalRules().install(ctx);
 
         // Then: Node should have validation added
         assertNotNull(ctx.getNode());
@@ -125,7 +114,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -144,7 +133,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -163,7 +152,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -182,7 +171,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -201,7 +190,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -220,7 +209,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -239,7 +228,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -258,7 +247,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -277,7 +266,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -296,7 +285,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -315,7 +304,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -334,7 +323,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -352,7 +341,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -374,7 +363,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -395,7 +384,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -415,7 +404,7 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 
     @Test
@@ -436,6 +425,6 @@ class HipaaOrganizationalRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        assertDoesNotThrow(() -> HipaaOrganizationalRules.install(ctx));
+        assertDoesNotThrow(() -> new HipaaOrganizationalRules().install(ctx));
     }
 }

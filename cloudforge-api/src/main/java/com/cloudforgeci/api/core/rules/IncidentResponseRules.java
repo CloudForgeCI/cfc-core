@@ -1,7 +1,9 @@
 package com.cloudforgeci.api.core.rules;
 
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,15 +32,22 @@ import java.util.logging.Logger;
  *
  * <h2>Usage</h2>
  * <pre>{@code
- * // Install incident response validation
- * IncidentResponseRules.install(ctx);
+ * // Automatically loaded via FrameworkLoader (v2.0 pattern)
+ * // Or manually: new IncidentResponseRules().install(ctx);
  * }</pre>
+ *
+ * @since 3.0.0
  */
-public final class IncidentResponseRules {
+@ComplianceFramework(
+    value = "IncidentResponse",
+    priority = 0,
+    alwaysLoad = true,
+    displayName = "Incident Response & DR",
+    description = "Cross-framework incident response and disaster recovery validation"
+)
+public class IncidentResponseRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(IncidentResponseRules.class.getName());
-
-    private IncidentResponseRules() {}
 
     /**
      * Install incident response validation rules.
@@ -46,7 +55,8 @@ public final class IncidentResponseRules {
      *
      * @param ctx System context
      */
-    public static void install(SystemContext ctx) {
+    @Override
+    public void install(SystemContext ctx) {
         LOG.info("Installing incident response compliance validation rules for " + ctx.security);
 
         ctx.getNode().addValidation(() -> {
@@ -105,7 +115,7 @@ public final class IncidentResponseRules {
      *   <li>SOC 2 CC7.4, CC7.5: Incident response and resolution</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateIncidentResponsePlan(SystemContext ctx) {
+    private List<ComplianceRule> validateIncidentResponsePlan(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -212,7 +222,7 @@ public final class IncidentResponseRules {
      *   <li>SOC 2 A1.2: System availability and recovery</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateDisasterRecovery(SystemContext ctx) {
+    private List<ComplianceRule> validateDisasterRecovery(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -315,7 +325,7 @@ public final class IncidentResponseRules {
      *   <li>This validates backup testing and restore procedures</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateBackupRestore(SystemContext ctx) {
+    private List<ComplianceRule> validateBackupRestore(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -375,7 +385,7 @@ public final class IncidentResponseRules {
      *   <li>HIPAA §164.312(b): Audit controls - protect against tampering</li>
      * </ul>
      */
-    private static List<ComplianceRule> validateForensicLogging(SystemContext ctx) {
+    private List<ComplianceRule> validateForensicLogging(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElse(null);
@@ -452,7 +462,7 @@ public final class IncidentResponseRules {
     /**
      * Helper method to safely get boolean settings from deployment context.
      */
-    private static boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
+    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
         try {
             String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
             return Boolean.parseBoolean(value);
@@ -468,7 +478,7 @@ public final class IncidentResponseRules {
      * Infrastructure requirements are technical controls that can be enforced in code.
      * Organizational controls are documentation and process requirements.
      */
-    private static boolean isInfrastructureRequirement(String ruleDescription) {
+    private boolean isInfrastructureRequirement(String ruleDescription) {
         // Organizational/operational controls (non-blocking for PRODUCTION)
         // These are documentation, testing, and process requirements
         if (ruleDescription.contains("must be tested") ||

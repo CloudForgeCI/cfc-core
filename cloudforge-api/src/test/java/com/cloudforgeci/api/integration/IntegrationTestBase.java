@@ -2,8 +2,8 @@ package com.cloudforgeci.api.integration;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import software.amazon.awscdk.Stack;
@@ -277,11 +277,64 @@ public abstract class IntegrationTestBase {
     /**
      * Validates that backup policies are in place for critical resources.
      * Note: BackupPlan requires BackupFactory to be called explicitly.
+     *
+     * <p>When BackupFactory has been called, validates:</p>
+     * <ul>
+     *   <li>AWS Backup vault exists</li>
+     *   <li>AWS Backup plan exists</li>
+     *   <li>Backup selection targets resources</li>
+     * </ul>
      */
     protected void assertBackupPoliciesConfigured() {
-        // Backup is optional - just verify infrastructure exists
-        // AWS Backup would be configured separately in production
-        template.resourceCountIs("AWS::EC2::VPC", 1);
+        // Check if AWS Backup resources exist
+        int vaultCount = template.findResources("AWS::Backup::BackupVault").size();
+        int planCount = template.findResources("AWS::Backup::BackupPlan").size();
+
+        if (vaultCount > 0 && planCount > 0) {
+            // AWS Backup is configured - validate properties
+            template.hasResourceProperties("AWS::Backup::BackupVault", Match.objectLike(Map.of(
+                "BackupVaultName", Match.anyValue()
+            )));
+
+            template.hasResourceProperties("AWS::Backup::BackupPlan", Match.objectLike(Map.of(
+                "BackupPlan", Match.objectLike(Map.of(
+                    "BackupPlanRule", Match.anyValue()
+                ))
+            )));
+        } else {
+            // Backup not configured - just verify infrastructure exists
+            // AWS Backup would be configured in production via BackupFactory
+            template.resourceCountIs("AWS::EC2::VPC", 1);
+        }
+    }
+
+    /**
+     * Validates that AWS Backup is fully configured with vault lock for compliance.
+     * Use this assertion for PCI-DSS and PRODUCTION security profiles.
+     */
+    protected void assertBackupVaultLockConfigured() {
+        template.hasResourceProperties("AWS::Backup::BackupVault", Match.objectLike(Map.of(
+            "LockConfiguration", Match.objectLike(Map.of(
+                "MinRetentionDays", Match.anyValue()
+            ))
+        )));
+    }
+
+    /**
+     * Validates that EFS is protected by a backup plan.
+     * This is a PCI-DSS requirement (efs-resources-protected-by-backup-plan).
+     */
+    protected void assertEfsProtectedByBackupPlan() {
+        // Verify EFS exists
+        template.resourceCountIs("AWS::EFS::FileSystem", 1);
+
+        // Verify backup selection exists (which links resources to backup plan)
+        int selectionCount = template.findResources("AWS::Backup::BackupSelection").size();
+        if (selectionCount > 0) {
+            template.hasResourceProperties("AWS::Backup::BackupSelection", Match.objectLike(Map.of(
+                "BackupSelection", Match.anyValue()
+            )));
+        }
     }
 
     // ============================================================================

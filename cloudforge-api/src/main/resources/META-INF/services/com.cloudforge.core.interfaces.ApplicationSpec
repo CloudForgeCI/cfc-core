@@ -1,0 +1,33 @@
+# CloudForge Built-in Application Specifications
+# These applications are available out-of-the-box via ServiceLoader discovery
+
+# CI/CD
+com.cloudforgeci.api.application.JenkinsApplicationSpec
+com.cloudforgeci.api.application.cicd.GitLabApplicationSpec
+com.cloudforgeci.api.application.cicd.DroneApplicationSpec
+
+# Version Control
+com.cloudforgeci.api.application.vcs.GiteaApplicationSpec
+
+# Monitoring
+com.cloudforgeci.api.application.monitoring.GrafanaApplicationSpec
+com.cloudforgeci.api.application.monitoring.PrometheusApplicationSpec
+
+# Analytics
+com.cloudforgeci.api.application.analytics.MetabaseApplicationSpec
+com.cloudforgeci.api.application.analytics.SupersetApplicationSpec
+
+# Databases
+com.cloudforgeci.api.application.database.PostgreSQLApplicationSpec
+com.cloudforgeci.api.application.database.RedisApplicationSpec
+
+# Artifact Registries
+com.cloudforgeci.api.application.artifactregistry.NexusApplicationSpec
+com.cloudforgeci.api.application.artifactregistry.HarborApplicationSpec
+
+# Secrets Management
+com.cloudforgeci.api.application.secrets.VaultApplicationSpec
+
+# Collaboration
+com.cloudforgeci.api.application.collaboration.MattermostApplicationSpec
+com.cloudforgeci.api.application.collaboration.MattermostTeamApplicationSpec

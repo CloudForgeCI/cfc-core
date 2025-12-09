@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.core;
 
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,7 +36,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             // Verify the context is created successfully
             assertNotNull(ctx);
@@ -56,7 +56,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -75,7 +75,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -94,7 +94,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -113,7 +113,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -132,7 +132,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -151,7 +151,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -170,7 +170,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -189,7 +189,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -208,7 +208,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -227,7 +227,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -246,7 +246,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -265,7 +265,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -284,7 +284,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -303,7 +303,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -322,7 +322,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -341,7 +341,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -360,7 +360,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -379,7 +379,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);
@@ -398,7 +398,7 @@ class CdkSynthesisValidationTest {
             var cfc = DeploymentContext.from(stack);
 
             // Initialize SystemContext
-            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+            var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
             assertNotNull(ctx);
             assertNotNull(cfc);

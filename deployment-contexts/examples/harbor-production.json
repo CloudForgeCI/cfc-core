@@ -1,0 +1,51 @@
+{
+  "stackName": "Harbor-Production",
+  "applicationId": "harbor",
+  "applicationName": "Harbor Registry",
+  "description": "Production Harbor with Trivy scanning and Notary",
+  "environment": "production",
+
+  "runtime": "ec2",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "registry",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "harbor-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+
+  "instanceType": "t3.large",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 4,
+
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "databaseVersion": "15",
+  "databaseInstanceClass": "db.t3.medium",
+  "databaseAllocatedStorageGB": 100,
+  "databaseMultiAz": true,
+  "databaseName": "registry",
+  "databaseBackupRetentionDays": 30,
+
+  "enableNotary": true,
+  "enableTrivy": true,
+
+  "complianceFrameworks": "SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "awsConfigEnabled": true,
+  "guardDutyEnabled": true,
+  "wafEnabled": true,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "730",
+  "retainStorage": true
+}

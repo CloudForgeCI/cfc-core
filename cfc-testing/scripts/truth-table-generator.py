@@ -17,8 +17,10 @@ class Runtime(Enum):
     FARGATE = "FARGATE"
 
 class Topology(Enum):
-    JENKINS_SINGLE_NODE = "JENKINS_SINGLE_NODE"
-    JENKINS_SERVICE = "JENKINS_SERVICE"
+    # JENKINS_SINGLE_NODE = "JENKINS_SINGLE_NODE"  # DEPRECATED - removed in CloudForge 3.0.0
+    # JENKINS_SERVICE = "JENKINS_SERVICE"  # Legacy topology - for backward compatibility
+    APPLICATION_SERVICE = "APPLICATION_SERVICE"  # Universal application topology (CloudForge 3.0.0+)
+    # S3_WEBSITE = "S3_WEBSITE"  # Static website topology - not yet implemented in synthesis tests
 
 class SecurityProfile(Enum):
     DEV = "DEV"
@@ -40,6 +42,7 @@ class SubdomainConfig(Enum):
 class AuthMode(Enum):
     NONE = "none"
     ALB_OIDC = "alb-oidc"
+    APPLICATION_OIDC = "application-oidc"
 
 class NetworkMode(Enum):
     PUBLIC_NO_NAT = "public-no-nat"
@@ -60,30 +63,28 @@ class TestConfiguration:
         return f"{self.runtime.value}_{self.topology.value}_{self.security_profile.value}_{self.domain_config.value}_{self.ssl_config.value}_{self.subdomain_config.value}_{self.auth_mode.value}_{self.network_mode.value}"
     
     def is_valid(self) -> bool:
-        """Check if this configuration combination is valid"""
-        # SSL requires domain
+        """
+        Check if this configuration combination is valid.
+
+        CloudForge 3.0.0 supports only APPLICATION_SERVICE topology with EC2/FARGATE runtimes.
+        All configurations using APPLICATION_SERVICE are valid as long as they meet basic requirements.
+
+        CloudForge 3.1.0 adds Private CA support for OIDC modes without custom domain:
+        - alb-oidc and application-oidc can use ALB DNS name with AWS Private CA certificate
+        - SSL is required for OIDC modes (enableSsl=true) but domain is optional
+        """
+        # SSL requires domain UNLESS using OIDC auth mode (which can use Private CA with ALB DNS)
+        is_oidc_mode = self.auth_mode in (AuthMode.ALB_OIDC, AuthMode.APPLICATION_OIDC)
         if self.ssl_config == SSLConfig.SSL_ENABLED and self.domain_config == DomainConfig.NO_DOMAIN:
-            return False
+            if not is_oidc_mode:
+                return False
 
         # Subdomain requires domain
         if self.subdomain_config == SubdomainConfig.WITH_SUBDOMAIN and self.domain_config == DomainConfig.NO_DOMAIN:
             return False
 
-        # JENKINS_SINGLE_NODE topology requires EC2 runtime (architectural constraint)
-        # Fargate doesn't support single-node topology - it uses ECS Services
-        if self.topology == Topology.JENKINS_SINGLE_NODE and self.runtime == Runtime.FARGATE:
-            return False
-
-        # ALB-OIDC authentication requires a domain (for redirect URIs)
-        if self.auth_mode == AuthMode.ALB_OIDC and self.domain_config == DomainConfig.NO_DOMAIN:
-            return False
-
-        # DEV profile doesn't support OIDC authentication
-        if self.security_profile == SecurityProfile.DEV and self.auth_mode == AuthMode.ALB_OIDC:
-            return False
-
-        # ALB-OIDC requires JENKINS_SERVICE topology (needs ALB for listener rules)
-        if self.auth_mode == AuthMode.ALB_OIDC and self.topology != Topology.JENKINS_SERVICE:
+        # OIDC authentication requires SSL (but NOT necessarily a domain - Private CA can be used)
+        if is_oidc_mode and self.ssl_config == SSLConfig.SSL_DISABLED:
             return False
 
         return True
@@ -144,6 +145,11 @@ class ResourceType(Enum):
     ELASTIC_IP = "AWS::EC2::EIP"
     VPC_ENDPOINT = "AWS::EC2::VPCEndpoint"
 
+    # Private CA (for OIDC without custom domain)
+    PRIVATE_CA = "AWS::ACMPCA::CertificateAuthority"
+    PRIVATE_CA_CERTIFICATE = "AWS::ACMPCA::Certificate"
+    PRIVATE_CERTIFICATE = "AWS::CertificateManager::Certificate"  # Private cert from PCA
+
 class TruthTableGenerator:
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
@@ -185,8 +191,8 @@ class TruthTableGenerator:
             
             # DomainFactory
             ResourceType.ROUTE53_HOSTED_ZONE: ["DomainFactory.java"],
-            ResourceType.ROUTE53_RECORDS: ["JenkinsServiceTopologyConfiguration.java", "JenkinsSingleNodeTopologyConfiguration.java"],
-            ResourceType.ACM_CERTIFICATE: ["FargateRuntimeConfiguration.java", "Ec2RuntimeConfiguration.java"],
+            ResourceType.ROUTE53_RECORDS: ["ApplicationServiceTopologyConfiguration.java", "DomainFactory.java"],
+            ResourceType.ACM_CERTIFICATE: ["CertificateFactory.java", "DomainFactory.java"],
             
             # IAM Factories
             ResourceType.IAM_ROLES: ["IamStandardConfiguration.java", "FargateFactory.java", "Ec2Factory.java"],
@@ -212,6 +218,11 @@ class TruthTableGenerator:
             ResourceType.NAT_GATEWAY: ["VpcFactory.java"],
             ResourceType.ELASTIC_IP: ["VpcFactory.java"],
             ResourceType.VPC_ENDPOINT: ["VpcFactory.java"],
+
+            # Private CA (for OIDC without custom domain)
+            ResourceType.PRIVATE_CA: ["FargateRuntimeConfiguration.java", "Ec2RuntimeConfiguration.java"],
+            ResourceType.PRIVATE_CA_CERTIFICATE: ["FargateRuntimeConfiguration.java", "Ec2RuntimeConfiguration.java"],
+            ResourceType.PRIVATE_CERTIFICATE: ["FargateRuntimeConfiguration.java", "Ec2RuntimeConfiguration.java"],
         }
     
     def generate_expected_resources(self, config: TestConfiguration) -> Set[ResourceType]:
@@ -241,15 +252,14 @@ class TruthTableGenerator:
             ])
         else:  # EC2
             resources.add(ResourceType.EC2_INSTANCES)
-            if config.topology == Topology.JENKINS_SERVICE:
-                resources.add(ResourceType.AUTO_SCALING_GROUP)
-        
-        # Topology-specific resources
-        if config.topology == Topology.JENKINS_SERVICE:
-            resources.update([
-                ResourceType.APPLICATION_LOAD_BALANCER,
-                ResourceType.TARGET_GROUPS,
-            ])
+            # EC2 with APPLICATION_SERVICE topology uses Auto Scaling
+            resources.add(ResourceType.AUTO_SCALING_GROUP)
+
+        # APPLICATION_SERVICE topology uses ALB
+        resources.update([
+            ResourceType.APPLICATION_LOAD_BALANCER,
+            ResourceType.TARGET_GROUPS,
+        ])
         
         # EFS for Jenkins (both runtimes)
         resources.update([
@@ -264,19 +274,30 @@ class TruthTableGenerator:
                 ResourceType.ROUTE53_HOSTED_ZONE,
                 ResourceType.ROUTE53_RECORDS,
             ])
-            
-            if config.topology == Topology.JENKINS_SERVICE:
-                if config.ssl_config == SSLConfig.SSL_ENABLED:
-                    resources.update([
-                        ResourceType.ACM_CERTIFICATE,
-                        ResourceType.HTTPS_LISTENER,
-                        ResourceType.HTTP_LISTENER,  # For redirect
-                    ])
-                else:
-                    resources.add(ResourceType.HTTP_LISTENER)
-        elif config.topology == Topology.JENKINS_SERVICE:
-            # No domain but still need HTTP listener for ALB
-            resources.add(ResourceType.HTTP_LISTENER)
+
+            # APPLICATION_SERVICE with domain can have SSL
+            if config.ssl_config == SSLConfig.SSL_ENABLED:
+                resources.update([
+                    ResourceType.ACM_CERTIFICATE,
+                    ResourceType.HTTPS_LISTENER,
+                    ResourceType.HTTP_LISTENER,  # For redirect
+                ])
+            else:
+                resources.add(ResourceType.HTTP_LISTENER)
+        else:
+            # No domain - check if OIDC mode (uses Private CA for SSL)
+            is_oidc_mode = config.auth_mode in (AuthMode.ALB_OIDC, AuthMode.APPLICATION_OIDC)
+            if is_oidc_mode and config.ssl_config == SSLConfig.SSL_ENABLED:
+                # OIDC without domain uses AWS Private CA
+                resources.update([
+                    ResourceType.PRIVATE_CA,
+                    ResourceType.PRIVATE_CA_CERTIFICATE,
+                    ResourceType.PRIVATE_CERTIFICATE,
+                    ResourceType.HTTPS_LISTENER,
+                    ResourceType.HTTP_LISTENER,  # For redirect
+                ])
+            else:
+                resources.add(ResourceType.HTTP_LISTENER)
         
         # Security profile-specific resources
         if config.security_profile == SecurityProfile.STAGING:
@@ -293,7 +314,7 @@ class TruthTableGenerator:
             ])
 
         # Authentication-specific resources
-        if config.auth_mode == AuthMode.ALB_OIDC:
+        if config.auth_mode in (AuthMode.ALB_OIDC, AuthMode.APPLICATION_OIDC):
             resources.update([
                 ResourceType.COGNITO_USER_POOL,
                 ResourceType.COGNITO_USER_POOL_CLIENT,
@@ -421,8 +442,8 @@ class TruthTableGenerator:
             "smoke_test": {
                 "description": "Minimal test set covering basic functionality",
                 "configurations": [
-                    "FARGATE_JENKINS_SERVICE_DEV_with-domain_ssl-enabled_with-subdomain",
-                    "EC2_JENKINS_SINGLE_NODE_DEV_no-domain_ssl-disabled_no-subdomain",
+                    "FARGATE_APPLICATION_SERVICE_DEV_with-domain_ssl-enabled_with-subdomain",
+                    "EC2_APPLICATION_SERVICE_DEV_no-domain_ssl-disabled_no-subdomain",
                 ]
             },
             "ssl_regression": {

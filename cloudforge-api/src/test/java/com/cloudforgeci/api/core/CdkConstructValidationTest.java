@@ -5,9 +5,9 @@ import com.cloudforgeci.api.compute.FargateFactory;
 import com.cloudforgeci.api.network.VpcFactory;
 import com.cloudforgeci.api.ingress.AlbFactory;
 import com.cloudforgeci.api.storage.EfsFactory;
-import com.cloudforgeci.api.interfaces.RuntimeType;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
-import com.cloudforgeci.api.interfaces.TopologyType;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,7 +36,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When
         var vpcFactory = new VpcFactory(stack, "VpcFactory");
@@ -64,7 +64,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When
         var vpcFactory = new VpcFactory(stack, "VpcFactory");
@@ -101,7 +101,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When
         var vpcFactory = new VpcFactory(stack, "VpcFactory");
@@ -128,7 +128,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -146,7 +146,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -164,7 +164,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -182,7 +182,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -209,7 +209,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -227,7 +227,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -245,7 +245,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -263,7 +263,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -281,7 +281,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -299,7 +299,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext with FARGATE runtime (test creates FargateFactory)
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforgeci.api.interfaces.IAMProfile.MINIMAL, cfc);
+        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -344,9 +344,9 @@ class CdkConstructValidationTest {
      */
     private static Stream<Arguments> workingEc2NodeCombinations() {
         return Stream.of(
-            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.DEV),
-            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.STAGING),
-            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SINGLE_NODE, SecurityProfile.PRODUCTION)
+            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.DEV),
+            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.STAGING),
+            Arguments.of(RuntimeType.EC2, TopologyType.JENKINS_SERVICE, SecurityProfile.PRODUCTION)
         );
     }
 }

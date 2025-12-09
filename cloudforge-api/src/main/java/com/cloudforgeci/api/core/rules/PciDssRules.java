@@ -1,8 +1,11 @@
 package com.cloudforgeci.api.core.rules;
 
+
+import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforgeci.api.interfaces.ComplianceMode;
-import com.cloudforgeci.api.interfaces.SecurityProfile;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
@@ -26,16 +29,21 @@ import java.util.logging.Logger;
  * - Requirement 10: Track and monitor all access to network resources
  * - Requirement 11: Regularly test security systems and processes
  */
-public final class PciDssRules {
+@ComplianceFramework(
+    value = "PCI-DSS",
+    priority = 20,
+    displayName = "PCI-DSS",
+    description = "Validates PCI-DSS requirements for cardholder data protection"
+)
+public class PciDssRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(PciDssRules.class.getName());
 
-    private PciDssRules() {}
 
     /**
      * Check if log retention period meets PCI-DSS requirement (at least 1 year).
      * PCI-DSS Requirement 10.7: Retain audit trail history for at least one year.
      */
-    private static boolean isRetentionSufficient(RetentionDays retention) {
+    private boolean isRetentionSufficient(RetentionDays retention) {
         // PCI-DSS requires at least 1 year (365 days)
         // Acceptable values: ONE_YEAR, TWO_YEARS, FIVE_YEARS, etc.
         return retention == RetentionDays.ONE_YEAR ||
@@ -51,10 +59,14 @@ public final class PciDssRules {
     }
 
     /**
-     * Install PCI-DSS validation rules for production environments.
+     * Install PCI-DSS compliance validation rules.
+     * PCI-DSS applies to environments processing cardholder data.
      * Only enforced when security profile is PRODUCTION.
+     *
+     * @since 3.0.0
      */
-    public static void install(SystemContext ctx) {
+    @Override
+    public void install(SystemContext ctx) {
         if (ctx.security != SecurityProfile.PRODUCTION) {
             LOG.info("PCI-DSS validation rules only enforced for PRODUCTION security profile");
             return;
@@ -128,7 +140,7 @@ public final class PciDssRules {
      * PCI-DSS Requirement 1: Install and maintain a firewall configuration.
      * Validates network segmentation and firewall rules.
      */
-    private static List<ComplianceRule> validateNetworkSecurity(SystemContext ctx) {
+    private List<ComplianceRule> validateNetworkSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Requirement 1.2.1: Network segmentation
@@ -194,7 +206,7 @@ public final class PciDssRules {
      * PCI-DSS Requirement 3 & 4: Protect stored and transmitted cardholder data.
      * Validates encryption settings.
      */
-    private static List<ComplianceRule> validateEncryption(SystemContext ctx) {
+    private List<ComplianceRule> validateEncryption(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -280,7 +292,7 @@ public final class PciDssRules {
      * PCI-DSS Requirement 6.6: Protect public-facing web applications.
      * Either WAF or application-layer security review required.
      */
-    private static List<ComplianceRule> validateWebApplicationSecurity(SystemContext ctx) {
+    private List<ComplianceRule> validateWebApplicationSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -312,7 +324,7 @@ public final class PciDssRules {
      * PCI-DSS Requirement 7 & 8: Restrict access and authenticate users.
      * Validates access control configuration.
      */
-    private static List<ComplianceRule> validateAccessControl(SystemContext ctx) {
+    private List<ComplianceRule> validateAccessControl(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Requirement 7.1: Limit access by business need to know
@@ -339,7 +351,7 @@ public final class PciDssRules {
                 "PCI-DSS-Req-8.2-Auth",
                 "Authentication must be enabled for production environments",
                 "PCI-DSS Req 8.2: Authentication must be enabled for production environments. " +
-                "Configure authMode = 'alb-oidc' or 'jenkins-oidc' with MFA-enabled identity provider. " +
+                "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' with MFA-enabled identity provider. " +
                 "Users must use multi-factor authentication to access cardholder data."
             ));
         } else {
@@ -350,7 +362,7 @@ public final class PciDssRules {
         }
 
         // Requirement 8.3: Strong authentication with MFA
-        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode)) {
+        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
             // Check if using Cognito with MFA (compliant) or SSO (requires ssoInstanceArn)
             boolean usingCognitoWithMfa = Boolean.TRUE.equals(ctx.cfc.cognitoAutoProvision())
                                        && Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled());
@@ -379,7 +391,7 @@ public final class PciDssRules {
      * PCI-DSS Requirement 10: Track and monitor all access.
      * Validates audit logging configuration.
      */
-    private static List<ComplianceRule> validateAuditLogging(SystemContext ctx) {
+    private List<ComplianceRule> validateAuditLogging(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -453,7 +465,7 @@ public final class PciDssRules {
      * PCI-DSS Requirement 11: Regularly test security systems.
      * Validates security monitoring and intrusion detection.
      */
-    private static List<ComplianceRule> validateSecurityMonitoring(SystemContext ctx) {
+    private List<ComplianceRule> validateSecurityMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
@@ -515,7 +527,7 @@ public final class PciDssRules {
      * For PRODUCTION security profile, these operational controls are assumed to be
      * implemented as part of the organization's security program and are auto-approved.
      */
-    private static List<ComplianceRule> validateVendorDefaults(SystemContext ctx) {
+    private List<ComplianceRule> validateVendorDefaults(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // For PRODUCTION profile, assume operational controls are in place
@@ -641,9 +653,9 @@ public final class PciDssRules {
     /**
      * Generate PCI-DSS compliance report showing which requirements are met.
      */
-    public static String generateComplianceReport(SystemContext ctx) {
+    public String generateComplianceReport(SystemContext ctx) {
         StringBuilder report = new StringBuilder();
-        report.append("\n=== PCI-DSS Compliance Report == = \n\n");
+        report.append("\n=== PCI-DSS Compliance Report ===\n\n");
 
         var config = ctx.securityProfileConfig.get().orElseThrow(
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
