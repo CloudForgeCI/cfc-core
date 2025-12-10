@@ -3,12 +3,30 @@
 
   <groupId>com.cloudforgeci</groupId>
   <artifactId>cfc-core</artifactId>
-  <version>3.0.0-SNAPSHOT</version>
+  <version>3.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>CloudForge Core BOM</name>
   <description>Bill of Materials (BOM) for CloudForge infrastructure deployment libraries</description>
   <url>https://github.com/CloudForgeCI/cfc-core</url>
+
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>cloudforgeci</id>
+      <name>CloudForge CI Team</name>
+      <email>support@cloudforge.com</email>
+      <organization>CloudForge CI</organization>
+      <organizationUrl>https://www.cloudforgeci.com</organizationUrl>
+    </developer>
+  </developers>
 
   <properties>
     <!-- Build Properties -->
@@ -217,7 +235,7 @@
             <version>1.7.3</version>
             <configuration>
               <updatePomFile>true</updatePomFile> <!-- publish the flattened POM -->
-              <flattenMode>oss</flattenMode>      <!-- or resolveCiFriendliesOnly if you prefer -->
+              <flattenMode>bom</flattenMode>      <!-- or resolveCiFriendliesOnly if you prefer -->
               <flattenedPomFilename>${project.build.directory}/${project.artifactId}-${project.version}.pom</flattenedPomFilename>
             </configuration>
             <executions>
