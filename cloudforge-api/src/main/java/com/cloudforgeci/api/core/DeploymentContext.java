@@ -385,7 +385,7 @@ public final class DeploymentContext {
         this.auditManagerEnabled = bool("auditManagerEnabled", false);
         this.complianceFrameworks = str("complianceFrameworks", "");
         this.complianceMode = str("complianceMode", null);  // null = use default based on securityProfile
-        this.logRetentionDays = intval("logRetentionDays", 7);  // Default: 7 days (overridden by SecurityProfileConfiguration if needed)
+        this.logRetentionDays = intval("logRetentionDays", null);  // Default: null (overridden by SecurityProfileConfiguration if needed)
         this.instanceType = str("instanceType", "t3.micro");
         this.provisionDatabase = boolOrNull("provisionDatabase");
 
