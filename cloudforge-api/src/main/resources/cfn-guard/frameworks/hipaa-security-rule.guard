@@ -1,0 +1,142 @@
+# ============================================================================
+# HIPAA Security Rule - CloudFormation Template Validation
+# ============================================================================
+# Framework: HIPAA Security Rule (45 CFR §164.302-318)
+# Last Updated: 2025-12-11
+# Compatible with cfn-guard 3.x
+# ============================================================================
+
+let s3_buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let rds_instances = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
+let rds_clusters = Resources.*[ Type == 'AWS::RDS::DBCluster' ]
+let ebs_volumes = Resources.*[ Type == 'AWS::EC2::Volume' ]
+let efs_filesystems = Resources.*[ Type == 'AWS::EFS::FileSystem' ]
+let dynamodb_tables = Resources.*[ Type == 'AWS::DynamoDB::Table' ]
+let alb_listeners = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' ]
+let alb_https_listeners = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' Properties.Port == 443 ]
+let cloudtrail_trails = Resources.*[ Type == 'AWS::CloudTrail::Trail' ]
+let kms_keys = Resources.*[ Type == 'AWS::KMS::Key' ]
+let cognito_pools = Resources.*[ Type == 'AWS::Cognito::UserPool' ]
+let log_groups = Resources.*[ Type == 'AWS::Logs::LogGroup' ]
+let flow_logs = Resources.*[ Type == 'AWS::EC2::FlowLog' ]
+
+# ============================================================================
+# §164.312(a)(2)(iv) - ENCRYPTION AT REST
+# ============================================================================
+
+# S3 Bucket Encryption
+rule hipaa_s3_encryption when %s3_buckets !empty {
+    %s3_buckets.Properties.BucketEncryption exists
+}
+
+# RDS Encryption
+rule hipaa_rds_encryption when %rds_instances !empty {
+    %rds_instances.Properties.StorageEncrypted == true
+}
+
+# RDS Cluster Encryption
+rule hipaa_rds_cluster_encryption when %rds_clusters !empty {
+    %rds_clusters.Properties.StorageEncrypted == true
+}
+
+# EBS Volume Encryption
+rule hipaa_ebs_encryption when %ebs_volumes !empty {
+    %ebs_volumes.Properties.Encrypted == true
+}
+
+# EFS Encryption
+rule hipaa_efs_encryption when %efs_filesystems !empty {
+    %efs_filesystems.Properties.Encrypted == true
+}
+
+# DynamoDB Encryption
+rule hipaa_dynamodb_encryption when %dynamodb_tables !empty {
+    %dynamodb_tables.Properties.SSESpecification exists
+    %dynamodb_tables.Properties.SSESpecification.SSEEnabled == true
+}
+
+# KMS Key Rotation
+rule hipaa_kms_key_rotation when %kms_keys !empty {
+    %kms_keys.Properties.EnableKeyRotation == true
+}
+
+# ============================================================================
+# §164.312(e)(1) - TRANSMISSION SECURITY
+# ============================================================================
+
+# ALB HTTPS Enforcement - HTTPS listeners on port 443 must use HTTPS/TLS protocol
+# HTTP listeners on port 80 are allowed for redirect purposes
+rule hipaa_alb_https when %alb_https_listeners !empty {
+    %alb_https_listeners.Properties.Protocol in ['HTTPS', 'TLS']
+}
+
+# ============================================================================
+# §164.312(a)(1) - ACCESS CONTROL
+# ============================================================================
+
+# RDS No Public Access
+rule hipaa_rds_no_public_access when %rds_instances !empty {
+    %rds_instances.Properties.PubliclyAccessible == false or
+    %rds_instances.Properties.PubliclyAccessible not exists
+}
+
+# S3 Block Public Access
+rule hipaa_s3_block_public_access when %s3_buckets !empty {
+    %s3_buckets.Properties.PublicAccessBlockConfiguration exists
+    %s3_buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+    %s3_buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+}
+
+# ============================================================================
+# §164.312(d) - AUTHENTICATION
+# ============================================================================
+
+# Cognito MFA for User Authentication
+rule hipaa_cognito_mfa when %cognito_pools !empty {
+    %cognito_pools.Properties.MfaConfiguration in ['ON', 'OPTIONAL']
+}
+
+# ============================================================================
+# §164.312(b) - AUDIT CONTROLS
+# ============================================================================
+
+# CloudTrail Enabled
+rule hipaa_cloudtrail_enabled when %cloudtrail_trails !empty {
+    %cloudtrail_trails.Properties.IsLogging == true
+}
+
+# VPC Flow Logs
+rule hipaa_vpc_flow_logs when %flow_logs !empty {
+    %flow_logs.Properties.TrafficType == 'ALL'
+}
+
+# ============================================================================
+# §164.316(b)(2)(i) - LOG RETENTION (6 Years)
+# ============================================================================
+
+# CloudWatch Logs Retention - HIPAA requires 6 year retention
+rule hipaa_cloudwatch_logs_retention when %log_groups !empty {
+    %log_groups.Properties.RetentionInDays exists
+    %log_groups.Properties.RetentionInDays >= 2190
+}
+
+# ============================================================================
+# BACKUP & RECOVERY
+# ============================================================================
+
+# S3 Versioning
+rule hipaa_s3_versioning when %s3_buckets !empty {
+    %s3_buckets.Properties.VersioningConfiguration exists
+    %s3_buckets.Properties.VersioningConfiguration.Status == 'Enabled'
+}
+
+# RDS Automated Backups
+rule hipaa_rds_automated_backups when %rds_instances !empty {
+    %rds_instances.Properties.BackupRetentionPeriod exists
+    %rds_instances.Properties.BackupRetentionPeriod >= 7
+}
+
+# RDS Multi-AZ for High Availability
+rule hipaa_rds_multi_az when %rds_instances !empty {
+    %rds_instances.Properties.MultiAZ == true
+}

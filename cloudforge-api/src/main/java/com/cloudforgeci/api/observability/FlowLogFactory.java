@@ -44,8 +44,9 @@ public class FlowLogFactory extends BaseFactory {
         // Create flow log log group with security profile-based settings
         // Note: logGroupName is intentionally omitted to allow CloudFormation to auto-generate unique names
         // This prevents naming conflicts when deploying multiple stacks with the same security profile
+        // Use getLogRetentionDays() which is compliance-aware (respects logRetentionDays override)
         LogGroup logGroup = LogGroup.Builder.create(this, "VpcFlowLogsGroup")
-                    .retention(config.getFlowLogRetentionDays())
+                    .retention(config.getLogRetentionDays())
                     .removalPolicy(config.getLogRemovalPolicy())
                     .build();
 
@@ -59,7 +60,7 @@ public class FlowLogFactory extends BaseFactory {
 
         LOG.info("Flow logs configured for " + security + " profile: " +
                 "traffic = " + config.getFlowLogTrafficType() +
-                ", retention = " + config.getFlowLogRetentionDays() +
+                ", retention = " + config.getLogRetentionDays() +
                 ", removal = " + config.getLogRemovalPolicy());
     }
 

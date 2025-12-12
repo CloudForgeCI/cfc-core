@@ -1,0 +1,145 @@
+# ============================================================================
+# PCI-DSS v3.2.1 - CloudFormation Template Validation
+# ============================================================================
+# Framework: PCI-DSS v3.2.1
+# Last Updated: 2025-12-11
+# Compatible with cfn-guard 3.x
+# ============================================================================
+
+let s3_buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let rds_instances = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
+let rds_clusters = Resources.*[ Type == 'AWS::RDS::DBCluster' ]
+let ebs_volumes = Resources.*[ Type == 'AWS::EC2::Volume' ]
+let efs_filesystems = Resources.*[ Type == 'AWS::EFS::FileSystem' ]
+let dynamodb_tables = Resources.*[ Type == 'AWS::DynamoDB::Table' ]
+let alb_listeners = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' ]
+let alb_https_listeners = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' Properties.Port == 443 ]
+let alb_loadbalancers = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::LoadBalancer' ]
+let cloudtrail_trails = Resources.*[ Type == 'AWS::CloudTrail::Trail' ]
+let kms_keys = Resources.*[ Type == 'AWS::KMS::Key' ]
+let cognito_pools = Resources.*[ Type == 'AWS::Cognito::UserPool' ]
+let log_groups = Resources.*[ Type == 'AWS::Logs::LogGroup' ]
+let security_groups = Resources.*[ Type == 'AWS::EC2::SecurityGroup' ]
+let iam_policies = Resources.*[ Type == 'AWS::IAM::Policy' ]
+let iam_managed_policies = Resources.*[ Type == 'AWS::IAM::ManagedPolicy' ]
+let flow_logs = Resources.*[ Type == 'AWS::EC2::FlowLog' ]
+
+# ============================================================================
+# Req 3.4 - RENDER PAN UNREADABLE (Encryption at Rest)
+# ============================================================================
+
+# S3 Bucket Encryption
+rule pci_s3_encryption when %s3_buckets !empty {
+    %s3_buckets.Properties.BucketEncryption exists
+}
+
+# RDS Encryption
+rule pci_rds_encryption when %rds_instances !empty {
+    %rds_instances.Properties.StorageEncrypted == true
+}
+
+# RDS Cluster Encryption
+rule pci_rds_cluster_encryption when %rds_clusters !empty {
+    %rds_clusters.Properties.StorageEncrypted == true
+}
+
+# EBS Volume Encryption
+rule pci_ebs_encryption when %ebs_volumes !empty {
+    %ebs_volumes.Properties.Encrypted == true
+}
+
+# EFS Encryption
+rule pci_efs_encryption when %efs_filesystems !empty {
+    %efs_filesystems.Properties.Encrypted == true
+}
+
+# DynamoDB Encryption
+rule pci_dynamodb_encryption when %dynamodb_tables !empty {
+    %dynamodb_tables.Properties.SSESpecification exists
+    %dynamodb_tables.Properties.SSESpecification.SSEEnabled == true
+}
+
+# KMS Key Rotation
+rule pci_kms_key_rotation when %kms_keys !empty {
+    %kms_keys.Properties.EnableKeyRotation == true
+}
+
+# ============================================================================
+# Req 4.1 - ENCRYPT TRANSMISSION OF CARDHOLDER DATA
+# ============================================================================
+
+# ALB HTTPS Listeners - HTTPS listeners on port 443 must use HTTPS/TLS protocol
+# HTTP listeners on port 80 are allowed for redirect purposes
+rule pci_alb_https when %alb_https_listeners !empty {
+    %alb_https_listeners.Properties.Protocol in ['HTTPS', 'TLS']
+}
+
+# ============================================================================
+# Req 1.2.1 & 1.3 - NETWORK SEGMENTATION
+# ============================================================================
+
+# RDS No Public Access
+rule pci_rds_no_public_access when %rds_instances !empty {
+    %rds_instances.Properties.PubliclyAccessible == false or
+    %rds_instances.Properties.PubliclyAccessible not exists
+}
+
+# ============================================================================
+# Req 7.1 & 7.2 - ACCESS CONTROL
+# ============================================================================
+
+# S3 Block Public Access
+rule pci_s3_block_public_access when %s3_buckets !empty {
+    %s3_buckets.Properties.PublicAccessBlockConfiguration exists
+    %s3_buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+    %s3_buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+}
+
+# ============================================================================
+# Req 8.2 & 8.3 - AUTHENTICATION
+# ============================================================================
+
+# Cognito User Pool MFA
+rule pci_cognito_mfa when %cognito_pools !empty {
+    %cognito_pools.Properties.MfaConfiguration in ['ON', 'OPTIONAL']
+}
+
+# ============================================================================
+# Req 10.1, 10.2, 10.3 - AUDIT LOGGING
+# ============================================================================
+
+# CloudTrail Enabled
+rule pci_cloudtrail_enabled when %cloudtrail_trails !empty {
+    %cloudtrail_trails.Properties.IsLogging == true
+}
+
+# VPC Flow Logs
+rule pci_vpc_flow_logs when %flow_logs !empty {
+    %flow_logs.Properties.TrafficType == 'ALL'
+}
+
+# ============================================================================
+# Req 10.7 - LOG RETENTION (At Least One Year)
+# ============================================================================
+
+# CloudWatch Logs Retention
+rule pci_cloudwatch_logs_retention when %log_groups !empty {
+    %log_groups.Properties.RetentionInDays exists
+    %log_groups.Properties.RetentionInDays >= 365
+}
+
+# ============================================================================
+# Req 9.5.1 & Req 10.5 - BACKUP & RECOVERY
+# ============================================================================
+
+# S3 Versioning for Backup
+rule pci_s3_versioning when %s3_buckets !empty {
+    %s3_buckets.Properties.VersioningConfiguration exists
+    %s3_buckets.Properties.VersioningConfiguration.Status == 'Enabled'
+}
+
+# RDS Automated Backups
+rule pci_rds_automated_backups when %rds_instances !empty {
+    %rds_instances.Properties.BackupRetentionPeriod exists
+    %rds_instances.Properties.BackupRetentionPeriod >= 7
+}

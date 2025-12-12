@@ -130,7 +130,7 @@ import java.util.Map;
  * <ul>
  *   <li>enableMonitoring: CloudWatch monitoring (default: true)</li>
  *   <li>enableEncryption: Encryption at rest (default: true)</li>
- *   <li>logRetentionDays: CloudWatch log retention (default: 7)</li>
+ *   <li>logRetentionDays: CloudWatch log retention (default: security profile default)</li>
  *   <li>awsConfigEnabled: AWS Config compliance (default: false)</li>
  *   <li>complianceMode: "enforce" | "advisory" (auto: enforce for PRODUCTION, advisory for DEV/STAGING)</li>
  *   <li>complianceFrameworks: "PCI-DSS,HIPAA,SOC2,GDPR" (comma-separated)</li>
@@ -385,7 +385,7 @@ public final class DeploymentContext {
         this.auditManagerEnabled = bool("auditManagerEnabled", false);
         this.complianceFrameworks = str("complianceFrameworks", "");
         this.complianceMode = str("complianceMode", null);  // null = use default based on securityProfile
-        this.logRetentionDays = intval("logRetentionDays", 7);
+        this.logRetentionDays = intval("logRetentionDays", 7);  // Default: 7 days (overridden by SecurityProfileConfiguration if needed)
         this.instanceType = str("instanceType", "t3.micro");
         this.provisionDatabase = boolOrNull("provisionDatabase");
 
@@ -595,17 +595,8 @@ public final class DeploymentContext {
     private void validateOrThrow() {
         List<String> errs = new ArrayList<>();
 
-        if (enableSsl) {
-            if (fqdn == null || fqdn.isBlank()) {
-                if (domain == null || domain.isBlank()) {
-                    // OIDC modes can use Private CA with ALB DNS name (no custom domain required)
-                    boolean isOidcMode = "alb-oidc".equals(authMode) || "application-oidc".equals(authMode);
-                    if (!isOidcMode) {
-                        errs.add("enableSsl=true but neither 'fqdn' nor 'domain' provided.");
-                    }
-                }
-            }
-        }
+        // SSL can be enabled without a domain - AWS Private CA will be used for the ALB DNS name
+        // No validation needed here - both custom domain SSL and private certificate SSL are valid
 
         // OIDC modes require HTTPS (enableSsl=true)
         // When no custom domain is configured, AWS Private CA is used for the ALB DNS name

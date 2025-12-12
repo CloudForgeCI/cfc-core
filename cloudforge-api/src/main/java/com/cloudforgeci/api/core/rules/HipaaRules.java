@@ -425,6 +425,22 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
         );
 
+        // §164.312(e)(2)(i) - SSL/TLS must be enabled for encrypted ePHI transmission
+        if (!ctx.cfc.enableSsl()) {
+            rules.add(ComplianceRule.fail(
+                "HIPAA-164.312(e)(2)(i)-SSL",
+                "SSL/TLS must be enabled for encrypted transmission of ePHI (HIPAA §164.312(e)(2)(i))",
+                "ALBHttpsOnly",
+                "Set enableSsl=true for production HIPAA compliance."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "HIPAA-164.312(e)(2)(i)-SSL",
+                "SSL/TLS enabled for transmission security (HIPAA §164.312(e)(2)(i))",
+                "ALBHttpsOnly"
+            ));
+        }
+
         // §164.312(e)(2)(i) - Integrity Controls (Addressable - we enforce)
         if (ctx.cert.get().isEmpty()) {
             rules.add(ComplianceRule.fail(

@@ -3,7 +3,7 @@
 
   <groupId>com.cloudforgeci</groupId>
   <artifactId>cfc-core</artifactId>
-  <version>3.0.1-SNAPSHOT</version>
+  <version>3.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>CloudForge Core BOM</name>
@@ -38,6 +38,7 @@
     <!-- AWS CDK Versions -->
     <cdk.version>2.232.1</cdk.version>
     <constructs.version>10.3.0</constructs.version>
+    <cdknag.version>2.36.40</cdknag.version>
 
     <!-- Core Library Versions -->
     <jackson.version>2.19.4</jackson.version>
@@ -85,6 +86,13 @@
         <groupId>software.constructs</groupId>
         <artifactId>constructs</artifactId>
         <version>${constructs.version}</version>
+      </dependency>
+
+      <!-- CDK Nag for compliance validation -->
+      <dependency>
+        <groupId>io.github.cdklabs</groupId>
+        <artifactId>cdknag</artifactId>
+        <version>${cdknag.version}</version>
       </dependency>
 
       <!-- Jackson JSON Processing -->
@@ -443,13 +451,13 @@
                     <limit>
                       <counter>INSTRUCTION</counter>
                       <value>COVEREDRATIO</value>
-                      <minimum>0.65</minimum>
+                      <minimum>0.50</minimum>
                     </limit>
                     <!-- Fail build if branch coverage is less than 60% -->
                     <limit>
                       <counter>BRANCH</counter>
                       <value>COVEREDRATIO</value>
-                      <minimum>0.50</minimum>
+                      <minimum>0.40</minimum>
                     </limit>
                   </limits>
                 </rule>

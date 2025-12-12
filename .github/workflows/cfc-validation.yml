@@ -68,6 +68,20 @@ jobs:
           cdk --version
           echo "AWS CDK installed"
 
+      - name: Install Rust toolchain (for cfn-guard)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+
+      - name: Install cfn-guard
+        run: |
+          echo "Installing cfn-guard..."
+          cargo install cfn-guard
+          cfn-guard --version
+          echo "cfn-guard installed"
+
       - name: Configure AWS credentials (for CDK synth only)
         env:
           # Mock credentials for CDK synthesis only - not used for actual AWS operations
@@ -231,6 +245,67 @@ jobs:
 
           exit $EXIT_CODE
 
+      - name: Extract compliance configuration
+        id: compliance
+        run: |
+          cd cfc-testing
+          FRAMEWORKS=$(jq -r '.context.cfc.complianceFrameworks // ""' cdk.json)
+          MODE=$(jq -r '.context.cfc.complianceMode // "advisory"' cdk.json)
+
+          echo "frameworks=$FRAMEWORKS" >> $GITHUB_OUTPUT
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+
+          echo "Compliance Frameworks: $FRAMEWORKS"
+          echo "Compliance Mode: $MODE"
+
+      - name: cfn-guard Validation - HIPAA
+        if: contains(steps.compliance.outputs.frameworks, 'HIPAA')
+        continue-on-error: ${{ steps.compliance.outputs.mode != 'enforce' }}
+        run: |
+          cd cfc-testing
+          echo "::group::Validating HIPAA compliance"
+          cfn-guard validate \
+            --rules ../cloudforge-api/src/main/resources/cfn-guard/frameworks/hipaa-security-rule.guard \
+            --data cdk.out/*.template.json \
+            --show-summary fail \
+            --output-format single-line-summary
+          HIPAA_EXIT=$?
+          echo "hipaa_exit=$HIPAA_EXIT" >> $GITHUB_ENV
+          echo "::endgroup::"
+          exit $HIPAA_EXIT
+
+      - name: cfn-guard Validation - PCI-DSS
+        if: contains(steps.compliance.outputs.frameworks, 'PCI-DSS') || contains(steps.compliance.outputs.frameworks, 'PCI')
+        continue-on-error: ${{ steps.compliance.outputs.mode != 'enforce' }}
+        run: |
+          cd cfc-testing
+          echo "::group::Validating PCI-DSS compliance"
+          cfn-guard validate \
+            --rules ../cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v3.2.1.guard \
+            --data cdk.out/*.template.json \
+            --show-summary fail \
+            --output-format single-line-summary
+          PCIDSS_EXIT=$?
+          echo "pcidss_exit=$PCIDSS_EXIT" >> $GITHUB_ENV
+          echo "::endgroup::"
+          exit $PCIDSS_EXIT
+
+      - name: cfn-guard Validation - SOC2
+        if: contains(steps.compliance.outputs.frameworks, 'SOC2')
+        continue-on-error: ${{ steps.compliance.outputs.mode != 'enforce' }}
+        run: |
+          cd cfc-testing
+          echo "::group::Validating SOC2 compliance"
+          cfn-guard validate \
+            --rules ../cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard \
+            --data cdk.out/*.template.json \
+            --show-summary fail \
+            --output-format single-line-summary
+          SOC2_EXIT=$?
+          echo "soc2_exit=$SOC2_EXIT" >> $GITHUB_ENV
+          echo "::endgroup::"
+          exit $SOC2_EXIT
+
       - name: Generate testing strategy for PR
         if: github.event_name == 'pull_request' && steps.mode.outputs.mode != 'smoke'
         continue-on-error: true
@@ -313,6 +388,47 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Code Coverage Summary
+          # Compliance Validation Summary
+          echo "### Compliance Validation" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.compliance.outputs.frameworks }}" ]; then
+            echo "- **Frameworks:** \`${{ steps.compliance.outputs.frameworks }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Mode:** \`${{ steps.compliance.outputs.mode }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Multi-Layer Validation Status:**" >> $GITHUB_STEP_SUMMARY
+            echo "| Layer | Tool | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|-------|------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Layer 1: Construct-level | cdk-nag | ✅ Integrated |" >> $GITHUB_STEP_SUMMARY
+            echo "| Layer 2: Business logic | CloudForge FrameworkRules | ✅ Integrated |" >> $GITHUB_STEP_SUMMARY
+
+            # cfn-guard results
+            if [ -n "${HIPAA_EXIT:-}" ]; then
+              if [ "${HIPAA_EXIT}" == "0" ]; then
+                echo "| Layer 3: Template-level (HIPAA) | cfn-guard | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "| Layer 3: Template-level (HIPAA) | cfn-guard | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+            if [ -n "${PCIDSS_EXIT:-}" ]; then
+              if [ "${PCIDSS_EXIT}" == "0" ]; then
+                echo "| Layer 3: Template-level (PCI-DSS) | cfn-guard | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "| Layer 3: Template-level (PCI-DSS) | cfn-guard | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+            if [ -n "${SOC2_EXIT:-}" ]; then
+              if [ "${SOC2_EXIT}" == "0" ]; then
+                echo "| Layer 3: Template-level (SOC2) | cfn-guard | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "| Layer 3: Template-level (SOC2) | cfn-guard | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+
+            echo "| Layer 4: Runtime | AWS Config | Deployed at runtime |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- No compliance frameworks configured" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
           echo "### Code Coverage" >> $GITHUB_STEP_SUMMARY
           if [ -f ../cloudforge-api/target/site/jacoco/index.html ]; then
             API_COVERAGE=$(grep "Total" ../cloudforge-api/target/site/jacoco/index.html | grep -o '[0-9][0-9]*%' | head -1 | tr -d '%' || echo "N/A")

@@ -33,18 +33,14 @@ class DeploymentContextValidationRulesTest {
     class SslValidationRules {
 
         @Test
-        @DisplayName("enableSsl=true requires fqdn or domain")
-        void sslRequiresFqdnOrDomain() {
+        @DisplayName("enableSsl=true without domain should succeed (uses Private CA)")
+        void sslWithoutDomainSucceeds() throws Exception {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("enableSsl", true);
-            // No fqdn, no domain
+            // No fqdn, no domain - will use AWS Private CA for ALB DNS name
 
-            InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
-            Throwable cause = ex.getTargetException();
-            assertInstanceOf(IllegalArgumentException.class, cause);
-            assertTrue(cause.getMessage().contains("enableSsl=true"), "Error should mention enableSsl=true");
-            assertTrue(cause.getMessage().contains("fqdn") || cause.getMessage().contains("domain"),
-                    "Error should mention fqdn or domain requirement");
+            assertDoesNotThrow(() -> fromMap(config),
+                "Should succeed - AWS Private CA will be used for ALB DNS name");
         }
 
         @Test
@@ -79,27 +75,25 @@ class DeploymentContextValidationRulesTest {
         }
 
         @Test
-        @DisplayName("enableSsl=true with empty domain should fail")
-        void sslWithEmptyDomainFails() {
+        @DisplayName("enableSsl=true with empty domain should succeed (uses Private CA)")
+        void sslWithEmptyDomainSucceeds() throws Exception {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("enableSsl", true);
             config.put("domain", "");
 
-            InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
-            Throwable cause = ex.getTargetException();
-            assertInstanceOf(IllegalArgumentException.class, cause);
+            assertDoesNotThrow(() -> fromMap(config),
+                "Should succeed - empty domain is treated as no domain, AWS Private CA will be used");
         }
 
         @Test
-        @DisplayName("enableSsl=true with blank fqdn should fail")
-        void sslWithBlankFqdnFails() {
+        @DisplayName("enableSsl=true with blank fqdn should succeed (uses Private CA)")
+        void sslWithBlankFqdnSucceeds() throws Exception {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("enableSsl", true);
             config.put("fqdn", "   ");
 
-            InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
-            Throwable cause = ex.getTargetException();
-            assertInstanceOf(IllegalArgumentException.class, cause);
+            assertDoesNotThrow(() -> fromMap(config),
+                "Should succeed - blank fqdn is treated as no domain, AWS Private CA will be used");
         }
 
         @Test
@@ -236,20 +230,14 @@ class DeploymentContextValidationRulesTest {
     class CombinedValidationScenarios {
 
         @Test
-        @DisplayName("SSL without domain in non-OIDC mode should fail")
-        void sslWithoutDomainInNonOidcMode() {
+        @DisplayName("SSL without domain in non-OIDC mode should succeed (uses Private CA)")
+        void sslWithoutDomainInNonOidcModeSucceeds() throws Exception {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("enableSsl", true);  // No domain/fqdn
-            config.put("authMode", "none");  // Non-OIDC mode requires domain for SSL
+            config.put("authMode", "none");  // Non-OIDC mode can use Private CA for SSL
 
-            InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
-            Throwable cause = ex.getTargetException();
-            assertInstanceOf(IllegalArgumentException.class, cause);
-            String message = cause.getMessage();
-
-            // Should mention SSL domain requirement
-            assertTrue(message.contains("enableSsl") || message.contains("fqdn") || message.contains("domain"),
-                    "Should mention SSL domain requirement");
+            assertDoesNotThrow(() -> fromMap(config),
+                "Should succeed - AWS Private CA will be used for ALB DNS name");
         }
 
         @Test
@@ -348,16 +336,15 @@ class DeploymentContextValidationRulesTest {
         }
 
         @Test
-        @DisplayName("Both fqdn and domain blank with SSL should fail")
-        void bothFqdnAndDomainBlankFails() {
+        @DisplayName("Both fqdn and domain blank with SSL should succeed (uses Private CA)")
+        void bothFqdnAndDomainBlankSucceeds() throws Exception {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("enableSsl", true);
             config.put("fqdn", "  ");
             config.put("domain", "  ");
 
-            InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
-            Throwable cause = ex.getTargetException();
-            assertInstanceOf(IllegalArgumentException.class, cause);
+            assertDoesNotThrow(() -> fromMap(config),
+                "Should succeed - blank values treated as no domain, AWS Private CA will be used");
         }
 
         @Test
@@ -392,18 +379,13 @@ class DeploymentContextValidationRulesTest {
     class ValidationErrorMessageQuality {
 
         @Test
-        @DisplayName("SSL validation error should be clear and actionable")
-        void sslValidationErrorClear() {
+        @DisplayName("SSL without domain should succeed (no validation error)")
+        void sslWithoutDomainNoError() throws Exception {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("enableSsl", true);
 
-            InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(config));
-            Throwable cause = ex.getTargetException();
-
-            String message = cause.getMessage();
-            assertNotNull(message, "Error message should not be null");
-            assertTrue(message.contains("DeploymentContext validation failed"),
-                    "Should indicate it's a validation error");
+            assertDoesNotThrow(() -> fromMap(config),
+                "SSL without domain should succeed using AWS Private CA");
         }
 
         @Test

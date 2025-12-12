@@ -333,24 +333,97 @@ echo "" | tee -a "$REPORT_FILE"
 echo "Starting changeset validation tests..." | tee -a "$REPORT_FILE"
 echo "" | tee -a "$REPORT_FILE"
 
-# Test configurations - smaller subset for changeset validation (requires AWS)
-CONFIGS=(
-    # Format: runtime,security_profile,auth_mode,network_mode
-    "FARGATE,STAGING,alb-oidc,public-no-nat"
-    "FARGATE,PRODUCTION,alb-oidc,private-with-nat"
-    "EC2,STAGING,none,public-no-nat"
-)
+# Configuration for random subset selection
+RANDOM_SUBSET_COUNT="${RANDOM_SUBSET_COUNT:-5}"  # Number of random configs to test (default: 5)
+USE_CSV_CONFIGS="${USE_CSV_CONFIGS:-true}"        # Use CSV configs (default: true)
+CSV_FILE="${CSV_FILE:-$SCRIPT_DIR/../cloudforge-api/src/test/resources/compliance-test-matrix.csv}"
+
+# Try alternate location if first doesn't exist
+if [ ! -f "$CSV_FILE" ]; then
+    CSV_FILE="$BASE_DIR/../cloudforge-api/src/test/resources/compliance-test-matrix.csv"
+fi
+
+echo "Configuration:" | tee -a "$REPORT_FILE"
+echo "  - Random subset count: $RANDOM_SUBSET_COUNT" | tee -a "$REPORT_FILE"
+echo "  - Use CSV configs: $USE_CSV_CONFIGS" | tee -a "$REPORT_FILE"
+echo "" | tee -a "$REPORT_FILE"
+
+# Build configuration array
+declare -a CONFIGS
+
+if [[ "$USE_CSV_CONFIGS" == "true" ]] && [[ -f "$CSV_FILE" ]]; then
+    echo "📋 Reading configurations from CSV: $CSV_FILE" | tee -a "$REPORT_FILE"
+
+    # Read CSV and extract passing configurations (exclude FAIL_ prefixed and comments)
+    # CSV format: config_name,runtime,security_profile,domain_config,ssl_config,subdomain_config,auth_mode,network_mode,compliance_framework,...
+    mapfile -t ALL_CONFIGS < <(
+        grep -v "^#" "$CSV_FILE" | \
+        grep -v "^FAIL_" | \
+        grep -v "^config_name" | \
+        awk -F',' '{
+            # Only include PRODUCTION configs to test actual compliance
+            if ($3 == "PRODUCTION" && $4 == "with-domain" && $5 == "ssl-enabled") {
+                print $2 "," $3 "," $7 "," $8 "," $9
+            }
+        }' | sort -u
+    )
+
+    total_available=${#ALL_CONFIGS[@]}
+    echo "  - Total eligible configs: $total_available" | tee -a "$REPORT_FILE"
+
+    if [[ $total_available -eq 0 ]]; then
+        echo "  ⚠️  No eligible configs found in CSV, falling back to defaults" | tee -a "$REPORT_FILE"
+        USE_CSV_CONFIGS="false"
+    else
+        # Select random subset
+        if [[ $RANDOM_SUBSET_COUNT -ge $total_available ]]; then
+            echo "  - Using all $total_available configs (subset size >= total)" | tee -a "$REPORT_FILE"
+            CONFIGS=("${ALL_CONFIGS[@]}")
+        else
+            echo "  - Selecting $RANDOM_SUBSET_COUNT random configs from $total_available" | tee -a "$REPORT_FILE"
+
+            # Shuffle and select N items
+            mapfile -t CONFIGS < <(
+                printf '%s\n' "${ALL_CONFIGS[@]}" | shuf -n "$RANDOM_SUBSET_COUNT"
+            )
+        fi
+
+        echo "" | tee -a "$REPORT_FILE"
+        echo "Selected configurations:" | tee -a "$REPORT_FILE"
+        for config in "${CONFIGS[@]}"; do
+            echo "  - $config" | tee -a "$REPORT_FILE"
+        done
+        echo "" | tee -a "$REPORT_FILE"
+    fi
+fi
+
+# Fallback to default configs if CSV not available or disabled
+if [[ "$USE_CSV_CONFIGS" != "true" ]] || [[ ${#CONFIGS[@]} -eq 0 ]]; then
+    echo "📋 Using default test configurations" | tee -a "$REPORT_FILE"
+    CONFIGS=(
+        # Format: runtime,security_profile,auth_mode,network_mode,compliance_framework
+        "FARGATE,STAGING,alb-oidc,public-no-nat,SOC2"
+        "FARGATE,PRODUCTION,alb-oidc,private-with-nat,PCI-DSS"
+        "EC2,STAGING,none,public-no-nat,HIPAA"
+    )
+fi
 
 test_counter=1
 successful_tests=0
 failed_tests=0
+total_tests=${#CONFIGS[@]}
+
+echo "🧪 Running $total_tests changeset validation tests..." | tee -a "$REPORT_FILE"
+echo "" | tee -a "$REPORT_FILE"
 
 for config in "${CONFIGS[@]}"; do
-    IFS=',' read -r runtime security_profile auth_mode network_mode <<< "$config"
+    IFS=',' read -r runtime security_profile auth_mode network_mode compliance_framework <<< "$config"
 
     # Generate unique subdomain
     subdomain="changeset-$(date +%m%d)-${test_counter}"
     stack_name="changeset-${runtime,,}-${security_profile,,}-${test_counter}"
+
+    echo "[$test_counter/$total_tests] Testing: $runtime / $security_profile / $auth_mode / $network_mode / $compliance_framework" | tee -a "$REPORT_FILE"
 
     if run_changeset_deployment "$runtime" "$security_profile" "$subdomain" "$stack_name" "$auth_mode" "$network_mode"; then
         successful_tests=$((successful_tests + 1))

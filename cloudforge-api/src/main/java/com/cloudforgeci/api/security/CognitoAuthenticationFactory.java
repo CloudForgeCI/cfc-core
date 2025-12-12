@@ -113,6 +113,18 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @DeploymentContext("cognitoInitialAdminEmail")
     private String cognitoInitialAdminEmail;
 
+    // ========== Path-Based Authentication ==========
+    // These settings control which paths require authentication at the ALB level
+
+    @DeploymentContext("protectedPaths")
+    private java.util.List<String> protectedPaths;
+
+    @DeploymentContext("additionalProtectedPaths")
+    private java.util.List<String> additionalProtectedPaths;
+
+    @DeploymentContext("publicPaths")
+    private java.util.List<String> publicPaths;
+
     @DeploymentContext("cognitoInitialAdminPhone")
     private String cognitoInitialAdminPhone;
 
@@ -930,6 +942,15 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * Configure native ALB Cognito authentication.
      * This uses ALB's built-in Cognito support which eliminates the need for Secrets Manager.
      * Only activates if authMode is "alb-oidc" (Cognito User Pool authentication).
+     *
+     * <p>Path-based authentication allows protecting only specific paths while
+     * leaving other paths public. This is configured via:</p>
+     * <ul>
+     *   <li>ApplicationSpec.protectedPaths() - Application default protected paths</li>
+     *   <li>DeploymentContext.protectedPaths - Override/replace application defaults</li>
+     *   <li>DeploymentContext.additionalProtectedPaths - Add to application defaults</li>
+     *   <li>DeploymentContext.publicPaths - Explicitly exclude paths from protection</li>
+     * </ul>
      */
     private void configureAlbAuthentication() {
         // Only configure ALB authentication if authMode is "alb-oidc"
@@ -955,28 +976,22 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     var userPoolClient = ctx.cognitoUserPoolClient.get().orElseThrow();
                     var userPoolDomain = ctx.cognitoUserPoolDomain.get().orElseThrow();
 
-                    // Create native Cognito authentication action
-                    https.addAction("CognitoAuth", AddApplicationActionProps.builder()
-                        .priority(1)  // High priority to catch all requests before default action
-                        .conditions(List.of(
-                            ListenerCondition.pathPatterns(List.of("/*"))  // Match all paths
-                        ))
-                        .action(AuthenticateCognitoAction.Builder.create()
-                                .userPool(userPool)
-                                .userPoolClient(userPoolClient)
-                                .userPoolDomain(userPoolDomain)
-                                .scope("openid email profile")
-                                .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
-                                .next(ListenerAction.forward(List.of(targetGroup)))  // Forward to target group after authentication
-                                .build()
-                        )
-                        .build());
+                    // Calculate effective protected paths
+                    List<String> effectiveProtectedPaths = calculateEffectiveProtectedPaths();
+
+                    if (effectiveProtectedPaths.isEmpty()) {
+                        // No specific paths defined - protect everything (existing behavior)
+                        LOG.info("No specific protected paths defined - protecting all paths");
+                        configureFullAuthenticationRule(https, targetGroup, userPool, userPoolClient, userPoolDomain);
+                    } else {
+                        // Specific paths defined - create path-based authentication rules
+                        LOG.info("Path-based authentication enabled with " + effectiveProtectedPaths.size() + " protected path(s)");
+                        configurePathBasedAuthenticationRules(https, targetGroup, userPool, userPoolClient, userPoolDomain, effectiveProtectedPaths);
+                    }
 
                     LOG.info("✅ Native Cognito authentication configured successfully");
                     LOG.info("  User Pool ID: " + ctx.cognitoUserPoolId.get().orElse("N/A"));
                     LOG.info("  Target Group: " + targetGroup.getTargetGroupName());
-                    LOG.info("  Priority: 1 (authenticate then forward to target group)");
-                    LOG.info("  Authentication: All requests require Cognito User Pool authentication");
                     LOG.info("  Scopes: openid, email, profile");
                     LOG.info("  Benefits: No Secrets Manager required, simplified configuration");
                 } else {
@@ -985,6 +1000,148 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 }
             });
         });
+    }
+
+    /**
+     * Calculate the effective list of protected paths based on ApplicationSpec and DeploymentContext.
+     *
+     * <p>Priority:</p>
+     * <ol>
+     *   <li>If DeploymentContext.protectedPaths is set, it replaces ApplicationSpec defaults</li>
+     *   <li>Otherwise, use ApplicationSpec.protectedPaths()</li>
+     *   <li>Add any DeploymentContext.additionalProtectedPaths</li>
+     *   <li>Remove any DeploymentContext.publicPaths from the result</li>
+     * </ol>
+     *
+     * @return List of path patterns requiring authentication (empty = protect everything)
+     */
+    private List<String> calculateEffectiveProtectedPaths() {
+        java.util.Set<String> paths = new java.util.LinkedHashSet<>();
+
+        // Step 1: Start with base protected paths
+        if (protectedPaths != null && !protectedPaths.isEmpty()) {
+            // DeploymentContext overrides ApplicationSpec
+            paths.addAll(protectedPaths);
+            LOG.info("Using DeploymentContext.protectedPaths: " + protectedPaths);
+        } else if (applicationSpec != null && !applicationSpec.protectedPaths().isEmpty()) {
+            // Use ApplicationSpec defaults
+            paths.addAll(applicationSpec.protectedPaths());
+            LOG.info("Using ApplicationSpec.protectedPaths(): " + applicationSpec.protectedPaths());
+        }
+
+        // Step 2: Add additional protected paths from DeploymentContext
+        if (additionalProtectedPaths != null && !additionalProtectedPaths.isEmpty()) {
+            paths.addAll(additionalProtectedPaths);
+            LOG.info("Adding DeploymentContext.additionalProtectedPaths: " + additionalProtectedPaths);
+        }
+
+        // Step 3: Remove public paths from DeploymentContext
+        if (publicPaths != null && !publicPaths.isEmpty()) {
+            paths.removeAll(publicPaths);
+            LOG.info("Removing DeploymentContext.publicPaths: " + publicPaths);
+        }
+
+        // Step 4: Remove public paths from ApplicationSpec
+        if (applicationSpec != null && !applicationSpec.publicPaths().isEmpty()) {
+            paths.removeAll(applicationSpec.publicPaths());
+            LOG.info("Removing ApplicationSpec.publicPaths(): " + applicationSpec.publicPaths());
+        }
+
+        List<String> result = new java.util.ArrayList<>(paths);
+        LOG.info("Effective protected paths: " + (result.isEmpty() ? "[ALL PATHS]" : result));
+        return result;
+    }
+
+    /**
+     * Configure authentication rule that protects all paths (original behavior).
+     */
+    private void configureFullAuthenticationRule(
+            ApplicationListener https,
+            IApplicationTargetGroup targetGroup,
+            IUserPool userPool,
+            IUserPoolClient userPoolClient,
+            IUserPoolDomain userPoolDomain) {
+
+        // Create native Cognito authentication action for all paths
+        https.addAction("CognitoAuth", AddApplicationActionProps.builder()
+            .priority(1)  // High priority to catch all requests before default action
+            .conditions(List.of(
+                ListenerCondition.pathPatterns(List.of("/*"))  // Match all paths
+            ))
+            .action(AuthenticateCognitoAction.Builder.create()
+                    .userPool(userPool)
+                    .userPoolClient(userPoolClient)
+                    .userPoolDomain(userPoolDomain)
+                    .scope("openid email profile")
+                    .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
+                    .next(ListenerAction.forward(List.of(targetGroup)))
+                    .build()
+            )
+            .build());
+
+        LOG.info("  Priority: 1 (authenticate then forward to target group)");
+        LOG.info("  Authentication: All requests require Cognito User Pool authentication");
+    }
+
+    /**
+     * Configure path-based authentication rules.
+     *
+     * <p>Creates separate rules:</p>
+     * <ul>
+     *   <li>Priority 1-N: Protected paths require authentication</li>
+     *   <li>Priority N+1: Catch-all rule forwards without authentication</li>
+     * </ul>
+     */
+    private void configurePathBasedAuthenticationRules(
+            ApplicationListener https,
+            IApplicationTargetGroup targetGroup,
+            IUserPool userPool,
+            IUserPoolClient userPoolClient,
+            IUserPoolDomain userPoolDomain,
+            List<String> protectedPathPatterns) {
+
+        // ALB rules can have multiple path patterns per rule (up to 5 values per condition)
+        // Group paths into batches of 5 for efficiency
+        int batchSize = 5;
+        int priority = 1;
+
+        for (int i = 0; i < protectedPathPatterns.size(); i += batchSize) {
+            int endIndex = Math.min(i + batchSize, protectedPathPatterns.size());
+            List<String> batch = protectedPathPatterns.subList(i, endIndex);
+
+            String ruleName = "CognitoAuth" + (priority > 1 ? "-" + priority : "");
+
+            https.addAction(ruleName, AddApplicationActionProps.builder()
+                .priority(priority)
+                .conditions(List.of(
+                    ListenerCondition.pathPatterns(batch)
+                ))
+                .action(AuthenticateCognitoAction.Builder.create()
+                        .userPool(userPool)
+                        .userPoolClient(userPoolClient)
+                        .userPoolDomain(userPoolDomain)
+                        .scope("openid email profile")
+                        .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
+                        .next(ListenerAction.forward(List.of(targetGroup)))
+                        .build()
+                )
+                .build());
+
+            LOG.info("  Rule '" + ruleName + "' (priority " + priority + "): Authenticate for paths " + batch);
+            priority++;
+        }
+
+        // Add catch-all rule that forwards without authentication (lower priority)
+        https.addAction("PublicForward", AddApplicationActionProps.builder()
+            .priority(priority)
+            .conditions(List.of(
+                ListenerCondition.pathPatterns(List.of("/*"))
+            ))
+            .action(ListenerAction.forward(List.of(targetGroup)))
+            .build());
+
+        LOG.info("  Rule 'PublicForward' (priority " + priority + "): Forward without auth for all other paths");
+        LOG.info("  Authentication: Only protected paths require Cognito authentication");
     }
 
     /**

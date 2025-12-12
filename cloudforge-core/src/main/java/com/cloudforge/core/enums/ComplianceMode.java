@@ -79,7 +79,14 @@ public enum ComplianceMode {
      * Deployments proceed with compliance violations documented.
      * Use for development, testing, or phased compliance implementation.
      */
-    ADVISORY;
+    ADVISORY,
+
+    /**
+     * No compliance validation performed.
+     * cdk-nag and cfn-guard are completely disabled.
+     * Not recommended - use ADVISORY instead for development.
+     */
+    DISABLED;
 
     /**
      * Parse compliance mode from string (case-insensitive).

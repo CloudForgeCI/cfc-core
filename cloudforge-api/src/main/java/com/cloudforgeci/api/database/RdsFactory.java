@@ -335,8 +335,16 @@ public class RdsFactory {
                     .version(mapPostgresVersion(version))
                     .build()
             );
-            case "mysql" -> DatabaseInstanceEngine.MYSQL;
-            case "mariadb" -> DatabaseInstanceEngine.MARIADB;
+            case "mysql" -> DatabaseInstanceEngine.mysql(
+                MySqlInstanceEngineProps.builder()
+                    .version(mapMySqlVersion(version))
+                    .build()
+            );
+            case "mariadb" -> DatabaseInstanceEngine.mariaDb(
+                MariaDbInstanceEngineProps.builder()
+                    .version(mapMariaDbVersion(version))
+                    .build()
+            );
             default -> throw new IllegalArgumentException(
                 "Unsupported database engine: " + engineName +
                 ". Supported engines: postgres, mysql, mariadb");
@@ -355,6 +363,32 @@ public class RdsFactory {
             case "15" -> PostgresEngineVersion.VER_15;
             case "16" -> PostgresEngineVersion.VER_16;
             default -> PostgresEngineVersion.of(version, version);
+        };
+    }
+
+    /**
+     * Map version string to MySQL engine version.
+     */
+    private static MysqlEngineVersion mapMySqlVersion(String version) {
+        return switch (version) {
+            case "5.7" -> MysqlEngineVersion.VER_5_7;
+            case "8.0" -> MysqlEngineVersion.VER_8_0;
+            case "8.0.32" -> MysqlEngineVersion.VER_8_0_32;
+            case "8.0.33" -> MysqlEngineVersion.VER_8_0_33;
+            case "8.0.34" -> MysqlEngineVersion.VER_8_0_34;
+            case "8.0.35" -> MysqlEngineVersion.VER_8_0_35;
+            default -> MysqlEngineVersion.of(version, version);
+        };
+    }
+
+    /**
+     * Map version string to MariaDB engine version.
+     */
+    private static MariaDbEngineVersion mapMariaDbVersion(String version) {
+        return switch (version) {
+            case "10.6" -> MariaDbEngineVersion.VER_10_6;
+            case "10.11" -> MariaDbEngineVersion.VER_10_11;
+            default -> MariaDbEngineVersion.of(version, version);
         };
     }
 

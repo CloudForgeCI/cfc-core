@@ -1,0 +1,128 @@
+# ============================================================================
+# GDPR (General Data Protection Regulation) - Data Protection Rules
+# ============================================================================
+# Framework: GDPR (EU Regulation 2016/679)
+# Last Updated: 2025-12-11
+# Compatible with cfn-guard 3.x
+# ============================================================================
+
+let s3_buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let rds_instances = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
+let rds_clusters = Resources.*[ Type == 'AWS::RDS::DBCluster' ]
+let ebs_volumes = Resources.*[ Type == 'AWS::EC2::Volume' ]
+let efs_filesystems = Resources.*[ Type == 'AWS::EFS::FileSystem' ]
+let dynamodb_tables = Resources.*[ Type == 'AWS::DynamoDB::Table' ]
+let alb_listeners = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' ]
+let alb_https_listeners = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' Properties.Port == 443 ]
+let cloudtrail_trails = Resources.*[ Type == 'AWS::CloudTrail::Trail' ]
+let kms_keys = Resources.*[ Type == 'AWS::KMS::Key' ]
+let cognito_pools = Resources.*[ Type == 'AWS::Cognito::UserPool' ]
+let log_groups = Resources.*[ Type == 'AWS::Logs::LogGroup' ]
+let flow_logs = Resources.*[ Type == 'AWS::EC2::FlowLog' ]
+
+# ============================================================================
+# Article 32 - Security of Processing (Encryption at Rest)
+# ============================================================================
+
+# S3 Bucket Encryption
+rule gdpr_s3_encryption when %s3_buckets !empty {
+    %s3_buckets.Properties.BucketEncryption exists
+}
+
+# RDS Encryption
+rule gdpr_rds_encryption when %rds_instances !empty {
+    %rds_instances.Properties.StorageEncrypted == true
+}
+
+# RDS Cluster Encryption
+rule gdpr_rds_cluster_encryption when %rds_clusters !empty {
+    %rds_clusters.Properties.StorageEncrypted == true
+}
+
+# EBS Volume Encryption
+rule gdpr_ebs_encryption when %ebs_volumes !empty {
+    %ebs_volumes.Properties.Encrypted == true
+}
+
+# EFS Encryption
+rule gdpr_efs_encryption when %efs_filesystems !empty {
+    %efs_filesystems.Properties.Encrypted == true
+}
+
+# DynamoDB Encryption
+rule gdpr_dynamodb_encryption when %dynamodb_tables !empty {
+    %dynamodb_tables.Properties.SSESpecification exists
+    %dynamodb_tables.Properties.SSESpecification.SSEEnabled == true
+}
+
+# KMS Key Rotation
+rule gdpr_kms_key_rotation when %kms_keys !empty {
+    %kms_keys.Properties.EnableKeyRotation == true
+}
+
+# ============================================================================
+# Article 32 - Security of Processing (Encryption in Transit)
+# ============================================================================
+
+# ALB HTTPS Enforcement - HTTPS listeners on port 443 must use HTTPS/TLS protocol
+# HTTP listeners on port 80 are allowed for redirect purposes
+rule gdpr_alb_https when %alb_https_listeners !empty {
+    %alb_https_listeners.Properties.Protocol in ['HTTPS', 'TLS']
+}
+
+# ============================================================================
+# Article 25 - Data Protection by Design (Access Control)
+# ============================================================================
+
+# RDS No Public Access
+rule gdpr_rds_no_public_access when %rds_instances !empty {
+    %rds_instances.Properties.PubliclyAccessible == false or
+    %rds_instances.Properties.PubliclyAccessible not exists
+}
+
+# S3 Block Public Access
+rule gdpr_s3_block_public_access when %s3_buckets !empty {
+    %s3_buckets.Properties.PublicAccessBlockConfiguration exists
+    %s3_buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+    %s3_buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+}
+
+# ============================================================================
+# Article 30 - Records of Processing Activities (Audit Logging)
+# ============================================================================
+
+# CloudTrail Enabled
+rule gdpr_cloudtrail_enabled when %cloudtrail_trails !empty {
+    %cloudtrail_trails.Properties.IsLogging == true
+}
+
+# VPC Flow Logs
+rule gdpr_vpc_flow_logs when %flow_logs !empty {
+    %flow_logs.Properties.TrafficType == 'ALL'
+}
+
+# ============================================================================
+# Article 5(1)(e) - Storage Limitation (Log Retention)
+# ============================================================================
+
+# CloudWatch Logs Retention - GDPR compliant retention (1 year minimum)
+rule gdpr_cloudwatch_logs_retention when %log_groups !empty {
+    %log_groups.Properties.RetentionInDays exists
+    %log_groups.Properties.RetentionInDays >= 365
+}
+
+# ============================================================================
+# Article 32(1)(c) - Availability and Resilience
+# ============================================================================
+
+# S3 Versioning
+rule gdpr_s3_versioning when %s3_buckets !empty {
+    %s3_buckets.Properties.VersioningConfiguration exists
+    %s3_buckets.Properties.VersioningConfiguration.Status == 'Enabled'
+}
+
+# RDS Automated Backups
+rule gdpr_rds_automated_backups when %rds_instances !empty {
+    %rds_instances.Properties.BackupRetentionPeriod exists
+    %rds_instances.Properties.BackupRetentionPeriod >= 7
+}

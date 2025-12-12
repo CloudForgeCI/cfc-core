@@ -12,6 +12,12 @@ import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
 import com.cloudforge.core.interfaces.FrameworkRules;
 
+import io.github.cdklabs.cdknag.AwsSolutionsChecks;
+import io.github.cdklabs.cdknag.HIPAASecurityChecks;
+import io.github.cdklabs.cdknag.PCIDSS321Checks;
+import io.github.cdklabs.cdknag.NagPack;
+import software.amazon.awscdk.Aspects;
+
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -64,27 +70,33 @@ public final class SecurityRules {
       p.wire(ctx);
     });
 
-    // Install multi-framework compliance validation rules
-    // Only run compliance validation if auditManagerEnabled is true
-    if (!ctx.cfc.auditManagerEnabled()) {
-      LOG.info("Skipping compliance validation (auditManagerEnabled = false)");
-      return;
-    }
-
     // Get enabled compliance frameworks (comma-separated list)
     String frameworksConfig = ctx.cfc.complianceFrameworks();
     if (frameworksConfig == null || frameworksConfig.trim().isEmpty()) {
-      LOG.info("No compliance frameworks specified - skipping validation");
+      LOG.info("No compliance frameworks specified - skipping all compliance validation");
       return;
     }
-
-    LOG.info("Installing compliance validation for: " + frameworksConfig);
 
     // Parse enabled frameworks into a set for fast lookup
     Set<String> enabledFrameworks = Arrays.stream(frameworksConfig.split(","))
         .map(String::trim)
         .map(String::toUpperCase)
         .collect(java.util.stream.Collectors.toSet());
+
+    // AUTO-APPLY CDK-NAG (v3.1.0+)
+    // Apply cdk-nag validation packs BEFORE checking auditManagerEnabled
+    // cdk-nag construct-level validation is independent of AWS Audit Manager
+    applyCdkNagValidation(ctx, enabledFrameworks);
+
+    // Install multi-framework compliance validation rules
+    // Only run CloudForge FrameworkRules validation if auditManagerEnabled is true
+    if (!ctx.cfc.auditManagerEnabled()) {
+      LOG.info("Skipping CloudForge FrameworkRules validation (auditManagerEnabled = false)");
+      LOG.info("  Note: cdk-nag validation still applied for enabled frameworks");
+      return;
+    }
+
+    LOG.info("Installing CloudForge FrameworkRules validation for: " + frameworksConfig);
 
     // Discover all available compliance frameworks (v3.0.0 plugin architecture)
     List<FrameworkRules<SystemContext>> allFrameworks = FrameworkLoader.discover();
@@ -111,6 +123,84 @@ public final class SecurityRules {
       }
     }
 
-    LOG.info("Successfully installed " + installedCount + " compliance framework validators");
+    LOG.info("Successfully installed " + installedCount + " CloudForge FrameworkRules validators");
+  }
+
+  /**
+   * Auto-apply cdk-nag validation packs based on enabled compliance frameworks.
+   *
+   * <p>Maps framework names to appropriate cdk-nag rule packs:</p>
+   * <ul>
+   *   <li><strong>HIPAA:</strong> HIPAASecurityChecks</li>
+   *   <li><strong>PCI-DSS:</strong> PCIDSS321Checks</li>
+   *   <li><strong>SOC2:</strong> AwsSolutionsChecks</li>
+   *   <li><strong>Custom:</strong> AwsSolutionsChecks (fallback)</li>
+   * </ul>
+   *
+   * <p>The enforcement mode is determined by {@code complianceMode}:</p>
+   * <ul>
+   *   <li><strong>enforce:</strong> Blocks synthesis on violations</li>
+   *   <li><strong>advisory:</strong> Logs warnings only</li>
+   * </ul>
+   *
+   * @param ctx the system context containing deployment configuration
+   * @param enabledFrameworks set of enabled framework IDs (uppercase)
+   * @since 3.1.0
+   */
+  private static void applyCdkNagValidation(SystemContext ctx, Set<String> enabledFrameworks) {
+    if (enabledFrameworks.isEmpty()) {
+      LOG.info("No frameworks enabled - skipping cdk-nag validation");
+      return;
+    }
+
+    boolean enforce = "enforce".equalsIgnoreCase(ctx.cfc.complianceMode());
+    LOG.info("Applying cdk-nag validation (mode=" + (enforce ? "enforce" : "advisory") + ")");
+
+    int appliedCount = 0;
+    for (String framework : enabledFrameworks) {
+      NagPack pack = mapFrameworkToNagPack(framework, enforce);
+      if (pack != null) {
+        Aspects.of(ctx.getNode().getRoot()).add(pack);
+        appliedCount++;
+        LOG.info("  ✓ Applied cdk-nag pack for " + framework);
+      }
+    }
+
+    LOG.info("Applied " + appliedCount + " cdk-nag validation packs");
+  }
+
+  /**
+   * Maps a compliance framework to its corresponding cdk-nag rule pack.
+   *
+   * @param framework the framework ID (uppercase)
+   * @param enforce true to enforce violations, false to log only
+   * @return the corresponding NagPack, or null if no mapping exists
+   * @since 3.1.0
+   */
+  private static NagPack mapFrameworkToNagPack(String framework, boolean enforce) {
+    return switch (framework) {
+      case "HIPAA" -> HIPAASecurityChecks.Builder.create()
+          .logIgnores(!enforce)
+          .build();
+      case "PCI-DSS" -> PCIDSS321Checks.Builder.create()
+          .logIgnores(!enforce)
+          .build();
+      case "SOC2" -> AwsSolutionsChecks.Builder.create()
+          .logIgnores(!enforce)
+          .build();
+      // FEDRAMP: Handled by existing FedRampRules.java plugin only
+      // Not integrated with cdk-nag to avoid conflicts (future epic)
+      case "FEDRAMP", "FEDRAMPHIGH" -> {
+        LOG.info("  - Skipping cdk-nag for " + framework + " (uses existing FedRampRules.java)");
+        yield null;
+      }
+      // Custom frameworks: fallback to AWS Solutions best practices
+      default -> {
+        LOG.info("  - Applying AwsSolutionsChecks (fallback) for custom framework: " + framework);
+        yield AwsSolutionsChecks.Builder.create()
+            .logIgnores(!enforce)
+            .build();
+      }
+    };
   }
 }

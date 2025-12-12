@@ -1,11 +1,11 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.storage.ContainerFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
-import com.cloudforgeci.api.storage.ContainerFactory;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.Port;
@@ -180,11 +180,24 @@ public class FargateFactory extends BaseFactory {
   @Override
   public void create() {
     // Set scaling configuration in SystemContext slots so topology can wire auto-scaling
-    if (minInstanceCapacity != null) {
-      ctx.minInstanceCapacity.set(minInstanceCapacity);
+    // Priority: DeploymentContext > SecurityProfileConfiguration > default
+    Integer effectiveMinCapacity = minInstanceCapacity;
+    Integer effectiveMaxCapacity = maxInstanceCapacity;
+
+    if (effectiveMinCapacity == null && config != null) {
+      effectiveMinCapacity = config.getMinInstanceCount();
+      LOG.info("Min instance capacity inherited from security profile: " + effectiveMinCapacity);
     }
-    if (maxInstanceCapacity != null) {
-      ctx.maxInstanceCapacity.set(maxInstanceCapacity);
+    if (effectiveMaxCapacity == null && config != null) {
+      effectiveMaxCapacity = config.getMaxInstanceCount();
+      LOG.info("Max instance capacity inherited from security profile: " + effectiveMaxCapacity);
+    }
+
+    if (effectiveMinCapacity != null) {
+      ctx.minInstanceCapacity.set(effectiveMinCapacity);
+    }
+    if (effectiveMaxCapacity != null) {
+      ctx.maxInstanceCapacity.set(effectiveMaxCapacity);
     }
     if (cpuTargetUtilization != null) {
       ctx.cpuTargetUtilization.set(cpuTargetUtilization);
@@ -228,9 +241,8 @@ public class FargateFactory extends BaseFactory {
             .containerInsights(enableContainerInsights)
             .build();
 
-    // Apply removal policy - RETAIN for production, DESTROY for dev/staging
-    cluster.applyRemovalPolicy(
-            security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY);
+ 
+    cluster.applyRemovalPolicy(RemovalPolicy.DESTROY);
     SecurityGroup serviceSg = SecurityGroup.Builder.create(this, getNode().getId() + "SvcSg")
             .vpc(vpc)
             .allowAllOutbound(true).build();
@@ -244,7 +256,7 @@ public class FargateFactory extends BaseFactory {
             .cluster(cluster)
             .securityGroups(List.of(serviceSg))
             .taskDefinition(taskDef)
-            .desiredCount(minInstanceCapacity != null ? minInstanceCapacity : 1)
+            .desiredCount(effectiveMinCapacity != null ? effectiveMinCapacity : 1)
             .assignPublicIp(assignPublicIp)
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
             .enableExecuteCommand(enableEcsExec)  // Enable ECS Exec for shell access when bastionCidr is set
@@ -320,10 +332,8 @@ public class FargateFactory extends BaseFactory {
    * Fargate-specific configuration in one place.</p>
    */
   private void configureSecurityGroupRules(SecurityGroup serviceSg) {
-    // Allow NFS traffic from Fargate service to EFS
-    if (efsSg != null) {
-      efsSg.addIngressRule(serviceSg, Port.tcp(2049), "NFS_from_Fargate_service", false);
-    }
+    // NFS traffic (Fargate -> EFS) is handled by security profile configurations
+    // (DevSecurityConfiguration, StagingSecurityConfiguration, ProductionSecurityConfiguration)
 
     // Allow HTTP traffic from ALB to Fargate service
     if (albSg != null) {

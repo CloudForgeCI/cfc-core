@@ -44,6 +44,15 @@ jobs:
           npm install -g aws-cdk
           cdk --version
 
+      - name: Install CloudFormation Guard (cfn-guard)
+        run: |
+          echo "Installing CloudFormation Guard for Layer 3 template validation..."
+          wget -q https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.1.1/cfn-guard-v3-ubuntu-latest.tar.gz
+          tar -xzf cfn-guard-v3-ubuntu-latest.tar.gz
+          sudo mv cfn-guard-v3-ubuntu-latest/cfn-guard /usr/local/bin/
+          cfn-guard --version
+          echo "✅ cfn-guard installed successfully"
+
       - name: Get current date for cache key
         id: date
         run: echo "date=$(date +'%Y-%U')" >> $GITHUB_OUTPUT
@@ -115,11 +124,14 @@ jobs:
           echo "Running full validation to generate truth tables for GitHub Pages..."
           bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log || true
 
-      - name: Generate compliance truth table report
+      - name: Generate compliance truth table reports
         continue-on-error: true
         run: |
           cd cfc-testing/scripts
-          echo "Generating compliance truth table report..."
+          echo "Generating compliance truth table reports..."
+          echo "1️⃣ Generating multi-layer validation report with cdk-nag, cfn-guard, FrameworkRules, and AWS Config..."
+          python3 truth-table-generator.py --with-validation 2>&1 | tee truth-table-validation.log || true
+          echo "2️⃣ Generating comprehensive FrameworkRules unit test report..."
           python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log || true
           echo "✅ Compliance truth table generation complete"
 
@@ -450,6 +462,31 @@ jobs:
                       font-size: 1.2em;
                       opacity: 0.9;
                   }
+                  .version-selector {
+                      text-align: center;
+                      margin: 20px 0;
+                  }
+                  .version-dropdown {
+                      display: inline-block;
+                      background: rgba(255,255,255,0.2);
+                      border-radius: 25px;
+                      padding: 5px;
+                  }
+                  .version-dropdown select {
+                      background: white;
+                      border: none;
+                      padding: 10px 20px;
+                      font-size: 1em;
+                      border-radius: 20px;
+                      cursor: pointer;
+                      color: #667eea;
+                      font-weight: 600;
+                      min-width: 200px;
+                  }
+                  .version-dropdown select:focus {
+                      outline: none;
+                      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+                  }
                   .timestamp {
                       text-align: center;
                       color: white;
@@ -547,6 +584,15 @@ jobs:
                       <p>CloudForge CI - Reports Dashboard</p>
                   </div>
 
+                  <div class="version-selector">
+                      <div class="version-dropdown">
+                          <select id="report-version" onchange="navigateToVersion(this.value)">
+                              <option value="" selected>📅 Latest Reports</option>
+                              <option value="history/">📁 Browse History...</option>
+                          </select>
+                      </div>
+                  </div>
+
                   <div class="timestamp">
                       Last updated: <span id="timestamp"></span>
                   </div>
@@ -576,6 +622,7 @@ jobs:
                               <li><a href="validation/validation-run.log">Validation Log</a></li>
                               <li><a href="validation/compliance-truth-table-report.html">Compliance Truth Table (HTML)</a> <span class="badge badge-success">Auditor</span></li>
                               <li><a href="validation/compliance-truth-table.json">Compliance Truth Table (JSON)</a></li>
+                              <li><a href="validation/compliance-validation-dashboard.html">Multi-Layer Compliance Dashboard</a> <span class="badge badge-info">4 Layers</span></li>
                               <li><a href="validation/comprehensive-synth-report.html">Comprehensive Synthesis Tests</a> <span class="badge badge-info">All Stacks</span></li>
                           </ul>
                       </div>
@@ -640,6 +687,13 @@ jobs:
                   // Set current timestamp
                   const now = new Date();
                   document.getElementById('timestamp').textContent = now.toUTCString();
+
+                  // Navigate to selected version
+                  function navigateToVersion(path) {
+                      if (path) {
+                          window.location.href = path;
+                      }
+                  }
               </script>
           </body>
           </html>
@@ -850,6 +904,159 @@ jobs:
 
             echo "✅ Created placeholder changeset validation dashboard"
           fi
+
+      - name: Create historical version
+        run: |
+          # Create date-based archive folder
+          REPORT_DATE=$(date +'%Y-%m-%d')
+          HISTORY_DIR="github-pages-reports/history/${REPORT_DATE}"
+
+          echo "Creating historical archive for ${REPORT_DATE}..."
+          mkdir -p "${HISTORY_DIR}"
+
+          # Copy current reports to history (excluding history folder itself)
+          for dir in coverage validation drift sbom deployment-metrics changeset-validation; do
+            if [ -d "github-pages-reports/${dir}" ]; then
+              echo "Archiving ${dir}..."
+              cp -r "github-pages-reports/${dir}" "${HISTORY_DIR}/" 2>/dev/null || true
+            fi
+          done
+
+          echo "✅ Archived reports for ${REPORT_DATE}"
+
+          # Create archive index.html for this date
+          cat > "${HISTORY_DIR}/index.html" << EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>CFC Core Reports - ${REPORT_DATE}</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+                  .container { max-width: 1200px; margin: 0 auto; }
+                  .header { text-align: center; color: white; padding: 40px 20px; }
+                  .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+                  .content { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+                  .back-link { display: inline-block; margin-bottom: 20px; color: #667eea; text-decoration: none; font-weight: 500; }
+                  .back-link:hover { text-decoration: underline; }
+                  ul { list-style: none; margin: 20px 0; }
+                  li { padding: 12px 0; border-bottom: 1px solid #e1e4e8; }
+                  li:last-child { border-bottom: none; }
+                  a { color: #667eea; text-decoration: none; font-weight: 500; }
+                  a:hover { text-decoration: underline; }
+                  .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: 600; margin-left: 10px; background: #e8daef; color: #6c3483; }
+                  h3 { color: #2c3e50; margin-top: 30px; margin-bottom: 15px; font-size: 1.3em; border-bottom: 2px solid #3498db; padding-bottom: 8px; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>📁 Archived Reports</h1>
+                      <p>Date: ${REPORT_DATE}</p>
+                  </div>
+                  <div class="content">
+                      <a href="../../index.html" class="back-link">← Back to Latest Reports</a>
+                      <h2>Reports from ${REPORT_DATE}</h2>
+
+                      <h3>📊 Code Coverage</h3>
+                      <ul>
+                          <li><a href="coverage/cloudforge-api/index.html">CloudForge API Coverage</a></li>
+                          <li><a href="coverage/cloudforge-core/index.html">CloudForge Core Coverage</a></li>
+                      </ul>
+
+                      <h3>✅ Validation Reports</h3>
+                      <ul>
+                          <li><a href="validation/truth-table-report.html">Truth Table Report</a></li>
+                          <li><a href="validation/compliance-truth-table-report.html">Compliance Truth Table</a> <span class="badge">Auditor</span></li>
+                          <li><a href="validation/compliance-validation-dashboard.html">Multi-Layer Compliance Dashboard</a> <span class="badge">New</span></li>
+                      </ul>
+
+                      <h3>🔒 Security & SBOM</h3>
+                      <ul>
+                          <li><a href="sbom/dependency-check/dependency-check-report.html">Vulnerability Report</a></li>
+                      </ul>
+
+                      <h3>🔍 Drift Detection</h3>
+                      <ul>
+                          <li><a href="drift/index.html">Drift Reports</a></li>
+                      </ul>
+                  </div>
+              </div>
+          </body>
+          </html>
+          EOF
+
+          echo "✅ Created historical archive for ${REPORT_DATE}"
+
+      - name: Update history index
+        run: |
+          HISTORY_BASE="github-pages-reports/history"
+
+          # Create or update history index listing all archived dates
+          mkdir -p "${HISTORY_BASE}"
+
+          # Generate list of available archive dates
+          ARCHIVE_DATES=$(find "${HISTORY_BASE}" -mindepth 1 -maxdepth 1 -type d -name "20*" -exec basename {} \; | sort -r | head -30)
+
+          cat > "${HISTORY_BASE}/index.html" << 'HISTORYEOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>CFC Core - Report History</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+                  .container { max-width: 900px; margin: 0 auto; }
+                  .header { text-align: center; color: white; padding: 40px 20px; }
+                  .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+                  .content { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+                  .back-link { display: inline-block; margin-bottom: 20px; color: #667eea; text-decoration: none; font-weight: 500; }
+                  .back-link:hover { text-decoration: underline; }
+                  .date-list { list-style: none; margin: 20px 0; }
+                  .date-list li { padding: 15px 20px; border-bottom: 1px solid #e1e4e8; display: flex; justify-content: space-between; align-items: center; }
+                  .date-list li:hover { background: #f6f8fa; }
+                  .date-list li:last-child { border-bottom: none; }
+                  a { color: #667eea; text-decoration: none; font-weight: 500; }
+                  a:hover { text-decoration: underline; }
+                  .date-icon { font-size: 1.5em; margin-right: 15px; }
+                  .date-info { display: flex; align-items: center; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>📅 Report History</h1>
+                      <p>Browse historical compliance and coverage reports</p>
+                  </div>
+                  <div class="content">
+                      <a href="../index.html" class="back-link">← Back to Latest Reports</a>
+                      <h2>Archived Reports</h2>
+                      <ul class="date-list" id="archive-list">
+          HISTORYEOF
+
+          # Add each date as a list item
+          for date in ${ARCHIVE_DATES}; do
+            echo "                <li><div class=\"date-info\"><span class=\"date-icon\">📁</span><a href=\"${date}/index.html\">${date}</a></div></li>" >> "${HISTORY_BASE}/index.html"
+          done
+
+          # If no archives yet
+          if [ -z "${ARCHIVE_DATES}" ]; then
+            echo "                <li>No historical reports available yet.</li>" >> "${HISTORY_BASE}/index.html"
+          fi
+
+          cat >> "${HISTORY_BASE}/index.html" << 'HISTORYEOF'
+                      </ul>
+                  </div>
+              </div>
+          </body>
+          </html>
+          HISTORYEOF
+
+          echo "✅ Updated history index"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

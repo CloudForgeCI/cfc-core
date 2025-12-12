@@ -278,18 +278,34 @@ public class GdprRules implements FrameworkRules<SystemContext> {
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
         );
 
-        // Art. 32(1)(a): Encryption of personal data - TLS
+        // Art. 32(1)(a): SSL/TLS must be enabled for encrypted transmission of personal data
+        if (!ctx.cfc.enableSsl()) {
+            rules.add(ComplianceRule.fail(
+                "GDPR-SSL-ENCRYPTION",
+                "SSL/TLS must be enabled for data in transit (GDPR Art. 32(1)(a))",
+                "ALBHttpsOnly",
+                "Set enableSsl=true for production GDPR compliance to protect personal data in transit."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "GDPR-SSL-ENCRYPTION",
+                "SSL/TLS enabled for data in transit (GDPR Art. 32(1)(a))",
+                "ALBHttpsOnly"
+            ));
+        }
+
+        // Art. 32(1)(a): Encryption of personal data - TLS certificate
         if (ctx.cert.get().isEmpty()) {
             rules.add(ComplianceRule.fail(
                 "GDPR-TLS-ENCRYPTION",
-                "TLS encryption required for data in transit (GDPR Art. 32(1)(a))",
+                "TLS certificate required for data in transit (GDPR Art. 32(1)(a))",
                 "ALBHttpsOnly",
                 "TLS certificate not configured. Configure HTTPS to encrypt transmission of personal data."
             ));
         } else {
             rules.add(ComplianceRule.pass(
                 "GDPR-TLS-ENCRYPTION",
-                "TLS encryption required for data in transit (GDPR Art. 32(1)(a))",
+                "TLS certificate configured for data in transit (GDPR Art. 32(1)(a))",
                 "ALBHttpsOnly"
             ));
         }

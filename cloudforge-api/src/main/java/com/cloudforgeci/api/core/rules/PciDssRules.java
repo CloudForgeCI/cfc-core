@@ -45,8 +45,10 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
      */
     private boolean isRetentionSufficient(RetentionDays retention) {
         // PCI-DSS requires at least 1 year (365 days)
-        // Acceptable values: ONE_YEAR, TWO_YEARS, FIVE_YEARS, etc.
+        // Acceptable values: ONE_YEAR (365), THIRTEEN_MONTHS (400), EIGHTEEN_MONTHS (545), and higher
         return retention == RetentionDays.ONE_YEAR ||
+               retention == RetentionDays.THIRTEEN_MONTHS ||
+               retention == RetentionDays.EIGHTEEN_MONTHS ||
                retention == RetentionDays.TWO_YEARS ||
                retention == RetentionDays.THREE_YEARS ||
                retention == RetentionDays.FIVE_YEARS ||
@@ -268,6 +270,20 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
             rules.add(ComplianceRule.pass(
                 "PCI-DSS-Req-4.1-EFS-Transit",
                 "EFS encryption in transit enabled"
+            ));
+        }
+
+        // Requirement 4.1: SSL/TLS must be enabled for encrypted transmission
+        if (!ctx.cfc.enableSsl()) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-4.1-SSL",
+                "SSL/TLS must be enabled for encrypted transmission of cardholder data",
+                "PCI-DSS Req 4.1: enableSsl must be true for production PCI-DSS compliance"
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-4.1-SSL",
+                "SSL/TLS enabled"
             ));
         }
 

@@ -198,7 +198,18 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             rules.add(ComplianceRule.pass("SOC2-CC6.6-SG", "Security groups configured"));
         }
 
-        // CC6.7: Encryption in transit
+        // CC6.7: SSL/TLS must be enabled for encrypted data transmission
+        if (!ctx.cfc.enableSsl()) {
+            rules.add(ComplianceRule.fail(
+                "SOC2-CC6.7-SSL",
+                "SSL/TLS must be enabled for encrypted data transmission (CC6.7)",
+                "Set enableSsl=true for production SOC2 compliance."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass("SOC2-CC6.7-SSL", "SSL/TLS enabled for data transmission"));
+        }
+
+        // CC6.7: Encryption in transit - TLS certificate
         if (ctx.cert.get().isEmpty()) {
             rules.add(ComplianceRule.fail(
                 "SOC2-CC6.7-TLS",

@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.scaling.ScalingFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.RuntimeType;
@@ -8,7 +9,6 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
-import com.cloudforgeci.api.scaling.ScalingFactory;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
 import software.amazon.awscdk.services.ec2.BlockDevice;
@@ -30,7 +30,6 @@ import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.logs.LogGroup;
-import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.logging.Logger;
 import software.constructs.Construct;
@@ -313,7 +312,7 @@ public class Ec2Factory extends BaseFactory {
   private LogGroup createLogGroup() {
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
     return LogGroup.Builder.create(this, appId + "Ec2Logs")
-            .retention(RetentionDays.ONE_WEEK)
+            .retention(config.getLogRetentionDays())
             .build();
   }
 
@@ -428,14 +427,20 @@ public class Ec2Factory extends BaseFactory {
       LOG.info("EBS data volumes will be DESTROYED with instances (retainStorage = false)");
     }
 
-    // Determine encryption setting with priority: DeploymentConfig > SecurityProfile default
+    // Determine encryption setting with priority: DeploymentConfig > SecurityProfileConfiguration > SecurityProfile default
     // For production deployments, encryption defaults to true
     boolean encrypt;
     if (enableEncryption != null) {
       encrypt = enableEncryption;
+      LOG.info("EBS encryption setting from deployment context: " + encrypt);
+    } else if (config != null) {
+      // Use SecurityProfileConfiguration setting (inherited from BaseFactory)
+      encrypt = config.isEbsEncryptionEnabled();
+      LOG.info("EBS encryption inherited from security profile: " + encrypt);
     } else {
-      // Default: encrypt for PRODUCTION and STAGING, optional for DEV
+      // Fallback: encrypt for PRODUCTION and STAGING, optional for DEV
       encrypt = (security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING);
+      LOG.info("EBS encryption using SecurityProfile default: " + encrypt);
     }
 
     // Add block devices

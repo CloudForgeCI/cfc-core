@@ -24,6 +24,11 @@ on:
           - dry_run
           - changeset_validation
           - full_validation
+      random_subset_count:
+        description: 'Number of random configurations to test (changeset_validation only)'
+        required: false
+        default: '1'
+        type: string
 
   push:
     branches:
@@ -447,8 +452,11 @@ jobs:
       - name: Run changeset validation
         env:
           DOMAIN: ${{ secrets.DEPLOYMENT_TEST_DOMAIN || 'cloudforgeci.com' }}
+          RANDOM_SUBSET_COUNT: ${{ github.event.inputs.random_subset_count || '1' }}
+          USE_CSV_CONFIGS: 'true'
         run: |
           cd cfc-testing
+          echo "Running changeset validation with $RANDOM_SUBSET_COUNT random configs from CSV..."
           timeout 90m bash scripts/deployment-changeset-validator.sh || exit_code=$?
           if [ ${exit_code:-0} -eq 124 ]; then
             echo "Test timed out after 90 minutes"

@@ -386,6 +386,14 @@ public class DeploymentConfig {
     /** Compliance frameworks (comma-separated: "soc2,hipaa,pci-dss,gdpr") */
     public String complianceFrameworks = "";
 
+    /**
+     * Compliance validation mode controlling how validation failures are handled.
+     * - "enforce": Validation failures block synthesis/deployment (PRODUCTION default)
+     * - "advisory": Validation failures logged as warnings only (DEV/STAGING default)
+     * - "disabled": No compliance validation (not recommended)
+     */
+    public String complianceMode = "advisory";
+
     /** CloudWatch Logs retention days */
     public String logRetentionDays = "7";
 

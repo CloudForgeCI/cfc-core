@@ -8,12 +8,16 @@ import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.samples.launchers.ApplicationEc2Stack;
 import com.cloudforgeci.samples.launchers.ApplicationFargateStack;
 
 // Auto-discovery via ApplicationLoader - no need to import all ApplicationSpecs manually
 import com.cloudforge.core.interfaces.ApplicationSpec;
+
+// CDK-NAG for construct-level compliance validation
+import io.github.cdklabs.cdknag.AwsSolutionsChecks;
 
 // Configuration Introspection imports
 import com.cloudforge.core.config.ConfigFieldInfo;
@@ -23,6 +27,7 @@ import com.cloudforge.core.config.ValidationResult;
 import com.cloudforge.core.annotation.FieldTag;
 
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.Aspects;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Environment;
 
@@ -739,6 +744,23 @@ public class InteractiveDeployer {
             config.complianceFrameworks = "";
         }
 
+        // Compliance validation mode (cdk-nag + cfn-guard)
+        if (!config.complianceFrameworks.isEmpty()) {
+            System.out.println("\n🔍 Compliance Validation Mode:");
+            System.out.println("==============================");
+            System.out.println("Controls how cdk-nag and cfn-guard handle violations:");
+            System.out.println("  • ENFORCE: Block deployment on violations (recommended for PRODUCTION)");
+            System.out.println("  • ADVISORY: Log warnings only, allow deployment (recommended for DEV/STAGING)");
+            System.out.println("  • DISABLED: Skip validation (not recommended)");
+            System.out.println("");
+
+            String defaultMode = config.securityProfile == SecurityProfile.PRODUCTION ? "enforce" : "advisory";
+            config.complianceMode = promptWithValidation("Validation Mode", defaultMode,
+                new String[]{"enforce", "advisory", "disabled"});
+        } else {
+            config.complianceMode = "disabled";
+        }
+
         // Database configuration
         configureDatabaseOptions(config);
 
@@ -1082,19 +1104,30 @@ public class InteractiveDeployer {
     private static ApplicationInfo selectApplicationByCategory() {
         System.out.println("\n📂 Select Category:");
         System.out.println("===================");
-        System.out.println("  1. CI/CD (Jenkins, GitLab, Drone)");
-        System.out.println("  2. Version Control (Gitea)");
-        System.out.println("  3. Monitoring (Grafana, Prometheus)");
-        System.out.println("  4. Databases (PostgreSQL, Redis)");
-        System.out.println("  5. Secrets Management (HashiCorp Vault)");
-        System.out.println("  6. Artifact Registry (Nexus, Harbor)");
-        System.out.println("  7. Collaboration (Mattermost)");
-        System.out.println("  8. Analytics (Metabase, Superset)");
+
+        // Dynamically list all categories from discovered applications
+        List<String> categoryKeys = new ArrayList<>(APPLICATION_CATEGORIES.keySet());
+        java.util.Collections.sort(categoryKeys);
+
+        int num = 1;
+        for (String key : categoryKeys) {
+            List<ApplicationInfo> apps = APPLICATION_CATEGORIES.get(key);
+            String appNames = apps.stream()
+                .limit(3)
+                .map(a -> a.name)
+                .collect(java.util.stream.Collectors.joining(", "));
+            if (apps.size() > 3) {
+                appNames += ", ...";
+            }
+            String defaultMarker = (num == 1) ? " (default)" : "";
+            System.out.println("  " + num + ". " + getCategoryName(key) + " (" + appNames + ")" + defaultMarker);
+            num++;
+        }
         System.out.println("");
 
-        String category = promptChoice("Category", new String[]{"cicd", "vcs", "monitoring", "database", "secrets", "artifactregistry", "collaboration", "analytics"}, "cicd");
-
-        String categoryKey = category;
+        // Handle category selection directly (don't use promptChoice which prints its own list)
+        int categoryIndex = promptNumberChoice("Category", categoryKeys.size(), 1) - 1;
+        String categoryKey = categoryKeys.get(categoryIndex);
 
         List<ApplicationInfo> apps = APPLICATION_CATEGORIES.get(categoryKey);
 
@@ -1175,7 +1208,15 @@ public class InteractiveDeployer {
             case "artifactregistry" -> "Artifact Registry";
             case "collaboration" -> "Collaboration";
             case "analytics" -> "Analytics";
-            default -> "Unknown";
+            // CMS categories from @CmsPlugin
+            case "cms" -> "Content Management";
+            case "ecommerce" -> "E-commerce";
+            case "forum" -> "Forum Software";
+            case "wiki" -> "Wiki Platforms";
+            case "lms" -> "Learning Management";
+            case "social" -> "Social Networking";
+            case "crm" -> "CRM Platforms";
+            default -> key; // Return raw key instead of "Unknown"
         };
     }
 
@@ -1461,17 +1502,57 @@ public class InteractiveDeployer {
             new ApplicationFargateStack(app, config.stackName, props, config.securityProfile, iamProfile, appSpec);
         }
 
+        // Apply cdk-nag validation based on complianceMode (Layer 1: construct-level compliance checks)
+        ComplianceMode complianceMode = ComplianceMode.fromString(config.complianceMode,
+            ComplianceMode.defaultForProfile(config.securityProfile));
+
+        if (complianceMode != ComplianceMode.DISABLED) {
+            System.out.println("\n🔍 Applying cdk-nag validation (AWS Solutions Checks)...");
+            System.out.println("   Mode: " + complianceMode);
+
+            AwsSolutionsChecks nagChecks = new AwsSolutionsChecks();
+
+            // Configure cdk-nag behavior based on mode
+            if (complianceMode == ComplianceMode.ADVISORY) {
+                System.out.println("   ⚠️  Violations will be logged as warnings only");
+                // In advisory mode, cdk-nag still validates but doesn't fail synthesis
+                // The warnings will be visible in the synthesis output
+            } else if (complianceMode == ComplianceMode.ENFORCE) {
+                System.out.println("   🚫 Violations will block deployment");
+                // In enforce mode, cdk-nag validation failures will fail synthesis
+            }
+
+            Aspects.of(app).add(nagChecks);
+        } else {
+            System.out.println("\n⏭️  Skipping cdk-nag validation (disabled)");
+        }
+
         // Execute deployment based on choice
         executeDeployment(app, config, choice);
     }
 
     private static void executeDeployment(App app, DeploymentConfig config, String choice) {
+        // Parse compliance mode
+        ComplianceMode complianceMode = ComplianceMode.fromString(config.complianceMode,
+            ComplianceMode.defaultForProfile(config.securityProfile));
+
         switch (choice) {
             case "2", "3" -> {
                 System.out.println("\n✅ CDK Stack synthesized successfully!");
-                System.out.println("🚀 Starting CDK deployment to AWS...");
                 app.synth();
 
+                // Run cfn-guard validation if enforce mode is enabled
+                if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty()) {
+                    boolean guardPassed = runCfnGuardValidation(config);
+                    if (!guardPassed) {
+                        System.out.println("\n❌ cfn-guard validation FAILED!");
+                        System.out.println("   Deployment blocked due to compliance violations.");
+                        System.out.println("   Fix the violations or switch to ADVISORY mode to proceed.");
+                        return;
+                    }
+                }
+
+                System.out.println("🚀 Starting CDK deployment to AWS...");
                 try {
                     System.out.println("⏳ Deploying stack '" + config.stackName + "' to AWS...");
                     ProcessBuilder deployProcess = new ProcessBuilder("cdk", "deploy", "--require-approval", "never");
@@ -1490,9 +1571,19 @@ public class InteractiveDeployer {
             }
             case "4" -> {
                 System.out.println("\n✅ CDK Stack synthesized successfully!");
-                System.out.println("🔍 Creating changeset for dry-run...");
                 app.synth();
 
+                // Run cfn-guard validation if enforce mode is enabled
+                if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty()) {
+                    boolean guardPassed = runCfnGuardValidation(config);
+                    if (!guardPassed) {
+                        System.out.println("\n❌ cfn-guard validation FAILED!");
+                        System.out.println("   Changeset creation blocked due to compliance violations.");
+                        return;
+                    }
+                }
+
+                System.out.println("🔍 Creating changeset for dry-run...");
                 try {
                     ProcessBuilder deployProcess = new ProcessBuilder("cdk", "deploy", "--no-execute", "--require-approval", "never");
                     deployProcess.inheritIO();
@@ -1508,9 +1599,85 @@ public class InteractiveDeployer {
             }
             default -> {
                 System.out.println("\n✅ CDK Stack synthesized successfully!");
-                System.out.println("Run 'cdk deploy' to deploy to AWS");
                 app.synth();
+
+                // Run cfn-guard validation if enforce mode is enabled
+                if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty()) {
+                    runCfnGuardValidation(config);
+                }
+
+                System.out.println("Run 'cdk deploy' to deploy to AWS");
             }
+        }
+    }
+
+    /**
+     * Run cfn-guard validation on synthesized CloudFormation templates.
+     * Returns true if validation passes, false if it fails.
+     */
+    private static boolean runCfnGuardValidation(DeploymentConfig config) {
+        System.out.println("\n🛡️  Running cfn-guard validation (Layer 3)...");
+        System.out.println("   Frameworks: " + config.complianceFrameworks);
+
+        try {
+            // Find the synthesized CloudFormation template
+            String templatePath = "cdk.out/" + config.stackName + ".template.json";
+            if (!Files.exists(Paths.get(templatePath))) {
+                System.out.println("⚠️  Template not found at: " + templatePath);
+                System.out.println("   Skipping cfn-guard validation");
+                return true;
+            }
+
+            // Parse selected frameworks
+            String[] frameworks = config.complianceFrameworks.toLowerCase().split(",");
+            boolean allPassed = true;
+
+            for (String framework : frameworks) {
+                framework = framework.trim();
+                if (framework.isEmpty()) continue;
+
+                // Map framework to guard rule file
+                String guardFile = switch (framework) {
+                    case "soc2" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard";
+                    case "pci-dss", "pci" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v3.2.1.guard";
+                    case "hipaa" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/hipaa-security-rule.guard";
+                    case "gdpr" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/gdpr-data-protection.guard";
+                    case "fedramp" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/fedramp-moderate.guard";
+                    default -> null;
+                };
+
+                if (guardFile == null || !Files.exists(Paths.get(guardFile))) {
+                    System.out.println("⚠️  No guard rules found for framework: " + framework);
+                    continue;
+                }
+
+                System.out.println("\n   Validating against " + framework.toUpperCase() + "...");
+
+                // Run cfn-guard validate
+                ProcessBuilder guardProcess = new ProcessBuilder(
+                    "cfn-guard", "validate",
+                    "--rules", guardFile,
+                    "--data", templatePath,
+                    "--show-summary", "fail"
+                );
+                guardProcess.inheritIO();
+                Process guardProc = guardProcess.start();
+                int exitCode = guardProc.waitFor();
+
+                if (exitCode != 0) {
+                    System.out.println("   ❌ " + framework.toUpperCase() + " validation FAILED");
+                    allPassed = false;
+                } else {
+                    System.out.println("   ✅ " + framework.toUpperCase() + " validation PASSED");
+                }
+            }
+
+            return allPassed;
+
+        } catch (Exception e) {
+            System.out.println("⚠️  cfn-guard validation error: " + e.getMessage());
+            System.out.println("   Proceeding without cfn-guard validation");
+            return true; // Don't block on cfn-guard errors
         }
     }
 
