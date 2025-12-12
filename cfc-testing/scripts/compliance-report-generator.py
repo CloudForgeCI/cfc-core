@@ -1109,12 +1109,42 @@ class ComplianceReportGenerator:
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Generate CloudForge compliance validation dashboard with multi-layer validation results'
+    )
+    parser.add_argument(
+        '--skip-tests',
+        action='store_true',
+        help='Skip running tests and use existing JUnit XML results (faster when tests already ran)'
+    )
+
+    args = parser.parse_args()
+
     # Find project root
     script_dir = Path(__file__).parent
     project_root = script_dir.parent.parent
 
     generator = ComplianceReportGenerator(project_root)
-    success = generator.run()
+
+    if args.skip_tests:
+        # Skip test execution and load results from existing JUnit XML
+        print("⏭️  Skipping test execution, loading existing results...")
+        generator.output_dir.mkdir(parents=True, exist_ok=True)
+        generator._parse_junit_xml_incremental()
+        generator._load_incremental_results()
+
+        # Generate reports from loaded results
+        if generator.results:
+            generator.generate_json_report()
+            generator.generate_html_dashboard()
+            success = True
+        else:
+            print("❌ No existing test results found. Run without --skip-tests first.")
+            success = False
+    else:
+        success = generator.run()
 
     sys.exit(0 if success else 1)
 
