@@ -133,6 +133,8 @@ jobs:
           python3 truth-table-generator.py --with-validation 2>&1 | tee truth-table-validation.log || true
           echo "2️⃣ Generating comprehensive FrameworkRules unit test report..."
           python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log || true
+          echo "3️⃣ Generating multi-layer compliance validation dashboard..."
+          python3 compliance-report-generator.py 2>&1 | tee compliance-report.log || true
           echo "✅ Compliance truth table generation complete"
 
       - name: Run comprehensive synthesis tests
