@@ -345,6 +345,7 @@ public class ComplianceFactory extends BaseFactory {
                 .trailName(this.trailName)  // Fixed name for reusability
                 .bucket(trailBucket)
                 .sendToCloudWatchLogs(true)
+                .cloudWatchLogsRetention(config.getLogRetentionDays())  // Use security profile retention
                 .enableFileValidation(true)
                 .includeGlobalServiceEvents(true)
                 .isMultiRegionTrail(true)

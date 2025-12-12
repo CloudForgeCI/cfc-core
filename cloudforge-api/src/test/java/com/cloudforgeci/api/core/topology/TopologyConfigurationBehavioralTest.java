@@ -146,8 +146,8 @@ class TopologyConfigurationBehavioralTest {
     }
 
     @Test
-    void testValidationSslRequiresFqdnOrDomain() {
-        // Given: Jenkins Service with SSL but no FQDN or domain
+    void testValidationSslWithoutDomainUsesPrivateCa() {
+        // Given: Jenkins Service with SSL but no FQDN or domain (uses Private CA)
         App app = new App();
         Stack stack = new Stack(app, "TestJenkinsSslNoDomain");
 
@@ -155,16 +155,13 @@ class TopologyConfigurationBehavioralTest {
         cfcContext.put("stackName", "TestJenkinsSslNoDomain");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("enableSsl", true);
-        // No domain or fqdn
+        // No domain or fqdn - Private CA will be used for ALB DNS
         stack.getNode().setContext("cfc", cfcContext);
 
-        // When/Then: Must throw IllegalArgumentException
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> {
+        // When/Then: Should succeed (Private CA will be used)
+        assertDoesNotThrow(() -> {
             DeploymentContext.from(stack);
-        }, "SSL without domain/fqdn must be rejected");
-
-        assertTrue(ex.getMessage().contains("enableSsl"),
-            "Error message must mention enableSsl requirement");
+        }, "SSL without domain should succeed using Private CA");
     }
 
     @Test

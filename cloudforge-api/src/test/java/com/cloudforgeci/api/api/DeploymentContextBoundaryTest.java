@@ -333,11 +333,11 @@ class DeploymentContextBoundaryTest {
         }
 
         @Test
-        @DisplayName("logRetentionDays should default to 7 when not specified")
+        @DisplayName("logRetentionDays should default to null when not specified (SecurityProfileConfiguration provides default)")
         void logRetentionDaysDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
 
-            assertEquals(7, ctx.logRetentionDays(), "Log retention should default to 7 days");
+            assertNull(ctx.logRetentionDays(), "Log retention should default to null (SecurityProfileConfiguration provides actual default)");
         }
     }
 
@@ -600,7 +600,7 @@ class DeploymentContextBoundaryTest {
             assertEquals(1, ctx.minInstanceCapacity());
             assertEquals(1, ctx.maxInstanceCapacity());
             assertEquals(60, ctx.cpuTargetUtilization());
-            assertEquals(7, ctx.logRetentionDays());
+            assertNull(ctx.logRetentionDays()); // null = SecurityProfileConfiguration provides default
         }
 
         @Test

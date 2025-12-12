@@ -94,7 +94,7 @@ public class ComplianceValidationMatrix {
     /**
      * Validate compliance framework requirements.
      *
-     * @param complianceFramework The compliance framework (SOC2, PCI-DSS, HIPAA, GDPR)
+     * @param complianceFramework The compliance framework (SOC2, PCI-DSS, HIPAA, GDPR) or comma-separated list
      * @param securityProfile The security profile (DEV, STAGING, PRODUCTION)
      */
     public void validateCompliance(String complianceFramework, SecurityProfile securityProfile) {
@@ -102,21 +102,26 @@ public class ComplianceValidationMatrix {
             return; // No compliance validation needed
         }
 
-        switch (complianceFramework) {
-            case "SOC2":
-                validateSoc2Compliance(securityProfile);
-                break;
-            case "PCI-DSS":
-                validatePciDssCompliance(securityProfile);
-                break;
-            case "HIPAA":
-                validateHipaaCompliance(securityProfile);
-                break;
-            case "GDPR":
-                validateGdprCompliance(securityProfile);
-                break;
-            default:
-                violations.add("Unknown compliance framework: " + complianceFramework);
+        // Support multi-framework configurations (e.g., "SOC2,PCI-DSS")
+        String[] frameworks = complianceFramework.split(",");
+        for (String framework : frameworks) {
+            String trimmedFramework = framework.trim();
+            switch (trimmedFramework) {
+                case "SOC2":
+                    validateSoc2Compliance(securityProfile);
+                    break;
+                case "PCI-DSS":
+                    validatePciDssCompliance(securityProfile);
+                    break;
+                case "HIPAA":
+                    validateHipaaCompliance(securityProfile);
+                    break;
+                case "GDPR":
+                    validateGdprCompliance(securityProfile);
+                    break;
+                default:
+                    violations.add("Unknown compliance framework: " + trimmedFramework);
+            }
         }
     }
 

@@ -322,8 +322,8 @@ class FargateRuntimeConfigurationTest {
     }
 
     @Test
-    void testFargateRuntimeConfigurationWithSslValidation() {
-        // Given: A Fargate deployment with SSL but attempting no domain
+    void testFargateRuntimeConfigurationWithSslWithoutDomain() {
+        // Given: A Fargate deployment with SSL but no domain (uses Private CA)
         App app = new App();
         Stack stack = new Stack(app, "TestFargateSslValidation");
 
@@ -331,13 +331,13 @@ class FargateRuntimeConfigurationTest {
         cfcContext.put("stackName", "TestFargateSslValidation");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("enableSsl", true);
-        // Intentionally omit domain and fqdn
+        // Intentionally omit domain and fqdn - Private CA will be used
         stack.getNode().setContext("cfc", cfcContext);
 
-        // When/Then: Should fail validation (SSL requires domain or fqdn)
-        assertThrows(IllegalArgumentException.class, () -> {
+        // When/Then: Should succeed (Private CA will be used for ALB DNS)
+        assertDoesNotThrow(() -> {
             DeploymentContext.from(stack);
-        });
+        }, "SSL without domain should succeed using Private CA");
     }
 
     @Test

@@ -280,10 +280,10 @@ public class DeploymentContextDefaultsTest {
         }
 
         @Test
-        @DisplayName("logRetentionDays defaults to 7")
-        void logRetentionDaysDefaultsTo7() throws Exception {
+        @DisplayName("logRetentionDays defaults to null (uses SecurityProfileConfiguration)")
+        void logRetentionDaysDefaultsToNull() throws Exception {
             DeploymentContext cfc = fromMap(new LinkedHashMap<>());
-            assertEquals(7, cfc.logRetentionDays(), "Default logRetentionDays should be 7");
+            assertNull(cfc.logRetentionDays(), "Default logRetentionDays should be null (SecurityProfileConfiguration provides actual default)");
         }
     }
 

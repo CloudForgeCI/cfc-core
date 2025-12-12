@@ -260,8 +260,8 @@ class FargateRuntimeBehavioralTest {
     }
 
     @Test
-    void testWireSslWithoutHostFallsBackToHttp() {
-        // Given: SSL enabled but no domain or FQDN (edge case)
+    void testWireSslWithoutHostUsesPrivateCa() {
+        // Given: SSL enabled but no domain or FQDN (uses Private CA for ALB DNS)
         App app = new App();
         Stack stack = new Stack(app, "TestSslNoHost");
 
@@ -269,13 +269,13 @@ class FargateRuntimeBehavioralTest {
         cfcContext.put("stackName", "TestSslNoHost");
         cfcContext.put("securityProfile", "DEV");
         cfcContext.put("enableSsl", true);
-        // Intentionally omit domain and fqdn
+        // Intentionally omit domain and fqdn - Private CA will be used
         stack.getNode().setContext("cfc", cfcContext);
 
-        // When/Then: DeploymentContext should fail validation (SSL requires host)
-        assertThrows(IllegalArgumentException.class, () -> {
+        // When/Then: DeploymentContext should succeed (Private CA will be used for ALB DNS)
+        assertDoesNotThrow(() -> {
             DeploymentContext.from(stack);
-        }, "SSL mode requires domain or fqdn");
+        }, "SSL without domain should succeed using Private CA");
     }
 
     @Test

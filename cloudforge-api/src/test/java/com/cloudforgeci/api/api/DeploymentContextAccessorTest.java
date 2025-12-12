@@ -411,10 +411,10 @@ class DeploymentContextAccessorTest {
         }
 
         @Test
-        @DisplayName("logRetentionDays() returns default 7 when not configured")
+        @DisplayName("logRetentionDays() returns null when not configured (SecurityProfileConfiguration provides default)")
         void logRetentionDaysAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertEquals(7, ctx.logRetentionDays());
+            assertNull(ctx.logRetentionDays());
         }
 
         @Test
