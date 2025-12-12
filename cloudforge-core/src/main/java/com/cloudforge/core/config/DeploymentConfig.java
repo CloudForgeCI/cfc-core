@@ -395,7 +395,7 @@ public class DeploymentConfig {
     public String complianceMode = "advisory";
 
     /** CloudWatch Logs retention days */
-    public String logRetentionDays = "7";
+    public String logRetentionDays = null;
 
     /** Enable S3 versioning remediation */
     public boolean enableS3VersioningRemediation = false;
