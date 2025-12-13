@@ -1003,7 +1003,7 @@ class ComplianceReportGenerator:
                 const dateLinks = doc.querySelectorAll('.date-list a');
                 const dates = Array.from(dateLinks).map(link => {{
                     const href = link.getAttribute('href');
-                    const match = href.match(/(\d{{4}}-\d{{2}}-\d{{2}})/);
+                    const match = href.match(/(\\d{{4}}-\\d{{2}}-\\d{{2}})/);
                     return match ? match[1] : null;
                 }}).filter(date => date !== null);
 
