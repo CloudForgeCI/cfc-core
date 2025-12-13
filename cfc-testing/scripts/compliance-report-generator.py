@@ -1026,38 +1026,46 @@ class ComplianceReportGenerator:
         // Toggle detail row visibility
         function toggleDetail(idx) {
             const detailRow = document.getElementById('detail-' + idx);
-            detailRow.classList.toggle('expanded');
+            if (detailRow) {
+                detailRow.classList.toggle('expanded');
+            }
         }
 
-        // Layer validation chart
-        const ctx = document.getElementById('layerChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['cdk-nag', 'FrameworkRules', 'cfn-guard', 'AWS Config'],
-                datasets: [{
-                    label: 'Passed',
-                    data: [""" + f"{cdk_nag_passed}, {framework_rules_passed}, {cfn_guard_passed}, {total_tests}" + """],
-                    backgroundColor: ['#3498db', '#2ecc71', '#f39c12', '#9b59b6']
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Multi-Layer Validation Coverage'
+        // Layer validation chart - wait for Chart.js to load
+        window.addEventListener('load', function() {
+            if (typeof Chart !== 'undefined') {
+                const ctx = document.getElementById('layerChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['cdk-nag', 'FrameworkRules', 'cfn-guard', 'AWS Config'],
+                        datasets: [{
+                            label: 'Passed',
+                            data: [""" + f"{cdk_nag_passed}, {framework_rules_passed}, {cfn_guard_passed}, {total_tests}" + """],
+                            backgroundColor: ['#3498db', '#2ecc71', '#f39c12', '#9b59b6']
+                        }]
                     },
-                    legend: {
-                        display: false
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Multi-Layer Validation Coverage'
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: """ + str(total_tests) + """
+                            }
+                        }
                     }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: """ + str(total_tests) + """
-                    }
-                }
+                });
+            } else {
+                console.error('Chart.js library failed to load');
             }
         });
     </script>
