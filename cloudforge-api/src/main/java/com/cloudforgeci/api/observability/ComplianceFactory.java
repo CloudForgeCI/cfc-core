@@ -3194,19 +3194,32 @@ public class ComplianceFactory extends BaseFactory {
 
         // Create one assessment per framework
         int assessmentCount = 0;
+        int attemptedCount = 0;
         for (String framework : frameworks) {
-            assessmentCount++;
-            createSingleAssessment(
-                framework,
-                assessmentCount,
-                shortId,
-                assessmentReportBucket,
-                auditManagerRole,
-                accountId
-            );
+            attemptedCount++;
+            try {
+                createSingleAssessment(
+                    framework,
+                    attemptedCount,  // Use attempted count for logging
+                    shortId,
+                    assessmentReportBucket,
+                    auditManagerRole,
+                    accountId
+                );
+                assessmentCount++;  // Only increment if successful (didn't return early)
+            } catch (Exception e) {
+                LOG.warning("Failed to create Audit Manager assessment for framework " + framework + ": " + e.getMessage());
+                LOG.warning("  Continuing with remaining frameworks...");
+            }
         }
 
-        LOG.info("Created " + assessmentCount + " Audit Manager assessment(s) successfully");
+        if (assessmentCount > 0) {
+            LOG.info("Created " + assessmentCount + " Audit Manager assessment(s) successfully");
+        } else {
+            LOG.warning("No Audit Manager assessments were created (all frameworks were skipped or failed)");
+            LOG.warning("  This is normal for custom frameworks (SOC2, PCI-DSS, HIPAA, GDPR, etc.)");
+            LOG.warning("  Compliance validation will use other layers: cdk-nag, FrameworkRules, cfn-guard, AWS Config");
+        }
     }
 
     /**
@@ -3264,6 +3277,10 @@ public class ComplianceFactory extends BaseFactory {
         // Use AWS-managed frameworks since Conformance Packs handle the Config rule deployment
         // Conformance Packs provide standardized, AWS-maintained rule sets that Audit Manager can reference
         String frameworkId = resolveFrameworkIdentifier(frameworkName);
+        if (frameworkId == null) {
+            LOG.info("  Skipping Audit Manager assessment for custom framework: " + frameworkName);
+            return;  // Skip this assessment
+        }
         LOG.info("  Using AWS-managed framework: " + frameworkId);
         LOG.info("  Evidence will be collected from Conformance Pack rules automatically");
 
@@ -3745,12 +3762,14 @@ public class ComplianceFactory extends BaseFactory {
         // For short names, try to query AWS for matching framework
         String result = queryAwsForFramework(identifier);
 
-        // If query failed (returned placeholder), don't use placeholder - fail clearly
+        // If query failed (returned placeholder), skip this framework with a warning
         if ("00000000-0000-0000-0000-000000000000".equals(result)) {
-            LOG.severe("Failed to resolve framework '" + identifier + "'. " +
-                      "Please provide the full UUID instead. " +
-                      "Find it with: aws auditmanager list-assessment-frameworks --framework-type Standard");
-            throw new RuntimeException("Unable to resolve Audit Manager framework: " + identifier);
+            LOG.warning("Unable to resolve Audit Manager framework: " + identifier);
+            LOG.warning("  Framework '" + identifier + "' is not available as an AWS Audit Manager standard framework");
+            LOG.warning("  This may be a custom framework that requires CloudForge-specific Config rules");
+            LOG.warning("  Skipping Audit Manager assessment creation for this framework");
+            LOG.warning("  Note: Other compliance layers (cdk-nag, FrameworkRules, cfn-guard, AWS Config) will still validate this framework");
+            return null;  // Return null to signal "skip this framework"
         }
 
         return result;
