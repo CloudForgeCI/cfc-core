@@ -196,6 +196,18 @@ class ComplianceReportGenerator:
                 current_test.cfn_guard_status = "skipped"
                 current_test._current_layer = None
 
+            # Parse Layer 4 (AWS Config) results - extract rule count
+            if "✅ Layer 4 (AWS Config):" in line and "rules would be deployed" in line:
+                match = re.search(r'(\d+)\s+rules would be deployed', line)
+                if match:
+                    current_test.aws_config_status = f"passed ({match.group(1)} rules)"
+                else:
+                    current_test.aws_config_status = "passed"
+                current_test._current_layer = None
+            elif "⏭️  Layer 4 (AWS Config): Skipped" in line:
+                current_test.aws_config_status = "skipped"
+                current_test._current_layer = None
+
             # Capture individual violation messages
             # Format 1: "SEVERE:   - SOC2-CC6.2-Auth: ..." (FrameworkRules)
             # Format 2: "      - violation message" (cdk-nag, cfn-guard)
@@ -361,6 +373,13 @@ class ComplianceReportGenerator:
                         layer_statuses['cfn_guard'] = 'skipped (no template)'
                     elif "⏭️  Layer 3 (cfn-guard): Skipped" in text:
                         layer_statuses['cfn_guard'] = 'skipped'
+
+                    # Parse Layer 4 (AWS Config) status - extract rule count
+                    aws_config_match = re.search(r'✅ Layer 4 \(AWS Config\):\s+(\d+)\s+rules would be deployed', text)
+                    if aws_config_match:
+                        layer_statuses['aws_config'] = f"passed ({aws_config_match.group(1)} rules)"
+                    elif "⏭️  Layer 4 (AWS Config): Skipped" in text:
+                        layer_statuses['aws_config'] = 'skipped'
 
                     # Check if this is a negative test that passed
                     if "NEGATIVE TEST PASSED" in text:
