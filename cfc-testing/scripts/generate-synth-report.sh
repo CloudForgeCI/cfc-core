@@ -197,18 +197,23 @@ cat > "$OUTPUT_DIR/comprehensive-synth-report.html" << 'EOF'
         async function loadTestResults() {
             try {
                 // Try to load from multiple possible locations
+                // When deployed to GitHub Pages, the log is in the same directory as this HTML file
+                // When running locally, it might be in parent directories
                 const possiblePaths = [
-                    'comprehensive-synth.log',
-                    '../comprehensive-synth.log',
-                    'synth-results/comprehensive-synth.log'
+                    'comprehensive-synth.log',           // Same directory (GitHub Pages deployment)
+                    '../comprehensive-synth.log',        // Parent directory (local testing)
+                    '../../comprehensive-synth.log',     // Two levels up (from validation-results/)
+                    '../../../comprehensive-synth.log'   // Three levels up
                 ];
 
                 let response = null;
+                let foundPath = null;
                 for (const path of possiblePaths) {
                     try {
                         const r = await fetch(path);
                         if (r.ok) {
                             response = r;
+                            foundPath = path;
                             break;
                         }
                     } catch (e) {
@@ -218,12 +223,22 @@ cat > "$OUTPUT_DIR/comprehensive-synth-report.html" << 'EOF'
 
                 if (!response || !response.ok) {
                     document.getElementById('raw-output').textContent =
-                        'Test results not available. The comprehensive synthesis tests may not have run yet.';
+                        'Test results not available. The comprehensive synthesis tests may not have run yet.\n\n' +
+                        'To generate results, run:\n' +
+                        '  cd cfc-testing\n' +
+                        '  bash scripts/comprehensive-synth-test.sh 2>&1 | tee comprehensive-synth.log';
+                    document.getElementById('summary-section').innerHTML = `
+                        <div class="info-box" style="background: #fff3cd; border-left-color: #ffc107;">
+                            <h4>⚠️ No Test Results Found</h4>
+                            <p>The comprehensive synthesis tests have not been run yet. Run the tests to populate this dashboard.</p>
+                        </div>
+                    `;
                     return;
                 }
 
                 const text = await response.text();
                 document.getElementById('raw-output').textContent = text;
+                console.log('Loaded test results from:', foundPath);
 
                 // Parse results
                 const lines = text.split('\n');

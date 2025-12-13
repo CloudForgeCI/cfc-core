@@ -803,7 +803,7 @@ class ComplianceReportGenerator:
 <body>
     <div class="container">
         <div class="header">
-            <a href="../../index.html" class="back-link">← Back to Dashboard</a>
+            <a href="../index.html" class="back-link">← Back to Dashboard</a>
             <h1>🔒 Multi-Layer Compliance Validation Dashboard</h1>
             <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
             <p style="margin-top: 10px;">Defense-in-depth validation across 4 independent layers</p>
@@ -811,7 +811,7 @@ class ComplianceReportGenerator:
                 <div class="version-dropdown">
                     <select id="report-version" onchange="navigateToVersion(this.value)">
                         <option value="" selected>📅 Latest Reports</option>
-                        <option value="../../history/">📁 Browse History...</option>
+                        <option value="../history/">📁 Browse History...</option>
                     </select>
                 </div>
             </div>
@@ -1000,7 +1000,7 @@ class ComplianceReportGenerator:
         // Load historical report dates dynamically
         async function loadHistoricalDates() {{
             try {{
-                const response = await fetch('../../history/index.html');
+                const response = await fetch('../history/index.html');
                 if (!response.ok) return;
 
                 const html = await response.text();
@@ -1019,7 +1019,7 @@ class ComplianceReportGenerator:
                 const select = document.getElementById('report-version');
                 dates.forEach(date => {{
                     const option = document.createElement('option');
-                    option.value = `../../history/${{date}}/validation/compliance-validation-dashboard.html`;
+                    option.value = `../history/${{date}}/validation/compliance-validation-dashboard.html`;
                     option.textContent = `📅 ${{date}}`;
                     select.appendChild(option);
                 }});
