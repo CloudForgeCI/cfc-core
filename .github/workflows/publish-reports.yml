@@ -35,6 +35,9 @@ jobs:
           # Download the history folder from the deployed GitHub Pages site
           PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/history"
 
+          # Get today's date to skip downloading it (we'll create it fresh)
+          TODAY=$(date +'%Y-%m-%d')
+
           # Try to fetch the history index to see if it exists
           if curl -f -s "${PAGES_URL}/index.html" > /dev/null 2>&1; then
             echo "✅ Found existing history, downloading..."
@@ -44,6 +47,12 @@ jobs:
 
             # Extract date folders (format: YYYY-MM-DD) from the HTML
             grep -oP '\d{4}-\d{2}-\d{2}' /tmp/history-index.html | sort -u | while read -r date; do
+              # Skip today's date - we'll create it fresh with new reports
+              if [ "$date" = "$TODAY" ]; then
+                echo "  ⏭️  Skipping ${date} (will be created fresh with new reports)"
+                continue
+              fi
+
               echo "  📁 Downloading history for ${date}..."
               mkdir -p "github-pages-reports/history/${date}"
 
@@ -69,7 +78,7 @@ jobs:
             curl -s "${PAGES_URL}/index.html" \
               -o "github-pages-reports/history/index.html" 2>/dev/null || true
 
-            echo "✅ Downloaded existing history"
+            echo "✅ Downloaded existing history (excluding today's date)"
           else
             echo "ℹ️  No existing history found (this may be the first run)"
           fi
@@ -957,24 +966,20 @@ jobs:
           REPORT_DATE=$(date +'%Y-%m-%d')
           HISTORY_DIR="github-pages-reports/history/${REPORT_DATE}"
 
-          # Check if today's archive already exists (from download step)
-          if [ -d "${HISTORY_DIR}" ] && [ -f "${HISTORY_DIR}/index.html" ]; then
-            echo "ℹ️  Archive for ${REPORT_DATE} already exists (preserved from previous deployment)"
-            echo "   Skipping archive creation to preserve original timestamp"
-          else
-            echo "📦 Creating historical archive for ${REPORT_DATE}..."
-            mkdir -p "${HISTORY_DIR}"
+          # Always create fresh archive for today (download step skips today's date)
+          echo "📦 Creating historical archive for ${REPORT_DATE}..."
+          mkdir -p "${HISTORY_DIR}"
 
-            # Copy current reports to history (excluding history folder itself)
-            for dir in coverage validation drift sbom deployment-metrics changeset-validation; do
-              if [ -d "github-pages-reports/${dir}" ]; then
-                echo "  Archiving ${dir}..."
-                cp -r "github-pages-reports/${dir}" "${HISTORY_DIR}/" 2>/dev/null || true
-              fi
-            done
+          # Copy current reports to history (excluding history folder itself)
+          for dir in coverage validation drift sbom deployment-metrics changeset-validation; do
+            if [ -d "github-pages-reports/${dir}" ]; then
+              echo "  Archiving ${dir}..."
+              cp -r "github-pages-reports/${dir}" "${HISTORY_DIR}/" 2>/dev/null || true
+            fi
+          done
 
-            # Create archive index.html for this date (only for new archives)
-            cat > "${HISTORY_DIR}/index.html" << EOF
+          # Create archive index.html for this date
+          cat > "${HISTORY_DIR}/index.html" << EOF
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -1037,8 +1042,7 @@ jobs:
           </html>
           EOF
 
-            echo "✅ Created historical archive for ${REPORT_DATE}"
-          fi
+          echo "✅ Created historical archive for ${REPORT_DATE}"
 
       - name: Update history index
         run: |
