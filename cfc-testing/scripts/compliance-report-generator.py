@@ -204,9 +204,9 @@ class ComplianceReportGenerator:
             if "Layer 4 (AWS Config):" in line and "rules would be deployed" in line:
                 match = re.search(r'(\d+)\s+rules would be deployed', line)
                 if match:
-                    current_test.aws_config_status = f"passed ({match.group(1)} rules)"
+                    current_test.aws_config_status = f"{match.group(1)} rules"
                 else:
-                    current_test.aws_config_status = "passed"
+                    current_test.aws_config_status = "unknown count"
                 current_test._current_layer = None
             elif "Layer 4 (AWS Config): Skipped" in line:
                 current_test.aws_config_status = "skipped"
@@ -386,7 +386,7 @@ class ComplianceReportGenerator:
                     # Try multiple patterns to handle different formatting
                     aws_config_match = re.search(r'Layer 4 \(AWS Config\):\s+(\d+)\s+rules would be deployed', text)
                     if aws_config_match:
-                        layer_statuses['aws_config'] = f"passed ({aws_config_match.group(1)} rules)"
+                        layer_statuses['aws_config'] = f"{aws_config_match.group(1)} rules"
                     elif "Layer 4 (AWS Config): Skipped" in text:
                         layer_statuses['aws_config'] = 'skipped'
 
@@ -829,6 +829,7 @@ class ComplianceReportGenerator:
         .status-failed {{ background: #f8d7da; color: #721c24; }}
         .status-blocked {{ background: #f5c6cb; color: #721c24; }}
         .status-skipped {{ background: #fff3cd; color: #856404; }}
+        .status-deployed {{ background: #d1ecf1; color: #0c5460; }}
         .status-unknown {{ background: #e2e3e5; color: #383d41; }}
 
         .config-name {{ cursor: pointer; color: #3498db; text-decoration: underline; }}
@@ -961,7 +962,10 @@ class ComplianceReportGenerator:
             cdk_nag_class = f"status-{result.cdk_nag_status}"
             fr_class = f"status-{result.framework_rules_status}"
             cfg_class = f"status-{result.cfn_guard_status}"
-            aws_config_class = f"status-{result.aws_config_status.split()[0]}"  # Extract status word (e.g., "passed" from "passed (64 rules)")
+            if result.aws_config_status and result.aws_config_status.split()[0].isdigit():
+                aws_config_class = "status-deployed"
+            else:
+                aws_config_class = f"status-{result.aws_config_status.split()[0]}"
 
             # Build detail content with deployment context, violations, and error message
             detail_parts = []
