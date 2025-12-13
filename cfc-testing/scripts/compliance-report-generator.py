@@ -162,6 +162,12 @@ class ComplianceReportGenerator:
                 current_test.cdk_nag_status = "failed"
                 current_test._current_layer = "cdk_nag"
 
+            # Detect FrameworkRules validation failure (appears before Layer summary)
+            if "validation failed with" in line and "violations" in line and "SEVERE:" in line:
+                # This indicates FrameworkRules is about to report violations
+                current_test._current_layer = "framework_rules"
+                current_test.framework_rules_status = "failed"
+
             # Parse Layer 2 (FrameworkRules) results
             if "✅ Layer 2 (FrameworkRules):" in line:
                 current_test.framework_rules_status = "passed"
@@ -190,8 +196,10 @@ class ComplianceReportGenerator:
                 current_test.cfn_guard_status = "skipped"
                 current_test._current_layer = None
 
-            # Capture individual violation messages (indented with "      - ")
-            violation_match = re.match(r'\s+- (.+)', line)
+            # Capture individual violation messages
+            # Format 1: "SEVERE:   - SOC2-CC6.2-Auth: ..." (FrameworkRules)
+            # Format 2: "      - violation message" (cdk-nag, cfn-guard)
+            violation_match = re.match(r'SEVERE:\s+- (.+)', line) or re.match(r'\s+- (.+)', line)
             if violation_match and current_test._current_layer:
                 violation = violation_match.group(1).strip()
                 if current_test._current_layer == "cdk_nag":
@@ -208,6 +216,12 @@ class ComplianceReportGenerator:
                 gap = line.strip()[1:].strip()
                 current_test.framework_rules_known_gaps.append(gap)
 
+            # Capture rejection layers for negative tests (BEFORE test completion check)
+            if "📋 Rejection layers:" in line:
+                match = re.search(r'📋 Rejection layers:\s*(.+)', line)
+                if match:
+                    current_test.rejection_layers = match.group(1).strip()
+
             # Detect test success (positive tests)
             if "✅ Compliance validation passed" in line:
                 current_test.status = "passed"
@@ -222,12 +236,6 @@ class ComplianceReportGenerator:
                 current_test._current_layer = None
                 self._write_result_incremental(current_test)
                 return None  # Test completed
-
-            # Capture rejection layers for negative tests
-            if "📋 Rejection layers:" in line:
-                match = re.search(r'📋 Rejection layers:\s*(.+)', line)
-                if match:
-                    current_test.rejection_layers = match.group(1).strip()
 
         return current_test
 
@@ -967,7 +975,7 @@ class ComplianceReportGenerator:
                             <td colspan="8"><div class="detail-content">{detail_content}</div></td>
                         </tr>"""
 
-        html_content += """
+        html_content += f"""
                     </tbody>
                 </table>
             </div>
@@ -983,15 +991,15 @@ class ComplianceReportGenerator:
 
     <script>
         // Navigate to selected version
-        function navigateToVersion(path) {
-            if (path) {
+        function navigateToVersion(path) {{
+            if (path) {{
                 window.location.href = path;
-            }
-        }
+            }}
+        }}
 
         // Load historical report dates dynamically
-        async function loadHistoricalDates() {
-            try {
+        async function loadHistoricalDates() {{
+            try {{
                 const response = await fetch('../../history/index.html');
                 if (!response.ok) return;
 
@@ -1024,50 +1032,50 @@ class ComplianceReportGenerator:
         loadHistoricalDates();
 
         // Toggle detail row visibility
-        function toggleDetail(idx) {
+        function toggleDetail(idx) {{
             const detailRow = document.getElementById('detail-' + idx);
-            if (detailRow) {
+            if (detailRow) {{
                 detailRow.classList.toggle('expanded');
-            }
-        }
+            }}
+        }}
 
         // Layer validation chart - wait for Chart.js to load
-        window.addEventListener('load', function() {
-            if (typeof Chart !== 'undefined') {
+        window.addEventListener('load', function() {{
+            if (typeof Chart !== 'undefined') {{
                 const ctx = document.getElementById('layerChart').getContext('2d');
-                new Chart(ctx, {
+                new Chart(ctx, {{
                     type: 'bar',
-                    data: {
+                    data: {{
                         labels: ['cdk-nag', 'FrameworkRules', 'cfn-guard', 'AWS Config'],
-                        datasets: [{
+                        datasets: [{{
                             label: 'Passed',
-                            data: [""" + f"{cdk_nag_passed}, {framework_rules_passed}, {cfn_guard_passed}, {total_tests}" + """],
+                            data: [{cdk_nag_passed}, {framework_rules_passed}, {cfn_guard_passed}, {total_tests}],
                             backgroundColor: ['#3498db', '#2ecc71', '#f39c12', '#9b59b6']
-                        }]
-                    },
-                    options: {
+                        }}]
+                    }},
+                    options: {{
                         responsive: true,
-                        plugins: {
-                            title: {
+                        plugins: {{
+                            title: {{
                                 display: true,
                                 text: 'Multi-Layer Validation Coverage'
-                            },
-                            legend: {
+                            }},
+                            legend: {{
                                 display: false
-                            }
-                        },
-                        scales: {
-                            y: {
+                            }}
+                        }},
+                        scales: {{
+                            y: {{
                                 beginAtZero: true,
-                                max: """ + str(total_tests) + """
-                            }
-                        }
-                    }
-                });
-            } else {
+                                max: {total_tests}
+                            }}
+                        }}
+                    }}
+                }});
+            }} else {{
                 console.error('Chart.js library failed to load');
-            }
-        });
+            }}
+        }});
     </script>
 </body>
 </html>"""
