@@ -132,10 +132,19 @@ run_synthesis() {
     
     # Create deployment context
     create_deployment_context "$runtime" "$security_profile" "$subdomain" "$stack_name"
-    
+
+    # Verify deployment context was created
+    if [ ! -f "$BASE_DIR/deployment-context.json" ]; then
+        echo -e "  ${RED}❌ Failed to create deployment-context.json${NC}"
+        return 1
+    fi
+
+    # Debug: Show first few lines of context (for troubleshooting)
+    echo "  📋 Deployment context created (stack: $stack_name)"
+
     # Clean previous CDK output
     rm -rf "$CDK_OUT_DIR"
-    
+
     # Run synthesis
     echo "  🔧 Synthesizing..."
     cd "$BASE_DIR"
@@ -146,7 +155,16 @@ run_synthesis() {
 
     # Use cdk synth with deployment-context.json (written by create_deployment_context)
     # Note: cdk-nag may cause exit code 1 even when synthesis succeeds, so we check for template file instead
-    cdk synth --quiet --context cfc=@deployment-context.json > "$synth_output" 2> "$synth_error"
+    # Add timeout to prevent hanging (5 minutes max)
+    timeout 300 cdk synth --quiet --context cfc=@deployment-context.json > "$synth_output" 2> "$synth_error"
+    local synth_exit_code=$?
+
+    # Check if timeout occurred
+    if [ $synth_exit_code -eq 124 ]; then
+        echo -e "  ${RED}❌ Synthesis timed out after 5 minutes${NC}"
+        echo "Synthesis timed out" > "$synth_error"
+        return 1
+    fi
 
     # Check if synthesis succeeded by looking for the generated template file
     local template_file="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-template.json"
@@ -181,6 +199,13 @@ run_synthesis() {
     else
         echo -e "  ${RED}❌ Synthesis failed - no template generated${NC}"
         echo "  📄 Error log: $synth_error"
+
+        # Show first 10 lines of error for debugging
+        if [ -f "$synth_error" ] && [ -s "$synth_error" ]; then
+            echo "  📋 Error details (first 10 lines):"
+            head -10 "$synth_error" | sed 's/^/     /'
+        fi
+
         return 1
     fi
 }

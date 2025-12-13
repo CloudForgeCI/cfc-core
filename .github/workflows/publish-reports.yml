@@ -53,8 +53,9 @@ jobs:
                 if curl -f -s "${PAGES_URL}/${date}/${subdir}/index.html" > /dev/null 2>&1; then
                   echo "    ↓ ${subdir}/"
                   # Use wget to recursively download the subdirectory
-                  wget -q -r -np -nH -R "index.html?*" --cut-dirs=3 \
-                    -P "github-pages-reports/history/${date}" \
+                  # --cut-dirs=1 removes only the repo name (cfc-core), preserving history/DATE/SUBDIR structure
+                  wget -q -r -np -nH -R "index.html?*" --cut-dirs=1 \
+                    -P "github-pages-reports" \
                     "${PAGES_URL}/${date}/${subdir}/" 2>/dev/null || true
                 fi
               done

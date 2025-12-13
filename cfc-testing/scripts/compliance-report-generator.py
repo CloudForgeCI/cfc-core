@@ -140,7 +140,11 @@ class ComplianceReportGenerator:
 
             # Extract runtime and network mode from config name
             parts = config_name.split('_')
-            runtime = parts[0] if len(parts) > 0 else "unknown"
+            # Handle negative tests that start with FAIL_
+            if parts[0] == 'FAIL':
+                runtime = parts[1] if len(parts) > 1 else "unknown"
+            else:
+                runtime = parts[0] if len(parts) > 0 else "unknown"
             network_mode = parts[-1] if len(parts) > 0 else "unknown"
 
             current_test = ComplianceTestResult(config_name, framework, runtime, network_mode)
@@ -340,7 +344,11 @@ class ComplianceReportGenerator:
                         framework = match.group(2)
                         # Parse runtime and network mode from config name
                         parts = config_name.split('_')
-                        runtime = parts[0] if len(parts) > 0 else "unknown"
+                        # Handle negative tests that start with FAIL_
+                        if parts[0] == 'FAIL':
+                            runtime = parts[1] if len(parts) > 1 else "unknown"
+                        else:
+                            runtime = parts[0] if len(parts) > 0 else "unknown"
                         network_mode = parts[-1] if len(parts) > 0 else "unknown"
 
                     # Extract deployment context
@@ -403,27 +411,45 @@ class ComplianceReportGenerator:
                     result['layers']['cdk_nag']['status'] = layer_statuses['cdk_nag']
                     result['layers']['framework_rules']['status'] = layer_statuses['framework_rules']
                     result['layers']['cfn_guard']['status'] = layer_statuses['cfn_guard']
+                    result['layers']['aws_config']['status'] = layer_statuses.get('aws_config', result['layers'].get('aws_config', {}).get('status', 'deployed'))
                     result['is_negative_test'] = is_negative_test
-                    if test_failed:
-                        result['status'] = 'failed'
-                        error_text = failure_elem.text or ''
-                        message = failure_elem.get('message', '')
-                        result['error_message'] = f"{message}\n\n{error_text}" if error_text else message
+
+                    # For negative tests: test passing means deployment would fail
+                    # For positive tests: test failing means deployment failed
+                    if is_negative_test:
+                        result['status'] = 'failed' if not test_failed else 'error'
+                        if test_failed:
+                            error_text = failure_elem.text or ''
+                            message = failure_elem.get('message', '')
+                            result['error_message'] = f"{message}\n\n{error_text}" if error_text else message
+                    else:
+                        if test_failed:
+                            result['status'] = 'failed'
+                            error_text = failure_elem.text or ''
+                            message = failure_elem.get('message', '')
+                            result['error_message'] = f"{message}\n\n{error_text}" if error_text else message
                     updated_count += 1
                 else:
                     # Create new result from JUnit XML
+                    # For negative tests: test passing means deployment would fail
+                    # For positive tests: use normal test status
+                    if is_negative_test:
+                        status = 'failed' if not test_failed else 'error'
+                    else:
+                        status = 'failed' if test_failed else 'passed'
+
                     result = {
                         'config_name': config_name,
                         'framework': framework,
                         'runtime': runtime,
                         'network_mode': network_mode,
-                        'status': 'failed' if test_failed else 'passed',
+                        'status': status,
                         'duration': time_val,
                         'layers': {
                             'cdk_nag': {'status': layer_statuses['cdk_nag'], 'packs_applied': 1 if layer_statuses['cdk_nag'] == 'passed' else 0},
                             'framework_rules': {'status': layer_statuses['framework_rules']},
                             'cfn_guard': {'status': layer_statuses['cfn_guard']},
-                            'aws_config': {'status': 'deployed'}
+                            'aws_config': {'status': layer_statuses.get('aws_config', 'deployed')}
                         },
                         'error_message': None,
                         'deployment_context': deployment_context,
@@ -921,6 +947,7 @@ class ComplianceReportGenerator:
                             <th>cdk-nag</th>
                             <th>FrameworkRules</th>
                             <th>cfn-guard</th>
+                            <th>AWS Config</th>
                             <th>Status</th>
                             <th>Duration</th>
                         </tr>
@@ -933,6 +960,7 @@ class ComplianceReportGenerator:
             cdk_nag_class = f"status-{result.cdk_nag_status}"
             fr_class = f"status-{result.framework_rules_status}"
             cfg_class = f"status-{result.cfn_guard_status}"
+            aws_config_class = f"status-{result.aws_config_status.split()[0]}"  # Extract status word (e.g., "passed" from "passed (64 rules)")
 
             # Build detail content with deployment context, violations, and error message
             detail_parts = []
@@ -987,11 +1015,12 @@ class ComplianceReportGenerator:
                             <td><span class="status-badge {cdk_nag_class}">{result.cdk_nag_status}</span></td>
                             <td><span class="status-badge {fr_class}">{result.framework_rules_status}</span></td>
                             <td><span class="status-badge {cfg_class}">{result.cfn_guard_status}</span></td>
+                            <td><span class="status-badge {aws_config_class}">{result.aws_config_status}</span></td>
                             <td><span class="status-badge {status_class}">{result.status}</span></td>
                             <td>{result.duration:.2f}s</td>
                         </tr>
                         <tr class="detail-row" id="detail-{idx}">
-                            <td colspan="8"><div class="detail-content">{detail_content}</div></td>
+                            <td colspan="9"><div class="detail-content">{detail_content}</div></td>
                         </tr>"""
 
         html_content += f"""
