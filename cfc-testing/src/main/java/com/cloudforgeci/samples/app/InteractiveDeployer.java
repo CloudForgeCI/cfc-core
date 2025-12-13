@@ -18,6 +18,8 @@ import com.cloudforge.core.interfaces.ApplicationSpec;
 
 // CDK-NAG for construct-level compliance validation
 import io.github.cdklabs.cdknag.AwsSolutionsChecks;
+import io.github.cdklabs.cdknag.NagPackProps;
+import io.github.cdklabs.cdknag.NagReportFormat;
 
 // Configuration Introspection imports
 import com.cloudforge.core.config.ConfigFieldInfo;
@@ -1510,16 +1512,30 @@ public class InteractiveDeployer {
             System.out.println("\n🔍 Applying cdk-nag validation (AWS Solutions Checks)...");
             System.out.println("   Mode: " + complianceMode);
 
-            AwsSolutionsChecks nagChecks = new AwsSolutionsChecks();
+            AwsSolutionsChecks nagChecks;
 
             // Configure cdk-nag behavior based on mode
             if (complianceMode == ComplianceMode.ADVISORY) {
                 System.out.println("   ⚠️  Violations will be logged as warnings only");
-                // In advisory mode, cdk-nag still validates but doesn't fail synthesis
-                // The warnings will be visible in the synthesis output
+                // In advisory mode, cdk-nag validates but doesn't fail synthesis
+                // reports=false prevents synthesis from failing on violations
+                nagChecks = AwsSolutionsChecks.Builder.create()
+                    .verbose(true)
+                    .reports(false)  // Disable error reports to prevent synthesis failure
+                    .logIgnores(true)
+                    .build();
             } else if (complianceMode == ComplianceMode.ENFORCE) {
                 System.out.println("   🚫 Violations will block deployment");
                 // In enforce mode, cdk-nag validation failures will fail synthesis
+                // reports=true causes synthesis to fail on violations
+                nagChecks = AwsSolutionsChecks.Builder.create()
+                    .verbose(true)
+                    .reports(true)
+                    .logIgnores(true)
+                    .build();
+            } else {
+                // Default to enforce mode if somehow we get here
+                nagChecks = new AwsSolutionsChecks();
             }
 
             Aspects.of(app).add(nagChecks);

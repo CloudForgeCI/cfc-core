@@ -1,14 +1,16 @@
-# CloudForge 3.0.0 — Universal Application Deployment Platform
+# CloudForge 3.0.0 — Compliance-Ready AWS Infrastructure Framework
 
-**Enterprise-ready application deployment infrastructure on AWS using CDK**
+**Open-source infrastructure-as-code framework for deploying secure, auditable application workloads on AWS**
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.cloudforgeci/cloudforge-api)](https://central.sonatype.com/artifact/com.cloudforgeci/cloudforge-api)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 
-Deploy secure, compliant application infrastructure on AWS in minutes. **14 applications across 8 categories**: CI/CD (Jenkins, GitLab, Drone), Version Control (Gitea), Monitoring (Grafana, Prometheus), Databases (PostgreSQL, Redis), Secrets Management (Vault), Artifact Registry (Nexus, Harbor), Collaboration (Mattermost), and Analytics (Metabase, Superset). Built-in OIDC authentication (Cognito, IAM Identity Center) and compliance support (SOC2, HIPAA, PCI-DSS, GDPR) with automated remediation.
+Deploy secure, compliance-ready application infrastructure on AWS in minutes. **10+ applications across 8 categories**: CI/CD (Jenkins, GitLab, Drone), Version Control (Gitea), Monitoring (Grafana, Prometheus), Databases (PostgreSQL, Redis), Secrets Management (Vault), Artifact Registry (Nexus, Harbor), Collaboration (Mattermost), and Analytics (Metabase, Superset). Built-in OIDC authentication (AWS Cognito, IAM Identity Center) and automated compliance validation for SOC2, HIPAA, PCI-DSS, GDPR, and ISO 27001.
 
 **📈 [Live Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** — Coverage, validation, compliance truth tables & drift detection
+
+> **⚠️ IMPORTANT:** This software is provided "AS IS" under the Apache License 2.0. It is **compliance-ready**, not compliance-certified. While CloudForge provides tools, controls, and configurations designed to support compliance efforts, it does NOT guarantee compliance with any regulatory framework. Organizations are solely responsible for conducting their own compliance assessments, engaging qualified auditors and legal counsel, and meeting all applicable regulatory requirements. See [LICENSE](LICENSE) for full terms.
 
 ---
 

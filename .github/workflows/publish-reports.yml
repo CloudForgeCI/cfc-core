@@ -107,13 +107,9 @@ jobs:
       - name: Prepare CDK dependencies for validation
         run: |
           cd cfc-testing
-          if [ ! -d "target/classes" ]; then
-            echo "Building cfc-testing module..."
-            mvn clean install -DskipTests -B
-          fi
-          if [ ! -d "target/dependency" ]; then
-            mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B
-          fi
+          echo "Ensuring clean build of cfc-testing module for synthesis tests..."
+          echo "This ensures all latest changes from cloudforge-core are picked up"
+          mvn clean package -DskipTests -B
           chmod +x scripts/*.sh 2>/dev/null || true
           mkdir -p scripts/validation-results scripts/synth-results
 

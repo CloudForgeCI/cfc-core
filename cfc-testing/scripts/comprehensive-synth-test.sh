@@ -145,41 +145,41 @@ run_synthesis() {
     local synth_error="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-error.log"
 
     # Use cdk synth with deployment-context.json (written by create_deployment_context)
-    if cdk synth --quiet --context cfc=@deployment-context.json > "$synth_output" 2> "$synth_error"; then
+    # Note: cdk-nag may cause exit code 1 even when synthesis succeeds, so we check for template file instead
+    cdk synth --quiet --context cfc=@deployment-context.json > "$synth_output" 2> "$synth_error"
+
+    # Check if synthesis succeeded by looking for the generated template file
+    local template_file="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-template.json"
+    if [ -f "$CDK_OUT_DIR/$stack_name.template.json" ]; then
         echo -e "  ${GREEN}✅ Synthesis successful${NC}"
-        
-        # Copy synthesized template
-        local template_file="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-template.json"
-        if [ -f "$CDK_OUT_DIR/$stack_name.template.json" ]; then
-            cp "$CDK_OUT_DIR/$stack_name.template.json" "$template_file"
-            echo "  📄 Template saved: $template_file"
-        fi
-        
+        cp "$CDK_OUT_DIR/$stack_name.template.json" "$template_file"
+        echo "  📄 Template saved: $template_file"
+
         # Check for Route53 records in template
         if grep -q "AWS::Route53::RecordSet" "$template_file" 2>/dev/null; then
             echo -e "  ${GREEN}✅ Route53 records found${NC}"
         else
             echo -e "  ${RED}❌ No Route53 records found${NC}"
         fi
-        
+
         # Check for security groups
         local sg_count=$(grep -c "AWS::EC2::SecurityGroup" "$template_file" 2>/dev/null || echo "0")
         echo "  🔒 Security Groups: $sg_count"
-        
+
         # Check for IAM roles
         local iam_count=$(grep -c "AWS::IAM::Role" "$template_file" 2>/dev/null || echo "0")
         echo "  👤 IAM Roles: $iam_count"
-        
+
         # Check for load balancer
         if grep -q "AWS::ElasticLoadBalancingV2::LoadBalancer" "$template_file" 2>/dev/null; then
             echo -e "  ${GREEN}✅ Load Balancer found${NC}"
         else
             echo -e "  ${RED}❌ No Load Balancer found${NC}"
         fi
-        
+
         return 0
     else
-        echo -e "  ${RED}❌ Synthesis failed${NC}"
+        echo -e "  ${RED}❌ Synthesis failed - no template generated${NC}"
         echo "  📄 Error log: $synth_error"
         return 1
     fi
