@@ -275,3 +275,17 @@ FAIL_GDPR_ALL_FRAMEWORKS_EC2_us-east-1_no-approval,EC2,PRODUCTION,with-domain,ss
 FAIL_GDPR_ALL_FRAMEWORKS_FARGATE_us-east-1_no-approval,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,us-east-1,
 GDPR_ALL_FRAMEWORKS_EC2_us-east-1_with-approval,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,us-east-1,true
 GDPR_ALL_FRAMEWORKS_FARGATE_us-east-1_with-approval,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,us-east-1,true
+SOC2_PRIVATE_CA_EC2_ssl-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+SOC2_PRIVATE_CA_FARGATE_ssl-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+HIPAA_PRIVATE_CA_EC2_ssl-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,,PASS,jenkins,,,
+HIPAA_PRIVATE_CA_FARGATE_ssl-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,,PASS,jenkins,,,
+PCI-DSS_PRIVATE_CA_EC2_ssl-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+PCI-DSS_PRIVATE_CA_FARGATE_ssl-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+FAIL_SOC2_EC2_ssl-disabled,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_SOC2_FARGATE_ssl-disabled,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_HIPAA_EC2_ssl-disabled,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,,FAIL,jenkins,,,
+FAIL_HIPAA_FARGATE_ssl-disabled,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_ssl-disabled,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_ssl-disabled,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_SOC2_EC2_no-ssl-no-domain,EC2,PRODUCTION,no-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_SOC2_FARGATE_no-ssl-no-domain,FARGATE,PRODUCTION,no-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,

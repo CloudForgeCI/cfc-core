@@ -207,17 +207,22 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             ));
         } else {
             rules.add(ComplianceRule.pass("SOC2-CC6.7-SSL", "SSL/TLS enabled for data transmission"));
-        }
 
-        // CC6.7: Encryption in transit - TLS certificate
-        if (ctx.cert.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC6.7-TLS",
-                "TLS certificate required for encrypted data transmission",
-                "Configure HTTPS for all customer-facing endpoints."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.7-TLS", "TLS certificate configured"));
+            // CC6.7: Encryption in transit - TLS certificate (only checked if SSL is enabled)
+            // Note: Private CA certificates (when no domain is specified) are automatically created
+            boolean hasUserCert = ctx.cert.get().isPresent();
+            boolean usePrivateCa = ctx.cfc.domain() == null && ctx.cfc.fqdn() == null;
+
+            if (!hasUserCert && !usePrivateCa) {
+                rules.add(ComplianceRule.fail(
+                    "SOC2-CC6.7-TLS",
+                    "TLS certificate required for encrypted data transmission",
+                    "Configure a domain with HTTPS certificate or use Private CA (SSL without domain)."
+                ));
+            } else {
+                String certType = usePrivateCa ? "Private CA certificate" : "TLS certificate";
+                rules.add(ComplianceRule.pass("SOC2-CC6.7-TLS", certType + " configured"));
+            }
         }
 
         if (!config.isEfsEncryptionInTransitEnabled()) {

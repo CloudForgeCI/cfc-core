@@ -104,12 +104,10 @@ rule database_security_rds_enhanced_monitoring when
 rule database_security_rds_log_exports when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    when Properties.EnableCloudwatchLogsExports exists {
-        Properties.EnableCloudwatchLogsExports.* exists
-    }
+    Properties.EnableCloudwatchLogsExports exists
 
     <<
-        [Database Security] RDS instances should export logs to CloudWatch.
+        [Database Security] RDS instances must export logs to CloudWatch.
         CloudForge Mapping: AUDIT_LOGGING control
     >>
 }
@@ -122,12 +120,11 @@ rule database_security_rds_log_exports when
 rule database_security_dynamodb_encryption when
     resourceType == 'AWS::DynamoDB::Table' {
 
-    when Properties.SSESpecification exists {
-        Properties.SSESpecification.SSEEnabled == true
-    }
+    Properties.SSESpecification exists
+    Properties.SSESpecification.SSEEnabled == true
 
     <<
-        [Database Security] DynamoDB tables should use encryption at rest.
+        [Database Security] DynamoDB tables must use encryption at rest.
         CloudForge Mapping: ENCRYPTION_AT_REST control
     >>
 }
@@ -140,12 +137,11 @@ rule database_security_dynamodb_encryption when
 rule database_security_dynamodb_pitr when
     resourceType == 'AWS::DynamoDB::Table' {
 
-    when Properties.PointInTimeRecoverySpecification exists {
-        Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled == true
-    }
+    Properties.PointInTimeRecoverySpecification exists
+    Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled == true
 
     <<
-        [Database Security] DynamoDB tables should have point-in-time recovery enabled.
+        [Database Security] DynamoDB tables must have point-in-time recovery enabled.
         CloudForge Mapping: BACKUP_RECOVERY control
     >>
 }

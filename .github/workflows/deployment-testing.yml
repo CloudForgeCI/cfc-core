@@ -458,11 +458,11 @@ jobs:
           cd cfc-testing
           echo "Running changeset validation with $RANDOM_SUBSET_COUNT random configs from CSV..."
           timeout 90m bash scripts/deployment-changeset-validator.sh || exit_code=$?
-          if [ ${exit_code:-0} -eq 124 ]; then
+          if [ "${exit_code:-0}" -eq 124 ]; then
             echo "Test timed out after 90 minutes"
             exit 1
           fi
-          exit ${exit_code:-0}
+          exit "${exit_code:-0}"
 
       - name: Upload changeset reports
         if: always()

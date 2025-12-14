@@ -156,7 +156,7 @@ public final class CdkNagControlMapper {
         // ECR image scanning
         map.put("AwsSolutions-ECR-1", SecurityControl.ACCESS_CONTROL);
         map.put("AwsSolutions-ECR-2", SecurityControl.ACCESS_CONTROL);
-        map.put("HIPAA.Security-ECRImageScanning", SecurityControl.ACCESS_CONTROL);
+        // ECRImageScanning moved to VULNERABILITY_MANAGEMENT section (line 289)
 
         // KMS key rotation
         map.put("AwsSolutions-KMS-5", SecurityControl.ACCESS_CONTROL);
@@ -217,7 +217,7 @@ public final class CdkNagControlMapper {
 
         // Lambda logging
         map.put("AwsSolutions-L-1", SecurityControl.AUDIT_LOGGING);
-        map.put("HIPAA.Security-LambdaConcurrency", SecurityControl.AUDIT_LOGGING);
+        // LambdaConcurrency moved to VULNERABILITY_MANAGEMENT section (line 293)
 
         // ========== LOG_RETENTION ==========
         // CloudWatch Logs retention

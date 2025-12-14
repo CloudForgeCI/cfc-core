@@ -1153,12 +1153,7 @@ class TruthTableValidationTest {
 
         // Auth mode
         if ("alb-oidc".equals(authMode)) {
-            // ALB-OIDC requires SSL and domain
-            if (!hasDomain) {
-                throw new IllegalArgumentException(
-                    "Configuration '" + configName + "' has alb-oidc auth without domain - this violates truth table constraints"
-                );
-            }
+            // ALB-OIDC requires SSL (domain is optional - callback can use ALB DNS when no domain specified)
             // Force SSL to be enabled for OIDC (required by DeploymentContext validation)
             sslEnabled = true;
             context.put("authMode", "alb-oidc");

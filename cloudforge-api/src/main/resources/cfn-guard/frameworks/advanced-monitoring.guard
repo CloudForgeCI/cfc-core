@@ -134,9 +134,8 @@ rule advanced_monitoring_rds_enhanced when
 rule advanced_monitoring_rds_logs when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    when Properties.EnableCloudwatchLogsExports exists {
-        Properties.EnableCloudwatchLogsExports.* exists
-    }
+    Properties.EnableCloudwatchLogsExports exists
+    Properties.EnableCloudwatchLogsExports not empty
 
     <<
         [Advanced Monitoring] RDS instances should export logs to CloudWatch.
