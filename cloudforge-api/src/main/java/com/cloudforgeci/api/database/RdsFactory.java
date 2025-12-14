@@ -5,6 +5,7 @@ import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection;
 import com.cloudforge.core.enums.SecurityProfile;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.IVpc;
@@ -140,11 +141,19 @@ public class RdsFactory {
         }
 
         // Create database credentials in Secrets Manager
+        String secretTemplate;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            secretTemplate = mapper.writeValueAsString(Map.of("username", requirement.databaseName() + "admin"));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create secret template JSON", e);
+        }
+
         Secret databaseSecret = Secret.Builder.create(scope, instanceId + "Secret")
             .secretName(stackName + "-" + instanceId + "-credentials")
             .description("Database credentials for " + stackName + "-" + instanceId)
             .generateSecretString(SecretStringGenerator.builder()
-                .secretStringTemplate("{\"username\":\"" + requirement.databaseName() + "admin\"}")
+                .secretStringTemplate(secretTemplate)
                 .generateStringKey("password")
                 .excludePunctuation(true)
                 .passwordLength(32)
@@ -370,6 +379,9 @@ public class RdsFactory {
      * Map version string to MySQL engine version.
      */
     private static MysqlEngineVersion mapMySqlVersion(String version) {
+        if ("5.7".equals(version)) {
+            System.err.println("WARNING: MySQL 5.7 reached end-of-life in October 2023. Consider upgrading to MySQL 8.0 for continued security updates and support.");
+        }
         return switch (version) {
             case "5.7" -> MysqlEngineVersion.VER_5_7;
             case "8.0" -> MysqlEngineVersion.VER_8_0;

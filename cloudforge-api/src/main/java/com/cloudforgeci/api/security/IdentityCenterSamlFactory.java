@@ -6,6 +6,7 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforgeci.api.util.CfnStringUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.customresources.AwsCustomResource;
@@ -308,10 +309,18 @@ public class IdentityCenterSamlFactory extends BaseFactory {
         LOG.info("IdP SSO URL: " + ssoUrl);
 
         String secretName = stackName + "/" + appId + "/saml/idp-config";
-        String secretValue = String.format(
-            "{\"metadataUrl\":\"%s\",\"ssoUrl\":\"%s\",\"instanceId\":\"%s\",\"region\":\"%s\"}",
-            metadataUrl, ssoUrl, instanceId, region
-        );
+        String secretValue;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            secretValue = mapper.writeValueAsString(Map.of(
+                "metadataUrl", metadataUrl,
+                "ssoUrl", ssoUrl,
+                "instanceId", instanceId,
+                "region", region
+            ));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create Identity Center SAML secret JSON", e);
+        }
         String description = "IAM Identity Center SAML IdP configuration for " + appId;
 
         // Delete secret on stack deletion - ALWAYS delete, no RETAIN behavior for this config

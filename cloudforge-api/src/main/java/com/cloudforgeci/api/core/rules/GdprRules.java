@@ -156,11 +156,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
      * Check if the given AWS region is in the European Union.
      */
     private boolean isEuropeanUnionRegion(String region) {
-        return region != null && (
-            region.startsWith("eu-") ||           // EU regions (eu-west-1, eu-central-1, etc.)
-            region.equals("me-south-1") ||        // Middle East (Bahrain) - not EU but sometimes grouped
-            region.equals("af-south-1")           // Africa (Cape Town) - not EU
-        ) && !region.equals("me-south-1") && !region.equals("af-south-1");
+        return region != null && region.startsWith("eu-");
     }
 
     /**

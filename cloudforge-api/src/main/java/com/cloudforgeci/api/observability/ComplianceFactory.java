@@ -3198,7 +3198,7 @@ public class ComplianceFactory extends BaseFactory {
         for (String framework : frameworks) {
             attemptedCount++;
             try {
-                createSingleAssessment(
+                boolean created = createSingleAssessment(
                     framework,
                     attemptedCount,  // Use attempted count for logging
                     shortId,
@@ -3206,7 +3206,9 @@ public class ComplianceFactory extends BaseFactory {
                     auditManagerRole,
                     accountId
                 );
-                assessmentCount++;  // Only increment if successful (didn't return early)
+                if (created) {
+                    assessmentCount++;
+                }
             } catch (Exception e) {
                 LOG.warning("Failed to create Audit Manager assessment for framework " + framework + ": " + e.getMessage());
                 LOG.warning("  Continuing with remaining frameworks...");
@@ -3256,7 +3258,7 @@ public class ComplianceFactory extends BaseFactory {
      * Creates a single Audit Manager assessment for the specified framework.
      * Populates custom control sets from AuditManagerControlRegistry to map Config rules to framework controls.
      */
-    private void createSingleAssessment(
+    private boolean createSingleAssessment(
         String frameworkName,
         int index,
         String shortId,
@@ -3279,7 +3281,7 @@ public class ComplianceFactory extends BaseFactory {
         String frameworkId = resolveFrameworkIdentifier(frameworkName);
         if (frameworkId == null) {
             LOG.info("  Skipping Audit Manager assessment for custom framework: " + frameworkName);
-            return;  // Skip this assessment
+            return false;  // Skip this assessment
         }
         LOG.info("  Using AWS-managed framework: " + frameworkId);
         LOG.info("  Evidence will be collected from Conformance Pack rules automatically");
@@ -3376,6 +3378,7 @@ public class ComplianceFactory extends BaseFactory {
         assessment.getNode().addDependency(reportBucket);
 
         LOG.info("  Created: " + assessmentName + " (framework: " + frameworkId + ")");
+        return true;
     }
 
 

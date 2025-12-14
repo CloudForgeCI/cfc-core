@@ -101,7 +101,7 @@ public final class CdkNagControlMapper {
 
         // RDS SSL/TLS
         map.put("AwsSolutions-RDS-10", SecurityControl.ENCRYPTION_IN_TRANSIT);
-        map.put("HIPAA.Security-RDSEnhancedMonitoringEnabled", SecurityControl.ENCRYPTION_IN_TRANSIT);
+        map.put("HIPAA.Security-RDSEnhancedMonitoringEnabled", SecurityControl.SECURITY_MONITORING);
 
         // Redshift SSL
         map.put("AwsSolutions-RS-1", SecurityControl.ENCRYPTION_IN_TRANSIT);

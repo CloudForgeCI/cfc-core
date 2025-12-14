@@ -971,6 +971,15 @@ class TruthTableValidationTest {
             Path tempTemplate = Files.createTempFile("cfn-template-", ".json");
             Files.writeString(tempTemplate, templateJson);
 
+            // Verify template file was created and is readable
+            if (!Files.exists(tempTemplate) || !Files.isReadable(tempTemplate)) {
+                throw new IllegalStateException(
+                    "Failed to create synthesized CloudFormation template for cfn-guard validation. " +
+                    "Expected template at: " + tempTemplate + ". " +
+                    "Ensure CDK synthesis succeeded and temp directory is writable."
+                );
+            }
+
             try {
                 // Find cfn-guard executable and check if it's installed
                 String cfnGuardPath = findCfnGuardExecutable();

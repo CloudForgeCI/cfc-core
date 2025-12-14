@@ -90,12 +90,11 @@ rule incident_response_cloudwatch_retention when
 rule incident_response_s3_logging when
     resourceType == 'AWS::S3::Bucket' {
 
-    when Properties.LoggingConfiguration exists {
-        Properties.LoggingConfiguration.DestinationBucketName exists
-    }
+    Properties.LoggingConfiguration exists
+    Properties.LoggingConfiguration.DestinationBucketName exists
 
     <<
-        [Incident Response] S3 buckets should have access logging enabled for forensic analysis.
+        [Incident Response] S3 buckets must have access logging enabled for forensic analysis.
         CloudForge Mapping: AUDIT_LOGGING control
     >>
 }
@@ -124,12 +123,10 @@ rule incident_response_guardduty_enabled when
 rule incident_response_sns_encryption when
     resourceType == 'AWS::SNS::Topic' {
 
-    when Properties.KmsMasterKeyId exists {
-        Properties.KmsMasterKeyId exists
-    }
+    Properties.KmsMasterKeyId exists
 
     <<
-        [Incident Response] SNS topics used for incident notifications should be encrypted.
+        [Incident Response] SNS topics used for incident notifications must be encrypted.
         CloudForge Mapping: ENCRYPTION_AT_REST control
     >>
 }
@@ -273,12 +270,11 @@ rule incident_response_config_recorder when
 rule incident_response_snapshot_encryption when
     resourceType == 'AWS::EC2::Snapshot' {
 
-    when Properties.Encrypted exists {
-        Properties.Encrypted == true
-    }
+    Properties.Encrypted exists
+    Properties.Encrypted == true
 
     <<
-        [Incident Response] EBS snapshots should be encrypted for evidence protection.
+        [Incident Response] EBS snapshots must be encrypted for evidence protection.
         CloudForge Mapping: ENCRYPTION_AT_REST control
     >>
 }
