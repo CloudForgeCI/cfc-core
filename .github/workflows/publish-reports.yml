@@ -37,6 +37,7 @@ jobs:
 
           # Get today's date to skip downloading it (we'll create it fresh)
           TODAY=$(date +'%Y-%m-%d')
+          echo "📅 Today's date: ${TODAY}"
 
           # Try to fetch the history index to see if it exists
           if curl -f -s "${PAGES_URL}/index.html" > /dev/null 2>&1; then
@@ -46,7 +47,11 @@ jobs:
             curl -s "${PAGES_URL}/index.html" -o /tmp/history-index.html
 
             # Extract date folders (format: YYYY-MM-DD) from the HTML
-            grep -oP '\d{4}-\d{2}-\d{2}' /tmp/history-index.html | sort -u | while read -r date; do
+            echo "📋 Extracting available historical dates..."
+            DATES=$(grep -oP '\d{4}-\d{2}-\d{2}' /tmp/history-index.html | sort -u)
+            echo "Found dates: ${DATES}"
+
+            echo "${DATES}" | while read -r date; do
               # Skip today's date - we'll create it fresh with new reports
               if [ "$date" = "$TODAY" ]; then
                 echo "  ⏭️  Skipping ${date} (will be created fresh with new reports)"
@@ -57,7 +62,7 @@ jobs:
               mkdir -p "github-pages-reports/history/${date}"
 
               # Download each subdirectory that might exist
-              for subdir in coverage validation drift sbom; do
+              for subdir in coverage validation drift sbom deployment-metrics changeset-validation; do
                 # Try to download the index file to check if subdir exists
                 if curl -f -s "${PAGES_URL}/${date}/${subdir}/index.html" > /dev/null 2>&1; then
                   echo "    ↓ ${subdir}/"
@@ -66,12 +71,16 @@ jobs:
                   wget -q -r -np -nH -R "index.html?*" --cut-dirs=1 \
                     -P "github-pages-reports" \
                     "${PAGES_URL}/${date}/${subdir}/" 2>/dev/null || true
+                else
+                  echo "    ⊘ ${subdir}/ (not found)"
                 fi
               done
 
               # Download the date's index.html
               curl -s "${PAGES_URL}/${date}/index.html" \
                 -o "github-pages-reports/history/${date}/index.html" 2>/dev/null || true
+
+              echo "  ✅ Completed download for ${date}"
             done
 
             # Download history index.html
@@ -79,6 +88,8 @@ jobs:
               -o "github-pages-reports/history/index.html" 2>/dev/null || true
 
             echo "✅ Downloaded existing history (excluding today's date)"
+            echo "📊 Final structure:"
+            find github-pages-reports/history -type d -name "20*" | sort
           else
             echo "ℹ️  No existing history found (this may be the first run)"
           fi

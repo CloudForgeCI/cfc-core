@@ -35,6 +35,7 @@ class GdprRulesTest {
         cfcContext.put("securityProfile", profile.name());
         cfcContext.put("auditManagerEnabled", "true");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         stack.getNode().setContext("cfc", cfcContext);
 
         return stack;
@@ -99,6 +100,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprEncryption");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("encryptionAtRest", "true");
         cfcContext.put("kmsKeyRotation", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -121,6 +123,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprTransit");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("enableSsl", "true");
         cfcContext.put("fqdn", "gdpr.example.com");
         cfcContext.put("tlsVersion", "1.2");
@@ -144,6 +147,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprDataMin");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("dataMinimizationEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -165,6 +169,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprBreach");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("breachNotification72Hours", "true");
         cfcContext.put("securityContactEmail", "dpo@example.com");
         stack.getNode().setContext("cfc", cfcContext);
@@ -187,6 +192,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprRights");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("dataSubjectAccessEnabled", "true");
         cfcContext.put("rightToErasureSupported", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -209,6 +215,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprAudit");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("auditLoggingEnabled", "true");
         cfcContext.put("processingRecordsEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -231,6 +238,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprAccess");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("rbacEnabled", "true");
         cfcContext.put("leastPrivilegeEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -253,6 +261,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprDpia");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("dpiaCompleted", "true");
         cfcContext.put("highRiskProcessing", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -275,6 +284,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprRetention");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("dataRetentionPolicyEnabled", "true");
         cfcContext.put("automaticDeletionEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -297,6 +307,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprPseudo");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("pseudonymizationEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -318,6 +329,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprPortability");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("dataPortabilityEnabled", "true");
         cfcContext.put("structuredDataFormat", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -340,6 +352,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprComplete");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         // Art. 32: Security of processing
         cfcContext.put("encryptionAtRest", "true");
         cfcContext.put("enableSsl", "true");
@@ -408,6 +421,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprLawful");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("lawfulBasisDocumented", "true");
         cfcContext.put("consentManagementEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -430,6 +444,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprTransfer");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("internationalDataTransfers", "true");
         cfcContext.put("adequacyDecision", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -452,6 +467,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprAutomated");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("automatedDecisionMaking", "true");
         cfcContext.put("humanReviewRequired", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -474,6 +490,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprProcessor");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("processorAgreementsInPlace", "true");
         cfcContext.put("subProcessorApproval", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -496,6 +513,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprPrivacyDesign");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("privacyByDesign", "true");
         cfcContext.put("privacyByDefault", "true");
         cfcContext.put("dataProtectionByDefault", "true");
@@ -519,6 +537,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprTransparency");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("privacyNoticeProvided", "true");
         cfcContext.put("clearLanguageUsed", "true");
         cfcContext.put("processingPurposesDocumented", "true");
@@ -542,6 +561,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprAccuracy");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("dataAccuracyChecks", "true");
         cfcContext.put("dataUpdateMechanism", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -564,6 +584,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprRectification");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("rectificationSupported", "true");
         cfcContext.put("recipientNotificationEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -586,6 +607,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprRestriction");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("processingRestrictionSupported", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -607,6 +629,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprObject");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("rightToObjectSupported", "true");
         cfcContext.put("directMarketingOptOut", "true");
         stack.getNode().setContext("cfc", cfcContext);
@@ -629,6 +652,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprAccountability");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("complianceDocumentation", "true");
         cfcContext.put("evidenceOfCompliance", "true");
         cfcContext.put("dataProtectionPolicies", "true");
@@ -652,6 +676,7 @@ class GdprRulesTest {
         cfcContext.put("stackName", "TestGdprChildren");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("complianceFrameworks", "GDPR");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("childrenDataProcessing", "true");
         cfcContext.put("parentalConsentRequired", "true");
         cfcContext.put("ageVerificationEnabled", "true");
@@ -689,6 +714,7 @@ class GdprRulesTest {
     void testGdprSecurityProfileBranches(String profile, String runtime, String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprProfile");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
 
@@ -762,6 +788,7 @@ class GdprRulesTest {
                                                    String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprEncryption");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
@@ -835,6 +862,7 @@ class GdprRulesTest {
     void testGdprNetworkIsolation(String profile, String runtime, String networkMode, String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprNetwork");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", networkMode);
@@ -921,6 +949,7 @@ class GdprRulesTest {
                                           boolean flowLogs, boolean albLogging, String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprLogging");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
@@ -1010,6 +1039,7 @@ class GdprRulesTest {
                                              boolean efsTransit, String authMode, String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprTransit");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("authMode", authMode);
@@ -1097,6 +1127,7 @@ class GdprRulesTest {
                                              boolean automatedBackup, String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprMonitoring");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("securityMonitoringEnabled", String.valueOf(securityMonitoring));
@@ -1173,6 +1204,7 @@ class GdprRulesTest {
     void testGdprAwsConfig(String profile, String runtime, boolean awsConfig, String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprConfig");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("awsConfigEnabled", String.valueOf(awsConfig));
@@ -1254,6 +1286,7 @@ class GdprRulesTest {
                                  boolean securityMonitoring, String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprBreach");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("guardDutyEnabled", String.valueOf(guardDuty));
@@ -1327,6 +1360,7 @@ class GdprRulesTest {
     void testGdprWafProtection(String profile, String runtime, boolean wafEnabled, String complianceMode) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestGdprWaf");
+        customContext.put("gdprDataTransferApproved", true);
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("wafEnabled", String.valueOf(wafEnabled));
@@ -1417,6 +1451,7 @@ class GdprRulesTest {
 
         Map<String, Object> cfcContext = new HashMap<>();
         cfcContext.put("stackName", "TestGdprComprehensive");
+        cfcContext.put("gdprDataTransferApproved", true);
         cfcContext.put("securityProfile", profile);
         cfcContext.put("complianceMode", complianceMode);
         cfcContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));

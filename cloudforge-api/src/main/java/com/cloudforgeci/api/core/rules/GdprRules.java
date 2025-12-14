@@ -66,6 +66,9 @@ public class GdprRules implements FrameworkRules<SystemContext> {
             // Collect all validation results
             List<ComplianceRule> rules = new ArrayList<>();
 
+            // GDPR Chapter V: Data Residency and Cross-Border Transfers (Articles 44-50)
+            rules.addAll(validateDataResidency(ctx));
+
             // Article 25: Data Protection by Design and by Default
             rules.addAll(validateDataProtectionByDesign(ctx));
 
@@ -105,6 +108,59 @@ public class GdprRules implements FrameworkRules<SystemContext> {
                 return List.of();
             }
         });
+    }
+
+    /**
+     * GDPR Chapter V: Data Residency and Cross-Border Transfers (Articles 44-50).
+     * GDPR requires that personal data of EU residents be processed in the EU or in countries
+     * with adequate data protection unless proper transfer mechanisms are in place.
+     */
+    private List<ComplianceRule> validateDataResidency(SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+
+        String region = ctx.cfc.region();
+        boolean isEuRegion = isEuropeanUnionRegion(region);
+
+        // Check if gdprDataTransferApproved flag is set
+        boolean transferApproved = Optional.ofNullable(ctx.cfc.gdprDataTransferApproved())
+            .orElse(false);
+
+        if (!isEuRegion && !transferApproved) {
+            rules.add(ComplianceRule.fail(
+                "GDPR-DATA-RESIDENCY",
+                "GDPR requires EU data residency or approved transfer mechanisms (Art. 44-50)",
+                "DataResidencyRule",
+                "Deploying to non-EU region '" + region + "' without approved data transfer mechanism. " +
+                "Either deploy to an EU region (eu-west-1, eu-central-1, etc.) or set " +
+                "gdprDataTransferApproved=true to confirm Standard Contractual Clauses (SCCs) or " +
+                "other valid transfer mechanisms are in place."
+            ));
+        } else if (!isEuRegion && transferApproved) {
+            rules.add(ComplianceRule.pass(
+                "GDPR-DATA-RESIDENCY",
+                "GDPR data transfer approved for non-EU region (Art. 44-50): " + region,
+                "DataResidencyRule"
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "GDPR-DATA-RESIDENCY",
+                "GDPR compliant EU region deployment (Art. 44-50): " + region,
+                "DataResidencyRule"
+            ));
+        }
+
+        return rules;
+    }
+
+    /**
+     * Check if the given AWS region is in the European Union.
+     */
+    private boolean isEuropeanUnionRegion(String region) {
+        return region != null && (
+            region.startsWith("eu-") ||           // EU regions (eu-west-1, eu-central-1, etc.)
+            region.equals("me-south-1") ||        // Middle East (Bahrain) - not EU but sometimes grouped
+            region.equals("af-south-1")           // Africa (Cape Town) - not EU
+        ) && !region.equals("me-south-1") && !region.equals("af-south-1");
     }
 
     /**

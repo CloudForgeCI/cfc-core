@@ -461,6 +461,14 @@ public class DeploymentConfig {
     /** AWS region (e.g., "us-east-1", "us-west-2") */
     public String region = "us-east-1";
 
+    /**
+     * GDPR data transfer approval flag for non-EU deployments.
+     * Set to true to confirm that proper data transfer mechanisms are in place
+     * (Standard Contractual Clauses, Binding Corporate Rules, etc.) when deploying
+     * outside EU regions with GDPR compliance enabled.
+     */
+    public Boolean gdprDataTransferApproved = false;
+
     /** Availability zones for deployment */
     public String[] availabilityZones;
 

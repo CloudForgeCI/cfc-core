@@ -2,6 +2,9 @@ package com.cloudforgeci.api.integration.deployment;
 
 import com.cloudforgeci.api.compute.ApplicationFactory;
 import com.cloudforgeci.api.application.JenkinsApplicationSpec;
+import com.cloudforgeci.api.application.collaboration.MattermostApplicationSpec;
+import com.cloudforgeci.api.application.cicd.GitLabApplicationSpec;
+import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.enums.SecurityProfile;
@@ -476,7 +479,11 @@ class TruthTableValidationTest {
             String complianceFramework,
             String logRetentionDaysOverride,
             String flowLogsEnabledOverride,
-            String expectedResult) {
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
 
         // Determine if this test should fail (negative test case)
         boolean expectFailure = "FAIL".equalsIgnoreCase(expectedResult != null ? expectedResult.trim() : "");
@@ -502,6 +509,25 @@ class TruthTableValidationTest {
         cfcContext.put("complianceFrameworks", complianceFramework);
         cfcContext.put("complianceMode", "enforce");  // Enable cfn-guard validation
         cfcContext.put("auditManagerEnabled", true);  // Enable FrameworkRules validation
+        cfcContext.put("awsConfigEnabled", true);  // Enable AWS Config rules (Layer 4)
+        cfcContext.put("createConfigInfrastructure", true);  // Create Config Recorder and Delivery Channel
+
+        // Add database provisioning flag if specified
+        if (provisionDatabase != null && !provisionDatabase.trim().isEmpty()) {
+            boolean shouldProvisionDb = "true".equalsIgnoreCase(provisionDatabase.trim());
+            cfcContext.put("provisionDatabase", shouldProvisionDb);
+        }
+
+        // Add region if specified (default is us-east-1)
+        if (region != null && !region.trim().isEmpty()) {
+            cfcContext.put("region", region.trim());
+        }
+
+        // Add GDPR data transfer approval flag if specified
+        if (gdprDataTransferApproved != null && !gdprDataTransferApproved.trim().isEmpty()) {
+            boolean approved = "true".equalsIgnoreCase(gdprDataTransferApproved.trim());
+            cfcContext.put("gdprDataTransferApproved", approved);
+        }
 
         // Add framework-specific configuration requirements (only for alb-oidc tests)
         // Use contains() to support multi-framework configurations (e.g., "SOC2,PCI-DSS")
@@ -580,11 +606,21 @@ class TruthTableValidationTest {
         SecurityProfile secProfile = SecurityProfile.valueOf(securityProfile);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(secProfile);
 
+        // Select ApplicationSpec based on applicationId
+        ApplicationSpec appSpec;
+        if ("mattermost".equalsIgnoreCase(applicationId)) {
+            appSpec = new MattermostApplicationSpec();
+        } else if ("gitlab".equalsIgnoreCase(applicationId)) {
+            appSpec = new GitLabApplicationSpec();
+        } else {
+            appSpec = new JenkinsApplicationSpec();
+        }
+
         // Create infrastructure based on runtime
         if ("EC2".equals(runtime)) {
-            ApplicationFactory.createEc2(stack, "TestApp", cfc, secProfile, iamProfile, new JenkinsApplicationSpec());
+            ApplicationFactory.createEc2(stack, "TestApp", cfc, secProfile, iamProfile, appSpec);
         } else {
-            ApplicationFactory.createFargate(stack, "TestApp", cfc, secProfile, iamProfile, new JenkinsApplicationSpec());
+            ApplicationFactory.createFargate(stack, "TestApp", cfc, secProfile, iamProfile, appSpec);
         }
 
         // Track layer results - run all layers regardless of previous failures
@@ -678,8 +714,113 @@ class TruthTableValidationTest {
             System.out.println("   ⏭️  Layer 3 (cfn-guard): Skipped (no template)");
         }
 
-        // Layer 4: AWS Config (always deployed at runtime)
-        System.out.println("   ✅ Layer 4 (AWS Config): 140+ rules deployed at runtime");
+        // Layer 4: AWS Config (count rules that would actually be deployed based on conditions)
+        int configRuleCount = 0;
+        if (template != null) {
+            try {
+                // Get active framework conditions from the template
+                Map<String, Object> templateMap = template.toJSON();
+                Object conditionsObj = templateMap.get("Conditions");
+                Set<String> activeConditions = new java.util.HashSet<>();
+
+                // Normalize framework string for matching
+                String normalizedFramework = complianceFramework.toUpperCase().replace("-", "").replace("_", "");
+
+                // Parse which conditions are true based on the compliance framework
+                if (conditionsObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> conditions = (Map<String, Object>) conditionsObj;
+
+
+                    // Check if database is provisioned for this deployment
+                    boolean hasDatabase = cfcContext.containsKey("provisionDatabase") &&
+                                        Boolean.TRUE.equals(cfcContext.get("provisionDatabase"));
+
+                    // Check each condition to see if it evaluates to true
+                    for (Map.Entry<String, Object> entry : conditions.entrySet()) {
+                        String conditionName = entry.getKey();
+
+                        // Framework conditions like SystemContext...ComplianceEnableSoc2Rules...
+                        // They contain "Enable" followed by framework name followed by "Rules"
+                        if (conditionName.contains("Enable") && conditionName.contains("Rules")) {
+                            // Check for framework-specific non-RDS rules
+                            if (conditionName.contains("EnablePciDssRules") && !conditionName.contains("Rds")) {
+                                if (normalizedFramework.contains("PCIDSS")) {
+                                    activeConditions.add(conditionName);
+                                }
+                            } else if (conditionName.contains("EnableSoc2Rules") && !conditionName.contains("Rds")) {
+                                if (normalizedFramework.contains("SOC2")) {
+                                    activeConditions.add(conditionName);
+                                }
+                            } else if (conditionName.contains("EnableHipaaRules") && !conditionName.contains("Rds")) {
+                                if (normalizedFramework.contains("HIPAA")) {
+                                    activeConditions.add(conditionName);
+                                }
+                            } else if (conditionName.contains("EnableGdprRules") && !conditionName.contains("Rds")) {
+                                if (normalizedFramework.contains("GDPR")) {
+                                    activeConditions.add(conditionName);
+                                }
+                            }
+                            // Database/RDS rules - only add if database is provisioned
+                            else if (hasDatabase && conditionName.contains("Rds")) {
+                                if (conditionName.contains("EnablePciDssRdsRules") && normalizedFramework.contains("PCIDSS")) {
+                                    activeConditions.add(conditionName);
+                                } else if (conditionName.contains("EnableSoc2RdsRules") && normalizedFramework.contains("SOC2")) {
+                                    activeConditions.add(conditionName);
+                                } else if (conditionName.contains("EnableHipaaRdsRules") && normalizedFramework.contains("HIPAA")) {
+                                    activeConditions.add(conditionName);
+                                } else if (conditionName.contains("EnableGdprRdsRules") && normalizedFramework.contains("GDPR")) {
+                                    activeConditions.add(conditionName);
+                                }
+                            }
+                        }
+                    }
+
+                }
+
+                // Count AWS::Config::ConfigRule resources that will actually be deployed
+                Object resourcesObj = templateMap.get("Resources");
+                if (resourcesObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> resources = (Map<String, Object>) resourcesObj;
+
+                    for (Object resourceObj : resources.values()) {
+                        if (resourceObj instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> resource = (Map<String, Object>) resourceObj;
+                            Object type = resource.get("Type");
+
+                            if ("AWS::Config::ConfigRule".equals(type)) {
+                                // Check if this rule has a condition
+                                Object condition = resource.get("Condition");
+
+                                if (condition == null) {
+                                    // No condition means it always deploys
+                                    configRuleCount++;
+                                } else if (condition instanceof String) {
+                                    String conditionName = (String) condition;
+
+                                    // Has a condition - only count if the condition is active
+                                    if (activeConditions.contains(conditionName)) {
+                                        configRuleCount++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (configRuleCount > 0) {
+                    System.out.println("   ✅ Layer 4 (AWS Config): " + configRuleCount + " rules would be deployed");
+                } else {
+                    System.out.println("   ⏭️  Layer 4 (AWS Config): Skipped (no Config rules in template)");
+                }
+            } catch (Exception e) {
+                System.out.println("   ⏭️  Layer 4 (AWS Config): Unable to count rules - " + e.getMessage());
+            }
+        } else {
+            System.out.println("   ⏭️  Layer 4 (AWS Config): Skipped (no template)");
+        }
 
         // Collect all failures
         List<String> allFailures = new ArrayList<>();
@@ -814,7 +955,6 @@ class TruthTableValidationTest {
 
             // Split frameworks for multi-framework support (e.g., "SOC2,PCI-DSS")
             String[] frameworks = complianceFramework.split(",");
-            List<String> validatedFrameworks = new ArrayList<>();
             List<String> failedFrameworks = new ArrayList<>();
             StringBuilder allErrors = new StringBuilder();
 
@@ -832,8 +972,9 @@ class TruthTableValidationTest {
             Files.writeString(tempTemplate, templateJson);
 
             try {
-                // Check if cfn-guard is installed
-                ProcessBuilder checkBuilder = new ProcessBuilder("cfn-guard", "--version");
+                // Find cfn-guard executable and check if it's installed
+                String cfnGuardPath = findCfnGuardExecutable();
+                ProcessBuilder checkBuilder = new ProcessBuilder(cfnGuardPath, "--version");
                 Process checkProcess = checkBuilder.start();
                 int checkExitCode = checkProcess.waitFor();
 
@@ -862,7 +1003,7 @@ class TruthTableValidationTest {
 
                     // Run cfn-guard validation for this framework
                     ProcessBuilder pb = new ProcessBuilder(
-                        "cfn-guard", "validate",
+                        cfnGuardPath, "validate",
                         "--rules", guardRulePath.toString(),
                         "--data", tempTemplate.toString(),
                         "--show-summary", "fail",
@@ -888,8 +1029,6 @@ class TruthTableValidationTest {
                         allErrors.append("\n--- " + framework + " ---\n");
                         allErrors.append("Exit code: " + exitCode + "\n");
                         allErrors.append(output.toString());
-                    } else {
-                        validatedFrameworks.add(framework);
                     }
                 }
 
@@ -916,6 +1055,37 @@ class TruthTableValidationTest {
             // Don't fail the test if cfn-guard validation encounters an error
             // This allows tests to pass in environments where cfn-guard is not installed
         }
+    }
+
+    /**
+     * Find the absolute path to the cfn-guard executable.
+     * This resolves the command from the system PATH to avoid security warnings
+     * about executing commands with relative paths.
+     *
+     * @return the absolute path to cfn-guard, or "cfn-guard" as fallback
+     */
+    private String findCfnGuardExecutable() {
+        try {
+            // Try to find cfn-guard using 'which' on Unix-like systems or 'where' on Windows
+            String command = System.getProperty("os.name").toLowerCase().contains("win") ? "where" : "which";
+            ProcessBuilder pb = new ProcessBuilder(command, "cfn-guard");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream()))) {
+                String path = reader.readLine();
+                int exitCode = process.waitFor();
+
+                if (exitCode == 0 && path != null && !path.trim().isEmpty()) {
+                    return path.trim();
+                }
+            }
+        } catch (Exception e) {
+            // Fall through to default
+        }
+
+        // Fallback to relative path (will work if cfn-guard is in PATH)
+        return "cfn-guard";
     }
 
     /**

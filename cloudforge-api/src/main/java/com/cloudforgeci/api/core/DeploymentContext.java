@@ -176,6 +176,7 @@ public final class DeploymentContext {
 
     private final SecurityProfile securityProfile; // DEV | STAGING | PRODUCTION
     private final String region;      // default: us-east-1
+    private final Boolean gdprDataTransferApproved; // GDPR data transfer approval for non-EU regions
 
     // Naming / DNS
     @DnsName(message = "Domain must be a valid DNS name")
@@ -307,6 +308,7 @@ public final class DeploymentContext {
         this.env    = str("env", "dev");
         this.securityProfile = parseSecurityProfile(str("securityProfile", "dev"));
         this.region = str("region", "us-east-1");
+        this.gdprDataTransferApproved = boolOrNull("gdprDataTransferApproved");
 
         this.domain = str("domain", null);
         this.subdomain = str("subdomain", null);
@@ -452,6 +454,7 @@ public final class DeploymentContext {
     }
 
     public String region() { return region; }
+    public Boolean gdprDataTransferApproved() { return gdprDataTransferApproved; }
 
     public String domain() { return domain; }
     public String subdomain() { return subdomain; }
