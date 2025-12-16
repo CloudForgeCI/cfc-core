@@ -112,7 +112,9 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         // PRODUCTION profile enables security monitoring which includes Security Hub
         boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
-        boolean securityHubEnabled = getBooleanSetting(ctx, "securityHubEnabled", securityMonitoringEnabled);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean securityHubEnabled = ctx.cfc.securityHubEnabled() != null ?
+            ctx.cfc.securityHubEnabled() : securityMonitoringEnabled;
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!securityHubEnabled) {
@@ -211,7 +213,9 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         // PRODUCTION profile enables security monitoring which includes Inspector
         boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
-        boolean inspectorEnabled = getBooleanSetting(ctx, "inspectorEnabled", securityMonitoringEnabled);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean inspectorEnabled = ctx.cfc.inspectorEnabled() != null ?
+            ctx.cfc.inspectorEnabled() : securityMonitoringEnabled;
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!inspectorEnabled) {
@@ -296,7 +300,9 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
     private List<ComplianceRule> validateMacie(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        boolean macieEnabled = getBooleanSetting(ctx, "macieEnabled", false);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean macieEnabled = ctx.cfc.macieEnabled() != null ?
+            ctx.cfc.macieEnabled() : false;
 
         // Macie is critical for GDPR and HIPAA compliance
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
@@ -325,7 +331,9 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
             // Automated discovery jobs
             if (macieEnabled) {
-                boolean macieAutomatedDiscovery = getBooleanSetting(ctx, "macieAutomatedDiscovery", false);
+                // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+                boolean macieAutomatedDiscovery = ctx.cfc.macieAutomatedDiscoveryEnabled() != null ?
+                    ctx.cfc.macieAutomatedDiscoveryEnabled() : false;
 
                 if (!macieAutomatedDiscovery) {
                     rules.add(ComplianceRule.fail(

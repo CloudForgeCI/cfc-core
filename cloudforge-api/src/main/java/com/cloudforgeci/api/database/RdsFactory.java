@@ -5,7 +5,6 @@ import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection;
 import com.cloudforge.core.enums.SecurityProfile;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.IVpc;
@@ -141,19 +140,11 @@ public class RdsFactory {
         }
 
         // Create database credentials in Secrets Manager
-        String secretTemplate;
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            secretTemplate = mapper.writeValueAsString(Map.of("username", requirement.databaseName() + "admin"));
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create secret template JSON", e);
-        }
-
         Secret databaseSecret = Secret.Builder.create(scope, instanceId + "Secret")
             .secretName(stackName + "-" + instanceId + "-credentials")
             .description("Database credentials for " + stackName + "-" + instanceId)
             .generateSecretString(SecretStringGenerator.builder()
-                .secretStringTemplate(secretTemplate)
+                .secretStringTemplate("{\"username\":\"" + requirement.databaseName() + "admin\"}")
                 .generateStringKey("password")
                 .excludePunctuation(true)
                 .passwordLength(32)

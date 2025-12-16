@@ -364,7 +364,7 @@ class InteractiveDeployerTest {
         assertFalse(config.awsConfigEnabled);
         assertFalse(config.guardDutyEnabled);
         assertFalse(config.auditManagerEnabled);
-        assertEquals("7", config.logRetentionDays);
+        assertNull(config.logRetentionDays);
         assertEquals(300, config.healthCheckGracePeriod);
         assertEquals(30, config.healthCheckInterval);
         assertEquals(5, config.healthCheckTimeout);

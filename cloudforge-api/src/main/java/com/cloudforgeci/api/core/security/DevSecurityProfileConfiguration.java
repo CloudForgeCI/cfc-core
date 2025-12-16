@@ -280,6 +280,30 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
         return false;
     }
 
+    @Override
+    public boolean isSecurityHubRemediationEnabled() {
+        // Disabled for dev - not needed in development
+        return false;
+    }
+
+    @Override
+    public boolean isInspectorRemediationEnabled() {
+        // Disabled for dev - not needed in development
+        return false;
+    }
+
+    @Override
+    public boolean isMacieRemediationEnabled() {
+        // Disabled for dev - not needed in development
+        return false;
+    }
+
+    @Override
+    public boolean isEcrImageScanningRemediationEnabled() {
+        // Disabled for dev - not needed in development
+        return false;
+    }
+
     // ==================== Authentication Configuration ====================
 
     @Override
@@ -339,6 +363,56 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     @Override
     public boolean isAdvancedSecurityEnabled() {
         // Not needed for development
+        return false;
+    }
+
+    // ==================== Advanced Monitoring & Threat Detection ====================
+
+    @Override
+    public boolean isMacieEnabled() {
+        // Not required for development
+        return false;
+    }
+
+    @Override
+    public boolean isMacieAutomatedDiscoveryEnabled() {
+        // Not applicable
+        return false;
+    }
+
+    @Override
+    public boolean isSecurityHubEnabled() {
+        // Not needed for development
+        return false;
+    }
+
+    @Override
+    public boolean isInspectorEnabled() {
+        // Not needed for development
+        return false;
+    }
+
+    @Override
+    public boolean isAntiMalwareEnabled() {
+        // Not required for development
+        return false;
+    }
+
+    @Override
+    public boolean isFileIntegrityMonitoringEnabled() {
+        // Not required for development
+        return false;
+    }
+
+    @Override
+    public boolean isContainerRuntimeSecurityEnabled() {
+        // Not required for development
+        return false;
+    }
+
+    @Override
+    public boolean isContainerImageScanningEnabled() {
+        // Not required for development
         return false;
     }
 }

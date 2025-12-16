@@ -1,0 +1,2 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
+EC2_PRODUCTION_SOC2_PCI-DSS_HIPAA_GDPR_subdomain_flow-logs,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,true,PASS,jenkins,,,true

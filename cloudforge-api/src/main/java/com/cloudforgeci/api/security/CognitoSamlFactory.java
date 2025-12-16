@@ -7,7 +7,6 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforgeci.api.util.CfnStringUtils;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
@@ -214,18 +213,10 @@ public class CognitoSamlFactory extends BaseFactory {
 
         // Create a secret to store the IdP certificate
         // For now, we store the metadata URL - the init container fetches the actual cert
-        String secretValue;
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            secretValue = mapper.writeValueAsString(Map.of(
-                "metadataUrl", metadataUrl,
-                "userPoolId", userPoolId,
-                "region", region,
-                "providerType", "cognito"
-            ));
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create SAML secret JSON", e);
-        }
+        String secretValue = String.format(
+            "{\"metadataUrl\":\"%s\",\"userPoolId\":\"%s\",\"region\":\"%s\",\"providerType\":\"cognito\"}",
+            metadataUrl, userPoolId, region
+        );
 
         // Create secret
         AwsSdkCall createSecretCall = AwsSdkCall.builder()

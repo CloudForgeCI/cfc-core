@@ -411,6 +411,39 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         return false;
     }
 
+    @Override
+    public boolean isSecurityHubRemediationEnabled() {
+        // Enabled by default for production - required for compliance frameworks
+        // Security Hub aggregates findings from GuardDuty, Inspector, Macie
+        // Required for FedRamp, PCI-DSS, HIPAA, SOC2 centralized security monitoring
+        return true;
+    }
+
+    @Override
+    public boolean isInspectorRemediationEnabled() {
+        // Enabled by default for production - required for vulnerability scanning
+        // Inspector v2 continuously scans EC2, ECR, Lambda for CVEs
+        // Required for PCI-DSS Req 6.2, FedRamp RA-5
+        return true;
+    }
+
+    @Override
+    public boolean isMacieRemediationEnabled() {
+        // Enabled by default for production - required for sensitive data discovery
+        // Macie discovers and protects PII/PHI in S3 buckets
+        // Required for HIPAA, GDPR data classification and protection
+        // WARNING: Has cost implications (~$1/GB scanned)
+        return true;
+    }
+
+    @Override
+    public boolean isEcrImageScanningRemediationEnabled() {
+        // Enabled by default for production - required for container security
+        // ECR scan-on-push ensures no vulnerable images are deployed
+        // Required for container security best practices
+        return true;
+    }
+
     // ==================== Authentication Configuration ====================
 
     @Override
@@ -472,5 +505,104 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         // Recommended for threat detection (requires Cognito Plus tier)
         // Risk-based adaptive authentication detects suspicious login patterns
         return true;
+    }
+
+    // ==================== Advanced Monitoring & Threat Detection ====================
+
+    @Override
+    public boolean isMacieEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.macieEnabled() != null) {
+            boolean enabled = deploymentContext.macieEnabled();
+            LOG.info("PRODUCTION profile: Overriding Macie from deployment context: " + enabled);
+            return enabled;
+        }
+        // PRODUCTION default: false (requires explicit opt-in due to cost)
+        // Note: FrameworkRules will require this for HIPAA/GDPR compliance
+        return false;
+    }
+
+    @Override
+    public boolean isMacieAutomatedDiscoveryEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.macieAutomatedDiscoveryEnabled() != null) {
+            boolean enabled = deploymentContext.macieAutomatedDiscoveryEnabled();
+            LOG.info("PRODUCTION profile: Overriding Macie automated discovery from deployment context: " + enabled);
+            return enabled;
+        }
+        // Only enable automated discovery if Macie itself is enabled
+        return isMacieEnabled();
+    }
+
+    @Override
+    public boolean isSecurityHubEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.securityHubEnabled() != null) {
+            boolean enabled = deploymentContext.securityHubEnabled();
+            LOG.info("PRODUCTION profile: Overriding Security Hub from deployment context: " + enabled);
+            return enabled;
+        }
+        // PRODUCTION default: true (recommended for centralized security monitoring)
+        return isSecurityMonitoringEnabled();
+    }
+
+    @Override
+    public boolean isInspectorEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.inspectorEnabled() != null) {
+            boolean enabled = deploymentContext.inspectorEnabled();
+            LOG.info("PRODUCTION profile: Overriding Inspector from deployment context: " + enabled);
+            return enabled;
+        }
+        // PRODUCTION default: true (recommended for vulnerability scanning)
+        return isSecurityMonitoringEnabled();
+    }
+
+    @Override
+    public boolean isAntiMalwareEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.antiMalwareEnabled() != null) {
+            boolean enabled = deploymentContext.antiMalwareEnabled();
+            LOG.info("PRODUCTION profile: Overriding anti-malware from deployment context: " + enabled);
+            return enabled;
+        }
+        // PRODUCTION default: false (only applicable to EC2, requires explicit configuration)
+        return false;
+    }
+
+    @Override
+    public boolean isFileIntegrityMonitoringEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.fileIntegrityMonitoringEnabled() != null) {
+            boolean enabled = deploymentContext.fileIntegrityMonitoringEnabled();
+            LOG.info("PRODUCTION profile: Overriding file integrity monitoring from deployment context: " + enabled);
+            return enabled;
+        }
+        // PRODUCTION default: false (only applicable to EC2, requires explicit configuration)
+        return false;
+    }
+
+    @Override
+    public boolean isContainerRuntimeSecurityEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.containerRuntimeSecurityEnabled() != null) {
+            boolean enabled = deploymentContext.containerRuntimeSecurityEnabled();
+            LOG.info("PRODUCTION profile: Overriding container runtime security from deployment context: " + enabled);
+            return enabled;
+        }
+        // PRODUCTION default: false (requires explicit configuration)
+        return false;
+    }
+
+    @Override
+    public boolean isContainerImageScanningEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.containerImageScanningEnabled() != null) {
+            boolean enabled = deploymentContext.containerImageScanningEnabled();
+            LOG.info("PRODUCTION profile: Overriding container image scanning from deployment context: " + enabled);
+            return enabled;
+        }
+        // PRODUCTION default: false (typically handled by ECR, requires explicit configuration)
+        return false;
     }
 }

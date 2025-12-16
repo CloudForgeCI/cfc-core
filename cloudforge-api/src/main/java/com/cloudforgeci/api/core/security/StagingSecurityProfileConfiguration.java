@@ -10,6 +10,8 @@ import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
+import java.util.logging.Logger;
+
 /**
  * Staging security profile configuration for pre-production environments.
  *
@@ -23,6 +25,7 @@ import software.amazon.awscdk.services.logs.RetentionDays;
  */
 public class StagingSecurityProfileConfiguration implements SecurityProfileConfiguration {
 
+    private static final Logger LOG = Logger.getLogger(StagingSecurityProfileConfiguration.class.getName());
     private final DeploymentContext deploymentContext;
 
     /**
@@ -323,6 +326,30 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         return false;
     }
 
+    @Override
+    public boolean isSecurityHubRemediationEnabled() {
+        // Disabled by default - enable explicitly to test auto-remediation
+        return false;
+    }
+
+    @Override
+    public boolean isInspectorRemediationEnabled() {
+        // Disabled by default - enable explicitly to test auto-remediation
+        return false;
+    }
+
+    @Override
+    public boolean isMacieRemediationEnabled() {
+        // Disabled by default - enable explicitly to test behavior before production
+        return false;
+    }
+
+    @Override
+    public boolean isEcrImageScanningRemediationEnabled() {
+        // Disabled by default - enable explicitly to test auto-remediation
+        return false;
+    }
+
     // ==================== Authentication Configuration ====================
 
     @Override
@@ -383,5 +410,103 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     public boolean isAdvancedSecurityEnabled() {
         // Optional for testing - can enable to test adaptive auth
         return false;
+    }
+
+    // ==================== Advanced Monitoring & Threat Detection ====================
+
+    @Override
+    public boolean isMacieEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.macieEnabled() != null) {
+            boolean enabled = deploymentContext.macieEnabled();
+            LOG.severe("STAGING profile: Overriding Macie from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (opt-in for testing)
+        return false;
+    }
+
+    @Override
+    public boolean isMacieAutomatedDiscoveryEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.macieAutomatedDiscoveryEnabled() != null) {
+            boolean enabled = deploymentContext.macieAutomatedDiscoveryEnabled();
+            LOG.severe("STAGING profile: Overriding Macie automated discovery from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (manual discovery preferred for testing)
+        return false;
+    }
+
+    @Override
+    public boolean isSecurityHubEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.securityHubEnabled() != null) {
+            boolean enabled = deploymentContext.securityHubEnabled();
+            LOG.severe("STAGING profile: Overriding Security Hub from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: true (test security monitoring)
+        return true;
+    }
+
+    @Override
+    public boolean isInspectorEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.inspectorEnabled() != null) {
+            boolean enabled = deploymentContext.inspectorEnabled();
+            LOG.severe("STAGING profile: Overriding Inspector from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: true (test vulnerability scanning)
+        return true;
+    }
+
+    @Override
+    public boolean isAntiMalwareEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.antiMalwareEnabled() != null) {
+            boolean enabled = deploymentContext.antiMalwareEnabled();
+            LOG.severe("STAGING profile: Overriding anti-malware from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (optional for testing)
+        return false;
+    }
+
+    @Override
+    public boolean isFileIntegrityMonitoringEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.fileIntegrityMonitoringEnabled() != null) {
+            boolean enabled = deploymentContext.fileIntegrityMonitoringEnabled();
+            LOG.severe("STAGING profile: Overriding file integrity monitoring from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (optional for testing)
+        return false;
+    }
+
+    @Override
+    public boolean isContainerRuntimeSecurityEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.containerRuntimeSecurityEnabled() != null) {
+            boolean enabled = deploymentContext.containerRuntimeSecurityEnabled();
+            LOG.severe("STAGING profile: Overriding container runtime security from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (optional for testing)
+        return false;
+    }
+
+    @Override
+    public boolean isContainerImageScanningEnabled() {
+        // Check deployment context override using proper accessor method
+        if (deploymentContext != null && deploymentContext.containerImageScanningEnabled() != null) {
+            boolean enabled = deploymentContext.containerImageScanningEnabled();
+            LOG.severe("STAGING profile: Overriding container image scanning from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: true (test image scanning pipeline)
+        return true;
     }
 }

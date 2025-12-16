@@ -38,7 +38,7 @@
     <!-- AWS CDK Versions -->
     <cdk.version>2.232.1</cdk.version>
     <constructs.version>10.3.0</constructs.version>
-    <cdknag.version>2.36.38</cdknag.version>
+    <cdknag.version>2.37.55</cdknag.version>
 
     <!-- Core Library Versions -->
     <jackson.version>2.19.4</jackson.version>

@@ -256,6 +256,34 @@ public interface SecurityProfileConfiguration {
      */
     boolean isRdsEncryptionRemediationEnabled();
 
+    /**
+     * Whether Security Hub remediation should be enabled.
+     * Automatically enables AWS Security Hub if not already enabled.
+     * Security Hub aggregates security findings from GuardDuty, Inspector, Macie, and other services.
+     */
+    boolean isSecurityHubRemediationEnabled();
+
+    /**
+     * Whether Inspector remediation should be enabled.
+     * Automatically enables Amazon Inspector v2 for vulnerability scanning if not already enabled.
+     * Inspector continuously scans EC2, ECR, and Lambda for software vulnerabilities.
+     */
+    boolean isInspectorRemediationEnabled();
+
+    /**
+     * Whether Macie remediation should be enabled.
+     * Automatically enables Amazon Macie for sensitive data discovery if not already enabled.
+     * WARNING: Has cost implications - charges per GB of data scanned.
+     */
+    boolean isMacieRemediationEnabled();
+
+    /**
+     * Whether ECR image scanning remediation should be enabled.
+     * Automatically enables scan-on-push for ECR repositories if not already enabled.
+     * Scans container images for vulnerabilities before they can be deployed.
+     */
+    boolean isEcrImageScanningRemediationEnabled();
+
     // ==================== Authentication Configuration ====================
 
     /**
@@ -418,4 +446,134 @@ public interface SecurityProfileConfiguration {
      * @return true if advanced security features should be enabled
      */
     boolean isAdvancedSecurityEnabled();
+
+    // ==================== Advanced Monitoring & Threat Detection ====================
+
+    /**
+     * Whether Amazon Macie should be enabled for sensitive data discovery.
+     *
+     * <p>Macie uses machine learning to automatically discover, classify, and protect
+     * sensitive data like PII and PHI in S3 buckets.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true - Required for HIPAA/GDPR compliance</li>
+     * </ul>
+     *
+     * @return true if Macie should be enabled
+     */
+    boolean isMacieEnabled();
+
+    /**
+     * Whether Macie automated discovery jobs should be enabled.
+     *
+     * <p>Automated discovery continuously scans S3 buckets for sensitive data.
+     * Only applicable when Macie is enabled.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not applicable</li>
+     *   <li>STAGING: false - Manual discovery preferred</li>
+     *   <li>PRODUCTION: true - Continuous monitoring required for compliance</li>
+     * </ul>
+     *
+     * @return true if automated discovery should be enabled
+     */
+    boolean isMacieAutomatedDiscoveryEnabled();
+
+    /**
+     * Whether AWS Security Hub should be enabled for centralized security findings.
+     *
+     * <p>Security Hub aggregates security findings from multiple AWS services
+     * (GuardDuty, Inspector, Macie, etc.) and provides compliance checks.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not needed for development</li>
+     *   <li>STAGING: true - Test security monitoring</li>
+     *   <li>PRODUCTION: true - Centralized security monitoring</li>
+     * </ul>
+     *
+     * @return true if Security Hub should be enabled
+     */
+    boolean isSecurityHubEnabled();
+
+    /**
+     * Whether Amazon Inspector should be enabled for vulnerability scanning.
+     *
+     * <p>Inspector automatically discovers workloads and continuously scans
+     * for software vulnerabilities and network exposure.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not needed for development</li>
+     *   <li>STAGING: true - Test vulnerability scanning</li>
+     *   <li>PRODUCTION: true - Required for PCI-DSS and security best practices</li>
+     * </ul>
+     *
+     * @return true if Inspector should be enabled
+     */
+    boolean isInspectorEnabled();
+
+    /**
+     * Whether anti-malware protection should be enabled on EC2 instances.
+     *
+     * <p>Deploys and configures anti-malware software on EC2 instances.
+     * Only applicable for EC2 runtime (not Fargate).</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true (EC2 only) - Required for PCI-DSS Req 5.1</li>
+     * </ul>
+     *
+     * @return true if anti-malware should be enabled
+     */
+    boolean isAntiMalwareEnabled();
+
+    /**
+     * Whether file integrity monitoring should be enabled on EC2 instances.
+     *
+     * <p>Monitors critical system files for unauthorized changes.
+     * Only applicable for EC2 runtime (not Fargate).</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true (EC2 only) - Required for PCI-DSS Req 11.5</li>
+     * </ul>
+     *
+     * @return true if file integrity monitoring should be enabled
+     */
+    boolean isFileIntegrityMonitoringEnabled();
+
+    /**
+     * Whether container runtime security monitoring should be enabled.
+     *
+     * <p>Monitors container behavior at runtime for suspicious activity.
+     * Only applicable for containerized workloads (Fargate, ECS, EKS).</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true (Fargate/ECS only) - Security best practice</li>
+     * </ul>
+     *
+     * @return true if container runtime security should be enabled
+     */
+    boolean isContainerRuntimeSecurityEnabled();
+
+    /**
+     * Whether container image scanning should be enabled.
+     *
+     * <p>Scans container images for vulnerabilities before deployment.
+     * Typically handled by ECR image scanning.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: true - Test image scanning pipeline</li>
+     *   <li>PRODUCTION: true - Required for secure container deployments</li>
+     * </ul>
+     *
+     * @return true if container image scanning should be enabled
+     */
+    boolean isContainerImageScanningEnabled();
 }

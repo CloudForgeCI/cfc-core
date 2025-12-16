@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.core.rules;
 
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.FrameworkRequirement;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,7 +20,7 @@ class ComplianceMatrixTest {
         var control = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST;
 
         // Then: Should have mappings for all major frameworks
-        Map<String, List<String>> frameworks = control.getFrameworkMappings();
+        Map<String, FrameworkRequirement> frameworks = control.getFrameworkMappings();
         assertTrue(frameworks.containsKey("PCI-DSS"));
         assertTrue(frameworks.containsKey("HIPAA"));
         assertTrue(frameworks.containsKey("SOC2"));
@@ -33,13 +33,12 @@ class ComplianceMatrixTest {
         // Given: ENCRYPTION_AT_REST control
         var control = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST;
 
-        // When: Getting PCI-DSS mappings
-        List<String> pciRequirements = control.getFrameworkMappings().get("PCI-DSS");
+        // When: Getting PCI-DSS requirement
+        FrameworkRequirement pciRequirement = control.getRequirement("PCI-DSS");
 
         // Then: Should map to Requirement 3.4
-        assertNotNull(pciRequirements);
-        assertFalse(pciRequirements.isEmpty());
-        assertTrue(pciRequirements.stream().anyMatch(req -> req.contains("Req 3.4")));
+        assertNotNull(pciRequirement);
+        assertTrue(pciRequirement.citation().contains("Req 3.4"));
     }
 
     @Test
@@ -47,13 +46,12 @@ class ComplianceMatrixTest {
         // Given: ENCRYPTION_AT_REST control
         var control = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST;
 
-        // When: Getting HIPAA mappings
-        List<String> hipaaRequirements = control.getFrameworkMappings().get("HIPAA");
+        // When: Getting HIPAA requirement
+        FrameworkRequirement hipaaRequirement = control.getRequirement("HIPAA");
 
         // Then: Should map to §164.312(a)(2)(iv)
-        assertNotNull(hipaaRequirements);
-        assertFalse(hipaaRequirements.isEmpty());
-        assertTrue(hipaaRequirements.stream().anyMatch(req -> req.contains("§164.312(a)(2)(iv)")));
+        assertNotNull(hipaaRequirement);
+        assertTrue(hipaaRequirement.citation().contains("§164.312(a)(2)(iv)"));
     }
 
     @Test
@@ -62,7 +60,7 @@ class ComplianceMatrixTest {
         var control = ComplianceMatrix.SecurityControl.ENCRYPTION_IN_TRANSIT;
 
         // Then: Should have mappings for all major frameworks
-        Map<String, List<String>> frameworks = control.getFrameworkMappings();
+        Map<String, FrameworkRequirement> frameworks = control.getFrameworkMappings();
         assertTrue(frameworks.containsKey("PCI-DSS"));
         assertTrue(frameworks.containsKey("HIPAA"));
         assertTrue(frameworks.containsKey("SOC2"));
@@ -76,10 +74,9 @@ class ComplianceMatrixTest {
         var control = ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION;
 
         // Then: Should have PCI-DSS Requirement 1 mappings
-        List<String> pciRequirements = control.getFrameworkMappings().get("PCI-DSS");
-        assertNotNull(pciRequirements);
-        assertTrue(pciRequirements.stream().anyMatch(req -> req.contains("Req 1.2.1")));
-        assertTrue(pciRequirements.stream().anyMatch(req -> req.contains("Req 1.3")));
+        FrameworkRequirement pciRequirement = control.getRequirement("PCI-DSS");
+        assertNotNull(pciRequirement);
+        assertTrue(pciRequirement.citation().contains("Req 1"));
     }
 
     @Test
@@ -88,19 +85,17 @@ class ComplianceMatrixTest {
         var control = ComplianceMatrix.SecurityControl.ACCESS_CONTROL;
 
         // Then: Should have mappings for role-based access control
-        Map<String, List<String>> frameworks = control.getFrameworkMappings();
-
         // PCI-DSS Requirement 7
-        List<String> pciRequirements = frameworks.get("PCI-DSS");
-        assertTrue(pciRequirements.stream().anyMatch(req -> req.contains("Req 7")));
+        FrameworkRequirement pciRequirement = control.getRequirement("PCI-DSS");
+        assertTrue(pciRequirement.citation().contains("Req 7"));
 
         // HIPAA Access Control
-        List<String> hipaaRequirements = frameworks.get("HIPAA");
-        assertTrue(hipaaRequirements.stream().anyMatch(req -> req.contains("§164.312(a)(1)")));
+        FrameworkRequirement hipaaRequirement = control.getRequirement("HIPAA");
+        assertTrue(hipaaRequirement.citation().contains("§164.312(a)(1)"));
 
         // SOC 2 CC6
-        List<String> soc2Requirements = frameworks.get("SOC2");
-        assertTrue(soc2Requirements.stream().anyMatch(req -> req.contains("CC6")));
+        FrameworkRequirement soc2Requirement = control.getRequirement("SOC2");
+        assertTrue(soc2Requirement.citation().contains("CC6"));
     }
 
     @Test
@@ -109,15 +104,13 @@ class ComplianceMatrixTest {
         var control = ComplianceMatrix.SecurityControl.AUTHENTICATION;
 
         // Then: Should have MFA requirements
-        Map<String, List<String>> frameworks = control.getFrameworkMappings();
-
         // PCI-DSS Requirement 8 (MFA)
-        List<String> pciRequirements = frameworks.get("PCI-DSS");
-        assertTrue(pciRequirements.stream().anyMatch(req -> req.contains("Req 8")));
+        FrameworkRequirement pciRequirement = control.getRequirement("PCI-DSS");
+        assertTrue(pciRequirement.citation().contains("Req 8"));
 
         // NIST IA-2 (Identification and Authentication)
-        List<String> nistRequirements = frameworks.get("NIST");
-        assertTrue(nistRequirements.stream().anyMatch(req -> req.contains("IA-2")));
+        FrameworkRequirement nistRequirement = control.getRequirement("NIST");
+        assertTrue(nistRequirement.citation().contains("IA-2"));
     }
 
     @Test
@@ -126,19 +119,17 @@ class ComplianceMatrixTest {
         var control = ComplianceMatrix.SecurityControl.AUDIT_LOGGING;
 
         // Then: Should have comprehensive audit logging requirements
-        Map<String, List<String>> frameworks = control.getFrameworkMappings();
-
         // PCI-DSS Requirement 10
-        List<String> pciRequirements = frameworks.get("PCI-DSS");
-        assertTrue(pciRequirements.stream().anyMatch(req -> req.contains("Req 10")));
+        FrameworkRequirement pciRequirement = control.getRequirement("PCI-DSS");
+        assertTrue(pciRequirement.citation().contains("Req 10"));
 
         // HIPAA Audit Controls
-        List<String> hipaaRequirements = frameworks.get("HIPAA");
-        assertTrue(hipaaRequirements.stream().anyMatch(req -> req.contains("§164.312(b)")));
+        FrameworkRequirement hipaaRequirement = control.getRequirement("HIPAA");
+        assertTrue(hipaaRequirement.citation().contains("§164.312(b)"));
 
         // SOC 2 Monitoring
-        List<String> soc2Requirements = frameworks.get("SOC2");
-        assertTrue(soc2Requirements.stream().anyMatch(req -> req.contains("CC7.2")));
+        FrameworkRequirement soc2Requirement = control.getRequirement("SOC2");
+        assertTrue(soc2Requirement.citation().contains("CC7.2"));
     }
 
     @Test
@@ -147,11 +138,9 @@ class ComplianceMatrixTest {
         var control = ComplianceMatrix.SecurityControl.LOG_RETENTION;
 
         // Then: Should have log retention period requirements
-        Map<String, List<String>> frameworks = control.getFrameworkMappings();
-
         // PCI-DSS 1 year minimum
-        List<String> pciRequirements = frameworks.get("PCI-DSS");
-        assertTrue(pciRequirements.stream().anyMatch(req -> req.contains("Req 10.7")));
+        FrameworkRequirement pciRequirement = control.getRequirement("PCI-DSS");
+        assertTrue(pciRequirement.citation().contains("Req 10.7"));
     }
 
     @Test
@@ -169,7 +158,7 @@ class ComplianceMatrixTest {
         // When: Iterating through all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have framework mappings
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertNotNull(mappings);
             assertFalse(mappings.isEmpty());
 
@@ -183,7 +172,7 @@ class ComplianceMatrixTest {
         // When: Iterating through all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should map to multiple frameworks (cross-framework coverage)
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.size() >= 4,
                 "Control " + control.name() + " should map to at least 4 frameworks");
         }
@@ -212,13 +201,13 @@ class ComplianceMatrixTest {
         // Given: All security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Should have GDPR mappings
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.containsKey("GDPR"),
                 "Control " + control.name() + " should have GDPR mappings");
 
-            List<String> gdprRequirements = mappings.get("GDPR");
-            assertFalse(gdprRequirements.isEmpty(),
-                "Control " + control.name() + " should have at least one GDPR requirement");
+            FrameworkRequirement gdprRequirement = mappings.get("GDPR");
+            assertNotNull(gdprRequirement,
+                "Control " + control.name() + " should have a GDPR requirement");
         }
     }
 
@@ -227,7 +216,7 @@ class ComplianceMatrixTest {
         // Given: All security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Should have SOC2 mappings
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.containsKey("SOC2"),
                 "Control " + control.name() + " should have SOC2 mappings");
         }
@@ -238,7 +227,7 @@ class ComplianceMatrixTest {
         // Given: All security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Should have NIST mappings
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.containsKey("NIST"),
                 "Control " + control.name() + " should have NIST SP 800-53 mappings");
         }
@@ -265,12 +254,12 @@ class ComplianceMatrixTest {
         var control = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST;
 
         // When: Getting framework mappings
-        Map<String, List<String>> mappings = control.getFrameworkMappings();
+        Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
 
         // Then: Attempting to modify should throw exception or have no effect
         // (depending on Map.of() immutability)
         assertThrows(UnsupportedOperationException.class, () -> {
-            mappings.put("TEST", List.of("Test requirement"));
+            mappings.put("TEST", FrameworkRequirement.required("Test requirement"));
         });
     }
 }

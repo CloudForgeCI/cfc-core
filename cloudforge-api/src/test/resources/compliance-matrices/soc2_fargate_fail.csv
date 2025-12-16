@@ -1,0 +1,9 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
+FAIL_FARGATE_SOC2_no-auth_public-network,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_FARGATE_SOC2_insufficient-retention-30,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,30,,FAIL,jenkins,,,
+FAIL_FARGATE_SOC2_no-auth_private-network,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_FARGATE_SOC2_public-no-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_FARGATE_SOC2_flow-logs-disabled,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,false,FAIL,jenkins,,,
+FAIL_FARGATE_SOC2_no-ssl,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_FARGATE_SOC2_zero-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,0,,FAIL,jenkins,,,
+FAIL_FARGATE_SOC2_no-auth_flow-logs-disabled,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,false,FAIL,jenkins,,,

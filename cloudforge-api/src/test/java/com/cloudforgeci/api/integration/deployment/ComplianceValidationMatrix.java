@@ -188,6 +188,15 @@ public class ComplianceValidationMatrix {
                 violations.add("SOC2: VPC Flow Logs required for " + securityProfile);
             }
         }
+
+        // 7. HTTPS/TLS - Encryption in transit (SOC2 CC6.7)
+        try {
+            template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike(Map.of(
+                "Protocol", "HTTPS"
+            )));
+        } catch (AssertionError e) {
+            violations.add("SOC2: HTTPS listener required for data transmission encryption (CC6.7)");
+        }
     }
 
     /**
@@ -247,6 +256,15 @@ public class ComplianceValidationMatrix {
         } catch (AssertionError e) {
             violations.add("PCI-DSS: Security groups required");
         }
+
+        // 7. HTTPS/TLS - Encryption in transit (PCI-DSS Req 4.1)
+        try {
+            template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike(Map.of(
+                "Protocol", "HTTPS"
+            )));
+        } catch (AssertionError e) {
+            violations.add("PCI-DSS: HTTPS listener required for encrypted transmission of cardholder data (Req 4.1)");
+        }
     }
 
     /**
@@ -285,8 +303,14 @@ public class ComplianceValidationMatrix {
             violations.add("HIPAA: VPC Flow Logs required for audit trails");
         }
 
-        // 4. HTTPS/TLS - Encryption in transit
-        // Validated separately in SSL configuration tests
+        // 4. HTTPS/TLS - Encryption in transit (HIPAA §164.312(e)(2)(i))
+        try {
+            template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike(Map.of(
+                "Protocol", "HTTPS"
+            )));
+        } catch (AssertionError e) {
+            violations.add("HIPAA: HTTPS listener required for encryption in transit (§164.312(e)(2)(i))");
+        }
 
         // 5. Access Controls - IAM roles should exist
         try {

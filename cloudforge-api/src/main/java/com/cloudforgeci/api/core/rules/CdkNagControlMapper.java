@@ -240,6 +240,21 @@ public final class CdkNagControlMapper {
         map.put("HIPAA.Security-GuardDutyEnabled", SecurityControl.THREAT_DETECTION);
         map.put("PCI.DSS.321-GuardDutyEnabled", SecurityControl.THREAT_DETECTION);
 
+        // ========== SECURITY_HUB ==========
+        // Security Hub centralized findings
+        map.put("HIPAA.Security-SecurityHubEnabled", SecurityControl.SECURITY_HUB);
+        map.put("PCI.DSS.321-SecurityHubEnabled", SecurityControl.SECURITY_HUB);
+
+        // ========== VULNERABILITY_SCANNING ==========
+        // AWS Inspector vulnerability scanning
+        map.put("HIPAA.Security-EC2InstanceManagedBySSM", SecurityControl.VULNERABILITY_SCANNING);
+        map.put("PCI.DSS.321-EC2InstanceManagedBySSM", SecurityControl.VULNERABILITY_SCANNING);
+
+        // ========== SENSITIVE_DATA_DISCOVERY ==========
+        // AWS Macie sensitive data discovery
+        map.put("HIPAA.Security-DataClassificationEnabled", SecurityControl.SENSITIVE_DATA_DISCOVERY);
+        map.put("PCI.DSS.321-S3BucketReplicationEnabled", SecurityControl.SENSITIVE_DATA_DISCOVERY);
+
         // ========== WAF_PROTECTION ==========
         // WAF v2
         map.put("AwsSolutions-APIG-6", SecurityControl.WAF_PROTECTION);

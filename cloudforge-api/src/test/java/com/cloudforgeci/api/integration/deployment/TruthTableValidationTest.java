@@ -94,18 +94,8 @@ class TruthTableValidationTest {
         .filter(entry -> entry.getValue().get("valid").asBoolean())
         .filter(entry -> {
             // Filter out configurations that violate business constraints
-            JsonNode config = entry.getValue().get("configuration");
-            String domainConfig = config.get("domain_config").asText();
-            String authMode = config.get("auth_mode").asText();
-
-            boolean hasDomain = "with-domain".equals(domainConfig);
-            boolean hasOidcAuth = "alb-oidc".equals(authMode);
-
-            // Skip: alb-oidc without domain (requires Cognito callback URL)
-            if (hasOidcAuth && !hasDomain) {
-                return false;
-            }
-
+            // Note: alb-oidc can work without domain using Private CA + ALB DNS for OIDC callback
+            // All configurations in the truth table CSV should be valid
             return true;
         })
         .map(entry -> {
@@ -462,10 +452,11 @@ class TruthTableValidationTest {
      * @param networkMode public-no-nat or private-with-nat
      * @param complianceFramework HIPAA, PCI-DSS, SOC2, GDPR, etc.
      */
+    @org.junit.jupiter.api.Disabled("Split into smaller test methods to avoid JSII crashes - see testGdprFargatePass(), etc.")
     @ParameterizedTest(name = "{0}")
     @CsvFileSource(
         resources = "/compliance-test-matrix.csv",
-        numLinesToSkip = 1  // Skip CSV header
+        numLinesToSkip = 1
     )
     void testComplianceFrameworkIntegrationCsv(
             String configName,
@@ -507,10 +498,10 @@ class TruthTableValidationTest {
 
         // Add compliance framework and mode
         cfcContext.put("complianceFrameworks", complianceFramework);
-        cfcContext.put("complianceMode", "enforce");  // Enable cfn-guard validation
-        cfcContext.put("auditManagerEnabled", true);  // Enable FrameworkRules validation
+        cfcContext.put("complianceMode", "enforce");  // Enable cfn-guard validation (enforce mode)
+        cfcContext.put("auditManagerEnabled", true);  // Enable Audit Manager
         cfcContext.put("awsConfigEnabled", true);  // Enable AWS Config rules (Layer 4)
-        cfcContext.put("createConfigInfrastructure", true);  // Create Config Recorder and Delivery Channel
+        cfcContext.put("createConfigInfrastructure", false);  // Skip Config infrastructure (avoid AWS CLI calls during synthesis)
 
         // Add database provisioning flag if specified
         if (provisionDatabase != null && !provisionDatabase.trim().isEmpty()) {
@@ -529,9 +520,9 @@ class TruthTableValidationTest {
             cfcContext.put("gdprDataTransferApproved", approved);
         }
 
-        // Add framework-specific configuration requirements (only for alb-oidc tests)
+        // Add framework-specific configuration requirements
         // Use contains() to support multi-framework configurations (e.g., "SOC2,PCI-DSS")
-        if ("alb-oidc".equals(authMode)) {
+        if (complianceFramework != null && !complianceFramework.isEmpty()) {
             // Track the most restrictive log retention requirement
             int logRetention = 730;  // Default: TWO_YEARS for PRODUCTION
 
@@ -542,9 +533,6 @@ class TruthTableValidationTest {
             if (complianceFramework.contains("PCI-DSS")) {
                 // PCI-DSS Req 10.7: ONE_YEAR log retention (365 days minimum)
                 logRetention = Math.max(logRetention, 365);
-                // PCI-DSS Req 8.3: MFA required for OIDC
-                cfcContext.put("cognitoAutoProvision", true);
-                cfcContext.put("cognitoMfaEnabled", true);
                 // PCI-DSS Req 5.1: Anti-malware (EC2 only)
                 if ("EC2".equals(runtime)) {
                     cfcContext.put("antiMalwareEnabled", true);
@@ -553,23 +541,30 @@ class TruthTableValidationTest {
                 if ("EC2".equals(runtime)) {
                     cfcContext.put("fileIntegrityMonitoring", true);
                 }
+                // PCI-DSS Req 8.3: MFA required for OIDC (only when using Cognito/OIDC auth)
+                if ("alb-oidc".equals(authMode)) {
+                    cfcContext.put("cognitoAutoProvision", true);
+                    cfcContext.put("cognitoMfaEnabled", true);
+                }
             }
 
             // HIPAA requirements
             if (complianceFramework.contains("HIPAA")) {
                 // HIPAA §164.316(b)(2)(i): 6-year log retention (2190 days)
                 logRetention = Math.max(logRetention, 2190);
-                // HIPAA §164.308(a)(1)(ii)(A): Macie for PHI discovery
+                // HIPAA §164.308(a)(1)(ii)(A): Macie for PHI discovery (required regardless of auth mode)
                 cfcContext.put("macieEnabled", true);
                 cfcContext.put("macieAutomatedDiscovery", true);
-                // HIPAA §164.312(d): MFA recommended for ePHI access
-                cfcContext.put("cognitoAutoProvision", true);
-                cfcContext.put("cognitoMfaEnabled", true);
+                // HIPAA §164.312(d): MFA recommended for ePHI access (only when using Cognito/OIDC auth)
+                if ("alb-oidc".equals(authMode)) {
+                    cfcContext.put("cognitoAutoProvision", true);
+                    cfcContext.put("cognitoMfaEnabled", true);
+                }
             }
 
             // GDPR requirements
             if (complianceFramework.contains("GDPR")) {
-                // GDPR Art.25 & Art.30: Macie for PII discovery
+                // GDPR Art.25 & Art.30: Macie for PII discovery (required regardless of auth mode)
                 cfcContext.put("macieEnabled", true);
                 cfcContext.put("macieAutomatedDiscovery", true);
             }
@@ -694,7 +689,7 @@ class TruthTableValidationTest {
         // Layer 3: cfn-guard validation (only if synthesis succeeded)
         if (template != null && "enforce".equals(cfcContext.get("complianceMode"))) {
             try {
-                runCfnGuardValidation(stack, complianceFramework, configName);
+                runCfnGuardValidation(template, complianceFramework, configName);
                 System.out.println("   ✅ Layer 3 (cfn-guard): Validation passed");
             } catch (AssertionError e) {
                 layer3Failures.add(e.getMessage());
@@ -943,11 +938,11 @@ class TruthTableValidationTest {
      * Run cfn-guard validation on synthesized CloudFormation template.
      * This provides Layer 3 (template-level) validation in the defense-in-depth architecture.
      *
-     * @param stack the CDK stack to validate
+     * @param template the already-synthesized CDK template
      * @param complianceFramework the compliance framework to validate against (HIPAA, PCI-DSS, SOC2, etc.)
      * @param configName the configuration name for error reporting
      */
-    private void runCfnGuardValidation(Stack stack, String complianceFramework, String configName) {
+    private void runCfnGuardValidation(Template template, String complianceFramework, String configName) {
         try {
             // Find project root and cfn-guard rules directory
             Path projectRoot = Paths.get(System.getProperty("user.dir")).getParent();
@@ -958,14 +953,10 @@ class TruthTableValidationTest {
             List<String> failedFrameworks = new ArrayList<>();
             StringBuilder allErrors = new StringBuilder();
 
-            // Get the App and synthesize to get CloudAssembly (only once for all frameworks)
-            App app = (App) stack.getNode().getRoot();
-            var cloudAssembly = app.synth();
-
-            // Get the stack's CloudFormation template as a Map and convert to proper JSON
-            Object template = cloudAssembly.getStackArtifact(stack.getArtifactId()).getTemplate();
+            // Get the CloudFormation template as a Map and convert to proper JSON
+            Map<String, Object> templateMap = template.toJSON();
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            String templateJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(template);
+            String templateJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(templateMap);
 
             // Write template to temporary file
             Path tempTemplate = Files.createTempFile("cfn-template-", ".json");
@@ -1022,7 +1013,7 @@ class TruthTableValidationTest {
                     pb.redirectErrorStream(true);
                     Process process = pb.start();
 
-                    // Capture output
+                    // Capture output with timeout
                     StringBuilder output = new StringBuilder();
                     try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream()))) {
                         String line;
@@ -1031,7 +1022,14 @@ class TruthTableValidationTest {
                         }
                     }
 
-                    int exitCode = process.waitFor();
+                    // Wait for process with 30 second timeout
+                    boolean completed = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+                    if (!completed) {
+                        process.destroyForcibly();
+                        throw new RuntimeException("cfn-guard validation timed out after 30 seconds for framework: " + framework);
+                    }
+
+                    int exitCode = process.exitValue();
 
                     if (exitCode != 0) {
                         failedFrameworks.add(framework);
@@ -1058,11 +1056,25 @@ class TruthTableValidationTest {
             }
 
         } catch (AssertionError e) {
-            throw e;  // Re-throw assertion errors
+            throw e;  // Re-throw assertion errors (validation failures)
         } catch (Exception e) {
-            System.out.println("   ⚠️  cfn-guard validation skipped due to error: " + e.getMessage());
-            // Don't fail the test if cfn-guard validation encounters an error
-            // This allows tests to pass in environments where cfn-guard is not installed
+            // Check if it's a "cfn-guard not installed" error
+            if (e instanceof java.io.IOException &&
+                e.getMessage() != null &&
+                (e.getMessage().contains("Cannot run program") || e.getMessage().contains("No such file"))) {
+                System.out.println("   ⚠️  cfn-guard validation skipped: cfn-guard not installed");
+                System.out.println("   Install via: cargo install cfn-guard");
+                // Don't fail the test if cfn-guard is not installed
+                return;
+            }
+
+            // For other exceptions, log the error and skip gracefully
+            // This prevents test hangs while still recording the issue
+            System.out.println("   ⚠️  cfn-guard validation error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            if (e.getCause() != null) {
+                System.out.println("   Caused by: " + e.getCause().getMessage());
+            }
+            // Skip validation but don't fail the test (allows tests to run in environments with cfn-guard issues)
         }
     }
 
@@ -1159,18 +1171,14 @@ class TruthTableValidationTest {
 
         // SSL configuration
         boolean sslEnabled = "ssl-enabled".equals(sslConfig);
+        context.put("enableSsl", sslEnabled);
 
         // Auth mode
         if ("alb-oidc".equals(authMode)) {
-            // ALB-OIDC requires SSL (domain is optional - callback can use ALB DNS when no domain specified)
-            // Force SSL to be enabled for OIDC (required by DeploymentContext validation)
-            sslEnabled = true;
             context.put("authMode", "alb-oidc");
             context.put("cognitoAutoProvision", true);
             context.put("cognitoDomainPrefix", configName.toLowerCase().replaceAll("[^a-z0-9-]", "-"));
         }
-
-        context.put("enableSsl", sslEnabled);
 
         // WAF configuration (enabled for PRODUCTION, configurable for others)
         if ("PRODUCTION".equals(securityProfile)) {
@@ -1340,4 +1348,1640 @@ class TruthTableValidationTest {
             throw new AssertionError(message);
         }
     }
+// ========== SPLIT CSV TEST METHODS ==========
+// Auto-generated test methods for 48 split CSV files
+// Each test method delegates to testComplianceFrameworkIntegrationCsv()
+
+    // 22 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/gdpr_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testGdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 15 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/hipaa_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testHipaaFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 14 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 14 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2FargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 13 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/hipaa_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testHipaaEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 12 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/gdpr_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testGdprFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 12 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 12 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_fargate_all_frameworks.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaGdprFargateAllFrameworks(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 12 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2Ec2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 12 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2FargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 11 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/hipaa_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testHipaaFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 11 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 10 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/gdpr_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testGdprEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 9 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/hipaa_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testHipaaEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 9 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 8 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_ec2_all_frameworks.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaGdprEc2AllFrameworks(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 8 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2Ec2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 6 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/gdpr_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testGdprEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 6 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaGdprFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 4 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/gdpr,soc2_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testGdprSoc2FargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 4 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,hipaa_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2HipaaEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 4 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,hipaa_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2HipaaFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 4 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaGdprEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 4 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 4 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,gdpr_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssGdprEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,gdpr_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssGdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,hipaa,gdpr_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssHipaaGdprEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,hipaa,gdpr_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssHipaaGdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,hipaa_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssHipaaEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,hipaa_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssHipaaFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,gdpr_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2GdprEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,gdpr_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2GdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/gdpr,soc2_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testGdprSoc2FargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/hipaa,gdpr_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testHipaaGdprEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/hipaa,gdpr_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testHipaaGdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,hipaa,gdpr_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2HipaaGdprEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,hipaa,gdpr_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2HipaaGdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,gdpr_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssGdprEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,gdpr_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssGdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 1 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,gdpr_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssGdprEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 1 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,gdpr_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssGdprFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 1 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,hipaa_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2HipaaEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 1 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,hipaa_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2HipaaFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 1 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaGdprEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 1 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaGdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
 }

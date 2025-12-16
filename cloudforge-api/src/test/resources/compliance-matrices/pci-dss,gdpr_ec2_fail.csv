@@ -1,0 +1,2 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
+FAIL_EC2_PCI-DSS_GDPR_insufficient-retention-180,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",180,,FAIL,jenkins,,eu-west-1,

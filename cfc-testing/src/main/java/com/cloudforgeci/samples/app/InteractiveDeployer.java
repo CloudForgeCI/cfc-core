@@ -1508,7 +1508,12 @@ public class InteractiveDeployer {
         ComplianceMode complianceMode = ComplianceMode.fromString(config.complianceMode,
             ComplianceMode.defaultForProfile(config.securityProfile));
 
-        if (complianceMode != ComplianceMode.DISABLED) {
+        // Only apply CDK Nag if compliance frameworks are specified
+        // CDK Nag (Layer 1) runs independently of Layer 2 (FrameworkRules) and Layer 4 (AWS Config)
+        boolean hasComplianceFrameworks = config.complianceFrameworks != null &&
+                                          !config.complianceFrameworks.trim().isEmpty();
+
+        if (complianceMode != ComplianceMode.DISABLED && hasComplianceFrameworks) {
             System.out.println("\n🔍 Applying cdk-nag validation (AWS Solutions Checks)...");
             System.out.println("   Mode: " + complianceMode);
 
@@ -1540,7 +1545,11 @@ public class InteractiveDeployer {
 
             Aspects.of(app).add(nagChecks);
         } else {
-            System.out.println("\n⏭️  Skipping cdk-nag validation (disabled)");
+            if (complianceMode == ComplianceMode.DISABLED) {
+                System.out.println("\n⏭️  Skipping cdk-nag validation (complianceMode disabled)");
+            } else {
+                System.out.println("\n⏭️  Skipping cdk-nag validation (no compliance frameworks enabled)");
+            }
         }
 
         // Execute deployment based on choice

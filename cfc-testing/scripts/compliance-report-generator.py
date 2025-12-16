@@ -61,74 +61,112 @@ class ComplianceReportGenerator:
         self.incremental_results_file = self.output_dir / "compliance-results-incremental.jsonl"
 
     def run_compliance_tests(self) -> bool:
-        """Run Maven compliance tests and stream output, parsing incrementally."""
-        print("🧪 Running compliance validation tests with incremental parsing...")
+        """Run split test methods sequentially to avoid JSII memory issues."""
+        print("🧪 Running compliance validation tests...")
         print(f"   Project root: {self.project_root}")
         print(f"   Working directory: {self.cloudforge_api_dir}")
 
-        # Clear incremental results file
         if self.incremental_results_file.exists():
             self.incremental_results_file.unlink()
 
-        # Run Maven tests with XML output
-        cmd = [
-            "mvn", "test",
-            "-Dtest=TruthTableValidationTest#testComplianceFrameworkIntegrationCsv",
-            "--batch-mode"
-        ]
+        test_methods = self._discover_split_test_methods()
+        if not test_methods:
+            print("   ❌ No split test methods discovered!")
+            return False
+
+        total_methods = len(test_methods)
+        print(f"   📋 Discovered {total_methods} split test methods")
+        print(f"   🔄 Running tests sequentially...")
+
+        output_file = self.output_dir / "compliance-test-output.log"
+        print(f"   📝 Streaming output to: {output_file}")
+        print(f"   📊 Incremental results: {self.incremental_results_file}")
 
         try:
-            output_file = self.output_dir / "compliance-test-output.log"
-
-            # Start the Maven process
-            print(f"   📝 Streaming output to: {output_file}")
-            print(f"   📊 Incremental results: {self.incremental_results_file}")
-
             with open(output_file, 'w') as log_file:
-                process = subprocess.Popen(
-                    cmd,
-                    cwd=str(self.cloudforge_api_dir),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1  # Line buffered
-                )
+                all_passed = True
 
-                # Stream output line by line and parse incrementally
-                current_test = None
-                test_count = 0
+                for idx, method in enumerate(test_methods, 1):
+                    print(f"   [{idx}/{total_methods}] Running {method}...")
 
-                for line in process.stdout:
-                    log_file.write(line)
-                    log_file.flush()
+                    cmd = [
+                        "mvn", "test",
+                        f"-Dtest=TruthTableValidationTest#{method}",
+                        "--batch-mode",
+                        "-q"  # Quiet mode to reduce noise
+                    ]
 
-                    # Parse each line and update results incrementally
-                    result = self._parse_line_incremental(line, current_test)
-                    if result:
-                        current_test = result
-                        if "Testing compliance configuration" in line:
-                            test_count += 1
-                            if test_count % 10 == 0:
-                                print(f"   ✓ Processed {test_count} tests...")
+                    process = subprocess.Popen(
+                        cmd,
+                        cwd=str(self.cloudforge_api_dir),
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1
+                    )
 
-                process.wait(timeout=1800)  # 30 minute timeout
+                    current_test = None
+                    for line in process.stdout:
+                        log_file.write(line)
+                        log_file.flush()
 
-                print(f"   ✅ Test execution completed")
-                print(f"   📊 Processed {test_count} test configurations")
+                        result = self._parse_line_incremental(line, current_test)
+                        if result:
+                            current_test = result
+
+                    process.wait(timeout=300)  # 5 minute timeout per test method
+
+                    if process.returncode != 0:
+                        print(f"      ⚠️  {method} failed (exit code {process.returncode})")
+                        all_passed = False
+                    else:
+                        print(f"      ✓ {method} passed")
+
+                    # Kill lingering JSII processes between tests
+                    try:
+                        subprocess.run(["pkill", "-9", "-f", "jsii-java-runtime"],
+                                     capture_output=True, timeout=2)
+                    except:
+                        pass  # Ignore errors from pkill
+
+                print(f"   ✅ All test methods completed")
 
                 # Parse JUnit XML for final details
                 self._parse_junit_xml_incremental()
 
-                return process.returncode == 0
+                return all_passed
 
         except subprocess.TimeoutExpired:
-            print("   ❌ Tests timed out after 30 minutes")
+            print("   ❌ Test timed out")
             if process:
                 process.kill()
             return False
         except Exception as e:
             print(f"   ❌ Failed to run tests: {e}")
+            import traceback
+            traceback.print_exc()
             return False
+
+    def _discover_split_test_methods(self) -> List[str]:
+        """Discover all split test methods from CSV files."""
+        matrices_dir = self.project_root / "cloudforge-api/src/test/resources/compliance-matrices"
+        if not matrices_dir.exists():
+            print(f"   ⚠️  Compliance matrices directory not found: {matrices_dir}")
+            return []
+
+        csv_files = sorted(matrices_dir.glob("*.csv"))
+        test_methods = []
+
+        for csv_file in csv_files:
+            # Convert filename to test method name
+            # e.g., "soc2_ec2_pass.csv" -> "testSoc2Ec2Pass"
+            name_parts = csv_file.stem.replace(',', '_').replace('-', '_').split('_')
+            method_name = "test" + "".join(word.capitalize() for word in name_parts)
+            method_name = method_name.replace('__', '_')
+
+            test_methods.append(method_name)
+
+        return test_methods
 
     def _parse_line_incremental(self, line: str, current_test: Optional[ComplianceTestResult]) -> Optional[ComplianceTestResult]:
         """Parse a single line of output and update results incrementally."""

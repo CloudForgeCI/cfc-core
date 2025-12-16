@@ -108,6 +108,21 @@ public class ComplianceFactory extends BaseFactory {
     @DeploymentContext("enableRdsAutoMinorVersionUpgradeRemediation")
     private Boolean enableRdsAutoMinorVersionUpgradeRemediation;
 
+    @DeploymentContext("enableSecurityHubRemediation")
+    private Boolean enableSecurityHubRemediation;
+
+    @DeploymentContext("enableInspectorRemediation")
+    private Boolean enableInspectorRemediation;
+
+    @DeploymentContext("enableMacieRemediation")
+    private Boolean enableMacieRemediation;
+
+    @DeploymentContext("enableGuardDutyRemediation")
+    private Boolean enableGuardDutyRemediation;
+
+    @DeploymentContext("enableEcrImageScanningRemediation")
+    private Boolean enableEcrImageScanningRemediation;
+
     @DeploymentContext("scopeConfigRulesToDeployment")
     private Boolean scopeConfigRulesToDeployment;
 
@@ -149,8 +164,8 @@ public class ComplianceFactory extends BaseFactory {
         // Create CloudFormation conditions for compliance frameworks
         createFrameworkConditions();
 
-        // Create CloudTrail if enabled for this security profile
-        if (config.isCloudTrailEnabled()) {
+        // Create CloudTrail if enabled for this security profile (STAGING/PRODUCTION by default)
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             createCloudTrail();
         } else {
             LOG.info("CloudTrail disabled for security profile: " + security);
@@ -159,7 +174,7 @@ public class ComplianceFactory extends BaseFactory {
         // Check if AWS Audit Manager should be enabled (do this BEFORE Config infrastructure)
         // This ensures Audit Manager configuration errors fail before creating account-level resources
         boolean auditManagerEnabledFlag = Boolean.TRUE.equals(auditManagerEnabled)
-            || (auditManagerEnabled == null && config.isAuditManagerEnabled());
+            || (auditManagerEnabled == null && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING));
 
         if (auditManagerEnabledFlag) {
             LOG.info("Creating AWS Audit Manager assessments and framework controls for profile: " + security);
@@ -171,15 +186,20 @@ public class ComplianceFactory extends BaseFactory {
         // STEP 1: Check if Config INFRASTRUCTURE should be created (Recorder + Delivery Channel)
         // These are account-level singleton resources - only ONE per region per account allowed
         // createConfigInfrastructure controls ONLY infrastructure, NOT rules
-        boolean configInfraExists = checkConfigInfrastructureExists();
         boolean shouldCreateInfra = Boolean.TRUE.equals(createConfigInfrastructure);
+        boolean configInfraExists = false;
 
-        if (configInfraExists && shouldCreateInfra) {
-            LOG.warning("Config infrastructure already exists but createConfigInfrastructure = true");
-            LOG.warning("  Existing Config Recorder detected in region: " + region);
-            LOG.warning("  Setting createConfigInfrastructure = false automatically to avoid conflict");
-            LOG.warning("  To override this behavior, manually set createConfigInfrastructure in deployment-context.json");
-            shouldCreateInfra = false;
+        // Only check for existing infrastructure if we're planning to create it
+        if (shouldCreateInfra) {
+            configInfraExists = checkConfigInfrastructureExists();
+
+            if (configInfraExists) {
+                LOG.warning("Config infrastructure already exists but createConfigInfrastructure = true");
+                LOG.warning("  Existing Config Recorder detected in region: " + region);
+                LOG.warning("  Setting createConfigInfrastructure = false automatically to avoid conflict");
+                LOG.warning("  To override this behavior, manually set createConfigInfrastructure in deployment-context.json");
+                shouldCreateInfra = false;
+            }
         }
 
         ConfigInfrastructure configInfra = null;
@@ -199,7 +219,7 @@ public class ComplianceFactory extends BaseFactory {
         // STEP 2: Deploy Conformance Packs (AWS managed rule bundles for compliance frameworks)
         // Conformance Packs are the foundation - they deploy standardized Config rules
         boolean configRulesEnabled = Boolean.TRUE.equals(awsConfigEnabled)
-            || (awsConfigEnabled == null && config.isAwsConfigEnabled());
+            || (awsConfigEnabled == null && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING));
 
         if (configRulesEnabled) {
             LOG.info("Deploying Conformance Packs for compliance frameworks");
@@ -892,9 +912,9 @@ public class ComplianceFactory extends BaseFactory {
         CfnConfigRule versioningRule = versioningRuleBuilder.build();
         addConfigRuleDependencies(versioningRule, recorder, starterResource);
 
-        // Add automatic remediation if enabled
+        // Add automatic remediation if enabled (PRODUCTION only by default)
         boolean shouldEnableS3VersioningRemediation = Boolean.TRUE.equals(enableS3VersioningRemediation)
-            || (enableS3VersioningRemediation == null && config.isS3VersioningRemediationEnabled());
+            || (enableS3VersioningRemediation == null && ctx.security == SecurityProfile.PRODUCTION);
 
         if (shouldEnableS3VersioningRemediation) {
             createS3VersioningRemediation(versioningRule);
@@ -1626,9 +1646,9 @@ public class ComplianceFactory extends BaseFactory {
         CfnConfigRule cloudTrailRule = cloudTrailRuleBuilder.build();
         addConfigRuleDependencies(cloudTrailRule, recorder, starterResource);
 
-        // Add auto-remediation for CloudTrail bucket access errors if enabled
+        // Add auto-remediation for CloudTrail bucket access errors if enabled (PRODUCTION only by default)
         boolean shouldEnableCloudTrailBucketAccessRemediation = Boolean.TRUE.equals(enableCloudTrailBucketAccessRemediation)
-            || (enableCloudTrailBucketAccessRemediation == null && config.isCloudTrailBucketAccessRemediationEnabled());
+            || (enableCloudTrailBucketAccessRemediation == null && ctx.security == SecurityProfile.PRODUCTION);
 
         if (shouldEnableCloudTrailBucketAccessRemediation) {
             addCloudTrailBucketAccessRemediation(cloudTrailRule);
@@ -1768,9 +1788,9 @@ public class ComplianceFactory extends BaseFactory {
 
         CfnConfigRule cloudTrailRule = cloudTrailRuleBuilder.build();
 
-        // Add auto-remediation for CloudTrail bucket access errors if enabled
+        // Add auto-remediation for CloudTrail bucket access errors if enabled (PRODUCTION only by default)
         boolean shouldEnableCloudTrailBucketAccessRemediation = Boolean.TRUE.equals(enableCloudTrailBucketAccessRemediation)
-            || (enableCloudTrailBucketAccessRemediation == null && config.isCloudTrailBucketAccessRemediationEnabled());
+            || (enableCloudTrailBucketAccessRemediation == null && ctx.security == SecurityProfile.PRODUCTION);
 
         if (shouldEnableCloudTrailBucketAccessRemediation) {
             addCloudTrailBucketAccessRemediation(cloudTrailRule);
@@ -2023,9 +2043,15 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier("GUARDDUTY_ENABLED_CENTRALIZED")
                         .build())
                 .build();
-        guardDutyEnabledCentralized.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
+        guardDutyEnabledCentralized.addOverride("DeletionPolicy", "Delete");
         guardDutyEnabledCentralized.addOverride("Condition", pciDssCondition.getLogicalId());
         guardDutyEnabledCentralized.getNode().addDependency(recorder);
+
+        // Automatic remediation: enables GuardDuty if not already enabled (PRODUCTION only by default)
+        if (Boolean.TRUE.equals(enableGuardDutyRemediation) ||
+            (enableGuardDutyRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
+            createGuardDutyRemediation(guardDutyEnabledCentralized);
+        }
 
         LOG.info("Created 8 PCI-DSS Config rules with conditional deployment");
     }
@@ -2087,9 +2113,53 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier("SECURITYHUB_ENABLED")
                         .build())
                 .build();
-        securityHubEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
+        securityHubEnabled.addOverride("DeletionPolicy", "Delete");
         securityHubEnabled.addOverride("Condition", soc2Condition.getLogicalId());
         securityHubEnabled.getNode().addDependency(recorder);
+
+        // Automatic remediation: enables Security Hub if not already enabled (PRODUCTION only by default)
+        if (Boolean.TRUE.equals(enableSecurityHubRemediation) ||
+            (enableSecurityHubRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
+            createSecurityHubRemediation(securityHubEnabled);
+        }
+
+        // CC7.2: Vulnerability Scanning
+        CfnConfigRule inspectorEnabled = CfnConfigRule.Builder.create(this, "Soc2InspectorEnabled")
+                .configRuleName(this.stackName + "-soc2-inspector-enabled")
+                .description("SOC 2 CC7.2: Continuous vulnerability scanning")
+                .source(CfnConfigRule.SourceProperty.builder()
+                        .owner("AWS")
+                        .sourceIdentifier("INSPECTOR_ENABLED")
+                        .build())
+                .build();
+        inspectorEnabled.addOverride("DeletionPolicy", "Delete");
+        inspectorEnabled.addOverride("Condition", soc2Condition.getLogicalId());
+        inspectorEnabled.getNode().addDependency(recorder);
+
+        // Automatic remediation: enables Inspector if not already enabled (PRODUCTION only by default)
+        if (Boolean.TRUE.equals(enableInspectorRemediation) ||
+            (enableInspectorRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
+            createInspectorRemediation(inspectorEnabled);
+        }
+
+        // CC7.2: Sensitive Data Protection
+        CfnConfigRule macieEnabled = CfnConfigRule.Builder.create(this, "Soc2MacieEnabled")
+                .configRuleName(this.stackName + "-soc2-macie-enabled")
+                .description("SOC 2 CC7.2: Sensitive data discovery and protection")
+                .source(CfnConfigRule.SourceProperty.builder()
+                        .owner("AWS")
+                        .sourceIdentifier("MACIE_ENABLED")
+                        .build())
+                .build();
+        macieEnabled.addOverride("DeletionPolicy", "Delete");
+        macieEnabled.addOverride("Condition", soc2Condition.getLogicalId());
+        macieEnabled.getNode().addDependency(recorder);
+
+        // Automatic remediation: enables Macie if not already enabled (PRODUCTION only by default)
+        if (Boolean.TRUE.equals(enableMacieRemediation) ||
+            (enableMacieRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
+            createMacieRemediation(macieEnabled);
+        }
 
         // CC8.1: Change Management
         CfnConfigRule cloudtrailS3DataEventsEnabled = CfnConfigRule.Builder.create(this, "Soc2CloudTrailS3DataEvents")
@@ -4241,6 +4311,301 @@ public class ComplianceFactory extends BaseFactory {
                 .expiration(software.amazon.awscdk.Duration.days(retentionDays))
                 .build()
         );
+    }
+
+    /**
+     * Creates auto-remediation for Security Hub enablement.
+     * Automatically enables AWS Security Hub if not already enabled.
+     *
+     * @param securityHubRule The Config rule to attach remediation to
+     */
+    private void createSecurityHubRemediation(CfnConfigRule securityHubRule) {
+        // Create SSM Automation document for Security Hub enablement
+        CfnDocument securityHubDocument = CfnDocument.Builder.create(this, "SecurityHubEnablementDocument")
+                .documentType("Automation")
+                .content(Map.of(
+                    "schemaVersion", "0.3",
+                    "description", "Enables AWS Security Hub if not already enabled",
+                    "assumeRole", "{{ AutomationAssumeRole }}",
+                    "parameters", Map.of(
+                        "AutomationAssumeRole", Map.of(
+                            "type", "String",
+                            "description", "IAM role ARN for SSM Automation"
+                        )
+                    ),
+                    "mainSteps", List.of(
+                        Map.of(
+                            "name", "EnableSecurityHub",
+                            "action", "aws:executeAwsApi",
+                            "onFailure", "Continue",
+                            "inputs", Map.of(
+                                "Service", "securityhub",
+                                "Api", "EnableSecurityHub"
+                            )
+                        )
+                    )
+                ))
+                .build();
+
+        // Create IAM role for SSM Automation
+        Role ssmRole = Role.Builder.create(this, "SecurityHubRemediationRole")
+                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
+                .inlinePolicies(Map.of(
+                    "SecurityHubPermissions",
+                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
+                        .statements(List.of(
+                            PolicyStatement.Builder.create()
+                                .effect(Effect.ALLOW)
+                                .actions(List.of(
+                                    "securityhub:EnableSecurityHub",
+                                    "securityhub:GetEnabledStandards"
+                                ))
+                                .resources(List.of("*"))
+                                .build()
+                        ))
+                        .build()
+                ))
+                .build();
+
+        // Create remediation configuration
+        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
+                this, "SecurityHubRemediation")
+                .configRuleName(securityHubRule.getRef())
+                .targetType("SSM_DOCUMENT")
+                .targetId(securityHubDocument.getRef())
+                .targetVersion("1")
+                .automatic(true)
+                .maximumAutomaticAttempts(3)
+                .retryAttemptSeconds(60)
+                .build();
+
+        remediation.addPropertyOverride("Parameters", Map.of(
+            "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
+        ));
+
+        LOG.info("Security Hub automatic remediation enabled");
+    }
+
+    /**
+     * Creates auto-remediation for Inspector enablement.
+     * Automatically enables Amazon Inspector v2 if not already enabled.
+     *
+     * @param inspectorRule The Config rule to attach remediation to
+     */
+    private void createInspectorRemediation(CfnConfigRule inspectorRule) {
+        // Create SSM Automation document for Inspector enablement
+        CfnDocument inspectorDocument = CfnDocument.Builder.create(this, "InspectorEnablementDocument")
+                .documentType("Automation")
+                .content(Map.of(
+                    "schemaVersion", "0.3",
+                    "description", "Enables Amazon Inspector v2 if not already enabled",
+                    "assumeRole", "{{ AutomationAssumeRole }}",
+                    "parameters", Map.of(
+                        "AutomationAssumeRole", Map.of(
+                            "type", "String",
+                            "description", "IAM role ARN for SSM Automation"
+                        )
+                    ),
+                    "mainSteps", List.of(
+                        Map.of(
+                            "name", "EnableInspector",
+                            "action", "aws:executeAwsApi",
+                            "onFailure", "Continue",
+                            "inputs", Map.of(
+                                "Service", "inspector2",
+                                "Api", "Enable",
+                                "resourceTypes", List.of("EC2", "ECR", "LAMBDA")
+                            )
+                        )
+                    )
+                ))
+                .build();
+
+        // Create IAM role for SSM Automation
+        Role ssmRole = Role.Builder.create(this, "InspectorRemediationRole")
+                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
+                .inlinePolicies(Map.of(
+                    "InspectorPermissions",
+                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
+                        .statements(List.of(
+                            PolicyStatement.Builder.create()
+                                .effect(Effect.ALLOW)
+                                .actions(List.of(
+                                    "inspector2:Enable",
+                                    "inspector2:GetConfiguration"
+                                ))
+                                .resources(List.of("*"))
+                                .build()
+                        ))
+                        .build()
+                ))
+                .build();
+
+        // Create remediation configuration
+        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
+                this, "InspectorRemediation")
+                .configRuleName(inspectorRule.getRef())
+                .targetType("SSM_DOCUMENT")
+                .targetId(inspectorDocument.getRef())
+                .targetVersion("1")
+                .automatic(true)
+                .maximumAutomaticAttempts(3)
+                .retryAttemptSeconds(60)
+                .build();
+
+        remediation.addPropertyOverride("Parameters", Map.of(
+            "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
+        ));
+
+        LOG.info("Inspector automatic remediation enabled");
+    }
+
+    /**
+     * Creates auto-remediation for Macie enablement.
+     * Automatically enables Amazon Macie if not already enabled.
+     *
+     * @param macieRule The Config rule to attach remediation to
+     */
+    private void createMacieRemediation(CfnConfigRule macieRule) {
+        // Create SSM Automation document for Macie enablement
+        CfnDocument macieDocument = CfnDocument.Builder.create(this, "MacieEnablementDocument")
+                .documentType("Automation")
+                .content(Map.of(
+                    "schemaVersion", "0.3",
+                    "description", "Enables Amazon Macie if not already enabled",
+                    "assumeRole", "{{ AutomationAssumeRole }}",
+                    "parameters", Map.of(
+                        "AutomationAssumeRole", Map.of(
+                            "type", "String",
+                            "description", "IAM role ARN for SSM Automation"
+                        )
+                    ),
+                    "mainSteps", List.of(
+                        Map.of(
+                            "name", "EnableMacie",
+                            "action", "aws:executeAwsApi",
+                            "onFailure", "Continue",
+                            "inputs", Map.of(
+                                "Service", "macie2",
+                                "Api", "EnableMacie"
+                            )
+                        )
+                    )
+                ))
+                .build();
+
+        // Create IAM role for SSM Automation
+        Role ssmRole = Role.Builder.create(this, "MacieRemediationRole")
+                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
+                .inlinePolicies(Map.of(
+                    "MaciePermissions",
+                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
+                        .statements(List.of(
+                            PolicyStatement.Builder.create()
+                                .effect(Effect.ALLOW)
+                                .actions(List.of(
+                                    "macie2:EnableMacie",
+                                    "macie2:GetMacieSession"
+                                ))
+                                .resources(List.of("*"))
+                                .build()
+                        ))
+                        .build()
+                ))
+                .build();
+
+        // Create remediation configuration
+        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
+                this, "MacieRemediation")
+                .configRuleName(macieRule.getRef())
+                .targetType("SSM_DOCUMENT")
+                .targetId(macieDocument.getRef())
+                .targetVersion("1")
+                .automatic(true)
+                .maximumAutomaticAttempts(3)
+                .retryAttemptSeconds(60)
+                .build();
+
+        remediation.addPropertyOverride("Parameters", Map.of(
+            "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
+        ));
+
+        LOG.info("Macie automatic remediation enabled");
+    }
+
+    /**
+     * Creates auto-remediation for GuardDuty enablement.
+     * Automatically enables AWS GuardDuty if not already enabled.
+     *
+     * @param guardDutyRule The Config rule to attach remediation to
+     */
+    private void createGuardDutyRemediation(CfnConfigRule guardDutyRule) {
+        // Create SSM Automation document for GuardDuty enablement
+        CfnDocument guardDutyDocument = CfnDocument.Builder.create(this, "GuardDutyEnablementDocument")
+                .documentType("Automation")
+                .content(Map.of(
+                    "schemaVersion", "0.3",
+                    "description", "Enables AWS GuardDuty if not already enabled",
+                    "assumeRole", "{{ AutomationAssumeRole }}",
+                    "parameters", Map.of(
+                        "AutomationAssumeRole", Map.of(
+                            "type", "String",
+                            "description", "IAM role ARN for SSM Automation"
+                        )
+                    ),
+                    "mainSteps", List.of(
+                        Map.of(
+                            "name", "EnableGuardDuty",
+                            "action", "aws:executeAwsApi",
+                            "onFailure", "Continue",
+                            "inputs", Map.of(
+                                "Service", "guardduty",
+                                "Api", "CreateDetector",
+                                "Enable", true,
+                                "FindingPublishingFrequency", "FIFTEEN_MINUTES"
+                            )
+                        )
+                    )
+                ))
+                .build();
+
+        // Create IAM role for SSM Automation
+        Role ssmRole = Role.Builder.create(this, "GuardDutyRemediationRole")
+                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
+                .inlinePolicies(Map.of(
+                    "GuardDutyPermissions",
+                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
+                        .statements(List.of(
+                            PolicyStatement.Builder.create()
+                                .effect(Effect.ALLOW)
+                                .actions(List.of(
+                                    "guardduty:CreateDetector",
+                                    "guardduty:ListDetectors"
+                                ))
+                                .resources(List.of("*"))
+                                .build()
+                        ))
+                        .build()
+                ))
+                .build();
+
+        // Create remediation configuration
+        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
+                this, "GuardDutyRemediation")
+                .configRuleName(guardDutyRule.getRef())
+                .targetType("SSM_DOCUMENT")
+                .targetId(guardDutyDocument.getRef())
+                .targetVersion("1")
+                .automatic(true)
+                .maximumAutomaticAttempts(3)
+                .retryAttemptSeconds(60)
+                .build();
+
+        remediation.addPropertyOverride("Parameters", Map.of(
+            "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
+        ));
+
+        LOG.info("GuardDuty automatic remediation enabled");
     }
 
 }

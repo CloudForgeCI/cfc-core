@@ -2,8 +2,6 @@ package com.cloudforgeci.api.core.rules;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -122,77 +120,82 @@ class ComplianceMatrixMethodsExtendedTest {
 
     @Test
     void testGetRequirementsPciDss() {
-        // When: Getting PCI-DSS requirements for encryption
-        List<String> requirements = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
-            .getRequirements("PCI-DSS");
+        // When: Getting PCI-DSS requirement for encryption
+        ComplianceMatrix.FrameworkRequirement requirement = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
+            .getRequirement("PCI-DSS");
 
-        // Then: Should have requirements
-        assertNotNull(requirements);
-        assertFalse(requirements.isEmpty());
+        // Then: Should have requirement
+        assertNotNull(requirement);
+        assertNotNull(requirement.citation());
+        assertFalse(requirement.citation().isEmpty());
     }
 
     @Test
     void testGetRequirementsHipaa() {
-        // When: Getting HIPAA requirements for encryption
-        List<String> requirements = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
-            .getRequirements("HIPAA");
+        // When: Getting HIPAA requirement for encryption
+        ComplianceMatrix.FrameworkRequirement requirement = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
+            .getRequirement("HIPAA");
 
-        // Then: Should have requirements
-        assertNotNull(requirements);
-        assertFalse(requirements.isEmpty());
+        // Then: Should have requirement
+        assertNotNull(requirement);
+        assertNotNull(requirement.citation());
+        assertFalse(requirement.citation().isEmpty());
     }
 
     @Test
     void testGetRequirementsSoc2() {
-        // When: Getting SOC2 requirements for access control
-        List<String> requirements = ComplianceMatrix.SecurityControl.ACCESS_CONTROL
-            .getRequirements("SOC2");
+        // When: Getting SOC2 requirement for access control
+        ComplianceMatrix.FrameworkRequirement requirement = ComplianceMatrix.SecurityControl.ACCESS_CONTROL
+            .getRequirement("SOC2");
 
-        // Then: Should have requirements
-        assertNotNull(requirements);
-        assertFalse(requirements.isEmpty());
+        // Then: Should have requirement
+        assertNotNull(requirement);
+        assertNotNull(requirement.citation());
+        assertFalse(requirement.citation().isEmpty());
     }
 
     @Test
     void testGetRequirementsGdpr() {
-        // When: Getting GDPR requirements for audit logging
-        List<String> requirements = ComplianceMatrix.SecurityControl.AUDIT_LOGGING
-            .getRequirements("GDPR");
+        // When: Getting GDPR requirement for audit logging
+        ComplianceMatrix.FrameworkRequirement requirement = ComplianceMatrix.SecurityControl.AUDIT_LOGGING
+            .getRequirement("GDPR");
 
-        // Then: Should have requirements
-        assertNotNull(requirements);
-        assertFalse(requirements.isEmpty());
+        // Then: Should have requirement
+        assertNotNull(requirement);
+        assertNotNull(requirement.citation());
+        assertFalse(requirement.citation().isEmpty());
     }
 
     @Test
     void testGetRequirementsNist() {
-        // When: Getting NIST requirements for network segmentation
-        List<String> requirements = ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION
-            .getRequirements("NIST");
+        // When: Getting NIST requirement for network segmentation
+        ComplianceMatrix.FrameworkRequirement requirement = ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION
+            .getRequirement("NIST");
 
-        // Then: Should have requirements
-        assertNotNull(requirements);
-        assertFalse(requirements.isEmpty());
+        // Then: Should have requirement
+        assertNotNull(requirement);
+        assertNotNull(requirement.citation());
+        assertFalse(requirement.citation().isEmpty());
     }
 
     @Test
     void testGetRequirementsUnknownFramework() {
-        // When: Getting requirements for unknown framework
-        List<String> requirements = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
-            .getRequirements("UNKNOWN_FRAMEWORK");
+        // When: Getting requirement for unknown framework
+        ComplianceMatrix.FrameworkRequirement requirement = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
+            .getRequirement("UNKNOWN_FRAMEWORK");
 
-        // Then: Should return empty list
-        assertNotNull(requirements);
-        assertTrue(requirements.isEmpty());
+        // Then: Should return NOT_APPLICABLE requirement
+        assertNotNull(requirement);
+        assertEquals(ComplianceMatrix.RequirementLevel.NOT_APPLICABLE, requirement.level());
     }
 
     @Test
     void testAllControlsHaveGetRequirementsMethod() {
         // When: Checking all controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
-            // Then: Each should have getRequirements method
-            List<String> pciReqs = control.getRequirements("PCI-DSS");
-            assertNotNull(pciReqs, control.name() + " should return non-null for getRequirements");
+            // Then: Each should have getRequirement method
+            ComplianceMatrix.FrameworkRequirement pciReq = control.getRequirement("PCI-DSS");
+            assertNotNull(pciReq, control.name() + " should return non-null for getRequirement");
         }
     }
 
@@ -219,12 +222,13 @@ class ComplianceMatrixMethodsExtendedTest {
 
     @Test
     void testSecurityControlGetRequirementsReturnsList() {
-        // When: Getting requirements
+        // When: Getting requirement
         var control = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST;
-        Object result = control.getRequirements("PCI-DSS");
+        Object result = control.getRequirement("PCI-DSS");
 
-        // Then: Should return List
-        assertTrue(result instanceof List, "getRequirements should return a List");
+        // Then: Should return FrameworkRequirement
+        assertTrue(result instanceof ComplianceMatrix.FrameworkRequirement,
+            "getRequirement should return a FrameworkRequirement");
     }
 
     @Test
@@ -232,16 +236,16 @@ class ComplianceMatrixMethodsExtendedTest {
         // When: Checking all controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have requirements for all frameworks
-            assertFalse(control.getRequirements("PCI-DSS").isEmpty(),
-                control.name() + " should have PCI-DSS requirements");
-            assertFalse(control.getRequirements("HIPAA").isEmpty(),
-                control.name() + " should have HIPAA requirements");
-            assertFalse(control.getRequirements("SOC2").isEmpty(),
-                control.name() + " should have SOC2 requirements");
-            assertFalse(control.getRequirements("GDPR").isEmpty(),
-                control.name() + " should have GDPR requirements");
-            assertFalse(control.getRequirements("NIST").isEmpty(),
-                control.name() + " should have NIST requirements");
+            assertNotNull(control.getRequirement("PCI-DSS"),
+                control.name() + " should have PCI-DSS requirement");
+            assertNotNull(control.getRequirement("HIPAA"),
+                control.name() + " should have HIPAA requirement");
+            assertNotNull(control.getRequirement("SOC2"),
+                control.name() + " should have SOC2 requirement");
+            assertNotNull(control.getRequirement("GDPR"),
+                control.name() + " should have GDPR requirement");
+            assertNotNull(control.getRequirement("NIST"),
+                control.name() + " should have NIST requirement");
         }
     }
 
@@ -266,14 +270,14 @@ class ComplianceMatrixMethodsExtendedTest {
 
     @Test
     void testGetRequirementsIsImmutable() {
-        // When: Getting requirements
-        List<String> requirements = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
-            .getRequirements("PCI-DSS");
+        // When: Getting requirement
+        ComplianceMatrix.FrameworkRequirement requirement = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
+            .getRequirement("PCI-DSS");
 
-        // Then: Should be immutable
-        assertThrows(UnsupportedOperationException.class, () -> {
-            requirements.add("New Requirement");
-        });
+        // Then: FrameworkRequirement is a record and thus immutable
+        assertNotNull(requirement);
+        assertNotNull(requirement.citation());
+        assertNotNull(requirement.level());
     }
 
     @Test
@@ -310,8 +314,8 @@ class ComplianceMatrixMethodsExtendedTest {
 
     @Test
     void testSecurityControlEnumHasGetRequirementsMethod() throws NoSuchMethodException {
-        // When: Checking for getRequirements method
-        var method = ComplianceMatrix.SecurityControl.class.getDeclaredMethod("getRequirements", String.class);
+        // When: Checking for getRequirement method
+        var method = ComplianceMatrix.SecurityControl.class.getDeclaredMethod("getRequirement", String.class);
 
         // Then: Should exist and be public
         assertNotNull(method);

@@ -1,0 +1,13 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
+FARGATE_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_boundary-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_extended-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,730,,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_flow-logs-explicit,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_flow-logs-retention-730,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,730,true,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_max-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,3650,true,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_subdomain_flow-logs,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_exact-min-retention-365,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_one-above-min-366,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,366,,PASS,jenkins,,,
+FARGATE_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_mattermost,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,mattermost,true,,
+FARGATE_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_gitlab_db,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,gitlab,true,,

@@ -201,6 +201,16 @@ public final class DeploymentContext {
     private final Boolean guardDutyAlertsConfigured;  // GuardDuty alerts configured (EventBridge to SNS/SIEM)
     private final Boolean certificateExpirationMonitoring;  // Certificate expiration monitoring enabled (CloudWatch alarms)
 
+    // Advanced Monitoring & Threat Protection (Compliance Requirements)
+    private final Boolean macieEnabled;  // Enable Amazon Macie for PII/PHI discovery (HIPAA §164.308(a)(1)(ii)(A), GDPR Art.25)
+    private final Boolean macieAutomatedDiscoveryEnabled;  // Enable Macie automated discovery
+    private final Boolean securityHubEnabled;  // Enable AWS Security Hub for centralized security findings
+    private final Boolean inspectorEnabled;  // Enable Amazon Inspector for vulnerability scanning
+    private final Boolean antiMalwareEnabled;  // Enable anti-malware scanning
+    private final Boolean fileIntegrityMonitoringEnabled;  // Enable file integrity monitoring
+    private final Boolean containerRuntimeSecurityEnabled;  // Enable container runtime security monitoring
+    private final Boolean containerImageScanningEnabled;  // Enable container image vulnerability scanning
+
     // Security - SSH Access Control
     private final String bastionCidr;  // CIDR for bastion/VPN SSH access (PRODUCTION profile)
 
@@ -323,6 +333,17 @@ public final class DeploymentContext {
         this.createGuardDutyDetector = boolOrNull("createGuardDutyDetector");
         this.guardDutyAlertsConfigured = boolOrNull("guardDutyAlertsConfigured");
         this.certificateExpirationMonitoring = boolOrNull("certificateExpirationMonitoring");
+
+        // Advanced Monitoring & Threat Protection
+        this.macieEnabled = boolOrNull("macieEnabled");
+        this.macieAutomatedDiscoveryEnabled = boolOrNull("macieAutomatedDiscovery");
+        this.securityHubEnabled = boolOrNull("securityHubEnabled");
+        this.inspectorEnabled = boolOrNull("inspectorEnabled");
+        this.antiMalwareEnabled = boolOrNull("antiMalwareEnabled");
+        this.fileIntegrityMonitoringEnabled = boolOrNull("fileIntegrityMonitoring");
+        this.containerRuntimeSecurityEnabled = boolOrNull("containerRuntimeSecurity");
+        this.containerImageScanningEnabled = boolOrNull("containerImageScanning");
+
         this.cloudfront = bool("cloudfront", false);
         this.lbType = oneOf("lbType", "alb", List.of("alb", "nlb"));
 
@@ -467,6 +488,17 @@ public final class DeploymentContext {
     public Boolean createGuardDutyDetector() { return createGuardDutyDetector; }
     public Boolean guardDutyAlertsConfigured() { return guardDutyAlertsConfigured; }
     public Boolean certificateExpirationMonitoring() { return certificateExpirationMonitoring; }
+
+    // Advanced Monitoring & Threat Protection
+    public Boolean macieEnabled() { return macieEnabled; }
+    public Boolean macieAutomatedDiscoveryEnabled() { return macieAutomatedDiscoveryEnabled; }
+    public Boolean securityHubEnabled() { return securityHubEnabled; }
+    public Boolean inspectorEnabled() { return inspectorEnabled; }
+    public Boolean antiMalwareEnabled() { return antiMalwareEnabled; }
+    public Boolean fileIntegrityMonitoringEnabled() { return fileIntegrityMonitoringEnabled; }
+    public Boolean containerRuntimeSecurityEnabled() { return containerRuntimeSecurityEnabled; }
+    public Boolean containerImageScanningEnabled() { return containerImageScanningEnabled; }
+
     public boolean cloudfrontEnabled() { return cloudfront; }
     public String lbType() { return lbType; }
 

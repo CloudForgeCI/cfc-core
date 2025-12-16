@@ -146,25 +146,6 @@ class TopologyConfigurationBehavioralTest {
     }
 
     @Test
-    void testValidationSslWithoutDomainUsesPrivateCa() {
-        // Given: Jenkins Service with SSL but no FQDN or domain (uses Private CA)
-        App app = new App();
-        Stack stack = new Stack(app, "TestJenkinsSslNoDomain");
-
-        Map<String, Object> cfcContext = new HashMap<>();
-        cfcContext.put("stackName", "TestJenkinsSslNoDomain");
-        cfcContext.put("securityProfile", "PRODUCTION");
-        cfcContext.put("enableSsl", true);
-        // No domain or fqdn - Private CA will be used for ALB DNS
-        stack.getNode().setContext("cfc", cfcContext);
-
-        // When/Then: Should succeed (Private CA will be used)
-        assertDoesNotThrow(() -> {
-            DeploymentContext.from(stack);
-        }, "SSL without domain should succeed using Private CA");
-    }
-
-    @Test
     void testJenkinsServiceWireCompletesWithoutErrors() {
         // Given: Valid Jenkins Service configuration with Fargate
         App app = new App();

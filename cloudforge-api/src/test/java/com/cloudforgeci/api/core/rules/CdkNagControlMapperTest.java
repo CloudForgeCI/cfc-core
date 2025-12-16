@@ -374,7 +374,7 @@ class CdkNagControlMapperTest {
         assertTrue(totalRulesMapped > 0, "Should have mapped rules");
 
         Integer totalSecurityControls = (Integer) stats.get("totalSecurityControls");
-        assertEquals(14, totalSecurityControls, "Should have 14 SecurityControl enums");
+        assertEquals(17, totalSecurityControls, "Should have 17 SecurityControl enums");
     }
 
     @Test

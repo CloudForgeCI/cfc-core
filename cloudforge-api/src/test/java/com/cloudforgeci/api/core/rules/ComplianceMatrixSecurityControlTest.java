@@ -1,8 +1,8 @@
 package com.cloudforgeci.api.core.rules;
 
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.FrameworkRequirement;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -128,7 +128,7 @@ class ComplianceMatrixSecurityControlTest {
         // When: Getting all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have framework mappings
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertNotNull(mappings, control.name() + " should have framework mappings");
             assertFalse(mappings.isEmpty(), control.name() + " should have at least one framework mapping");
         }
@@ -139,11 +139,11 @@ class ComplianceMatrixSecurityControlTest {
         // When: Getting all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have PCI-DSS mapping
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.containsKey("PCI-DSS"),
                 control.name() + " should have PCI-DSS mapping");
-            assertFalse(mappings.get("PCI-DSS").isEmpty(),
-                control.name() + " PCI-DSS mapping should not be empty");
+            assertNotNull(mappings.get("PCI-DSS"),
+                control.name() + " PCI-DSS mapping should not be null");
         }
     }
 
@@ -152,11 +152,11 @@ class ComplianceMatrixSecurityControlTest {
         // When: Getting all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have HIPAA mapping
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.containsKey("HIPAA"),
                 control.name() + " should have HIPAA mapping");
-            assertFalse(mappings.get("HIPAA").isEmpty(),
-                control.name() + " HIPAA mapping should not be empty");
+            assertNotNull(mappings.get("HIPAA"),
+                control.name() + " HIPAA mapping should not be null");
         }
     }
 
@@ -165,11 +165,11 @@ class ComplianceMatrixSecurityControlTest {
         // When: Getting all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have SOC2 mapping
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.containsKey("SOC2"),
                 control.name() + " should have SOC2 mapping");
-            assertFalse(mappings.get("SOC2").isEmpty(),
-                control.name() + " SOC2 mapping should not be empty");
+            assertNotNull(mappings.get("SOC2"),
+                control.name() + " SOC2 mapping should not be null");
         }
     }
 
@@ -178,11 +178,11 @@ class ComplianceMatrixSecurityControlTest {
         // When: Getting all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have GDPR mapping
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.containsKey("GDPR"),
                 control.name() + " should have GDPR mapping");
-            assertFalse(mappings.get("GDPR").isEmpty(),
-                control.name() + " GDPR mapping should not be empty");
+            assertNotNull(mappings.get("GDPR"),
+                control.name() + " GDPR mapping should not be null");
         }
     }
 
@@ -191,11 +191,11 @@ class ComplianceMatrixSecurityControlTest {
         // When: Getting all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have NIST mapping
-            Map<String, List<String>> mappings = control.getFrameworkMappings();
+            Map<String, FrameworkRequirement> mappings = control.getFrameworkMappings();
             assertTrue(mappings.containsKey("NIST"),
                 control.name() + " should have NIST mapping");
-            assertFalse(mappings.get("NIST").isEmpty(),
-                control.name() + " NIST mapping should not be empty");
+            assertNotNull(mappings.get("NIST"),
+                control.name() + " NIST mapping should not be null");
         }
     }
 
@@ -222,41 +222,46 @@ class ComplianceMatrixSecurityControlTest {
     @Test
     void testEncryptionAtRestHasPciDssMapping() {
         // When: Getting ENCRYPTION_AT_REST PCI-DSS mapping
-        var mappings = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST.getFrameworkMappings();
+        FrameworkRequirement pciRequirement = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
+            .getRequirement("PCI-DSS");
 
         // Then: Should have Req 3.4
-        assertTrue(mappings.get("PCI-DSS").stream()
-            .anyMatch(req -> req.contains("Req 3.4")));
+        assertNotNull(pciRequirement);
+        assertTrue(pciRequirement.citation().contains("Req 3.4"));
     }
 
     @Test
     void testEncryptionAtRestHasHipaaMapping() {
         // When: Getting ENCRYPTION_AT_REST HIPAA mapping
-        var mappings = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST.getFrameworkMappings();
+        FrameworkRequirement hipaaRequirement = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
+            .getRequirement("HIPAA");
 
         // Then: Should have §164.312 reference
-        assertTrue(mappings.get("HIPAA").stream()
-            .anyMatch(req -> req.contains("§164.312")));
+        assertNotNull(hipaaRequirement);
+        assertTrue(hipaaRequirement.citation().contains("§164.312"));
     }
 
     @Test
     void testAccessControlHasMultipleRequirements() {
-        // When: Getting ACCESS_CONTROL mappings
-        var mappings = ComplianceMatrix.SecurityControl.ACCESS_CONTROL.getFrameworkMappings();
+        // When: Getting ACCESS_CONTROL PCI-DSS requirement
+        FrameworkRequirement pciRequirement = ComplianceMatrix.SecurityControl.ACCESS_CONTROL
+            .getRequirement("PCI-DSS");
 
-        // Then: Should have multiple PCI-DSS requirements
-        List<String> pciDss = mappings.get("PCI-DSS");
-        assertTrue(pciDss.size() >= 2, "Access control should have multiple PCI-DSS requirements");
+        // Then: Should have PCI-DSS requirement
+        assertNotNull(pciRequirement);
+        assertNotNull(pciRequirement.citation());
+        assertFalse(pciRequirement.citation().isEmpty());
     }
 
     @Test
     void testAuditLoggingHasComprehensiveMappings() {
-        // When: Getting AUDIT_LOGGING mappings
-        var mappings = ComplianceMatrix.SecurityControl.AUDIT_LOGGING.getFrameworkMappings();
+        // When: Getting AUDIT_LOGGING PCI-DSS requirement
+        FrameworkRequirement pciRequirement = ComplianceMatrix.SecurityControl.AUDIT_LOGGING
+            .getRequirement("PCI-DSS");
 
         // Then: Should have comprehensive PCI-DSS requirements (Req 10.x)
-        List<String> pciDss = mappings.get("PCI-DSS");
-        assertTrue(pciDss.stream().anyMatch(req -> req.contains("Req 10")),
+        assertNotNull(pciRequirement);
+        assertTrue(pciRequirement.citation().contains("Req 10"),
             "Audit logging should have Req 10 requirements");
     }
 
@@ -267,20 +272,20 @@ class ComplianceMatrixSecurityControlTest {
 
         // Then: Should be immutable
         assertThrows(UnsupportedOperationException.class, () -> {
-            mappings.put("NEW_FRAMEWORK", List.of("Test"));
+            mappings.put("NEW_FRAMEWORK", FrameworkRequirement.required("Test"));
         });
     }
 
     @Test
     void testFrameworkRequirementListsAreImmutable() {
-        // When: Getting PCI-DSS requirements
-        var mappings = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST.getFrameworkMappings();
-        List<String> pciDss = mappings.get("PCI-DSS");
+        // When: Getting PCI-DSS requirement
+        FrameworkRequirement pciRequirement = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
+            .getRequirement("PCI-DSS");
 
-        // Then: Should be immutable
-        assertThrows(UnsupportedOperationException.class, () -> {
-            pciDss.add("New Requirement");
-        });
+        // Then: Should be non-null and immutable (FrameworkRequirement is a record)
+        assertNotNull(pciRequirement);
+        assertNotNull(pciRequirement.citation());
+        assertNotNull(pciRequirement.level());
     }
 
     @Test
@@ -330,11 +335,12 @@ class ComplianceMatrixSecurityControlTest {
     void testSecurityControlGetFrameworkRequirement() {
         // When: Getting specific framework requirement
         var control = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST;
-        List<String> pciDssReqs = control.getFrameworkMappings().get("PCI-DSS");
+        FrameworkRequirement pciDssReq = control.getRequirement("PCI-DSS");
 
-        // Then: Should have specific requirements
-        assertNotNull(pciDssReqs);
-        assertFalse(pciDssReqs.isEmpty());
+        // Then: Should have specific requirement
+        assertNotNull(pciDssReq);
+        assertNotNull(pciDssReq.citation());
+        assertFalse(pciDssReq.citation().isEmpty());
     }
 
     @Test

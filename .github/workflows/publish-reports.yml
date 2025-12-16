@@ -186,7 +186,7 @@ jobs:
         run: |
           cd cfc-testing
           echo "Running full validation to generate truth tables for GitHub Pages..."
-          bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log || true
+          bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log
 
       - name: Generate compliance truth table reports
         continue-on-error: true
@@ -194,11 +194,11 @@ jobs:
           cd cfc-testing/scripts
           echo "Generating compliance truth table reports..."
           echo "1️⃣ Generating truth table and test matrix..."
-          python3 truth-table-generator.py 2>&1 | tee truth-table-validation.log || true
+          python3 truth-table-generator.py 2>&1 | tee truth-table-validation.log
           echo "2️⃣ Generating comprehensive FrameworkRules unit test report..."
-          python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log || true
+          python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log
           echo "3️⃣ Generating multi-layer compliance validation dashboard..."
-          python3 compliance-report-generator.py 2>&1 | tee compliance-report.log || true
+          python3 compliance-report-generator.py 2>&1 | tee compliance-report.log
           echo "✅ Compliance truth table generation complete"
 
       - name: Run comprehensive synthesis tests
@@ -206,7 +206,7 @@ jobs:
         run: |
           cd cfc-testing
           echo "Running comprehensive synthesis tests..."
-          bash scripts/comprehensive-synth-test.sh 2>&1 | tee comprehensive-synth.log || true
+          bash scripts/comprehensive-synth-test.sh 2>&1 | tee comprehensive-synth.log
           echo "✅ Comprehensive synthesis tests complete"
 
       - name: Generate synthesis test HTML report
@@ -214,7 +214,7 @@ jobs:
         run: |
           cd cfc-testing/scripts
           echo "Generating synthesis test HTML report..."
-          bash generate-synth-report.sh || true
+          bash generate-synth-report.sh
           echo "✅ Synthesis report generation complete"
 
       - name: Create reports directory structure

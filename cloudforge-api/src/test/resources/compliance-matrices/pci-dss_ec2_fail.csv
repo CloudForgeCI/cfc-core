@@ -1,0 +1,10 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
+FAIL_EC2_PCI-DSS_no-auth_public-network,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_EC2_PCI-DSS_insufficient-retention-30,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,30,,FAIL,jenkins,,,
+FAIL_EC2_PCI-DSS_no-auth_private-network,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_EC2_PCI-DSS_public-no-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_EC2_PCI-DSS_below-minimum-retention-180,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,180,,FAIL,jenkins,,,
+FAIL_EC2_PCI-DSS_flow-logs-disabled,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_EC2_PCI-DSS_below-min-180,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,180,,FAIL,jenkins,,,
+FAIL_EC2_PCI-DSS_no-ssl,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_EC2_PCI-DSS_public_flow-logs-disabled,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,false,FAIL,jenkins,,,

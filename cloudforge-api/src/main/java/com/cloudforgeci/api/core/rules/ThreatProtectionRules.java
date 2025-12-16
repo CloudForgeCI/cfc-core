@@ -116,7 +116,9 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         boolean requiresPciDss = complianceFrameworks != null &&
             complianceFrameworks.toUpperCase().contains("PCI-DSS");
 
-        boolean antiMalwareEnabled = getBooleanSetting(ctx, "antiMalwareEnabled", false);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean antiMalwareEnabled = ctx.cfc.antiMalwareEnabled() != null ?
+            ctx.cfc.antiMalwareEnabled() : false;
         boolean isFargate = ctx.runtime != null && ctx.runtime.toString().equals("FARGATE");
         var config = ctx.securityProfileConfig.get().orElse(null);
         boolean hasGuardDuty = config != null && config.isGuardDutyEnabled();
@@ -179,7 +181,9 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
 
         // Container image scanning (alternative for containerized workloads)
         if (ctx.security == SecurityProfile.PRODUCTION) {
-            boolean containerImageScanning = getBooleanSetting(ctx, "containerImageScanning", false);
+            // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+            boolean containerImageScanning = ctx.cfc.containerImageScanningEnabled() != null ?
+                ctx.cfc.containerImageScanningEnabled() : false;
 
             if (!containerImageScanning && !antiMalwareEnabled) {
                 rules.add(ComplianceRule.fail(
@@ -334,7 +338,9 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
 
         // File integrity monitoring (required for PCI-DSS only)
         // For PRODUCTION with containers (FARGATE), immutable infrastructure satisfies this
-        boolean fileIntegrityMonitoring = getBooleanSetting(ctx, "fileIntegrityMonitoring", false);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean fileIntegrityMonitoring = ctx.cfc.fileIntegrityMonitoringEnabled() != null ?
+            ctx.cfc.fileIntegrityMonitoringEnabled() : false;
         boolean isFargate = ctx.runtime != null && ctx.runtime.toString().equals("FARGATE");
 
         // Auto-pass for PRODUCTION profile with FARGATE (immutable infrastructure = file integrity by design)
@@ -402,7 +408,9 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
             complianceFrameworks.toUpperCase().contains("GDPR");
 
         // Container runtime security (recommended but not required - only enforce for GDPR)
-        boolean containerRuntimeSecurity = getBooleanSetting(ctx, "containerRuntimeSecurity", false);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean containerRuntimeSecurity = ctx.cfc.containerRuntimeSecurityEnabled() != null ?
+            ctx.cfc.containerRuntimeSecurityEnabled() : false;
 
         if (ctx.security == SecurityProfile.PRODUCTION && requiresGdpr && !containerRuntimeSecurity) {
             rules.add(ComplianceRule.fail(
