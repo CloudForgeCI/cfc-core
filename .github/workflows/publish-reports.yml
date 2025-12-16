@@ -191,12 +191,12 @@ jobs:
         run: |
           cd cfc-testing/scripts
           echo "Generating compliance truth table reports..."
-          echo "1️⃣ Generating truth table and test matrix..."
+          echo "1️⃣ Running 48 split compliance tests and generating multi-layer validation dashboard..."
+          python3 compliance-report-generator.py 2>&1 | tee compliance-report.log
+          echo "2️⃣ Generating truth table and test matrix from test results..."
           python3 truth-table-generator.py 2>&1 | tee truth-table-validation.log
-          echo "2️⃣ Generating comprehensive FrameworkRules unit test report..."
+          echo "3️⃣ Generating comprehensive FrameworkRules unit test report..."
           python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log
-          echo "3️⃣ Generating multi-layer compliance validation dashboard from existing test results..."
-          python3 compliance-report-generator.py --skip-tests 2>&1 | tee compliance-report.log
           echo "✅ Compliance truth table generation complete"
 
       - name: Run comprehensive synthesis tests
