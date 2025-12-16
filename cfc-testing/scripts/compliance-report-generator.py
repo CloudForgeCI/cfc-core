@@ -93,7 +93,12 @@ class ComplianceReportGenerator:
                         "mvn", "test",
                         f"-Dtest=TruthTableValidationTest#{method}",
                         "--batch-mode",
-                        "-q"  # Quiet mode to reduce noise
+                        "-Dsurefire.useSystemClassLoader=false",  # Prevent classloader issues
+                        "-Dsurefire.useFile=true",  # Force XML output
+                        "-Dsurefire.trimStackTrace=false",  # Full stack traces in XML
+                        "-Dsurefire.redirectTestOutputToFile=false",  # Keep output in console AND XML
+                        "-Dsurefire.reportFormat=plain",  # Plain text for better parsing
+                        "-Dsurefire.printSummary=true"  # Print test summary
                     ]
 
                     process = subprocess.Popen(
@@ -102,7 +107,8 @@ class ComplianceReportGenerator:
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
                         text=True,
-                        bufsize=1
+                        bufsize=0,  # Unbuffered for real-time output
+                        env={**os.environ, 'MAVEN_OPTS': '-Xmx2048m'}  # Increase memory
                     )
 
                     current_test = None
@@ -131,8 +137,24 @@ class ComplianceReportGenerator:
 
                 print(f"   ✅ All test methods completed")
 
-                # Parse JUnit XML for final details
-                self._parse_junit_xml_incremental()
+                # Wait for JUnit XML to be fully written (critical for CI environments)
+                print(f"   ⏳ Waiting for JUnit XML to be fully written...")
+                import time
+                time.sleep(2)  # Give Maven Surefire time to flush XML
+
+                # Parse JUnit XML for final details with retry
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        self._parse_junit_xml_incremental()
+                        break
+                    except Exception as e:
+                        if attempt < max_retries - 1:
+                            print(f"   ⚠️  XML parse attempt {attempt + 1} failed, retrying...")
+                            time.sleep(1)
+                        else:
+                            print(f"   ❌ Failed to parse JUnit XML after {max_retries} attempts: {e}")
+                            raise
 
                 return all_passed
 
@@ -340,6 +362,13 @@ class ComplianceReportGenerator:
             print(f"   ⚠️  JUnit XML not found: {xml_file}")
             return
 
+        # Verify file is not empty and is valid XML
+        if xml_file.stat().st_size == 0:
+            print(f"   ⚠️  JUnit XML is empty (0 bytes)")
+            return
+
+        print(f"   📊 Parsing JUnit XML ({xml_file.stat().st_size} bytes)...")
+
         try:
             # Read existing incremental results (if any)
             results_by_config = {}
@@ -352,8 +381,12 @@ class ComplianceReportGenerator:
             tree = ET.parse(xml_file)
             root = tree.getroot()
 
+            total_testcases = len(root.findall('testcase'))
+            print(f"   📋 Found {total_testcases} testcases in JUnit XML")
+
             updated_count = 0
             created_count = 0
+            skipped_count = 0
 
             for testcase in root.findall('testcase'):
                 time_val = float(testcase.get('time', 0.0))
@@ -371,6 +404,11 @@ class ComplianceReportGenerator:
                     'cfn_guard': 'unknown'
                 }
                 is_negative_test = False
+
+                # Check if system-out exists and has content
+                if system_out is None:
+                    # Try system-err as fallback
+                    system_out = testcase.find('system-err')
 
                 if system_out is not None and system_out.text:
                     text = system_out.text
@@ -432,8 +470,14 @@ class ComplianceReportGenerator:
                     if "NEGATIVE TEST PASSED" in text:
                         is_negative_test = True
 
-                # Skip non-CSV tests (e.g., testTruthTableLoaded)
+                # Fallback: Extract config name from test method name if system-out didn't have it
                 if not config_name:
+                    test_method = testcase.get('name', '')
+                    # Test method names like "testSoc2Ec2Pass" -> extract from CSV file mapping
+                    # For now, skip if we can't determine config name
+                    if test_method and not test_method.startswith('testTruthTableLoaded'):
+                        print(f"   ⚠️  No config name found for test: {test_method} (system-out may be empty)")
+                    skipped_count += 1
                     continue
 
                 # Check for test failures
@@ -506,9 +550,15 @@ class ComplianceReportGenerator:
                 for result in results_by_config.values():
                     f.write(json.dumps(result) + '\n')
 
-            print(f"   ✅ Updated {updated_count} results with JUnit XML timing data")
-            if created_count > 0:
-                print(f"   ✅ Created {created_count} new results from JUnit XML")
+            print(f"   ✅ Parsed {total_testcases} testcases: {updated_count} updated, {created_count} created, {skipped_count} skipped (non-CSV)")
+
+            # Diagnostic: Show sample of parsed data
+            if results_by_config:
+                sample_config = next(iter(results_by_config.keys()))
+                sample_duration = results_by_config[sample_config].get('duration', 0)
+                print(f"   📊 Sample: {sample_config} = {sample_duration:.2f}s")
+            else:
+                print(f"   ⚠️  WARNING: No compliance test results extracted from JUnit XML!")
 
         except Exception as e:
             print(f"   ⚠️  Failed to parse JUnit XML: {e}")
