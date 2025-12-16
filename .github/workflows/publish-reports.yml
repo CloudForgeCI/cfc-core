@@ -187,18 +187,7 @@ jobs:
           echo "Running full validation to generate truth tables for GitHub Pages..."
           bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log
 
-      - name: Check for compliance test results
-        run: |
-          echo "🔍 Checking if TruthTableValidationTest ran during 'mvn clean install' step..."
-          if [ -f "cloudforge-api/target/surefire-reports/TEST-com.cloudforgeci.api.integration.deployment.TruthTableValidationTest.xml" ]; then
-            TESTCASES=$(grep -c '<testcase' cloudforge-api/target/surefire-reports/TEST-com.cloudforgeci.api.integration.deployment.TruthTableValidationTest.xml)
-            echo "✅ Found JUnit XML with $TESTCASES testcases"
-            ls -lh cloudforge-api/target/surefire-reports/TEST-com.cloudforgeci.api.integration.deployment.TruthTableValidationTest.xml
-          else
-            echo "⚠️  JUnit XML not found - TruthTableValidationTest may not have run"
-            echo "Note: Compliance dashboard will be generated but may have limited timing data"
-            echo "This can happen if tests are excluded or skipped during the build phase"
-          fi
+
 
       - name: Generate compliance truth table reports
         run: |
