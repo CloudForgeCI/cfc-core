@@ -163,7 +163,7 @@ jobs:
       - name: Build and test with coverage
         run: |
           echo "Building project with tests and coverage..."
-          mvn clean install -B -V -Dtest='!TruthTableValidationTest'
+          mvn clean install -B -V
           echo "Build complete"
 
       - name: Generate surefire HTML reports
@@ -177,7 +177,7 @@ jobs:
           cd cfc-testing
           echo "Ensuring clean build of cfc-testing module for synthesis tests..."
           echo "This ensures all latest changes from cloudforge-core are picked up"
-          mvn clean package -DskipTests -B
+          #mvn clean package -DskipTests -B
           chmod +x scripts/*.sh 2>/dev/null || true
           mkdir -p scripts/validation-results scripts/synth-results
 
@@ -209,7 +209,7 @@ jobs:
           echo "2️⃣ Generating comprehensive FrameworkRules unit test report..."
           python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log
           echo "3️⃣ Generating multi-layer compliance validation dashboard from existing test results..."
-          python3 compliance-report-generator.py --skip-tests 2>&1 | tee compliance-report.log
+          python3 compliance-report-generator.py 2>&1 | tee compliance-report.log
           echo "✅ Compliance truth table generation complete"
 
       - name: Run comprehensive synthesis tests
