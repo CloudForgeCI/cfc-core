@@ -177,7 +177,7 @@ jobs:
           cd cfc-testing
           echo "Ensuring clean build of cfc-testing module for synthesis tests..."
           echo "This ensures all latest changes from cloudforge-core are picked up"
-          #mvn clean package -DskipTests -B
+          mvn clean package -DskipTests -B
           chmod +x scripts/*.sh 2>/dev/null || true
           mkdir -p scripts/validation-results scripts/synth-results
 
