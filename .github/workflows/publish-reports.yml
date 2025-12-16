@@ -187,6 +187,14 @@ jobs:
           echo "Running full validation to generate truth tables for GitHub Pages..."
           bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log
 
+      - name: Run compliance validation tests
+        run: |
+          cd cloudforge-api
+          echo "Running TruthTableValidationTest to generate timing data..."
+          echo "This will take ~10 minutes for 274 test configurations"
+          mvn test -Dtest=TruthTableValidationTest -B 2>&1 | tee ../cfc-testing/scripts/compliance-test-run.log || true
+          echo "✅ Compliance tests completed"
+
       - name: Generate compliance truth table reports
         run: |
           cd cfc-testing/scripts
@@ -195,8 +203,8 @@ jobs:
           python3 truth-table-generator.py 2>&1 | tee truth-table-validation.log
           echo "2️⃣ Generating comprehensive FrameworkRules unit test report..."
           python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log
-          echo "3️⃣ Generating multi-layer compliance validation dashboard..."
-          python3 compliance-report-generator.py 2>&1 | tee compliance-report.log
+          echo "3️⃣ Generating multi-layer compliance validation dashboard from existing test results..."
+          python3 compliance-report-generator.py --skip-tests 2>&1 | tee compliance-report.log
           echo "✅ Compliance truth table generation complete"
 
       - name: Run comprehensive synthesis tests
