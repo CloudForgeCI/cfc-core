@@ -160,9 +160,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-dependency-check-v12-
 
+      - name: Pre-generate truth table for tests
+        run: |
+          cd cfc-testing/scripts
+          echo "Generating truth table before build so TruthTableValidationTest can run..."
+          mkdir -p validation-results
+          python3 truth-table-generator.py 2>&1 | tee truth-table-generation.log
+          echo "✅ Truth table generated"
+          ls -lh validation-results/truth-table.json
+
       - name: Build and test with coverage
         run: |
           echo "Building project with tests and coverage..."
+          echo "TruthTableValidationTest will now run (truth-table.json exists)"
           mvn clean install -B -V
           echo "Build complete"
 
@@ -187,6 +197,19 @@ jobs:
           echo "Running full validation to generate truth tables for GitHub Pages..."
           bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log
 
+      - name: Check for compliance test results
+        run: |
+          echo "🔍 Checking if TruthTableValidationTest ran during 'mvn clean install' step..."
+          if [ -f "cloudforge-api/target/surefire-reports/TEST-com.cloudforgeci.api.integration.deployment.TruthTableValidationTest.xml" ]; then
+            TESTCASES=$(grep -c '<testcase' cloudforge-api/target/surefire-reports/TEST-com.cloudforgeci.api.integration.deployment.TruthTableValidationTest.xml)
+            echo "✅ Found JUnit XML with $TESTCASES testcases"
+            ls -lh cloudforge-api/target/surefire-reports/TEST-com.cloudforgeci.api.integration.deployment.TruthTableValidationTest.xml
+          else
+            echo "⚠️  JUnit XML not found - TruthTableValidationTest may not have run"
+            echo "Note: Compliance dashboard will be generated but may have limited timing data"
+            echo "This can happen if tests are excluded or skipped during the build phase"
+          fi
+
       - name: Generate compliance truth table reports
         run: |
           cd cfc-testing/scripts
@@ -196,7 +219,7 @@ jobs:
           echo "2️⃣ Generating comprehensive FrameworkRules unit test report..."
           python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log
           echo "3️⃣ Generating multi-layer compliance validation dashboard from existing test results..."
-          python3 compliance-report-generator.py 2>&1 | tee compliance-report.log
+          python3 compliance-report-generator.py --skip-tests 2>&1 | tee compliance-report.log
           echo "✅ Compliance truth table generation complete"
 
       - name: Run comprehensive synthesis tests
