@@ -697,61 +697,72 @@ class TruthTableGenerator:
 
     def run_compliance_tests(self, project_dir: str, log_file: str) -> bool:
         """
-        Run Maven compliance tests and capture output.
+        Parse existing compliance test results from JUnit XML.
+
+        NOTE: Tests are now run as 48 split methods by compliance-report-generator.py
+        This method just parses the existing results for duration data.
 
         Args:
             project_dir: Path to cloudforge-api directory
-            log_file: Where to save test output
+            log_file: Where to save parsed results
 
         Returns:
-            True if tests passed, False otherwise
+            True if results were parsed successfully, False otherwise
         """
-        print("🧪 Running compliance validation tests...")
+        print("📊 Parsing existing compliance test results...")
 
         try:
-            # Find Maven command (works for both macOS Homebrew and Linux/GitHub Actions)
-            mvn_cmd = 'mvn'
-            for potential_path in ['/opt/homebrew/bin/mvn', '/usr/bin/mvn', '/usr/local/bin/mvn']:
-                if os.path.exists(potential_path):
-                    mvn_cmd = potential_path
-                    break
+            # Check if JUnit XML exists
+            xml_file = os.path.join(project_dir, "target", "surefire-reports",
+                                   "TEST-com.cloudforgeci.api.integration.deployment.TruthTableValidationTest.xml")
 
-            # Run Maven tests
-            cmd = [
-                mvn_cmd,
-                'test',
-                '-Dtest=TruthTableValidationTest#testComplianceFrameworkIntegrationCsv'
-            ]
+            if not os.path.exists(xml_file):
+                print(f"⚠️  JUnit XML not found: {xml_file}")
+                print("   Compliance tests may not have run yet during 'mvn clean install'")
+                # Create empty log file
+                with open(log_file, 'w') as f:
+                    f.write("No compliance test results found - JUnit XML does not exist.\n")
+                return False
 
-            env = os.environ.copy()
-            env['PATH'] = f"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:{env.get('PATH', '')}"
+            # Parse the existing JUnit XML to extract test results
+            print(f"✅ Found JUnit XML: {xml_file}")
 
-            result = subprocess.run(
-                cmd,
-                cwd=project_dir,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
+            # Read JUnit XML and create a summary log
+            import xml.etree.ElementTree as ET
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
 
-            # Save output to log file
+            test_count = len(root.findall('testcase'))
+            print(f"   Found {test_count} test cases in JUnit XML")
+
+            # Save summary to log file
             with open(log_file, 'w') as f:
-                f.write(result.stdout)
-                f.write(result.stderr)
+                f.write(f"Parsed {test_count} compliance test results from JUnit XML\n")
+                f.write(f"XML file: {xml_file}\n\n")
 
-            print(f"✅ Test output saved to: {log_file}")
+                for testcase in root.findall('testcase'):
+                    name = testcase.get('name', 'unknown')
+                    time = testcase.get('time', '0')
+                    status = 'PASSED'
 
-            # Parse results
+                    failure = testcase.find('failure')
+                    error = testcase.find('error')
+                    if failure is not None or error is not None:
+                        status = 'FAILED'
+
+                    f.write(f"{status}: {name} ({time}s)\n")
+
+            print(f"✅ Test summary saved to: {log_file}")
+
+            # Parse results for compliance data (even though we're not running tests)
             self.parse_test_results(log_file)
 
-            return result.returncode == 0
+            return True
 
-        except subprocess.TimeoutExpired:
-            print("❌ Tests timed out after 5 minutes")
-            return False
         except Exception as e:
-            print(f"❌ Error running tests: {e}")
+            print(f"❌ Error parsing test results: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def generate_html_report(self, filename: str):
