@@ -182,14 +182,12 @@ jobs:
           mkdir -p scripts/validation-results scripts/synth-results
 
       - name: Run CFC validation (full mode for GitHub Pages)
-        continue-on-error: true
         run: |
           cd cfc-testing
           echo "Running full validation to generate truth tables for GitHub Pages..."
           bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log
 
       - name: Generate compliance truth table reports
-        continue-on-error: true
         run: |
           cd cfc-testing/scripts
           echo "Generating compliance truth table reports..."
@@ -202,7 +200,6 @@ jobs:
           echo "✅ Compliance truth table generation complete"
 
       - name: Run comprehensive synthesis tests
-        continue-on-error: true
         run: |
           cd cfc-testing
           echo "Running comprehensive synthesis tests..."
@@ -210,7 +207,6 @@ jobs:
           echo "✅ Comprehensive synthesis tests complete"
 
       - name: Generate synthesis test HTML report
-        continue-on-error: true
         run: |
           cd cfc-testing/scripts
           echo "Generating synthesis test HTML report..."
