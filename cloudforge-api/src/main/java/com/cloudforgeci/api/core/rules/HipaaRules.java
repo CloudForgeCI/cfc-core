@@ -528,17 +528,10 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
      * §164.316(b)(2)(i): Retain documentation for 6 years.
      */
     private boolean isRetentionSufficient(RetentionDays retention) {
-        // HIPAA requires 6 years (2190 days)
-        // CloudWatch RetentionDays enum doesn't have 6-year option
-        // TWO_YEARS (730 days) does NOT meet HIPAA requirement
-        // Must use combination of CloudWatch (1-2 years) + S3 archival (additional 4-5 years)
-
-        // For validation purposes, we accept TWO_YEARS or longer with a warning
-        // Organizations should implement additional archival to S3 for full 6-year retention
-        return retention == RetentionDays.TWO_YEARS ||
-               retention == RetentionDays.THREE_YEARS ||
-               retention == RetentionDays.FIVE_YEARS ||
-               retention == RetentionDays.SIX_YEARS ||
+        // HIPAA STRICTLY requires 6 years (2190 days) - §164.316(b)(2)(i)
+        // ONLY accept SIX_YEARS (2192 days) or longer
+        // TWO_YEARS (731 days), THREE_YEARS (1096 days), FIVE_YEARS (1827 days) do NOT meet HIPAA requirement
+        return retention == RetentionDays.SIX_YEARS ||
                retention == RetentionDays.SEVEN_YEARS ||
                retention == RetentionDays.EIGHT_YEARS ||
                retention == RetentionDays.NINE_YEARS ||

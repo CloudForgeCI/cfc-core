@@ -128,6 +128,15 @@ class ComplianceReportGenerator:
                     else:
                         print(f"      ✓ {method} passed")
 
+                    # Save JUnit XML with unique name before next test overwrites it
+                    xml_file = self.cloudforge_api_dir / "target" / "surefire-reports" / \
+                              "TEST-com.cloudforgeci.api.integration.deployment.TruthTableValidationTest.xml"
+                    if xml_file.exists():
+                        saved_xml = self.output_dir / f"junit-xml-{method}.xml"
+                        import shutil
+                        shutil.copy(xml_file, saved_xml)
+                        print(f"      📁 Saved JUnit XML: {saved_xml.name}")
+
                     # Kill lingering JSII processes between tests
                     try:
                         subprocess.run(["pkill", "-9", "-f", "jsii-java-runtime"],
@@ -142,11 +151,11 @@ class ComplianceReportGenerator:
                 import time
                 time.sleep(2)  # Give Maven Surefire time to flush XML
 
-                # Parse JUnit XML for final details with retry
+                # Parse ALL saved JUnit XML files for timing information
                 max_retries = 3
                 for attempt in range(max_retries):
                     try:
-                        self._parse_junit_xml_incremental()
+                        self._parse_all_junit_xml_files()
                         break
                     except Exception as e:
                         if attempt < max_retries - 1:
@@ -352,6 +361,72 @@ class ComplianceReportGenerator:
         # Append to JSONL file (one JSON object per line)
         with open(self.incremental_results_file, 'a') as f:
             f.write(json.dumps(result_dict) + '\n')
+
+    def _parse_all_junit_xml_files(self):
+        """Parse all saved JUnit XML files from split test method runs and aggregate timing data."""
+        # Find all saved XML files
+        saved_xml_files = sorted(self.output_dir.glob("junit-xml-*.xml"))
+
+        if not saved_xml_files:
+            print(f"   ⚠️  No saved JUnit XML files found in {self.output_dir}")
+            # Fall back to parsing the final XML file
+            self._parse_junit_xml_incremental()
+            return
+
+        print(f"   📊 Parsing {len(saved_xml_files)} saved JUnit XML files...")
+
+        for xml_file in saved_xml_files:
+            self._parse_single_junit_xml(xml_file)
+
+        print(f"   ✅ Aggregated timing data from {len(saved_xml_files)} XML files")
+
+    def _parse_single_junit_xml(self, xml_file: Path):
+        """Parse a single JUnit XML file and update results with timing info."""
+        if not xml_file.exists():
+            return
+
+        if xml_file.stat().st_size == 0:
+            return
+
+        try:
+            # Read existing incremental results
+            results_by_config = {}
+            if self.incremental_results_file.exists():
+                with open(self.incremental_results_file, 'r') as f:
+                    for line in f:
+                        result = json.loads(line)
+                        results_by_config[result['config_name']] = result
+
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+
+            for testcase in root.findall('testcase'):
+                time_val = float(testcase.get('time', 0.0))
+
+                # Extract config name from system-out
+                system_out = testcase.find('system-out')
+                config_name = None
+
+                if system_out is None:
+                    system_out = testcase.find('system-err')
+
+                if system_out is not None and system_out.text:
+                    text = system_out.text
+                    match = re.search(r'Testing compliance configuration \(CSV\):\s*(\S+)\s+\[(.+?)\]', text)
+                    if match:
+                        config_name = match.group(1)
+
+                if config_name and config_name in results_by_config:
+                    # Update duration for this config
+                    results_by_config[config_name]['duration'] = time_val
+
+            # Rewrite the incremental file with updated durations
+            with open(self.incremental_results_file, 'w') as f:
+                for result in results_by_config.values():
+                    f.write(json.dumps(result) + '\n')
+
+        except Exception as e:
+            print(f"   ⚠️  Failed to parse {xml_file.name}: {e}")
 
     def _parse_junit_xml_incremental(self):
         """Parse JUnit XML and create/update results with timing, error info, and layer status."""
@@ -1047,13 +1122,17 @@ class ComplianceReportGenerator:
         for idx, result in enumerate(sorted(self.results, key=lambda r: (r.framework, r.runtime, r.network_mode))):
             status_class = "status-passed" if result.status == "passed" else "status-failed"
 
-            cdk_nag_class = f"status-{result.cdk_nag_status}"
-            fr_class = f"status-{result.framework_rules_status}"
-            cfg_class = f"status-{result.cfn_guard_status}"
+            # Sanitize status strings for CSS class names (replace spaces and special chars with hyphens)
+            def sanitize_status(status: str) -> str:
+                return status.replace(' ', '-').replace('(', '').replace(')', '').replace('/', '-').lower()
+
+            cdk_nag_class = f"status-{sanitize_status(result.cdk_nag_status)}"
+            fr_class = f"status-{sanitize_status(result.framework_rules_status)}"
+            cfg_class = f"status-{sanitize_status(result.cfn_guard_status)}"
             if result.aws_config_status and result.aws_config_status.split()[0].isdigit():
                 aws_config_class = "status-deployed"
             else:
-                aws_config_class = f"status-{result.aws_config_status.split()[0]}"
+                aws_config_class = f"status-{sanitize_status(result.aws_config_status.split()[0])}"
 
             # Build detail content with deployment context, violations, and error message
             detail_parts = []

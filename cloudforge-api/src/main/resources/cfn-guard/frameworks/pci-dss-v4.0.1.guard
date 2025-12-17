@@ -1,8 +1,8 @@
 # ============================================================================
-# PCI-DSS v3.2.1 - CloudFormation Template Validation
+# PCI DSS v4.0.1 - CloudFormation Template Validation
 # ============================================================================
-# Framework: PCI-DSS v3.2.1
-# Last Updated: 2025-12-11
+# Framework: PCI DSS v4.0.1
+# Last Updated: 2025-12-16
 # Compatible with cfn-guard 3.x
 # ============================================================================
 
@@ -96,12 +96,21 @@ rule pci_s3_block_public_access when %s3_buckets !empty {
 }
 
 # ============================================================================
-# Req 8.2 & 8.3 - AUTHENTICATION
+# Req 8.3.6 - PASSWORD REQUIREMENTS (12 character minimum)
 # ============================================================================
 
-# Cognito User Pool MFA
+# Cognito Password Policy - Minimum 12 characters
+rule pci_cognito_password_length when %cognito_pools !empty {
+    %cognito_pools.Properties.Policies.PasswordPolicy.MinimumLength >= 12
+}
+
+# ============================================================================
+# Req 8.4.2 - MFA FOR ALL CDE ACCESS
+# ============================================================================
+
+# Cognito User Pool MFA - Required for all CDE access in v4.0
 rule pci_cognito_mfa when %cognito_pools !empty {
-    %cognito_pools.Properties.MfaConfiguration in ['ON', 'OPTIONAL']
+    %cognito_pools.Properties.MfaConfiguration == 'ON'
 }
 
 # ============================================================================

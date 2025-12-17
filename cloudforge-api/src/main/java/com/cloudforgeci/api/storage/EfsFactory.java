@@ -24,6 +24,14 @@ import java.util.logging.Logger;
  *   <li>Creating Access Points with application-specific ownership and permissions</li>
  * </ul>
  *
+ * <p><strong>Compliance Coverage:</strong></p>
+ * <ul>
+ *   <li>SOC2-C1.1-EFS: Encryption at rest for confidentiality</li>
+ *   <li>HIPAA §164.312(a)(2)(iv): Encryption of ePHI at rest</li>
+ *   <li>PCI-DSS Req 3.4: Protect stored cardholder data</li>
+ *   <li>GDPR Art. 32: Security of processing (encryption)</li>
+ * </ul>
+ *
  * <p>CloudForge 3.0.0: Uses ApplicationSpec to determine Access Point configuration</p>
  */
 public class EfsFactory extends BaseFactory {

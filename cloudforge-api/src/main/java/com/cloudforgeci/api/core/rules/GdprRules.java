@@ -6,6 +6,7 @@ import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
+import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -311,6 +312,29 @@ public class GdprRules implements FrameworkRules<SystemContext> {
             ));
         }
 
+        // Art. 30(1) & Art. 32(1)(d): Log retention for audit trail and security assessment
+        // GDPR doesn't specify exact retention period, but requires adequate retention
+        // for maintaining records of processing activities and security monitoring
+        // Industry standard: 90 days minimum for security logs (aligns with SOC2 CC7.2)
+        var retentionDays = config.getLogRetentionDays();
+        if (!isRetentionSufficient(retentionDays)) {
+            rules.add(ComplianceRule.fail(
+                "GDPR-LOG-RETENTION",
+                "Log retention must be adequate for processing records and security assessment (GDPR Art. 30(1) & 32(1)(d))",
+                "CloudWatchLogGroupRetention",
+                "Log retention must be at least 90 days (THREE_MONTHS) to maintain adequate records of processing activities. Current: " +
+                retentionDays.toString() + ". " +
+                "GDPR Article 30(1) requires maintaining records of processing activities, and Article 32(1)(d) " +
+                "requires ability to regularly test and evaluate security measures."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "GDPR-LOG-RETENTION",
+                "Log retention adequate for processing records and security assessment (GDPR Art. 30(1) & 32(1)(d))",
+                "CloudWatchLogGroupRetention"
+            ));
+        }
+
         return rules;
     }
 
@@ -516,6 +540,36 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         return rules;
+    }
+
+    /**
+     * Check if log retention meets GDPR requirement (90 days minimum).
+     * GDPR Art. 30(1): Maintain records of processing activities.
+     * GDPR Art. 32(1)(d): Regularly test, assess, and evaluate effectiveness of security measures.
+     *
+     * While GDPR doesn't specify exact retention periods, it requires adequate retention
+     * to maintain records of processing activities and assess security measures.
+     * Industry standard: 90 days minimum (THREE_MONTHS or longer).
+     */
+    private boolean isRetentionSufficient(RetentionDays retention) {
+        // GDPR requires adequate retention for processing records and security assessment
+        // Industry standard: 90 days minimum (THREE_MONTHS or longer) - aligns with SOC2 CC7.2
+        return retention == RetentionDays.THREE_MONTHS ||
+               retention == RetentionDays.FOUR_MONTHS ||
+               retention == RetentionDays.FIVE_MONTHS ||
+               retention == RetentionDays.SIX_MONTHS ||
+               retention == RetentionDays.ONE_YEAR ||
+               retention == RetentionDays.THIRTEEN_MONTHS ||
+               retention == RetentionDays.EIGHTEEN_MONTHS ||
+               retention == RetentionDays.TWO_YEARS ||
+               retention == RetentionDays.THREE_YEARS ||
+               retention == RetentionDays.FIVE_YEARS ||
+               retention == RetentionDays.SIX_YEARS ||
+               retention == RetentionDays.SEVEN_YEARS ||
+               retention == RetentionDays.EIGHT_YEARS ||
+               retention == RetentionDays.NINE_YEARS ||
+               retention == RetentionDays.TEN_YEARS ||
+               retention == RetentionDays.INFINITE;
     }
 
     /**

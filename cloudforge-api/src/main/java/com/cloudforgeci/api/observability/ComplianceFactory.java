@@ -14,13 +14,13 @@ import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.cloudtrail.CfnTrail;
 import software.amazon.awscdk.services.config.*;
 import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.IRole;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.AnyPrincipal;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.ssm.CfnDocument;
+import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
@@ -359,17 +359,42 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("CloudTrail bucket ARN will be tracked in SSM Parameter Store for reuse");
 
+        // HIPAA requires KMS encryption for CloudTrail in PRODUCTION
+        boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
+        boolean useKms = security == SecurityProfile.PRODUCTION && isHipaa;
+
         // Create CloudTrail using high-level Trail construct
         // If trail with this name already exists, CloudFormation will update it or fail gracefully
-        Trail trail = Trail.Builder.create(this, "CloudTrail")
+        Trail.Builder trailBuilder = Trail.Builder.create(this, "CloudTrail")
                 .trailName(this.trailName)  // Fixed name for reusability
                 .bucket(trailBucket)
                 .sendToCloudWatchLogs(true)
                 .cloudWatchLogsRetention(config.getLogRetentionDays())  // Use security profile retention
                 .enableFileValidation(true)
                 .includeGlobalServiceEvents(true)
-                .isMultiRegionTrail(true)
-                .build();
+                .isMultiRegionTrail(true);
+
+        // Apply KMS encryption for HIPAA compliance in PRODUCTION
+        if (useKms) {
+            Key cloudTrailKmsKey = Key.Builder.create(this, "CloudTrailKmsKey")
+                    .description("KMS key for CloudTrail (HIPAA compliance)")
+                    .enableKeyRotation(true)
+                    .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                    .build();
+
+            // Grant CloudTrail service permission to use the key
+            cloudTrailKmsKey.addToResourcePolicy(PolicyStatement.Builder.create()
+                    .sid("Enable CloudTrail log encryption")
+                    .effect(Effect.ALLOW)
+                    .principals(List.of(new ServicePrincipal("cloudtrail.amazonaws.com")))
+                    .actions(List.of("kms:GenerateDataKey*", "kms:DecryptDataKey"))
+                    .resources(List.of("*"))
+                    .build());
+
+            trailBuilder.encryptionKey(cloudTrailKmsKey);
+        }
+
+        Trail trail = trailBuilder.build();
 
         // Store trail for later configuration
         this.trail = trail;
@@ -4055,16 +4080,47 @@ public class ComplianceFactory extends BaseFactory {
         boolean shouldRetain = security == SecurityProfile.PRODUCTION;
         boolean shouldAutoDelete = !shouldRetain;
 
-        Bucket bucket = Bucket.Builder.create(this, id)
+        // HIPAA requires KMS encryption for compliance buckets in PRODUCTION
+        boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
+        boolean useKms = security == SecurityProfile.PRODUCTION && isHipaa;
+
+        Bucket.Builder bucketBuilder = Bucket.Builder.create(this, id)
                 // NO bucketName specified - CloudFormation auto-generates unique name
-                .encryption(BucketEncryption.S3_MANAGED)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
                 .removalPolicy(shouldRetain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
                 // Enable autoDeleteObjects for non-production so CloudFormation can delete bucket contents
                 .autoDeleteObjects(shouldAutoDelete)
                 .versioned(true)  // Required for compliance (SOC2/PCI-DSS/HIPAA)
-                .lifecycleRules(lifecycleRules)  // Compliance-driven retention policies
-                .build();
+                .lifecycleRules(lifecycleRules);  // Compliance-driven retention policies
+
+        // Apply KMS encryption for HIPAA compliance in PRODUCTION
+        if (useKms) {
+            Key kmsKey = Key.Builder.create(this, id + "KmsKey")
+                    .description("KMS key for " + id + " (HIPAA compliance)")
+                    .enableKeyRotation(true)
+                    .removalPolicy(shouldRetain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                    .build();
+            bucketBuilder.encryptionKey(kmsKey).encryption(BucketEncryption.KMS);
+        } else {
+            bucketBuilder.encryption(BucketEncryption.S3_MANAGED);
+        }
+
+        Bucket bucket = bucketBuilder.build();
+
+        // Enforce SSL for all S3 requests (HIPAA requirement)
+        bucket.addToResourcePolicy(PolicyStatement.Builder.create()
+                .sid("DenyInsecureTransport")
+                .effect(Effect.DENY)
+                .principals(List.of(new AnyPrincipal()))
+                .actions(List.of("s3:*"))
+                .resources(List.of(
+                        bucket.getBucketArn(),
+                        bucket.getBucketArn() + "/*"
+                ))
+                .conditions(java.util.Map.of(
+                        "Bool", java.util.Map.of("aws:SecureTransport", "false")
+                ))
+                .build());
 
         return bucket;
     }

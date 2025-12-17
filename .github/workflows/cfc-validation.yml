@@ -281,7 +281,7 @@ jobs:
           cd cfc-testing
           echo "::group::Validating PCI-DSS compliance"
           cfn-guard validate \
-            --rules ../cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v3.2.1.guard \
+            --rules ../cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard \
             --data cdk.out/*.template.json \
             --show-summary fail \
             --output-format single-line-summary

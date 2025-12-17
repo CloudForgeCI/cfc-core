@@ -18,6 +18,16 @@ import java.util.logging.Logger;
  * and NAT gateways based on the network mode setting. It uses annotation-based
  * context injection for clean, maintainable code.</p>
  *
+ * <p><strong>Compliance Coverage:</strong></p>
+ * <ul>
+ *   <li>SOC2-CC6.6-VPC: Network segmentation and boundary protection</li>
+ *   <li>SOC2-CC7.2-FlowLogs: Network monitoring via VPC Flow Logs</li>
+ *   <li>HIPAA §164.312(e)(1): Technical safeguards for network transmission</li>
+ *   <li>PCI-DSS Req 1.1: Network documentation and segmentation</li>
+ *   <li>PCI-DSS Req 1.3: Prohibit direct public access to cardholder data environment</li>
+ *   <li>GDPR Art. 32: Security of processing (network isolation)</li>
+ * </ul>
+ *
  * <p><strong>Network Configurations:</strong></p>
  * <ul>
  *   <li><strong>public-no-nat:</strong> Creates VPC with public subnets only, no NAT gateways (unless security profile requires them)</li>

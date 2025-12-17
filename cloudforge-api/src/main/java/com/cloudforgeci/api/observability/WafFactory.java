@@ -17,6 +17,21 @@ import java.util.logging.Logger;
 /**
  * Factory for creating AWS WAF WebACL resources.
  * Creates Web Application Firewall protection for Application Load Balancers.
+ *
+ * <p><strong>Compliance Coverage:</strong></p>
+ * <ul>
+ *   <li>SOC2-CC6.6-WAF: Web Application Firewall for boundary protection</li>
+ *   <li>PCI-DSS Req 6.6: Web application security (WAF or code review)</li>
+ *   <li>HIPAA §164.312(e)(1): Transmission security controls</li>
+ *   <li>GDPR Art. 32: Security of processing (protection against attacks)</li>
+ * </ul>
+ *
+ * <p><strong>Managed Rule Groups:</strong></p>
+ * <ul>
+ *   <li>AWSManagedRulesKnownBadInputsRuleSet: Protection against known malicious inputs</li>
+ *   <li>AWSManagedRulesSQLiRuleSet: SQL injection protection</li>
+ *   <li>AWSManagedRulesLinuxRuleSet: Linux-specific vulnerability protection</li>
+ * </ul>
  */
 public class WafFactory extends BaseFactory {
 

@@ -32,12 +32,14 @@ import java.util.logging.Logger;
 @ComplianceFramework(
     value = "PCI-DSS",
     priority = 20,
-    displayName = "PCI-DSS",
-    description = "Validates PCI-DSS requirements for cardholder data protection"
+    displayName = "PCI DSS v4.0.1",
+    description = "Validates PCI DSS v4.0.1 requirements for cardholder data protection"
 )
 public class PciDssRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(PciDssRules.class.getName());
 
+    // PCI DSS v4.0 Req 8.3.6: Minimum 12 character passwords (increased from 7 in v3.2.1)
+    private static final int MIN_PASSWORD_LENGTH = 12;
 
     /**
      * Check if log retention period meets PCI-DSS requirement (at least 1 year).
@@ -337,11 +339,32 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * PCI-DSS Requirement 7 & 8: Restrict access and authenticate users.
-     * Validates access control configuration.
+     * PCI DSS Requirement 7 & 8: Restrict access and authenticate users.
+     * Validates access control and authentication configuration.
      */
     private List<ComplianceRule> validateAccessControl(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
+
+        var config = ctx.securityProfileConfig.get().orElseThrow(
+            () -> new IllegalStateException("SecurityProfileConfiguration not set")
+        );
+
+        // Req 8.3.6: Minimum 12 character passwords
+        int passwordLength = config.getMinimumPasswordLength();
+        if (passwordLength < MIN_PASSWORD_LENGTH) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-8.3.6-Password",
+                "Minimum password length must be " + MIN_PASSWORD_LENGTH + " characters (PCI DSS v4.0 Req 8.3.6)",
+                "IAMPasswordPolicyRule",
+                "Current: " + passwordLength + " characters. Update SecurityProfileConfiguration.getMinimumPasswordLength()."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-8.3.6-Password",
+                "Password length requirement met (" + passwordLength + " characters)",
+                "IAMPasswordPolicyRule"
+            ));
+        }
 
         // Requirement 7.1: Limit access by business need to know
         // IAM validation is handled by IAMRules, but we verify it's configured

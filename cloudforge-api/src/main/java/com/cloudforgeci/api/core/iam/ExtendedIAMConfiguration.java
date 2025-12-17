@@ -26,6 +26,9 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
  * - Extended monitoring capabilities
  * - Development tools access
  * - Administrative permissions for troubleshooting
+ *
+ * WARNING: This IAM profile is NOT recommended for PRODUCTION security profile.
+ * Use MINIMAL or STANDARD profiles for production deployments with compliance requirements.
  */
 public final class ExtendedIAMConfiguration implements IAMConfiguration {
 

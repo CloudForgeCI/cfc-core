@@ -31,6 +31,21 @@ import java.util.Map;
  * <p>This factory creates production-ready RDS instances with security best practices
  * for PCI-DSS, HIPAA, SOC 2, and GDPR compliance.</p>
  *
+ * <h2>Compliance Coverage</h2>
+ * <ul>
+ *   <li><b>SOC2-C1.1:</b> Encryption at rest (storageEncrypted)</li>
+ *   <li><b>SOC2-CC6.6:</b> Network isolation (privateSubnets, publiclyAccessible=false)</li>
+ *   <li><b>SOC2-A1.2-MultiAZ:</b> High availability (multiAz)</li>
+ *   <li><b>SOC2-A1.3:</b> Automated backups (backupRetention)</li>
+ *   <li><b>HIPAA §164.312(a)(2)(iv):</b> Encryption of ePHI at rest</li>
+ *   <li><b>HIPAA §164.312(a)(1):</b> Access control (no public access)</li>
+ *   <li><b>HIPAA §164.310(d)(2)(iii):</b> Data backup procedures</li>
+ *   <li><b>PCI-DSS Req 1.3:</b> Prohibit direct public access to cardholder data</li>
+ *   <li><b>PCI-DSS Req 3.4:</b> Render cardholder data unreadable (encryption)</li>
+ *   <li><b>PCI-DSS Req 8.3.1:</b> IAM authentication for database access</li>
+ *   <li><b>GDPR Art. 32:</b> Security of processing (encryption, access control)</li>
+ * </ul>
+ *
  * <h2>Security Features</h2>
  * <ul>
  *   <li><b>Encryption at Rest:</b> KMS encryption for production/staging</li>

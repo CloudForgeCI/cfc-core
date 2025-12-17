@@ -625,29 +625,79 @@ class TruthTableValidationTest {
         List<String> knownGaps = new ArrayList<>();
         Template template = null;
 
-        // Layer 1: Synthesize template (triggers cdk-nag validation)
+        // Layer 1 & 2: Synthesize template (triggers both cdk-nag and FrameworkRules validation)
         try {
             template = Template.fromStack(stack);
             System.out.println("   ✅ Layer 1 (cdk-nag): Synthesis passed");
         } catch (Exception e) {
-            String error = "Layer 1 (cdk-nag) synthesis failed: " + e.getMessage();
-            layer1Failures.add(error);
-            System.out.println("   ❌ Layer 1 (cdk-nag): Synthesis failed");
-            System.out.println("\n   📋 cdk-nag Failure Details:");
-            System.out.println("   " + "=".repeat(70));
-            // Print detailed error message with proper indentation
-            String[] errorLines = e.getMessage().split("\n");
-            int maxLines = Math.min(errorLines.length, 50); // Limit to first 50 lines
-            for (int i = 0; i < maxLines; i++) {
-                System.out.println("   " + errorLines[i]);
+            String errorMessage = e.getMessage();
+
+            // Check if this is a FrameworkRules failure (Layer 2) or cdk-nag failure (Layer 1)
+            // FrameworkRules failures contain "SEVERE:" and framework-specific rule IDs
+            String lowerMessage = errorMessage != null ? errorMessage.toLowerCase() : "";
+            boolean isFrameworkRulesFailure = errorMessage != null && (
+                lowerMessage.contains("severe:") ||
+                lowerMessage.contains("validation failed with") && (
+                    errorMessage.contains("GDPR-") ||
+                    errorMessage.contains("HIPAA-") ||
+                    errorMessage.contains("SOC2-") ||
+                    errorMessage.contains("PCI-DSS-") ||
+                    errorMessage.contains("Key Management") ||
+                    errorMessage.contains("Database Security") ||
+                    errorMessage.contains("Advanced Monitoring") ||
+                    errorMessage.contains("Incident Response") ||
+                    errorMessage.contains("Threat Protection")
+                )
+            );
+
+            if (isFrameworkRulesFailure) {
+                // This is a FrameworkRules validation failure (Layer 2)
+                System.out.println("   ✅ Layer 1 (cdk-nag): Passed (no cdk-nag violations)");
+                System.out.println("   ❌ Layer 2 (FrameworkRules): Validation failed - synthesis blocked");
+
+                // Extract individual violation lines from CDK ValidationError format
+                // Format: [stack/construct] RULE-ID: message
+                String[] errorLines = errorMessage.split("\n");
+                for (String line : errorLines) {
+                    String trimmed = line.trim();
+                    // Look for lines starting with [stack/construct] that contain rule IDs
+                    if (trimmed.startsWith("[") && trimmed.contains("]") &&
+                        (trimmed.contains("GDPR-") || trimmed.contains("HIPAA-") ||
+                         trimmed.contains("SOC2-") || trimmed.contains("PCI-DSS-"))) {
+                        // Extract everything after the [stack/construct] prefix
+                        int closeBracket = trimmed.indexOf("]");
+                        if (closeBracket >= 0 && closeBracket < trimmed.length() - 1) {
+                            String violation = trimmed.substring(closeBracket + 1).trim();
+                            layer2Failures.add(violation);
+                        }
+                    }
+                }
+
+                System.out.println("\n   📋 FrameworkRules Violation Details:");
+                System.out.println("   " + "=".repeat(70));
+                layer2Failures.forEach(f -> System.out.println("   • " + f));
+                System.out.println("   " + "=".repeat(70) + "\n");
+            } else {
+                // This is a cdk-nag or other synthesis failure (Layer 1)
+                String error = "Layer 1 (cdk-nag) synthesis failed: " + errorMessage;
+                layer1Failures.add(error);
+                System.out.println("   ❌ Layer 1 (cdk-nag): Synthesis failed");
+                System.out.println("\n   📋 cdk-nag Failure Details:");
+                System.out.println("   " + "=".repeat(70));
+                // Print detailed error message with proper indentation
+                String[] errorLines = errorMessage.split("\n");
+                int maxLines = Math.min(errorLines.length, 50); // Limit to first 50 lines
+                for (int i = 0; i < maxLines; i++) {
+                    System.out.println("   " + errorLines[i]);
+                }
+                if (errorLines.length > 50) {
+                    System.out.println("   ... (" + (errorLines.length - 50) + " more lines)");
+                }
+                System.out.println("   " + "=".repeat(70) + "\n");
             }
-            if (errorLines.length > 50) {
-                System.out.println("   ... (" + (errorLines.length - 50) + " more lines)");
-            }
-            System.out.println("   " + "=".repeat(70) + "\n");
         }
 
-        // Layer 2: FrameworkRules validation (only if synthesis succeeded)
+        // Layer 2: FrameworkRules post-synthesis validation (only if synthesis succeeded and no FrameworkRules failures yet)
         if (template != null) {
             try {
                 ComplianceValidationMatrix complianceValidator = new ComplianceValidationMatrix(template);
@@ -657,17 +707,20 @@ class TruthTableValidationTest {
                 knownGaps = violations.stream()
                     .filter(v -> v.contains("[KNOWN GAP]"))
                     .toList();
-                layer2Failures = violations.stream()
+                List<String> postSynthViolations = violations.stream()
                     .filter(v -> !v.contains("[KNOWN GAP]"))
                     .toList();
 
+                // Add to existing layer2Failures from synthesis
+                layer2Failures.addAll(postSynthViolations);
+
                 if (layer2Failures.isEmpty()) {
                     System.out.println("   ✅ Layer 2 (FrameworkRules): Validation passed");
-                } else {
-                    System.out.println("   ❌ Layer 2 (FrameworkRules): " + layer2Failures.size() + " violations");
+                } else if (!postSynthViolations.isEmpty()) {
+                    System.out.println("   ❌ Layer 2 (FrameworkRules): " + postSynthViolations.size() + " violations");
                     System.out.println("\n   📋 FrameworkRules Violation Details:");
                     System.out.println("   " + "=".repeat(70));
-                    layer2Failures.forEach(f -> System.out.println("   • " + f));
+                    postSynthViolations.forEach(f -> System.out.println("   • " + f));
                     System.out.println("   " + "=".repeat(70) + "\n");
                 }
 
@@ -682,7 +735,8 @@ class TruthTableValidationTest {
                 layer2Failures.add("Layer 2 exception: " + e.getMessage());
                 System.out.println("   ❌ Layer 2 (FrameworkRules): Exception - " + e.getMessage());
             }
-        } else {
+        } else if (layer2Failures.isEmpty()) {
+            // Only show "skipped" if no FrameworkRules failures from synthesis
             System.out.println("   ⏭️  Layer 2 (FrameworkRules): Skipped (no template)");
         }
 
@@ -1118,7 +1172,7 @@ class TruthTableValidationTest {
     private String mapFrameworkToGuardFile(String framework) {
         return switch (framework.toUpperCase()) {
             case "HIPAA" -> "hipaa-security-rule.guard";
-            case "PCI-DSS", "PCI" -> "pci-dss-v3.2.1.guard";
+            case "PCI-DSS", "PCI" -> "pci-dss-v4.0.1.guard";
             case "SOC2" -> "soc2-trust-services.guard";
             case "GDPR" -> "gdpr-data-protection.guard";
             case "ISO-27001", "ISO27001" -> "iso-27001-controls.guard";

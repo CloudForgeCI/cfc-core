@@ -83,6 +83,9 @@ public class DeploymentConfig {
     /** Enable AWS WAF */
     public boolean wafEnabled;
 
+    /** Enable ALB access logs to S3 */
+    public boolean albAccessLogging = false;
+
     /** Enable CloudFront CDN */
     public boolean cloudfrontEnabled;
 
@@ -377,8 +380,45 @@ public class DeploymentConfig {
     /** Create AWS Config infrastructure */
     public boolean createConfigInfrastructure = true;
 
-    /** Enable GuardDuty */
+    /** Enable GuardDuty threat detection */
     public boolean guardDutyEnabled = false;
+
+    /** Create GuardDuty detector (account-region singleton) */
+    public boolean createGuardDutyDetector = false;
+
+    /** GuardDuty alerts configured (EventBridge to SNS/SIEM) */
+    public boolean guardDutyAlertsConfigured = false;
+
+    /** Certificate expiration monitoring enabled */
+    public boolean certificateExpirationMonitoring = false;
+
+    /** Enable CloudTrail for API audit logging */
+    public boolean cloudTrailEnabled = false;
+
+    // Advanced Monitoring & Threat Protection
+    /** Enable Amazon Macie for PII/PHI discovery (HIPAA/GDPR) */
+    public boolean macieEnabled = false;
+
+    /** Enable Macie automated discovery jobs */
+    public boolean macieAutomatedDiscovery = false;
+
+    /** Enable AWS Security Hub for centralized security findings */
+    public boolean securityHubEnabled = false;
+
+    /** Enable Amazon Inspector for vulnerability scanning */
+    public boolean inspectorEnabled = false;
+
+    /** Enable anti-malware scanning */
+    public boolean antiMalwareEnabled = false;
+
+    /** Enable file integrity monitoring */
+    public boolean fileIntegrityMonitoring = false;
+
+    /** Enable container runtime security monitoring */
+    public boolean containerRuntimeSecurity = false;
+
+    /** Enable container image vulnerability scanning */
+    public boolean containerImageScanning = false;
 
     /** Enable AWS Audit Manager */
     public boolean auditManagerEnabled = false;

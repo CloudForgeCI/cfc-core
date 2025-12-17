@@ -6,6 +6,7 @@ import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
+import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -316,7 +317,53 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             rules.add(ComplianceRule.pass("SOC2-CC7.2-Config", "AWS Config compliance monitoring enabled"));
         }
 
+        // CC7.2: Log retention for audit trail
+        // SOC2 requires adequate log retention for security monitoring and incident investigation
+        // Common practice: 90 days minimum for audit trails (THREE_MONTHS or longer)
+        var retentionDays = config.getLogRetentionDays();
+        if (!isRetentionSufficient(retentionDays)) {
+            rules.add(ComplianceRule.fail(
+                "SOC2-CC7.2-LogRetention",
+                "Log retention must be at least 90 days for audit trails (SOC2 CC7.2)",
+                "CloudWatchLogGroupRetention",
+                "Log retention must be at least 90 days (THREE_MONTHS). Current: " +
+                retentionDays.toString() + ". " +
+                "SOC2 CC7.2 requires adequate log retention for security monitoring and incident investigation."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "SOC2-CC7.2-LogRetention",
+                "Log retention meets 90-day requirement (SOC2 CC7.2)",
+                "CloudWatchLogGroupRetention"
+            ));
+        }
+
         return rules;
+    }
+
+    /**
+     * Check if log retention meets SOC2 requirement (90 days minimum).
+     * CC7.2: System monitoring requires adequate log retention for audit trails.
+     */
+    private boolean isRetentionSufficient(RetentionDays retention) {
+        // SOC2 CC7.2 requires adequate retention for security monitoring
+        // Industry standard: 90 days minimum (THREE_MONTHS or longer)
+        return retention == RetentionDays.THREE_MONTHS ||
+               retention == RetentionDays.FOUR_MONTHS ||
+               retention == RetentionDays.FIVE_MONTHS ||
+               retention == RetentionDays.SIX_MONTHS ||
+               retention == RetentionDays.ONE_YEAR ||
+               retention == RetentionDays.THIRTEEN_MONTHS ||
+               retention == RetentionDays.EIGHTEEN_MONTHS ||
+               retention == RetentionDays.TWO_YEARS ||
+               retention == RetentionDays.THREE_YEARS ||
+               retention == RetentionDays.FIVE_YEARS ||
+               retention == RetentionDays.SIX_YEARS ||
+               retention == RetentionDays.SEVEN_YEARS ||
+               retention == RetentionDays.EIGHT_YEARS ||
+               retention == RetentionDays.NINE_YEARS ||
+               retention == RetentionDays.TEN_YEARS ||
+               retention == RetentionDays.INFINITE;
     }
 
     /**
@@ -502,7 +549,7 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         report.append("  ✓ CC6.1 - Access Controls: ").append(ctx.iamProfile != null ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC6.2 - Authentication: ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC6.6 - Network Segmentation: ").append(ctx.vpc.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ CC6.7 - Encryption in Transit: ").append(ctx.cert.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ CC6.7 - Encryption in Transit: ").append(ctx.cfc.enableSsl() && (ctx.cert.get().isPresent() || (ctx.cfc.domain() == null && ctx.cfc.fqdn() == null)) ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC7.2 - System Monitoring: ").append(config.isSecurityMonitoringEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC8.1 - Change Management: ").append(config.isCloudTrailEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("\n");
