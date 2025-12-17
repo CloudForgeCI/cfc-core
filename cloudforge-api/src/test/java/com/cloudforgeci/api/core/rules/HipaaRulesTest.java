@@ -1688,15 +1688,16 @@ class HipaaRulesTest {
     @ParameterizedTest
     @CsvSource({
         "PRODUCTION,2555,ENFORCE,true,FARGATE",      // 7 years - PASS branch
-        "PRODUCTION,2190,ENFORCE,true,FARGATE",      // 6 years exactly - PASS branch
-        "PRODUCTION,1825,ENFORCE,true,FARGATE",      // 5 years - PASS branch
-        "PRODUCTION,1095,ENFORCE,true,FARGATE",      // 3 years - PASS branch
-        "PRODUCTION,730,ENFORCE,true,FARGATE",       // 2 years - PASS branch (minimum)
+        "PRODUCTION,2190,ENFORCE,true,FARGATE",      // 6 years exactly - PASS branch (minimum)
+        "PRODUCTION,1825,ENFORCE,false,FARGATE",     // 5 years - FAIL branch (insufficient)
+        "PRODUCTION,1095,ENFORCE,false,FARGATE",     // 3 years - FAIL branch (insufficient)
+        "PRODUCTION,730,ENFORCE,false,FARGATE",      // 2 years - FAIL branch (insufficient)
         "PRODUCTION,365,ENFORCE,false,FARGATE",      // 1 year - FAIL branch
         "PRODUCTION,180,ENFORCE,false,FARGATE",      // 180 days - FAIL branch
         "PRODUCTION,90,ENFORCE,false,FARGATE",       // 90 days - FAIL branch
         "PRODUCTION,365,ADVISORY,false,FARGATE",     // Advisory mode with 1 year
-        "STAGING,730,ENFORCE,true,FARGATE",          // Staging with 2 years
+        "STAGING,2190,ENFORCE,true,FARGATE",         // Staging with 6 years - PASS branch
+        "STAGING,730,ENFORCE,false,FARGATE",         // Staging with 2 years - FAIL branch (insufficient)
         "STAGING,365,ENFORCE,false,FARGATE"          // Staging with 1 year
     })
     void testHipaaRetentionRequirementsCombinations(String profile, int retentionDays,
@@ -1713,7 +1714,7 @@ class HipaaRulesTest {
         // This ensures focused tests don't fail on unrelated requirements
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Only add baseline if test expects to pass (has the specific requirement being tested)
-            boolean hasRequirement = retentionDays >= 730;
+            boolean hasRequirement = retentionDays >= 2190;
             if (hasRequirement) {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -1754,7 +1755,7 @@ class HipaaRulesTest {
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Test will fail if THIS requirement is missing
             // (it may also fail for other missing requirements, but we're specifically testing this one)
-            if (retentionDays < 730) {
+            if (retentionDays < 2190) {
                 shouldFail = true;
             }
         }
@@ -1819,7 +1820,7 @@ class HipaaRulesTest {
     @CsvSource({
         // Full compliance scenarios
         "PRODUCTION,ENFORCE,alb-oidc,true,true,true,true,true,true,true,private-with-nat,2555,FARGATE",
-        "STAGING,ENFORCE,alb-oidc,true,true,true,true,true,false,true,private-with-nat,730,FARGATE",
+        "STAGING,ENFORCE,alb-oidc,true,true,true,true,true,false,true,private-with-nat,2190,FARGATE",
 
         // Partial compliance scenarios
         "PRODUCTION,ADVISORY,none,false,false,false,false,false,false,false,public-no-nat,90,FARGATE",
@@ -1831,7 +1832,7 @@ class HipaaRulesTest {
 
         // Authentication variations
         "PRODUCTION,ENFORCE,alb-oidc,false,true,true,true,true,true,true,private-with-nat,2190,FARGATE",
-        "PRODUCTION,ENFORCE,jenkins-oidc,false,false,true,true,true,true,true,private-with-nat,1095,FARGATE"
+        "PRODUCTION,ENFORCE,jenkins-oidc,false,false,true,true,true,true,true,private-with-nat,2190,FARGATE"
     })
     void testHipaaComprehensiveCombinations(String profile, String complianceMode, String authMode,
                                            boolean cognitoMfa, boolean secMonitoring, boolean guardDuty,
@@ -1880,7 +1881,7 @@ class HipaaRulesTest {
                             (!cloudTrail || !flowLogs) ||                        // Missing audit logs
                             !efsTransit ||                                       // No EFS transit encryption
                             "public-no-nat".equals(networkMode) ||               // Public network
-                            retention < 730 ||                                   // Insufficient retention
+                            retention < 2190 ||                                  // Insufficient retention (6 years minimum)
                             (secProfile == SecurityProfile.PRODUCTION && !crossRegion)); // PROD needs cross-region backup
 
         if (shouldFail) {

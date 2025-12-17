@@ -67,12 +67,12 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
                 .info("STAGING profile: Overriding log retention from deployment context: " + days + " days -> " + retention);
             return retention;
         }
-        return RetentionDays.ONE_MONTH; // Moderate retention for staging (default for non-compliant deployments)
+        return RetentionDays.THREE_MONTHS; // Minimum retention for SOC2/GDPR compliance (CC7.2, Art. 30/32)
     }
 
     @Override
     public RetentionDays getFlowLogRetentionDays() {
-        return RetentionDays.ONE_MONTH; // Moderate retention for staging
+        return RetentionDays.THREE_MONTHS; // Minimum retention for SOC2/GDPR compliance
     }
 
     @Override
@@ -217,7 +217,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public RetentionDays getAlbAccessLogRetentionDays() {
-        return RetentionDays.ONE_MONTH; // Moderate retention for staging
+        return RetentionDays.THREE_MONTHS; // Minimum retention for SOC2/GDPR compliance
     }
 
     // Performance and Reliability - Moderate for staging

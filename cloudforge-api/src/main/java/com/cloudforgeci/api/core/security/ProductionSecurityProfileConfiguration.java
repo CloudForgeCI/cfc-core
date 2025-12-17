@@ -52,12 +52,12 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
             LOG.info("PRODUCTION profile: Overriding log retention from deployment context: " + days + " days -> " + retention);
             return retention;
         }
-        return RetentionDays.TWO_YEARS; // Extended retention for compliance
+        return RetentionDays.SIX_YEARS; // HIPAA minimum retention (§164.316(b)(2)(i) - 6 years)
     }
 
     @Override
     public RetentionDays getFlowLogRetentionDays() {
-        return RetentionDays.TWO_YEARS; // Extended retention for compliance
+        return RetentionDays.SIX_YEARS; // HIPAA minimum retention for audit logs
     }
 
     @Override
@@ -287,7 +287,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
 
     @Override
     public RetentionDays getAlbAccessLogRetentionDays() {
-        return RetentionDays.TWO_YEARS; // Extended retention for compliance
+        return RetentionDays.SIX_YEARS; // HIPAA minimum retention for audit logs
     }
 
     // Performance and Reliability - Maximum for production

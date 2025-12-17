@@ -2489,6 +2489,10 @@ class Soc2RulesTest {
             if (!cloudTrail || !flowLogs || !awsConfig) {
                 shouldFailLogging = true;
             }
+            // Insufficient log retention causes failure (SOC2 requires 90 days minimum)
+            if (retentionDays < 90) {
+                shouldFailLogging = true;
+            }
         }
 
         // Add baseline SOC2 requirements for all tests that should pass
