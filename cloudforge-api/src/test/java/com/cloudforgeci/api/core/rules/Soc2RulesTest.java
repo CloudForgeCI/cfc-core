@@ -1750,7 +1750,8 @@ class Soc2RulesTest {
         // Scenario 6: Advisory mode - minimal
         "PRODUCTION,ADVISORY,none,false,false,false,false,false,false,false,false,false,false,false,false,public-no-nat",
         // Scenario 7: STAGING fully compliant (no availability requirements)
-        "STAGING,ENFORCE,alb-oidc,true,true,true,true,true,false,false,false,false,true,true,true,private-with-nat",
+        // Framework config overrides: guardDuty, cloudTrail, awsConfig, waf all default to true for SOC2
+        "STAGING,ENFORCE,alb-oidc,true,true,true,true,true,false,true,true,true,true,false,false,private-with-nat",
         // Scenario 8: STAGING minimal
         "STAGING,ENFORCE,none,false,false,false,false,false,false,false,false,false,false,false,false,public-no-nat"
     })
@@ -1762,22 +1763,23 @@ class Soc2RulesTest {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestSoc2Comprehensive");
         customContext.put("securityProfile", profile);
+        customContext.put("complianceFrameworks", "SOC2");
         customContext.put("complianceMode", complianceMode);
         customContext.put("authMode", authMode);
-        customContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
-        customContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsEncryption));
-        customContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
-        customContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
-        customContext.put("wafEnabled", String.valueOf(waf));
-        customContext.put("securityMonitoringEnabled", String.valueOf(secMonitoring));
-        customContext.put("guardDutyEnabled", String.valueOf(guardDuty));
-        customContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
-        customContext.put("awsConfigEnabled", String.valueOf(awsConfig));
-        customContext.put("multiAzEnforced", String.valueOf(multiAz));
-        customContext.put("autoScalingEnabled", String.valueOf(autoScaling));
-        customContext.put("automatedBackupEnabled", String.valueOf(multiAz)); // Use multiAz as proxy for backup
-        customContext.put("crossRegionBackupEnabled", String.valueOf(multiAz)); // Use multiAz as proxy
+        customContext.put("ebsEncryptionEnabled", ebsEncryption);
+        customContext.put("efsEncryptionAtRestEnabled", efsEncryption);
+        customContext.put("s3EncryptionEnabled", s3Encryption);
+        customContext.put("efsEncryptionInTransitEnabled", efsTransit);
+        customContext.put("wafEnabled", waf);
+        customContext.put("securityMonitoringEnabled", secMonitoring);
+        customContext.put("guardDutyEnabled", guardDuty);
+        customContext.put("cloudTrailEnabled", cloudTrail);
+        customContext.put("flowLogsEnabled", flowLogs);
+        customContext.put("awsConfigEnabled", awsConfig);
+        customContext.put("multiAzEnforced", multiAz);
+        customContext.put("autoScalingEnabled", autoScaling);
+        customContext.put("automatedBackupEnabled", multiAz); // Use multiAz as proxy for backup
+        customContext.put("crossRegionBackupEnabled", multiAz); // Use multiAz as proxy
         customContext.put("networkMode", networkMode);
 
         if ("alb-oidc".equals(authMode)) {
@@ -1800,10 +1802,13 @@ class Soc2RulesTest {
         // Determine if synthesis should fail
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
-            // Check all required controls
+            // Check all required controls based on ComplianceMatrix
             boolean hasAccessControls = !authMode.equals("none") && ebsEncryption && efsEncryption;
             boolean hasNetworkSecurity = efsTransit && waf;
-            boolean hasMonitoring = secMonitoring && guardDuty && cloudTrail && flowLogs && awsConfig;
+            // AUDIT_LOGGING (CloudTrail, Flow Logs) is REQUIRED for SOC2
+            // SECURITY_MONITORING (secMonitoring, awsConfig) is ADVISORY for SOC2
+            // THREAT_DETECTION (GuardDuty) is ADVISORY for SOC2
+            boolean hasMonitoring = cloudTrail && flowLogs && awsConfig;
             boolean hasConfidentiality = ebsEncryption && efsEncryption && s3Encryption && "private-with-nat".equals(networkMode);
             boolean hasAvailability = true;
             if (secProfile == SecurityProfile.PRODUCTION) {

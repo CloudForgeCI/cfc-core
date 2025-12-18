@@ -3,6 +3,7 @@ package com.cloudforgeci.api.core.rules;
 import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
@@ -224,26 +225,44 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
 
         // Check which compliance frameworks are enabled
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
+        String complianceModeStr = ctx.cfc.complianceMode();
+        ComplianceMode complianceMode = ComplianceMode.fromString(
+            complianceModeStr,
+            ComplianceMode.defaultForProfile(ctx.security)
+        );
+
+        // Keep requiresPciDss for WAF validation below
         boolean requiresPciDss = complianceFrameworks != null &&
             complianceFrameworks.toUpperCase().contains("PCI-DSS");
-        boolean requiresHipaa = complianceFrameworks != null &&
-            complianceFrameworks.toUpperCase().contains("HIPAA");
 
-        // GuardDuty for network intrusion detection (required for PCI-DSS and HIPAA only)
-        if (ctx.security == SecurityProfile.PRODUCTION && (requiresPciDss || requiresHipaa)) {
-            if (!config.isGuardDutyEnabled()) {
+        // GuardDuty for network intrusion detection - framework-specific validation
+        // Read actual configured value for validation (deployment context overrides take precedence)
+        boolean guardDutyEnabled = ctx.cfc.guardDutyEnabled() != null ?
+            ctx.cfc.guardDutyEnabled() : config.isGuardDutyEnabled();
+
+        ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
+            ComplianceMatrix.SecurityControl.THREAT_DETECTION,
+            complianceFrameworks,
+            guardDutyEnabled,
+            complianceMode
+        );
+
+        if (ctx.security == SecurityProfile.PRODUCTION) {
+            if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "NETWORK-INTRUSION-DETECTION",
-                    "Network intrusion detection required for " +
-                        (requiresPciDss ? "PCI-DSS" : "") +
-                        (requiresPciDss && requiresHipaa ? " and " : "") +
-                        (requiresHipaa ? "HIPAA" : ""),
+                    "Network intrusion detection (GuardDuty) required for " + complianceFrameworks,
                     "GuardDutyEnabled",
                     "Enable GuardDuty for network intrusion detection and threat intelligence. " +
-                    (requiresPciDss ? "PCI-DSS Req 11.4; " : "") +
-                    (requiresHipaa ? "HIPAA §164.312(e)(1); " : "") +
                     "Monitors VPC Flow Logs, CloudTrail, DNS queries. " +
                     "Set guardDutyEnabled = true in deployment context."
+                ));
+            } else if (result == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("GuardDuty recommended but not required for " + complianceFrameworks);
+                rules.add(ComplianceRule.pass(
+                    "NETWORK-INTRUSION-DETECTION",
+                    "GuardDuty recommended but not required",
+                    "GuardDutyEnabled"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -365,9 +384,10 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // Change detection with AWS Config (required for PCI-DSS only)
+        // Change detection with AWS Config (required for PCI-DSS with EC2 only)
+        // FARGATE has immutable infrastructure, so infrastructure-level change detection via AWS Config is optional
         var config = ctx.securityProfileConfig.get().orElse(null);
-        if (config != null && ctx.security == SecurityProfile.PRODUCTION && requiresPciDss) {
+        if (config != null && ctx.security == SecurityProfile.PRODUCTION && requiresPciDss && !isFargate) {
             if (!config.isAwsConfigEnabled()) {
                 rules.add(ComplianceRule.fail(
                     "CONFIG-CHANGE-DETECTION",

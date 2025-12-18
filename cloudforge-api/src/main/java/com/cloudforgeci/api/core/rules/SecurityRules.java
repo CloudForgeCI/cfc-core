@@ -90,7 +90,7 @@ public final class SecurityRules {
 
     // Install multi-framework compliance validation rules
     // Only run CloudForge FrameworkRules validation if auditManagerEnabled is true
-    if (!ctx.cfc.auditManagerEnabled()) {
+    if (!Boolean.TRUE.equals(ctx.cfc.auditManagerEnabled())) {
       LOG.info("Skipping CloudForge FrameworkRules validation (auditManagerEnabled = false)");
       LOG.info("  Note: cdk-nag validation still applied for enabled frameworks");
       return;

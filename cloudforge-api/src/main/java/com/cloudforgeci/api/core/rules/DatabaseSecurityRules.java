@@ -3,6 +3,7 @@ package com.cloudforgeci.api.core.rules;
 import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
@@ -162,18 +163,38 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // Multi-AZ for production
-        if (ctx.security == SecurityProfile.PRODUCTION) {
-            boolean rdsMultiAz = getBooleanSetting(ctx, "rdsMultiAz", false);
+        // Multi-AZ for production - use ComplianceMatrix
+        boolean rdsMultiAz = getBooleanSetting(ctx, "rdsMultiAz", false);
 
-            if (!rdsMultiAz) {
+        String complianceFrameworks = ctx.cfc.complianceFrameworks();
+        String complianceModeStr = ctx.cfc.complianceMode();
+        ComplianceMode complianceMode = ComplianceMode.fromString(
+            complianceModeStr,
+            ComplianceMode.defaultForProfile(ctx.security)
+        );
+
+        ComplianceMatrix.ValidationResult multiAzResult = ComplianceMatrix.validateControlMultiFramework(
+            ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ,
+            complianceFrameworks,
+            rdsMultiAz,
+            complianceMode
+        );
+
+        if (ctx.security == SecurityProfile.PRODUCTION) {
+            if (multiAzResult == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "RDS-MULTI-AZ",
-                    "RDS Multi-AZ deployment required for production",
+                    "RDS Multi-AZ deployment required for " + complianceFrameworks,
                     "RdsMultiAzEnabled",
                     "Enable Multi-AZ deployment for high availability. " +
-                    "SOC2 A1.2, HIPAA §164.308(a)(7)(ii)(B). " +
                     "Set rdsMultiAz = true in deployment context."
+                ));
+            } else if (multiAzResult == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("RDS Multi-AZ recommended but not required for " + complianceFrameworks);
+                rules.add(ComplianceRule.pass(
+                    "RDS-MULTI-AZ",
+                    "RDS Multi-AZ is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "RdsMultiAzEnabled"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -265,24 +286,46 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // DynamoDB Point-in-Time Recovery
+        // DynamoDB Point-in-Time Recovery - use ComplianceMatrix
         boolean dynamoDbPitrEnabled = getBooleanSetting(ctx, "dynamoDbPitrEnabled", false);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !dynamoDbPitrEnabled) {
-            rules.add(ComplianceRule.fail(
-                "DYNAMODB-PITR",
-                "DynamoDB Point-in-Time Recovery required for production",
-                "DynamoDbPitrEnabled",
-                "Enable Point-in-Time Recovery for production tables. " +
-                "SOC2 A1.3, HIPAA §164.310(d)(2)(iii). " +
-                "Set dynamoDbPitrEnabled = true in deployment context."
-            ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION) {
-            rules.add(ComplianceRule.pass(
-                "DYNAMODB-PITR",
-                "DynamoDB Point-in-Time Recovery enabled",
-                "DynamoDbPitrEnabled"
-            ));
+        String complianceFrameworks = ctx.cfc.complianceFrameworks();
+        String complianceModeStr = ctx.cfc.complianceMode();
+        ComplianceMode complianceMode = ComplianceMode.fromString(
+            complianceModeStr,
+            ComplianceMode.defaultForProfile(ctx.security)
+        );
+
+        ComplianceMatrix.ValidationResult pitrResult = ComplianceMatrix.validateControlMultiFramework(
+            ComplianceMatrix.SecurityControl.DATABASE_PITR,
+            complianceFrameworks,
+            dynamoDbPitrEnabled,
+            complianceMode
+        );
+
+        if (ctx.security == SecurityProfile.PRODUCTION) {
+            if (pitrResult == ComplianceMatrix.ValidationResult.FAIL) {
+                rules.add(ComplianceRule.fail(
+                    "DYNAMODB-PITR",
+                    "DynamoDB Point-in-Time Recovery required for " + complianceFrameworks,
+                    "DynamoDbPitrEnabled",
+                    "Enable Point-in-Time Recovery for production tables. " +
+                    "Set dynamoDbPitrEnabled = true in deployment context."
+                ));
+            } else if (pitrResult == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("DynamoDB PITR recommended but not required for " + complianceFrameworks);
+                rules.add(ComplianceRule.pass(
+                    "DYNAMODB-PITR",
+                    "DynamoDB PITR is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "DynamoDbPitrEnabled"
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "DYNAMODB-PITR",
+                    "DynamoDB Point-in-Time Recovery enabled",
+                    "DynamoDbPitrEnabled"
+                ));
+            }
         }
 
         return rules;

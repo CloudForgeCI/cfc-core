@@ -27,9 +27,7 @@ rule advanced_monitoring_cloudwatch_retention when
 rule advanced_monitoring_log_encryption when
     resourceType == 'AWS::Logs::LogGroup' {
 
-    when Properties.KmsKeyId exists {
-        Properties.KmsKeyId exists
-    }
+    Properties.KmsKeyId exists
 
     <<
         [Advanced Monitoring] CloudWatch log groups should be encrypted with KMS.

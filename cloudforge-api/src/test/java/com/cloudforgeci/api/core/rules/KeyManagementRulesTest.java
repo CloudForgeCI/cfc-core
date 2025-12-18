@@ -518,6 +518,9 @@ class KeyManagementRulesTest {
         // Explicitly set KMS properties to override defaults
         customContext.put("kmsKeyRotationEnabled", String.valueOf(kmsRotation));
         customContext.put("useCustomerManagedKeys", String.valueOf(customerManagedKeys));
+        // Add PCI-DSS framework to make KMS rotation REQUIRED
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", "enforce");
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -529,10 +532,11 @@ class KeyManagementRulesTest {
         new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
-        // PRODUCTION requires BOTH kmsRotation AND customerManagedKeys
+        // NOTE: KMS_KEY_ROTATION is REQUIRED for PCI-DSS, HIPAA, GDPR, NIST (ADVISORY for SOC2)
         boolean shouldFail = false;
         if (secProfile == SecurityProfile.PRODUCTION) {
-            if (!kmsRotation || !customerManagedKeys) {
+            // With PCI-DSS framework, KMS rotation is REQUIRED
+            if (!kmsRotation) {
                 shouldFail = true;
             }
         }
@@ -628,6 +632,9 @@ class KeyManagementRulesTest {
         // Explicitly set secrets properties to override defaults
         customContext.put("secretsManagerEnabled", String.valueOf(secretsManager));
         customContext.put("secretRotationEnabled", String.valueOf(secretRotation));
+        // Add PCI-DSS framework to make Secrets Manager and rotation REQUIRED
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", "enforce");
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -639,11 +646,18 @@ class KeyManagementRulesTest {
         new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
-        // PRODUCTION requires BOTH secretsManager AND secretRotation
+        // NOTE: SECRETS_MANAGER and SECRETS_ROTATION are REQUIRED for PCI-DSS, HIPAA, NIST
+        // Secret rotation is only checked if Secrets Manager is enabled
         boolean shouldFail = false;
         if (secProfile == SecurityProfile.PRODUCTION) {
-            if (!secretsManager || !secretRotation) {
+            // Secrets Manager is REQUIRED for PCI-DSS
+            if (!secretsManager) {
                 shouldFail = true;
+            } else {
+                // If Secrets Manager is enabled, rotation is also REQUIRED
+                if (!secretRotation) {
+                    shouldFail = true;
+                }
             }
         }
         // STAGING and DEV are advisory only (never fail)
@@ -715,6 +729,9 @@ class KeyManagementRulesTest {
         customContext.put("acmAutoRenewalEnabled", String.valueOf(acmAutoRenewal));
         customContext.put("secretsManagerEnabled", String.valueOf(secretsManager));
         customContext.put("secretRotationEnabled", String.valueOf(secretRotation));
+        // Add PCI-DSS framework to make controls REQUIRED
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", "enforce");
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -726,22 +743,30 @@ class KeyManagementRulesTest {
         new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
-        // PRODUCTION has three independent validation checks:
-        // 1. KMS: requires BOTH kmsRotation AND customerManagedKeys
-        // 2. Certificates: requires BOTH certExpirationMonitoring AND acmAutoRenewal
-        //    NOTE: Certificate validation only runs when ctx.cert.get().isPresent()
-        //    Since no certificate is created, this validation always passes
-        // 3. Secrets: requires BOTH secretsManager AND secretRotation
+        // NOTE: With ComplianceMatrix and PCI-DSS framework:
+        // - KMS_KEY_ROTATION: REQUIRED (only rotation, customerManagedKeys not checked)
+        // - CERTIFICATE_EXPIRATION_MONITORING: ADVISORY (never fails)
+        // - SECRETS_MANAGER: REQUIRED
+        // - SECRETS_ROTATION: REQUIRED (only if Secrets Manager enabled)
         boolean shouldFail = false;
         if (secProfile == SecurityProfile.PRODUCTION) {
-            boolean kmsValid = kmsRotation && customerManagedKeys;
-            boolean secretsValid = secretsManager && secretRotation;
-
-            // Any validation failure causes overall failure
-            // Certificate validation is not checked since no certificate exists
-            if (!kmsValid || !secretsValid) {
+            // KMS rotation is REQUIRED for PCI-DSS
+            if (!kmsRotation) {
                 shouldFail = true;
             }
+
+            // Secrets Manager is REQUIRED for PCI-DSS
+            if (!secretsManager) {
+                shouldFail = true;
+            } else {
+                // If Secrets Manager is enabled, rotation is also REQUIRED
+                if (!secretRotation) {
+                    shouldFail = true;
+                }
+            }
+
+            // Certificate monitoring is ADVISORY - doesn't cause failures
+            // ACM auto-renewal is advisory - doesn't cause failures
         }
         // STAGING and DEV are advisory only (never fail)
 

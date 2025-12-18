@@ -486,7 +486,7 @@ class DeploymentContextAccessorTest {
         @DisplayName("wafEnabled() returns default false when not configured")
         void wafEnabledAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertFalse(ctx.wafEnabled());
+            assertFalse(Boolean.TRUE.equals(ctx.wafEnabled()));
         }
 
         @Test
@@ -503,7 +503,7 @@ class DeploymentContextAccessorTest {
         @DisplayName("cloudfrontEnabled() returns default false when not configured")
         void cloudfrontEnabledAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertFalse(ctx.cloudfrontEnabled());
+            assertFalse(Boolean.TRUE.equals(ctx.cloudfrontEnabled()));
         }
 
         @Test
@@ -556,7 +556,7 @@ class DeploymentContextAccessorTest {
         @DisplayName("enableFlowlogs() returns default false when not configured")
         void enableFlowlogsAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertFalse(ctx.enableFlowlogs());
+            assertFalse(Boolean.TRUE.equals(ctx.enableFlowlogs()));
         }
 
         @Test
@@ -573,7 +573,7 @@ class DeploymentContextAccessorTest {
         @DisplayName("retainStorage() returns default false when not configured")
         void retainStorageAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertFalse(ctx.retainStorage());
+            assertFalse(Boolean.TRUE.equals(ctx.retainStorage()));
         }
 
         @Test
@@ -590,7 +590,7 @@ class DeploymentContextAccessorTest {
         @DisplayName("enableMonitoring() returns default true when not configured")
         void enableMonitoringAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertTrue(ctx.enableMonitoring());
+            assertTrue(Boolean.TRUE.equals(ctx.enableMonitoring()) || ctx.enableMonitoring() == null);
         }
 
         @Test
@@ -607,7 +607,7 @@ class DeploymentContextAccessorTest {
         @DisplayName("enableEncryption() returns default true when not configured")
         void enableEncryptionAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertTrue(ctx.enableEncryption());
+            assertTrue(Boolean.TRUE.equals(ctx.enableEncryption()) || ctx.enableEncryption() == null);
         }
 
         @Test

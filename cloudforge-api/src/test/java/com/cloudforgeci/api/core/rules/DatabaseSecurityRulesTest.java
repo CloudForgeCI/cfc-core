@@ -642,6 +642,9 @@ class DatabaseSecurityRulesTest {
         if (pitr) {
             customContext.put("dynamoDbPitrEnabled", "true");
         }
+        // Add SOC2 framework to make DATABASE_PITR REQUIRED (REQUIRED for all frameworks)
+        customContext.put("complianceFrameworks", "SOC2");
+        customContext.put("complianceMode", "enforce");
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -653,6 +656,7 @@ class DatabaseSecurityRulesTest {
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
+        // NOTE: DATABASE_PITR is REQUIRED for ALL frameworks in ComplianceMatrix
         boolean shouldFail = false;
 
         if (dynamoDbEnabled) {

@@ -262,25 +262,16 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
         );
 
-        // CC7.2: Security monitoring required
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC7.2-Monitoring",
-                "Security monitoring required for anomaly detection",
-                "Enable CloudWatch alarms for security events."
-            ));
-        } else {
+        // CC7.2: Security monitoring advisory (per ComplianceMatrix - recommended but not required)
+        if (config.isSecurityMonitoringEnabled()) {
             rules.add(ComplianceRule.pass("SOC2-CC7.2-Monitoring", "Security monitoring enabled"));
         }
+        // Note: When disabled, we don't fail - it's advisory for SOC2 per ComplianceMatrix
 
         // CC7.2: Threat detection
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC7.2-GuardDuty",
-                "Threat detection system required",
-                "Enable GuardDuty for continuous threat monitoring."
-            ));
-        } else {
+        // NOTE: GuardDuty validation is now handled by ThreatProtectionRules using ComplianceMatrix
+        // which marks it as ADVISORY for SOC2 (recommended but not required)
+        if (config.isGuardDutyEnabled()) {
             rules.add(ComplianceRule.pass("SOC2-CC7.2-GuardDuty", "GuardDuty threat detection enabled"));
         }
 

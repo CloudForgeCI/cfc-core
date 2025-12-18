@@ -171,8 +171,8 @@ public final class ComplianceMatrix {
             Map.of(
                 "PCI-DSS", FrameworkRequirement.required("Req 11.4 - Use intrusion detection/prevention systems"),
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(1)(ii)(D) - Security incident procedures"),
-                "SOC2", FrameworkRequirement.required("CC7.2 - Threat Detection"),
-                "GDPR", FrameworkRequirement.required("Art. 33(1) - Breach Detection"),
+                "SOC2", FrameworkRequirement.advisory("CC7.2 - Threat Detection"),
+                "GDPR", FrameworkRequirement.advisory("Art. 33(1) - Breach Detection"),
                 "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring")
             )
         ),
@@ -262,6 +262,94 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC7.1 - Vulnerability detection and remediation"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Regular testing and evaluating effectiveness"),
                 "NIST", FrameworkRequirement.required("RA-5 - Vulnerability Scanning")
+            )
+        ),
+
+        KMS_KEY_ROTATION(
+            "Automatic KMS key rotation (annual)",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.required("Req 3.6.4 - Cryptoperiod rotation"),
+                "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption key management"),
+                "SOC2", FrameworkRequirement.advisory("CC6.1 - Encryption key rotation"),
+                "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Key management"),
+                "NIST", FrameworkRequirement.required("SC-12 - Cryptographic Key Management")
+            )
+        ),
+
+        CERTIFICATE_EXPIRATION_MONITORING(
+            "Certificate expiration monitoring (CloudWatch alarms)",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.advisory("Req 6.3.3 - Certificate management"),
+                "HIPAA", FrameworkRequirement.advisory("§164.312(e)(1) - Certificate lifecycle"),
+                "SOC2", FrameworkRequirement.advisory("CC6.7 - Certificate management"),
+                "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Availability assurance"),
+                "NIST", FrameworkRequirement.advisory("IA-5 - Authenticator Management")
+            )
+        ),
+
+        SECRETS_MANAGER(
+            "Secrets Manager for credentials (databases, API keys)",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.required("Req 8.2.1 - Strong authentication credentials"),
+                "HIPAA", FrameworkRequirement.required("§164.312(a)(1) - Access credential management"),
+                "SOC2", FrameworkRequirement.advisory("CC6.1 - Credential storage"),
+                "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Secure credential storage"),
+                "NIST", FrameworkRequirement.required("IA-5 - Authenticator Management")
+            )
+        ),
+
+        SECRETS_ROTATION(
+            "Automatic secrets rotation (90 days or less)",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.required("Req 8.2.4 - Change user passwords at least every 90 days"),
+                "HIPAA", FrameworkRequirement.required("§164.308(a)(5)(ii)(D) - Password management"),
+                "SOC2", FrameworkRequirement.advisory("CC6.1 - Credential rotation"),
+                "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Credential lifecycle"),
+                "NIST", FrameworkRequirement.required("IA-5(1) - Password-based Authentication")
+            )
+        ),
+
+        DATABASE_MULTI_AZ(
+            "Database Multi-AZ deployment (RDS, Aurora)",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.required("Req 12.10.4 - Critical system availability"),
+                "HIPAA", FrameworkRequirement.required("§164.308(a)(7)(ii)(B) - Disaster recovery"),
+                "SOC2", FrameworkRequirement.required("A1.2 - System availability"),
+                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - System resilience"),
+                "NIST", FrameworkRequirement.required("CP-6 - Alternate Storage Site")
+            )
+        ),
+
+        DATABASE_PITR(
+            "Database point-in-time recovery (DynamoDB, RDS)",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.required("Req 9.5.1 - Backup and restore capability"),
+                "HIPAA", FrameworkRequirement.required("§164.310(d)(2)(iii) - Data backup and recovery"),
+                "SOC2", FrameworkRequirement.required("A1.3 - Recovery capabilities"),
+                "GDPR", FrameworkRequirement.required("Art. 32(1)(c) - Restore data availability"),
+                "NIST", FrameworkRequirement.required("CP-9 - Information System Backup")
+            )
+        ),
+
+        NETWORK_FLOW_LOGS(
+            "VPC Flow Logs for network traffic monitoring",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.required("Req 10.2.2 - Log all network access"),
+                "HIPAA", FrameworkRequirement.required("§164.312(b) - Audit network access"),
+                "SOC2", FrameworkRequirement.required("CC7.2 - Network monitoring"),
+                "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Network monitoring"),
+                "NIST", FrameworkRequirement.required("AU-2 - Audit Events")
+            )
+        ),
+
+        AUDIT_MANAGER(
+            "Continuous audit evidence collection (AWS Audit Manager)",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.advisory("Req 10 - Continuous audit evidence"),
+                "HIPAA", FrameworkRequirement.advisory("§164.308(a)(1)(ii)(D) - Audit evidence"),
+                "SOC2", FrameworkRequirement.required("CC7.2 - Continuous monitoring and audit evidence"),
+                "GDPR", FrameworkRequirement.advisory("Art. 30 - Documentation of compliance"),
+                "NIST", FrameworkRequirement.required("AU-6 - Audit Review, Analysis, and Reporting")
             )
         );
 
@@ -449,7 +537,7 @@ public final class ComplianceMatrix {
         ValidationResult worst = ValidationResult.PASS;
 
         for (String framework : frameworksStr.split(",")) {
-            String normalized = framework.trim().toUpperCase().replace("-", "");
+            String normalized = framework.trim().toUpperCase();
             ValidationResult result = validateControl(control, normalized, isEnabled, complianceMode);
 
             if (result == ValidationResult.FAIL) {
@@ -594,5 +682,106 @@ public final class ComplianceMatrix {
         }
 
         return satisfied;
+    }
+
+    /**
+     * Check if a security control should be enforced based on compliance requirements.
+     *
+     * <p>This method determines whether a control must be enabled based on:
+     * <ul>
+     *   <li>The selected compliance frameworks (e.g., "PCI-DSS,HIPAA")</li>
+     *   <li>The compliance mode (ENFORCE, ADVISORY, DISABLED)</li>
+     *   <li>The requirement level of the control in each framework</li>
+     * </ul>
+     *
+     * <p>Enforcement logic:
+     * <ul>
+     *   <li>ENFORCE mode + control is REQUIRED in any framework → enforce (return true)</li>
+     *   <li>ENFORCE mode + control is only ADVISORY → don't enforce (return false)</li>
+     *   <li>ADVISORY mode → never enforce (return false, but may warn)</li>
+     *   <li>DISABLED mode → never enforce (return false)</li>
+     *   <li>No frameworks selected → never enforce (return false)</li>
+     * </ul>
+     *
+     * @param frameworksStr Comma-separated list of frameworks (e.g., "PCI-DSS,HIPAA,SOC2")
+     * @param mode Compliance mode (ENFORCE, ADVISORY, or DISABLED)
+     * @param control Security control to check
+     * @return true if the control should be enforced (must be enabled)
+     */
+    public static boolean isControlRequired(
+        String frameworksStr,
+        ComplianceMode mode,
+        SecurityControl control
+    ) {
+        // DISABLED mode: never enforce
+        if (mode == ComplianceMode.DISABLED) {
+            return false;
+        }
+
+        // ADVISORY mode: never enforce (just warn)
+        if (mode == ComplianceMode.ADVISORY) {
+            return false;
+        }
+
+        // ENFORCE mode: check if any selected framework REQUIRES this control
+        if (mode == ComplianceMode.ENFORCE) {
+            if (frameworksStr == null || frameworksStr.isEmpty()) {
+                return false; // No frameworks selected
+            }
+
+            for (String framework : frameworksStr.split(",")) {
+                String normalized = framework.trim().toUpperCase();
+                if (control.isRequired(normalized)) {
+                    LOG.fine("Control " + control.name() + " REQUIRED by framework: " + normalized);
+                    return true; // At least one framework requires it
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if warnings should be logged for a disabled control.
+     *
+     * <p>Warnings are generated when:
+     * <ul>
+     *   <li>Control is disabled (isEnabled = false)</li>
+     *   <li>Mode is ADVISORY or ENFORCE</li>
+     *   <li>At least one framework has requirements (REQUIRED or ADVISORY)</li>
+     * </ul>
+     *
+     * @param frameworksStr Comma-separated list of frameworks
+     * @param mode Compliance mode
+     * @param control Security control to check
+     * @param isEnabled Whether the control is currently enabled
+     * @return true if warnings should be logged
+     */
+    public static boolean shouldWarnForControl(
+        String frameworksStr,
+        ComplianceMode mode,
+        SecurityControl control,
+        boolean isEnabled
+    ) {
+        // No warnings if mode is DISABLED or control is already enabled
+        if (mode == ComplianceMode.DISABLED || isEnabled) {
+            return false;
+        }
+
+        // No warnings if no frameworks selected
+        if (frameworksStr == null || frameworksStr.isEmpty()) {
+            return false;
+        }
+
+        // Check if any framework has requirements (REQUIRED or ADVISORY)
+        for (String framework : frameworksStr.split(",")) {
+            String normalized = framework.trim().toUpperCase();
+            RequirementLevel level = control.getRequirementLevel(normalized);
+            if (level != RequirementLevel.NOT_APPLICABLE) {
+                return true; // Found a framework with requirements
+            }
+        }
+
+        return false;
     }
 }

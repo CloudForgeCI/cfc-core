@@ -132,6 +132,10 @@ import java.util.Map;
  *   <li>enableEncryption: Encryption at rest (default: true)</li>
  *   <li>logRetentionDays: CloudWatch log retention (default: security profile default)</li>
  *   <li>awsConfigEnabled: AWS Config compliance (default: false)</li>
+ *   <li>securityMonitoringEnabled: Enable security monitoring (default: false)</li>
+ *   <li>efsEncryptionInTransitEnabled: Enable EFS encryption in transit (default: profile default)</li>
+ *   <li>automatedBackupEnabled: Enable automated backups (default: profile default)</li>
+ *   <li>crossRegionBackupEnabled: Enable cross-region backups (default: profile default)</li>
  *   <li>complianceMode: "enforce" | "advisory" (auto: enforce for PRODUCTION, advisory for DEV/STAGING)</li>
  *   <li>complianceFrameworks: "PCI-DSS,HIPAA,SOC2,GDPR" (comma-separated)</li>
  * </ul>
@@ -189,9 +193,9 @@ public final class DeploymentContext {
     // Networking
     @OneOf(value = {"public-no-nat", "private-with-nat"}, message = "Network mode must be 'public-no-nat' or 'private-with-nat'")
     private final String networkMode; // public-no-nat | private-with-nat
-    private final boolean wafEnabled;
+    private final Boolean wafEnabled;
     private final Boolean albAccessLogging;  // Enable ALB access logs to S3
-    private final boolean cloudfront;
+    private final Boolean cloudfront;
     @OneOf(value = {"alb", "nlb"}, message = "Load balancer type must be 'alb' or 'nlb'")
     private final String lbType;      // alb | nlb
 
@@ -215,7 +219,7 @@ public final class DeploymentContext {
     private final String bastionCidr;  // CIDR for bastion/VPN SSH access (PRODUCTION profile)
 
     // Storage Persistence Configuration
-    private final boolean retainStorage;  // Retain EFS/EBS volumes on stack deletion (agnostic - works for any workload)
+    private final Boolean retainStorage;  // Retain EFS/EBS volumes on stack deletion (agnostic - works for any workload)
     private final String existingFileSystemId;  // Reuse existing EFS by ID (for disaster recovery workflows)
 
     // Auth / SSO
@@ -260,15 +264,19 @@ public final class DeploymentContext {
     private final Integer maxInstanceCapacity;
     private final Integer minInstanceCapacity;
 
-    private final boolean enableFlowlogs;
+    private final Boolean enableFlowlogs;
     private final Boolean cloudTrailEnabled;  // Enable CloudTrail for API audit logging
+    private final Boolean securityMonitoringEnabled;  // Enable security monitoring
+    private final Boolean efsEncryptionInTransitEnabled;  // Enable EFS encryption in transit
+    private final Boolean automatedBackupEnabled;  // Enable automated backups
+    private final Boolean crossRegionBackupEnabled;  // Enable cross-region backups
 
     // Advanced Configuration
-    private final boolean enableMonitoring;
-    private final boolean enableEncryption;
-    private final boolean awsConfigEnabled;
+    private final Boolean enableMonitoring;
+    private final Boolean enableEncryption;
+    private final Boolean awsConfigEnabled;
     private final Boolean createConfigInfrastructure;  // Create AWS Config Recorder and Delivery Channel (account-level singletons)
-    private final boolean auditManagerEnabled;
+    private final Boolean auditManagerEnabled;
     private final String complianceFrameworks;  // Comma-separated list: "PCI-DSS,HIPAA,SOC2,GDPR"
     private final String complianceMode;  // "enforce" | "advisory" (default based on securityProfile)
     private final Integer logRetentionDays;
@@ -327,7 +335,7 @@ public final class DeploymentContext {
 
         this.networkMode = oneOf("networkMode", "public-no-nat",
                 List.of("public-no-nat", "private-with-nat"));
-        this.wafEnabled = bool("wafEnabled", false);
+        this.wafEnabled = boolOrNull("wafEnabled");
         this.albAccessLogging = boolOrNull("albAccessLogging");
         this.guardDutyEnabled = boolOrNull("guardDutyEnabled");
         this.createGuardDutyDetector = boolOrNull("createGuardDutyDetector");
@@ -344,7 +352,7 @@ public final class DeploymentContext {
         this.containerRuntimeSecurityEnabled = boolOrNull("containerRuntimeSecurity");
         this.containerImageScanningEnabled = boolOrNull("containerImageScanning");
 
-        this.cloudfront = bool("cloudfront", false);
+        this.cloudfront = boolOrNull("cloudfront");
         this.lbType = oneOf("lbType", "alb", List.of("alb", "nlb"));
 
         this.authMode = oneOf("authMode", "none",
@@ -390,22 +398,26 @@ public final class DeploymentContext {
         this.maxInstanceCapacity = intval("maxInstanceCapacity", 1);
         this.cpuTargetUtilization = intval("cpuTargetUtilization", 60);
 
-        this.enableFlowlogs = bool("enableFlowlogs", false);
+        this.enableFlowlogs = boolOrNull("enableFlowlogs");
         this.cloudTrailEnabled = boolOrNull("cloudTrailEnabled");
+        this.securityMonitoringEnabled = boolOrNull("securityMonitoringEnabled");
+        this.efsEncryptionInTransitEnabled = boolOrNull("efsEncryptionInTransitEnabled");
+        this.automatedBackupEnabled = boolOrNull("automatedBackupEnabled");
+        this.crossRegionBackupEnabled = boolOrNull("crossRegionBackupEnabled");
 
         // Security - SSH Access Control
         this.bastionCidr = str("bastionCidr", "10.0.1.0/24");
 
         // Storage Persistence Configuration
-        this.retainStorage = bool("retainStorage", false);
+        this.retainStorage = boolOrNull("retainStorage");
         this.existingFileSystemId = str("existingFileSystemId", null);
 
         // Advanced Configuration
-        this.enableMonitoring = bool("enableMonitoring", true);
-        this.enableEncryption = bool("enableEncryption", true);
-        this.awsConfigEnabled = bool("awsConfigEnabled", false);
+        this.enableMonitoring = boolOrNull("enableMonitoring");
+        this.enableEncryption = boolOrNull("enableEncryption");
+        this.awsConfigEnabled = boolOrNull("awsConfigEnabled");
         this.createConfigInfrastructure = boolOrNull("createConfigInfrastructure");
-        this.auditManagerEnabled = bool("auditManagerEnabled", false);
+        this.auditManagerEnabled = boolOrNull("auditManagerEnabled");
         this.complianceFrameworks = str("complianceFrameworks", "");
         this.complianceMode = str("complianceMode", null);  // null = use default based on securityProfile
         this.logRetentionDays = intval("logRetentionDays", null);  // Default: null (overridden by SecurityProfileConfiguration if needed)
@@ -482,7 +494,7 @@ public final class DeploymentContext {
     public String fqdn() { return fqdn; }
 
     public String networkMode() { return networkMode; }
-    public boolean wafEnabled() { return wafEnabled; }
+    public Boolean wafEnabled() { return wafEnabled; }
     public Boolean albAccessLogging() { return albAccessLogging; }
     public Boolean guardDutyEnabled() { return guardDutyEnabled; }
     public Boolean createGuardDutyDetector() { return createGuardDutyDetector; }
@@ -499,29 +511,33 @@ public final class DeploymentContext {
     public Boolean containerRuntimeSecurityEnabled() { return containerRuntimeSecurityEnabled; }
     public Boolean containerImageScanningEnabled() { return containerImageScanningEnabled; }
 
-    public boolean cloudfrontEnabled() { return cloudfront; }
+    public Boolean cloudfrontEnabled() { return cloudfront; }
     public String lbType() { return lbType; }
 
     public Integer cpuTargetUtilization() { return cpuTargetUtilization; }
     public Integer maxInstanceCapacity() { return maxInstanceCapacity; }
     public Integer minInstanceCapacity() { return minInstanceCapacity; }
 
-    public boolean enableFlowlogs() { return enableFlowlogs; }
+    public Boolean enableFlowlogs() { return enableFlowlogs; }
     public Boolean cloudTrailEnabled() { return cloudTrailEnabled; }
+    public Boolean securityMonitoringEnabled() { return securityMonitoringEnabled; }
+    public Boolean efsEncryptionInTransitEnabled() { return efsEncryptionInTransitEnabled; }
+    public Boolean automatedBackupEnabled() { return automatedBackupEnabled; }
+    public Boolean crossRegionBackupEnabled() { return crossRegionBackupEnabled; }
 
     // Security - SSH Access Control
     public String bastionCidr() { return bastionCidr; }
 
     // Storage Persistence Configuration
-    public boolean retainStorage() { return retainStorage; }
+    public Boolean retainStorage() { return retainStorage; }
     public String existingFileSystemId() { return existingFileSystemId; }
 
     // Advanced Configuration
-    public boolean enableMonitoring() { return enableMonitoring; }
-    public boolean enableEncryption() { return enableEncryption; }
-    public boolean awsConfigEnabled() { return awsConfigEnabled; }
+    public Boolean enableMonitoring() { return enableMonitoring; }
+    public Boolean enableEncryption() { return enableEncryption; }
+    public Boolean awsConfigEnabled() { return awsConfigEnabled; }
     public Boolean createConfigInfrastructure() { return createConfigInfrastructure; }
-    public boolean auditManagerEnabled() { return auditManagerEnabled; }
+    public Boolean auditManagerEnabled() { return auditManagerEnabled; }
     public String complianceFrameworks() { return complianceFrameworks; }
     public String complianceMode() { return complianceMode; }
     public Integer logRetentionDays() { return logRetentionDays; }

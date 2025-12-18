@@ -30,6 +30,8 @@ import software.amazon.awscdk.customresources.AwsSdkCall;
 import software.amazon.awscdk.customresources.PhysicalResourceId;
 import software.amazon.awscdk.customresources.PhysicalResourceIdReference;
 import software.constructs.Construct;
+import io.github.cdklabs.cdknag.NagSuppressions;
+import io.github.cdklabs.cdknag.NagPackSuppression;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -3283,6 +3285,20 @@ public class ComplianceFactory extends BaseFactory {
                 .build());
 
         LOG.info("Created shared Audit Manager role and bucket with comprehensive permissions");
+
+        // Suppress CDK-nag warnings for IAM wildcards - all are justified
+        NagSuppressions.addResourceSuppressions(
+            auditManagerRole,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("S3 bucket object access requires /* pattern for write operations. " +
+                           "Service read APIs (AuditManager, CloudTrail, Config, SecurityHub, IAM, EC2) " +
+                           "require * for account-wide read-only operations - AWS service requirements.")
+                    .build()
+            ),
+            Boolean.TRUE  // Apply to all policies
+        );
 
         // Get account ID for assessments
         String accountId = software.amazon.awscdk.Stack.of(this).getAccount();

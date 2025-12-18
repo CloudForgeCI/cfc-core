@@ -167,8 +167,8 @@ class ConfigurationValidationTest {
 
         // Then
         assertNotNull(context);
-        assertFalse(context.wafEnabled());
-        assertFalse(context.cloudfrontEnabled());
+        assertFalse(Boolean.TRUE.equals(context.wafEnabled()));
+        assertFalse(Boolean.TRUE.equals(context.cloudfrontEnabled()));
     }
 
     @Test

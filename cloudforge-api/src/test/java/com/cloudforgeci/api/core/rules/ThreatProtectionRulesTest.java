@@ -751,19 +751,19 @@ class ThreatProtectionRulesTest {
         if (!framework.equals("NONE")) {
             customContext.put("complianceFrameworks", framework);
         }
-        customContext.put("guardDutyEnabled", String.valueOf(guardDuty));
-        customContext.put("antiMalwareEnabled", String.valueOf(antiMalware));
-        customContext.put("antiMalwareAutoUpdate", String.valueOf(autoUpdate));
-        customContext.put("malwareScanLogging", String.valueOf(scanLogging));
-        customContext.put("containerImageScanning", String.valueOf(containerScanning));
+        customContext.put("guardDutyEnabled", guardDuty);
+        customContext.put("antiMalwareEnabled", antiMalware);
+        customContext.put("antiMalwareAutoUpdate", autoUpdate);
+        customContext.put("malwareScanLogging", scanLogging);
+        customContext.put("containerImageScanning", containerScanning);
 
         // PCI-DSS requires additional services beyond malware protection
         // Set defaults to satisfy all PCI-DSS requirements for this focused test
         if (framework.equals("PCI-DSS")) {
             customContext.put("wafEnabled", "true");  // PCI-DSS requires WAF
-            customContext.put("flowLogsEnabled", "true");  // PCI-DSS requires Flow Logs
+            customContext.put("enableFlowlogs", "true");  // PCI-DSS requires Flow Logs (fixed field name)
             customContext.put("awsConfigEnabled", "true");  // PCI-DSS requires Config for FIM
-            customContext.put("fileIntegrityMonitoringEnabled", "true");  // PCI-DSS requires FIM
+            customContext.put("fileIntegrityMonitoring", "true");  // PCI-DSS requires FIM (fixed field name)
         }
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -842,10 +842,10 @@ class ThreatProtectionRulesTest {
         customContext.put("stackName", "TestThreatIDS");
         customContext.put("securityProfile", profile);
         customContext.put("complianceFrameworks", frameworks);
-        customContext.put("guardDutyEnabled", String.valueOf(guardDuty));
-        customContext.put("wafEnabled", String.valueOf(waf));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
-        customContext.put("guardDutyAlertsConfigured", String.valueOf(alerts));
+        customContext.put("guardDutyEnabled", guardDuty);
+        customContext.put("wafEnabled", waf);
+        customContext.put("enableFlowlogs", flowLogs);  // Fixed: use correct field name
+        customContext.put("guardDutyAlertsConfigured", alerts);
 
         // PCI-DSS requires additional services beyond intrusion detection
         // Set defaults to satisfy all other PCI-DSS requirements for this focused test

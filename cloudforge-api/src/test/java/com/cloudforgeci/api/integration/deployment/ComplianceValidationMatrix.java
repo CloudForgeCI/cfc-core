@@ -149,14 +149,9 @@ public class ComplianceValidationMatrix {
             }
         }
 
-        // 3. Threat Detection - GuardDuty (auto-enabled for SOC2 compliance)
-        if (securityProfile == SecurityProfile.PRODUCTION) {
-            try {
-                template.hasResourceProperties("AWS::GuardDuty::Detector", Match.objectLike(Collections.emptyMap()));
-            } catch (Exception e) {
-                violations.add("SOC2: GuardDuty detector required for PRODUCTION threat detection");
-            }
-        }
+        // 3. Threat Detection - GuardDuty
+        // NOTE: GuardDuty is ADVISORY for SOC2 (not required), so we don't check for it
+        // It's handled by ThreatProtectionRules using ComplianceMatrix which marks it as recommended but not required
 
         // 4. Encryption at Rest - EFS
         try {

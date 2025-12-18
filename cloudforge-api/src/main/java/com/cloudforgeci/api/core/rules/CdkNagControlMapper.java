@@ -158,10 +158,10 @@ public final class CdkNagControlMapper {
         map.put("AwsSolutions-ECR-2", SecurityControl.ACCESS_CONTROL);
         // ECRImageScanning moved to VULNERABILITY_MANAGEMENT section (line 289)
 
-        // KMS key rotation
-        map.put("AwsSolutions-KMS-5", SecurityControl.ACCESS_CONTROL);
-        map.put("HIPAA.Security-KMSBackingKeyRotationEnabled", SecurityControl.ACCESS_CONTROL);
-        map.put("PCI.DSS.321-KMSBackingKeyRotationEnabled", SecurityControl.ACCESS_CONTROL);
+        // KMS key rotation - moved to KMS_KEY_ROTATION control (see line ~330)
+        map.put("AwsSolutions-KMS-5", SecurityControl.KMS_KEY_ROTATION);
+        map.put("HIPAA.Security-KMSBackingKeyRotationEnabled", SecurityControl.KMS_KEY_ROTATION);
+        map.put("PCI.DSS.321-KMSBackingKeyRotationEnabled", SecurityControl.KMS_KEY_ROTATION);
 
         // ========== AUTHENTICATION ==========
         // Cognito user pool MFA
@@ -184,10 +184,7 @@ public final class CdkNagControlMapper {
         map.put("PCI.DSS.321-CloudTrailCloudWatchLogsEnabled", SecurityControl.AUDIT_LOGGING);
         map.put("PCI.DSS.321-CloudTrailEnabled", SecurityControl.AUDIT_LOGGING);
 
-        // VPC Flow Logs
-        map.put("AwsSolutions-VPC-7", SecurityControl.AUDIT_LOGGING);
-        map.put("HIPAA.Security-VPCFlowLogsEnabled", SecurityControl.AUDIT_LOGGING);
-        map.put("PCI.DSS.321-VPCFlowLogsEnabled", SecurityControl.AUDIT_LOGGING);
+        // VPC Flow Logs - moved to NETWORK_FLOW_LOGS (see line below)
 
         // ALB/ELB access logs
         map.put("AwsSolutions-ALB-1", SecurityControl.AUDIT_LOGGING);
@@ -269,10 +266,10 @@ public final class CdkNagControlMapper {
         map.put("HIPAA.Security-RDSAutomaticBackupEnabled", SecurityControl.BACKUP_RECOVERY);
         map.put("PCI.DSS.321-RDSAutomaticBackupEnabled", SecurityControl.BACKUP_RECOVERY);
 
-        // DynamoDB backups
-        map.put("AwsSolutions-DDB-2", SecurityControl.BACKUP_RECOVERY);
-        map.put("HIPAA.Security-DynamoDBPITREnabled", SecurityControl.BACKUP_RECOVERY);
-        map.put("PCI.DSS.321-DynamoDBPITREnabled", SecurityControl.BACKUP_RECOVERY);
+        // DynamoDB backups - Point-in-Time Recovery mapped to DATABASE_PITR
+        map.put("AwsSolutions-DDB-2", SecurityControl.DATABASE_PITR);
+        map.put("HIPAA.Security-DynamoDBPITREnabled", SecurityControl.DATABASE_PITR);
+        map.put("PCI.DSS.321-DynamoDBPITREnabled", SecurityControl.DATABASE_PITR);
 
         // S3 versioning
         map.put("AwsSolutions-S3-3", SecurityControl.BACKUP_RECOVERY);
@@ -280,10 +277,10 @@ public final class CdkNagControlMapper {
         map.put("PCI.DSS.321-S3BucketVersioningEnabled", SecurityControl.BACKUP_RECOVERY);
 
         // ========== HIGH_AVAILABILITY ==========
-        // RDS Multi-AZ
-        map.put("AwsSolutions-RDS-1", SecurityControl.HIGH_AVAILABILITY);
-        map.put("HIPAA.Security-RDSMultiAZSupport", SecurityControl.HIGH_AVAILABILITY);
-        map.put("PCI.DSS.321-RDSMultiAZSupport", SecurityControl.HIGH_AVAILABILITY);
+        // RDS Multi-AZ - mapped to DATABASE_MULTI_AZ for database-specific HA
+        map.put("AwsSolutions-RDS-1", SecurityControl.DATABASE_MULTI_AZ);
+        map.put("HIPAA.Security-RDSMultiAZSupport", SecurityControl.DATABASE_MULTI_AZ);
+        map.put("PCI.DSS.321-RDSMultiAZSupport", SecurityControl.DATABASE_MULTI_AZ);
 
         // ELB deletion protection
         map.put("AwsSolutions-ELB-4", SecurityControl.HIGH_AVAILABILITY);
@@ -306,6 +303,12 @@ public final class CdkNagControlMapper {
         // Lambda runtime
         map.put("AwsSolutions-L-10", SecurityControl.VULNERABILITY_MANAGEMENT);
         map.put("HIPAA.Security-LambdaConcurrency", SecurityControl.VULNERABILITY_MANAGEMENT);
+
+        // ========== NETWORK_FLOW_LOGS ==========
+        // VPC Flow Logs for network traffic monitoring
+        map.put("AwsSolutions-VPC-7", SecurityControl.NETWORK_FLOW_LOGS);
+        map.put("HIPAA.Security-VPCFlowLogsEnabled", SecurityControl.NETWORK_FLOW_LOGS);
+        map.put("PCI.DSS.321-VPCFlowLogsEnabled", SecurityControl.NETWORK_FLOW_LOGS);
 
         return Collections.unmodifiableMap(map);
     }

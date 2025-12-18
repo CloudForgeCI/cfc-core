@@ -533,6 +533,8 @@ class TruthTableValidationTest {
             if (complianceFramework.contains("PCI-DSS")) {
                 // PCI-DSS Req 10.7: ONE_YEAR log retention (365 days minimum)
                 logRetention = Math.max(logRetention, 365);
+                // PCI-DSS Req 11.4: Intrusion detection (GuardDuty)
+                cfcContext.put("guardDutyEnabled", true);
                 // PCI-DSS Req 5.1: Anti-malware (EC2 only)
                 if ("EC2".equals(runtime)) {
                     cfcContext.put("antiMalwareEnabled", true);
@@ -586,8 +588,8 @@ class TruthTableValidationTest {
 
         if (flowLogsEnabledOverride != null && !flowLogsEnabledOverride.trim().isEmpty()) {
             boolean overrideValue = Boolean.parseBoolean(flowLogsEnabledOverride.trim());
-            cfcContext.put("flowLogsEnabled", overrideValue);
-            System.out.println("   ⚠️  Override: flowLogsEnabled = " + overrideValue);
+            cfcContext.put("enableFlowlogs", overrideValue);
+            System.out.println("   ⚠️  Override: enableFlowlogs = " + overrideValue);
         }
 
         // Configure stack with deployment context
@@ -1237,6 +1239,8 @@ class TruthTableValidationTest {
         // WAF configuration (enabled for PRODUCTION, configurable for others)
         if ("PRODUCTION".equals(securityProfile)) {
             context.put("wafEnabled", true);
+            context.put("guardDutyEnabled", true);  // Enable GuardDuty for PRODUCTION
+            context.put("createGuardDutyDetector", true);  // Create the detector resource
         } else {
             context.put("wafEnabled", false);
         }

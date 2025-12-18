@@ -167,11 +167,11 @@ class CdkNagControlMapperTest {
     }
 
     @Test
-    void testVpcFlowLogsRuleMapsToAuditLogging() {
+    void testVpcFlowLogsRuleMapsToNetworkFlowLogs() {
         Optional<SecurityControl> control = CdkNagControlMapper.mapRuleToControl("AwsSolutions-VPC-7");
 
         assertTrue(control.isPresent());
-        assertEquals(SecurityControl.AUDIT_LOGGING, control.get());
+        assertEquals(SecurityControl.NETWORK_FLOW_LOGS, control.get());
     }
 
     @Test
@@ -254,7 +254,7 @@ class CdkNagControlMapperTest {
         Optional<SecurityControl> control = CdkNagControlMapper.mapRuleToControl("AwsSolutions-DDB-2");
 
         assertTrue(control.isPresent());
-        assertEquals(SecurityControl.BACKUP_RECOVERY, control.get());
+        assertEquals(SecurityControl.DATABASE_PITR, control.get());
     }
 
     @Test
@@ -272,7 +272,7 @@ class CdkNagControlMapperTest {
         Optional<SecurityControl> control = CdkNagControlMapper.mapRuleToControl("AwsSolutions-RDS-1");
 
         assertTrue(control.isPresent());
-        assertEquals(SecurityControl.HIGH_AVAILABILITY, control.get());
+        assertEquals(SecurityControl.DATABASE_MULTI_AZ, control.get());
     }
 
     @Test
@@ -374,7 +374,7 @@ class CdkNagControlMapperTest {
         assertTrue(totalRulesMapped > 0, "Should have mapped rules");
 
         Integer totalSecurityControls = (Integer) stats.get("totalSecurityControls");
-        assertEquals(17, totalSecurityControls, "Should have 17 SecurityControl enums");
+        assertEquals(25, totalSecurityControls, "Should have 25 SecurityControl enums");
     }
 
     @Test
@@ -391,8 +391,21 @@ class CdkNagControlMapperTest {
 
     @Test
     void testAllSecurityControlsHaveMappings() {
-        // Verify every SecurityControl enum has at least one mapped rule
+        // Runtime-only controls that don't have CloudFormation/CDK-nag equivalents
+        Set<SecurityControl> runtimeOnlyControls = Set.of(
+            SecurityControl.SECRETS_MANAGER,        // Runtime check for Secrets Manager usage
+            SecurityControl.SECRETS_ROTATION,       // Runtime check for secret rotation config
+            SecurityControl.CERTIFICATE_EXPIRATION_MONITORING,  // Runtime check for CloudWatch alarms
+            SecurityControl.AUDIT_MANAGER           // Runtime check for AWS Audit Manager enablement
+        );
+
+        // Verify every SecurityControl enum (except runtime-only) has at least one mapped rule
         for (SecurityControl control : SecurityControl.values()) {
+            if (runtimeOnlyControls.contains(control)) {
+                // Skip runtime-only controls - they're validated during synthesis, not in templates
+                continue;
+            }
+
             List<String> rules = CdkNagControlMapper.getRulesForControl(control);
             assertFalse(rules.isEmpty(),
                     "SecurityControl " + control.name() + " should have at least one mapped cdk-nag rule");
@@ -444,10 +457,9 @@ class CdkNagControlMapperTest {
         List<String> auditRules = CdkNagControlMapper.getRulesForControl(SecurityControl.AUDIT_LOGGING);
 
         // Verify we cover major AWS services for audit logging
+        // Note: VPC Flow Logs are now in NETWORK_FLOW_LOGS control
         assertTrue(auditRules.stream().anyMatch(r -> r.contains("CloudTrail")),
                 "Should cover CloudTrail logging");
-        assertTrue(auditRules.stream().anyMatch(r -> r.contains("VPC") && r.contains("Flow")),
-                "Should cover VPC Flow Logs");
         assertTrue(auditRules.stream().anyMatch(r -> r.contains("ALB") || r.contains("ELB")),
                 "Should cover ALB/ELB logging");
         assertTrue(auditRules.stream().anyMatch(r -> r.contains("S3") && r.contains("Logging")),
@@ -475,9 +487,13 @@ class CdkNagControlMapperTest {
 
         // Verify we cover backup and recovery for major data stores
         assertTrue(backupRules.stream().anyMatch(r -> r.contains("RDS")), "Should cover RDS backups");
-        assertTrue(backupRules.stream().anyMatch(r -> r.contains("DynamoDB") || r.contains("DDB")),
-                "Should cover DynamoDB PITR");
+        // Note: DynamoDB PITR now mapped to DATABASE_PITR control, not BACKUP_RECOVERY
         assertTrue(backupRules.stream().anyMatch(r -> r.contains("S3") && r.contains("Version")),
                 "Should cover S3 versioning");
+
+        // Verify DATABASE_PITR control exists and covers DynamoDB
+        List<String> pitrRules = CdkNagControlMapper.getRulesForControl(SecurityControl.DATABASE_PITR);
+        assertTrue(pitrRules.stream().anyMatch(r -> r.contains("DynamoDB") || r.contains("DDB")),
+                "DATABASE_PITR should cover DynamoDB PITR");
     }
 }

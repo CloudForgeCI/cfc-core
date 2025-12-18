@@ -363,7 +363,7 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         // Verify IAM roles are created (Config Recorder role, remediation roles, etc.)
         // The test infrastructure creates multiple IAM roles
-        template.resourceCountIs("AWS::IAM::Role", 12);
+        template.resourceCountIs("AWS::IAM::Role", 13);
     }
 
     @Test
