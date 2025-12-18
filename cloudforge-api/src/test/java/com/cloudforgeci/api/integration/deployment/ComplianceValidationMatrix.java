@@ -47,10 +47,10 @@ public class ComplianceValidationMatrix {
         Map<String, List<String>> requirements = new HashMap<>();
 
         // SOC2 requirements (subset of actual rules)
+        // NOTE: GuardDuty is ADVISORY for SOC2 (recommended but not required)
         requirements.put("SOC2", List.of(
             "s3-bucket-versioning-enabled",
             "cloudtrail-enabled",
-            "guardduty-enabled-centralized",
             "ebs-encryption-enabled",
             "efs-encrypted-check",
             "alb-http-to-https-redirection-check",
@@ -69,6 +69,7 @@ public class ComplianceValidationMatrix {
         ));
 
         // HIPAA requirements (subset of actual rules)
+        // GuardDuty is REQUIRED per §164.308(a)(1)(ii)(D) - Security incident procedures
         requirements.put("HIPAA", List.of(
             "encrypted-volumes",
             "s3-bucket-server-side-encryption-enabled",
@@ -76,10 +77,12 @@ public class ComplianceValidationMatrix {
             "access-keys-rotated",
             "iam-password-policy",
             "rds-encryption-enabled",
-            "vpc-flow-logs-enabled"
+            "vpc-flow-logs-enabled",
+            "guardduty-enabled-centralized"
         ));
 
         // GDPR requirements (subset of actual rules)
+        // NOTE: GuardDuty is ADVISORY for GDPR (Art. 33(1) - recommended but not required)
         requirements.put("GDPR", List.of(
             "ebs-encryption-enabled",
             "s3-bucket-server-side-encryption-enabled",
@@ -270,6 +273,7 @@ public class ComplianceValidationMatrix {
      * - Audit trails
      * - Access controls
      * - Breach notification mechanisms
+     * - Threat detection (GuardDuty) - REQUIRED per §164.308(a)(1)(ii)(D)
      */
     private void validateHipaaCompliance(SecurityProfile securityProfile) {
         // 1. EFS Encryption (for PHI storage)
@@ -313,6 +317,13 @@ public class ComplianceValidationMatrix {
         } catch (AssertionError e) {
             violations.add("HIPAA: IAM roles required for access control");
         }
+
+        // 6. Threat Detection - GuardDuty (REQUIRED per §164.308(a)(1)(ii)(D) - Security incident procedures)
+        try {
+            template.hasResourceProperties("AWS::GuardDuty::Detector", Match.objectLike(Collections.emptyMap()));
+        } catch (Exception e) {
+            violations.add("HIPAA: GuardDuty detector required for security incident procedures (§164.308(a)(1)(ii)(D))");
+        }
     }
 
     /**
@@ -323,6 +334,7 @@ public class ComplianceValidationMatrix {
      * - Audit logging
      * - Right to be forgotten (data deletion capabilities)
      * - Data protection officer (DPO) designation
+     * - NOTE: GuardDuty is ADVISORY for GDPR (Art. 33(1) - breach detection recommended but not required)
      */
     private void validateGdprCompliance(SecurityProfile securityProfile) {
         // 1. Encryption - Required for personal data protection

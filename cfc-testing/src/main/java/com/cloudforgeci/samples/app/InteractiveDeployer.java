@@ -1844,6 +1844,9 @@ public class InteractiveDeployer {
 
         // Network configuration
         config.networkMode = extractStringValue(content, "networkMode", "public-no-nat");
+        config.lbType = extractStringValue(content, "lbType", "alb");
+        config.createZone = extractBoolValue(content, "createZone", false);
+        config.enableFlowlogs = extractBoolValue(content, "enableFlowlogs", false);
         config.wafEnabled = extractBoolValue(content, "wafEnabled", false);
         config.albAccessLogging = extractBoolValue(content, "albAccessLogging", false);
         config.cloudfrontEnabled = extractBoolValue(content, "cloudfrontEnabled", false);

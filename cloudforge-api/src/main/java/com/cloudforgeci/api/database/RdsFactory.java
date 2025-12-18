@@ -20,6 +20,8 @@ import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.rds.*;
 import software.amazon.awscdk.services.secretsmanager.*;
 import software.constructs.Construct;
+import io.github.cdklabs.cdknag.NagPackSuppression;
+import io.github.cdklabs.cdknag.NagSuppressions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -261,6 +263,33 @@ public class RdsFactory {
         }
 
         DatabaseInstance instance = instanceBuilder.build();
+
+        // Add CDK-NAG suppressions for RDS compliance findings
+        NagSuppressions.addResourceSuppressions(
+            databaseSecret,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-SMG4")
+                    .reason("Secret rotation requires Lambda function setup - scheduled for future implementation. Credentials are generated with 32-char password and stored securely in Secrets Manager.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        NagSuppressions.addResourceSuppressions(
+            instance,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-RDS11")
+                    .reason("Default database ports (5432/3306) are used intentionally - security is enforced via VPC security groups restricting access to application containers only. Non-standard ports provide minimal security benefit (security through obscurity).")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM4")
+                    .reason("RDS Enhanced Monitoring requires the AWS managed policy AmazonRDSEnhancedMonitoringRole - this is the AWS-recommended approach for RDS monitoring and cannot be replaced with a customer-managed policy.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
 
         // Store database instance and its security group in SystemContext
         ctx.rdsDatabase.set(instance);

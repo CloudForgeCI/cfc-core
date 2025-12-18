@@ -252,13 +252,20 @@ class TruthTableValidationTest {
         cfcContext.put("auditManagerEnabled", false);  // Disable FrameworkRules validation for basic infrastructure tests
 
         // HIPAA and GDPR require Macie for PHI/PII discovery (when testing compliant configs)
-        if ("HIPAA".equals(complianceFramework) || "GDPR".equals(complianceFramework)) {
+        if (complianceFramework != null && (complianceFramework.contains("HIPAA") || complianceFramework.contains("GDPR"))) {
             if ("alb-oidc".equals(authMode)) {
                 cfcContext.put("macieEnabled", true);
                 cfcContext.put("macieAutomatedDiscovery", true);
                 cfcContext.put("cognitoMfaEnabled", true);
                 cfcContext.put("logRetentionDays", 2190); // 6 years for HIPAA
             }
+        }
+
+        // HIPAA and PCI-DSS require GuardDuty for threat detection
+        // HIPAA: §164.308(a)(1)(ii)(D) - Security incident procedures
+        // PCI-DSS: Req 11.4 - Intrusion detection/prevention systems
+        if (complianceFramework != null && (complianceFramework.contains("HIPAA") || complianceFramework.contains("PCI-DSS"))) {
+            cfcContext.put("guardDutyEnabled", true);
         }
 
         // Configure stack with deployment context
@@ -557,6 +564,8 @@ class TruthTableValidationTest {
                 // HIPAA §164.308(a)(1)(ii)(A): Macie for PHI discovery (required regardless of auth mode)
                 cfcContext.put("macieEnabled", true);
                 cfcContext.put("macieAutomatedDiscovery", true);
+                // HIPAA §164.308(a)(1)(ii)(D): GuardDuty for security incident procedures (REQUIRED)
+                cfcContext.put("guardDutyEnabled", true);
                 // HIPAA §164.312(d): MFA recommended for ePHI access (only when using Cognito/OIDC auth)
                 if ("alb-oidc".equals(authMode)) {
                     cfcContext.put("cognitoAutoProvision", true);
