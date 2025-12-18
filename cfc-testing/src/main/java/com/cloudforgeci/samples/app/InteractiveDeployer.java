@@ -1920,6 +1920,7 @@ public class InteractiveDeployer {
 
         config.auditManagerEnabled = extractBoolValue(content, "auditManagerEnabled", false);
         config.complianceFrameworks = extractStringValue(content, "complianceFrameworks", "");
+        config.complianceMode = extractStringValue(content, "complianceMode", null);
         config.logRetentionDays = extractStringValue(content, "logRetentionDays", "7");
         config.enableS3VersioningRemediation = extractBoolValue(content, "enableS3VersioningRemediation", false);
         config.enableCloudTrailBucketAccessRemediation = extractBoolValue(content, "enableCloudTrailBucketAccessRemediation", false);
