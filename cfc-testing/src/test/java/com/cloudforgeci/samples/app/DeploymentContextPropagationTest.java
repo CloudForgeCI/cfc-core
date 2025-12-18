@@ -60,7 +60,7 @@ class DeploymentContextPropagationTest {
         context.put("enableSsl", true);
         context.put("networkMode", "private-with-nat");
         context.put("wafEnabled", true);
-        context.put("cloudfrontEnabled", false);
+        context.put("cloudfront", false);
         context.put("authMode", "alb-oidc");
 
         // Cognito
@@ -170,10 +170,10 @@ class DeploymentContextPropagationTest {
         // Fields using boolOrNull() return null when not set
         assertNull(cfc.guardDutyEnabled());
 
-        // Fields using bool(..., false) return false when not set
-        assertFalse(cfc.auditManagerEnabled());
-        assertFalse(cfc.wafEnabled());
-        assertFalse(cfc.cloudfrontEnabled());
+        // Fields using boolOrNull() return null when not set - use null-safe comparison
+        assertFalse(Boolean.TRUE.equals(cfc.auditManagerEnabled()));
+        assertFalse(Boolean.TRUE.equals(cfc.wafEnabled()));
+        assertFalse(Boolean.TRUE.equals(cfc.cloudfrontEnabled()));
         assertFalse(cfc.enableSsl());
         assertEquals(false, cfc.cognitoAutoProvision());  // Boolean type but has default false
         assertEquals(false, cfc.cognitoMfaEnabled());     // Boolean type but has default false
