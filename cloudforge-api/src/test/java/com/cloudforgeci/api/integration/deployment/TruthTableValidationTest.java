@@ -94,6 +94,16 @@ class TruthTableValidationTest {
         System.out.println("📁 CloudFormation templates will be written to: " + cfnTemplatesOutputDir);
     }
 
+    // Note: Explicit System.gc() calls were tested but removed because they can cause
+    // the JSII runtime (CDK's Java-to-JS bridge) to be garbage collected prematurely,
+    // resulting in "Stream closed" errors. The JSII runtime maintains singleton state
+    // that must persist across all tests in the class.
+    //
+    // Memory management for CDK tests relies on:
+    // 1. Local variables (App, Stack, Template) going out of scope after each test
+    // 2. JVM's normal garbage collection between tests
+    // 3. Surefire's fork mode can be configured if memory isolation is needed
+
     /**
      * Write the synthesized CloudFormation template to a JSON file for report linking.
      *
@@ -810,9 +820,20 @@ class TruthTableValidationTest {
         Template template = null;
 
         // Layer 1 & 2: Synthesize template (triggers both cdk-nag and FrameworkRules validation)
+        List<String> cdkNagWarnings = new ArrayList<>();
         try {
             template = Template.fromStack(stack);
-            System.out.println("   ✅ Layer 1 (cdk-nag): Synthesis passed");
+
+            // Check for cdk-nag warnings (advisories) from CDK Annotations
+            cdkNagWarnings = extractCdkNagWarnings(stack);
+            if (cdkNagWarnings.isEmpty()) {
+                System.out.println("   ✅ Layer 1 (cdk-nag): Synthesis passed");
+            } else {
+                System.out.println("   ⚠️ Layer 1 (cdk-nag): Passed with " + cdkNagWarnings.size() + " advisories");
+                System.out.println("\n   📋 cdk-nag Advisories (non-blocking warnings):");
+                cdkNagWarnings.forEach(w -> System.out.println("      ⚠ " + w));
+                System.out.println();
+            }
         } catch (Exception e) {
             String errorMessage = e.getMessage();
 
@@ -953,7 +974,12 @@ class TruthTableValidationTest {
                 System.out.println("   ⏭️  Layer 3 (cfn-guard): Skipped - " + e.getMessage());
             }
         } else if (template == null) {
-            System.out.println("   ⏭️  Layer 3 (cfn-guard): Skipped (no template)");
+            // Differentiate between blocked (due to earlier failures) and skipped (no template expected)
+            if (!layer1Failures.isEmpty() || !layer2Failures.isEmpty()) {
+                System.out.println("   ⛔ Layer 3 (cfn-guard): Blocked (synthesis failed in earlier layer)");
+            } else {
+                System.out.println("   ⏭️  Layer 3 (cfn-guard): Skipped (no template)");
+            }
         }
 
         // Layer 4: AWS Config (count rules that would actually be deployed based on conditions)
@@ -1021,12 +1047,15 @@ class TruthTableValidationTest {
                 }
 
                 // Count AWS::Config::ConfigRule resources that will actually be deployed
+                List<String> configRuleNames = new ArrayList<>();
                 Object resourcesObj = templateMap.get("Resources");
                 if (resourcesObj instanceof Map) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> resources = (Map<String, Object>) resourcesObj;
 
-                    for (Object resourceObj : resources.values()) {
+                    for (Map.Entry<String, Object> entry : resources.entrySet()) {
+                        String resourceName = entry.getKey();
+                        Object resourceObj = entry.getValue();
                         if (resourceObj instanceof Map) {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> resource = (Map<String, Object>) resourceObj;
@@ -1039,12 +1068,14 @@ class TruthTableValidationTest {
                                 if (condition == null) {
                                     // No condition means it always deploys
                                     configRuleCount++;
+                                    configRuleNames.add(resourceName);
                                 } else if (condition instanceof String) {
                                     String conditionName = (String) condition;
 
                                     // Has a condition - only count if the condition is active
                                     if (activeConditions.contains(conditionName)) {
                                         configRuleCount++;
+                                        configRuleNames.add(resourceName);
                                     }
                                 }
                             }
@@ -1054,6 +1085,10 @@ class TruthTableValidationTest {
 
                 if (configRuleCount > 0) {
                     System.out.println("   ✅ Layer 4 (AWS Config): " + configRuleCount + " rules would be deployed");
+                    System.out.println("\n   📋 AWS Config Rules (Layer 4):");
+                    for (String ruleName : configRuleNames) {
+                        System.out.println("      ✓ " + ruleName);
+                    }
                 } else {
                     System.out.println("   ⏭️  Layer 4 (AWS Config): Skipped (no Config rules in template)");
                 }
@@ -1061,7 +1096,12 @@ class TruthTableValidationTest {
                 System.out.println("   ⏭️  Layer 4 (AWS Config): Unable to count rules - " + e.getMessage());
             }
         } else {
-            System.out.println("   ⏭️  Layer 4 (AWS Config): Skipped (no template)");
+            // Differentiate between blocked (due to earlier failures) and skipped (no template expected)
+            if (!layer1Failures.isEmpty() || !layer2Failures.isEmpty()) {
+                System.out.println("   ⛔ Layer 4 (AWS Config): Blocked (synthesis failed in earlier layer)");
+            } else {
+                System.out.println("   ⏭️  Layer 4 (AWS Config): Skipped (no template)");
+            }
         }
 
         // Note: CloudFormation templates already written before Layer 3 (cfn-guard validation)
@@ -1395,6 +1435,136 @@ class TruthTableValidationTest {
             case "ADVANCEDMONITORING" -> "advanced-monitoring.guard";
             default -> null;
         };
+    }
+
+    /**
+     * Extract cdk-nag warnings from CDK Annotations API.
+     * Uses software.amazon.awscdk.assertions.Annotations to get warnings
+     * that were added to the construct tree during synthesis.
+     *
+     * @param stack the CDK stack after synthesis
+     * @return list of warning messages from cdk-nag
+     */
+    private List<String> extractCdkNagWarnings(Stack stack) {
+        List<String> warnings = new ArrayList<>();
+        try {
+            // Use CDK Assertions Annotations API to extract warnings
+            software.amazon.awscdk.assertions.Annotations annotations =
+                software.amazon.awscdk.assertions.Annotations.fromStack(stack);
+
+            // Find all warnings matching any pattern (use regex .* to match all)
+            // The Annotations API returns SynthesisMessage objects
+            var allWarnings = annotations.findWarning("*", Match.anyValue());
+
+            for (var warning : allWarnings) {
+                // Each SynthesisMessage has entry (metadata entry with data field containing message)
+                String message = warning.getEntry().getData().toString();
+                // Filter for cdk-nag related warnings (they typically contain rule IDs)
+                // cdk-nag rule IDs follow pattern like AwsSolutions-IAM4, HIPAA-*, etc.
+                if (message != null && !message.isEmpty()) {
+                    // Skip the deprecation warning about addWarning itself
+                    if (!message.contains("aws-cdk-lib.Annotations#addWarning is deprecated")) {
+                        warnings.add(message);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Silently ignore if Annotations API fails - we'll just report no warnings
+            // This can happen in edge cases during synthesis
+        }
+        return warnings;
+    }
+
+    /**
+     * Parse cdk-nag report CSV files and extract warnings/advisories.
+     * cdk-nag generates reports in cdk.out directory with format: {PackName}-{stackName}-NagReport.csv
+     * Note: This is used by comprehensive-synth-test.sh, not JUnit tests.
+     *
+     * @param stackName the CDK stack name
+     * @return list of warning messages found in cdk-nag reports
+     */
+    private List<String> parseCdkNagReportWarnings(String stackName) {
+        List<String> warnings = new ArrayList<>();
+
+        try {
+            // Find cdk.out directory (relative to project root)
+            Path cdkOutDir = Paths.get(System.getProperty("user.dir")).getParent().resolve("cfc-testing/cdk.out");
+            if (!Files.exists(cdkOutDir)) {
+                // Try current directory's cdk.out
+                cdkOutDir = Paths.get("cdk.out");
+            }
+            if (!Files.exists(cdkOutDir)) {
+                return warnings;
+            }
+
+            // Find all *-NagReport.csv files matching this stack
+            try (var files = Files.list(cdkOutDir)) {
+                List<Path> nagReports = files
+                    .filter(p -> p.toString().endsWith("-NagReport.csv"))
+                    .filter(p -> p.getFileName().toString().toLowerCase().contains(stackName.toLowerCase().replace("-", "")))
+                    .toList();
+
+                for (Path reportFile : nagReports) {
+                    // Parse CSV and extract warnings
+                    List<String> lines = Files.readAllLines(reportFile);
+                    if (lines.size() <= 1) continue; // Skip if only header or empty
+
+                    String packName = reportFile.getFileName().toString().split("-")[0];
+
+                    for (int i = 1; i < lines.size(); i++) {
+                        String line = lines.get(i);
+                        // CSV format: Rule ID,Resource ID,Compliance,Exception Reason,Rule Level,Rule Info
+                        // We need to handle quoted CSV fields
+                        String[] parts = parseCSVLine(line);
+                        if (parts.length >= 6) {
+                            String ruleId = parts[0].replace("\"", "");
+                            String resourceId = parts[1].replace("\"", "");
+                            String compliance = parts[2].replace("\"", "");
+                            String ruleLevel = parts[4].replace("\"", "");
+                            String ruleInfo = parts[5].replace("\"", "");
+
+                            // Check for Warning level rules that are Non-Compliant
+                            if ("Warning".equalsIgnoreCase(ruleLevel) && "Non-Compliant".equalsIgnoreCase(compliance)) {
+                                // Extract just the resource name (last part of construct path)
+                                String resourceName = resourceId.contains("/")
+                                    ? resourceId.substring(resourceId.lastIndexOf("/") + 1)
+                                    : resourceId;
+                                warnings.add(String.format("[%s] %s: %s (%s)", packName, ruleId, ruleInfo, resourceName));
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Silently ignore errors parsing cdk-nag reports
+            System.out.println("   ⚠️  Could not parse cdk-nag reports: " + e.getMessage());
+        }
+
+        return warnings;
+    }
+
+    /**
+     * Simple CSV line parser that handles quoted fields.
+     */
+    private String[] parseCSVLine(String line) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                parts.add(current.toString());
+                current = new StringBuilder();
+            } else {
+                current.append(c);
+            }
+        }
+        parts.add(current.toString());
+
+        return parts.toArray(new String[0]);
     }
 
     /**
@@ -3865,6 +4035,298 @@ class TruthTableValidationTest {
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
             applicationId, provisionDatabase, region, gdprDataTransferApproved
         );
+    }
+
+    // ========== INCIDENTRESPONSE FRAMEWORK TESTS ==========
+    // Tests for IncidentResponse framework (log retention, flow logs)
+
+    // 2 tests
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/incidentresponse_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testIncidentResponseEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        System.out.println("\n[INCIDENTRESPONSE TEST] EC2 Configuration: " + configName);
+        System.out.println("   Framework: " + complianceFramework);
+        System.out.println("   Log Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default (730)"));
+        System.out.println("   Focus: Log retention for incident investigation, flow logs for network forensics");
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/incidentresponse_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testIncidentResponseFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        System.out.println("\n[INCIDENTRESPONSE TEST] Fargate Configuration: " + configName);
+        System.out.println("   Framework: " + complianceFramework);
+        System.out.println("   Log Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default (730)"));
+        System.out.println("   Focus: Log retention for incident investigation, flow logs for network forensics");
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // ========== ADVANCEDMONITORING FRAMEWORK TESTS ==========
+    // Tests for AdvancedMonitoring framework (enhanced logging, flow logs)
+
+    // 2 tests
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/advancedmonitoring_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testAdvancedMonitoringEc2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        System.out.println("\n[ADVANCEDMONITORING TEST] EC2 Configuration: " + configName);
+        System.out.println("   Framework: " + complianceFramework);
+        System.out.println("   Log Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default (730)"));
+        System.out.println("   Flow Logs: " + (flowLogsEnabledOverride != null ? flowLogsEnabledOverride : "default"));
+        System.out.println("   Focus: Enhanced monitoring, detailed logging, network visibility");
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 2 tests
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/advancedmonitoring_fargate_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testAdvancedMonitoringFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        System.out.println("\n[ADVANCEDMONITORING TEST] Fargate Configuration: " + configName);
+        System.out.println("   Framework: " + complianceFramework);
+        System.out.println("   Log Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default (730)"));
+        System.out.println("   Flow Logs: " + (flowLogsEnabledOverride != null ? flowLogsEnabledOverride : "default"));
+        System.out.println("   Focus: Enhanced monitoring, detailed logging, network visibility");
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // ========== L1 CDK-NAG VIOLATION TESTS ==========
+    // Tests that trigger visible cdk-nag violations (AwsSolutions, HIPAA, PCI-DSS packs)
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/l1_cdk-nag_violations.csv",
+        numLinesToSkip = 1
+    )
+    void testL1CdkNagViolations(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        System.out.println("\n[L1 VIOLATION TEST] Testing cdk-nag violations: " + configName);
+        System.out.println("   Expected: L1 (cdk-nag) should FAIL with violations");
+        System.out.println("   Pack: " + mapFrameworkToNagPack(complianceFramework));
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // ========== L2 FRAMEWORKRULES VIOLATION TESTS ==========
+    // Tests that trigger visible FrameworkRules violations
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/l2_frameworkrules_violations.csv",
+        numLinesToSkip = 1
+    )
+    void testL2FrameworkRulesViolations(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        System.out.println("\n[L2 VIOLATION TEST] Testing FrameworkRules violations: " + configName);
+        System.out.println("   Expected: L2 (FrameworkRules) should FAIL with violations");
+        System.out.println("   Framework: " + complianceFramework);
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // ========== ADVISORY EDGE CASE TESTS ==========
+    // Tests that pass but may have advisories (boundary conditions, known gaps)
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/advisory_edge_cases.csv",
+        numLinesToSkip = 1
+    )
+    void testAdvisoryEdgeCases(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        System.out.println("\n[ADVISORY TEST] Testing edge case: " + configName);
+        System.out.println("   Expected: PASS (may have advisories)");
+        System.out.println("   Framework: " + complianceFramework);
+        System.out.println("   Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default"));
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    /**
+     * Helper method to map compliance framework to cdk-nag pack name for logging.
+     */
+    private String mapFrameworkToNagPack(String framework) {
+        if (framework == null) return "AwsSolutionsChecks";
+        return switch (framework.toUpperCase()) {
+            case "HIPAA" -> "HIPAASecurityChecks";
+            case "PCI-DSS", "PCIDSS" -> "PCIDSS321Checks";
+            case "SOC2" -> "AwsSolutionsChecks";
+            case "GDPR" -> "AwsSolutionsChecks (fallback)";
+            default -> "AwsSolutionsChecks (fallback)";
+        };
     }
 
 }

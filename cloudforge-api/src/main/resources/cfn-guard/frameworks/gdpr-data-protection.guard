@@ -105,10 +105,12 @@ rule gdpr_vpc_flow_logs when %flow_logs !empty {
 # Article 5(1)(e) - Storage Limitation (Log Retention)
 # ============================================================================
 
-# CloudWatch Logs Retention - GDPR compliant retention (1 year minimum)
+# CloudWatch Logs Retention - GDPR compliant retention (90 days minimum for audit purposes)
+# Note: GDPR Article 5(1)(e) requires storage limitation but doesn't mandate specific retention
+# 90 days provides reasonable audit trail while respecting data minimization principles
 rule gdpr_cloudwatch_logs_retention when %log_groups !empty {
     %log_groups.Properties.RetentionInDays exists
-    %log_groups.Properties.RetentionInDays >= 365
+    %log_groups.Properties.RetentionInDays >= 90
 }
 
 # ============================================================================

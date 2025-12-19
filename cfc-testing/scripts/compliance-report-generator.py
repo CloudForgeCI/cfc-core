@@ -53,6 +53,17 @@ class ComplianceTestResult:
         self.cfn_template_json = None
         self.cfn_template_yaml = None
 
+        # Advisory tracking (warnings that don't cause failure)
+        self.has_advisories = False
+        self.advisory_layers = []  # List of layers with advisories: "L1", "L2", "L3"
+        self.cdk_nag_warnings = []  # Warnings (not errors) from cdk-nag
+        self.framework_rules_advisories = []  # Advisories from FrameworkRules
+        self.cfn_guard_warnings = []  # Warnings from cfn-guard
+
+        # Installed rules tracking
+        self.installed_rules = []  # List of FrameworkRules installed for this test
+        self.aws_config_rules = []  # List of AWS Config rules that would be deployed
+
 
 class ComplianceReportGenerator:
     """Generates compliance validation reports by running tests and parsing results."""
@@ -213,11 +224,13 @@ class ComplianceReportGenerator:
 
             # Extract runtime and network mode from config name
             parts = config_name.split('_')
-            # Handle negative tests that start with FAIL_
-            if parts[0] == 'FAIL':
-                runtime = parts[1] if len(parts) > 1 else "unknown"
-            else:
-                runtime = parts[0] if len(parts) > 0 else "unknown"
+            # Handle test prefixes: FAIL_, L1_, ADVISORY_, NEGATIVE_, etc.
+            # Find the actual runtime (EC2, FARGATE) in the parts
+            runtime = "unknown"
+            for part in parts:
+                if part.upper() in ['EC2', 'FARGATE']:
+                    runtime = part.upper()
+                    break
             network_mode = parts[-1] if len(parts) > 0 else "unknown"
 
             current_test = ComplianceTestResult(config_name, framework, runtime, network_mode)
@@ -230,17 +243,37 @@ class ComplianceReportGenerator:
                 if match:
                     current_test.deployment_context = match.group(1)
 
+            # Parse installed FrameworkRules (Layer 2)
+            # Format: "INFO:   ✓ Rule Name (priority=X)" - use non-emoji pattern for GitHub compatibility
+            if "INFO:" in line and "(priority=" in line:
+                match = re.search(r'INFO:\s+.?\s*(.+?)\s*\(priority=(-?\d+)\)', line)
+                if match:
+                    rule_name = match.group(1).strip()
+                    if rule_name and rule_name not in [r for r in current_test.installed_rules]:
+                        current_test.installed_rules.append(rule_name)
+
             # Parse Layer 1 (cdk-nag) results
             if "✅ Layer 1 (cdk-nag):" in line:
                 current_test.cdk_nag_status = "passed"
                 current_test.cdk_nag_packs_applied = 1
                 current_test._current_layer = None
+            elif "⚠️ Layer 1 (cdk-nag):" in line or "⚠️  Layer 1 (cdk-nag):" in line:
+                # Passed with warnings (advisory)
+                current_test.cdk_nag_status = "passed"
+                current_test.cdk_nag_packs_applied = 1
+                current_test.has_advisories = True
+                if "L1" not in current_test.advisory_layers:
+                    current_test.advisory_layers.append("L1")
+                current_test._current_layer = "cdk_nag_warnings"
             elif "❌ Layer 1 (cdk-nag)" in line:
                 current_test.cdk_nag_status = "failed"
                 current_test._current_layer = "cdk_nag"
             elif "📋 cdk-nag Failure Details:" in line:
                 # Start capturing cdk-nag violation details
                 current_test._current_layer = "cdk_nag_details"
+            elif "📋 cdk-nag Warnings:" in line or "📋 cdk-nag Advisories" in line:
+                # Start capturing cdk-nag warning/advisory details
+                current_test._current_layer = "cdk_nag_warnings"
 
             # Detect FrameworkRules validation failure (appears before Layer summary)
             if "validation failed with" in line and "violations" in line and "SEVERE:" in line:
@@ -252,9 +285,19 @@ class ComplianceReportGenerator:
             if "✅ Layer 2 (FrameworkRules):" in line:
                 current_test.framework_rules_status = "passed"
                 current_test._current_layer = None
+            elif "⚠️ Layer 2 (FrameworkRules):" in line or "⚠️  Layer 2 (FrameworkRules):" in line:
+                # Passed with advisories
+                current_test.framework_rules_status = "passed"
+                current_test.has_advisories = True
+                if "L2" not in current_test.advisory_layers:
+                    current_test.advisory_layers.append("L2")
+                current_test._current_layer = "framework_rules_advisories"
             elif "❌ Layer 2 (FrameworkRules):" in line:
                 current_test.framework_rules_status = "failed"
                 current_test._current_layer = "framework_rules"
+            elif "📋 FrameworkRules Advisories:" in line:
+                # Start capturing FrameworkRules advisory details
+                current_test._current_layer = "framework_rules_advisories"
             elif "⏭️  Layer 2 (FrameworkRules): Skipped (no template)" in line:
                 current_test.framework_rules_status = "skipped (no template)"
                 current_test._current_layer = None
@@ -266,14 +309,27 @@ class ComplianceReportGenerator:
             if "✅ Layer 3 (cfn-guard):" in line:
                 current_test.cfn_guard_status = "passed"
                 current_test._current_layer = None
+            elif "⚠️ Layer 3 (cfn-guard):" in line or "⚠️  Layer 3 (cfn-guard):" in line:
+                # Passed with warnings
+                current_test.cfn_guard_status = "passed"
+                current_test.has_advisories = True
+                if "L3" not in current_test.advisory_layers:
+                    current_test.advisory_layers.append("L3")
+                current_test._current_layer = "cfn_guard_warnings"
             elif "❌ Layer 3 (cfn-guard):" in line:
                 current_test.cfn_guard_status = "failed"
                 current_test._current_layer = "cfn_guard"
             elif "📋 cfn-guard Failure Details:" in line:
                 # Start capturing cfn-guard violation details
                 current_test._current_layer = "cfn_guard_details"
+            elif "📋 cfn-guard Warnings:" in line:
+                # Start capturing cfn-guard warning details
+                current_test._current_layer = "cfn_guard_warnings"
             elif "⏭️  Layer 3 (cfn-guard): Skipped (no template)" in line:
                 current_test.cfn_guard_status = "skipped (no template)"
+                current_test._current_layer = None
+            elif "⛔ Layer 3 (cfn-guard): Blocked" in line:
+                current_test.cfn_guard_status = "blocked"
                 current_test._current_layer = None
             elif "⏭️  Layer 3 (cfn-guard): Skipped" in line:
                 current_test.cfn_guard_status = "skipped"
@@ -290,19 +346,54 @@ class ComplianceReportGenerator:
             elif "Layer 4 (AWS Config): Skipped" in line:
                 current_test.aws_config_status = "skipped"
                 current_test._current_layer = None
+            elif "⛔ Layer 4 (AWS Config): Blocked" in line:
+                current_test.aws_config_status = "blocked"
+                current_test._current_layer = None
+
+            # Parse AWS Config Rules list header
+            # Format: "📋 AWS Config Rules (Layer 4):"
+            if "AWS Config Rules" in line and "Layer 4" in line:
+                current_test._current_layer = "aws_config_rules"
+
+            # Capture individual AWS Config rule names
+            # Format: "      ✓ SystemContext...ComplianceRuleName..."
+            if current_test._current_layer == "aws_config_rules":
+                stripped = line.strip()
+                # Stop at section end markers
+                if "Compliance validation" in line or stripped.startswith("=") or (not stripped and current_test.aws_config_rules):
+                    current_test._current_layer = None
+                elif "SystemContext" in line or "Compliance" in line:
+                    # Extract rule name from line like "✓ RuleName" or just "RuleName"
+                    parts = stripped.split()
+                    for part in parts:
+                        if part.startswith("SystemContext") or "Compliance" in part:
+                            if part not in current_test.aws_config_rules:
+                                current_test.aws_config_rules.append(part)
+                            break
 
             # Capture individual violation messages
             # Format 1: "SEVERE:   - SOC2-CC6.2-Auth: ..." (FrameworkRules)
             # Format 2: "      - violation message" (cdk-nag, cfn-guard)
-            violation_match = re.match(r'SEVERE:\s+- (.+)', line) or re.match(r'\s+- (.+)', line)
+            # Format 3: "WARNING:  - ..." (advisories)
+            # Format 4: "      ⚠ warning message" (cdk-nag advisories from JUnit tests)
+            violation_match = (re.match(r'SEVERE:\s+- (.+)', line) or
+                             re.match(r'WARNING:\s+- (.+)', line) or
+                             re.match(r'\s+⚠\s*(.+)', line) or
+                             re.match(r'\s+- (.+)', line))
             if violation_match and current_test._current_layer:
                 violation = violation_match.group(1).strip()
                 if current_test._current_layer == "cdk_nag":
                     current_test.cdk_nag_violations.append(violation)
+                elif current_test._current_layer == "cdk_nag_warnings":
+                    current_test.cdk_nag_warnings.append(violation)
                 elif current_test._current_layer == "framework_rules":
                     current_test.framework_rules_violations.append(violation)
+                elif current_test._current_layer == "framework_rules_advisories":
+                    current_test.framework_rules_advisories.append(violation)
                 elif current_test._current_layer == "cfn_guard":
                     current_test.cfn_guard_violations.append(violation)
+                elif current_test._current_layer == "cfn_guard_warnings":
+                    current_test.cfn_guard_warnings.append(violation)
 
             # Capture cdk-nag failure detail lines (after "📋 cdk-nag Failure Details:")
             # These lines start with "   " (3 spaces) and are NOT separator lines (=====)
@@ -381,20 +472,27 @@ class ComplianceReportGenerator:
             "network_mode": result.network_mode,
             "status": result.status,
             "duration": result.duration,
+            "has_advisories": result.has_advisories,
+            "advisory_layers": result.advisory_layers,
+            "installed_rules": result.installed_rules,
+            "aws_config_rules": result.aws_config_rules,
             "layers": {
                 "cdk_nag": {
                     "status": result.cdk_nag_status,
                     "packs_applied": result.cdk_nag_packs_applied,
-                    "violations": result.cdk_nag_violations
+                    "violations": result.cdk_nag_violations,
+                    "warnings": result.cdk_nag_warnings
                 },
                 "framework_rules": {
                     "status": result.framework_rules_status,
                     "violations": result.framework_rules_violations,
+                    "advisories": result.framework_rules_advisories,
                     "known_gaps": result.framework_rules_known_gaps
                 },
                 "cfn_guard": {
                     "status": result.cfn_guard_status,
-                    "violations": result.cfn_guard_violations
+                    "violations": result.cfn_guard_violations,
+                    "warnings": result.cfn_guard_warnings
                 },
                 "aws_config": {
                     "status": result.aws_config_status
@@ -431,7 +529,7 @@ class ComplianceReportGenerator:
         print(f"   ✅ Aggregated timing data from {len(saved_xml_files)} XML files")
 
     def _parse_single_junit_xml(self, xml_file: Path):
-        """Parse a single JUnit XML file and update results with timing info."""
+        """Parse a single JUnit XML file and update results with timing, advisories, and installed rules."""
         if not xml_file.exists():
             return
 
@@ -453,24 +551,102 @@ class ComplianceReportGenerator:
             for testcase in root.findall('testcase'):
                 time_val = float(testcase.get('time', 0.0))
 
-                # Extract config name from system-out
+                # Extract config name and other data from both system-out and system-err
                 system_out = testcase.find('system-out')
+                system_err = testcase.find('system-err')
                 config_name = None
 
-                if system_out is None:
-                    system_out = testcase.find('system-err')
+                # Combine both outputs for full parsing
+                stdout_text = system_out.text if system_out is not None and system_out.text else ""
+                stderr_text = system_err.text if system_err is not None and system_err.text else ""
+                combined_text = stdout_text + "\n" + stderr_text
 
-                if system_out is not None and system_out.text:
-                    text = system_out.text
-                    match = re.search(r'Testing compliance configuration \(CSV\):\s*(\S+)\s+\[(.+?)\]', text)
-                    if match:
-                        config_name = match.group(1)
+                # Config name is typically in stdout
+                match = re.search(r'Testing compliance configuration \(CSV\):\s*(\S+)\s+\[(.+?)\]', combined_text)
+                if match:
+                    config_name = match.group(1)
 
-                if config_name and config_name in results_by_config:
-                    # Update duration for this config
-                    results_by_config[config_name]['duration'] = time_val
+                    if config_name and config_name in results_by_config:
+                        result = results_by_config[config_name]
+                        # Update duration for this config
+                        result['duration'] = time_val
 
-            # Rewrite the incremental file with updated durations
+                        # Extract cdk-nag advisories (warnings) from stdout
+                        cdk_nag_warnings = []
+                        if "cdk-nag Advisories" in combined_text:
+                            lines = combined_text.split('\n')
+                            in_advisories = False
+                            for line in lines:
+                                if "cdk-nag Advisories" in line:
+                                    in_advisories = True
+                                    continue
+                                if in_advisories:
+                                    # Stop at next section - check without relying on emoji
+                                    if "Layer 2" in line or "CFN_TEMPLATE" in line or line.strip().startswith("---"):
+                                        break
+                                    # Extract warning lines (start with ⚠ or contain warning text)
+                                    warn_match = re.match(r'\s*[⚠]\s*(.+)', line)
+                                    if warn_match:
+                                        cdk_nag_warnings.append(warn_match.group(1).strip())
+
+                        # Extract installed rules from stderr (format: "INFO:   ✓ Rule Name (priority=X)")
+                        # Use pattern without emoji for GitHub compatibility
+                        installed_rules = []
+                        seen_rules = set()  # Avoid duplicates
+                        for line in combined_text.split('\n'):
+                            # Match "INFO: ... (priority=X)" pattern, extract text before (priority=)
+                            if 'INFO:' in line and '(priority=' in line:
+                                # Extract the rule name between INFO: marker and (priority=
+                                rule_match = re.search(r'INFO:\s+.?\s*(.+?)\s*\(priority=(-?\d+)\)', line)
+                                if rule_match:
+                                    rule_name = rule_match.group(1).strip()
+                                    if rule_name and rule_name not in seen_rules:
+                                        installed_rules.append(rule_name)
+                                        seen_rules.add(rule_name)
+
+                        # Extract AWS Config rules (Layer 4)
+                        # Format: "📋 AWS Config Rules (Layer 4):" followed by "✓ RuleName"
+                        aws_config_rules = []
+                        if "AWS Config Rules" in combined_text:
+                            lines = combined_text.split('\n')
+                            in_config_rules = False
+                            for line in lines:
+                                if "AWS Config Rules" in line and "Layer 4" in line:
+                                    in_config_rules = True
+                                    continue
+                                if in_config_rules:
+                                    # Stop at section end markers
+                                    stripped = line.strip()
+                                    if "Compliance validation" in line or stripped.startswith("---") or stripped.startswith("=") or (not stripped and aws_config_rules):
+                                        break
+                                    # Extract rule names - look for "SystemContext" or "Compliance" prefixes
+                                    # Use text-based matching for GitHub compatibility (avoid emoji chars)
+                                    if "SystemContext" in line or "Compliance" in line:
+                                        # Extract the rule name (everything after whitespace and optional checkmark)
+                                        parts = stripped.split()
+                                        if parts:
+                                            # Last part is usually the rule name, or first part if checkmark
+                                            rule_name = parts[-1] if len(parts) == 1 else parts[-1]
+                                            # Also try to extract from the format "✓ RuleName"
+                                            for part in parts:
+                                                if part.startswith("SystemContext") or "Compliance" in part:
+                                                    rule_name = part
+                                                    break
+                                            if rule_name and rule_name not in aws_config_rules:
+                                                aws_config_rules.append(rule_name)
+
+                        # Update result with new data
+                        result['cdk_nag_warnings'] = cdk_nag_warnings
+                        result['installed_rules'] = installed_rules
+                        result['aws_config_rules'] = aws_config_rules
+                        # Check for advisories using text patterns (avoid emoji for GitHub compatibility)
+                        result['has_advisories'] = len(cdk_nag_warnings) > 0 or "Layer 1 (cdk-nag): Passed with" in combined_text
+                        if result['has_advisories']:
+                            result['advisory_layers'] = ['L1']
+                        if 'layers' in result and 'cdk_nag' in result['layers']:
+                            result['layers']['cdk_nag']['warnings'] = cdk_nag_warnings
+
+            # Rewrite the incremental file with updated data
             with open(self.incremental_results_file, 'w') as f:
                 for result in results_by_config.values():
                     f.write(json.dumps(result) + '\n')
@@ -545,11 +721,13 @@ class ComplianceReportGenerator:
                         framework = match.group(2)
                         # Parse runtime and network mode from config name
                         parts = config_name.split('_')
-                        # Handle negative tests that start with FAIL_
-                        if parts[0] == 'FAIL':
-                            runtime = parts[1] if len(parts) > 1 else "unknown"
-                        else:
-                            runtime = parts[0] if len(parts) > 0 else "unknown"
+                        # Handle test prefixes: FAIL_, L1_, ADVISORY_, NEGATIVE_, etc.
+                        # Find the actual runtime (EC2, FARGATE) in the parts
+                        runtime = "unknown"
+                        for part in parts:
+                            if part.upper() in ['EC2', 'FARGATE']:
+                                runtime = part.upper()
+                                break
                         network_mode = parts[-1] if len(parts) > 0 else "unknown"
 
                     # Extract deployment context
@@ -560,8 +738,39 @@ class ComplianceReportGenerator:
                     # Parse Layer 1 (cdk-nag) status
                     if "✅ Layer 1 (cdk-nag):" in text:
                         layer_statuses['cdk_nag'] = 'passed'
+                    elif "⚠️ Layer 1 (cdk-nag):" in text or "⚠️  Layer 1 (cdk-nag):" in text:
+                        layer_statuses['cdk_nag'] = 'passed'
+                        layer_statuses['cdk_nag_has_advisories'] = True
                     elif "❌ Layer 1 (cdk-nag)" in text or "❌ Layer 1" in text:
                         layer_statuses['cdk_nag'] = 'failed'
+
+                    # Extract cdk-nag advisories (warnings)
+                    cdk_nag_warnings = []
+                    if "📋 cdk-nag Advisories" in text:
+                        # Find the advisories section and extract warning lines
+                        lines = text.split('\n')
+                        in_advisories = False
+                        for line in lines:
+                            if "📋 cdk-nag Advisories" in line:
+                                in_advisories = True
+                                continue
+                            if in_advisories:
+                                # Stop at next section marker
+                                if line.strip().startswith("✅") or line.strip().startswith("❌") or line.strip().startswith("📋") or line.strip().startswith("📄") or "Layer 2" in line:
+                                    break
+                                # Extract warning lines (start with ⚠)
+                                warn_match = re.match(r'\s*⚠\s*(.+)', line)
+                                if warn_match:
+                                    cdk_nag_warnings.append(warn_match.group(1).strip())
+                    layer_statuses['cdk_nag_warnings'] = cdk_nag_warnings
+
+                    # Extract installed rules (from "✓ Rule Name (priority=X)")
+                    installed_rules = []
+                    for line in text.split('\n'):
+                        rule_match = re.search(r'✓\s+(.+?)\s+\(priority=(\d+)\)', line)
+                        if rule_match:
+                            installed_rules.append(rule_match.group(1).strip())
+                    layer_statuses['installed_rules'] = installed_rules
 
                     # Parse Layer 2 (FrameworkRules) status
                     if "✅ Layer 2 (FrameworkRules):" in text:
@@ -617,10 +826,16 @@ class ComplianceReportGenerator:
                     result = results_by_config[config_name]
                     result['duration'] = time_val
                     result['layers']['cdk_nag']['status'] = layer_statuses['cdk_nag']
+                    result['layers']['cdk_nag']['warnings'] = layer_statuses.get('cdk_nag_warnings', [])
                     result['layers']['framework_rules']['status'] = layer_statuses['framework_rules']
                     result['layers']['cfn_guard']['status'] = layer_statuses['cfn_guard']
                     result['layers']['aws_config']['status'] = layer_statuses.get('aws_config', result['layers'].get('aws_config', {}).get('status', 'deployed'))
                     result['is_negative_test'] = is_negative_test
+                    result['cdk_nag_warnings'] = layer_statuses.get('cdk_nag_warnings', [])
+                    result['installed_rules'] = layer_statuses.get('installed_rules', [])
+                    result['has_advisories'] = layer_statuses.get('cdk_nag_has_advisories', False) or len(layer_statuses.get('cdk_nag_warnings', [])) > 0
+                    if result['has_advisories']:
+                        result['advisory_layers'] = ['L1']
 
                     # For negative tests: test passing means deployment would fail
                     # For positive tests: test failing means deployment failed
@@ -646,6 +861,7 @@ class ComplianceReportGenerator:
                     else:
                         status = 'failed' if test_failed else 'passed'
 
+                    has_advisories = layer_statuses.get('cdk_nag_has_advisories', False) or len(layer_statuses.get('cdk_nag_warnings', [])) > 0
                     result = {
                         'config_name': config_name,
                         'framework': framework,
@@ -653,8 +869,12 @@ class ComplianceReportGenerator:
                         'network_mode': network_mode,
                         'status': status,
                         'duration': time_val,
+                        'has_advisories': has_advisories,
+                        'advisory_layers': ['L1'] if has_advisories else [],
+                        'cdk_nag_warnings': layer_statuses.get('cdk_nag_warnings', []),
+                        'installed_rules': layer_statuses.get('installed_rules', []),
                         'layers': {
-                            'cdk_nag': {'status': layer_statuses['cdk_nag'], 'packs_applied': 1 if layer_statuses['cdk_nag'] == 'passed' else 0},
+                            'cdk_nag': {'status': layer_statuses['cdk_nag'], 'packs_applied': 1 if layer_statuses['cdk_nag'] == 'passed' else 0, 'warnings': layer_statuses.get('cdk_nag_warnings', [])},
                             'framework_rules': {'status': layer_statuses['framework_rules']},
                             'cfn_guard': {'status': layer_statuses['cfn_guard']},
                             'aws_config': {'status': layer_statuses.get('aws_config', 'deployed')}
@@ -705,14 +925,21 @@ class ComplianceReportGenerator:
                 )
                 result.status = data['status']
                 result.duration = data['duration']
+                result.has_advisories = data.get('has_advisories', False)
+                result.advisory_layers = data.get('advisory_layers', [])
+                result.installed_rules = data.get('installed_rules', [])
+                result.aws_config_rules = data.get('aws_config_rules', [])
                 result.cdk_nag_status = data['layers']['cdk_nag']['status']
                 result.cdk_nag_packs_applied = data['layers']['cdk_nag'].get('packs_applied', 0)
                 result.cdk_nag_violations = data['layers']['cdk_nag'].get('violations', [])
+                result.cdk_nag_warnings = data['layers']['cdk_nag'].get('warnings', [])
                 result.framework_rules_status = data['layers']['framework_rules']['status']
                 result.framework_rules_violations = data['layers']['framework_rules'].get('violations', [])
+                result.framework_rules_advisories = data['layers']['framework_rules'].get('advisories', [])
                 result.framework_rules_known_gaps = data['layers']['framework_rules'].get('known_gaps', [])
                 result.cfn_guard_status = data['layers']['cfn_guard']['status']
                 result.cfn_guard_violations = data['layers']['cfn_guard'].get('violations', [])
+                result.cfn_guard_warnings = data['layers']['cfn_guard'].get('warnings', [])
                 result.aws_config_status = data['layers']['aws_config']['status']
                 result.error_message = data.get('error_message')
                 result.deployment_context = data.get('deployment_context')
@@ -740,7 +967,13 @@ class ComplianceReportGenerator:
 
                 # Extract runtime and network mode from config name
                 parts = config_name.split('_')
-                runtime = parts[0] if len(parts) > 0 else "unknown"
+                # Handle test prefixes: FAIL_, L1_, ADVISORY_, NEGATIVE_, etc.
+                # Find the actual runtime (EC2, FARGATE) in the parts
+                runtime = "unknown"
+                for part in parts:
+                    if part.upper() in ['EC2', 'FARGATE']:
+                        runtime = part.upper()
+                        break
                 network_mode = parts[-1] if len(parts) > 0 else "unknown"
 
                 current_test = ComplianceTestResult(config_name, framework, runtime, network_mode)
@@ -754,6 +987,14 @@ class ComplianceReportGenerator:
                     match = re.search(r'DEPLOYMENT_CONTEXT_JSON:\s*(\{.*\})', line)
                     if match:
                         current_test.deployment_context = match.group(1)
+
+                # Parse installed FrameworkRules (Layer 2)
+                if "✓ " in line and "(priority=" in line:
+                    # Format: "✓ HIPAA Rules (priority=100)"
+                    match = re.search(r'✓\s+(.+?)\s+\(priority=(\d+)\)', line)
+                    if match:
+                        rule_name = match.group(1).strip()
+                        current_test.installed_rules.append(rule_name)
 
                 # Parse Layer 1 (cdk-nag) results - new format
                 if "✅ Layer 1 (cdk-nag):" in line:
@@ -921,11 +1162,14 @@ class ComplianceReportGenerator:
 
     def generate_json_report(self) -> Path:
         """Generate JSON report with all test results."""
+        advisory_count = len([r for r in self.results if r.status == "passed" and r.has_advisories])
         report = {
             "metadata": {
                 "generated_at": datetime.now().isoformat(),
                 "total_tests": len(self.results),
                 "passed": len([r for r in self.results if r.status == "passed"]),
+                "passed_clean": len([r for r in self.results if r.status == "passed" and not r.has_advisories]),
+                "passed_with_advisories": advisory_count,
                 "failed": len([r for r in self.results if r.status == "failed"]),
                 "duration_total": sum(r.duration for r in self.results)
             },
@@ -940,29 +1184,37 @@ class ComplianceReportGenerator:
                 "network_mode": result.network_mode,
                 "status": result.status,
                 "duration": result.duration,
+                "has_advisories": result.has_advisories,
+                "advisory_layers": result.advisory_layers,
                 "is_negative_test": result.is_negative_test,
                 "rejection_layers": result.rejection_layers,
                 "layers": {
                     "cdk_nag": {
                         "status": result.cdk_nag_status,
                         "packs_applied": result.cdk_nag_packs_applied,
-                        "violations": result.cdk_nag_violations
+                        "violations": result.cdk_nag_violations,
+                        "warnings": result.cdk_nag_warnings
                     },
                     "framework_rules": {
                         "status": result.framework_rules_status,
                         "violations": result.framework_rules_violations,
+                        "advisories": result.framework_rules_advisories,
                         "known_gaps": result.framework_rules_known_gaps
                     },
                     "cfn_guard": {
                         "status": result.cfn_guard_status,
-                        "violations": result.cfn_guard_violations
+                        "violations": result.cfn_guard_violations,
+                        "warnings": result.cfn_guard_warnings
                     },
                     "aws_config": {
-                        "status": result.aws_config_status
+                        "status": result.aws_config_status,
+                        "rules": result.aws_config_rules
                     }
                 },
                 "error_message": result.error_message,
-                "deployment_context": result.deployment_context
+                "deployment_context": result.deployment_context,
+                "installed_rules": result.installed_rules,
+                "aws_config_rules": result.aws_config_rules
             })
 
         json_file = self.output_dir / "compliance-validation-results.json"
@@ -978,23 +1230,66 @@ class ComplianceReportGenerator:
         total_tests = len(self.results)
         passed = len([r for r in self.results if r.status == "passed"])
         failed = len([r for r in self.results if r.status == "failed"])
+        advisory = len([r for r in self.results if r.status == "passed" and r.has_advisories])
+        clean_passed = passed - advisory
         duration = sum(r.duration for r in self.results)
 
         # Layer statistics
         cdk_nag_passed = len([r for r in self.results if r.cdk_nag_status == "passed"])
+        cdk_nag_failed = len([r for r in self.results if r.cdk_nag_status == "failed"])
         cfn_guard_passed = len([r for r in self.results if r.cfn_guard_status == "passed"])
+        cfn_guard_failed = len([r for r in self.results if r.cfn_guard_status == "failed"])
         framework_rules_passed = len([r for r in self.results if r.framework_rules_status == "passed"])
+        framework_rules_failed = len([r for r in self.results if r.framework_rules_status == "failed"])
 
         # Framework breakdown
         frameworks = {}
+        runtimes = set()
         for result in self.results:
+            runtimes.add(result.runtime)
             if result.framework not in frameworks:
-                frameworks[result.framework] = {"passed": 0, "failed": 0, "total": 0}
+                frameworks[result.framework] = {"passed": 0, "failed": 0, "advisory": 0, "total": 0}
             frameworks[result.framework]["total"] += 1
             if result.status == "passed":
                 frameworks[result.framework]["passed"] += 1
+                if result.has_advisories:
+                    frameworks[result.framework]["advisory"] += 1
             else:
                 frameworks[result.framework]["failed"] += 1
+
+        # Generate JSON data for JavaScript
+        results_json = json.dumps([{
+            "config_name": r.config_name,
+            "framework": r.framework,
+            "runtime": r.runtime,
+            "network_mode": r.network_mode,
+            "status": r.status,
+            "duration": r.duration,
+            "has_advisories": r.has_advisories,
+            "advisory_layers": r.advisory_layers,
+            "is_negative_test": r.is_negative_test,
+            "rejection_layers": r.rejection_layers,
+            "cdk_nag_status": r.cdk_nag_status,
+            "cdk_nag_violations": r.cdk_nag_violations,
+            "cdk_nag_warnings": r.cdk_nag_warnings,
+            "framework_rules_status": r.framework_rules_status,
+            "framework_rules_violations": r.framework_rules_violations,
+            "framework_rules_advisories": r.framework_rules_advisories,
+            "framework_rules_known_gaps": r.framework_rules_known_gaps,
+            "cfn_guard_status": r.cfn_guard_status,
+            "cfn_guard_violations": r.cfn_guard_violations,
+            "cfn_guard_warnings": r.cfn_guard_warnings,
+            "aws_config_status": r.aws_config_status,
+            "error_message": r.error_message,
+            "deployment_context": r.deployment_context,
+            "cfn_template_json": r.cfn_template_json,
+            "cfn_template_yaml": r.cfn_template_yaml,
+            "installed_rules": r.installed_rules,
+            "aws_config_rules": r.aws_config_rules
+        } for r in self.results])
+
+        frameworks_json = json.dumps(list(frameworks.keys()))
+        runtimes_json = json.dumps(list(runtimes))
 
         html_content = f"""<!DOCTYPE html>
 <html>
@@ -1002,64 +1297,121 @@ class ComplianceReportGenerator:
     <title>CloudForge Compliance Validation Dashboard</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; }}
-        .container {{ max-width: 1400px; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); overflow: hidden; }}
-        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }}
-        .header h1 {{ font-size: 2.5em; margin-bottom: 10px; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }}
+        .container {{ max-width: 1600px; margin: 0 auto; }}
+        .header {{ text-align: center; color: white; padding: 30px 20px; }}
+        .header h1 {{ font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }}
         .header p {{ opacity: 0.9; font-size: 1.1em; }}
-        .version-selector {{ text-align: center; margin: 15px 0; }}
-        .version-dropdown {{ display: inline-block; background: rgba(255,255,255,0.2); border-radius: 25px; padding: 5px; }}
-        .version-dropdown select {{ background: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 20px; cursor: pointer; color: #667eea; font-weight: 600; min-width: 200px; }}
-        .version-dropdown select:focus {{ outline: none; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3); }}
-        .back-link {{ display: inline-block; margin: 15px 0 0 30px; padding: 10px 20px; background: rgba(255,255,255,0.2); color: white; text-decoration: none; border-radius: 6px; font-weight: 500; transition: background 0.3s ease; }}
+        .back-link {{ display: inline-block; margin-bottom: 20px; color: white; text-decoration: none; font-weight: 500; padding: 10px 20px; background: rgba(255,255,255,0.2); border-radius: 6px; }}
         .back-link:hover {{ background: rgba(255,255,255,0.3); }}
+        .content {{ background: white; border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin-bottom: 30px; }}
 
-        .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; padding: 30px; background: #f8f9fa; }}
-        .stat-card {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
-        .stat-number {{ font-size: 2.5em; font-weight: bold; }}
-        .stat-number.success {{ color: #27ae60; }}
-        .stat-number.warning {{ color: #f39c12; }}
-        .stat-number.danger {{ color: #e74c3c; }}
-        .stat-label {{ color: #7f8c8d; margin-top: 5px; }}
+        .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin: 30px 0; }}
+        .stat-card {{ background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border-left: 4px solid #667eea; transition: transform 0.2s; }}
+        .stat-card:hover {{ transform: translateY(-2px); }}
+        .stat-card.success {{ border-left-color: #27ae60; }}
+        .stat-card.advisory {{ border-left-color: #f39c12; }}
+        .stat-card.failed {{ border-left-color: #e74c3c; }}
+        .stat-number {{ font-size: 2.5em; font-weight: bold; color: #667eea; margin-bottom: 5px; }}
+        .stat-card.success .stat-number {{ color: #27ae60; }}
+        .stat-card.advisory .stat-number {{ color: #f39c12; }}
+        .stat-card.failed .stat-number {{ color: #e74c3c; }}
+        .stat-label {{ color: #7f8c8d; font-size: 0.9em; }}
 
-        .section {{ padding: 30px; }}
+        .section {{ margin: 30px 0; }}
         .section h2 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; margin-bottom: 20px; }}
 
         .layer-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }}
-        .layer-card {{ background: #ecf0f1; padding: 20px; border-radius: 8px; border-left: 5px solid #3498db; }}
+        .layer-card {{ background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 5px solid #3498db; }}
         .layer-card h3 {{ color: #2c3e50; margin-bottom: 10px; }}
         .layer-stats {{ font-size: 1.5em; font-weight: bold; color: #27ae60; }}
-        .layer-badge {{ display: inline-block; padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; margin: 5px; }}
+        .layer-badge {{ display: inline-block; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }}
         .badge-layer1 {{ background: #3498db; color: white; }}
         .badge-layer2 {{ background: #2ecc71; color: white; }}
         .badge-layer3 {{ background: #f39c12; color: white; }}
         .badge-layer4 {{ background: #9b59b6; color: white; }}
 
-        .results-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-        .results-table th {{ background: #34495e; color: white; padding: 15px; text-align: left; position: sticky; top: 0; }}
-        .results-table td {{ padding: 12px; border-bottom: 1px solid #ecf0f1; }}
-        .results-table tr:hover {{ background: #f8f9fa; }}
-        .status-badge {{ display: inline-block; padding: 5px 10px; border-radius: 3px; font-size: 11px; font-weight: bold; }}
+        /* Filter Controls */
+        .filter-controls {{ display: flex; flex-wrap: wrap; gap: 15px; margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; align-items: center; }}
+        .filter-group {{ display: flex; flex-direction: column; gap: 5px; }}
+        .filter-group label {{ font-size: 0.85em; font-weight: 600; color: #7f8c8d; text-transform: uppercase; }}
+        .filter-group select, .filter-group input {{ padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95em; min-width: 150px; }}
+        .filter-group select:focus, .filter-group input:focus {{ outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }}
+        .filter-buttons {{ display: flex; gap: 10px; margin-left: auto; }}
+        .filter-btn {{ padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s; }}
+        .filter-btn.primary {{ background: #667eea; color: white; }}
+        .filter-btn.primary:hover {{ background: #5a6fd6; }}
+        .filter-btn.secondary {{ background: #e0e0e0; color: #333; }}
+        .filter-btn.secondary:hover {{ background: #d0d0d0; }}
+
+        /* Results Table */
+        .results-table-container {{ overflow-x: auto; margin-top: 20px; }}
+        .results-table {{ width: 100%; border-collapse: collapse; font-size: 0.9em; }}
+        .results-table th {{ background: #34495e; color: white; padding: 14px 10px; text-align: left; font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; position: sticky; top: 0; }}
+        .results-table th:hover {{ background: #3d566e; }}
+        .results-table th .sort-icon {{ margin-left: 6px; opacity: 0.5; }}
+        .results-table th.sorted .sort-icon {{ opacity: 1; }}
+        .results-table td {{ padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; }}
+        .results-table tbody tr:hover {{ background: #f8f9fa; }}
+        .results-table tbody tr.status-passed {{ border-left: 4px solid #27ae60; }}
+        .results-table tbody tr.status-advisory {{ border-left: 4px solid #f39c12; }}
+        .results-table tbody tr.status-failed {{ border-left: 4px solid #e74c3c; }}
+
+        /* Status Badges */
+        .status-badge {{ display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600; white-space: nowrap; }}
         .status-passed {{ background: #d4edda; color: #155724; }}
+        .status-advisory {{ background: #fff3cd; color: #856404; }}
         .status-failed {{ background: #f8d7da; color: #721c24; }}
         .status-blocked {{ background: #f5c6cb; color: #721c24; }}
         .status-skipped {{ background: #fff3cd; color: #856404; }}
+        .status-skipped-no-template {{ background: #e2e3e5; color: #383d41; }}
         .status-deployed {{ background: #d1ecf1; color: #0c5460; }}
         .status-unknown {{ background: #e2e3e5; color: #383d41; }}
 
-        .config-name {{ cursor: pointer; color: #3498db; text-decoration: underline; }}
-        .config-name:hover {{ color: #2980b9; }}
-        .template-link {{ color: #27ae60; text-decoration: none; font-weight: 600; font-size: 11px; padding: 2px 6px; background: #d5f5e3; border-radius: 3px; }}
+        /* Advisory layer badges */
+        .advisory-layers {{ display: inline-flex; gap: 3px; margin-left: 5px; }}
+        .layer-badge-small {{ display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 0.65em; font-weight: 600; }}
+        .layer-badge-small.l1 {{ background: #3498db; color: white; }}
+        .layer-badge-small.l2 {{ background: #2ecc71; color: white; }}
+        .layer-badge-small.l3 {{ background: #f39c12; color: white; }}
+
+        /* Framework & Runtime Badges */
+        .framework-badge {{ padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }}
+        .framework-badge.soc2 {{ background: #e3f2fd; color: #1565c0; }}
+        .framework-badge.hipaa {{ background: #fce4ec; color: #c2185b; }}
+        .framework-badge.pci {{ background: #fff3e0; color: #ef6c00; }}
+        .framework-badge.gdpr {{ background: #e8f5e9; color: #2e7d32; }}
+        .framework-badge.fedramp {{ background: #f3e5f5; color: #7b1fa2; }}
+        .runtime-badge {{ padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 500; }}
+        .runtime-badge.ec2 {{ background: #e3f2fd; color: #1565c0; }}
+        .runtime-badge.fargate {{ background: #fce4ec; color: #c2185b; }}
+
+        .config-name {{ cursor: pointer; color: #3498db; font-family: monospace; font-size: 0.85em; }}
+        .config-name:hover {{ text-decoration: underline; }}
+        .neg-badge {{ display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; font-weight: 600; background: #e8daef; color: #6c3483; margin-left: 5px; }}
+        .violations-count {{ color: #e74c3c; font-size: 0.75em; margin-left: 5px; }}
+        .template-link {{ color: #27ae60; text-decoration: none; font-weight: 600; font-size: 0.75em; padding: 2px 6px; background: #d5f5e3; border-radius: 3px; margin: 0 2px; }}
         .template-link:hover {{ background: #abebc6; color: #1e8449; }}
+
         .detail-row {{ display: none; background: #f8f9fa; }}
         .detail-row.expanded {{ display: table-row; }}
-        .detail-content {{ padding: 15px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-word; background: #2c3e50; color: #ecf0f1; border-radius: 5px; max-height: 300px; overflow-y: auto; }}
+        .detail-content {{ padding: 15px; font-family: monospace; font-size: 0.8em; white-space: pre-wrap; word-break: break-word; background: #1e1e1e; color: #d4d4d4; border-radius: 6px; max-height: 300px; overflow-y: auto; }}
 
-        .framework-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }}
-        .framework-card {{ background: white; border: 2px solid #ecf0f1; border-radius: 8px; padding: 15px; text-align: center; }}
+        .framework-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin: 20px 0; }}
+        .framework-card {{ background: #f8f9fa; border: 2px solid #ecf0f1; border-radius: 8px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s; }}
+        .framework-card:hover {{ border-color: #667eea; transform: translateY(-2px); }}
+        .framework-card.active {{ border-color: #667eea; background: #f0f4ff; }}
         .framework-name {{ font-weight: bold; color: #2c3e50; margin-bottom: 10px; }}
         .framework-stats {{ font-size: 1.2em; color: #27ae60; }}
 
+        /* Pagination */
+        .pagination {{ display: flex; justify-content: center; gap: 5px; margin-top: 20px; }}
+        .pagination button {{ padding: 8px 14px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }}
+        .pagination button:hover {{ background: #f0f0f0; }}
+        .pagination button.active {{ background: #667eea; color: white; border-color: #667eea; }}
+        .pagination button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+
+        .result-count {{ color: #7f8c8d; font-size: 0.9em; margin-bottom: 15px; }}
         .chart-container {{ margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; }}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1071,299 +1423,625 @@ class ComplianceReportGenerator:
             <h1>🔒 Multi-Layer Compliance Validation Dashboard</h1>
             <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
             <p style="margin-top: 10px;">Defense-in-depth validation across 4 independent layers</p>
-            <div class="version-selector">
-                <div class="version-dropdown">
-                    <select id="report-version" onchange="navigateToVersion(this.value)">
-                        <option value="" selected>📅 Latest Reports</option>
-                        <option value="../history/">📁 Browse History...</option>
-                    </select>
-                </div>
-            </div>
         </div>
 
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number success">{passed}</div>
-                <div class="stat-label">Tests Passed</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number danger">{failed}</div>
-                <div class="stat-label">Tests Failed</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{total_tests}</div>
-                <div class="stat-label">Total Tests</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{duration:.1f}s</div>
-                <div class="stat-label">Duration</div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>📊 Multi-Layer Validation Status</h2>
-            <div class="layer-grid">
-                <div class="layer-card">
-                    <span class="layer-badge badge-layer1">LAYER 1</span>
-                    <h3>cdk-nag</h3>
-                    <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Construct-level validation</p>
-                    <div class="layer-stats">{cdk_nag_passed}/{total_tests}</div>
-                    <p style="font-size: 12px; color: #7f8c8d;">configurations validated</p>
-                    <a href="cdk-nag/" style="display: inline-block; margin-top: 10px; padding: 5px 10px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; font-size: 11px;">📄 NagReports</a>
+        <div class="content">
+            <div class="stats">
+                <div class="stat-card success">
+                    <div class="stat-number">{clean_passed}</div>
+                    <div class="stat-label">Tests Passed</div>
                 </div>
-
-                <div class="layer-card">
-                    <span class="layer-badge badge-layer2">LAYER 2</span>
-                    <h3>FrameworkRules</h3>
-                    <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Business logic validation</p>
-                    <div class="layer-stats">{framework_rules_passed}/{total_tests}</div>
-                    <p style="font-size: 12px; color: #7f8c8d;">configurations validated</p>
+                <div class="stat-card advisory">
+                    <div class="stat-number">{advisory}</div>
+                    <div class="stat-label">With Advisories</div>
                 </div>
-
-                <div class="layer-card">
-                    <span class="layer-badge badge-layer3">LAYER 3</span>
-                    <h3>cfn-guard</h3>
-                    <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Template-level policy</p>
-                    <div class="layer-stats">{cfn_guard_passed}/{total_tests}</div>
-                    <p style="font-size: 12px; color: #7f8c8d;">configurations validated</p>
+                <div class="stat-card failed">
+                    <div class="stat-number">{failed}</div>
+                    <div class="stat-label">Tests Failed</div>
                 </div>
-
-                <div class="layer-card">
-                    <span class="layer-badge badge-layer4">LAYER 4</span>
-                    <h3>AWS Config</h3>
-                    <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Runtime monitoring</p>
-                    <div class="layer-stats">140+</div>
-                    <p style="font-size: 12px; color: #7f8c8d;">rules deployed at runtime</p>
+                <div class="stat-card">
+                    <div class="stat-number">{total_tests}</div>
+                    <div class="stat-label">Total Tests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{duration:.1f}s</div>
+                    <div class="stat-label">Duration</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{(passed/total_tests*100) if total_tests > 0 else 0:.0f}%</div>
+                    <div class="stat-label">Pass Rate</div>
                 </div>
             </div>
-        </div>
 
-        <div class="section">
-            <h2>🎯 Framework Breakdown</h2>
-            <div class="framework-grid">"""
+            <div class="section">
+                <h2>📊 Multi-Layer Validation Status</h2>
+                <div class="layer-grid">
+                    <div class="layer-card">
+                        <span class="layer-badge badge-layer1">LAYER 1</span>
+                        <h3>cdk-nag</h3>
+                        <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Construct-level validation</p>
+                        <div class="layer-stats">{cdk_nag_passed}/{total_tests}</div>
+                        <p style="font-size: 12px; color: #7f8c8d;">configurations validated</p>
+                        <a href="cdk-nag/" style="display: inline-block; margin-top: 10px; padding: 5px 10px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; font-size: 11px;">📄 NagReports</a>
+                    </div>
+
+                    <div class="layer-card">
+                        <span class="layer-badge badge-layer2">LAYER 2</span>
+                        <h3>FrameworkRules</h3>
+                        <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Business logic validation</p>
+                        <div class="layer-stats">{framework_rules_passed}/{total_tests}</div>
+                        <p style="font-size: 12px; color: #7f8c8d;">configurations validated</p>
+                    </div>
+
+                    <div class="layer-card">
+                        <span class="layer-badge badge-layer3">LAYER 3</span>
+                        <h3>cfn-guard</h3>
+                        <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Template-level policy</p>
+                        <div class="layer-stats">{cfn_guard_passed}/{total_tests}</div>
+                        <p style="font-size: 12px; color: #7f8c8d;">configurations validated</p>
+                    </div>
+
+                    <div class="layer-card">
+                        <span class="layer-badge badge-layer4">LAYER 4</span>
+                        <h3>AWS Config</h3>
+                        <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Runtime monitoring</p>
+                        <div class="layer-stats">140+</div>
+                        <p style="font-size: 12px; color: #7f8c8d;">rules deployed at runtime</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🎯 Framework Breakdown</h2>
+                <div class="framework-grid" id="framework-grid">"""
 
         for framework, stats in sorted(frameworks.items()):
             pass_rate = (stats['passed'] / stats['total'] * 100) if stats['total'] > 0 else 0
+            framework_class = framework.lower().replace('-', '').replace('_', '')
             html_content += f"""
-                <div class="framework-card">
-                    <div class="framework-name">{framework}</div>
-                    <div class="framework-stats">{stats['passed']}/{stats['total']}</div>
-                    <div style="margin-top: 5px; font-size: 12px; color: #7f8c8d;">{pass_rate:.0f}% pass rate</div>
-                </div>"""
-
-        html_content += """
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>📋 Detailed Test Results</h2>
-            <div style="max-height: 600px; overflow-y: auto;">
-                <table class="results-table">
-                    <thead>
-                        <tr>
-                            <th>Configuration</th>
-                            <th>Framework</th>
-                            <th>Runtime</th>
-                            <th>cdk-nag</th>
-                            <th>FrameworkRules</th>
-                            <th>cfn-guard</th>
-                            <th>AWS Config</th>
-                            <th>Status</th>
-                            <th>Duration</th>
-                            <th>Template</th>
-                        </tr>
-                    </thead>
-                    <tbody>"""
-
-        for idx, result in enumerate(sorted(self.results, key=lambda r: (r.framework, r.runtime, r.network_mode))):
-            status_class = "status-passed" if result.status == "passed" else "status-failed"
-
-            # Sanitize status strings for CSS class names (replace spaces and special chars with hyphens)
-            def sanitize_status(status: str) -> str:
-                return status.replace(' ', '-').replace('(', '').replace(')', '').replace('/', '-').lower()
-
-            cdk_nag_class = f"status-{sanitize_status(result.cdk_nag_status)}"
-            fr_class = f"status-{sanitize_status(result.framework_rules_status)}"
-            cfg_class = f"status-{sanitize_status(result.cfn_guard_status)}"
-            if result.aws_config_status and result.aws_config_status.split()[0].isdigit():
-                aws_config_class = "status-deployed"
-            else:
-                aws_config_class = f"status-{sanitize_status(result.aws_config_status.split()[0])}"
-
-            # Build detail content with deployment context, violations, and error message
-            detail_parts = []
-
-            # Add deployment context
-            if result.deployment_context:
-                context_formatted = result.deployment_context.replace(', ', ',\n  ').replace('{', '{\n  ').replace('}', '\n}')
-                detail_parts.append(f"📋 DEPLOYMENT CONTEXT:\n{context_formatted}")
-
-            # Add rejection layers for negative tests
-            if result.is_negative_test and result.rejection_layers:
-                detail_parts.append(f"\n🔒 REJECTION LAYERS: {result.rejection_layers}")
-
-            # Add Layer 1 (cdk-nag) violations
-            if result.cdk_nag_violations:
-                violations_text = "\n".join(f"  • {v}" for v in result.cdk_nag_violations)
-                detail_parts.append(f"\n❌ LAYER 1 (cdk-nag) VIOLATIONS:\n{violations_text}")
-
-            # Add Layer 2 (FrameworkRules) violations
-            if result.framework_rules_violations:
-                violations_text = "\n".join(f"  • {v}" for v in result.framework_rules_violations)
-                detail_parts.append(f"\n❌ LAYER 2 (FrameworkRules) VIOLATIONS:\n{violations_text}")
-
-            # Add Layer 2 known gaps
-            if result.framework_rules_known_gaps:
-                gaps_text = "\n".join(f"  ⚠ {g}" for g in result.framework_rules_known_gaps)
-                detail_parts.append(f"\n⚠️  KNOWN GAPS:\n{gaps_text}")
-
-            # Add Layer 3 (cfn-guard) violations
-            if result.cfn_guard_violations:
-                violations_text = "\n".join(f"  • {v}" for v in result.cfn_guard_violations)
-                detail_parts.append(f"\n❌ LAYER 3 (cfn-guard) VIOLATIONS:\n{violations_text}")
-
-            # Add error message (from JUnit failure)
-            if result.error_message:
-                detail_parts.append(f"\n📄 TEST ERROR MESSAGE:\n{result.error_message}")
-
-            detail_content = html_module.escape('\n\n'.join(detail_parts) if detail_parts else "No additional details available")
-
-            # Show negative test indicator
-            neg_test_badge = '<span class="status-badge" style="background: #e8daef; color: #6c3483; margin-left: 5px;">NEG</span>' if result.is_negative_test else ''
-
-            # Format config name with violations count if any
-            violations_count = len(result.cdk_nag_violations) + len(result.framework_rules_violations) + len(result.cfn_guard_violations)
-            violations_indicator = f' <span style="color: #e74c3c; font-size: 10px;">({violations_count} violations)</span>' if violations_count > 0 else ''
-
-            # Generate template download links
-            template_links = []
-            if result.cfn_template_json:
-                # Extract filename from path for relative link
-                json_filename = Path(result.cfn_template_json).name
-                template_links.append(f'<a href="cfn-templates/{json_filename}" download class="template-link" title="Download JSON">JSON</a>')
-            if result.cfn_template_yaml:
-                yaml_filename = Path(result.cfn_template_yaml).name
-                template_links.append(f'<a href="cfn-templates/{yaml_filename}" download class="template-link" title="Download YAML">YAML</a>')
-            template_cell = ' | '.join(template_links) if template_links else '<span style="color: #95a5a6;">-</span>'
-
-            html_content += f"""
-                        <tr>
-                            <td style="font-family: monospace; font-size: 11px;"><span class="config-name" onclick="toggleDetail({idx})">&#9658; {result.config_name}</span>{neg_test_badge}{violations_indicator}</td>
-                            <td><strong>{result.framework}</strong></td>
-                            <td>{result.runtime}</td>
-                            <td><span class="status-badge {cdk_nag_class}">{result.cdk_nag_status}</span></td>
-                            <td><span class="status-badge {fr_class}">{result.framework_rules_status}</span></td>
-                            <td><span class="status-badge {cfg_class}">{result.cfn_guard_status}</span></td>
-                            <td><span class="status-badge {aws_config_class}">{result.aws_config_status}</span></td>
-                            <td><span class="status-badge {status_class}">{result.status}</span></td>
-                            <td>{result.duration:.2f}s</td>
-                            <td style="text-align: center;">{template_cell}</td>
-                        </tr>
-                        <tr class="detail-row" id="detail-{idx}">
-                            <td colspan="10"><div class="detail-content">{detail_content}</div></td>
-                        </tr>"""
+                    <div class="framework-card" onclick="filterByFramework('{framework}')" data-framework="{framework}">
+                        <div class="framework-name">{framework}</div>
+                        <div class="framework-stats">{stats['passed']}/{stats['total']}</div>
+                        <div style="margin-top: 5px; font-size: 12px; color: #7f8c8d;">{pass_rate:.0f}% pass rate</div>
+                    </div>"""
 
         html_content += f"""
-                    </tbody>
-                </table>
+                </div>
             </div>
-        </div>
 
-        <div class="section">
-            <h2>📈 Validation Charts</h2>
-            <div class="chart-container">
-                <canvas id="layerChart" width="400" height="200"></canvas>
+            <div class="section">
+                <h2>📋 Detailed Test Results</h2>
+
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label>Framework</label>
+                        <select id="filter-framework">
+                            <option value="">All Frameworks</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Runtime</label>
+                        <select id="filter-runtime">
+                            <option value="">All Runtimes</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Status</label>
+                        <select id="filter-status">
+                            <option value="">All Statuses</option>
+                            <option value="passed">✅ Passed (clean)</option>
+                            <option value="advisory">⚠️ Advisory</option>
+                            <option value="failed">❌ Failed</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Layer 1 (cdk-nag)</label>
+                        <select id="filter-layer1">
+                            <option value="">All</option>
+                            <option value="passed">✅ Passed</option>
+                            <option value="failed">❌ Failed</option>
+                            <option value="skipped">⏭️ Skipped</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Layer 2 (Rules)</label>
+                        <select id="filter-layer2">
+                            <option value="">All</option>
+                            <option value="passed">✅ Passed</option>
+                            <option value="failed">❌ Failed</option>
+                            <option value="skipped">⏭️ Skipped</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Search</label>
+                        <input type="text" id="filter-search" placeholder="Search configs...">
+                    </div>
+                    <div class="filter-buttons">
+                        <button class="filter-btn secondary" onclick="resetFilters()">Reset</button>
+                        <button class="filter-btn primary" onclick="applyFilters()">Apply</button>
+                    </div>
+                </div>
+
+                <div class="result-count" id="result-count"></div>
+                <div class="results-table-container">
+                    <table class="results-table" id="results-table">
+                        <thead>
+                            <tr>
+                                <th class="sorted" onclick="handleSort('config_name')">Configuration <span class="sort-icon">↕</span></th>
+                                <th onclick="handleSort('framework')">Framework <span class="sort-icon">↕</span></th>
+                                <th onclick="handleSort('runtime')">Runtime <span class="sort-icon">↕</span></th>
+                                <th onclick="handleSort('cdk_nag_status')">cdk-nag <span class="sort-icon">↕</span></th>
+                                <th onclick="handleSort('framework_rules_status')">FrameworkRules <span class="sort-icon">↕</span></th>
+                                <th onclick="handleSort('cfn_guard_status')">cfn-guard <span class="sort-icon">↕</span></th>
+                                <th onclick="handleSort('aws_config_status')">AWS Config <span class="sort-icon">↕</span></th>
+                                <th onclick="handleSort('status')">Status <span class="sort-icon">↕</span></th>
+                                <th onclick="handleSort('duration')">Duration <span class="sort-icon">↕</span></th>
+                                <th>Template</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="pagination"></div>
+            </div>
+
+            <div class="section">
+                <h2>📈 Validation Charts</h2>
+                <div class="chart-container">
+                    <canvas id="layerChart" width="400" height="200"></canvas>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Navigate to selected version
-        function navigateToVersion(path) {{
-            if (path) {{
-                window.location.href = path;
-            }}
+        // Test results data
+        const allTests = {results_json};
+        const frameworks = {frameworks_json};
+        const runtimes = {runtimes_json};
+
+        let filteredTests = [...allTests];
+        let currentSort = {{ column: 'config_name', direction: 'asc' }};
+        let currentPage = 1;
+        const testsPerPage = 25;
+        let expandedRows = new Set();
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {{
+            populateFilters();
+            applyFilters();
+            initChart();
+        }});
+
+        function populateFilters() {{
+            const frameworkSelect = document.getElementById('filter-framework');
+            frameworks.forEach(f => {{
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                frameworkSelect.appendChild(opt);
+            }});
+
+            const runtimeSelect = document.getElementById('filter-runtime');
+            runtimes.forEach(r => {{
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.textContent = r;
+                runtimeSelect.appendChild(opt);
+            }});
         }}
 
-        // Load historical report dates dynamically
-        async function loadHistoricalDates() {{
-            try {{
-                const response = await fetch('../history/index.html');
-                if (!response.ok) return;
-
-                const html = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-
-                // Extract dates from archive links (format: YYYY-MM-DD)
-                const dateLinks = doc.querySelectorAll('.date-list a');
-                const dates = Array.from(dateLinks).map(link => {{
-                    const href = link.getAttribute('href');
-                    const match = href.match(/(\\d{{4}}-\\d{{2}}-\\d{{2}})/);
-                    return match ? match[1] : null;
-                }}).filter(date => date !== null);
-
-                // Add dates to dropdown
-                const select = document.getElementById('report-version');
-                dates.forEach(date => {{
-                    const option = document.createElement('option');
-                    option.value = `../history/${{date}}/validation/compliance-validation-dashboard.html`;
-                    option.textContent = `📅 ${{date}}`;
-                    select.appendChild(option);
-                }});
-            }} catch (err) {{
-                console.log('No historical reports available yet');
-            }}
+        function filterByFramework(framework) {{
+            document.getElementById('filter-framework').value = framework;
+            // Update framework cards
+            document.querySelectorAll('.framework-card').forEach(card => {{
+                card.classList.toggle('active', card.dataset.framework === framework);
+            }});
+            applyFilters();
         }}
 
-        // Load historical dates on page load
-        loadHistoricalDates();
+        function applyFilters() {{
+            const framework = document.getElementById('filter-framework').value;
+            const runtime = document.getElementById('filter-runtime').value;
+            const status = document.getElementById('filter-status').value;
+            const layer1 = document.getElementById('filter-layer1').value;
+            const layer2 = document.getElementById('filter-layer2').value;
+            const search = document.getElementById('filter-search').value.toLowerCase();
 
-        // Toggle detail row visibility
+            filteredTests = allTests.filter(test => {{
+                if (framework && test.framework !== framework) return false;
+                if (runtime && test.runtime !== runtime) return false;
+                // Handle status filter with advisory distinction
+                if (status) {{
+                    if (status === 'passed') {{
+                        // Only clean passes (not advisory)
+                        if (test.status !== 'passed' || test.has_advisories) return false;
+                    }} else if (status === 'advisory') {{
+                        // Only passed with advisories
+                        if (test.status !== 'passed' || !test.has_advisories) return false;
+                    }} else if (status === 'failed') {{
+                        if (test.status !== 'failed') return false;
+                    }}
+                }}
+                if (layer1 && !test.cdk_nag_status.includes(layer1)) return false;
+                if (layer2 && !test.framework_rules_status.includes(layer2)) return false;
+                if (search && !test.config_name.toLowerCase().includes(search)) return false;
+                return true;
+            }});
+
+            sortTests();
+            currentPage = 1;
+            displayResults();
+        }}
+
+        function resetFilters() {{
+            document.getElementById('filter-framework').value = '';
+            document.getElementById('filter-runtime').value = '';
+            document.getElementById('filter-status').value = '';
+            document.getElementById('filter-layer1').value = '';
+            document.getElementById('filter-layer2').value = '';
+            document.getElementById('filter-search').value = '';
+            document.querySelectorAll('.framework-card').forEach(card => card.classList.remove('active'));
+            applyFilters();
+        }}
+
+        function sortTests() {{
+            const {{ column, direction }} = currentSort;
+            const modifier = direction === 'asc' ? 1 : -1;
+
+            filteredTests.sort((a, b) => {{
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (column === 'duration') {{
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                }}
+
+                if (column === 'status') {{
+                    const statusOrder = {{ failed: 0, passed: 1 }};
+                    aVal = statusOrder[aVal] ?? 2;
+                    bVal = statusOrder[bVal] ?? 2;
+                }}
+
+                if (aVal < bVal) return -1 * modifier;
+                if (aVal > bVal) return 1 * modifier;
+                return 0;
+            }});
+        }}
+
+        function handleSort(column) {{
+            // Update header styling
+            document.querySelectorAll('.results-table th').forEach(th => th.classList.remove('sorted'));
+            event.target.closest('th').classList.add('sorted');
+
+            if (currentSort.column === column) {{
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            }} else {{
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }}
+            sortTests();
+            displayResults();
+        }}
+
+        function displayResults() {{
+            const start = (currentPage - 1) * testsPerPage;
+            const end = start + testsPerPage;
+            const pageTests = filteredTests.slice(start, end);
+
+            document.getElementById('result-count').textContent =
+                `Showing ${{start + 1}}-${{Math.min(end, filteredTests.length)}} of ${{filteredTests.length}} tests`;
+
+            const tbody = document.getElementById('results-tbody');
+            tbody.innerHTML = '';
+
+            pageTests.forEach((test, idx) => {{
+                const globalIdx = start + idx;
+                const row = document.createElement('tr');
+                // Determine row class: passed (clean), advisory (passed with warnings), or failed
+                let rowClass = 'status-failed';
+                if (test.status === 'passed') {{
+                    rowClass = test.has_advisories ? 'status-advisory' : 'status-passed';
+                }}
+                row.className = rowClass;
+
+                const frameworkClass = test.framework.toLowerCase().replace(/[^a-z]/g, '');
+                const runtimeClass = test.runtime.toLowerCase();
+                const violationsCount = (test.cdk_nag_violations?.length || 0) +
+                                        (test.framework_rules_violations?.length || 0) +
+                                        (test.cfn_guard_violations?.length || 0);
+                const warningsCount = (test.cdk_nag_warnings?.length || 0) +
+                                      (test.framework_rules_advisories?.length || 0) +
+                                      (test.cfn_guard_warnings?.length || 0);
+
+                row.innerHTML = `
+                    <td>
+                        <span class="config-name" onclick="toggleDetail(${{globalIdx}})">▶ ${{test.config_name}}</span>
+                        ${{test.is_negative_test ? '<span class="neg-badge">NEG</span>' : ''}}
+                        ${{violationsCount > 0 ? `<span class="violations-count">(${{violationsCount}} violations)</span>` : ''}}
+                        ${{warningsCount > 0 ? `<span class="violations-count" style="color:#f39c12;">(${{warningsCount}} advisories)</span>` : ''}}
+                    </td>
+                    <td><span class="framework-badge ${{frameworkClass}}">${{test.framework}}</span></td>
+                    <td><span class="runtime-badge ${{runtimeClass}}">${{test.runtime}}</span></td>
+                    <td>${{getStatusBadge(test.cdk_nag_status)}}</td>
+                    <td>${{getStatusBadge(test.framework_rules_status)}}</td>
+                    <td>${{getStatusBadge(test.cfn_guard_status)}}</td>
+                    <td>${{getStatusBadge(test.aws_config_status)}}</td>
+                    <td>${{getOverallStatusBadge(test)}}</td>
+                    <td>${{test.duration.toFixed(2)}}s</td>
+                    <td>${{getTemplateLinks(test)}}</td>
+                `;
+                tbody.appendChild(row);
+
+                // Detail row
+                const detailRow = document.createElement('tr');
+                detailRow.className = 'detail-row' + (expandedRows.has(globalIdx) ? ' expanded' : '');
+                detailRow.id = 'detail-' + globalIdx;
+                detailRow.innerHTML = `<td colspan="10"><div class="detail-content">${{getDetailContent(test)}}</div></td>`;
+                tbody.appendChild(detailRow);
+            }});
+
+            displayPagination();
+        }}
+
+        function getStatusBadge(status) {{
+            if (!status) return '<span class="status-badge status-unknown">unknown</span>';
+            const normalized = status.replace(/[\\s()]/g, '-').toLowerCase();
+            let icon = '';
+            if (status.includes('passed')) icon = '✅';
+            else if (status.includes('failed')) icon = '❌';
+            else if (status.includes('skipped')) icon = '⏭️';
+            else if (status.includes('deployed') || /^\\d+/.test(status)) icon = '📋';
+            return `<span class="status-badge status-${{normalized}}">${{icon}} ${{status}}</span>`;
+        }}
+
+        function getOverallStatusBadge(test) {{
+            if (test.status === 'failed') {{
+                return '<span class="status-badge status-failed">❌ failed</span>';
+            }}
+            if (test.has_advisories) {{
+                // Build advisory layers badges
+                let layerBadges = '';
+                if (test.advisory_layers && test.advisory_layers.length > 0) {{
+                    layerBadges = '<span class="advisory-layers">' +
+                        test.advisory_layers.map(l => `<span class="layer-badge-small ${{l.toLowerCase()}}">${{l}}</span>`).join('') +
+                        '</span>';
+                }}
+                return `<span class="status-badge status-advisory">⚠️ advisory</span>${{layerBadges}}`;
+            }}
+            return '<span class="status-badge status-passed">✅ passed</span>';
+        }}
+
+        function getTemplateLinks(test) {{
+            const links = [];
+            if (test.cfn_template_json) {{
+                const filename = test.cfn_template_json.split('/').pop();
+                links.push(`<a href="cfn-templates/${{filename}}" download class="template-link">JSON</a>`);
+            }}
+            if (test.cfn_template_yaml) {{
+                const filename = test.cfn_template_yaml.split('/').pop();
+                links.push(`<a href="cfn-templates/${{filename}}" download class="template-link">YAML</a>`);
+            }}
+            return links.length > 0 ? links.join(' ') : '-';
+        }}
+
+        function getDetailContent(test) {{
+            const parts = [];
+
+            // Deployment context (collapsible summary)
+            if (test.deployment_context) {{
+                try {{
+                    const ctx = JSON.parse(test.deployment_context);
+                    parts.push('📋 DEPLOYMENT CONTEXT:\\n' + JSON.stringify(ctx, null, 2));
+                }} catch {{
+                    parts.push('📋 DEPLOYMENT CONTEXT:\\n' + test.deployment_context);
+                }}
+            }}
+
+            // Negative test info
+            if (test.is_negative_test && test.rejection_layers) {{
+                parts.push('\\n🔒 REJECTION LAYERS: ' + test.rejection_layers);
+            }}
+
+            // ═══════════════════════════════════════════════════════════════
+            // LAYER 1: CDK-NAG (Static Analysis / Infrastructure Best Practices)
+            // Validates synthesized CloudFormation against AWS best practices
+            // Severity: Critical for security issues, Medium for configuration warnings
+            // ═══════════════════════════════════════════════════════════════
+            const hasL1Content = (test.cdk_nag_violations?.length > 0) || (test.cdk_nag_warnings?.length > 0);
+            if (hasL1Content) {{
+                let l1Content = '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+                l1Content += '\\n🔍 LAYER 1: CDK-NAG (Infrastructure Best Practices)';
+                l1Content += '\\n   Validates CloudFormation against AWS security best practices';
+                l1Content += '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+
+                if (test.cdk_nag_violations?.length > 0) {{
+                    l1Content += '\\n\\n❌ VIOLATIONS [Severity: Critical]';
+                    l1Content += '\\n   Audit Note: These findings block deployment and must be remediated';
+                    l1Content += '\\n' + test.cdk_nag_violations.map(v => '  • ' + v).join('\\n');
+                }}
+
+                if (test.cdk_nag_warnings?.length > 0) {{
+                    l1Content += '\\n\\n⚠️ ADVISORIES [Severity: Medium]';
+                    l1Content += '\\n   Audit Note: Review recommended - may require compensating controls';
+                    l1Content += '\\n' + test.cdk_nag_warnings.map(v => '  ⚠ ' + v).join('\\n');
+                }}
+
+                parts.push(l1Content);
+            }}
+
+            // ═══════════════════════════════════════════════════════════════
+            // LAYER 2: FRAMEWORKRULES (Business Logic / Compliance Controls)
+            // Enforces organization-specific security and compliance policies
+            // Severity: Critical for compliance violations, High for policy warnings
+            // ═══════════════════════════════════════════════════════════════
+            const hasL2Content = (test.installed_rules?.length > 0) || (test.framework_rules_violations?.length > 0) || (test.framework_rules_advisories?.length > 0) || (test.framework_rules_known_gaps?.length > 0);
+            if (hasL2Content) {{
+                let l2Content = '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+                l2Content += '\\n📋 LAYER 2: FRAMEWORKRULES (Compliance Controls)';
+                l2Content += '\\n   Enforces regulatory compliance requirements (SOC2, HIPAA, PCI-DSS, GDPR)';
+                l2Content += '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+
+                if (test.installed_rules?.length > 0) {{
+                    l2Content += '\\n\\n📦 ACTIVE COMPLIANCE RULES:';
+                    l2Content += '\\n' + test.installed_rules.map(r => '  ✓ ' + r).join('\\n');
+                }}
+
+                if (test.framework_rules_violations?.length > 0) {{
+                    l2Content += '\\n\\n❌ VIOLATIONS [Severity: Critical]';
+                    l2Content += '\\n   Audit Note: Non-compliant configurations - must be remediated before production';
+                    l2Content += '\\n' + test.framework_rules_violations.map(v => '  • ' + v).join('\\n');
+                }}
+
+                if (test.framework_rules_advisories?.length > 0) {{
+                    l2Content += '\\n\\n⚠️ ADVISORIES [Severity: High]';
+                    l2Content += '\\n   Audit Note: Configuration recommendations - document justification if not implemented';
+                    l2Content += '\\n' + test.framework_rules_advisories.map(v => '  ⚠ ' + v).join('\\n');
+                }}
+
+                if (test.framework_rules_known_gaps?.length > 0) {{
+                    l2Content += '\\n\\n📌 KNOWN GAPS [Severity: Medium]';
+                    l2Content += '\\n   Audit Note: Documented deviations - ensure compensating controls are in place';
+                    l2Content += '\\n' + test.framework_rules_known_gaps.map(g => '  📌 ' + g).join('\\n');
+                }}
+
+                parts.push(l2Content);
+            }}
+
+            // ═══════════════════════════════════════════════════════════════
+            // LAYER 3: CFN-GUARD (Policy-as-Code / Template Validation)
+            // Validates CloudFormation templates against custom guard rules
+            // Severity: Critical for violations, Medium for warnings
+            // ═══════════════════════════════════════════════════════════════
+            const hasL3Content = (test.cfn_guard_violations?.length > 0) || (test.cfn_guard_warnings?.length > 0);
+            if (hasL3Content) {{
+                let l3Content = '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+                l3Content += '\\n📜 LAYER 3: CFN-GUARD (Policy-as-Code)';
+                l3Content += '\\n   Validates templates against AWS Guard rules (HIPAA, PCI-DSS, GDPR)';
+                l3Content += '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+
+                if (test.cfn_guard_violations?.length > 0) {{
+                    l3Content += '\\n\\n❌ VIOLATIONS [Severity: Critical]';
+                    l3Content += '\\n   Audit Note: Template policy violations - must be remediated';
+                    l3Content += '\\n' + test.cfn_guard_violations.map(v => '  • ' + v).join('\\n');
+                }}
+
+                if (test.cfn_guard_warnings?.length > 0) {{
+                    l3Content += '\\n\\n⚠️ ADVISORIES [Severity: Medium]';
+                    l3Content += '\\n   Audit Note: Policy recommendations - review for applicability';
+                    l3Content += '\\n' + test.cfn_guard_warnings.map(v => '  ⚠ ' + v).join('\\n');
+                }}
+
+                parts.push(l3Content);
+            }}
+
+            // ═══════════════════════════════════════════════════════════════
+            // LAYER 4: AWS CONFIG (Runtime Compliance / Continuous Monitoring)
+            // Lists AWS Config rules that will monitor deployed resources
+            // Severity: Informational - these are detective controls
+            // ═══════════════════════════════════════════════════════════════
+            if (test.aws_config_status && test.aws_config_status !== 'skipped') {{
+                let l4Content = '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+                l4Content += '\\n🔎 LAYER 4: AWS CONFIG (Runtime Compliance)';
+                l4Content += '\\n   Continuous compliance monitoring for deployed resources';
+                l4Content += '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+                l4Content += '\\n\\n📊 STATUS: ' + test.aws_config_status;
+                l4Content += '\\n   Audit Note: These rules provide detective controls post-deployment';
+
+                if (test.aws_config_rules?.length > 0) {{
+                    l4Content += '\\n\\n📋 CONFIG RULES TO BE DEPLOYED:';
+                    l4Content += '\\n' + test.aws_config_rules.map(r => '  ✓ ' + r).join('\\n');
+                }}
+
+                parts.push(l4Content);
+            }}
+
+            // Error message section
+            if (test.error_message) {{
+                let errContent = '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+                errContent += '\\n🚨 TEST ERROR MESSAGE';
+                errContent += '\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+                errContent += '\\n' + test.error_message;
+                parts.push(errContent);
+            }}
+
+            return parts.length > 0 ? parts.join('\\n\\n') : 'No additional details available';
+        }}
+
         function toggleDetail(idx) {{
             const detailRow = document.getElementById('detail-' + idx);
             if (detailRow) {{
                 detailRow.classList.toggle('expanded');
+                if (detailRow.classList.contains('expanded')) {{
+                    expandedRows.add(idx);
+                }} else {{
+                    expandedRows.delete(idx);
+                }}
             }}
         }}
 
-        // Layer validation chart - wait for Chart.js to load
-        window.addEventListener('load', function() {{
-            if (typeof Chart !== 'undefined') {{
-                const ctx = document.getElementById('layerChart').getContext('2d');
-                new Chart(ctx, {{
-                    type: 'bar',
-                    data: {{
-                        labels: ['cdk-nag', 'FrameworkRules', 'cfn-guard', 'AWS Config'],
-                        datasets: [{{
-                            label: 'Passed',
-                            data: [{cdk_nag_passed}, {framework_rules_passed}, {cfn_guard_passed}, {total_tests}],
-                            backgroundColor: ['#3498db', '#2ecc71', '#f39c12', '#9b59b6']
-                        }}]
-                    }},
-                    options: {{
-                        responsive: true,
-                        plugins: {{
-                            title: {{
-                                display: true,
-                                text: 'Multi-Layer Validation Coverage'
-                            }},
-                            legend: {{
-                                display: false
-                            }}
-                        }},
-                        scales: {{
-                            y: {{
-                                beginAtZero: true,
-                                max: {total_tests}
-                            }}
-                        }}
-                    }}
-                }});
-            }} else {{
-                console.error('Chart.js library failed to load');
+        function displayPagination() {{
+            const totalPages = Math.ceil(filteredTests.length / testsPerPage);
+            const pagination = document.getElementById('pagination');
+
+            if (totalPages <= 1) {{
+                pagination.innerHTML = '';
+                return;
             }}
+
+            let html = `<button ${{currentPage === 1 ? 'disabled' : ''}} onclick="goToPage(${{currentPage - 1}})">← Prev</button>`;
+
+            for (let i = 1; i <= totalPages; i++) {{
+                if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {{
+                    html += `<button class="${{i === currentPage ? 'active' : ''}}" onclick="goToPage(${{i}})">${{i}}</button>`;
+                }} else if (i === currentPage - 3 || i === currentPage + 3) {{
+                    html += '<button disabled>...</button>';
+                }}
+            }}
+
+            html += `<button ${{currentPage === totalPages ? 'disabled' : ''}} onclick="goToPage(${{currentPage + 1}})">Next →</button>`;
+            pagination.innerHTML = html;
+        }}
+
+        function goToPage(page) {{
+            currentPage = page;
+            displayResults();
+            document.querySelector('.results-table-container').scrollIntoView({{ behavior: 'smooth' }});
+        }}
+
+        // Event listeners
+        document.getElementById('filter-search').addEventListener('keyup', function(e) {{
+            if (e.key === 'Enter') applyFilters();
         }});
+
+        function initChart() {{
+            if (typeof Chart === 'undefined') return;
+
+            const ctx = document.getElementById('layerChart').getContext('2d');
+            new Chart(ctx, {{
+                type: 'bar',
+                data: {{
+                    labels: ['cdk-nag', 'FrameworkRules', 'cfn-guard', 'AWS Config'],
+                    datasets: [{{
+                        label: 'Passed',
+                        data: [{cdk_nag_passed}, {framework_rules_passed}, {cfn_guard_passed}, {total_tests}],
+                        backgroundColor: ['#3498db', '#2ecc71', '#f39c12', '#9b59b6']
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    plugins: {{
+                        title: {{ display: true, text: 'Multi-Layer Validation Coverage' }},
+                        legend: {{ display: false }}
+                    }},
+                    scales: {{
+                        y: {{ beginAtZero: true, max: {total_tests} }}
+                    }}
+                }}
+            }});
+        }}
     </script>
 </body>
 </html>"""
@@ -1433,10 +2111,11 @@ def main():
     generator = ComplianceReportGenerator(project_root)
 
     if args.skip_tests:
-        # Skip test execution and load results from existing JUnit XML
+        # Skip test execution and load results from existing saved JUnit XML files
         print("⏭️  Skipping test execution, loading existing results...")
         generator.output_dir.mkdir(parents=True, exist_ok=True)
-        generator._parse_junit_xml_incremental()
+        # Try to use saved split XML files first (more complete), fall back to incremental
+        generator._parse_all_junit_xml_files()
         generator._load_incremental_results()
 
         # Generate reports from loaded results
