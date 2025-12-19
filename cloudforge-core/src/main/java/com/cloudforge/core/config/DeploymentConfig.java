@@ -80,6 +80,15 @@ public class DeploymentConfig {
     /** Network mode (e.g., "private-with-nat", "public") */
     public String networkMode;
 
+    /** Load balancer type (alb or nlb) */
+    public String lbType = "alb";
+
+    /** Create Route53 hosted zone */
+    public boolean createZone = false;
+
+    /** Enable VPC flow logs */
+    public boolean enableFlowlogs = true;
+
     /** Enable AWS WAF */
     public boolean wafEnabled;
 
