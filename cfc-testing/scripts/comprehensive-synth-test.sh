@@ -3,7 +3,12 @@
 # Comprehensive Synthesis Test for All Security Profiles
 # Tests EC2 and Fargate runtimes across DEV, STAGING, PRODUCTION security profiles
 
-set -e
+# Don't exit on error - we want to run all tests and report failures at the end
+# set -e
+
+# Track overall success
+OVERALL_SUCCESS=true
+FAILED_TESTS=()
 
 # Colors for output
 RED='\033[0;31m'
@@ -287,7 +292,10 @@ echo -e "${BLUE}======================${NC}"
 for security_profile in "DEV" "STAGING" "PRODUCTION"; do
     for subdomain in "ec1" "ec2" "ec3"; do
         stack_name="ec2-$(echo $security_profile | tr '[:upper:]' '[:lower:]')-${subdomain}"
-        run_synthesis "EC2" "$security_profile" "$subdomain" "$stack_name"
+        if ! run_synthesis "EC2" "$security_profile" "$subdomain" "$stack_name"; then
+            OVERALL_SUCCESS=false
+            FAILED_TESTS+=("EC2-$security_profile-$subdomain")
+        fi
         echo ""
     done
 done
@@ -299,7 +307,10 @@ echo -e "${BLUE}=========================${NC}"
 for security_profile in "DEV" "STAGING" "PRODUCTION"; do
     for subdomain in "fc1" "fc2" "fc3"; do
         stack_name="fargate-$(echo $security_profile | tr '[:upper:]' '[:lower:]')-${subdomain}"
-        run_synthesis "FARGATE" "$security_profile" "$subdomain" "$stack_name"
+        if ! run_synthesis "FARGATE" "$security_profile" "$subdomain" "$stack_name"; then
+            OVERALL_SUCCESS=false
+            FAILED_TESTS+=("FARGATE-$security_profile-$subdomain")
+        fi
         echo ""
     done
 done
@@ -308,7 +319,21 @@ done
 analyze_results
 
 echo ""
-echo -e "${GREEN}🎉 Comprehensive synthesis test completed!${NC}"
+
+# Report failed tests
+if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
+    echo -e "${RED}❌ Failed Tests (${#FAILED_TESTS[@]}):${NC}"
+    for test in "${FAILED_TESTS[@]}"; do
+        echo -e "  ${RED}- $test${NC}"
+    done
+    echo ""
+fi
+
+if [ "$OVERALL_SUCCESS" = true ]; then
+    echo -e "${GREEN}🎉 Comprehensive synthesis test completed successfully!${NC}"
+else
+    echo -e "${YELLOW}⚠️  Comprehensive synthesis test completed with failures${NC}"
+fi
 echo "Results saved in: $RESULTS_DIR"
 echo ""
 echo -e "${YELLOW}📋 Next Steps:${NC}"
@@ -317,3 +342,8 @@ echo "2. Compare templates for inconsistencies"
 echo "3. Check Route53 record creation patterns"
 echo "4. Verify security group configurations"
 echo "5. Test actual deployments for working combinations"
+
+# Exit with error if any tests failed
+if [ "$OVERALL_SUCCESS" = false ]; then
+    exit 1
+fi

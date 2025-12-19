@@ -284,6 +284,7 @@ jobs:
 
       - name: Run comprehensive synthesis tests
         run: |
+          set -o pipefail
           cd cfc-testing
           echo "Running comprehensive synthesis tests..."
           bash scripts/comprehensive-synth-test.sh 2>&1 | tee comprehensive-synth.log
@@ -1165,7 +1166,7 @@ jobs:
       - name: List generated reports
         run: |
           echo "Generated reports structure:"
-          find github-pages-reports -type f | head -50
+          find github-pages-reports -type f 2>/dev/null | head -50 || true
 
       - name: Download metrics dashboards artifact
         id: download-metrics
