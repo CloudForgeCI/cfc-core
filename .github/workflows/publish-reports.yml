@@ -167,14 +167,42 @@ jobs:
           npm install -g aws-cdk
           cdk --version
 
+      - name: Cache cfn-guard binary
+        id: cache-cfn-guard
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/cfn-guard
+          key: cfn-guard-v3.1.1-${{ runner.os }}-sha256-106db0d9
+
       - name: Install CloudFormation Guard (cfn-guard)
+        if: steps.cache-cfn-guard.outputs.cache-hit != 'true'
         run: |
           echo "Installing CloudFormation Guard for Layer 3 template validation..."
-          wget -q https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.1.1/cfn-guard-v3-ubuntu-latest.tar.gz
-          tar -xzf cfn-guard-v3-ubuntu-latest.tar.gz
+          CFN_GUARD_VERSION="3.1.1"
+          CFN_GUARD_TARBALL="cfn-guard-v3-ubuntu-latest.tar.gz"
+          CFN_GUARD_SHA256="106db0d9fcbd11605349dd650145ac148a0c10e2c0b4d6f45898f222f3ae473b"
+
+          # Download cfn-guard
+          wget -q "https://github.com/aws-cloudformation/cloudformation-guard/releases/download/${CFN_GUARD_VERSION}/${CFN_GUARD_TARBALL}"
+
+          # Verify SHA256 checksum
+          echo "${CFN_GUARD_SHA256}  ${CFN_GUARD_TARBALL}" | sha256sum -c -
+          if [ $? -ne 0 ]; then
+            echo "❌ SHA256 checksum verification failed!"
+            exit 1
+          fi
+          echo "✅ SHA256 checksum verified"
+
+          # Extract and install
+          tar -xzf "${CFN_GUARD_TARBALL}"
           sudo mv cfn-guard-v3-ubuntu-latest/cfn-guard /usr/local/bin/
           cfn-guard --version
           echo "✅ cfn-guard installed successfully"
+
+      - name: Verify cfn-guard installation
+        run: |
+          cfn-guard --version
+          echo "✅ cfn-guard ready"
 
       - name: Get current date for cache key
         id: date
