@@ -1,0 +1,4 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
+FAIL_SOC2_PCIDSS_FARGATE_no-auth,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,SOC2,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_SOC2_PCIDSS_FARGATE_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,PCI-DSS,30,,FAIL,jenkins,,,
+FAIL_SOC2_PCIDSS_FARGATE_flow-logs-disabled,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,PCI-DSS,,false,FAIL,jenkins,,,

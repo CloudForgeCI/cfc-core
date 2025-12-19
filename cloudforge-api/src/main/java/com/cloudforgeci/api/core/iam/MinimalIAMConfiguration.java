@@ -102,6 +102,18 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                     ))
                     .build();
 
+            // Add CDK-NAG suppression for SSM S3 bucket wildcards
+            NagSuppressions.addResourceSuppressions(
+                ssmPolicy,
+                List.of(
+                    NagPackSuppression.builder()
+                        .id("AwsSolutions-IAM5")
+                        .reason("SSM requires s3:GetObject on AWS-managed SSM buckets (aws-ssm-*, amazon-ssm-*, aws-windows-downloads-*) - these are AWS service requirements, not application data")
+                        .build()
+                ),
+                Boolean.TRUE
+            );
+
             // Create Customer Managed CloudWatch Policy (standalone, not inline)
             ManagedPolicy cloudwatchPolicy = ManagedPolicy.Builder.create(c, "MinimalEc2CloudWatchPolicy")
                     .description("Minimal CloudWatch Logs permissions for EC2 instances")
@@ -121,6 +133,18 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                             .build()
                     ))
                     .build();
+
+            // Add CDK-NAG suppression for CloudWatch Logs wildcard pattern
+            NagSuppressions.addResourceSuppressions(
+                cloudwatchPolicy,
+                List.of(
+                    NagPackSuppression.builder()
+                        .id("AwsSolutions-IAM5")
+                        .reason("CloudWatch Logs requires wildcard in log group path (/aws/*/) to allow logging to application-specific log groups created at runtime")
+                        .build()
+                ),
+                Boolean.TRUE
+            );
 
             // Create role and attach Customer Managed Policies
             Role ec2Role = Role.Builder.create(c, "MinimalEc2Role")

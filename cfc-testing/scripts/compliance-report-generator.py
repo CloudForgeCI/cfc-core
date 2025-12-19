@@ -49,6 +49,10 @@ class ComplianceTestResult:
         self.rejection_layers = None  # Which layers rejected this config (for negative tests)
         self._current_layer = None  # Track which layer violations belong to during parsing
 
+        # CloudFormation template paths (for download links)
+        self.cfn_template_json = None
+        self.cfn_template_yaml = None
+
 
 class ComplianceReportGenerator:
     """Generates compliance validation reports by running tests and parsing results."""
@@ -307,6 +311,17 @@ class ComplianceReportGenerator:
                 if match:
                     current_test.rejection_layers = match.group(1).strip()
 
+            # Capture CloudFormation template paths for download links
+            if "CFN_TEMPLATE_JSON:" in line:
+                match = re.search(r'CFN_TEMPLATE_JSON:\s*(.+)', line)
+                if match:
+                    current_test.cfn_template_json = match.group(1).strip()
+
+            if "CFN_TEMPLATE_YAML:" in line:
+                match = re.search(r'CFN_TEMPLATE_YAML:\s*(.+)', line)
+                if match:
+                    current_test.cfn_template_yaml = match.group(1).strip()
+
             # Detect test success (positive tests)
             if "✅ Compliance validation passed" in line:
                 current_test.status = "passed"
@@ -355,7 +370,9 @@ class ComplianceReportGenerator:
             "error_message": result.error_message,
             "deployment_context": result.deployment_context,
             "is_negative_test": result.is_negative_test,
-            "rejection_layers": result.rejection_layers
+            "rejection_layers": result.rejection_layers,
+            "cfn_template_json": result.cfn_template_json,
+            "cfn_template_yaml": result.cfn_template_yaml
         }
 
         # Append to JSONL file (one JSON object per line)
@@ -656,7 +673,7 @@ class ComplianceReportGenerator:
                 result.status = data['status']
                 result.duration = data['duration']
                 result.cdk_nag_status = data['layers']['cdk_nag']['status']
-                result.cdk_nag_packs_applied = data['layers']['cdk_nag']['packs_applied']
+                result.cdk_nag_packs_applied = data['layers']['cdk_nag'].get('packs_applied', 0)
                 result.cdk_nag_violations = data['layers']['cdk_nag'].get('violations', [])
                 result.framework_rules_status = data['layers']['framework_rules']['status']
                 result.framework_rules_violations = data['layers']['framework_rules'].get('violations', [])
@@ -668,6 +685,8 @@ class ComplianceReportGenerator:
                 result.deployment_context = data.get('deployment_context')
                 result.is_negative_test = data.get('is_negative_test', False)
                 result.rejection_layers = data.get('rejection_layers')
+                result.cfn_template_json = data.get('cfn_template_json')
+                result.cfn_template_yaml = data.get('cfn_template_yaml')
                 self.results.append(result)
 
     def _parse_maven_output(self, output: str):
@@ -997,6 +1016,8 @@ class ComplianceReportGenerator:
 
         .config-name {{ cursor: pointer; color: #3498db; text-decoration: underline; }}
         .config-name:hover {{ color: #2980b9; }}
+        .template-link {{ color: #27ae60; text-decoration: none; font-weight: 600; font-size: 11px; padding: 2px 6px; background: #d5f5e3; border-radius: 3px; }}
+        .template-link:hover {{ background: #abebc6; color: #1e8449; }}
         .detail-row {{ display: none; background: #f8f9fa; }}
         .detail-row.expanded {{ display: table-row; }}
         .detail-content {{ padding: 15px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-word; background: #2c3e50; color: #ecf0f1; border-radius: 5px; max-height: 300px; overflow-y: auto; }}
@@ -1115,6 +1136,7 @@ class ComplianceReportGenerator:
                             <th>AWS Config</th>
                             <th>Status</th>
                             <th>Duration</th>
+                            <th>Template</th>
                         </tr>
                     </thead>
                     <tbody>"""
@@ -1179,6 +1201,17 @@ class ComplianceReportGenerator:
             violations_count = len(result.cdk_nag_violations) + len(result.framework_rules_violations) + len(result.cfn_guard_violations)
             violations_indicator = f' <span style="color: #e74c3c; font-size: 10px;">({violations_count} violations)</span>' if violations_count > 0 else ''
 
+            # Generate template download links
+            template_links = []
+            if result.cfn_template_json:
+                # Extract filename from path for relative link
+                json_filename = Path(result.cfn_template_json).name
+                template_links.append(f'<a href="cfn-templates/{json_filename}" download class="template-link" title="Download JSON">JSON</a>')
+            if result.cfn_template_yaml:
+                yaml_filename = Path(result.cfn_template_yaml).name
+                template_links.append(f'<a href="cfn-templates/{yaml_filename}" download class="template-link" title="Download YAML">YAML</a>')
+            template_cell = ' | '.join(template_links) if template_links else '<span style="color: #95a5a6;">-</span>'
+
             html_content += f"""
                         <tr>
                             <td style="font-family: monospace; font-size: 11px;"><span class="config-name" onclick="toggleDetail({idx})">&#9658; {result.config_name}</span>{neg_test_badge}{violations_indicator}</td>
@@ -1190,9 +1223,10 @@ class ComplianceReportGenerator:
                             <td><span class="status-badge {aws_config_class}">{result.aws_config_status}</span></td>
                             <td><span class="status-badge {status_class}">{result.status}</span></td>
                             <td>{result.duration:.2f}s</td>
+                            <td style="text-align: center;">{template_cell}</td>
                         </tr>
                         <tr class="detail-row" id="detail-{idx}">
-                            <td colspan="9"><div class="detail-content">{detail_content}</div></td>
+                            <td colspan="10"><div class="detail-content">{detail_content}</div></td>
                         </tr>"""
 
         html_content += f"""

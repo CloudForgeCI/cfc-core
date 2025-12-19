@@ -1,0 +1,4 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
+FAIL_SOC2_PCIDSS_GDPR_EC2_no-auth,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,SOC2,PCI-DSS,GDPR,,,FAIL,jenkins,,eu-west-1,
+FAIL_SOC2_PCIDSS_GDPR_EC2_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,PCI-DSS,GDPR,30,,FAIL,jenkins,,eu-west-1,
+FAIL_SOC2_PCIDSS_GDPR_EC2_us-no-approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,PCI-DSS,GDPR,,,FAIL,jenkins,,us-east-1,

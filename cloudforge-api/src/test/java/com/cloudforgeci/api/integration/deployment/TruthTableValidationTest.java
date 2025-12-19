@@ -58,6 +58,10 @@ class TruthTableValidationTest {
     private static JsonNode truthTable;
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
+    // Output directory for generated CloudFormation templates (for report linking)
+    private static Path cfnTemplatesOutputDir;
+    private static Path jsonlOutputFile;
+
     /**
      * Load truth table at test class initialization.
      * The truth table contains all 108 valid configurations and their expected resources.
@@ -77,6 +81,222 @@ class TruthTableValidationTest {
 
         int validConfigs = truthTable.get("metadata").get("valid_configurations").asInt();
         System.out.println("📊 Loaded truth table with " + validConfigs + " valid configurations");
+
+        // Initialize output directories for CloudFormation templates and JSONL
+        cfnTemplatesOutputDir = projectRoot.resolve("cfc-testing/scripts/validation-results/cfn-templates");
+        jsonlOutputFile = projectRoot.resolve("cfc-testing/scripts/validation-results/compliance-results-incremental.jsonl");
+
+        // Create templates directory if it doesn't exist
+        Files.createDirectories(cfnTemplatesOutputDir);
+        System.out.println("📁 CloudFormation templates will be written to: " + cfnTemplatesOutputDir);
+    }
+
+    /**
+     * Write the synthesized CloudFormation template to a JSON file for report linking.
+     *
+     * @param template the CDK template
+     * @param configName the configuration name (used for filename)
+     * @param complianceFramework the compliance framework
+     * @return the path to the written file, or null if writing failed
+     */
+    private Path writeCloudFormationTemplate(Template template, String configName, String complianceFramework) {
+        if (template == null || cfnTemplatesOutputDir == null) {
+            return null;
+        }
+
+        try {
+            // Sanitize config name for filename
+            String sanitizedName = configName.replaceAll("[^a-zA-Z0-9_-]", "_");
+            String filename = sanitizedName + ".json";
+            Path outputPath = cfnTemplatesOutputDir.resolve(filename);
+
+            // Get template as JSON map and format it
+            Map<String, Object> templateMap = template.toJSON();
+            String templateJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(templateMap);
+
+            // Write to file
+            Files.writeString(outputPath, templateJson);
+
+            System.out.println("   📄 CFN_TEMPLATE_JSON: " + outputPath.toAbsolutePath());
+            return outputPath;
+
+        } catch (Exception e) {
+            System.out.println("   ⚠️  Failed to write CloudFormation template (JSON): " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Write the synthesized CloudFormation template to a YAML file for report linking.
+     *
+     * @param template the CDK template
+     * @param configName the configuration name (used for filename)
+     * @param complianceFramework the compliance framework
+     * @return the path to the written file, or null if writing failed
+     */
+    private Path writeCloudFormationTemplateYaml(Template template, String configName, String complianceFramework) {
+        if (template == null || cfnTemplatesOutputDir == null) {
+            return null;
+        }
+
+        try {
+            // Sanitize config name for filename
+            String sanitizedName = configName.replaceAll("[^a-zA-Z0-9_-]", "_");
+            String filename = sanitizedName + ".yaml";
+            Path outputPath = cfnTemplatesOutputDir.resolve(filename);
+
+            // Get template as JSON map and convert to YAML format
+            Map<String, Object> templateMap = template.toJSON();
+            String yamlContent = convertJsonToYaml(templateMap, 0);
+
+            // Write to file
+            Files.writeString(outputPath, yamlContent);
+
+            System.out.println("   📄 CFN_TEMPLATE_YAML: " + outputPath.toAbsolutePath());
+            return outputPath;
+
+        } catch (Exception e) {
+            System.out.println("   ⚠️  Failed to write CloudFormation template (YAML): " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Convert a JSON-like map structure to YAML format.
+     * This is a simple converter that handles CloudFormation template structures.
+     */
+    @SuppressWarnings("unchecked")
+    private String convertJsonToYaml(Object obj, int indent) {
+        StringBuilder sb = new StringBuilder();
+        String indentStr = "  ".repeat(indent);
+
+        if (obj instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) obj;
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+
+                if (value instanceof Map || value instanceof List) {
+                    sb.append(indentStr).append(key).append(":\n");
+                    sb.append(convertJsonToYaml(value, indent + 1));
+                } else if (value instanceof String) {
+                    String strVal = (String) value;
+                    // Handle multi-line strings or strings with special chars
+                    if (strVal.contains("\n") || strVal.contains(":") || strVal.contains("#")) {
+                        sb.append(indentStr).append(key).append(": |\n");
+                        for (String line : strVal.split("\n")) {
+                            sb.append(indentStr).append("  ").append(line).append("\n");
+                        }
+                    } else {
+                        sb.append(indentStr).append(key).append(": ").append(quoteIfNeeded(strVal)).append("\n");
+                    }
+                } else if (value instanceof Boolean || value instanceof Number) {
+                    sb.append(indentStr).append(key).append(": ").append(value).append("\n");
+                } else if (value == null) {
+                    sb.append(indentStr).append(key).append(": null\n");
+                } else {
+                    sb.append(indentStr).append(key).append(": ").append(value.toString()).append("\n");
+                }
+            }
+        } else if (obj instanceof List) {
+            List<Object> list = (List<Object>) obj;
+            for (Object item : list) {
+                if (item instanceof Map || item instanceof List) {
+                    sb.append(indentStr).append("-\n");
+                    sb.append(convertJsonToYaml(item, indent + 1));
+                } else if (item instanceof String) {
+                    sb.append(indentStr).append("- ").append(quoteIfNeeded((String) item)).append("\n");
+                } else {
+                    sb.append(indentStr).append("- ").append(item).append("\n");
+                }
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Quote a string value if it needs quoting in YAML.
+     */
+    private String quoteIfNeeded(String value) {
+        if (value.isEmpty() ||
+            value.startsWith(" ") || value.endsWith(" ") ||
+            value.contains("\"") || value.contains("'") ||
+            value.equals("true") || value.equals("false") ||
+            value.equals("null") || value.equals("~") ||
+            value.matches("^[0-9].*") ||
+            value.contains("{") || value.contains("}") ||
+            value.contains("[") || value.contains("]")) {
+            // Use double quotes and escape internal quotes
+            return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        }
+        return value;
+    }
+
+    /**
+     * Append a test result to the JSONL file for incremental reporting.
+     *
+     * @param configName the configuration name
+     * @param framework the compliance framework
+     * @param runtime EC2 or FARGATE
+     * @param networkMode network mode
+     * @param status test status (passed/failed)
+     * @param templatePath path to the CloudFormation template file
+     * @param layerResults map of layer results
+     * @param violations list of violations
+     * @param isNegativeTest whether this is a negative test case
+     */
+    private void appendToJsonlReport(
+            String configName,
+            String framework,
+            String runtime,
+            String networkMode,
+            String status,
+            Path templatePath,
+            Map<String, String> layerResults,
+            List<String> violations,
+            boolean isNegativeTest) {
+
+        if (jsonlOutputFile == null) {
+            return;
+        }
+
+        try {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("config_name", configName);
+            result.put("framework", framework);
+            result.put("runtime", runtime);
+            result.put("network_mode", networkMode);
+            result.put("status", status);
+            result.put("is_negative_test", isNegativeTest);
+
+            if (templatePath != null) {
+                result.put("cfn_template_path", templatePath.toString());
+                result.put("cfn_template_filename", templatePath.getFileName().toString());
+            }
+
+            Map<String, Object> layers = new LinkedHashMap<>();
+            layers.put("cdk_nag", Map.of("status", layerResults.getOrDefault("cdk_nag", "unknown")));
+            layers.put("framework_rules", Map.of(
+                "status", layerResults.getOrDefault("framework_rules", "unknown"),
+                "violations", violations != null ? violations : Collections.emptyList()
+            ));
+            layers.put("cfn_guard", Map.of("status", layerResults.getOrDefault("cfn_guard", "unknown")));
+            layers.put("aws_config", Map.of("status", layerResults.getOrDefault("aws_config", "unknown")));
+            result.put("layers", layers);
+
+            String jsonLine = objectMapper.writeValueAsString(result);
+
+            // Append to JSONL file (thread-safe with synchronized)
+            synchronized (TruthTableValidationTest.class) {
+                Files.writeString(jsonlOutputFile, jsonLine + "\n",
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND);
+            }
+
+        } catch (Exception e) {
+            System.out.println("   ⚠️  Failed to append to JSONL: " + e.getMessage());
+        }
     }
 
     /**
@@ -882,6 +1102,13 @@ class TruthTableValidationTest {
             System.out.println("   ⏭️  Layer 4 (AWS Config): Skipped (no template)");
         }
 
+        // Write CloudFormation template to file for report linking (JSON and YAML formats)
+        Path templateJsonPath = null;
+        if (template != null) {
+            templateJsonPath = writeCloudFormationTemplate(template, configName, complianceFramework);
+            writeCloudFormationTemplateYaml(template, configName, complianceFramework);  // YAML for download
+        }
+
         // Collect all failures
         List<String> allFailures = new ArrayList<>();
         allFailures.addAll(layer1Failures);
@@ -889,6 +1116,13 @@ class TruthTableValidationTest {
         allFailures.addAll(layer3Failures);
 
         boolean hasFailures = !allFailures.isEmpty();
+
+        // Build layer results map for JSONL report
+        Map<String, String> layerResults = new LinkedHashMap<>();
+        layerResults.put("cdk_nag", layer1Failures.isEmpty() ? "passed" : "failed");
+        layerResults.put("framework_rules", layer2Failures.isEmpty() ? "passed" : "failed");
+        layerResults.put("cfn_guard", layer3Failures.isEmpty() ? "passed" : "failed");
+        layerResults.put("aws_config", configRuleCount > 0 ? configRuleCount + " rules" : "skipped");
 
         // Evaluate test result based on expectation
         if (expectFailure) {
@@ -898,7 +1132,15 @@ class TruthTableValidationTest {
                     (!layer1Failures.isEmpty() ? "L1 " : "") +
                     (!layer2Failures.isEmpty() ? "L2 " : "") +
                     (!layer3Failures.isEmpty() ? "L3 " : ""));
+
+                // Write to JSONL for report
+                appendToJsonlReport(configName, complianceFramework, runtime, networkMode,
+                    "passed", templateJsonPath, layerResults, allFailures, true);
             } else {
+                // Write failure to JSONL before throwing
+                appendToJsonlReport(configName, complianceFramework, runtime, networkMode,
+                    "failed", templateJsonPath, layerResults, allFailures, true);
+
                 throw new AssertionError(
                     "NEGATIVE TEST FAILURE: Expected compliance validation to FAIL for " + configName +
                     " [" + complianceFramework + "] but all layers PASSED.\n" +
@@ -907,6 +1149,10 @@ class TruthTableValidationTest {
             }
         } else {
             if (hasFailures) {
+                // Write failure to JSONL before throwing
+                appendToJsonlReport(configName, complianceFramework, runtime, networkMode,
+                    "failed", templateJsonPath, layerResults, allFailures, false);
+
                 throw new AssertionError(
                     "Compliance validation failed for " + configName + " [" + complianceFramework + "]:\n" +
                     allFailures.stream().map(f -> "  - " + f).reduce("", (a, b) -> a + b + "\n")
@@ -914,6 +1160,10 @@ class TruthTableValidationTest {
             } else {
                 System.out.println("   ✅ Compliance validation passed: " + complianceFramework +
                     (knownGaps.isEmpty() ? "" : " (with " + knownGaps.size() + " known gaps)"));
+
+                // Write success to JSONL for report
+                appendToJsonlReport(configName, complianceFramework, runtime, networkMode,
+                    "passed", templateJsonPath, layerResults, allFailures, false);
             }
         }
     }
@@ -1416,7 +1666,7 @@ class TruthTableValidationTest {
         }
     }
 // ========== SPLIT CSV TEST METHODS ==========
-// Auto-generated test methods for 48 split CSV files
+// Auto-generated test methods for 66 split CSV files
 // Each test method delegates to testComplianceFrameworkIntegrationCsv()
 
     // 22 tests
@@ -3025,6 +3275,621 @@ class TruthTableValidationTest {
         numLinesToSkip = 1
     )
     void testSoc2PciDssHipaaGdprFargatePass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // ========== NEW MULTI-FRAMEWORK VIOLATION TESTS ==========
+    // 18 additional test methods for comprehensive violation coverage
+
+    // 4 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/gdpr,soc2_ec2_pass.csv",
+        numLinesToSkip = 1
+    )
+    void testGdprSoc2Ec2Pass(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 4 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/gdpr,soc2_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testGdprSoc2Ec2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/hipaa,gdpr_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testHipaaGdprEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/hipaa,gdpr_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testHipaaGdprFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,hipaa_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssHipaaEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,hipaa_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssHipaaFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,hipaa,gdpr_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssHipaaGdprEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/pci-dss,hipaa,gdpr_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testPciDssHipaaGdprFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,gdpr_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2GdprEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,gdpr_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2GdprFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,hipaa,gdpr_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2HipaaGdprEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,hipaa,gdpr_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2HipaaGdprFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,gdpr_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssGdprEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,gdpr_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssGdprFargateFail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa_ec2_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaEc2Fail(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved) {
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved
+        );
+    }
+
+    // 3 tests
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/soc2,pci-dss,hipaa_fargate_fail.csv",
+        numLinesToSkip = 1
+    )
+    void testSoc2PciDssHipaaFargateFail(
             String configName,
             String runtime,
             String securityProfile,
