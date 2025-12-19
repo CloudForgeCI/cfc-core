@@ -11,6 +11,9 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -161,83 +164,26 @@ class TruthTableValidationTest {
         }
     }
 
+    /** Jackson YAML mapper for CloudFormation template serialization. */
+    private static final ObjectMapper YAML_MAPPER = new ObjectMapper(
+            new YAMLFactory()
+                .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)  // No --- at start
+                .enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)  // Only quote when needed
+                .disable(YAMLGenerator.Feature.SPLIT_LINES)  // Don't split long lines
+    ).enable(SerializationFeature.INDENT_OUTPUT);
+
     /**
-     * Convert a JSON-like map structure to YAML format.
-     * This is a simple converter that handles CloudFormation template structures.
+     * Convert a JSON-like map structure to YAML format using Jackson.
+     * Jackson handles all YAML special characters and edge cases properly.
      */
-    @SuppressWarnings("unchecked")
     private String convertJsonToYaml(Object obj, int indent) {
-        StringBuilder sb = new StringBuilder();
-        String indentStr = "  ".repeat(indent);
-
-        if (obj instanceof Map) {
-            Map<String, Object> map = (Map<String, Object>) obj;
-            for (Map.Entry<String, Object> entry : map.entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-
-                if (value instanceof Map || value instanceof List) {
-                    sb.append(indentStr).append(key).append(":\n");
-                    sb.append(convertJsonToYaml(value, indent + 1));
-                } else if (value instanceof String) {
-                    String strVal = (String) value;
-                    // Handle multi-line strings (only use literal block for actual newlines)
-                    if (strVal.contains("\n")) {
-                        sb.append(indentStr).append(key).append(": |\n");
-                        for (String line : strVal.split("\n")) {
-                            sb.append(indentStr).append("  ").append(line).append("\n");
-                        }
-                    } else {
-                        // Quote strings that contain special YAML chars (: # etc.)
-                        sb.append(indentStr).append(key).append(": ").append(quoteIfNeeded(strVal)).append("\n");
-                    }
-                } else if (value instanceof Boolean || value instanceof Number) {
-                    sb.append(indentStr).append(key).append(": ").append(value).append("\n");
-                } else if (value == null) {
-                    sb.append(indentStr).append(key).append(": null\n");
-                } else {
-                    sb.append(indentStr).append(key).append(": ").append(value.toString()).append("\n");
-                }
-            }
-        } else if (obj instanceof List) {
-            List<Object> list = (List<Object>) obj;
-            for (Object item : list) {
-                if (item instanceof Map || item instanceof List) {
-                    sb.append(indentStr).append("-\n");
-                    sb.append(convertJsonToYaml(item, indent + 1));
-                } else if (item instanceof String) {
-                    sb.append(indentStr).append("- ").append(quoteIfNeeded((String) item)).append("\n");
-                } else {
-                    sb.append(indentStr).append("- ").append(item).append("\n");
-                }
-            }
+        try {
+            return YAML_MAPPER.writeValueAsString(obj);
+        } catch (Exception e) {
+            // Fallback: return empty string on error
+            System.out.println("   ⚠️  YAML conversion failed: " + e.getMessage());
+            return "";
         }
-
-        return sb.toString();
-    }
-
-    /**
-     * Quote a string value if it needs quoting in YAML.
-     * YAML special characters that require quoting: *, &, !, :, #, %, @, `, etc.
-     */
-    private String quoteIfNeeded(String value) {
-        if (value.isEmpty() ||
-            value.startsWith(" ") || value.endsWith(" ") ||
-            value.contains("\"") || value.contains("'") ||
-            value.equals("true") || value.equals("false") ||
-            value.equals("null") || value.equals("~") ||
-            value.matches("^[0-9].*") ||
-            value.contains("{") || value.contains("}") ||
-            value.contains("[") || value.contains("]") ||
-            value.contains("*") || value.contains("&") ||
-            value.contains("!") || value.contains("|") ||
-            value.contains(">") || value.contains("@") ||
-            value.contains("`") || value.contains(",") ||
-            value.contains(":") || value.contains("#")) {
-            // Use double quotes and escape internal quotes
-            return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-        }
-        return value;
     }
 
     /**

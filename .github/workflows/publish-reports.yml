@@ -274,7 +274,7 @@ jobs:
         run: |
           cd cfc-testing/scripts
           echo "Generating compliance truth table reports..."
-          echo "1️⃣ Running 48 split compliance tests and generating multi-layer validation dashboard..."
+          echo "1️⃣ Running compliance tests and generating multi-layer validation dashboard..."
           python3 compliance-report-generator.py 2>&1 | tee compliance-report.log
           echo "2️⃣ Generating truth table and test matrix from test results..."
           python3 truth-table-generator.py 2>&1 | tee truth-table-validation.log

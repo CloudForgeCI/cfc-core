@@ -66,6 +66,12 @@
       <artifactId>jakarta.el</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Jackson YAML for CloudFormation template YAML generation -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
