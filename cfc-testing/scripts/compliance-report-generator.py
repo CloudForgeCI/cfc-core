@@ -238,6 +238,9 @@ class ComplianceReportGenerator:
             elif "❌ Layer 1 (cdk-nag)" in line:
                 current_test.cdk_nag_status = "failed"
                 current_test._current_layer = "cdk_nag"
+            elif "📋 cdk-nag Failure Details:" in line:
+                # Start capturing cdk-nag violation details
+                current_test._current_layer = "cdk_nag_details"
 
             # Detect FrameworkRules validation failure (appears before Layer summary)
             if "validation failed with" in line and "violations" in line and "SEVERE:" in line:
@@ -266,6 +269,9 @@ class ComplianceReportGenerator:
             elif "❌ Layer 3 (cfn-guard):" in line:
                 current_test.cfn_guard_status = "failed"
                 current_test._current_layer = "cfn_guard"
+            elif "📋 cfn-guard Failure Details:" in line:
+                # Start capturing cfn-guard violation details
+                current_test._current_layer = "cfn_guard_details"
             elif "⏭️  Layer 3 (cfn-guard): Skipped (no template)" in line:
                 current_test.cfn_guard_status = "skipped (no template)"
                 current_test._current_layer = None
@@ -297,6 +303,33 @@ class ComplianceReportGenerator:
                     current_test.framework_rules_violations.append(violation)
                 elif current_test._current_layer == "cfn_guard":
                     current_test.cfn_guard_violations.append(violation)
+
+            # Capture cdk-nag failure detail lines (after "📋 cdk-nag Failure Details:")
+            # These lines start with "   " (3 spaces) and are NOT separator lines (=====)
+            if current_test._current_layer == "cdk_nag_details":
+                stripped = line.strip()
+                # Stop capturing on Layer 2 marker or closing separator
+                if "Layer 2" in line or "FrameworkRules" in line:
+                    current_test._current_layer = None
+                elif stripped.startswith("=") and len(stripped) > 20:
+                    # Closing separator - continue but prepare to end
+                    pass
+                elif stripped and not stripped.startswith("=") and "📋" not in line:
+                    # Capture actual violation content (skip empty lines and markers)
+                    current_test.cdk_nag_violations.append(stripped)
+
+            # Capture cfn-guard failure detail lines (after "📋 cfn-guard Failure Details:")
+            if current_test._current_layer == "cfn_guard_details":
+                stripped = line.strip()
+                # Stop capturing on Layer 4 marker or closing separator
+                if "Layer 4" in line or "AWS Config" in line:
+                    current_test._current_layer = None
+                elif stripped.startswith("=") and len(stripped) > 20:
+                    # Closing separator - continue but prepare to end
+                    pass
+                elif stripped and not stripped.startswith("=") and "📋" not in line:
+                    # Capture actual violation content (skip empty lines and markers)
+                    current_test.cfn_guard_violations.append(stripped)
 
             # Capture known gaps
             if "⚠️  Known gaps:" in line:
@@ -1076,6 +1109,7 @@ class ComplianceReportGenerator:
                     <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">Construct-level validation</p>
                     <div class="layer-stats">{cdk_nag_passed}/{total_tests}</div>
                     <p style="font-size: 12px; color: #7f8c8d;">configurations validated</p>
+                    <a href="cdk-nag/" style="display: inline-block; margin-top: 10px; padding: 5px 10px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; font-size: 11px;">📄 NagReports</a>
                 </div>
 
                 <div class="layer-card">

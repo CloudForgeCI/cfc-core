@@ -363,6 +363,28 @@ jobs:
             echo "✅ Copied comprehensive synthesis log"
           fi
 
+      - name: Copy cdk-nag compliance reports
+        run: |
+          echo "Copying cdk-nag compliance reports..."
+          mkdir -p github-pages-reports/validation/cdk-nag
+
+          # Copy cdk-nag NagReport files (JSON and CSV)
+          if [ -d "cfc-testing/cdk.out" ]; then
+            find cfc-testing/cdk.out -name "*-NagReport.json" -exec cp {} github-pages-reports/validation/cdk-nag/ \; 2>/dev/null || true
+            find cfc-testing/cdk.out -name "*-NagReport.csv" -exec cp {} github-pages-reports/validation/cdk-nag/ \; 2>/dev/null || true
+
+            JSON_COUNT=$(find github-pages-reports/validation/cdk-nag -name "*.json" 2>/dev/null | wc -l)
+            CSV_COUNT=$(find github-pages-reports/validation/cdk-nag -name "*.csv" 2>/dev/null | wc -l)
+
+            if [ "$JSON_COUNT" -gt 0 ] || [ "$CSV_COUNT" -gt 0 ]; then
+              echo "✅ Copied cdk-nag reports: ${JSON_COUNT} JSON, ${CSV_COUNT} CSV"
+            else
+              echo "ℹ️  No cdk-nag reports found in cdk.out"
+            fi
+          else
+            echo "ℹ️  cdk.out directory not found"
+          fi
+
       - name: Copy drift reports
         run: |
           echo "Copying drift reports..."

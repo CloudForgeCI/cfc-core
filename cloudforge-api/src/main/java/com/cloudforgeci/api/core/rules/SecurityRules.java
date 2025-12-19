@@ -14,6 +14,7 @@ import com.cloudforge.core.interfaces.FrameworkRules;
 
 import io.github.cdklabs.cdknag.AwsSolutionsChecks;
 import io.github.cdklabs.cdknag.HIPAASecurityChecks;
+import io.github.cdklabs.cdknag.NagReportFormat;
 import io.github.cdklabs.cdknag.PCIDSS321Checks;
 import io.github.cdklabs.cdknag.NagPack;
 import software.amazon.awscdk.Aspects;
@@ -178,15 +179,24 @@ public final class SecurityRules {
    * @since 3.1.0
    */
   private static NagPack mapFrameworkToNagPack(String framework, boolean enforce) {
+    // Report formats for compliance auditing
+    var reportFormats = List.of(NagReportFormat.JSON, NagReportFormat.CSV);
+
     return switch (framework) {
       case "HIPAA" -> HIPAASecurityChecks.Builder.create()
           .logIgnores(!enforce)
+          .reports(true)
+          .reportFormats(reportFormats)
           .build();
       case "PCI-DSS" -> PCIDSS321Checks.Builder.create()
           .logIgnores(!enforce)
+          .reports(true)
+          .reportFormats(reportFormats)
           .build();
       case "SOC2" -> AwsSolutionsChecks.Builder.create()
           .logIgnores(!enforce)
+          .reports(true)
+          .reportFormats(reportFormats)
           .build();
       // FEDRAMP: Handled by existing FedRampRules.java plugin only
       // Not integrated with cdk-nag to avoid conflicts (future epic)
@@ -199,6 +209,8 @@ public final class SecurityRules {
         LOG.info("  - Applying AwsSolutionsChecks (fallback) for custom framework: " + framework);
         yield AwsSolutionsChecks.Builder.create()
             .logIgnores(!enforce)
+            .reports(true)
+            .reportFormats(reportFormats)
             .build();
       }
     };

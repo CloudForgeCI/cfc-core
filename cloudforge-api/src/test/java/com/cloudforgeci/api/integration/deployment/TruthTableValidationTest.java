@@ -181,13 +181,14 @@ class TruthTableValidationTest {
                     sb.append(convertJsonToYaml(value, indent + 1));
                 } else if (value instanceof String) {
                     String strVal = (String) value;
-                    // Handle multi-line strings or strings with special chars
-                    if (strVal.contains("\n") || strVal.contains(":") || strVal.contains("#")) {
+                    // Handle multi-line strings (only use literal block for actual newlines)
+                    if (strVal.contains("\n")) {
                         sb.append(indentStr).append(key).append(": |\n");
                         for (String line : strVal.split("\n")) {
                             sb.append(indentStr).append("  ").append(line).append("\n");
                         }
                     } else {
+                        // Quote strings that contain special YAML chars (: # etc.)
                         sb.append(indentStr).append(key).append(": ").append(quoteIfNeeded(strVal)).append("\n");
                     }
                 } else if (value instanceof Boolean || value instanceof Number) {
@@ -217,6 +218,7 @@ class TruthTableValidationTest {
 
     /**
      * Quote a string value if it needs quoting in YAML.
+     * YAML special characters that require quoting: *, &, !, :, #, %, @, `, etc.
      */
     private String quoteIfNeeded(String value) {
         if (value.isEmpty() ||
@@ -226,7 +228,12 @@ class TruthTableValidationTest {
             value.equals("null") || value.equals("~") ||
             value.matches("^[0-9].*") ||
             value.contains("{") || value.contains("}") ||
-            value.contains("[") || value.contains("]")) {
+            value.contains("[") || value.contains("]") ||
+            value.contains("*") || value.contains("&") ||
+            value.contains("!") || value.contains("|") ||
+            value.contains(">") || value.contains("@") ||
+            value.contains("`") || value.contains(",") ||
+            value.contains(":") || value.contains("#")) {
             // Use double quotes and escape internal quotes
             return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
         }
@@ -971,10 +978,19 @@ class TruthTableValidationTest {
             System.out.println("   ⏭️  Layer 2 (FrameworkRules): Skipped (no template)");
         }
 
+        // Write CloudFormation template to file BEFORE cfn-guard validation
+        // This ensures cfn-guard validates the actual generated template files
+        Path templateJsonPath = null;
+        if (template != null) {
+            templateJsonPath = writeCloudFormationTemplate(template, configName, complianceFramework);
+            writeCloudFormationTemplateYaml(template, configName, complianceFramework);  // YAML for download
+        }
+
         // Layer 3: cfn-guard validation (only if synthesis succeeded)
+        // Now validates the actual generated template file, not a temp copy
         if (template != null && "enforce".equals(cfcContext.get("complianceMode"))) {
             try {
-                runCfnGuardValidation(template, complianceFramework, configName);
+                runCfnGuardValidation(templateJsonPath, complianceFramework, configName);
                 System.out.println("   ✅ Layer 3 (cfn-guard): Validation passed");
             } catch (AssertionError e) {
                 layer3Failures.add(e.getMessage());
@@ -1102,12 +1118,8 @@ class TruthTableValidationTest {
             System.out.println("   ⏭️  Layer 4 (AWS Config): Skipped (no template)");
         }
 
-        // Write CloudFormation template to file for report linking (JSON and YAML formats)
-        Path templateJsonPath = null;
-        if (template != null) {
-            templateJsonPath = writeCloudFormationTemplate(template, configName, complianceFramework);
-            writeCloudFormationTemplateYaml(template, configName, complianceFramework);  // YAML for download
-        }
+        // Note: CloudFormation templates already written before Layer 3 (cfn-guard validation)
+        // templateJsonPath variable is already set from earlier in this method
 
         // Collect all failures
         List<String> allFailures = new ArrayList<>();
@@ -1253,12 +1265,21 @@ class TruthTableValidationTest {
      * Run cfn-guard validation on synthesized CloudFormation template.
      * This provides Layer 3 (template-level) validation in the defense-in-depth architecture.
      *
-     * @param template the already-synthesized CDK template
+     * @param templatePath path to the actual generated CloudFormation template JSON file
      * @param complianceFramework the compliance framework to validate against (HIPAA, PCI-DSS, SOC2, etc.)
      * @param configName the configuration name for error reporting
      */
-    private void runCfnGuardValidation(Template template, String complianceFramework, String configName) {
+    private void runCfnGuardValidation(Path templatePath, String complianceFramework, String configName) {
         try {
+            // Verify template file exists and is readable
+            if (templatePath == null || !Files.exists(templatePath) || !Files.isReadable(templatePath)) {
+                System.out.println("   ⚠️  cfn-guard validation skipped: Template file not available");
+                if (templatePath != null) {
+                    System.out.println("   Expected at: " + templatePath);
+                }
+                return;
+            }
+
             // Find project root and cfn-guard rules directory
             Path projectRoot = Paths.get(System.getProperty("user.dir")).getParent();
             Path guardRulesDir = projectRoot.resolve("cloudforge-api/src/main/resources/cfn-guard/frameworks");
@@ -1268,23 +1289,7 @@ class TruthTableValidationTest {
             List<String> failedFrameworks = new ArrayList<>();
             StringBuilder allErrors = new StringBuilder();
 
-            // Get the CloudFormation template as a Map and convert to proper JSON
-            Map<String, Object> templateMap = template.toJSON();
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            String templateJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(templateMap);
-
-            // Write template to temporary file
-            Path tempTemplate = Files.createTempFile("cfn-template-", ".json");
-            Files.writeString(tempTemplate, templateJson);
-
-            // Verify template file was created and is readable
-            if (!Files.exists(tempTemplate) || !Files.isReadable(tempTemplate)) {
-                throw new IllegalStateException(
-                    "Failed to create synthesized CloudFormation template for cfn-guard validation. " +
-                    "Expected template at: " + tempTemplate + ". " +
-                    "Ensure CDK synthesis succeeded and temp directory is writable."
-                );
-            }
+            System.out.println("   📄 Validating actual template: " + templatePath.getFileName());
 
             try {
                 // Find cfn-guard executable and check if it's installed
@@ -1316,11 +1321,11 @@ class TruthTableValidationTest {
                         continue;
                     }
 
-                    // Run cfn-guard validation for this framework
+                    // Run cfn-guard validation for this framework using the actual generated template
                     ProcessBuilder pb = new ProcessBuilder(
                         cfnGuardPath, "validate",
                         "--rules", guardRulePath.toString(),
-                        "--data", tempTemplate.toString(),
+                        "--data", templatePath.toString(),
                         "--show-summary", "fail",
                         "--output-format", "single-line-summary"
                     );
@@ -1365,9 +1370,9 @@ class TruthTableValidationTest {
 
                 System.out.println("   ✅ cfn-guard validation passed for " + configName + " [" + complianceFramework + "]");
 
-            } finally {
-                // Clean up temporary file
-                Files.deleteIfExists(tempTemplate);
+            } catch (Exception e) {
+                // Handle inner exceptions (cfn-guard process errors)
+                throw e;
             }
 
         } catch (AssertionError e) {

@@ -19,6 +19,7 @@ import com.cloudforge.core.interfaces.ApplicationSpec;
 // CDK-NAG for construct-level compliance validation
 import io.github.cdklabs.cdknag.AwsSolutionsChecks;
 import io.github.cdklabs.cdknag.HIPAASecurityChecks;
+import io.github.cdklabs.cdknag.NagReportFormat;
 import io.github.cdklabs.cdknag.PCIDSS321Checks;
 import io.github.cdklabs.cdknag.NagPack;
 
@@ -2624,21 +2625,26 @@ public class InteractiveDeployer {
      */
     private static NagPack mapFrameworkToNagPack(String framework, ComplianceMode complianceMode) {
         boolean enforce = complianceMode == ComplianceMode.ENFORCE;
+        // Report formats for compliance auditing (always generate reports)
+        var reportFormats = List.of(NagReportFormat.JSON, NagReportFormat.CSV);
 
         return switch (framework) {
             case "HIPAA" -> HIPAASecurityChecks.Builder.create()
                     .verbose(true)
-                    .reports(enforce)  // Fail synthesis on violations if enforce mode
+                    .reports(true)
+                    .reportFormats(reportFormats)
                     .logIgnores(!enforce)
                     .build();
             case "PCI-DSS", "PCIDSS", "PCI" -> PCIDSS321Checks.Builder.create()
                     .verbose(true)
-                    .reports(enforce)
+                    .reports(true)
+                    .reportFormats(reportFormats)
                     .logIgnores(!enforce)
                     .build();
             case "SOC2", "SOC-2" -> AwsSolutionsChecks.Builder.create()
                     .verbose(true)
-                    .reports(enforce)
+                    .reports(true)
+                    .reportFormats(reportFormats)
                     .logIgnores(!enforce)
                     .build();
             case "FEDRAMP", "FEDRAMPHIGH", "FEDRAMP-HIGH" -> {
@@ -2657,7 +2663,8 @@ public class InteractiveDeployer {
                 System.out.println("      (Using AwsSolutionsChecks as fallback for " + framework + ")");
                 yield AwsSolutionsChecks.Builder.create()
                         .verbose(true)
-                        .reports(enforce)
+                        .reports(true)
+                        .reportFormats(reportFormats)
                         .logIgnores(!enforce)
                         .build();
             }
