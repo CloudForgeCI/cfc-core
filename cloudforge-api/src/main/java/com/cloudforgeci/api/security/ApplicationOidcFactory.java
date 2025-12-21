@@ -3,6 +3,7 @@ package com.cloudforgeci.api.security;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
@@ -107,7 +108,7 @@ public class ApplicationOidcFactory extends BaseFactory {
     private static final Logger LOG = Logger.getLogger(ApplicationOidcFactory.class.getName());
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("oidcProvider")
     private String oidcProvider;
@@ -206,8 +207,8 @@ public class ApplicationOidcFactory extends BaseFactory {
     public void create() {
         LOG.info("ApplicationOidcFactory.create() called - authMode = " + authMode);
 
-        // Only configure if authMode is "application-oidc"
-        if (!"application-oidc".equals(authMode)) {
+        // Only configure if authMode is APPLICATION_OIDC
+        if (authMode != AuthMode.APPLICATION_OIDC) {
             LOG.info("Application-level OIDC not enabled (authMode = " + authMode + ")");
             return;
         }

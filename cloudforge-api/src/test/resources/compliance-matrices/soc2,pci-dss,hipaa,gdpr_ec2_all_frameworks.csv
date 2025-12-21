@@ -1,9 +1,9 @@
 configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-EC2_PRODUCTION_ALL_FRAMEWORKS_alb-oidc_private-with-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,,PASS,jenkins,,,true
-EC2_PRODUCTION_ALL_FRAMEWORKS_alb-oidc_private-with-nat_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,,PASS,jenkins,,,true
-EC2_PRODUCTION_ALL_FRAMEWORKS_retention-2555,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2555,,PASS,jenkins,,,true
+EC2_PRODUCTION_ALL_FRAMEWORKS_alb-oidc_private-with-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,true,PASS,jenkins,,,true
+EC2_PRODUCTION_ALL_FRAMEWORKS_alb-oidc_private-with-nat_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,true,PASS,jenkins,,,true
+EC2_PRODUCTION_ALL_FRAMEWORKS_retention-2555,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2555,true,PASS,jenkins,,,true
 EC2_PRODUCTION_ALL_FRAMEWORKS_flow-logs-explicit,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,true,PASS,jenkins,,,true
-EC2_PRODUCTION_ALL_FRAMEWORKS_subdomain_retention-2555,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2555,,PASS,jenkins,,,true
+EC2_PRODUCTION_ALL_FRAMEWORKS_subdomain_retention-2555,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2555,true,PASS,jenkins,,,true
 EC2_PRODUCTION_ALL_FRAMEWORKS_full-config,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2555,true,PASS,jenkins,,,true
 EC2_PRODUCTION_ALL_FRAMEWORKS_max-retention,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",3650,true,PASS,jenkins,,,true
 EC2_PRODUCTION_ALL_FRAMEWORKS_meets-all-minimums,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,,true

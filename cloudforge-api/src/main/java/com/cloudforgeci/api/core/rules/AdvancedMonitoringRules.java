@@ -119,11 +119,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         // Check ComplianceMatrix to determine if Security Hub is REQUIRED or ADVISORY
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
             ComplianceMatrix.SecurityControl.SECURITY_HUB,
@@ -240,11 +236,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         // Check ComplianceMatrix to determine if Inspector is REQUIRED or ADVISORY
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
             ComplianceMatrix.SecurityControl.VULNERABILITY_SCANNING,

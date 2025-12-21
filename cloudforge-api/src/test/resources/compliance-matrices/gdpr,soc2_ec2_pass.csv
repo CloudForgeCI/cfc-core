@@ -1,5 +1,5 @@
 configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-GDPR_SOC2_EC2_alb-oidc_private,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,SOC2,,,PASS,jenkins,,eu-west-1,
-GDPR_SOC2_EC2_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,SOC2,,,PASS,jenkins,,eu-central-1,
-GDPR_SOC2_EC2_extended-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,SOC2,730,,PASS,jenkins,,eu-west-1,
-GDPR_SOC2_EC2_us-with-approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,SOC2,,,PASS,jenkins,,us-east-1,true
+GDPR_SOC2_EC2_alb-oidc_private,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,,PASS,jenkins,,eu-west-1,
+GDPR_SOC2_EC2_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,,PASS,jenkins,,eu-central-1,
+GDPR_SOC2_EC2_extended-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",730,,PASS,jenkins,,eu-west-1,
+GDPR_SOC2_EC2_us-with-approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,,PASS,jenkins,,us-east-1,true

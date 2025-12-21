@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
@@ -286,6 +287,10 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       }
 
       c.https.set(https);
+
+      // Register AWS Config rules for HTTPS/TLS compliance
+      c.requireConfigRule(AwsConfigRule.ALB_HTTPS_ONLY);
+      c.requireConfigRule(AwsConfigRule.ELB_TLS_HTTPS_LISTENERS);
     });
 
     // 2c) Service behind HTTPS - wait for HTTPS listener, Fargate service, AND certificate to be ready

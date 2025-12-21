@@ -1,9 +1,9 @@
 configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-L2_VIOLATION_EC2_SOC2_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,7,,FAIL,jenkins,,,
-L2_VIOLATION_FARGATE_SOC2_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,7,,FAIL,jenkins,,,
-L2_VIOLATION_EC2_HIPAA_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,365,,FAIL,jenkins,,,
-L2_VIOLATION_FARGATE_HIPAA_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,365,,FAIL,jenkins,,,
-L2_VIOLATION_EC2_PCI-DSS_no-auth,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
-L2_VIOLATION_FARGATE_PCI-DSS_no-auth,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
-L2_VIOLATION_EC2_GDPR_no-transfer-approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,false
-L2_VIOLATION_FARGATE_GDPR_no-transfer-approval,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,false
+L2_VIOLATION_EC2_SOC2_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,7,true,FAIL,jenkins,,,
+L2_VIOLATION_FARGATE_SOC2_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,7,true,FAIL,jenkins,,,
+L2_VIOLATION_EC2_HIPAA_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,365,true,FAIL,jenkins,,,
+L2_VIOLATION_FARGATE_HIPAA_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,365,true,FAIL,jenkins,,,
+L2_VIOLATION_EC2_PCI-DSS_no-auth,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,true,FAIL,jenkins,,,
+L2_VIOLATION_FARGATE_PCI-DSS_no-auth,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,true,FAIL,jenkins,,,
+L2_VIOLATION_EC2_GDPR_no-transfer-approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,true,FAIL,jenkins,,us-east-1,false
+L2_VIOLATION_FARGATE_GDPR_no-transfer-approval,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,true,FAIL,jenkins,,us-east-1,false

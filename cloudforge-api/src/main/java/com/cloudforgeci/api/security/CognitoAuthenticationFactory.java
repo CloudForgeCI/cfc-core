@@ -3,6 +3,7 @@ package com.cloudforgeci.api.security;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.util.CfnStringUtils;
 import software.amazon.awscdk.Fn;
@@ -67,7 +68,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     private static final Logger LOG = Logger.getLogger(CognitoAuthenticationFactory.class.getName());
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("stackName")
     private String stackName;
@@ -164,13 +165,13 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @Override
     public void create() {
         // Only configure Cognito if authMode is OIDC-based
-        if (!"alb-oidc".equals(authMode) && !"jenkins-oidc".equals(authMode) && !"application-oidc".equals(authMode)) {
+        if (authMode != AuthMode.ALB_OIDC && authMode != AuthMode.APPLICATION_OIDC) {
             LOG.info("Cognito authentication not applicable (authMode = " + authMode + ")");
             return;
         }
 
         // Validate application supports Cognito (for application-oidc mode)
-        if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+        if (authMode == AuthMode.APPLICATION_OIDC && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
             var oidcIntegration = applicationSpec.getOidcIntegration();
             if (oidcIntegration != null && !oidcIntegration.supportsCognito()) {
                 LOG.warning("Application '" + applicationSpec.applicationId() + "' does not support Cognito");
@@ -559,7 +560,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         String secretName = null;
 
         // Check if we need to store the client secret for application-level OIDC
-        if ("application-oidc".equals(authMode)) {
+        if (authMode == AuthMode.APPLICATION_OIDC) {
             LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
             secretName = storeCognitoClientSecret(userPool, appClient);
         } else {
@@ -620,7 +621,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             // For application-oidc mode, we need to store the client secret in Secrets Manager
             // so the application container can retrieve it at runtime
             String secretName = null;
-            if ("application-oidc".equals(authMode)) {
+            if (authMode == AuthMode.APPLICATION_OIDC) {
                 LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
                 // For existing user pool with existing client, we need the secret to be provided externally
                 // or we retrieve it using Custom Resource
@@ -672,7 +673,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             // For application-oidc mode, we need to store the client secret in Secrets Manager
             // so the application container can retrieve it at runtime
             String secretName = null;
-            if ("application-oidc".equals(authMode)) {
+            if (authMode == AuthMode.APPLICATION_OIDC) {
                 LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
                 secretName = storeCognitoClientSecret(userPool, appClient);
             }
@@ -691,7 +692,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     private String constructRedirectUrl() {
         // Determine the callback path based on authMode
         String callbackPath;
-        if ("application-oidc".equals(authMode)) {
+        if (authMode == AuthMode.APPLICATION_OIDC) {
             // For application-level OIDC, get the callback path from the application's OidcIntegration
             callbackPath = getApplicationCallbackPath();
             LOG.info("Using application-oidc callback path: " + callbackPath);
@@ -953,8 +954,8 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * </ul>
      */
     private void configureAlbAuthentication() {
-        // Only configure ALB authentication if authMode is "alb-oidc"
-        if (!"alb-oidc".equals(authMode)) {
+        // Only configure ALB authentication if authMode is ALB_OIDC
+        if (authMode != AuthMode.ALB_OIDC) {
             LOG.info("ALB authentication not applicable for authMode: " + authMode);
             return;
         }

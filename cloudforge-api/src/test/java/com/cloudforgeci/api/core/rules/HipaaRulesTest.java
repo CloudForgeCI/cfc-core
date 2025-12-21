@@ -2113,8 +2113,8 @@ class HipaaRulesTest {
         cfcContext.put("cognitoMfaEnabled", String.valueOf(cognitoMfa));
         cfcContext.put("identityCenterSsoEnabled", String.valueOf(identityCenterSso));
 
-        // ALB OIDC requires SSL
-        if ("alb-oidc".equals(authMode)) {
+        // OIDC auth modes require SSL
+        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
             cfcContext.put("enableSsl", "true");
             cfcContext.put("fqdn", "hipaa.example.com");
         }

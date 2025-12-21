@@ -1,4 +1,4 @@
 configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-FARGATE_PRODUCTION_SOC2_PCI-DSS_HIPAA_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",,,PASS,jenkins,,,
-FARGATE_PRODUCTION_SOC2_PCI-DSS_HIPAA_alb-oidc_private-with-nat_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",,,PASS,jenkins,,,
+FARGATE_PRODUCTION_SOC2_PCI-DSS_HIPAA_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",,true,PASS,jenkins,,,
+FARGATE_PRODUCTION_SOC2_PCI-DSS_HIPAA_alb-oidc_private-with-nat_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",,true,PASS,jenkins,,,
 FARGATE_PRODUCTION_SOC2_PCI-DSS_HIPAA_full-config,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",2190,true,PASS,jenkins,,,

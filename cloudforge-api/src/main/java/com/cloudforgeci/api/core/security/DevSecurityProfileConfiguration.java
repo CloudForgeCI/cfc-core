@@ -1,10 +1,11 @@
 package com.cloudforgeci.api.core.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforge.core.enums.SecurityProfile;
-import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -164,9 +165,9 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     }
 
     @Override
-    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
+    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, NetworkMode networkMode) {
         // DEV profile respects network mode for cost optimization
-        if ("private-with-nat".equals(networkMode)) {
+        if (networkMode == NetworkMode.PRIVATE_WITH_NAT) {
             return 1; // Single NAT gateway for cost optimization in dev
         }
         return 0; // No NAT gateways for public subnets in dev

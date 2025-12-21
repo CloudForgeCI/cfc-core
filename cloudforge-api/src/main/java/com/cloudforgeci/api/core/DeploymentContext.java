@@ -3,9 +3,13 @@ package com.cloudforgeci.api.core;
 import com.cloudforge.core.utilities.DnsLabel;
 import com.cloudforge.core.utilities.DnsName;
 import com.cloudforge.core.utilities.OneOf;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.LoadBalancerType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
-import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
@@ -191,13 +195,11 @@ public final class DeploymentContext {
     private final String fqdn;        // computed if not provided
 
     // Networking
-    @OneOf(value = {"public-no-nat", "private-with-nat"}, message = "Network mode must be 'public-no-nat' or 'private-with-nat'")
-    private final String networkMode; // public-no-nat | private-with-nat
+    private final NetworkMode networkMode;
     private final Boolean wafEnabled;
     private final Boolean albAccessLogging;  // Enable ALB access logs to S3
     private final Boolean cloudfront;
-    @OneOf(value = {"alb", "nlb"}, message = "Load balancer type must be 'alb' or 'nlb'")
-    private final String lbType;      // alb | nlb
+    private final LoadBalancerType lbType;
 
     // Threat Detection
     private final Boolean guardDutyEnabled;  // Enable GuardDuty for threat detection (PCI-DSS Req 11.4)
@@ -223,8 +225,7 @@ public final class DeploymentContext {
     private final String existingFileSystemId;  // Reuse existing EFS by ID (for disaster recovery workflows)
 
     // Auth / SSO
-    @OneOf(value = {"none", "alb-oidc", "jenkins-oidc", "application-oidc"}, message = "Auth mode must be 'none', 'alb-oidc', 'jenkins-oidc', or 'application-oidc'")
-    private final String authMode;    // none | alb-oidc | jenkins-oidc | application-oidc
+    private final AuthMode authMode;
 
     // Cognito Configuration (recommended for OIDC)
     private final Boolean cognitoAutoProvision;         // Auto-provision Cognito User Pool
@@ -278,7 +279,7 @@ public final class DeploymentContext {
     private final Boolean createConfigInfrastructure;  // Create AWS Config Recorder and Delivery Channel (account-level singletons)
     private final Boolean auditManagerEnabled;
     private final String complianceFrameworks;  // Comma-separated list: "PCI-DSS,HIPAA,SOC2,GDPR"
-    private final String complianceMode;  // "enforce" | "advisory" (default based on securityProfile)
+    private final ComplianceMode complianceMode;  // ENFORCE | ADVISORY | DISABLED (default based on securityProfile)
     private final Integer logRetentionDays;
     private final String instanceType;
     private final Boolean provisionDatabase;  // Whether to provision RDS database for applications with optional database support
@@ -333,8 +334,7 @@ public final class DeploymentContext {
         String fqdnCtx = str("fqdn", null);
         this.fqdn = (fqdnCtx != null) ? fqdnCtx : composeFqdn(subdomain, domain);
 
-        this.networkMode = oneOf("networkMode", "public-no-nat",
-                List.of("public-no-nat", "private-with-nat"));
+        this.networkMode = NetworkMode.fromString(str("networkMode", "public"));
         this.wafEnabled = boolOrNull("wafEnabled");
         this.albAccessLogging = boolOrNull("albAccessLogging");
         this.guardDutyEnabled = boolOrNull("guardDutyEnabled");
@@ -353,10 +353,9 @@ public final class DeploymentContext {
         this.containerImageScanningEnabled = boolOrNull("containerImageScanning");
 
         this.cloudfront = boolOrNull("cloudfront");
-        this.lbType = oneOf("lbType", "alb", List.of("alb", "nlb"));
+        this.lbType = LoadBalancerType.fromString(str("lbType", "alb"));
 
-        this.authMode = oneOf("authMode", "none",
-                List.of("none", "alb-oidc", "jenkins-oidc", "application-oidc"));
+        this.authMode = AuthMode.fromString(str("authMode", "none"));
 
         // Cognito Configuration
         this.cognitoAutoProvision = bool("cognitoAutoProvision", false);
@@ -419,7 +418,10 @@ public final class DeploymentContext {
         this.createConfigInfrastructure = boolOrNull("createConfigInfrastructure");
         this.auditManagerEnabled = boolOrNull("auditManagerEnabled");
         this.complianceFrameworks = str("complianceFrameworks", "");
-        this.complianceMode = str("complianceMode", null);  // null = use default based on securityProfile
+        this.complianceMode = ComplianceMode.fromString(
+            str("complianceMode", null),
+            ComplianceMode.defaultForProfile(this.securityProfile)
+        );
         this.logRetentionDays = intval("logRetentionDays", null);  // Default: null (overridden by SecurityProfileConfiguration if needed)
         this.instanceType = str("instanceType", "t3.micro");
         this.provisionDatabase = boolOrNull("provisionDatabase");
@@ -493,7 +495,7 @@ public final class DeploymentContext {
     public String subdomain() { return subdomain; }
     public String fqdn() { return fqdn; }
 
-    public String networkMode() { return networkMode; }
+    public NetworkMode networkMode() { return networkMode; }
     public Boolean wafEnabled() { return wafEnabled; }
     public Boolean albAccessLogging() { return albAccessLogging; }
     public Boolean guardDutyEnabled() { return guardDutyEnabled; }
@@ -512,7 +514,7 @@ public final class DeploymentContext {
     public Boolean containerImageScanningEnabled() { return containerImageScanningEnabled; }
 
     public Boolean cloudfrontEnabled() { return cloudfront; }
-    public String lbType() { return lbType; }
+    public LoadBalancerType lbType() { return lbType; }
 
     public Integer cpuTargetUtilization() { return cpuTargetUtilization; }
     public Integer maxInstanceCapacity() { return maxInstanceCapacity; }
@@ -539,7 +541,7 @@ public final class DeploymentContext {
     public Boolean createConfigInfrastructure() { return createConfigInfrastructure; }
     public Boolean auditManagerEnabled() { return auditManagerEnabled; }
     public String complianceFrameworks() { return complianceFrameworks; }
-    public String complianceMode() { return complianceMode; }
+    public ComplianceMode complianceMode() { return complianceMode; }
     public Integer logRetentionDays() { return logRetentionDays; }
     public String instanceType() { return instanceType; }
     public Boolean provisionDatabase() { return provisionDatabase; }
@@ -555,7 +557,7 @@ public final class DeploymentContext {
     public Integer healthyThreshold() { return healthyThreshold; }
     public Integer unhealthyThreshold() { return unhealthyThreshold; }
 
-    public String authMode() { return authMode; }
+    public AuthMode authMode() { return authMode; }
 
     // Cognito Configuration
     public Boolean cognitoAutoProvision() { return cognitoAutoProvision; }
@@ -616,7 +618,7 @@ public final class DeploymentContext {
     // --------- Helpers / derived behavior ---------
 
     /** True if the service should run in private subnets without public IPs. */
-    public boolean isPrivateWithNat() { return "private-with-nat".equals(networkMode); }
+    public boolean isPrivateWithNat() { return networkMode == NetworkMode.PRIVATE_WITH_NAT; }
 
     /** True if enterprise features should be enabled. */
     public boolean isEnterprise() { return "enterprise".equalsIgnoreCase(tier); }
@@ -632,6 +634,79 @@ public final class DeploymentContext {
         return str(key, defaultValue);
     }
 
+    /**
+     * Export all deployment context fields to a Map for serialization.
+     * This produces the same format as InteractiveDeployer's buildCfcContext.
+     */
+    public Map<String, Object> toContextMap() {
+        Map<String, Object> ctx = new java.util.LinkedHashMap<>();
+
+        // Core configuration
+        ctx.put("runtime", runtime != null ? runtime.name() : runtimeRaw);
+        ctx.put("topology", topology != null ? topology.name() : topologyRaw);
+        ctx.put("securityProfile", securityProfile);
+        ctx.put("stackName", stackName);
+        ctx.put("region", region);
+
+        // Domain configuration
+        if (domain != null) ctx.put("domain", domain);
+        if (subdomain != null) ctx.put("subdomain", subdomain);
+        ctx.put("enableSsl", enableSsl);
+        ctx.put("createZone", createZone);
+
+        // Network configuration
+        ctx.put("networkMode", networkMode);
+        ctx.put("lbType", lbType);
+        if (enableFlowlogs != null) ctx.put("enableFlowlogs", enableFlowlogs);
+        if (wafEnabled != null) ctx.put("wafEnabled", wafEnabled);
+        if (albAccessLogging != null) ctx.put("albAccessLogging", albAccessLogging);
+        if (cloudfrontEnabled() != null) ctx.put("cloudfrontEnabled", cloudfrontEnabled());
+
+        // Authentication
+        ctx.put("authMode", authMode);
+        if (cognitoAutoProvision != null) ctx.put("cognitoAutoProvision", cognitoAutoProvision);
+        if (cognitoDomainPrefix != null) ctx.put("cognitoDomainPrefix", cognitoDomainPrefix);
+        if (cognitoMfaEnabled != null) ctx.put("cognitoMfaEnabled", cognitoMfaEnabled);
+
+        // Security & Compliance
+        if (complianceFrameworks != null) ctx.put("complianceFrameworks", complianceFrameworks);
+        if (complianceMode != null) ctx.put("complianceMode", complianceMode);
+        if (logRetentionDays != null) ctx.put("logRetentionDays", logRetentionDays);
+        if (gdprDataTransferApproved != null) ctx.put("gdprDataTransferApproved", gdprDataTransferApproved);
+
+        // Security services
+        if (guardDutyEnabled != null) ctx.put("guardDutyEnabled", guardDutyEnabled);
+        if (createGuardDutyDetector != null) ctx.put("createGuardDutyDetector", createGuardDutyDetector);
+        if (macieEnabled != null) ctx.put("macieEnabled", macieEnabled);
+        if (macieAutomatedDiscoveryEnabled != null) ctx.put("macieAutomatedDiscovery", macieAutomatedDiscoveryEnabled);
+        if (securityHubEnabled != null) ctx.put("securityHubEnabled", securityHubEnabled);
+        if (inspectorEnabled != null) ctx.put("inspectorEnabled", inspectorEnabled);
+        if (awsConfigEnabled != null) ctx.put("awsConfigEnabled", awsConfigEnabled);
+        if (createConfigInfrastructure != null) ctx.put("createConfigInfrastructure", createConfigInfrastructure);
+        if (auditManagerEnabled != null) ctx.put("auditManagerEnabled", auditManagerEnabled);
+
+        // Security controls
+        if (antiMalwareEnabled != null) ctx.put("antiMalwareEnabled", antiMalwareEnabled);
+        if (fileIntegrityMonitoringEnabled != null) ctx.put("fileIntegrityMonitoring", fileIntegrityMonitoringEnabled);
+        if (containerRuntimeSecurityEnabled != null) ctx.put("containerRuntimeSecurity", containerRuntimeSecurityEnabled);
+        if (containerImageScanningEnabled != null) ctx.put("containerImageScanning", containerImageScanningEnabled);
+
+        // Resource configuration
+        if (cpu > 0) ctx.put("cpu", cpu);
+        if (memory > 0) ctx.put("memory", memory);
+        if (instanceType != null) ctx.put("instanceType", instanceType);
+        if (minInstanceCapacity != null) ctx.put("minInstanceCapacity", minInstanceCapacity);
+        if (maxInstanceCapacity != null) ctx.put("maxInstanceCapacity", maxInstanceCapacity);
+
+        // Database
+        if (provisionDatabase != null) ctx.put("provisionDatabase", provisionDatabase);
+
+        // Container
+        if (containerImage != null) ctx.put("containerImage", containerImage);
+
+        return ctx;
+    }
+
     /** Tag a stack so you can see the config in the console. */
     public void tagStack(Stack stack) {
         stack.getTags().setTag("cfc:tier", tier);
@@ -639,8 +714,8 @@ public final class DeploymentContext {
         stack.getTags().setTag("cfc:topology", topology.name());
         stack.getTags().setTag("cfc:env", env);
         if (fqdn != null) stack.getTags().setTag("cfc:fqdn", fqdn);
-        stack.getTags().setTag("cfc:network", networkMode);
-        stack.getTags().setTag("cfc:auth", authMode);
+        stack.getTags().setTag("cfc:network", networkMode.getValue());
+        stack.getTags().setTag("cfc:auth", authMode.getValue());
     }
 
     private void validateOrThrow() {
@@ -651,13 +726,13 @@ public final class DeploymentContext {
 
         // OIDC modes require HTTPS (enableSsl=true)
         // When no custom domain is configured, AWS Private CA is used for the ALB DNS name
-        if ("alb-oidc".equals(authMode) && !enableSsl) {
+        if (authMode == AuthMode.ALB_OIDC && !enableSsl) {
             errs.add("authMode=alb-oidc requires HTTPS; set enableSsl=true. " +
                     "A custom domain (fqdn/domain) is recommended but not required - " +
                     "without a domain, AWS Private CA will be used for the ALB DNS name.");
         }
 
-        if ("application-oidc".equals(authMode) && !enableSsl) {
+        if (authMode == AuthMode.APPLICATION_OIDC && !enableSsl) {
             errs.add("authMode=application-oidc requires HTTPS; set enableSsl=true. " +
                     "A custom domain (fqdn/domain) is recommended but not required - " +
                     "without a domain, AWS Private CA will be used for the ALB DNS name.");

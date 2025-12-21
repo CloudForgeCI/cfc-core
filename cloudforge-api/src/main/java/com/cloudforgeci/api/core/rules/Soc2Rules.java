@@ -2,10 +2,12 @@ package com.cloudforgeci.api.core.rules;
 
 
 import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
@@ -61,15 +63,10 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
 
         LOG.info("Installing SOC 2 Trust Services Criteria compliance validation for " + ctx.security);
 
-        // Determine compliance mode
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        // Get compliance mode (already resolved to enum with proper default)
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
-        LOG.info("  Compliance mode: " + complianceMode +
-                 (complianceModeStr == null ? " (default for " + ctx.security + ")" : " (explicit)"));
+        LOG.info("  Compliance mode: " + complianceMode);
 
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();
@@ -141,8 +138,8 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         }
 
         // CC6.2: Authentication required
-        String authMode = ctx.cfc.authMode();
-        if ("none".equals(authMode)) {
+        AuthMode authMode = ctx.cfc.authMode();
+        if (authMode == AuthMode.NONE) {
             rules.add(ComplianceRule.fail(
                 "SOC2-CC6.2-Auth",
                 "User authentication required for customer-facing systems",
@@ -509,7 +506,7 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         }
 
         // C1.2: Access restrictions for confidential data
-        if ("public-no-nat".equals(ctx.cfc.networkMode())) {
+        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
             rules.add(ComplianceRule.fail(
                 "SOC2-C1.2-Network",
                 "Private network mode required for confidential data",
@@ -538,7 +535,7 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
 
         report.append("Common Criteria - Security (CC):\n");
         report.append("  ✓ CC6.1 - Access Controls: ").append(ctx.iamProfile != null ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ CC6.2 - Authentication: ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ CC6.2 - Authentication: ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC6.6 - Network Segmentation: ").append(ctx.vpc.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC6.7 - Encryption in Transit: ").append(ctx.cfc.enableSsl() && (ctx.cert.get().isPresent() || (ctx.cfc.domain() == null && ctx.cfc.fqdn() == null)) ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC7.2 - System Monitoring: ").append(config.isSecurityMonitoringEnabled() ? "ENABLED" : "DISABLED").append("\n");
@@ -555,7 +552,7 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
 
         report.append("Confidentiality Criteria (C):\n");
         report.append("  ✓ C1.1 - Encryption at Rest: ").append(config.isEbsEncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ C1.2 - Access Restrictions: ").append(!"public-no-nat".equals(ctx.cfc.networkMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ C1.2 - Access Restrictions: ").append(ctx.cfc.networkMode() != NetworkMode.PUBLIC ? "ENABLED" : "DISABLED").append("\n");
         report.append("\n");
 
         report.append("Note: SOC 2 audit requires independent CPA firm examination.\n");

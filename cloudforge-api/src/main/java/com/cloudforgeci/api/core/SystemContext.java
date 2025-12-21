@@ -1,5 +1,7 @@
 package com.cloudforgeci.api.core;
 
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix;
 import com.cloudforgeci.api.core.rules.Rules;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.TopologyType;
@@ -221,6 +223,7 @@ public final class SystemContext extends Construct {
 
   private final Set<String> onceKeys = new HashSet<>();
   private final List<Runnable> deferredActions = new ArrayList<>();
+  private final Set<AwsConfigRule> requiredConfigRules = new HashSet<>();
   private boolean installed = false;
 
   private SystemContext(Stack stack, TopologyType topology, RuntimeType runtime, SecurityProfile security, IAMProfile iamProfile, DeploymentContext cfc) {
@@ -309,6 +312,42 @@ public final class SystemContext extends Construct {
         throw e;
       }
     }
+  }
+
+  // ============================================================================
+  // AWS CONFIG RULES COLLECTOR
+  // ============================================================================
+
+  /**
+   * Register an AWS Config rule as required for this deployment.
+   * Factories call this method where they create the infrastructure being monitored.
+   * Duplicate rules are automatically deduplicated via Set.
+   *
+   * @param rule The AWS Config rule to require
+   */
+  public void requireConfigRule(AwsConfigRule rule) {
+    requiredConfigRules.add(rule);
+  }
+
+  /**
+   * Register all AWS Config rules for a specific security control.
+   * Use this when enabling a security control (e.g., ENCRYPTION_AT_REST)
+   * to automatically include all related Config rules.
+   *
+   * @param control The security control to get rules for
+   */
+  public void requireConfigRulesForControl(ComplianceMatrix.SecurityControl control) {
+    requiredConfigRules.addAll(AwsConfigRule.getRulesForControl(control));
+  }
+
+  /**
+   * Get all required AWS Config rules collected from factories.
+   * Called by ComplianceFactory to deploy the rules.
+   *
+   * @return Unmodifiable set of required Config rules
+   */
+  public Set<AwsConfigRule> getRequiredConfigRules() {
+    return Set.copyOf(requiredConfigRules);
   }
 
   public String debugPath(Construct scope) {

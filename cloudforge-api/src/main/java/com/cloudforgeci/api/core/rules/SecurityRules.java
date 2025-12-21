@@ -19,6 +19,8 @@ import io.github.cdklabs.cdknag.PCIDSS321Checks;
 import io.github.cdklabs.cdknag.NagPack;
 import software.amazon.awscdk.Aspects;
 
+import com.cloudforge.core.enums.ComplianceMode;
+
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -154,7 +156,7 @@ public final class SecurityRules {
       return;
     }
 
-    boolean enforce = "enforce".equalsIgnoreCase(ctx.cfc.complianceMode());
+    boolean enforce = ctx.cfc.complianceMode() == ComplianceMode.ENFORCE;
     LOG.info("Applying cdk-nag validation (mode=" + (enforce ? "enforce" : "advisory") + ")");
 
     int appliedCount = 0;

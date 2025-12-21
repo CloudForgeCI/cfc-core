@@ -276,7 +276,10 @@ class ComplianceReportGenerator:
                 current_test._current_layer = "cdk_nag_warnings"
 
             # Detect FrameworkRules validation failure (appears before Layer summary)
-            if "validation failed with" in line and "violations" in line and "SEVERE:" in line:
+            # Format 1: "SEVERE: validation failed with N violations" (Java logger)
+            # Format 2: "ValidationError: Validation failed with the following errors:" (CDK)
+            if ("validation failed with" in line.lower() and "violations" in line.lower() and "SEVERE:" in line) or \
+               ("ValidationError:" in line and "Validation failed" in line):
                 # This indicates FrameworkRules is about to report violations
                 current_test._current_layer = "framework_rules"
                 current_test.framework_rules_status = "failed"
@@ -298,6 +301,10 @@ class ComplianceReportGenerator:
             elif "📋 FrameworkRules Advisories:" in line:
                 # Start capturing FrameworkRules advisory details
                 current_test._current_layer = "framework_rules_advisories"
+            elif "📋 FrameworkRules Violation Details:" in line:
+                # Start capturing FrameworkRules violation details
+                current_test._current_layer = "framework_rules"
+                current_test.framework_rules_status = "failed"
             elif "⏭️  Layer 2 (FrameworkRules): Skipped (no template)" in line:
                 current_test.framework_rules_status = "skipped (no template)"
                 current_test._current_layer = None
@@ -372,13 +379,17 @@ class ComplianceReportGenerator:
                             break
 
             # Capture individual violation messages
-            # Format 1: "SEVERE:   - SOC2-CC6.2-Auth: ..." (FrameworkRules)
+            # Format 1: "SEVERE:   - SOC2-CC6.2-Auth: ..." (FrameworkRules Java logger)
             # Format 2: "      - violation message" (cdk-nag, cfn-guard)
             # Format 3: "WARNING:  - ..." (advisories)
             # Format 4: "      ⚠ warning message" (cdk-nag advisories from JUnit tests)
+            # Format 5: "[stack/construct] RULE-ID: message" (CDK ValidationError format)
+            # Format 6: "   • RULE-ID: message" (TruthTableValidationTest output)
             violation_match = (re.match(r'SEVERE:\s+- (.+)', line) or
                              re.match(r'WARNING:\s+- (.+)', line) or
                              re.match(r'\s+⚠\s*(.+)', line) or
+                             re.match(r'\s+•\s*(.+)', line) or
+                             re.match(r'\s*\[[\w\-\.]+/\w+\]\s+(.+)', line) or
                              re.match(r'\s+- (.+)', line))
             if violation_match and current_test._current_layer:
                 violation = violation_match.group(1).strip()
@@ -421,6 +432,27 @@ class ComplianceReportGenerator:
                 elif stripped and not stripped.startswith("=") and "📋" not in line:
                     # Capture actual violation content (skip empty lines and markers)
                     current_test.cfn_guard_violations.append(stripped)
+
+            # Capture FrameworkRules violation detail lines (after "📋 FrameworkRules Violation Details:")
+            # Also captures lines from CDK ValidationError format: [stack/construct] RULE-ID: message
+            if current_test._current_layer == "framework_rules":
+                stripped = line.strip()
+                # Stop capturing on Layer 3 marker, closing separator, or next test
+                if "Layer 3" in line or "cfn-guard" in line or "Testing:" in line:
+                    current_test._current_layer = None
+                elif stripped.startswith("=") and len(stripped) > 20:
+                    # Separator line - skip
+                    pass
+                elif stripped and not stripped.startswith("=") and "📋" not in line:
+                    # Capture violation content in various formats:
+                    # Format 1: "• RULE-ID: message" (bullet point)
+                    # Format 2: "[stack/construct] RULE-ID: message" (CDK ValidationError)
+                    # Skip empty lines and section markers
+                    if stripped.startswith("•") or re.match(r'\[[\w\-\.]+/\w+\]', stripped):
+                        violation = re.sub(r'^•\s*', '', stripped)  # Remove bullet
+                        violation = re.sub(r'^\[[\w\-\.]+/\w+\]\s*', '', violation)  # Remove [stack/construct]
+                        if violation and violation not in current_test.framework_rules_violations:
+                            current_test.framework_rules_violations.append(violation)
 
             # Capture known gaps
             if "⚠️  Known gaps:" in line:
@@ -1131,16 +1163,26 @@ class ComplianceReportGenerator:
             is_framework_rules_failure = False
             is_test_setup_failure = False
             if result.error_message and result.status == "failed":
-                # FrameworkRules validation errors contain specific patterns
-                framework_rules_patterns = [
-                    'SOC2-', 'PCI-DSS-', 'HIPAA-', 'GDPR-',
-                    'User authentication required',
-                    'Private network mode required',
-                    'Anti-malware protection required',
-                    'File integrity monitoring required',
-                    'SystemContext'  # FrameworkRules errors come from SystemContext
-                ]
-                is_framework_rules_failure = any(p in result.error_message for p in framework_rules_patterns)
+                # FrameworkRules validation errors can be detected by:
+                # 1. CDK ValidationError format: [stack-name/SystemContext] RULE-ID: message
+                # 2. ValidationError header: "Validation failed with the following errors:"
+                # Use regex to detect structural patterns rather than hardcoded rule names
+
+                # Pattern 1: [stack/construct] RULE-ID: message
+                # RULE-ID format: FRAMEWORK-CONTROL (e.g., HIPAA-164.312(b)-FlowLogs, SOC2-CC7.2-FlowLogs)
+                rule_id_pattern = re.compile(r'\[[\w\-\.]+/\w+\]\s+[A-Z][A-Za-z0-9\.\-\(\)]+:')
+
+                # Pattern 2: CDK ValidationError wrapper
+                validation_error_pattern = re.compile(r'ValidationError:\s*Validation failed', re.IGNORECASE)
+
+                # Pattern 3: SystemContext indicates FrameworkRules validation
+                system_context_pattern = re.compile(r'/SystemContext\]')
+
+                is_framework_rules_failure = (
+                    bool(rule_id_pattern.search(result.error_message)) or
+                    bool(validation_error_pattern.search(result.error_message)) or
+                    bool(system_context_pattern.search(result.error_message))
+                )
 
                 # Test setup failures (e.g., truth table constraint violations)
                 test_setup_patterns = [

@@ -1,8 +1,9 @@
 package com.cloudforgeci.api.interfaces;
 
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
-import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.RemovalPolicy;
@@ -113,7 +114,7 @@ public interface SecurityProfileConfiguration {
      * @param networkMode The network mode (public-no-nat, private-with-nat)
      * @return The number of NAT gateways to create (0, 1, or 2)
      */
-    int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode);
+    int getNatGatewayCount(TopologyType topology, RuntimeType runtime, NetworkMode networkMode);
 
     /**
      * Whether WAF should be enabled for web application protection.

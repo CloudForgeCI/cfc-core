@@ -2,6 +2,7 @@ package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.SecretValue;
 import software.amazon.awscdk.Stack;
@@ -57,7 +58,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
     private static final Logger LOG = Logger.getLogger(OidcAuthenticationFactory.class.getName());
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("stackName")
     private String stackName;
@@ -109,8 +110,8 @@ public class OidcAuthenticationFactory extends BaseFactory {
 
     @Override
     public void create() {
-        // Only configure OIDC if authMode is "alb-oidc"
-        if (!"alb-oidc".equals(authMode)) {
+        // Only configure OIDC if authMode is ALB_OIDC
+        if (authMode != AuthMode.ALB_OIDC) {
             LOG.info("ALB-OIDC authentication not enabled (authMode = " + authMode + ")");
             return;
         }

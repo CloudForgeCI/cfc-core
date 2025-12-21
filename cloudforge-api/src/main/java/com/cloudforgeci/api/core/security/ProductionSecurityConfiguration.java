@@ -1,5 +1,6 @@
 package com.cloudforgeci.api.core.security;
 
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.SystemContext;
@@ -338,7 +339,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
         // Authentication Configuration - centralized auth handling
         whenBoth(c.authMode, c.alb, (authMode, alb) -> {
-            if ("alb-oidc".equalsIgnoreCase(authMode)) {
+            if (AuthMode.ALB_OIDC == AuthMode.fromString(authMode)) {
                 // Configure ALB OIDC authentication
                 // OIDC configuration would go here
                 LOG.info("ALB OIDC authentication configured");

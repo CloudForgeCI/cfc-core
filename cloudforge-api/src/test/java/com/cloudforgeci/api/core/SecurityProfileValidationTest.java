@@ -4,6 +4,7 @@ import com.cloudforgeci.api.core.security.DevSecurityProfileConfiguration;
 import com.cloudforgeci.api.core.security.ProductionSecurityProfileConfiguration;
 import com.cloudforgeci.api.core.security.StagingSecurityProfileConfiguration;
 import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.enums.RuntimeType;
@@ -35,7 +36,7 @@ class SecurityProfileValidationTest {
             config.getLogRetentionDays();
             config.getLogRemovalPolicy();
             config.isSecurityMonitoringEnabled();
-            config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat");
+            config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC);
         });
     }
 
@@ -55,7 +56,7 @@ class SecurityProfileValidationTest {
             config.getLogRetentionDays();
             config.getLogRemovalPolicy();
             config.isSecurityMonitoringEnabled();
-            config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat");
+            config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC);
         });
     }
 
@@ -75,7 +76,7 @@ class SecurityProfileValidationTest {
             config.getLogRetentionDays();
             config.getLogRemovalPolicy();
             config.isSecurityMonitoringEnabled();
-            config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat");
+            config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC);
         });
     }
 
@@ -90,7 +91,7 @@ class SecurityProfileValidationTest {
         assertNotNull(config.getLogRetentionDays(), "Dev should have log retention");
         assertNotNull(config.getLogRemovalPolicy(), "Dev should have removal policy");
         assertFalse(config.isSecurityMonitoringEnabled(), "Dev should not have security monitoring");
-        assertEquals(0, config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"), "Dev should have 0 NAT gateways");
+        assertEquals(0, config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC), "Dev should have 0 NAT gateways");
     }
 
     @Test
@@ -104,7 +105,7 @@ class SecurityProfileValidationTest {
         assertNotNull(config.getLogRetentionDays(), "Staging should have log retention");
         assertNotNull(config.getLogRemovalPolicy(), "Staging should have removal policy");
         assertTrue(config.isSecurityMonitoringEnabled(), "Staging should have security monitoring");
-        assertEquals(0, config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"), "Staging should have 0 NAT gateways for public-no-nat");
+        assertEquals(0, config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC), "Staging should have 0 NAT gateways for NetworkMode.PUBLIC");
     }
 
     @Test
@@ -118,7 +119,7 @@ class SecurityProfileValidationTest {
         assertNotNull(config.getLogRetentionDays(), "Production should have log retention");
         assertNotNull(config.getLogRemovalPolicy(), "Production should have removal policy");
         assertTrue(config.isSecurityMonitoringEnabled(), "Production should have security monitoring");
-        assertEquals(2, config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "private-with-nat"), "Production should have 2 NAT gateways");
+        assertEquals(2, config.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PRIVATE_WITH_NAT), "Production should have 2 NAT gateways");
     }
 
     @Test
@@ -133,17 +134,17 @@ class SecurityProfileValidationTest {
         // Dev should have minimal security
         assertFalse(devConfig.isFlowLogsEnabled());
         assertFalse(devConfig.isSecurityMonitoringEnabled());
-        assertEquals(0, devConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"));
+        assertEquals(0, devConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC));
 
         // Staging should have moderate security
         assertTrue(stagingConfig.isFlowLogsEnabled());
         assertTrue(stagingConfig.isSecurityMonitoringEnabled());
-        assertEquals(0, stagingConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"));
+        assertEquals(0, stagingConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC));
 
         // Production should have maximum security
         assertTrue(productionConfig.isFlowLogsEnabled());
         assertTrue(productionConfig.isSecurityMonitoringEnabled());
-        assertEquals(2, productionConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "private-with-nat"));
+        assertEquals(2, productionConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PRIVATE_WITH_NAT));
     }
 
     @Test
@@ -155,9 +156,9 @@ class SecurityProfileValidationTest {
         var productionConfig = new ProductionSecurityProfileConfiguration();
 
         // When & Then
-        assertEquals(0, devConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"), "Dev should have 0 NAT gateways");
-        assertEquals(0, stagingConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "public-no-nat"), "Staging should have 0 NAT gateways");
-        assertEquals(2, productionConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, "private-with-nat"), "Production should have 2 NAT gateways");
+        assertEquals(0, devConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC), "Dev should have 0 NAT gateways");
+        assertEquals(0, stagingConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PUBLIC), "Staging should have 0 NAT gateways");
+        assertEquals(2, productionConfig.getNatGatewayCount(TopologyType.JENKINS_SERVICE, RuntimeType.EC2, NetworkMode.PRIVATE_WITH_NAT), "Production should have 2 NAT gateways");
     }
 
     @Test

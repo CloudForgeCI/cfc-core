@@ -225,11 +225,7 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
 
         // Check which compliance frameworks are enabled
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Keep requiresPciDss for WAF validation below
         boolean requiresPciDss = complianceFrameworks != null &&

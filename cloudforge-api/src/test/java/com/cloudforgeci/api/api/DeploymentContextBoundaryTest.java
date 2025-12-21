@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.api;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -457,10 +458,11 @@ class DeploymentContextBoundaryTest {
         @DisplayName("authMode should handle kebab-case")
         void authModeKebabCase() {
             Map<String, Object> config = new LinkedHashMap<>();
-            config.put("authMode", "jenkins-oidc");
+            config.put("authMode", "application-oidc");
+            config.put("enableSsl", true);  // OIDC requires SSL
             DeploymentContext ctx = createContext(config);
 
-            assertEquals("jenkins-oidc", ctx.authMode(), "Auth mode should handle kebab-case");
+            assertEquals(AuthMode.APPLICATION_OIDC, ctx.authMode(), "Auth mode should handle kebab-case");
         }
     }
 

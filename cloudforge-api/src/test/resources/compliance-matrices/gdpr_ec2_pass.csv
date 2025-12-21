@@ -1,11 +1,11 @@
 configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-EC2_PRODUCTION_GDPR_alb-oidc_private-with-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,,true
-EC2_PRODUCTION_GDPR_alb-oidc_private-with-nat_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,,true
-EC2_PRODUCTION_GDPR_boundary-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,365,,PASS,jenkins,,,true
-EC2_PRODUCTION_GDPR_extended-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,730,,PASS,jenkins,,,true
+EC2_PRODUCTION_GDPR_alb-oidc_private-with-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,true,PASS,jenkins,,,true
+EC2_PRODUCTION_GDPR_alb-oidc_private-with-nat_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,true,PASS,jenkins,,,true
+EC2_PRODUCTION_GDPR_boundary-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,365,true,PASS,jenkins,,,true
+EC2_PRODUCTION_GDPR_extended-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,730,true,PASS,jenkins,,,true
 EC2_PRODUCTION_GDPR_flow-logs-explicit,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,true,PASS,jenkins,,,true
 EC2_PRODUCTION_GDPR_flow-logs-retention-730,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,730,true,PASS,jenkins,,,true
 EC2_PRODUCTION_GDPR_max-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,3650,true,PASS,jenkins,,,true
 EC2_PRODUCTION_GDPR_subdomain_flow-logs,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,true,PASS,jenkins,,,true
-EC2_PRODUCTION_GDPR_exact-min-retention-365,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,365,,PASS,jenkins,,,true
-EC2_PRODUCTION_GDPR_alb-oidc_private-with-nat_mattermost,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,mattermost,true,,true
+EC2_PRODUCTION_GDPR_exact-min-retention-365,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,365,true,PASS,jenkins,,,true
+EC2_PRODUCTION_GDPR_alb-oidc_private-with-nat_mattermost,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,true,PASS,mattermost,true,,true

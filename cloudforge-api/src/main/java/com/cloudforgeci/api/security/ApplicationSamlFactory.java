@@ -4,6 +4,7 @@ import com.cloudforgeci.api.core.Slot;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import software.constructs.Construct;
 
 import java.util.logging.Logger;
@@ -55,7 +56,7 @@ public class ApplicationSamlFactory extends BaseFactory {
     private String oidcProvider;
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("stackName")
     private String stackName;
@@ -78,7 +79,7 @@ public class ApplicationSamlFactory extends BaseFactory {
     @Override
     public void create() {
         // Only process for application-level authentication
-        if (!"application-oidc".equals(authMode)) {
+        if (authMode != AuthMode.APPLICATION_OIDC) {
             LOG.info("Application SAML not applicable - authMode is '" + authMode + "' (expected 'application-oidc')");
             return;
         }

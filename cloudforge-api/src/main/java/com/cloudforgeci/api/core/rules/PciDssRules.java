@@ -2,10 +2,12 @@ package com.cloudforgeci.api.core.rules;
 
 
 import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
@@ -78,15 +80,10 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
 
         LOG.info("Installing PCI-DSS compliance validation rules");
 
-        // Determine compliance mode
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        // Get compliance mode (already resolved to enum with proper default)
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
-        LOG.info("  Compliance mode: " + complianceMode +
-                 (complianceModeStr == null ? " (default for " + ctx.security + ")" : " (explicit)"));
+        LOG.info("  Compliance mode: " + complianceMode);
 
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();
@@ -162,7 +159,7 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         }
 
         // Requirement 1.3: Prohibit direct public access
-        if ("public-no-nat".equals(ctx.cfc.networkMode())) {
+        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
             rules.add(ComplianceRule.fail(
                 "PCI-DSS-Req-1.3-Network",
                 "Private network mode required for cardholder data environment",
@@ -384,8 +381,8 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         }
 
         // Requirement 8.2: Multi-factor authentication
-        String authMode = ctx.cfc.authMode();
-        if ("none".equals(authMode)) {
+        AuthMode authMode = ctx.cfc.authMode();
+        if (authMode == AuthMode.NONE) {
             rules.add(ComplianceRule.fail(
                 "PCI-DSS-Req-8.2-Auth",
                 "Authentication must be enabled for production environments",
@@ -401,7 +398,7 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         }
 
         // Requirement 8.3: Strong authentication with MFA
-        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
+        if (authMode == AuthMode.ALB_OIDC || authMode == AuthMode.APPLICATION_OIDC) {
             // Check if using Cognito with MFA (compliant) or SSO (requires ssoInstanceArn)
             boolean usingCognitoWithMfa = Boolean.TRUE.equals(ctx.cfc.cognitoAutoProvision())
                                        && Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled());
@@ -706,14 +703,14 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
 
         report.append("Infrastructure Controls:\n");
         report.append("  ✓ Network Segmentation (Req 1.2.1): ").append(ctx.vpc.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Private Network (Req 1.3): ").append("private-with-nat".equals(ctx.cfc.networkMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Private Network (Req 1.3): ").append(ctx.cfc.networkMode() == NetworkMode.PRIVATE_WITH_NAT ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ EBS Encryption (Req 3.4): ").append(config.isEbsEncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ EFS Encryption at Rest (Req 3.4): ").append(config.isEfsEncryptionAtRestEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ EFS Encryption in Transit (Req 4.1): ").append(config.isEfsEncryptionInTransitEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ S3 Encryption (Req 3.4): ").append(config.isS3EncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ TLS Certificate (Req 4.1): ").append(ctx.cert.get().isPresent() ? "CONFIGURED" : "MISSING").append("\n");
         report.append("  ✓ WAF Protection (Req 6.6): ").append(config.isWafEnabled() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Authentication (Req 8.2): ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Authentication (Req 8.2): ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CloudTrail (Req 10.2): ").append(config.isCloudTrailEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ VPC Flow Logs (Req 10.3): ").append(config.isFlowLogsEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ ALB Access Logs (Req 10.5): ").append(config.isAlbAccessLoggingEnabled() ? "ENABLED" : "DISABLED").append("\n");

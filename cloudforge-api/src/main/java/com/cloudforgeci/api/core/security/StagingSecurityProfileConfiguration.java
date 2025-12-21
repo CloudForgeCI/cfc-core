@@ -4,10 +4,11 @@ import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.rules.ComplianceMatrix;
 import com.cloudforgeci.api.core.util.RetentionDaysConverter;
 import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
-import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -67,12 +68,17 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             return ComplianceMode.DISABLED;
         }
 
+        // Use the compliance mode from deployment context if set
+        ComplianceMode contextMode = deploymentContext.complianceMode();
+        if (contextMode != null) {
+            return contextMode;
+        }
+
+        // Default based on whether compliance frameworks are enabled
         String frameworks = deploymentContext.complianceFrameworks();
-        ComplianceMode defaultMode = (frameworks != null && !frameworks.isEmpty())
+        return (frameworks != null && !frameworks.isEmpty())
             ? ComplianceMode.ENFORCE
             : ComplianceMode.DISABLED;
-
-        return ComplianceMode.fromString(deploymentContext.complianceMode(), defaultMode);
     }
 
     // Logging Configuration - Moderate retention
@@ -361,9 +367,9 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     @Override
-    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
+    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, NetworkMode networkMode) {
         // Staging respects network mode for cost optimization
-        if ("private-with-nat".equals(networkMode)) {
+        if (networkMode == NetworkMode.PRIVATE_WITH_NAT) {
             return 2; // High availability for staging
         }
         return 0; // No NAT gateways for public subnets in staging

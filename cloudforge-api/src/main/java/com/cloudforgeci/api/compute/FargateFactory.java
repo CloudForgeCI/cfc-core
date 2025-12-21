@@ -4,6 +4,8 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import software.amazon.awscdk.CfnOutput;
@@ -85,7 +87,7 @@ public class FargateFactory extends BaseFactory {
   private Integer cpuTargetUtilization;
 
   @DeploymentContext("networkMode")
-  private String networkMode;
+  private NetworkMode networkMode;
 
   @DeploymentContext("healthCheckGracePeriod")
   private Integer healthCheckGracePeriod;
@@ -118,7 +120,7 @@ public class FargateFactory extends BaseFactory {
   private AccessPoint ap;
 
   @DeploymentContext("authMode")
-  private String authMode;
+  private AuthMode authMode;
 
   @DeploymentContext("stackName")
   private String stackName;
@@ -248,7 +250,7 @@ public class FargateFactory extends BaseFactory {
             .allowAllOutbound(true).build();
     ctx.fargateServiceSg.set(serviceSg);
     // Determine subnet type and public IP assignment based on network mode
-    boolean assignPublicIp = "public-no-nat".equals(networkMode);
+    boolean assignPublicIp = networkMode == NetworkMode.PUBLIC;
     SubnetType subnetType = assignPublicIp ? SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
 
     // Enable ECS Exec only if bastionCidr is configured (indicates remote access needed)

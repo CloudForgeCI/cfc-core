@@ -1,6 +1,8 @@
 package com.cloudforgeci.samples.app;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
@@ -110,10 +112,10 @@ class DeploymentContextPropagationTest {
         assertEquals("test.example.com", cfc.domain());
         assertEquals("app", cfc.subdomain());
         assertEquals(true, cfc.enableSsl());
-        assertEquals("private-with-nat", cfc.networkMode());
+        assertEquals(NetworkMode.PRIVATE_WITH_NAT, cfc.networkMode());
         assertEquals(true, cfc.wafEnabled());
         assertEquals(false, cfc.cloudfrontEnabled());
-        assertEquals("alb-oidc", cfc.authMode());
+        assertEquals(AuthMode.ALB_OIDC, cfc.authMode());
 
         // Cognito
         assertEquals(true, cfc.cognitoAutoProvision());
@@ -291,7 +293,7 @@ class DeploymentContextPropagationTest {
         context1.put("authMode", "none");
         app1.getNode().setContext("cfc", context1);
         DeploymentContext cfc1 = DeploymentContext.from(app1);
-        assertEquals("none", cfc1.authMode());
+        assertEquals(AuthMode.NONE, cfc1.authMode());
 
         // Test "alb-oidc" authMode (requires enableSsl=true and domain)
         App app2 = new App();
@@ -301,15 +303,17 @@ class DeploymentContextPropagationTest {
         context2.put("domain", "example.com");
         app2.getNode().setContext("cfc", context2);
         DeploymentContext cfc2 = DeploymentContext.from(app2);
-        assertEquals("alb-oidc", cfc2.authMode());
+        assertEquals(AuthMode.ALB_OIDC, cfc2.authMode());
 
-        // Test "jenkins-oidc" authMode
+        // Test "jenkins-oidc" authMode (legacy alias for APPLICATION_OIDC, requires enableSsl=true)
         App app3 = new App();
         Map<String, Object> context3 = createMinimalContext();
         context3.put("authMode", "jenkins-oidc");
+        context3.put("enableSsl", true);
+        context3.put("domain", "example.com");
         app3.getNode().setContext("cfc", context3);
         DeploymentContext cfc3 = DeploymentContext.from(app3);
-        assertEquals("jenkins-oidc", cfc3.authMode());
+        assertEquals(AuthMode.APPLICATION_OIDC, cfc3.authMode()); // jenkins-oidc maps to APPLICATION_OIDC
     }
 
     // ==================== Helper Methods ====================

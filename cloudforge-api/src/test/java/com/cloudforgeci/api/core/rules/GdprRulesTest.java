@@ -1045,13 +1045,15 @@ class GdprRulesTest {
         customContext.put("authMode", authMode);
         customContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
 
+        // OIDC auth modes require SSL
+        if (authMode.equals("alb-oidc") || authMode.equals("jenkins-oidc") || authMode.equals("application-oidc")) {
+            customContext.put("enableSsl", "true");
+            customContext.put("cognitoAutoProvision", "true");
+        }
+
         if (hasCert) {
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "gdpr.example.com");
-        }
-
-        if (authMode.equals("alb-oidc") || authMode.equals("jenkins-oidc")) {
-            customContext.put("cognitoAutoProvision", "true");
         }
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -1715,13 +1717,15 @@ class GdprRulesTest {
         cfcContext.put("networkMode", networkMode);
         cfcContext.put("authMode", authMode);
 
+        // OIDC auth modes require SSL
+        if (authMode.equals("alb-oidc") || authMode.equals("jenkins-oidc") || authMode.equals("application-oidc")) {
+            cfcContext.put("enableSsl", "true");
+            cfcContext.put("cognitoAutoProvision", "true");
+        }
+
         if (hasCert) {
             cfcContext.put("enableSsl", "true");
             cfcContext.put("fqdn", "gdpr.example.com");
-        }
-
-        if (authMode.equals("alb-oidc") || authMode.equals("jenkins-oidc")) {
-            cfcContext.put("cognitoAutoProvision", "true");
         }
         stack.getNode().setContext("cfc", cfcContext);
 

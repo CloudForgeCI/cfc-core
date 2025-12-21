@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.enums.SecurityProfile;
@@ -278,6 +279,10 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
       }
 
       c.https.set(https);
+
+      // Register AWS Config rules for HTTPS/TLS compliance
+      c.requireConfigRule(AwsConfigRule.ALB_HTTPS_ONLY);
+      c.requireConfigRule(AwsConfigRule.ELB_TLS_HTTPS_LISTENERS);
     });
 
     // 4c) Service behind HTTPS - wait for all components to be ready

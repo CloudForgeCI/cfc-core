@@ -128,11 +128,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
         // Use ComplianceMatrix to determine if KMS rotation is REQUIRED or ADVISORY
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
             ComplianceMatrix.SecurityControl.KMS_KEY_ROTATION,
@@ -205,11 +201,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
         // Use ComplianceMatrix to determine if certificate monitoring is REQUIRED or ADVISORY
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
             ComplianceMatrix.SecurityControl.CERTIFICATE_EXPIRATION_MONITORING,
@@ -290,11 +282,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
         // Use ComplianceMatrix to determine if Secrets Manager is REQUIRED or ADVISORY
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         ComplianceMatrix.ValidationResult smResult = ComplianceMatrix.validateControlMultiFramework(
             ComplianceMatrix.SecurityControl.SECRETS_MANAGER,

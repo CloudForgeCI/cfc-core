@@ -2,11 +2,14 @@ package com.cloudforgeci.samples.app;
 
 import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforge.core.config.ApplicationInfo;
+import com.cloudforge.core.enums.ComplianceFrameworkType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -149,7 +152,12 @@ class InteractiveDeployerTest {
         config.awsConfigEnabled = true;
         config.guardDutyEnabled = true;
         config.auditManagerEnabled = true;
-        config.complianceFrameworks = "SOC2,HIPAA,PCI-DSS,GDPR";
+        config.complianceFrameworks = List.of(
+            ComplianceFrameworkType.SOC2,
+            ComplianceFrameworkType.HIPAA,
+            ComplianceFrameworkType.PCI_DSS,
+            ComplianceFrameworkType.GDPR
+        );
         config.logRetentionDays = "730";
 
         // When
@@ -161,7 +169,7 @@ class InteractiveDeployerTest {
         assertEquals(true, context.get("awsConfigEnabled"));
         assertEquals(true, context.get("guardDutyEnabled"));
         assertEquals(true, context.get("auditManagerEnabled"));
-        assertEquals("SOC2,HIPAA,PCI-DSS,GDPR", context.get("complianceFrameworks"));
+        assertEquals("soc2,hipaa,pci-dss,gdpr", context.get("complianceFrameworks")); // Serialized as lowercase
         assertEquals("730", context.get("logRetentionDays"));
     }
 
@@ -169,7 +177,7 @@ class InteractiveDeployerTest {
     void testBuildCfcContext_NetworkConfiguration() throws Exception {
         // Given
         DeploymentConfig config = createMinimalConfig();
-        config.networkMode = "private-with-nat";
+        config.networkMode = NetworkMode.PRIVATE_WITH_NAT;
         config.wafEnabled = true;
         config.cloudfrontEnabled = true;
 
@@ -177,7 +185,7 @@ class InteractiveDeployerTest {
         Map<String, Object> context = buildCfcContext(config);
 
         // Then
-        assertEquals("private-with-nat", context.get("networkMode"));
+        assertEquals("private-with-nat", context.get("networkMode")); // Serialized as lowercase
         assertEquals(true, context.get("wafEnabled"));
         assertEquals(true, context.get("cloudfrontEnabled"));
     }
@@ -379,18 +387,14 @@ class InteractiveDeployerTest {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.applicationId = "gitlab";
-        config.supportsFargate = true;
-        config.supportsEc2 = true;
-        config.supportsOidc = true;
+        // Note: supportsFargate, supportsEc2, supportsOidc are on ApplicationInfo, not DeploymentConfig
+        // These are populated from ApplicationSpec during interactive deployment
 
         // When
         Map<String, Object> context = buildCfcContext(config);
 
         // Then
         assertEquals("gitlab", context.get("applicationId"));
-        assertEquals(true, context.get("supportsFargate"));
-        assertEquals(true, context.get("supportsEc2"));
-        assertEquals(true, context.get("supportsOidc"));
     }
 
     @Test

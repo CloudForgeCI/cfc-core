@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.api;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -148,12 +149,13 @@ class DeploymentContextValidationRulesTest {
         }
 
         @Test
-        @DisplayName("authMode=jenkins-oidc should not require SSL")
-        void jenkinsOidcNoSslRequirement() throws Exception {
+        @DisplayName("authMode=jenkins-oidc requires SSL")
+        void jenkinsOidcRequiresSsl() throws Exception {
             Map<String, Object> config = new LinkedHashMap<>();
             config.put("authMode", "jenkins-oidc");
+            config.put("enableSsl", true);  // OIDC modes require SSL
 
-            assertDoesNotThrow(() -> fromMap(config), "jenkins-oidc should work without SSL");
+            assertDoesNotThrow(() -> fromMap(config), "jenkins-oidc should work with SSL enabled");
         }
 
         @Test
@@ -269,7 +271,7 @@ class DeploymentContextValidationRulesTest {
             assertEquals("production", ctx.env());
             assertEquals("jenkins.myapp.com", ctx.fqdn());
             assertTrue(ctx.enableSsl());
-            assertEquals("alb-oidc", ctx.authMode());
+            assertEquals(AuthMode.ALB_OIDC, ctx.authMode());
         }
 
         @Test
@@ -284,7 +286,7 @@ class DeploymentContextValidationRulesTest {
             assertEquals("dev", ctx.env());
             assertEquals("public", ctx.tier());
             assertFalse(ctx.enableSsl());
-            assertEquals("none", ctx.authMode());
+            assertEquals(AuthMode.NONE, ctx.authMode());
         }
 
         @Test
@@ -302,10 +304,10 @@ class DeploymentContextValidationRulesTest {
         @DisplayName("Auth without SSL for non-OIDC modes should succeed")
         void authWithoutSslForNonOidcSucceeds() throws Exception {
             Map<String, Object> config = new LinkedHashMap<>();
-            config.put("authMode", "jenkins-oidc");
+            config.put("authMode", "none");  // Non-OIDC mode
             config.put("enableSsl", false);
 
-            assertDoesNotThrow(() -> fromMap(config), "jenkins-oidc without SSL should succeed");
+            assertDoesNotThrow(() -> fromMap(config), "non-OIDC auth mode without SSL should succeed");
         }
     }
 

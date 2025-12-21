@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.database;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection;
@@ -263,6 +264,13 @@ public class RdsFactory {
         }
 
         DatabaseInstance instance = instanceBuilder.build();
+
+        // Register AWS Config rules for RDS compliance monitoring
+        ctx.requireConfigRule(AwsConfigRule.RDS_STORAGE_ENCRYPTED);
+        ctx.requireConfigRule(AwsConfigRule.DB_INSTANCE_BACKUP_ENABLED);
+        if (multiAzOverride != null ? multiAzOverride : (security == SecurityProfile.PRODUCTION)) {
+            ctx.requireConfigRule(AwsConfigRule.RDS_MULTI_AZ);
+        }
 
         // Add CDK-NAG suppressions for RDS compliance findings
         NagSuppressions.addResourceSuppressions(

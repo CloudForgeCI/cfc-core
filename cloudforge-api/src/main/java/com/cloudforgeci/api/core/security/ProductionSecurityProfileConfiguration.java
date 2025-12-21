@@ -4,10 +4,11 @@ import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.rules.ComplianceMatrix;
 import com.cloudforgeci.api.core.util.RetentionDaysConverter;
 import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
-import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -49,12 +50,17 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
             return ComplianceMode.DISABLED;
         }
 
+        // Use the compliance mode from deployment context if set
+        ComplianceMode contextMode = deploymentContext.complianceMode();
+        if (contextMode != null) {
+            return contextMode;
+        }
+
+        // Default based on whether compliance frameworks are enabled
         String frameworks = deploymentContext.complianceFrameworks();
-        ComplianceMode defaultMode = (frameworks != null && !frameworks.isEmpty())
+        return (frameworks != null && !frameworks.isEmpty())
             ? ComplianceMode.ENFORCE
             : ComplianceMode.DISABLED;
-
-        return ComplianceMode.fromString(deploymentContext.complianceMode(), defaultMode);
     }
 
     // Logging Configuration - Extended retention for compliance
@@ -361,9 +367,9 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     }
 
     @Override
-    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
+    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, NetworkMode networkMode) {
         // Production respects network mode but defaults to NAT gateways for security
-        if ("public-no-nat".equals(networkMode)) {
+        if (networkMode == NetworkMode.PUBLIC) {
             return 0; // No NAT gateways for public subnets when explicitly requested
         }
         // Use 2 NAT gateways for high availability across AZs for private subnets

@@ -167,11 +167,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         boolean rdsMultiAz = getBooleanSetting(ctx, "rdsMultiAz", false);
 
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         ComplianceMatrix.ValidationResult multiAzResult = ComplianceMatrix.validateControlMultiFramework(
             ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ,
@@ -290,11 +286,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         boolean dynamoDbPitrEnabled = getBooleanSetting(ctx, "dynamoDbPitrEnabled", false);
 
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         ComplianceMatrix.ValidationResult pitrResult = ComplianceMatrix.validateControlMultiFramework(
             ComplianceMatrix.SecurityControl.DATABASE_PITR,

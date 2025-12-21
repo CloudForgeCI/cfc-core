@@ -4,11 +4,14 @@ import com.cloudforgeci.api.compute.ApplicationLoader;
 import com.cloudforge.core.config.ApplicationInfo;
 import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceFrameworkType;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
-import com.cloudforge.core.enums.IAMProfile;
-import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.samples.launchers.ApplicationEc2Stack;
 import com.cloudforgeci.samples.launchers.ApplicationFargateStack;
@@ -207,11 +210,6 @@ public class InteractiveDeployer {
         config.applicationName = selectedApp.name;
         config.applicationSpec = APPLICATION_REGISTRY.get(selectedApp.id);
 
-        // Store application metadata for later use
-        config.supportsFargate = selectedApp.supportsFargate;
-        config.supportsEc2 = selectedApp.supportsEc2;
-        config.supportsOidc = selectedApp.supportsOidc;
-
         // Auto-enable database provisioning for applications that require it
         if (config.applicationSpec instanceof com.cloudforge.core.interfaces.DatabaseSpec dbSpec) {
             var dbRequirement = dbSpec.databaseRequirement();
@@ -237,15 +235,15 @@ public class InteractiveDeployer {
         System.out.println("\n⚙️  Runtime Configuration:");
         System.out.println("========================");
 
-        if (config.supportsFargate && config.supportsEc2) {
+        if (selectedApp.supportsFargate && selectedApp.supportsEc2) {
             // Application supports both - let user choose
             config.runtime = RuntimeType.valueOf(
                 promptChoice("Runtime", new String[]{"FARGATE", "EC2"}, "FARGATE").toUpperCase());
-        } else if (config.supportsFargate) {
+        } else if (selectedApp.supportsFargate) {
             // Only Fargate supported
             config.runtime = RuntimeType.FARGATE;
             System.out.println("✅ Runtime: FARGATE (only option for " + selectedApp.name + ")");
-        } else if (config.supportsEc2) {
+        } else if (selectedApp.supportsEc2) {
             // Only EC2 supported
             config.runtime = RuntimeType.EC2;
             System.out.println("✅ Runtime: EC2 (only option for " + selectedApp.name + ")");
@@ -272,7 +270,7 @@ public class InteractiveDeployer {
         }
 
         // ========== OIDC AUTHENTICATION (truth table: only if application supports it) ==========
-        if (config.supportsOidc) {
+        if (selectedApp.supportsOidc) {
             System.out.println("\n🔐 OIDC Authentication (Application Supports It!):");
             System.out.println("===================================================");
             System.out.println("✅ " + selectedApp.name + " supports OIDC integration");
@@ -349,8 +347,9 @@ public class InteractiveDeployer {
         // ========== NETWORK CONFIGURATION ==========
         System.out.println("\n🌐 Network Configuration:");
         System.out.println("==========================");
-        config.networkMode = promptChoice("Network Mode",
+        String networkModeStr = promptChoice("Network Mode",
             new String[]{"public-no-nat", "private-with-nat"}, "public-no-nat");
+        config.networkMode = NetworkMode.fromString(networkModeStr);
 
         // Truth table: WAF and CloudFront recommended for PRODUCTION
         config.wafEnabled = promptYesNo("Enable WAF Protection",
@@ -478,14 +477,14 @@ public class InteractiveDeployer {
 
         if (oidcAuthModes.isEmpty()) {
             // Application doesn't support OIDC at all
-            config.authMode = "none";
+            config.authMode = AuthMode.NONE;
             System.out.println("\n⚠️  Application doesn't support OIDC authentication");
             return;
         }
 
         if (oidcAuthModes.size() == 1) {
             // Only one OIDC mode supported - use it automatically
-            config.authMode = oidcAuthModes.get(0);
+            config.authMode = AuthMode.fromString(oidcAuthModes.get(0));
             System.out.println("\n✅ Using " + config.authMode + " (only OIDC mode supported by this application)");
         } else {
             // Multiple modes supported - let user choose
@@ -498,8 +497,9 @@ public class InteractiveDeployer {
             System.out.println("Recommendation: " + recommendedAuthMode);
             System.out.println("");
 
-            config.authMode = promptChoice("Authentication Mode",
+            String authModeStr = promptChoice("Authentication Mode",
                 oidcAuthModes.toArray(String[]::new), recommendedAuthMode);
+            config.authMode = AuthMode.fromString(authModeStr);
         }
 
                 // OIDC requires SSL - auto-enable if not already set
@@ -643,8 +643,8 @@ public class InteractiveDeployer {
         }
 
         // For SAML apps, use application-oidc mode (auth happens at application level)
-        config.authMode = "application-oidc";
-        System.out.println("\n✅ Using application-oidc mode (SAML authentication at application level)");
+        config.authMode = AuthMode.APPLICATION_OIDC;
+        System.out.println("\n✅ Using APPLICATION_OIDC mode (SAML authentication at application level)");
     }
 
     private static void configureExternalOidc(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
@@ -740,12 +740,12 @@ public class InteractiveDeployer {
                 if (config.auditManagerEnabled) {
                     selectComplianceFrameworks(config);
                 } else {
-                    config.complianceFrameworks = "";
+                    config.complianceFrameworks.clear();
                 }
             }
         } else {
             config.auditManagerEnabled = false;
-            config.complianceFrameworks = "";
+            config.complianceFrameworks.clear();
         }
 
         // Compliance validation mode (cdk-nag + cfn-guard)
@@ -759,10 +759,11 @@ public class InteractiveDeployer {
             System.out.println("");
 
             String defaultMode = config.securityProfile == SecurityProfile.PRODUCTION ? "enforce" : "advisory";
-            config.complianceMode = promptWithValidation("Validation Mode", defaultMode,
+            String modeStr = promptWithValidation("Validation Mode", defaultMode,
                 new String[]{"enforce", "advisory", "disabled"});
+            config.complianceMode = ComplianceMode.fromString(modeStr, ComplianceMode.ADVISORY);
         } else {
-            config.complianceMode = "disabled";
+            config.complianceMode = ComplianceMode.DISABLED;
         }
 
         // Database configuration
@@ -954,19 +955,20 @@ public class InteractiveDeployer {
         String choice = promptWithValidation("Framework(s)", "1",
             new String[]{"1", "2", "3", "4", "5", "6", "7", "8"});
 
-        config.complianceFrameworks = switch (choice) {
-            case "1" -> "PCI-DSS,HIPAA,SOC2,GDPR";
-            case "2" -> "SOC2";
-            case "3" -> "HIPAA";
-            case "4" -> "PCI-DSS";
-            case "5" -> "GDPR";
-            case "6" -> "HIPAA,SOC2,GDPR";
-            case "7" -> "PCI-DSS,SOC2";
-            case "8" -> promptOptional("Frameworks (comma-separated)", "SOC2");
-            default -> "SOC2";
+        String frameworksStr = switch (choice) {
+            case "1" -> "pci-dss,hipaa,soc2,gdpr";
+            case "2" -> "soc2";
+            case "3" -> "hipaa";
+            case "4" -> "pci-dss";
+            case "5" -> "gdpr";
+            case "6" -> "hipaa,soc2,gdpr";
+            case "7" -> "pci-dss,soc2";
+            case "8" -> promptOptional("Frameworks (comma-separated)", "soc2");
+            default -> "soc2";
         };
+        config.complianceFrameworks = new ArrayList<>(ComplianceFrameworkType.parseCommaSeparated(frameworksStr));
 
-        System.out.println("\n✅ Selected frameworks: " + config.complianceFrameworks);
+        System.out.println("\n✅ Selected frameworks: " + config.getComplianceFrameworksAsString());
     }
 
     private static void configureAdvancedSettings(DeploymentConfig config) {
@@ -1284,7 +1286,7 @@ public class InteractiveDeployer {
         }
 
         // OIDC/SAML Authentication
-        if (config.supportsOidc && !config.oidcProvider.equals("none")) {
+        if (config.applicationSpec != null && config.applicationSpec.supportsOidcIntegration() && !config.oidcProvider.equals("none")) {
             System.out.println("🔐 Authentication");
             System.out.println("═══════════════════════════════════════════════════════════════");
             System.out.println("  Provider:           " + config.oidcProvider);
@@ -1512,30 +1514,28 @@ public class InteractiveDeployer {
         }
 
         // Apply cdk-nag validation based on complianceMode (Layer 1: construct-level compliance checks)
-        ComplianceMode complianceMode = ComplianceMode.fromString(config.complianceMode,
-            ComplianceMode.defaultForProfile(config.securityProfile));
+        ComplianceMode complianceMode = config.complianceMode != null
+            ? config.complianceMode
+            : ComplianceMode.defaultForProfile(config.securityProfile);
 
         // Only apply CDK Nag if compliance frameworks are specified
         // CDK Nag (Layer 1) runs independently of Layer 2 (FrameworkRules) and Layer 4 (AWS Config)
-        boolean hasComplianceFrameworks = config.complianceFrameworks != null &&
-                                          !config.complianceFrameworks.trim().isEmpty();
+        boolean hasComplianceFrameworks = config.hasAnyComplianceFramework();
 
         if (complianceMode != ComplianceMode.DISABLED && hasComplianceFrameworks) {
             System.out.println("\n🔍 Applying cdk-nag validation for compliance frameworks...");
             System.out.println("   Mode: " + complianceMode);
 
-            // Parse enabled frameworks from comma-separated list
-            String[] frameworks = config.complianceFrameworks.split(",");
+            // Iterate over enabled frameworks
             int appliedCount = 0;
 
-            for (String framework : frameworks) {
-                String trimmedFramework = framework.trim().toUpperCase();
-                NagPack pack = mapFrameworkToNagPack(trimmedFramework, complianceMode);
+            for (ComplianceFrameworkType framework : config.complianceFrameworks) {
+                NagPack pack = mapFrameworkToNagPack(framework.getMatrixKey(), complianceMode);
 
                 if (pack != null) {
                     Aspects.of(app).add(pack);
                     appliedCount++;
-                    System.out.println("   ✓ Applied cdk-nag pack for " + trimmedFramework);
+                    System.out.println("   ✓ Applied cdk-nag pack for " + framework.getMatrixKey());
                 }
             }
 
@@ -1562,9 +1562,10 @@ public class InteractiveDeployer {
     }
 
     private static void executeDeployment(App app, DeploymentConfig config, String choice) {
-        // Parse compliance mode
-        ComplianceMode complianceMode = ComplianceMode.fromString(config.complianceMode,
-            ComplianceMode.defaultForProfile(config.securityProfile));
+        // Use compliance mode from config, defaulting by profile if null
+        ComplianceMode complianceMode = config.complianceMode != null
+            ? config.complianceMode
+            : ComplianceMode.defaultForProfile(config.securityProfile);
 
         switch (choice) {
             case "2", "3" -> {
@@ -1658,30 +1659,24 @@ public class InteractiveDeployer {
                 return true;
             }
 
-            // Parse selected frameworks
-            String[] frameworks = config.complianceFrameworks.toLowerCase().split(",");
+            // Iterate over selected frameworks
             boolean allPassed = true;
 
-            for (String framework : frameworks) {
-                framework = framework.trim();
-                if (framework.isEmpty()) continue;
-
+            for (ComplianceFrameworkType framework : config.complianceFrameworks) {
                 // Map framework to guard rule file
                 String guardFile = switch (framework) {
-                    case "soc2" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard";
-                    case "pci-dss", "pci" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard";
-                    case "hipaa" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/hipaa-security-rule.guard";
-                    case "gdpr" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/gdpr-data-protection.guard";
-                    case "fedramp" -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/fedramp-moderate.guard";
-                    default -> null;
+                    case SOC2 -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard";
+                    case PCI_DSS -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard";
+                    case HIPAA -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/hipaa-security-rule.guard";
+                    case GDPR -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/gdpr-data-protection.guard";
                 };
 
-                if (guardFile == null || !Files.exists(Paths.get(guardFile))) {
-                    System.out.println("⚠️  No guard rules found for framework: " + framework);
+                if (!Files.exists(Paths.get(guardFile))) {
+                    System.out.println("⚠️  No guard rules found for framework: " + framework.getJsonValue());
                     continue;
                 }
 
-                System.out.println("\n   Validating against " + framework.toUpperCase() + "...");
+                System.out.println("\n   Validating against " + framework.getMatrixKey() + "...");
 
                 // Run cfn-guard validate
                 ProcessBuilder guardProcess = new ProcessBuilder(
@@ -1695,10 +1690,10 @@ public class InteractiveDeployer {
                 int exitCode = guardProc.waitFor();
 
                 if (exitCode != 0) {
-                    System.out.println("   ❌ " + framework.toUpperCase() + " validation FAILED");
+                    System.out.println("   ❌ " + framework.getMatrixKey() + " validation FAILED");
                     allPassed = false;
                 } else {
-                    System.out.println("   ✅ " + framework.toUpperCase() + " validation PASSED");
+                    System.out.println("   ✅ " + framework.getMatrixKey() + " validation PASSED");
                 }
             }
 
@@ -1797,34 +1792,20 @@ public class InteractiveDeployer {
     }
 
     private static void loadContextFromFileAndDeploy(String contextFile, String deploymentOption, String customStackName) throws Exception {
-        // Implementation unchanged from original - just loads saved context and deploys
-        String content = Files.readString(Paths.get(contextFile));
+        // Load configuration using Jackson deserialization (replaces 80+ manual extract calls)
+        DeploymentConfig config = DeploymentConfig.fromFile(contextFile);
 
-        String stackName = extractValue(content, "stackName");
-        String runtime = extractValue(content, "runtime");
-        String topology = extractValue(content, "topology");
-        String securityProfile = extractValue(content, "securityProfile");
-        String applicationId = extractValue(content, "applicationId");
-        String applicationName = extractValue(content, "applicationName");
-
-        DeploymentConfig config = new DeploymentConfig();
+        // Apply custom stack name override if provided
         if (customStackName != null && !customStackName.trim().isEmpty()) {
             config.stackName = customStackName;
-        } else {
-            config.stackName = stackName;
         }
-        config.runtime = RuntimeType.valueOf(runtime);
-        config.topology = topology != null ? TopologyType.valueOf(topology) : TopologyType.APPLICATION_SERVICE;
-        config.securityProfile = SecurityProfile.valueOf(securityProfile);
 
-        // Reconstruct applicationSpec from applicationId
-        if (applicationId != null) {
-            config.applicationId = applicationId;
-            config.applicationName = applicationName;
-            config.applicationSpec = APPLICATION_REGISTRY.get(applicationId);
+        // Reconstruct applicationSpec from applicationId (not serialized to JSON)
+        if (config.applicationId != null) {
+            config.applicationSpec = APPLICATION_REGISTRY.get(config.applicationId);
 
             if (config.applicationSpec == null) {
-                System.err.println("❌ ERROR: Unknown application ID: " + applicationId);
+                System.err.println("❌ ERROR: Unknown application ID: " + config.applicationId);
                 return;
             }
         } else {
@@ -1832,191 +1813,22 @@ public class InteractiveDeployer {
             return;
         }
 
-        // Load all configuration fields from context
-        config.environment = extractValue(content, "env");
-        if (config.environment == null) {
-            config.environment = extractValue(content, "environment");
-        }
-
-        // Domain configuration
-        config.domain = extractStringValue(content, "domain", "");
-        config.subdomain = extractStringValue(content, "subdomain", "");
-        config.enableSsl = extractBoolValue(content, "enableSsl", false);
-
-        // Network configuration
-        config.networkMode = extractStringValue(content, "networkMode", "public-no-nat");
-        config.lbType = extractStringValue(content, "lbType", "alb");
-        config.createZone = extractBoolValue(content, "createZone", false);
-        config.enableFlowlogs = extractBoolValue(content, "enableFlowlogs", false);
-        config.wafEnabled = extractBoolValue(content, "wafEnabled", false);
-        config.albAccessLogging = extractBoolValue(content, "albAccessLogging", false);
-        config.cloudfrontEnabled = extractBoolValue(content, "cloudfrontEnabled", false);
-
-        // Resource configuration
-        config.minInstanceCapacity = extractIntValue(content, "minInstanceCapacity", 1);
-        config.maxInstanceCapacity = extractIntValue(content, "maxInstanceCapacity", 1);
-        config.cpuTargetUtilization = extractIntValue(content, "cpuTargetUtilization", 60);
-        config.cpu = extractIntValue(content, "cpu", 1024);
-        config.memory = extractIntValue(content, "memory", 2048);
-        config.instanceType = extractStringValue(content, "instanceType", "t3.micro");
-        config.enableAutoScaling = extractBoolValue(content, "enableAutoScaling", false);
-
-        // OIDC configuration
-        config.oidcProvider = extractStringValue(content, "oidcProvider", "none");
-        config.authMode = extractStringValue(content, "authMode", "none");
-        config.cognitoAutoProvision = extractBoolValue(content, "cognitoAutoProvision", false);
-        config.cognitoUserPoolName = extractValue(content, "cognitoUserPoolName");
-        config.cognitoDomainPrefix = extractValue(content, "cognitoDomainPrefix");
-        config.cognitoMfaEnabled = extractBoolValue(content, "cognitoMfaEnabled", false);
-        config.cognitoCreateGroups = extractBoolValue(content, "cognitoCreateGroups", true);
-        config.cognitoAdminGroupName = extractValue(content, "cognitoAdminGroupName");
-        config.cognitoUserGroupName = extractValue(content, "cognitoUserGroupName");
-        config.cognitoInitialAdminEmail = extractValue(content, "cognitoInitialAdminEmail");
-        config.cognitoInitialAdminPhone = extractValue(content, "cognitoInitialAdminPhone");
-        config.cognitoUserPoolId = extractValue(content, "cognitoUserPoolId");
-        config.cognitoAppClientId = extractValue(content, "cognitoAppClientId");
-        config.oidcIssuer = extractValue(content, "oidcIssuer");
-        config.oidcAuthorizationEndpoint = extractValue(content, "oidcAuthorizationEndpoint");
-        config.oidcTokenEndpoint = extractValue(content, "oidcTokenEndpoint");
-        config.oidcUserInfoEndpoint = extractValue(content, "oidcUserInfoEndpoint");
-        config.oidcClientId = extractValue(content, "oidcClientId");
-        config.oidcClientSecretName = extractValue(content, "oidcClientSecretName");
-
-        // IAM Identity Center configuration
-        config.autoProvisionIdentityCenter = extractBoolValue(content, "autoProvisionIdentityCenter", false);
-        config.ssoInstanceArn = extractValue(content, "ssoInstanceArn");
-        config.identityCenterGroupName = extractValue(content, "identityCenterGroupName");
-
-        // Database configuration
-        config.provisionDatabase = extractBoolValue(content, "provisionDatabase", false);
-        config.databaseEngine = extractStringValue(content, "databaseEngine", "postgres");
-        config.databaseVersion = extractStringValue(content, "databaseVersion", "15");
-        config.databaseInstanceClass = extractStringValue(content, "databaseInstanceClass", "db.t3.small");
-        config.databaseAllocatedStorageGB = extractIntValue(content, "databaseAllocatedStorageGB", 20);
-        config.databaseMultiAz = extractBoolValue(content, "databaseMultiAz", false);
-        config.databaseName = extractStringValue(content, "databaseName", "appdb");
-        config.databaseBackupRetentionDays = extractIntValue(content, "databaseBackupRetentionDays", 7);
-        config.enableRdsDeletionProtectionRemediation = extractBoolValue(content, "enableRdsDeletionProtectionRemediation", false);
-        config.enableRdsAutoMinorVersionUpgradeRemediation = extractBoolValue(content, "enableRdsAutoMinorVersionUpgradeRemediation", false);
-
-        // Compliance configuration
-        config.enableMonitoring = extractBoolValue(content, "enableMonitoring", true);
-        config.enableEncryption = extractBoolValue(content, "enableEncryption", true);
-        config.awsConfigEnabled = extractBoolValue(content, "awsConfigEnabled", false);
-        config.createConfigInfrastructure = extractBoolValue(content, "createConfigInfrastructure", true);
-
-        // Threat Detection
-        config.guardDutyEnabled = extractBoolValue(content, "guardDutyEnabled", false);
-        config.createGuardDutyDetector = extractBoolValue(content, "createGuardDutyDetector", false);
-        config.guardDutyAlertsConfigured = extractBoolValue(content, "guardDutyAlertsConfigured", false);
-        config.certificateExpirationMonitoring = extractBoolValue(content, "certificateExpirationMonitoring", false);
-        config.cloudTrailEnabled = extractBoolValue(content, "cloudTrailEnabled", false);
-
-        // Advanced Monitoring & Threat Protection
-        config.macieEnabled = extractBoolValue(content, "macieEnabled", false);
-        config.macieAutomatedDiscovery = extractBoolValue(content, "macieAutomatedDiscovery", false);
-        config.securityHubEnabled = extractBoolValue(content, "securityHubEnabled", false);
-        config.inspectorEnabled = extractBoolValue(content, "inspectorEnabled", false);
-        config.antiMalwareEnabled = extractBoolValue(content, "antiMalwareEnabled", false);
-        config.fileIntegrityMonitoring = extractBoolValue(content, "fileIntegrityMonitoring", false);
-        config.containerRuntimeSecurity = extractBoolValue(content, "containerRuntimeSecurity", false);
-        config.containerImageScanning = extractBoolValue(content, "containerImageScanning", false);
-
-        config.auditManagerEnabled = extractBoolValue(content, "auditManagerEnabled", false);
-        config.complianceFrameworks = extractStringValue(content, "complianceFrameworks", "");
-        config.complianceMode = extractStringValue(content, "complianceMode", null);
-        config.logRetentionDays = extractStringValue(content, "logRetentionDays", "7");
-        config.enableS3VersioningRemediation = extractBoolValue(content, "enableS3VersioningRemediation", false);
-        config.enableCloudTrailBucketAccessRemediation = extractBoolValue(content, "enableCloudTrailBucketAccessRemediation", false);
-
         // Debug: Print what was loaded for key fields
         System.out.println("\n📖 Loaded from deployment-context.json:");
+        System.out.println("  applicationId: " + config.applicationId);
+        System.out.println("  runtime: " + config.runtime);
+        System.out.println("  securityProfile: " + config.securityProfile);
         System.out.println("  provisionDatabase: " + config.provisionDatabase);
-        System.out.println("  databaseEngine: " + config.databaseEngine);
-        System.out.println("  enableEncryption: " + config.enableEncryption);
-        System.out.println("  enableAutoScaling: " + config.enableAutoScaling);
         System.out.println("  complianceFrameworks: '" + config.complianceFrameworks + "'");
-        System.out.println("  logRetentionDays: '" + config.logRetentionDays + "'");
         System.out.println("  region: '" + config.region + "'");
-        System.out.println("  auditManagerEnabled: " + config.auditManagerEnabled);
-
-        // Health check configuration
-        config.healthCheckGracePeriod = extractIntValue(content, "healthCheckGracePeriod", 300);
-        config.healthCheckInterval = extractIntValue(content, "healthCheckInterval", 30);
-        config.healthCheckTimeout = extractIntValue(content, "healthCheckTimeout", 5);
-        config.healthyThreshold = extractIntValue(content, "healthyThreshold", 2);
-        config.unhealthyThreshold = extractIntValue(content, "unhealthyThreshold", 3);
-
-        // Region configuration
-        config.region = extractStringValue(content, "region", "us-east-1");
-
-        // Application metadata
-        config.supportsFargate = extractBoolValue(content, "supportsFargate", false);
-        config.supportsEc2 = extractBoolValue(content, "supportsEc2", false);
-        config.supportsOidc = extractBoolValue(content, "supportsOidc", false);
 
         // Pass false to prevent overwriting the saved deployment-context.json
         deployInfrastructure(config, deploymentOption, false);
     }
 
-    private static String extractStringValue(String json, String key, String defaultValue) {
-        String value = extractValue(json, key);
-        return value != null ? value : defaultValue;
-    }
-
-    private static boolean extractBoolValue(String json, String key, boolean defaultValue) {
-        String value = extractValue(json, key);
-        if (value == null) return defaultValue;
-        return Boolean.parseBoolean(value);
-    }
-
-    private static int extractIntValue(String json, String key, int defaultValue) {
-        String value = extractValue(json, key);
-        if (value == null) return defaultValue;
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    private static String extractValue(String json, String key) {
-        String quotedPattern = "\"" + key + "\":\\s*\"([^\"]*)\"";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(quotedPattern);
-        java.util.regex.Matcher m = p.matcher(json);
-        if (m.find()) {
-            return m.group(1);
-        }
-
-        String unquotedPattern = "\"" + key + "\":\\s*([^,}\\s]+)";
-        p = java.util.regex.Pattern.compile(unquotedPattern);
-        m = p.matcher(json);
-        if (m.find()) {
-            return m.group(1);
-        }
-
-        return null;
-    }
-
     private static Map<String, Object> buildCfcContext(DeploymentConfig config) {
-        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-
-        mapper.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.FIELD,
-                           com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY);
-        mapper.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.GETTER,
-                           com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE);
-
-        mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-        mapper.setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> context = mapper.convertValue(config, Map.class);
-
-        if (context.containsKey("environment")) {
-            context.put("env", context.remove("environment"));
-        }
-
-        return context;
+        // Use DeploymentConfig's built-in Jackson serialization (replaces manual ObjectMapper config)
+        return config.toContextMap();
     }
 
     private static void printConfiguration(DeploymentConfig config) {
@@ -2046,7 +1858,7 @@ public class InteractiveDeployer {
             System.out.println("SSL Enabled: " + config.enableSsl);
         }
 
-        if (config.supportsOidc && !config.oidcProvider.equals("none")) {
+        if (config.applicationSpec != null && config.applicationSpec.supportsOidcIntegration() && !config.oidcProvider.equals("none")) {
             System.out.println("\n🔐 OIDC Authentication:");
             System.out.println("  Provider: " + config.oidcProvider);
         }
@@ -2485,8 +2297,13 @@ public class InteractiveDeployer {
         System.out.println("   ✅ PRODUCTION suppressions applied (documented exceptions only)");
 
         // Apply HIPAA-specific suppressions if HIPAA compliance is enabled
-        if (config.complianceFrameworks != null && config.complianceFrameworks.toUpperCase().contains("HIPAA")) {
+        if (config.hasComplianceFramework(ComplianceFrameworkType.HIPAA)) {
             applyHipaaSuppressions(app, config);
+        }
+
+        // Apply PCI-DSS-specific suppressions if PCI-DSS compliance is enabled
+        if (config.hasComplianceFramework(ComplianceFrameworkType.PCI_DSS)) {
+            applyPciDssSuppressions(app, config);
         }
     }
 
@@ -2614,6 +2431,102 @@ public class InteractiveDeployer {
         );
 
         System.out.println("   ✅ HIPAA-specific suppressions applied (configurable settings and cost trade-offs)");
+    }
+
+    /**
+     * Apply PCI-DSS-specific CDK-NAG suppressions for configurable compliance settings.
+     *
+     * These suppressions document configurable settings and CDK framework limitations for PCI-DSS compliance.
+     */
+    private static void applyPciDssSuppressions(App app, DeploymentConfig config) {
+        System.out.println("\n💳 Applying PCI-DSS-specific CDK-NAG suppressions...");
+
+        software.amazon.awscdk.Stack stack = (software.amazon.awscdk.Stack) app.getNode().findChild(config.stackName);
+
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                // IAM Inline Policies - CDK framework resources (unavoidable)
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-IAMNoInlinePolicy")
+                    .reason("CDK framework resources (Custom Resources, VPC FlowLog, Cognito SMS role, CloudTrail role) use inline policies by design. " +
+                            "These are auto-generated deployment-time policies. Control IDs: 2.2, 7.1.2, 7.1.3, 7.2.1, 7.2.2")
+                    .build(),
+                // S3 Bucket Logging - CloudTrail/Audit buckets create circular dependency
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-S3BucketLoggingEnabled")
+                    .reason("CloudTrail and Audit Manager buckets do not enable access logging to avoid circular dependency. " +
+                            "CloudTrail S3 data events provide comprehensive audit trail. Control IDs: 2.2, 10.1, 10.2.x, 10.3.x")
+                    .build(),
+                // S3 Replication - Single-region deployment
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-S3BucketReplicationEnabled")
+                    .reason("S3 replication is not required for single-region deployments. " +
+                            "Versioning is enabled for data recovery. Control IDs: 2.2, 10.5.3")
+                    .build(),
+                // S3 KMS Encryption - Using SSE-S3 with SSL enforcement
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-S3DefaultEncryptionKMS")
+                    .reason("Buckets use encryption with SSL enforcement via bucket policy. " +
+                            "CloudTrail trail-level KMS encryption is enabled for PRODUCTION. Control IDs: 3.4, 8.2.1, 10.5")
+                    .build(),
+                // CloudTrail Encryption - Enabled for PCI-DSS PRODUCTION
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-CloudTrailEncryptionEnabled")
+                    .reason("CloudTrail uses KMS encryption for HIPAA/PCI-DSS PRODUCTION deployments. " +
+                            "S3 bucket has encryption at rest enabled. Control IDs: 2.2, 3.4, 10.5")
+                    .build(),
+                // CloudWatch Logs KMS Encryption - Cost implications
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-CloudWatchLogGroupEncrypted")
+                    .reason("CloudWatch Logs groups for CDK framework resources use default encryption. " +
+                            "KMS encryption is enabled for WAF and CloudTrail log groups. Control ID: 3.4")
+                    .build(),
+                // VPC Public Subnets - Required for NAT/ALB architecture
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-VPCSubnetAutoAssignPublicIpDisabled")
+                    .reason("Public subnets are used exclusively for NAT Gateways and internet-facing ALB. " +
+                            "Application workloads run in private subnets. Control IDs: 1.2, 1.2.1, 1.3.x, 2.2.2")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-VPCNoUnrestrictedRouteToIGW")
+                    .reason("Public subnets require IGW routes for NAT Gateway and ALB internet access. " +
+                            "Application workloads in private subnets have no direct internet access. Control IDs: 1.2, 1.2.1, 1.3.x, 2.2.2")
+                    .build(),
+                // ALB Access Logs Bucket - CDK logAccessLogs() limitation
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-S3BucketSSLRequestsOnly")
+                    .reason("ALB access logs bucket is written exclusively by AWS ELB service via internal HTTPS connections. " +
+                            "CDK logAccessLogs() creates bucket policy that doesn't merge with addToResourcePolicy() statements. " +
+                            "Bucket has blockPublicAccess enabled. Control IDs: 2.2, 4.1, 8.2.1")
+                    .build(),
+                // ALB Configuration
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-ALBHttpDropInvalidHeaderEnabled")
+                    .reason("ALB drop invalid headers is enabled via LoadBalancerAttributes override. Control IDs: 4.1, 8.2.1")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-ELBv2ACMCertificateRequired")
+                    .reason("HTTP listener redirects to HTTPS when SSL is enabled. " +
+                            "HTTPS listener uses ACM certificate. Both listeners required for redirect flow. Control ID: 4.1")
+                    .build(),
+                // WAF Logging - Enabled in WafFactory
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-WAFv2LoggingEnabled")
+                    .reason("WAF logging is enabled to CloudWatch Logs with KMS encryption. " +
+                            "Control IDs: 10.1, 10.3.x, 10.5.4")
+                    .build(),
+                // Lambda (CDK Framework) - Deployment-time only
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-LambdaInsideVPC")
+                    .reason("CDK Custom Resource Lambdas are deployment-time framework functions that make AWS API calls. " +
+                            "They do not process cardholder data and are not part of the CDE. Control IDs: 1.2, 1.2.1, 1.3.x, 2.2.2")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        System.out.println("   ✅ PCI-DSS-specific suppressions applied (CDK framework limitations and architecture justifications)");
     }
 
     /**

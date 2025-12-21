@@ -1,5 +1,7 @@
 package com.cloudforge.core.config;
 
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
@@ -56,7 +58,7 @@ class DeploymentConfigTest {
 
     @Test
     void testDefaultAuthMode() {
-        assertEquals("none", config.authMode);
+        assertEquals(AuthMode.NONE, config.authMode);
     }
 
     @Test
@@ -148,12 +150,12 @@ class DeploymentConfigTest {
 
     @Test
     void testDefaultWafEnabled() {
-        assertFalse(config.wafEnabled);
+        assertNull(config.wafEnabled);
     }
 
     @Test
     void testDefaultCloudfrontEnabled() {
-        assertFalse(config.cloudfrontEnabled);
+        assertNull(config.cloudfrontEnabled);
     }
 
     // ========== Field Assignment Tests ==========
@@ -388,7 +390,7 @@ class DeploymentConfigTest {
         config.subdomain = "jenkins";
         config.enableSsl = true;
 
-        config.networkMode = "private-with-nat";
+        config.networkMode = NetworkMode.PRIVATE_WITH_NAT;
         config.wafEnabled = true;
 
         config.minInstanceCapacity = 2;
@@ -397,7 +399,7 @@ class DeploymentConfigTest {
         config.cpuTargetUtilization = 70;
         config.instanceType = "t3.large";
 
-        config.authMode = "application-oidc";
+        config.authMode = AuthMode.APPLICATION_OIDC;
         config.cognitoAutoProvision = true;
         config.cognitoDomainPrefix = "jenkins-prod";
         config.cognitoMfaEnabled = true;
@@ -413,7 +415,7 @@ class DeploymentConfigTest {
         assertEquals(2, config.minInstanceCapacity);
         assertEquals(10, config.maxInstanceCapacity);
         assertTrue(config.enableAutoScaling);
-        assertEquals("application-oidc", config.authMode);
+        assertEquals(AuthMode.APPLICATION_OIDC, config.authMode);
         assertTrue(config.cognitoAutoProvision);
         assertTrue(config.cognitoMfaEnabled);
         assertEquals("us-west-2", config.region);

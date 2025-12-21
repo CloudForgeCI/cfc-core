@@ -94,16 +94,6 @@ class TruthTableValidationTest {
         System.out.println("📁 CloudFormation templates will be written to: " + cfnTemplatesOutputDir);
     }
 
-    // Note: Explicit System.gc() calls were tested but removed because they can cause
-    // the JSII runtime (CDK's Java-to-JS bridge) to be garbage collected prematurely,
-    // resulting in "Stream closed" errors. The JSII runtime maintains singleton state
-    // that must persist across all tests in the class.
-    //
-    // Memory management for CDK tests relies on:
-    // 1. Local variables (App, Stack, Template) going out of scope after each test
-    // 2. JVM's normal garbage collection between tests
-    // 3. Surefire's fork mode can be configured if memory isolation is needed
-
     /**
      * Write the synthesized CloudFormation template to a JSON file for report linking.
      *
@@ -523,6 +513,12 @@ class TruthTableValidationTest {
         cfcContext.put("awsConfigEnabled", true);
         cfcContext.put("createConfigInfrastructure", true);
 
+        // Add framework-specific settings for compliance validation
+        if (complianceFramework.contains("GDPR")) {
+            // GDPR requires EU region or approved data transfer mechanism
+            cfcContext.put("gdprDataTransferApproved", true);
+        }
+
         // Configure stack with deployment context
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -596,7 +592,8 @@ class TruthTableValidationTest {
         String[] frameworks = {"SOC2", "PCI-DSS", "HIPAA", "GDPR"};
 
         // Test one representative configuration per framework
-        // Use FARGATE + private-with-nat for consistency
+        // Use FARGATE + private-with-nat + alb-oidc for compliance validation
+        // Note: All production compliance frameworks require authentication
         for (String framework : frameworks) {
             String configName = "FARGATE_PRODUCTION_" + framework + "_ConfigRules";
 
@@ -607,7 +604,7 @@ class TruthTableValidationTest {
                 "with-domain",
                 "ssl-enabled",
                 "no-subdomain",
-                "none",
+                "alb-oidc",  // All compliance frameworks require authentication
                 "private-with-nat",
                 framework
             ));
@@ -787,11 +784,15 @@ class TruthTableValidationTest {
         // Configure stack with deployment context
         stack.getNode().setContext("cfc", cfcContext);
 
-        // Output deployment context as JSON for dashboard
-        System.out.println("   📋 DEPLOYMENT_CONTEXT_JSON: " + formatContextAsJson(cfcContext));
-
         // Create deployment context and security profile
         DeploymentContext cfc = DeploymentContext.from(stack);
+
+        // Output the FULL resolved deployment context as JSON for dashboard
+        // This includes all defaults and resolved values - same as InteractiveDeployer would produce
+        Map<String, Object> fullContext = cfc.toContextMap();
+        // Add applicationId which is from ApplicationSpec, not DeploymentContext
+        fullContext.put("applicationId", applicationId);
+        System.out.println("   📋 DEPLOYMENT_CONTEXT_JSON: " + formatContextAsJson(fullContext));
         SecurityProfile secProfile = SecurityProfile.valueOf(securityProfile);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(secProfile);
 
@@ -1569,6 +1570,7 @@ class TruthTableValidationTest {
 
     /**
      * Build deployment context map from truth table configuration parameters.
+     * This creates a complete deployment context matching real-world usage.
      */
     private Map<String, Object> buildDeploymentContext(
             String configName,
@@ -1589,6 +1591,7 @@ class TruthTableValidationTest {
         context.put("topology", "APPLICATION_SERVICE");
         context.put("securityProfile", securityProfile);
         context.put("lbType", "alb");
+        context.put("applicationId", "jenkins");  // Required application identifier
 
         // Network mode
         context.put("networkMode", networkMode);
@@ -1614,13 +1617,26 @@ class TruthTableValidationTest {
             context.put("authMode", "alb-oidc");
             context.put("cognitoAutoProvision", true);
             context.put("cognitoDomainPrefix", configName.toLowerCase().replaceAll("[^a-z0-9-]", "-"));
+            context.put("cognitoMfaEnabled", true);  // MFA for OIDC auth
         }
 
-        // WAF configuration (enabled for PRODUCTION, configurable for others)
-        if ("PRODUCTION".equals(securityProfile)) {
+        // Security and compliance settings based on profile
+        if ("PRODUCTION".equals(securityProfile) || "STAGING".equals(securityProfile)) {
             context.put("wafEnabled", true);
-            context.put("guardDutyEnabled", true);  // Enable GuardDuty for PRODUCTION
-            context.put("createGuardDutyDetector", true);  // Create the detector resource
+            context.put("guardDutyEnabled", true);
+            context.put("createGuardDutyDetector", true);
+            context.put("awsConfigEnabled", true);
+            context.put("macieEnabled", true);
+            context.put("macieAutomatedDiscovery", true);
+            context.put("auditManagerEnabled", true);
+            context.put("createConfigInfrastructure", false);  // Skip Config infrastructure in tests
+            context.put("inspectorEnabled", true);  // Required for SOC2/PCI-DSS/HIPAA/GDPR vulnerability scanning
+
+            // EC2-specific security settings
+            if ("EC2".equals(runtime)) {
+                context.put("antiMalwareEnabled", true);
+                context.put("fileIntegrityMonitoring", true);
+            }
         } else {
             context.put("wafEnabled", false);
         }

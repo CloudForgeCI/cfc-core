@@ -1,5 +1,5 @@
 configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-EC2_PRODUCTION_SOC2_HIPAA_alb-oidc_private-with-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,,PASS,jenkins,,,
-EC2_PRODUCTION_SOC2_HIPAA_alb-oidc_private-with-nat_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,,PASS,jenkins,,,
-EC2_PRODUCTION_SOC2_HIPAA_retention-2190,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,,PASS,jenkins,,,
-EC2_PRODUCTION_SOC2_HIPAA_subdomain_retention-2190,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,,PASS,jenkins,,,
+EC2_PRODUCTION_SOC2_HIPAA_alb-oidc_private-with-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,true,PASS,jenkins,,,
+EC2_PRODUCTION_SOC2_HIPAA_alb-oidc_private-with-nat_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,true,PASS,jenkins,,,
+EC2_PRODUCTION_SOC2_HIPAA_retention-2190,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,true,PASS,jenkins,,,
+EC2_PRODUCTION_SOC2_HIPAA_subdomain_retention-2190,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,true,PASS,jenkins,,,

@@ -4,6 +4,8 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
@@ -98,7 +100,7 @@ public class Ec2Factory extends BaseFactory {
   private Integer maxInstanceCapacity;
 
   @DeploymentContext("networkMode")
-  private String networkMode;
+  private NetworkMode networkMode;
 
   @DeploymentContext("retainStorage")
   private Boolean retainStorage;
@@ -198,7 +200,7 @@ public class Ec2Factory extends BaseFactory {
   private software.amazon.awscdk.services.efs.AccessPoint ap;
 
   @DeploymentContext("authMode")
-  private String authMode;
+  private AuthMode authMode;
 
   @DeploymentContext("fqdn")
   private String fqdn;
@@ -350,7 +352,7 @@ public class Ec2Factory extends BaseFactory {
 
     // Add OIDC integration commands if application-oidc mode is enabled
     // This configures OIDC authentication (e.g., Jenkins OIDC plugin setup)
-    if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+    if (authMode == AuthMode.APPLICATION_OIDC && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
       LOG.info("Ec2Factory: Configuring OIDC integration for EC2 UserData...");
 
       if (applicationOidcConfig != null) {
@@ -536,7 +538,7 @@ public class Ec2Factory extends BaseFactory {
     int desiredCapacity = Math.max(minCapacity, Math.min(maxCapacity, minCapacity)); // Start with minimum
 
     // Determine subnet type based on network mode
-    SubnetType subnetType = "public-no-nat".equals(networkMode) ?
+    SubnetType subnetType = networkMode == NetworkMode.PUBLIC ?
             SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
 
     if (vpc == null) {

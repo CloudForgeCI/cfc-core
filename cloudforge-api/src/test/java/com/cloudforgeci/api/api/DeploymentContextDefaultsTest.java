@@ -1,6 +1,9 @@
 package com.cloudforgeci.api.api;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.LoadBalancerType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
@@ -117,17 +120,17 @@ public class DeploymentContextDefaultsTest {
     class NetworkingDefaults {
 
         @Test
-        @DisplayName("networkMode defaults to 'public-no-nat'")
+        @DisplayName("networkMode defaults to PUBLIC")
         void networkModeDefaultsToPublicNoNat() throws Exception {
             DeploymentContext cfc = fromMap(new LinkedHashMap<>());
-            assertEquals("public-no-nat", cfc.networkMode(), "Default networkMode should be 'public-no-nat'");
+            assertEquals(NetworkMode.PUBLIC, cfc.networkMode(), "Default networkMode should be PUBLIC");
         }
 
         @Test
-        @DisplayName("lbType defaults to 'alb'")
+        @DisplayName("lbType defaults to ALB")
         void lbTypeDefaultsToAlb() throws Exception {
             DeploymentContext cfc = fromMap(new LinkedHashMap<>());
-            assertEquals("alb", cfc.lbType(), "Default lbType should be 'alb'");
+            assertEquals(LoadBalancerType.ALB, cfc.lbType(), "Default lbType should be ALB");
         }
 
         @Test
@@ -211,10 +214,10 @@ public class DeploymentContextDefaultsTest {
         }
 
         @Test
-        @DisplayName("authMode defaults to 'none'")
+        @DisplayName("authMode defaults to NONE")
         void authModeDefaultsToNone() throws Exception {
             DeploymentContext cfc = fromMap(new LinkedHashMap<>());
-            assertEquals("none", cfc.authMode(), "Default authMode should be 'none'");
+            assertEquals(AuthMode.NONE, cfc.authMode(), "Default authMode should be NONE");
         }
 
         @Test
@@ -397,8 +400,8 @@ public class DeploymentContextDefaultsTest {
             assertEquals(60, cfc.cpuTargetUtilization());
 
             // Networking
-            assertEquals("public-no-nat", cfc.networkMode());
-            assertEquals("alb", cfc.lbType());
+            assertEquals(NetworkMode.PUBLIC, cfc.networkMode());
+            assertEquals(LoadBalancerType.ALB, cfc.lbType());
             assertFalse(Boolean.TRUE.equals(cfc.wafEnabled()));
 
             // DNS
@@ -408,7 +411,7 @@ public class DeploymentContextDefaultsTest {
 
             // Security
             assertFalse(cfc.enableSsl());
-            assertEquals("none", cfc.authMode());
+            assertEquals(AuthMode.NONE, cfc.authMode());
 
             // Storage
             assertEquals(1024, cfc.cpu());
@@ -435,7 +438,7 @@ public class DeploymentContextDefaultsTest {
             // Unspecified values should use defaults
             assertEquals("dev", cfc.env());
             assertEquals(2048, cfc.memory());
-            assertEquals("public-no-nat", cfc.networkMode());
+            assertEquals(NetworkMode.PUBLIC, cfc.networkMode());
             assertEquals(1, cfc.minInstanceCapacity());
         }
     }

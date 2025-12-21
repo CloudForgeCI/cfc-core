@@ -1,2 +1,2 @@
 configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-FAIL_FARGATE_SOC2_HIPAA_insufficient-for-hipaa-1000,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",1000,,FAIL,jenkins,,,
+FAIL_FARGATE_SOC2_HIPAA_insufficient-for-hipaa-1000,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",1000,true,FAIL,jenkins,,,

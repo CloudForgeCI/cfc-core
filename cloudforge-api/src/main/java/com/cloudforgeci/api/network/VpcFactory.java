@@ -1,8 +1,10 @@
 package com.cloudforgeci.api.network;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.TopologyType;
 import software.amazon.awscdk.services.ec2.*;
@@ -77,7 +79,7 @@ public final class VpcFactory extends BaseFactory {
     private RuntimeType runtime;
 
     @DeploymentContext("networkMode")
-    private String networkMode;
+    private NetworkMode networkMode;
 
     public VpcFactory(Construct scope, String id) {
         super(scope, id);
@@ -101,11 +103,17 @@ public final class VpcFactory extends BaseFactory {
         // Create VPC with basic configuration
         Vpc vpc = createVpc();
 
+        // Register AWS Config rules for VPC network segmentation compliance
+        ctx.requireConfigRule(AwsConfigRule.EC2_INSTANCES_IN_VPC);
+        ctx.requireConfigRule(AwsConfigRule.VPC_DEFAULT_SG_CLOSED);
+        ctx.requireConfigRule(AwsConfigRule.RESTRICTED_SSH);
+
         // Add flow logs if configured
         // NOTE: Read from ctx.flowlogs.get() directly rather than using injected field,
         // because FlowLogFactory.create() may have set the value after VpcFactory was constructed
         ctx.flowlogs.get().ifPresent(flowLogOptions -> {
             vpc.addFlowLog("VpcFlowlog", flowLogOptions);
+            ctx.requireConfigRule(AwsConfigRule.VPC_FLOW_LOGS_ENABLED);
             LOG.info("VPC Flow Logs enabled with options: " + flowLogOptions);
         });
 

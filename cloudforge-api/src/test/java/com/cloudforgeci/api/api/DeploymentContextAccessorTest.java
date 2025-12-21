@@ -1,6 +1,9 @@
 package com.cloudforgeci.api.api;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.LoadBalancerType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
@@ -146,14 +149,14 @@ class DeploymentContextAccessorTest {
             config.put("networkMode", "private-with-nat");
             DeploymentContext ctx = createContext(config);
 
-            assertEquals("private-with-nat", ctx.networkMode());
+            assertEquals(NetworkMode.PRIVATE_WITH_NAT, ctx.networkMode());
         }
 
         @Test
-        @DisplayName("networkMode() returns default 'public-no-nat' when not configured")
+        @DisplayName("networkMode() returns default PUBLIC when not configured")
         void networkModeAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertEquals("public-no-nat", ctx.networkMode());
+            assertEquals(NetworkMode.PUBLIC, ctx.networkMode());
         }
 
         @Test
@@ -163,31 +166,32 @@ class DeploymentContextAccessorTest {
             config.put("lbType", "nlb");
             DeploymentContext ctx = createContext(config);
 
-            assertEquals("nlb", ctx.lbType());
+            assertEquals(LoadBalancerType.NLB, ctx.lbType());
         }
 
         @Test
-        @DisplayName("lbType() returns default 'alb' when not configured")
+        @DisplayName("lbType() returns default ALB when not configured")
         void lbTypeAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertEquals("alb", ctx.lbType());
+            assertEquals(LoadBalancerType.ALB, ctx.lbType());
         }
 
         @Test
         @DisplayName("authMode() returns configured auth mode")
         void authModeAccessor() {
             Map<String, Object> config = new LinkedHashMap<>();
-            config.put("authMode", "jenkins-oidc");
+            config.put("authMode", "application-oidc");
+            config.put("enableSsl", true);  // OIDC requires SSL
             DeploymentContext ctx = createContext(config);
 
-            assertEquals("jenkins-oidc", ctx.authMode());
+            assertEquals(AuthMode.APPLICATION_OIDC, ctx.authMode());
         }
 
         @Test
-        @DisplayName("authMode() returns default 'none' when not configured")
+        @DisplayName("authMode() returns default NONE when not configured")
         void authModeAccessorDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
-            assertEquals("none", ctx.authMode());
+            assertEquals(AuthMode.NONE, ctx.authMode());
         }
 
         @Test

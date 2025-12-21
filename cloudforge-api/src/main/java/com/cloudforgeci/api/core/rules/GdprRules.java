@@ -2,10 +2,12 @@ package com.cloudforgeci.api.core.rules;
 
 
 import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
@@ -58,11 +60,8 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         LOG.info("Installing GDPR technical safeguards validation for " + ctx.security);
 
         ctx.getNode().addValidation(() -> {
-            // Read compliance mode from deployment context
-            ComplianceMode complianceMode = ComplianceMode.fromString(
-                ctx.cfc.complianceMode(),
-                ComplianceMode.defaultForProfile(ctx.security)
-            );
+            // Get compliance mode (already resolved to enum with proper default)
+            ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
             // Collect all validation results
             List<ComplianceRule> rules = new ArrayList<>();
@@ -237,7 +236,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // Art. 25: Network isolation for data protection
-        if ("public-no-nat".equals(ctx.cfc.networkMode()) && ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC && ctx.security == SecurityProfile.PRODUCTION) {
             rules.add(ComplianceRule.fail(
                 "GDPR-NETWORK-ISOLATION",
                 "Private network mode recommended for production systems (GDPR Art. 25(1))",
@@ -403,8 +402,8 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // Art. 32(1)(b): Confidentiality through access controls
-        String authMode = ctx.cfc.authMode();
-        if ("none".equals(authMode)) {
+        AuthMode authMode = ctx.cfc.authMode();
+        if (authMode == AuthMode.NONE) {
             rules.add(ComplianceRule.fail(
                 "GDPR-AUTHENTICATION",
                 "Authentication required to ensure confidentiality (GDPR Art. 32(1)(b))",
@@ -478,17 +477,12 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         );
 
         // Art. 33(1): Breach detection capability
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-GUARDDUTY",
-                "GuardDuty required for breach detection (GDPR Art. 33(1))",
-                "GuardDutyEnabled",
-                "GuardDuty is disabled. Enable GuardDuty to detect potential data breaches within required timeframe."
-            ));
-        } else {
+        // NOTE: GuardDuty validation is now handled by ThreatProtectionRules using ComplianceMatrix
+        // which marks it as ADVISORY for GDPR (recommended but not required)
+        if (config.isGuardDutyEnabled()) {
             rules.add(ComplianceRule.pass(
                 "GDPR-GUARDDUTY",
-                "GuardDuty required for breach detection (GDPR Art. 33(1))",
+                "GuardDuty enabled for breach detection (GDPR Art. 33(1))",
                 "GuardDutyEnabled"
             ));
         }
@@ -590,7 +584,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         report.append("Article 25 - Data Protection by Design:\n");
         report.append("  ✓ Encryption at Rest (Art. 25(1)): ").append(config.isEbsEncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Access Controls (Art. 25(2)): ").append(ctx.iamProfile != null ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Network Isolation (Art. 25(1)): ").append(!"public-no-nat".equals(ctx.cfc.networkMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Network Isolation (Art. 25(1)): ").append(ctx.cfc.networkMode() != NetworkMode.PUBLIC ? "ENABLED" : "DISABLED").append("\n");
         report.append("\n");
 
         report.append("Article 30 - Records of Processing:\n");
@@ -601,7 +595,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
 
         report.append("Article 32 - Security of Processing:\n");
         report.append("  ✓ Encryption in Transit (Art. 32(1)(a)): ").append(ctx.cert.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Authentication (Art. 32(1)(b)): ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Authentication (Art. 32(1)(b)): ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Security Monitoring (Art. 32(1)(b)): ").append(config.isSecurityMonitoringEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Backup & Recovery (Art. 32(1)(c)): ").append(config.isAutomatedBackupEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Security Assessment (Art. 32(1)(d)): ").append(config.isAwsConfigEnabled() ? "ENABLED" : "DISABLED").append("\n");

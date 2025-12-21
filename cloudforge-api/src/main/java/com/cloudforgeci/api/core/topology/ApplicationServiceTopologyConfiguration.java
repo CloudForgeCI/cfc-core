@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.topology;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.TopologyType;
 import com.cloudforgeci.api.interfaces.TopologyConfiguration;
@@ -53,7 +54,7 @@ public final class ApplicationServiceTopologyConfiguration implements TopologyCo
     r.add(ctx -> {
       String mode = ctx.authMode.get().orElse(null);
       Boolean sslEnabled = ctx.sslEnabled.get().orElse(false);
-      if ("alb-oidc".equalsIgnoreCase(mode) && !sslEnabled) {
+      if (AuthMode.ALB_OIDC == AuthMode.fromString(mode) && !sslEnabled) {
         return List.of("authMode = alb-oidc requires enableSsl = true");
       }
       return List.of();

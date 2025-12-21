@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.storage;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.interfaces.ApplicationSpec;
@@ -96,6 +97,9 @@ public class EfsFactory extends BaseFactory {
     } else {
       LOG.info("EFS file system will be DESTROYED with stack (retainStorage = false)");
     }
+
+    // Register AWS Config rule for EFS encryption compliance
+    ctx.requireConfigRule(AwsConfigRule.EFS_ENCRYPTED);
 
     return FileSystem.Builder.create(this, "Efs")
             .securityGroup(efsSg)

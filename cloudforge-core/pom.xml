@@ -24,10 +24,14 @@
 
 
   <dependencies>
-    <!-- Jackson annotations for JSON serialization (version from parent BOM) -->
+    <!-- Jackson for JSON serialization/deserialization (version from parent BOM) -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-annotations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
     </dependency>
 
     <!-- Jakarta Validation API for validators (version from parent BOM) -->

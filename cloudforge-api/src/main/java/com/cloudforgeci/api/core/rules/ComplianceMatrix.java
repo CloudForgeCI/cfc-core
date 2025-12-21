@@ -1,7 +1,9 @@
 package com.cloudforgeci.api.core.rules;
 
-import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforgeci.api.core.SystemContext;
 
 import java.util.*;
 import java.util.logging.Logger;
@@ -579,13 +581,13 @@ public final class ComplianceMatrix {
             ctx.cert.get().isPresent() && config.isEfsEncryptionInTransitEnabled()));
 
         report.append(formatControlStatus("NETWORK_SEGMENTATION",
-            ctx.vpc.get().isPresent() && !"public-no-nat".equals(ctx.cfc.networkMode())));
+            ctx.vpc.get().isPresent() && ctx.cfc.networkMode() != NetworkMode.PUBLIC));
 
         report.append(formatControlStatus("ACCESS_CONTROL",
             ctx.iamProfile != null));
 
         report.append(formatControlStatus("AUTHENTICATION",
-            !"none".equals(ctx.cfc.authMode())));
+            ctx.cfc.authMode() != AuthMode.NONE));
 
         report.append(formatControlStatus("AUDIT_LOGGING",
             config.isCloudTrailEnabled() && config.isFlowLogsEnabled()));
@@ -625,7 +627,7 @@ public final class ComplianceMatrix {
         if (ctx.cert.get().isPresent()) enabledCount++;
         if (ctx.vpc.get().isPresent()) enabledCount++;
         if (ctx.iamProfile != null) enabledCount++;
-        if (!"none".equals(ctx.cfc.authMode())) enabledCount++;
+        if (ctx.cfc.authMode() != AuthMode.NONE) enabledCount++;
         if (config.isCloudTrailEnabled()) enabledCount++;
         if (config.getLogRetentionDays() == software.amazon.awscdk.services.logs.RetentionDays.TWO_YEARS) enabledCount++;
         if (config.isSecurityMonitoringEnabled()) enabledCount++;
@@ -661,8 +663,8 @@ public final class ComplianceMatrix {
 
         // Check if deployment meets minimum requirements for each framework
         boolean hasEncryption = config.isEbsEncryptionEnabled() && config.isEfsEncryptionAtRestEnabled();
-        boolean hasNetworkSecurity = ctx.vpc.get().isPresent() && !"public-no-nat".equals(ctx.cfc.networkMode());
-        boolean hasAuthentication = !"none".equals(ctx.cfc.authMode());
+        boolean hasNetworkSecurity = ctx.vpc.get().isPresent() && ctx.cfc.networkMode() != NetworkMode.PUBLIC;
+        boolean hasAuthentication = ctx.cfc.authMode() != AuthMode.NONE;
         boolean hasAuditLogging = config.isCloudTrailEnabled() && config.isFlowLogsEnabled();
         boolean hasMonitoring = config.isSecurityMonitoringEnabled() && config.isGuardDutyEnabled();
 

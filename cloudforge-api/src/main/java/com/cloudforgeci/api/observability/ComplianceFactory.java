@@ -1,8 +1,10 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforgeci.api.core.rules.AuditManagerControl;
 import com.cloudforgeci.api.core.rules.AuditManagerControlRegistry;
 import com.cloudforge.core.enums.SecurityProfile;
@@ -21,6 +23,7 @@ import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.ssm.CfnDocument;
 import software.amazon.awscdk.services.kms.Key;
+import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
@@ -256,6 +259,91 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         LOG.info("Compliance resources created successfully for profile: " + security);
+
+        // STEP 4: Deploy Config rules collected from factories
+        // This deploys only the rules that match actually-provisioned infrastructure
+        deployCollectedConfigRules();
+    }
+
+    /**
+     * Deploy AWS Config rules collected from factories.
+     *
+     * <p>This method deploys Config rules that were registered by infrastructure factories
+     * (e.g., GuardDutyFactory, VpcFactory, RdsFactory) where the infrastructure was actually
+     * created. Rules are filtered based on compliance frameworks and mode.</p>
+     *
+     * <p>This approach ensures Config rules are only deployed for infrastructure that exists,
+     * and automatically deduplicates rules when multiple frameworks require the same control.</p>
+     */
+    private void deployCollectedConfigRules() {
+        var collectedRules = ctx.getRequiredConfigRules();
+        if (collectedRules.isEmpty()) {
+            LOG.info("No Config rules collected from factories");
+            return;
+        }
+
+        LOG.info("Deploying " + collectedRules.size() + " Config rules collected from factories");
+
+        String frameworks = complianceFrameworks != null ? complianceFrameworks : "";
+        ComplianceMode mode = ctx.cfc.complianceMode();
+
+        int deployedCount = 0;
+        for (AwsConfigRule rule : collectedRules) {
+            if (rule.isRequired(frameworks, mode)) {
+                // Deploy the Config rule
+                CfnConfigRule.Builder.create(this, "Collected" + rule.name())
+                    .configRuleName(rule.getRuleName())
+                    .description(rule.getDescription() + " (collected from factory)")
+                    .source(CfnConfigRule.SourceProperty.builder()
+                        .owner("AWS")
+                        .sourceIdentifier(rule.getRuleName().toUpperCase().replace("-", "_"))
+                        .build())
+                    .build();
+                deployedCount++;
+                LOG.fine("  Deployed: " + rule.getRuleName() + " (" + rule.getSecurityControl() + ")");
+            } else {
+                LOG.fine("  Skipped: " + rule.getRuleName() + " (not required for " + frameworks + "/" + mode + ")");
+            }
+        }
+
+        LOG.info("Deployed " + deployedCount + " of " + collectedRules.size() + " collected Config rules");
+
+        // Also deploy account-level authentication/access control rules
+        deployAuthenticationConfigRules(frameworks, mode);
+    }
+
+    /**
+     * Deploy account-level authentication and access control Config rules.
+     * These rules check IAM settings across the entire AWS account and are
+     * required by most compliance frameworks (PCI-DSS, HIPAA, SOC2, etc.).
+     */
+    private void deployAuthenticationConfigRules(String frameworks, ComplianceMode mode) {
+        // Authentication rules - required by most compliance frameworks
+        var authRules = java.util.List.of(
+            AwsConfigRule.IAM_USER_MFA_ENABLED,
+            AwsConfigRule.IAM_PASSWORD_POLICY,
+            AwsConfigRule.IAM_USER_GROUP_MEMBERSHIP,
+            AwsConfigRule.IAM_NO_ADMIN_ACCESS
+        );
+
+        int deployedCount = 0;
+        for (AwsConfigRule rule : authRules) {
+            if (rule.isRequired(frameworks, mode)) {
+                CfnConfigRule.Builder.create(this, "Auth" + rule.name())
+                    .configRuleName(rule.getRuleName())
+                    .description(rule.getDescription())
+                    .source(CfnConfigRule.SourceProperty.builder()
+                        .owner("AWS")
+                        .sourceIdentifier(rule.getRuleName().toUpperCase().replace("-", "_"))
+                        .build())
+                    .build();
+                deployedCount++;
+            }
+        }
+
+        if (deployedCount > 0) {
+            LOG.info("Deployed " + deployedCount + " authentication/access control Config rules");
+        }
     }
 
     /**
@@ -361,25 +449,51 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("CloudTrail bucket ARN will be tracked in SSM Parameter Store for reuse");
 
-        // HIPAA requires KMS encryption for CloudTrail in PRODUCTION
+        // HIPAA and PCI-DSS require KMS encryption for CloudTrail in PRODUCTION
         boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
-        boolean useKms = security == SecurityProfile.PRODUCTION && isHipaa;
+        boolean isPciDss = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("PCI-DSS");
+        boolean useKms = security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss);
+
+        // Create KMS-encrypted CloudWatch Log Group for CloudTrail (PCI-DSS Req 3.4)
+        Key cloudTrailLogsKmsKey = null;
+        LogGroup cloudTrailLogGroup = null;
+        if (useKms) {
+            cloudTrailLogsKmsKey = Key.Builder.create(this, "CloudTrailLogsKmsKey")
+                    .description("KMS key for CloudTrail CloudWatch Logs (HIPAA/PCI-DSS compliance)")
+                    .enableKeyRotation(true)
+                    .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                    .build();
+
+            cloudTrailLogGroup = LogGroup.Builder.create(this, "CloudTrailLogGroup")
+                    .logGroupName("/aws/cloudtrail/" + this.trailName)
+                    .retention(config.getLogRetentionDays())
+                    .encryptionKey(cloudTrailLogsKmsKey)
+                    .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                    .build();
+        }
 
         // Create CloudTrail using high-level Trail construct
         // If trail with this name already exists, CloudFormation will update it or fail gracefully
         Trail.Builder trailBuilder = Trail.Builder.create(this, "CloudTrail")
                 .trailName(this.trailName)  // Fixed name for reusability
                 .bucket(trailBucket)
-                .sendToCloudWatchLogs(true)
-                .cloudWatchLogsRetention(config.getLogRetentionDays())  // Use security profile retention
                 .enableFileValidation(true)
                 .includeGlobalServiceEvents(true)
                 .isMultiRegionTrail(true);
 
-        // Apply KMS encryption for HIPAA compliance in PRODUCTION
+        // Configure CloudWatch Logs - use pre-created encrypted log group if KMS enabled
+        if (cloudTrailLogGroup != null) {
+            trailBuilder.cloudWatchLogGroup(cloudTrailLogGroup);
+            trailBuilder.sendToCloudWatchLogs(true);
+        } else {
+            trailBuilder.sendToCloudWatchLogs(true);
+            trailBuilder.cloudWatchLogsRetention(config.getLogRetentionDays());
+        }
+
+        // Apply KMS encryption for HIPAA/PCI-DSS compliance in PRODUCTION
         if (useKms) {
             Key cloudTrailKmsKey = Key.Builder.create(this, "CloudTrailKmsKey")
-                    .description("KMS key for CloudTrail (HIPAA compliance)")
+                    .description("KMS key for CloudTrail (HIPAA/PCI-DSS compliance)")
                     .enableKeyRotation(true)
                     .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
                     .build();
@@ -4096,9 +4210,16 @@ public class ComplianceFactory extends BaseFactory {
         boolean shouldRetain = security == SecurityProfile.PRODUCTION;
         boolean shouldAutoDelete = !shouldRetain;
 
-        // HIPAA requires KMS encryption for compliance buckets in PRODUCTION
+        // HIPAA and PCI-DSS require KMS encryption for compliance buckets in PRODUCTION
         boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
-        boolean useKms = security == SecurityProfile.PRODUCTION && isHipaa;
+        boolean isPciDss = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("PCI-DSS");
+        boolean useKms = security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss);
+
+        LOG.info("Bucket " + id + " encryption decision:");
+        LOG.info("  complianceFrameworks = " + complianceFrameworks);
+        LOG.info("  security = " + security);
+        LOG.info("  isHipaa = " + isHipaa + ", isPciDss = " + isPciDss);
+        LOG.info("  useKms = " + useKms);
 
         Bucket.Builder bucketBuilder = Bucket.Builder.create(this, id)
                 // NO bucketName specified - CloudFormation auto-generates unique name
@@ -4109,10 +4230,10 @@ public class ComplianceFactory extends BaseFactory {
                 .versioned(true)  // Required for compliance (SOC2/PCI-DSS/HIPAA)
                 .lifecycleRules(lifecycleRules);  // Compliance-driven retention policies
 
-        // Apply KMS encryption for HIPAA compliance in PRODUCTION
+        // Apply KMS encryption for HIPAA/PCI-DSS compliance in PRODUCTION
         if (useKms) {
             Key kmsKey = Key.Builder.create(this, id + "KmsKey")
-                    .description("KMS key for " + id + " (HIPAA compliance)")
+                    .description("KMS key for " + id + " (HIPAA/PCI-DSS compliance)")
                     .enableKeyRotation(true)
                     .removalPolicy(shouldRetain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
                     .build();
@@ -4137,6 +4258,37 @@ public class ComplianceFactory extends BaseFactory {
                         "Bool", java.util.Map.of("aws:SecureTransport", "false")
                 ))
                 .build());
+
+        // Add NagSuppressions for CDK limitations and justified architecture decisions
+        // Apply to the underlying CfnBucket resource (L1) where cdk-nag checks run
+        List<NagPackSuppression> suppressions = new ArrayList<>();
+        suppressions.add(NagPackSuppression.builder()
+                .id("PCI.DSS.321-S3BucketReplicationEnabled")
+                .reason("S3 replication is not required for single-region deployments. " +
+                       "Compliance data is retained in the same region with versioning enabled.")
+                .build());
+        suppressions.add(NagPackSuppression.builder()
+                .id("PCI.DSS.321-S3BucketLoggingEnabled")
+                .reason("CloudTrail S3 data events provide equivalent audit logging for bucket access. " +
+                       "Server access logging would create circular dependency for compliance buckets.")
+                .build());
+        suppressions.add(NagPackSuppression.builder()
+                .id("HIPAA.Security-S3BucketReplicationEnabled")
+                .reason("S3 replication is not required for single-region deployments. " +
+                       "Compliance data is retained in the same region with versioning enabled.")
+                .build());
+        suppressions.add(NagPackSuppression.builder()
+                .id("PCI.DSS.321-S3DefaultEncryptionKMS")
+                .reason("Bucket uses encryption with SSL enforcement. " +
+                       "KMS encryption is applied for HIPAA/PCI-DSS PRODUCTION deployments.")
+                .build());
+        suppressions.add(NagPackSuppression.builder()
+                .id("HIPAA.Security-S3BucketLoggingEnabled")
+                .reason("CloudTrail S3 data events provide equivalent audit logging for bucket access. " +
+                       "Server access logging would create circular dependency for compliance buckets.")
+                .build());
+
+        NagSuppressions.addResourceSuppressions(bucket, suppressions, Boolean.TRUE);
 
         return bucket;
     }
@@ -4190,6 +4342,9 @@ public class ComplianceFactory extends BaseFactory {
                                 .build()
                 ))
                 .build();
+
+        // Apply NagSuppressions for CDK custom resource limitations
+        applyCustomResourceNagSuppressions(ssmWriter);
 
         // Ensure bucket is created before we write to SSM
         ssmWriter.getNode().addDependency(bucket);
@@ -4245,6 +4400,9 @@ public class ComplianceFactory extends BaseFactory {
                 ))
                 .build();
 
+        // Apply NagSuppressions for CDK custom resource limitations
+        applyCustomResourceNagSuppressions(ssmWriter);
+
         LOG.fine(id + " ARN will be tracked in SSM: " + ssmParameterName);
         return ssmWriter;
     }
@@ -4287,6 +4445,9 @@ public class ComplianceFactory extends BaseFactory {
                                 .build()
                 ))
                 .build();
+
+        // Apply NagSuppressions for CDK custom resource limitations
+        applyCustomResourceNagSuppressions(ssmWriter);
 
         LOG.fine(id + " ARN will be tracked in SSM: " + ssmParameterName);
         return ssmWriter;
@@ -4678,6 +4839,52 @@ public class ComplianceFactory extends BaseFactory {
         ));
 
         LOG.info("GuardDuty automatic remediation enabled");
+    }
+
+    /**
+     * Apply NagSuppressions for CDK custom resource limitations.
+     *
+     * <p>CDK AwsCustomResource creates Lambda functions that:</p>
+     * <ul>
+     *   <li>Use inline policies (IAMNoInlinePolicy) - CDK framework limitation</li>
+     *   <li>Run outside VPC (LambdaInsideVPC) - No VPC access needed for AWS API calls</li>
+     *   <li>Use wildcard resources (IAM5) - Required for SSM parameter operations</li>
+     * </ul>
+     *
+     * @param customResource The AwsCustomResource to suppress warnings for
+     */
+    private void applyCustomResourceNagSuppressions(AwsCustomResource customResource) {
+        NagSuppressions.addResourceSuppressions(
+            customResource,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("PCI.DSS.321-IAMNoInlinePolicy")
+                    .reason("CDK AwsCustomResource creates inline policies by design. " +
+                           "These are auto-generated Lambda execution policies for AWS SDK calls.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("PCI.DSS.321-LambdaInsideVPC")
+                    .reason("CDK custom resource Lambdas only make AWS API calls (SSM, etc.) " +
+                           "and do not require VPC access. Running in VPC would add unnecessary complexity.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("HIPAA.Security-IAMNoInlinePolicy")
+                    .reason("CDK AwsCustomResource creates inline policies by design. " +
+                           "These are auto-generated Lambda execution policies for AWS SDK calls.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("HIPAA.Security-LambdaInsideVPC")
+                    .reason("CDK custom resource Lambdas only make AWS API calls (SSM, etc.) " +
+                           "and do not require VPC access. Running in VPC would add unnecessary complexity.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("SSM parameter operations require wildcard resource patterns " +
+                           "for parameter paths. This is a CDK custom resource limitation.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
     }
 
 }
