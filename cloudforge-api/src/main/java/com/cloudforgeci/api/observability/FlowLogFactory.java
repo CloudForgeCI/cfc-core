@@ -1,10 +1,12 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
 import software.amazon.awscdk.services.ec2.FlowLogOptions;
+import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.constructs.Construct;
 
@@ -45,10 +47,25 @@ public class FlowLogFactory extends BaseFactory {
         // Note: logGroupName is intentionally omitted to allow CloudFormation to auto-generate unique names
         // This prevents naming conflicts when deploying multiple stacks with the same security profile
         // Use getLogRetentionDays() which is compliance-aware (respects logRetentionDays override)
-        LogGroup logGroup = LogGroup.Builder.create(this, "VpcFlowLogsGroup")
+        LogGroup.Builder logGroupBuilder = LogGroup.Builder.create(this, "VpcFlowLogsGroup")
                     .retention(config.getLogRetentionDays())
+                    .removalPolicy(config.getLogRemovalPolicy());
+
+        // Add KMS encryption when enabled (required for PCI-DSS, HIPAA, SOC2 compliance)
+        if (config.isCloudWatchLogsKmsEncryptionEnabled()) {
+            Key flowLogsKmsKey = Key.Builder.create(this, "FlowLogsKmsKey")
+                    .description("KMS key for VPC Flow Logs encryption")
+                    .enableKeyRotation(true)
                     .removalPolicy(config.getLogRemovalPolicy())
                     .build();
+            logGroupBuilder.encryptionKey(flowLogsKmsKey);
+            LOG.info("VPC Flow Logs KMS encryption enabled");
+
+            // Register AWS Config rule for CloudWatch Logs KMS encryption compliance
+            ctx.requireConfigRule(AwsConfigRule.CLOUDWATCH_LOG_GROUP_ENCRYPTED);
+        }
+
+        LogGroup logGroup = logGroupBuilder.build();
 
         // Create flow log options with security profile-based traffic type
         FlowLogOptions flowLogOptions = FlowLogOptions.builder()
@@ -57,6 +74,9 @@ public class FlowLogFactory extends BaseFactory {
                 .build();
 
         ctx.flowlogs.set(flowLogOptions);
+
+        // Register AWS Config rule for VPC Flow Logs compliance
+        ctx.requireConfigRule(AwsConfigRule.VPC_FLOW_LOGS_ENABLED);
 
         LOG.info("Flow logs configured for " + security + " profile: " +
                 "traffic = " + config.getFlowLogTrafficType() +

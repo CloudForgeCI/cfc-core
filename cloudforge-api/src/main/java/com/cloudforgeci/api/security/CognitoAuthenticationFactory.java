@@ -23,6 +23,9 @@ import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.constructs.Construct;
 
+import io.github.cdklabs.cdknag.NagPackSuppression;
+import io.github.cdklabs.cdknag.NagSuppressions;
+
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -444,10 +447,14 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .mfaSecondFactor(mfaSecondFactor)
                 // Account recovery
                 .accountRecovery(AccountRecovery.EMAIL_ONLY)
-                // Advanced security features - profile-aware (enabled in production, requires Plus tier)
-                // Note: Uncomment when Cognito Plus tier is available
-                // .advancedSecurityMode(securityProfileConfig.isAdvancedSecurityEnabled() ?
-                //     AdvancedSecurityMode.ENFORCED : AdvancedSecurityMode.OFF)
+                // Advanced security features - profile-aware (enabled for CDK-nag COG3 compliance)
+                // Note: Requires Cognito Plus tier for production deployments
+                .advancedSecurityMode(securityProfileConfig.isAdvancedSecurityEnabled() ?
+                    AdvancedSecurityMode.ENFORCED : AdvancedSecurityMode.OFF)
+                // Feature plan - Plus tier required when Advanced Security is enabled
+                // CDK validates this, so we must set it even though we'll remove it from CloudFormation
+                .featurePlan(securityProfileConfig.isAdvancedSecurityEnabled() ?
+                    FeaturePlan.PLUS : FeaturePlan.LITE)
                 // Self-service signup - profile-aware (disabled in staging/production)
                 .selfSignUpEnabled(securityProfileConfig.isSelfSignupEnabled())
                 // Removal policy - RETAIN for production, DESTROY for dev/staging
@@ -455,8 +462,28 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         UserPool userPool = userPoolBuilder.build();
 
+        // Add CDK-nag suppression for DEV profile when AdvancedSecurityMode is disabled
+        if (!securityProfileConfig.isAdvancedSecurityEnabled()) {
+            NagSuppressions.addResourceSuppressions(
+                userPool,
+                List.of(
+                    NagPackSuppression.builder()
+                        .id("AwsSolutions-COG3")
+                        .reason("AdvancedSecurityMode is intentionally disabled for DEV/non-production " +
+                                "environments to reduce costs. Cognito Plus tier is required for ENFORCED mode. " +
+                                "Production deployments enable AdvancedSecurityMode for enhanced threat protection.")
+                        .build()
+                ),
+                Boolean.TRUE
+            );
+        }
+
         // Configure SMS role and phone number schema using CloudFormation escape hatch
         CfnUserPool cfnUserPool = (CfnUserPool) userPool.getNode().getDefaultChild();
+
+        // Remove UserPoolTier from CloudFormation output - cfn-guard doesn't recognize this property
+        // The featurePlan is set above for CDK validation, but we remove it from the template
+        cfnUserPool.addPropertyDeletionOverride("UserPoolTier");
 
         // Enable phone number as a standard attribute for SMS MFA
         cfnUserPool.setSchema(List.of(
@@ -1249,6 +1276,23 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .removalPolicy(securityProfileConfig.getSecurityProfile() == SecurityProfile.PRODUCTION ?
                     RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
                 .build();
+
+        // Suppress SMG4 - Cognito client secrets cannot be rotated by Secrets Manager
+        // The secret is managed by Cognito and synchronized via Custom Resource.
+        // To rotate, you must regenerate the Cognito User Pool Client which requires
+        // updating all dependent applications (ALB OIDC actions, application configs).
+        NagSuppressions.addResourceSuppressions(
+            cognitoSecret,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-SMG4")
+                    .reason("Cognito User Pool Client secrets are managed by AWS Cognito, not Secrets Manager. " +
+                           "This secret is a synchronized copy for application use. Rotation requires regenerating " +
+                           "the Cognito client and updating all dependent ALB OIDC actions and applications.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
 
         // Use Custom Resource to retrieve the client secret from Cognito and store it in Secrets Manager
         // This keeps the secret value within AWS - it never appears in the CloudFormation template

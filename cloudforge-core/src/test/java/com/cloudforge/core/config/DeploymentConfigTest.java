@@ -158,6 +158,16 @@ class DeploymentConfigTest {
         assertNull(config.cloudfrontEnabled);
     }
 
+    @Test
+    void testDefaultRestrictSecurityGroupEgress() {
+        assertFalse(config.restrictSecurityGroupEgress);
+    }
+
+    @Test
+    void testDefaultCloudWatchLogsKmsEncryptionEnabled() {
+        assertFalse(config.cloudWatchLogsKmsEncryptionEnabled);
+    }
+
     // ========== Field Assignment Tests ==========
 
     @Test
@@ -406,6 +416,10 @@ class DeploymentConfigTest {
 
         config.region = "us-west-2";
 
+        // Security hardening flags
+        config.restrictSecurityGroupEgress = true;
+        config.cloudWatchLogsKmsEncryptionEnabled = true;
+
         // Verify all values are set correctly
         assertEquals("myapp-production", config.stackName);
         assertEquals(RuntimeType.EC2, config.runtime);
@@ -419,6 +433,8 @@ class DeploymentConfigTest {
         assertTrue(config.cognitoAutoProvision);
         assertTrue(config.cognitoMfaEnabled);
         assertEquals("us-west-2", config.region);
+        assertTrue(config.restrictSecurityGroupEgress);
+        assertTrue(config.cloudWatchLogsKmsEncryptionEnabled);
     }
 
     @Test
@@ -444,6 +460,36 @@ class DeploymentConfigTest {
         assertEquals(2048, config.cpu);
         assertEquals(4096, config.memory);
         assertEquals(120, config.healthCheckGracePeriod);
+    }
+
+    // ========== Security Hardening Tests ==========
+
+    @Test
+    void testSetRestrictSecurityGroupEgress() {
+        config.restrictSecurityGroupEgress = true;
+        assertTrue(config.restrictSecurityGroupEgress);
+    }
+
+    @Test
+    void testSetCloudWatchLogsKmsEncryptionEnabled() {
+        config.cloudWatchLogsKmsEncryptionEnabled = true;
+        assertTrue(config.cloudWatchLogsKmsEncryptionEnabled);
+    }
+
+    @Test
+    void testSecurityHardeningConfiguration() {
+        // Configure a security-hardened production deployment
+        config.securityProfile = SecurityProfile.PRODUCTION;
+        config.networkMode = NetworkMode.PRIVATE_WITH_NAT;
+        config.restrictSecurityGroupEgress = true;
+        config.cloudWatchLogsKmsEncryptionEnabled = true;
+        config.wafEnabled = true;
+
+        assertEquals(SecurityProfile.PRODUCTION, config.securityProfile);
+        assertEquals(NetworkMode.PRIVATE_WITH_NAT, config.networkMode);
+        assertTrue(config.restrictSecurityGroupEgress);
+        assertTrue(config.cloudWatchLogsKmsEncryptionEnabled);
+        assertTrue(config.wafEnabled);
     }
 
     @Test

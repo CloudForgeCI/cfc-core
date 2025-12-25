@@ -11,31 +11,23 @@
 # ============================================================================
 
 # GuardDuty detector enabled
+# CloudForge Mapping: THREAT_DETECTION control
 rule threat_protection_guardduty_enabled when
     resourceType == 'AWS::GuardDuty::Detector' {
 
-    Properties.Enable == true
-
-    <<
-        [Threat Protection] GuardDuty must be enabled for threat detection.
-        CloudForge Mapping: THREAT_DETECTION control
-    >>
+    Properties.Enable == true <<[Threat Protection] GuardDuty must be enabled for threat detection>>
 }
 
 # GuardDuty S3 protection
+# CloudForge Mapping: THREAT_DETECTION control
 rule threat_protection_guardduty_s3 when
     resourceType == 'AWS::GuardDuty::Detector' {
 
     when Properties.DataSources exists {
         when Properties.DataSources.S3Logs exists {
-            Properties.DataSources.S3Logs.Enable == true
+            Properties.DataSources.S3Logs.Enable == true <<[Threat Protection] GuardDuty S3 protection should be enabled>>
         }
     }
-
-    <<
-        [Threat Protection] GuardDuty S3 protection should be enabled.
-        CloudForge Mapping: THREAT_DETECTION control
-    >>
 }
 
 # ============================================================================
@@ -43,49 +35,37 @@ rule threat_protection_guardduty_s3 when
 # ============================================================================
 
 # VPC Flow Logs for threat detection
+# CloudForge Mapping: NETWORK_MONITORING control
 rule threat_protection_vpc_flow_logs when
     resourceType == 'AWS::EC2::FlowLog' {
 
-    Properties.ResourceType == 'VPC'
-    Properties.TrafficType == 'ALL'
-
-    <<
-        [Threat Protection] VPC Flow Logs must be enabled for network threat detection.
-        CloudForge Mapping: NETWORK_MONITORING control
-    >>
+    Properties.ResourceType == 'VPC' <<[Threat Protection] VPC Flow Logs must target VPC>>
+    Properties.TrafficType == 'ALL' <<[Threat Protection] VPC Flow Logs must capture ALL traffic>>
 }
 
 # Security Group ingress restrictions
+# CloudForge Mapping: NETWORK_SECURITY control
 rule threat_protection_security_groups_restricted when
     resourceType == 'AWS::EC2::SecurityGroup' {
 
     when Properties.SecurityGroupIngress exists {
         Properties.SecurityGroupIngress[*] {
             when CidrIp exists {
-                CidrIp != '0.0.0.0/0'
+                CidrIp != '0.0.0.0/0' <<[Threat Protection] Security groups must not allow unrestricted inbound access>>
             }
             when CidrIpv6 exists {
-                CidrIpv6 != '::/0'
+                CidrIpv6 != '::/0' <<[Threat Protection] Security groups must not allow unrestricted IPv6 inbound access>>
             }
         }
     }
-
-    <<
-        [Threat Protection] Security groups must not allow unrestricted inbound access.
-        CloudForge Mapping: NETWORK_SECURITY control
-    >>
 }
 
 # WAF Web ACL association
+# CloudForge Mapping: WEB_APPLICATION_FIREWALL control
 rule threat_protection_waf_enabled when
     resourceType == 'AWS::WAFv2::WebACLAssociation' {
 
-    Properties.WebACLArn exists
-
-    <<
-        [Threat Protection] WAF Web ACL should be associated with resources.
-        CloudForge Mapping: WEB_APPLICATION_FIREWALL control
-    >>
+    Properties.WebACLArn exists <<[Threat Protection] WAF Web ACL should be associated with resources>>
 }
 
 # ============================================================================
@@ -93,43 +73,31 @@ rule threat_protection_waf_enabled when
 # ============================================================================
 
 # S3 bucket public access block
+# CloudForge Mapping: ACCESS_CONTROL control
 rule threat_protection_s3_public_access when
     resourceType == 'AWS::S3::Bucket' {
 
-    Properties.PublicAccessBlockConfiguration exists
-    Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
-    Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
-    Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
-    Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
-
-    <<
-        [Threat Protection] S3 buckets must block public access to prevent data exposure.
-        CloudForge Mapping: ACCESS_CONTROL control
-    >>
+    Properties.PublicAccessBlockConfiguration exists <<[Threat Protection] S3 buckets must have public access block configured>>
+    Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true <<[Threat Protection] S3 must block public ACLs>>
+    Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true <<[Threat Protection] S3 must block public policy>>
+    Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true <<[Threat Protection] S3 must ignore public ACLs>>
+    Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true <<[Threat Protection] S3 must restrict public buckets>>
 }
 
 # RDS instances not publicly accessible
+# CloudForge Mapping: ACCESS_CONTROL control
 rule threat_protection_rds_not_public when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.PubliclyAccessible == false
-
-    <<
-        [Threat Protection] RDS instances must not be publicly accessible.
-        CloudForge Mapping: ACCESS_CONTROL control
-    >>
+    Properties.PubliclyAccessible == false <<[Threat Protection] RDS instances must not be publicly accessible>>
 }
 
 # Redshift clusters not publicly accessible
+# CloudForge Mapping: ACCESS_CONTROL control
 rule threat_protection_redshift_not_public when
     resourceType == 'AWS::Redshift::Cluster' {
 
-    Properties.PubliclyAccessible == false
-
-    <<
-        [Threat Protection] Redshift clusters must not be publicly accessible.
-        CloudForge Mapping: ACCESS_CONTROL control
-    >>
+    Properties.PubliclyAccessible == false <<[Threat Protection] Redshift clusters must not be publicly accessible>>
 }
 
 # ============================================================================
@@ -137,29 +105,21 @@ rule threat_protection_redshift_not_public when
 # ============================================================================
 
 # CloudTrail enabled
+# CloudForge Mapping: AUDIT_LOGGING control
 rule threat_protection_cloudtrail_enabled when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    Properties.IsLogging == true
-    Properties.EnableLogFileValidation == true
-
-    <<
-        [Threat Protection] CloudTrail must be enabled for threat detection and forensics.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
+    Properties.IsLogging == true <<[Threat Protection] CloudTrail must be enabled>>
+    Properties.EnableLogFileValidation == true <<[Threat Protection] CloudTrail must enable log file validation>>
 }
 
 # CloudTrail multi-region
+# CloudForge Mapping: AUDIT_LOGGING control
 rule threat_protection_cloudtrail_multiregion when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    Properties.IsMultiRegionTrail == true
-    Properties.IncludeGlobalServiceEvents == true
-
-    <<
-        [Threat Protection] CloudTrail should be multi-region for comprehensive threat detection.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
+    Properties.IsMultiRegionTrail == true <<[Threat Protection] CloudTrail should be multi-region>>
+    Properties.IncludeGlobalServiceEvents == true <<[Threat Protection] CloudTrail should include global service events>>
 }
 
 # ============================================================================
@@ -167,19 +127,15 @@ rule threat_protection_cloudtrail_multiregion when
 # ============================================================================
 
 # Network ACL rules (prevent unrestricted access)
+# CloudForge Mapping: NETWORK_SECURITY control
 rule threat_protection_nacl_restricted when
     resourceType == 'AWS::EC2::NetworkAclEntry' {
 
     when Properties.Egress == false {
         when Properties.CidrBlock exists {
-            Properties.CidrBlock != '0.0.0.0/0'
+            Properties.CidrBlock != '0.0.0.0/0' <<[Threat Protection] Network ACL ingress rules should restrict source CIDR blocks>>
         }
     }
-
-    <<
-        [Threat Protection] Network ACL ingress rules should restrict source CIDR blocks.
-        CloudForge Mapping: NETWORK_SECURITY control
-    >>
 }
 
 # ============================================================================
@@ -187,30 +143,22 @@ rule threat_protection_nacl_restricted when
 # ============================================================================
 
 # S3 bucket versioning (protect against malicious deletion)
+# CloudForge Mapping: DATA_PROTECTION control
 rule threat_protection_s3_versioning when
     resourceType == 'AWS::S3::Bucket' {
 
-    Properties.VersioningConfiguration exists
-    Properties.VersioningConfiguration.Status == 'Enabled'
-
-    <<
-        [Threat Protection] S3 buckets should enable versioning to protect against data loss.
-        CloudForge Mapping: DATA_PROTECTION control
-    >>
+    Properties.VersioningConfiguration exists <<[Threat Protection] S3 buckets should have versioning configured>>
+    Properties.VersioningConfiguration.Status == 'Enabled' <<[Threat Protection] S3 versioning should be enabled>>
 }
 
 # S3 bucket logging (detect unauthorized access)
+# CloudForge Mapping: AUDIT_LOGGING control
 rule threat_protection_s3_logging when
     resourceType == 'AWS::S3::Bucket' {
 
     when Properties.LoggingConfiguration exists {
-        Properties.LoggingConfiguration.DestinationBucketName exists
+        Properties.LoggingConfiguration.DestinationBucketName exists <<[Threat Protection] S3 logging must specify destination bucket>>
     }
-
-    <<
-        [Threat Protection] S3 buckets should have access logging enabled for threat detection.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
 }
 
 # ============================================================================
@@ -218,31 +166,23 @@ rule threat_protection_s3_logging when
 # ============================================================================
 
 # S3 encryption (prevent data theft)
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule threat_protection_s3_encryption when
     resourceType == 'AWS::S3::Bucket' {
 
-    Properties.BucketEncryption exists
-    Properties.BucketEncryption.ServerSideEncryptionConfiguration exists
+    Properties.BucketEncryption exists <<[Threat Protection] S3 buckets must have encryption configured>>
+    Properties.BucketEncryption.ServerSideEncryptionConfiguration exists <<[Threat Protection] S3 must configure server-side encryption>>
 
     Properties.BucketEncryption.ServerSideEncryptionConfiguration[*] {
-        ServerSideEncryptionByDefault exists
-        ServerSideEncryptionByDefault.SSEAlgorithm in ['AES256', 'aws:kms']
+        ServerSideEncryptionByDefault exists <<[Threat Protection] S3 encryption must specify default algorithm>>
+        ServerSideEncryptionByDefault.SSEAlgorithm in ['AES256', 'aws:kms'] <<[Threat Protection] S3 must use AES256 or aws:kms>>
     }
-
-    <<
-        [Threat Protection] S3 buckets must use encryption to protect data from theft.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
 }
 
 # EBS encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule threat_protection_ebs_encryption when
     resourceType == 'AWS::EC2::Volume' {
 
-    Properties.Encrypted == true
-
-    <<
-        [Threat Protection] EBS volumes must be encrypted to protect data from theft.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.Encrypted == true <<[Threat Protection] EBS volumes must be encrypted to protect data>>
 }

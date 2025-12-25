@@ -852,6 +852,15 @@ class ComplianceReportGenerator:
                 failure_elem = failure if failure is not None else error
                 test_failed = failure_elem is not None
 
+                # If deployment_context not found in system-out, try to extract from failure message
+                if not deployment_context and failure_elem is not None:
+                    failure_text = failure_elem.text or ''
+                    failure_message = failure_elem.get('message', '')
+                    combined_failure = f"{failure_message}\n{failure_text}"
+                    ctx_match = re.search(r'DEPLOYMENT_CONTEXT_JSON:\s*(\{.*\})', combined_failure)
+                    if ctx_match:
+                        deployment_context = ctx_match.group(1)
+
                 # Create or update result
                 if config_name in results_by_config:
                     # Update existing result
@@ -868,6 +877,10 @@ class ComplianceReportGenerator:
                     result['has_advisories'] = layer_statuses.get('cdk_nag_has_advisories', False) or len(layer_statuses.get('cdk_nag_warnings', [])) > 0
                     if result['has_advisories']:
                         result['advisory_layers'] = ['L1']
+
+                    # Update deployment_context if we found one
+                    if deployment_context:
+                        result['deployment_context'] = deployment_context
 
                     # For negative tests: test passing means deployment would fail
                     # For positive tests: test failing means deployment failed

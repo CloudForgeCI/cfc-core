@@ -76,8 +76,12 @@ public enum AwsConfigRule {
         "Checks that EFS file systems are encrypted"),
 
     CLOUDWATCH_LOG_GROUP_ENCRYPTED("cloudwatch-log-group-encrypted",
+        ComplianceMatrix.SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION,
+        "Checks that CloudWatch log groups are encrypted with KMS"),
+
+    CLOUDTRAIL_ENCRYPTION_ENABLED("cloud-trail-encryption-enabled",
         ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
-        "Checks that CloudWatch log groups are encrypted"),
+        "Checks that CloudTrail is encrypted with KMS"),
 
     // ==================== Encryption in Transit ====================
     ALB_HTTPS_ONLY("alb-http-to-https-redirection-check",
@@ -122,6 +126,19 @@ public enum AwsConfigRule {
     RESTRICTED_SSH("restricted-ssh",
         ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION,
         "Checks that SSH is not open to 0.0.0.0/0"),
+
+    // ==================== S3 Logging & Compliance ====================
+    S3_BUCKET_LOGGING_ENABLED("s3-bucket-logging-enabled",
+        ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
+        "Checks that S3 server access logging is enabled"),
+
+    S3_BUCKET_VERSIONING_ENABLED("s3-bucket-versioning-enabled",
+        ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
+        "Checks that S3 bucket versioning is enabled"),
+
+    S3_BUCKET_DEFAULT_LOCK_ENABLED("s3-bucket-default-lock-enabled",
+        ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
+        "Checks that S3 Object Lock is enabled for WORM compliance"),
 
     // ==================== Backup & Recovery ====================
     DB_INSTANCE_BACKUP_ENABLED("db-instance-backup-enabled",
@@ -171,7 +188,197 @@ public enum AwsConfigRule {
 
     ALB_WAF_ENABLED("alb-waf-enabled",
         ComplianceMatrix.SecurityControl.WAF_PROTECTION,
-        "Checks that ALB has WAF associated");
+        "Checks that ALB has WAF associated"),
+
+    // ==================== Root Account Protection ====================
+    ROOT_ACCOUNT_MFA_ENABLED("root-account-mfa-enabled",
+        ComplianceMatrix.SecurityControl.ROOT_ACCOUNT_PROTECTION,
+        "Checks that MFA is enabled for the root account"),
+
+    ROOT_ACCOUNT_HARDWARE_MFA_ENABLED("root-account-hardware-mfa-enabled",
+        ComplianceMatrix.SecurityControl.ROOT_ACCOUNT_PROTECTION,
+        "Checks that hardware MFA is enabled for the root account"),
+
+    IAM_ROOT_ACCESS_KEY_CHECK("iam-root-access-key-check",
+        ComplianceMatrix.SecurityControl.ROOT_ACCOUNT_PROTECTION,
+        "Checks that root user does not have access keys"),
+
+    // ==================== Credential Rotation ====================
+    ACCESS_KEYS_ROTATED("access-keys-rotated",
+        ComplianceMatrix.SecurityControl.CREDENTIAL_ROTATION,
+        "Checks that IAM access keys are rotated within 90 days"),
+
+    IAM_USER_UNUSED_CREDENTIALS_CHECK("iam-user-unused-credentials-check",
+        ComplianceMatrix.SecurityControl.CREDENTIAL_ROTATION,
+        "Checks that IAM users do not have unused credentials"),
+
+    MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS("mfa-enabled-for-iam-console-access",
+        ComplianceMatrix.SecurityControl.AUTHENTICATION,
+        "Checks that MFA is enabled for IAM users with console access"),
+
+    // ==================== Database Access Control ====================
+    RDS_INSTANCE_PUBLIC_ACCESS_CHECK("rds-instance-public-access-check",
+        ComplianceMatrix.SecurityControl.DATABASE_ACCESS_CONTROL,
+        "Checks that RDS instances are not publicly accessible"),
+
+    RDS_CLUSTER_PUBLIC_ACCESS_CHECK("rds-cluster-public-access-check",
+        ComplianceMatrix.SecurityControl.DATABASE_ACCESS_CONTROL,
+        "Checks that RDS clusters are not publicly accessible"),
+
+    RDS_INSTANCE_IAM_AUTHENTICATION_ENABLED("rds-instance-iam-authentication-enabled",
+        ComplianceMatrix.SecurityControl.DATABASE_ACCESS_CONTROL,
+        "Checks that IAM authentication is enabled for RDS instances"),
+
+    RDS_CLUSTER_IAM_AUTHENTICATION_ENABLED("rds-cluster-iam-authentication-enabled",
+        ComplianceMatrix.SecurityControl.DATABASE_ACCESS_CONTROL,
+        "Checks that IAM authentication is enabled for RDS clusters"),
+
+    REDSHIFT_CLUSTER_PUBLIC_ACCESS_CHECK("redshift-cluster-public-access-check",
+        ComplianceMatrix.SecurityControl.DATABASE_ACCESS_CONTROL,
+        "Checks that Redshift clusters are not publicly accessible"),
+
+    // ==================== Database Logging ====================
+    RDS_LOGGING_ENABLED("rds-logging-enabled",
+        ComplianceMatrix.SecurityControl.DATABASE_LOGGING,
+        "Checks that RDS logging is enabled"),
+
+    REDSHIFT_AUDIT_LOGGING_ENABLED("redshift-audit-logging-enabled",
+        ComplianceMatrix.SecurityControl.DATABASE_LOGGING,
+        "Checks that Redshift audit logging is enabled"),
+
+    // ==================== Database Deletion Protection ====================
+    RDS_CLUSTER_DELETION_PROTECTION_ENABLED("rds-cluster-deletion-protection-enabled",
+        ComplianceMatrix.SecurityControl.DELETION_PROTECTION,
+        "Checks that RDS cluster deletion protection is enabled"),
+
+    RDS_INSTANCE_DELETION_PROTECTION_ENABLED("rds-instance-deletion-protection-enabled",
+        ComplianceMatrix.SecurityControl.DELETION_PROTECTION,
+        "Checks that RDS instance deletion protection is enabled"),
+
+    // ==================== Container Security (EKS) ====================
+    EKS_ENDPOINT_NO_PUBLIC_ACCESS("eks-endpoint-no-public-access",
+        ComplianceMatrix.SecurityControl.CONTAINER_SECURITY,
+        "Checks that EKS cluster endpoints are not publicly accessible"),
+
+    EKS_SECRETS_ENCRYPTED("eks-secrets-encrypted",
+        ComplianceMatrix.SecurityControl.CONTAINER_SECURITY,
+        "Checks that EKS secrets are encrypted with KMS"),
+
+    EKS_CLUSTER_LOGGING_ENABLED("eks-cluster-logging-enabled",
+        ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
+        "Checks that EKS cluster logging is enabled"),
+
+    EKS_CLUSTER_OLDEST_SUPPORTED_VERSION("eks-cluster-oldest-supported-version",
+        ComplianceMatrix.SecurityControl.VULNERABILITY_MANAGEMENT,
+        "Checks that EKS clusters are not running oldest supported version"),
+
+    // ==================== API Gateway Security ====================
+    API_GW_EXECUTION_LOGGING_ENABLED("api-gw-execution-logging-enabled",
+        ComplianceMatrix.SecurityControl.API_SECURITY,
+        "Checks that API Gateway execution logging is enabled"),
+
+    API_GW_SSL_ENABLED("api-gw-ssl-enabled",
+        ComplianceMatrix.SecurityControl.API_SECURITY,
+        "Checks that API Gateway has SSL enabled"),
+
+    API_GW_ASSOCIATED_WITH_WAF("api-gw-associated-with-waf",
+        ComplianceMatrix.SecurityControl.API_SECURITY,
+        "Checks that API Gateway is associated with WAF"),
+
+    API_GW_XRAY_ENABLED("api-gw-xray-enabled",
+        ComplianceMatrix.SecurityControl.SECURITY_MONITORING,
+        "Checks that API Gateway X-Ray tracing is enabled"),
+
+    // ==================== CDN Security (CloudFront) ====================
+    CLOUDFRONT_VIEWER_POLICY_HTTPS("cloudfront-viewer-policy-https",
+        ComplianceMatrix.SecurityControl.CDN_SECURITY,
+        "Checks that CloudFront uses HTTPS viewer policy"),
+
+    CLOUDFRONT_ASSOCIATED_WITH_WAF("cloudfront-associated-with-waf",
+        ComplianceMatrix.SecurityControl.CDN_SECURITY,
+        "Checks that CloudFront is associated with WAF"),
+
+    CLOUDFRONT_ORIGIN_ACCESS_IDENTITY_ENABLED("cloudfront-origin-access-identity-enabled",
+        ComplianceMatrix.SecurityControl.CDN_SECURITY,
+        "Checks that CloudFront uses origin access identity for S3"),
+
+    CLOUDFRONT_DEFAULT_ROOT_OBJECT_CONFIGURED("cloudfront-default-root-object-configured",
+        ComplianceMatrix.SecurityControl.CDN_SECURITY,
+        "Checks that CloudFront has default root object configured"),
+
+    CLOUDFRONT_ACCESSLOGS_ENABLED("cloudfront-accesslogs-enabled",
+        ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
+        "Checks that CloudFront access logging is enabled"),
+
+    CLOUDFRONT_NO_DEPRECATED_SSL_PROTOCOLS("cloudfront-no-deprecated-ssl-protocols",
+        ComplianceMatrix.SecurityControl.ENCRYPTION_IN_TRANSIT,
+        "Checks that CloudFront does not use deprecated SSL protocols"),
+
+    // ==================== Instance Metadata Security ====================
+    EC2_IMDSV2_CHECK("ec2-imdsv2-check",
+        ComplianceMatrix.SecurityControl.INSTANCE_METADATA_SECURITY,
+        "Checks that EC2 instances use IMDSv2"),
+
+    EC2_INSTANCE_PROFILE_ATTACHED("ec2-instance-profile-attached",
+        ComplianceMatrix.SecurityControl.ACCESS_CONTROL,
+        "Checks that EC2 instances have an IAM instance profile attached"),
+
+    EC2_LAUNCH_TEMPLATE_PUBLIC_IP_DISABLED("ec2-launch-template-public-ip-disabled",
+        ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION,
+        "Checks that EC2 launch templates do not assign public IPs"),
+
+    // ==================== Certificate Management ====================
+    ACM_CERTIFICATE_EXPIRATION_CHECK("acm-certificate-expiration-check",
+        ComplianceMatrix.SecurityControl.CERTIFICATE_MANAGEMENT,
+        "Checks that ACM certificates are not expired or expiring soon"),
+
+    ACM_CERTIFICATE_RSA_CHECK("acm-certificate-rsa-check",
+        ComplianceMatrix.SecurityControl.CERTIFICATE_MANAGEMENT,
+        "Checks that ACM certificates use RSA with adequate key length"),
+
+    // ==================== Lambda Security ====================
+    LAMBDA_FUNCTION_PUBLIC_ACCESS_PROHIBITED("lambda-function-public-access-prohibited",
+        ComplianceMatrix.SecurityControl.LAMBDA_SECURITY,
+        "Checks that Lambda functions are not publicly accessible"),
+
+    LAMBDA_DLQ_CHECK("lambda-dlq-check",
+        ComplianceMatrix.SecurityControl.LAMBDA_SECURITY,
+        "Checks that Lambda functions have dead letter queues configured"),
+
+    LAMBDA_INSIDE_VPC("lambda-inside-vpc",
+        ComplianceMatrix.SecurityControl.LAMBDA_SECURITY,
+        "Checks that Lambda functions are inside a VPC"),
+
+    LAMBDA_FUNCTION_SETTINGS_CHECK("lambda-function-settings-check",
+        ComplianceMatrix.SecurityControl.LAMBDA_SECURITY,
+        "Checks Lambda function runtime and configuration settings"),
+
+    // ==================== Redshift Security ====================
+    REDSHIFT_REQUIRE_TLS_SSL("redshift-require-tls-ssl",
+        ComplianceMatrix.SecurityControl.ENCRYPTION_IN_TRANSIT,
+        "Checks that Redshift clusters require TLS/SSL"),
+
+    REDSHIFT_CLUSTER_KMS_ENABLED("redshift-cluster-kms-enabled",
+        ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
+        "Checks that Redshift clusters use KMS encryption"),
+
+    // ==================== DynamoDB Security ====================
+    DYNAMODB_TABLE_ENCRYPTED_KMS("dynamodb-table-encrypted-kms",
+        ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
+        "Checks that DynamoDB tables are encrypted with KMS"),
+
+    DYNAMODB_AUTOSCALING_ENABLED("dynamodb-autoscaling-enabled",
+        ComplianceMatrix.SecurityControl.HIGH_AVAILABILITY,
+        "Checks that DynamoDB autoscaling is enabled"),
+
+    // ==================== CodeBuild Security ====================
+    CODEBUILD_PROJECT_ENVVAR_AWSCRED_CHECK("codebuild-project-envvar-awscred-check",
+        ComplianceMatrix.SecurityControl.SECRETS_MANAGER,
+        "Checks that CodeBuild projects do not use plaintext AWS credentials"),
+
+    CODEBUILD_PROJECT_LOGGING_ENABLED("codebuild-project-logging-enabled",
+        ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
+        "Checks that CodeBuild project logging is enabled");
 
     private final String ruleName;
     private final ComplianceMatrix.SecurityControl securityControl;

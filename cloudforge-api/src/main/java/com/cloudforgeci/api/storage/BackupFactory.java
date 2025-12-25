@@ -5,6 +5,8 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.AwsRegion;
 import com.cloudforge.core.enums.SecurityProfile;
 
+import io.github.cdklabs.cdknag.NagPackSuppression;
+import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.backup.BackupPlan;
@@ -172,6 +174,26 @@ public class BackupFactory extends BaseFactory {
                 .backupPlanName(planName)
                 .backupPlanRules(rules)
                 .build();
+
+        // Suppress IAM4 for AWS Backup service role - CDK automatically creates a role with
+        // AWSBackupServiceRolePolicyForBackup managed policy which is AWS-recommended
+        NagSuppressions.addResourceSuppressions(
+            plan,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM4")
+                    .reason("AWS Backup service role uses AWSBackupServiceRolePolicyForBackup " +
+                            "managed policy which is AWS-recommended for backup operations. " +
+                            "CDK automatically creates this role with appropriate permissions.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("AWS Backup service role requires wildcard permissions for backup " +
+                            "operations across multiple resource types. This is AWS-recommended.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
 
         LOG.info("Created backup plan: " + planName);
         return plan;

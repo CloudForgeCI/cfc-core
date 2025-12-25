@@ -368,4 +368,68 @@ class SecurityProfileFactoryTest {
         assertEquals(software.constructs.Construct.class, paramTypes[0]);
         assertEquals(String.class, paramTypes[1]);
     }
+
+    // ========== Security Hardening Configuration Tests ==========
+
+    @Test
+    void testDevSecurityProfileRestrictEgressDisabledByDefault() {
+        // DEV profile should have restrictSecurityGroupEgress disabled by default
+        SecurityProfileConfiguration devConfig = new DevSecurityProfileConfiguration();
+        assertFalse(devConfig.isRestrictSecurityGroupEgressEnabled());
+    }
+
+    @Test
+    void testStagingSecurityProfileRestrictEgressDisabledByDefault() {
+        // STAGING profile should have restrictSecurityGroupEgress disabled by default
+        SecurityProfileConfiguration stagingConfig = new StagingSecurityProfileConfiguration();
+        assertFalse(stagingConfig.isRestrictSecurityGroupEgressEnabled());
+    }
+
+    @Test
+    void testProductionSecurityProfileRestrictEgressDisabledByDefault() {
+        // PRODUCTION profile should have restrictSecurityGroupEgress disabled by default
+        SecurityProfileConfiguration prodConfig = new ProductionSecurityProfileConfiguration();
+        assertFalse(prodConfig.isRestrictSecurityGroupEgressEnabled());
+    }
+
+    @Test
+    void testDevSecurityProfileKmsEncryptionDisabledByDefault() {
+        // DEV profile should have KMS encryption disabled by default
+        SecurityProfileConfiguration devConfig = new DevSecurityProfileConfiguration();
+        assertFalse(devConfig.isCloudWatchLogsKmsEncryptionEnabled());
+    }
+
+    @Test
+    void testStagingSecurityProfileKmsEncryptionDisabledByDefault() {
+        // STAGING profile should have KMS encryption disabled by default
+        SecurityProfileConfiguration stagingConfig = new StagingSecurityProfileConfiguration();
+        assertFalse(stagingConfig.isCloudWatchLogsKmsEncryptionEnabled());
+    }
+
+    @Test
+    void testProductionSecurityProfileKmsEncryptionDisabledByDefault() {
+        // PRODUCTION profile should have KMS encryption disabled by default (can be overridden)
+        SecurityProfileConfiguration prodConfig = new ProductionSecurityProfileConfiguration();
+        assertFalse(prodConfig.isCloudWatchLogsKmsEncryptionEnabled());
+    }
+
+    @Test
+    void testSecurityProfileConfigurationHasRestrictEgressMethod() throws NoSuchMethodException {
+        // When: Getting method from interface
+        var method = SecurityProfileConfiguration.class.getDeclaredMethod("isRestrictSecurityGroupEgressEnabled");
+
+        // Then: Should exist and return boolean
+        assertNotNull(method);
+        assertEquals(boolean.class, method.getReturnType());
+    }
+
+    @Test
+    void testSecurityProfileConfigurationHasKmsEncryptionMethod() throws NoSuchMethodException {
+        // When: Getting method from interface
+        var method = SecurityProfileConfiguration.class.getDeclaredMethod("isCloudWatchLogsKmsEncryptionEnabled");
+
+        // Then: Should exist and return boolean
+        assertNotNull(method);
+        assertEquals(boolean.class, method.getReturnType());
+    }
 }

@@ -757,6 +757,12 @@ class ThreatProtectionRulesTest {
         customContext.put("malwareScanLogging", scanLogging);
         customContext.put("containerImageScanning", containerScanning);
 
+        // PRODUCTION profiles enforce compliance requirements
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        if (secProfile == SecurityProfile.PRODUCTION) {
+            customContext.put("complianceMode", "ENFORCE");
+        }
+
         // PCI-DSS requires additional services beyond malware protection
         // Set defaults to satisfy all PCI-DSS requirements for this focused test
         if (framework.equals("PCI-DSS")) {
@@ -765,8 +771,6 @@ class ThreatProtectionRulesTest {
             customContext.put("awsConfigEnabled", "true");  // PCI-DSS requires Config for FIM
             customContext.put("fileIntegrityMonitoring", "true");  // PCI-DSS requires FIM (fixed field name)
         }
-
-        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "TestThreatMalware", secProfile, runtimeType, customContext);
@@ -807,13 +811,13 @@ class ThreatProtectionRulesTest {
      */
     @ParameterizedTest
     @CsvSource({
-        // PRODUCTION + PCI-DSS: requires GuardDuty, WAF, Flow Logs
+        // PRODUCTION + PCI-DSS: requires GuardDuty, WAF (Flow Logs auto-enabled by security profile)
         "PRODUCTION,PCI-DSS,true,true,true,true",       // All features - PASS
         "PRODUCTION,PCI-DSS,false,true,true,true",      // No GuardDuty - FAIL
         "PRODUCTION,PCI-DSS,true,false,true,true",      // No WAF - FAIL
-        "PRODUCTION,PCI-DSS,true,true,false,true",      // No Flow Logs - FAIL
-        "PRODUCTION,PCI-DSS,true,true,true,false",      // No GuardDuty alerts
-        "PRODUCTION,PCI-DSS,false,false,false,false",   // All disabled - FAIL
+        "PRODUCTION,PCI-DSS,true,true,false,true",      // Flow Logs auto-enabled - PASS
+        "PRODUCTION,PCI-DSS,true,true,true,false",      // No GuardDuty alerts - PASS (advisory)
+        "PRODUCTION,PCI-DSS,false,false,false,false",   // No GuardDuty/WAF - FAIL
 
         // PRODUCTION + HIPAA: requires GuardDuty
         "PRODUCTION,HIPAA,true,false,false,true",       // GuardDuty + alerts - PASS
@@ -847,6 +851,12 @@ class ThreatProtectionRulesTest {
         customContext.put("enableFlowlogs", flowLogs);  // Fixed: use correct field name
         customContext.put("guardDutyAlertsConfigured", alerts);
 
+        // PRODUCTION profiles enforce compliance requirements
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        if (secProfile == SecurityProfile.PRODUCTION) {
+            customContext.put("complianceMode", "ENFORCE");
+        }
+
         // PCI-DSS requires additional services beyond intrusion detection
         // Set defaults to satisfy all other PCI-DSS requirements for this focused test
         if (frameworks.toUpperCase().contains("PCI-DSS")) {
@@ -854,8 +864,6 @@ class ThreatProtectionRulesTest {
             customContext.put("fileIntegrityMonitoring", "true");  // PCI-DSS requires FIM (FARGATE auto-passes)
             customContext.put("awsConfigEnabled", "true");  // PCI-DSS requires Config
         }
-
-        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "TestThreatIDS", secProfile, RuntimeType.FARGATE, customContext);
 
@@ -866,14 +874,20 @@ class ThreatProtectionRulesTest {
         // PCI-DSS requires: GuardDuty, WAF, VPC Flow Logs (infrastructure requirements, blocking)
         // HIPAA requires: GuardDuty (infrastructure requirement, blocking)
         // GuardDuty alerts are advisory (non-blocking)
+        //
+        // NOTE: For PRODUCTION + PCI-DSS/HIPAA/SOC2/GDPR, VPC Flow Logs are automatically
+        // enabled by ProductionSecurityProfileConfiguration because NETWORK_FLOW_LOGS is
+        // marked as REQUIRED in ComplianceMatrix. So flowLogs=false in test params won't
+        // actually result in disabled flow logs - the security profile overrides it.
         boolean shouldFail = false;
         if (secProfile == SecurityProfile.PRODUCTION) {
             boolean requiresPciDss = frameworks.toUpperCase().contains("PCI-DSS");
             boolean requiresHipaa = frameworks.toUpperCase().contains("HIPAA");
 
             if (requiresPciDss) {
-                // PCI-DSS requires GuardDuty, WAF, and Flow Logs (all infrastructure requirements)
-                if (!guardDuty || !waf || !flowLogs) {
+                // PCI-DSS requires GuardDuty and WAF (infrastructure requirements)
+                // Flow Logs are auto-enabled by ProductionSecurityProfileConfiguration
+                if (!guardDuty || !waf) {
                     shouldFail = true;
                 }
             } else if (requiresHipaa) {
@@ -940,7 +954,7 @@ class ThreatProtectionRulesTest {
         if (framework.toUpperCase().contains("PCI-DSS")) {
             customContext.put("guardDutyEnabled", "true");  // PCI-DSS requires GuardDuty
             customContext.put("wafEnabled", "true");  // PCI-DSS requires WAF
-            customContext.put("flowLogsEnabled", "true");  // PCI-DSS requires Flow Logs
+            customContext.put("enableFlowlogs", "true");  // PCI-DSS requires Flow Logs
             customContext.put("antiMalwareEnabled", "true");  // PCI-DSS requires anti-malware for EC2
         }
 
@@ -1018,7 +1032,7 @@ class ThreatProtectionRulesTest {
         if (framework.toUpperCase().contains("PCI-DSS")) {
             customContext.put("guardDutyEnabled", "true");  // PCI-DSS requires GuardDuty
             customContext.put("wafEnabled", "true");  // PCI-DSS requires WAF
-            customContext.put("flowLogsEnabled", "true");  // PCI-DSS requires Flow Logs
+            customContext.put("enableFlowlogs", "true");  // PCI-DSS requires Flow Logs
             customContext.put("antiMalwareEnabled", "true");  // PCI-DSS requires anti-malware for EC2
             customContext.put("fileIntegrityMonitoring", "true");  // PCI-DSS requires FIM
             customContext.put("awsConfigEnabled", "true");  // PCI-DSS requires Config
@@ -1096,7 +1110,7 @@ class ThreatProtectionRulesTest {
         customContext.put("malwareScanLogging", String.valueOf(scanLogging));
         customContext.put("containerImageScanning", String.valueOf(containerScanning));
         customContext.put("wafEnabled", String.valueOf(waf));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        customContext.put("enableFlowlogs", String.valueOf(flowLogs));
         customContext.put("guardDutyAlertsConfigured", String.valueOf(alerts));
         customContext.put("containerRuntimeSecurity", String.valueOf(runtimeSecurity));
         customContext.put("immutableInfrastructure", String.valueOf(immutable));

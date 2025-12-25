@@ -1,5 +1,5 @@
-configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-EC2_PRODUCTION_SOC2_PCI-DSS_alb-oidc_private-with-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",,true,PASS,jenkins,,,
-EC2_PRODUCTION_SOC2_PCI-DSS_alb-oidc_private-with-nat_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",,true,PASS,jenkins,,,
-EC2_PRODUCTION_SOC2_PCI-DSS_retention-730,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",730,true,PASS,jenkins,,,
-EC2_PRODUCTION_SOC2_PCI-DSS_subdomain_retention-730,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",730,true,PASS,jenkins,,,
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+EC2_PRODUCTION_SOC2_PCI-DSS_alb-oidc_private-with-nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",,true,PASS,jenkins,,,,,
+EC2_PRODUCTION_SOC2_PCI-DSS_alb-oidc_private-with-nat_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",,true,PASS,jenkins,,,,,
+EC2_PRODUCTION_SOC2_PCI-DSS_retention-730,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",730,true,PASS,jenkins,,,,,
+EC2_PRODUCTION_SOC2_PCI-DSS_subdomain_retention-730,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",730,true,PASS,jenkins,,,,,

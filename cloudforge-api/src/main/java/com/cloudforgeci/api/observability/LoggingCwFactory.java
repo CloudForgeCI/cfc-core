@@ -6,6 +6,8 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforgeci.api.core.util.RetentionDaysConverter;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
+import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
@@ -98,6 +100,18 @@ public class LoggingCwFactory extends BaseFactory {
             // Only set explicit name if using DESTROY policy, otherwise let CDK generate unique name
             if (config.getLogRemovalPolicy() == software.amazon.awscdk.RemovalPolicy.DESTROY) {
                 logGroupBuilder.logGroupName(logGroupName);
+            }
+
+            // Add KMS encryption when required by compliance frameworks (PCI-DSS, HIPAA, SOC2)
+            if (config.isCloudWatchLogsKmsEncryptionEnabled()) {
+                LOG.info("LoggingCwFactory: Enabling KMS encryption for CloudWatch Logs (compliance requirement)");
+                Key logsKmsKey = Key.Builder.create(this, "LogsKmsKey")
+                        .description("KMS key for CloudWatch Logs encryption (compliance requirement)")
+                        .enableKeyRotation(true)
+                        .removalPolicy(config.getLogRemovalPolicy() == RemovalPolicy.RETAIN
+                                ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                        .build();
+                logGroupBuilder.encryptionKey(logsKmsKey);
             }
 
             LogGroup logGroup = logGroupBuilder.build();

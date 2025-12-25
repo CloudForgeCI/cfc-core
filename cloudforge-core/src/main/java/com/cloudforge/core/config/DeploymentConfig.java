@@ -11,14 +11,17 @@ import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
@@ -115,6 +118,16 @@ public class DeploymentConfig {
     )
     public String subdomain;
 
+    /** Fully qualified domain name (computed from domain+subdomain if not provided) */
+    @ConfigField(
+        displayName = "FQDN",
+        description = "Fully qualified domain name (overrides domain+subdomain)",
+        category = "domain",
+        order = 25
+    )
+    @JsonIgnore  // Computed field, not serialized
+    public String fqdn;
+
     /** Enable SSL certificate via ACM */
     @ConfigField(
         displayName = "Enable SSL",
@@ -156,7 +169,7 @@ public class DeploymentConfig {
         required = true,
         order = 10
     )
-    public SecurityProfile securityProfile;
+    public SecurityProfile securityProfile = SecurityProfile.DEV;
 
     // ========== Network Configuration ==========
 
@@ -169,7 +182,7 @@ public class DeploymentConfig {
         example = "private-with-nat",
         order = 10
     )
-    public NetworkMode networkMode;
+    public NetworkMode networkMode = NetworkMode.PUBLIC;
 
     /** Load balancer type */
     @ConfigField(
@@ -196,7 +209,7 @@ public class DeploymentConfig {
         category = "network",
         order = 30
     )
-    public Boolean enableFlowlogs = true;
+    public Boolean enableFlowlogs = null;  // Null means security profile determines default
 
     /** Enable AWS WAF */
     @ConfigField(
@@ -207,6 +220,16 @@ public class DeploymentConfig {
         order = 40
     )
     public Boolean wafEnabled;
+
+    /** HTTPS-only mode (no HTTP listener when SSL enabled) */
+    @ConfigField(
+        displayName = "HTTPS Strict Mode",
+        description = "Disable HTTP listener when SSL enabled (no HTTP→HTTPS redirect)",
+        category = "network",
+        visibleWhen = "enableSsl == true",
+        order = 45
+    )
+    public Boolean httpsStrictEnabled;
 
     /** Enable ALB access logs to S3 */
     @ConfigField(
@@ -226,7 +249,19 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 60
     )
+    @JsonAlias("cloudfront")
     public Boolean cloudfrontEnabled;
+
+    /** CIDR for bastion/VPN SSH access */
+    @ConfigField(
+        displayName = "Bastion CIDR",
+        description = "CIDR for bastion/VPN SSH access (PRODUCTION profile)",
+        category = "network",
+        pattern = "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/\\d{1,2}$",
+        example = "10.0.1.0/24",
+        order = 70
+    )
+    public String bastionCidr = "10.0.1.0/24";
 
     // ========== Resource Configuration ==========
 
@@ -311,6 +346,56 @@ public class DeploymentConfig {
     )
     public String instanceType = "t3.micro";
 
+    /** Override container image tag */
+    @ConfigField(
+        displayName = "Container Image",
+        description = "Override container image tag (e.g., 'v1.2.3' or '2024.1')",
+        category = "resources",
+        example = "v1.2.3",
+        order = 65
+    )
+    public String containerImage;
+
+    // ========== Storage Configuration ==========
+
+    /** Retain EFS/EBS volumes on stack deletion */
+    @ConfigField(
+        displayName = "Retain Storage",
+        description = "Retain EFS/EBS volumes on stack deletion (agnostic - works for any workload)",
+        category = "storage",
+        order = 10
+    )
+    public Boolean retainStorage = false;
+
+    /** Reuse existing EFS by ID (for disaster recovery workflows) */
+    @ConfigField(
+        displayName = "Existing File System ID",
+        description = "Reuse existing EFS by ID (for disaster recovery workflows)",
+        category = "storage",
+        example = "fs-12345678",
+        order = 20
+    )
+    public String existingFileSystemId;
+
+    /** S3 bucket for artifacts */
+    @ConfigField(
+        displayName = "Artifacts Bucket",
+        description = "S3 bucket name for build artifacts",
+        category = "storage",
+        order = 30
+    )
+    public String artifactsBucket;
+
+    /** S3 prefix for artifacts */
+    @ConfigField(
+        displayName = "Artifacts Prefix",
+        description = "S3 prefix for build artifacts",
+        category = "storage",
+        example = "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}",
+        order = 40
+    )
+    public String artifactsPrefix = "jenkins/job/${JOB_NAME}/${BUILD_NUMBER}";
+
     // ========== Authentication Configuration ==========
 
     /** Authentication mode */
@@ -374,6 +459,17 @@ public class DeploymentConfig {
         order = 70
     )
     public Boolean cognitoMfaEnabled = false;
+
+    /** Cognito MFA method */
+    @ConfigField(
+        displayName = "MFA Method",
+        description = "MFA method: totp (authenticator app), sms, or both",
+        category = "security",
+        allowedValues = {"totp", "sms", "both"},
+        visibleWhen = "cognitoMfaEnabled == true",
+        order = 75
+    )
+    public String cognitoMfaMethod = "both";
 
     /** Create admin and user groups in Cognito */
     @ConfigField(
@@ -652,6 +748,27 @@ public class DeploymentConfig {
         order = 270
     )
     public String ssoInstanceArn = null;
+
+    /** SSO Group ID */
+    @ConfigField(
+        displayName = "SSO Group ID",
+        description = "IAM Identity Center group UUID",
+        category = "security",
+        visibleWhen = "oidcProvider == identity-center",
+        order = 275
+    )
+    public String ssoGroupId = null;
+
+    /** SSO Target Account ID */
+    @ConfigField(
+        displayName = "SSO Target Account ID",
+        description = "12-digit AWS account ID for SSO target",
+        category = "security",
+        pattern = "^\\d{12}$",
+        visibleWhen = "oidcProvider == identity-center",
+        order = 278
+    )
+    public String ssoTargetAccountId = null;
 
     /** Identity Center group name for user assignment */
     @ConfigField(
@@ -956,6 +1073,52 @@ public class DeploymentConfig {
     )
     public Boolean cloudTrailEnabled = false;
 
+    /** Enable security monitoring */
+    @ConfigField(
+        displayName = "Security Monitoring",
+        description = "Enable security monitoring features",
+        category = "monitoring",
+        order = 72
+    )
+    public Boolean securityMonitoringEnabled = false;
+
+    /** Enable EFS encryption in transit */
+    @ConfigField(
+        displayName = "EFS Encryption in Transit",
+        description = "Enable EFS encryption in transit for data protection",
+        category = "security",
+        order = 340
+    )
+    public Boolean efsEncryptionInTransitEnabled = true;
+
+    /** Restrict security group egress to VPC CIDR only (requires VPC endpoints for AWS service access) */
+    @ConfigField(
+        displayName = "Restrict Security Group Egress",
+        description = "Restrict security group egress to VPC CIDR only. Requires VPC endpoints for AWS services (CloudWatch, RDS monitoring). If false, allows 0.0.0.0/0 egress (default CDK behavior).",
+        category = "security",
+        order = 345
+    )
+    public Boolean restrictSecurityGroupEgress = false;
+
+    /** Enable automated backups (null = use security profile default) */
+    @ConfigField(
+        displayName = "Automated Backups",
+        description = "Enable automated backups for EFS and databases (null = profile default: PRODUCTION=true, others=false)",
+        category = "storage",
+        order = 50
+    )
+    public Boolean automatedBackupEnabled = null;
+
+    /** Enable cross-region backups (null = use security profile default) */
+    @ConfigField(
+        displayName = "Cross-Region Backups",
+        description = "Enable cross-region backup replication for disaster recovery (null = profile default)",
+        category = "storage",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 60
+    )
+    public Boolean crossRegionBackupEnabled = null;
+
     // ========== Advanced Monitoring & Threat Protection ==========
 
     /** Enable Amazon Macie for PII/PHI discovery (HIPAA/GDPR) */
@@ -1042,6 +1205,45 @@ public class DeploymentConfig {
         order = 160
     )
     public Boolean auditManagerEnabled = false;
+
+    /** Enable CloudWatch Logs KMS encryption */
+    @ConfigField(
+        displayName = "CloudWatch Logs KMS Encryption",
+        description = "Encrypt CloudWatch Logs with customer-managed KMS keys (required for PCI-DSS, HIPAA, SOC2)",
+        category = "monitoring",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 170
+    )
+    public Boolean cloudWatchLogsKmsEncryptionEnabled = false;
+
+    /** Enable CloudTrail Insights */
+    @ConfigField(
+        displayName = "CloudTrail Insights",
+        description = "Enable CloudTrail Insights for API activity anomaly detection (required for SOC2, NIST)",
+        category = "monitoring",
+        tags = {FieldTag.BILLING_IMPACT},
+        visibleWhen = "cloudTrailEnabled == true",
+        order = 180
+    )
+    public Boolean cloudTrailInsightsEnabled = false;
+
+    /** Enable Route53 Query Logging */
+    @ConfigField(
+        displayName = "Route53 Query Logging",
+        description = "Enable DNS query logging for Route53 hosted zones (required for SOC2, NIST)",
+        category = "monitoring",
+        order = 190
+    )
+    public Boolean route53QueryLoggingEnabled = false;
+
+    /** Enable S3 Object Lock for audit buckets (HIPAA/PCI-DSS immutability requirement) */
+    @ConfigField(
+        displayName = "S3 Object Lock",
+        description = "Enable S3 Object Lock for compliance audit buckets to ensure immutability (HIPAA § 164.312(c)(1), PCI-DSS Req 10.7)",
+        category = "compliance",
+        order = 195
+    )
+    public Boolean s3ObjectLockEnabled = false;
 
     /** Enable S3 versioning remediation */
     @ConfigField(
@@ -1179,13 +1381,15 @@ public class DeploymentConfig {
      * </ul>
      */
     private static ObjectMapper createMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-        mapper.setVisibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.NONE);
-        mapper.enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        mapper.configure(DeserializationFeature.READ_ENUMS_USING_TO_STRING, true);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        ObjectMapper mapper = JsonMapper.builder()
+                .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
+                .enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING)
+                .enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING)
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .serializationInclusion(JsonInclude.Include.NON_NULL)
+                .visibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
+                .visibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.NONE)
+                .build();
         return mapper;
     }
 
@@ -1220,6 +1424,53 @@ public class DeploymentConfig {
      */
     public static DeploymentConfig fromJson(String json) throws JsonProcessingException {
         return createMapper().readValue(json, DeploymentConfig.class);
+    }
+
+    /**
+     * Load DeploymentConfig from a Map (e.g., CDK context).
+     *
+     * <p>Uses Jackson's type-safe conversion to handle:
+     * <ul>
+     *   <li>String → Enum conversion via @JsonCreator methods</li>
+     *   <li>String/Number → Boolean conversion (supports "1", "yes", "0", "no")</li>
+     *   <li>Comma-separated strings → List conversion (complianceFrameworks)</li>
+     *   <li>Unknown properties are ignored for forward compatibility</li>
+     * </ul>
+     *
+     * @param map Map containing configuration key-value pairs
+     * @return DeploymentConfig populated from the map
+     */
+    public static DeploymentConfig fromMap(java.util.Map<String, Object> map) {
+        if (map == null || map.isEmpty()) {
+            return new DeploymentConfig();
+        }
+
+        // Normalize the map: handle CDK context key rename and boolean string coercion
+        java.util.Map<String, Object> normalized = new java.util.LinkedHashMap<>(map);
+        if (normalized.containsKey("env") && !normalized.containsKey("environment")) {
+            normalized.put("environment", normalized.get("env"));
+        }
+
+        // Coerce boolean-like string values before Jackson processing
+        normalized.replaceAll((key, value) -> coerceBooleanIfNeeded(value));
+
+        return createMapper().convertValue(normalized, DeploymentConfig.class);
+    }
+
+    /**
+     * Coerces common boolean-like string values to actual Boolean objects.
+     * Supports: "1", "yes", "on" → true; "0", "no", "off" → false.
+     */
+    private static Object coerceBooleanIfNeeded(Object value) {
+        if (value instanceof String str) {
+            String lower = str.trim().toLowerCase();
+            return switch (lower) {
+                case "1", "yes", "on" -> Boolean.TRUE;
+                case "0", "no", "off" -> Boolean.FALSE;
+                default -> value; // Keep original string for Jackson to parse
+            };
+        }
+        return value;
     }
 
     /**

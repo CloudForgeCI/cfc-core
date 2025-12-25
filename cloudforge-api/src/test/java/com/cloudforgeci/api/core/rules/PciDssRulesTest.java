@@ -1495,7 +1495,7 @@ class PciDssRulesTest {
         cfcContext.put("auditManagerEnabled", "true");
         cfcContext.put("complianceFrameworks", "PCI-DSS");
         cfcContext.put("complianceMode", "ADVISORY");
-        cfcContext.put("flowLogsEnabled", "false");  // Disable Flow Logs
+        cfcContext.put("enableFlowlogs", "false");  // Disable Flow Logs
 
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -1852,7 +1852,7 @@ class PciDssRulesTest {
             boolean hasRequirement = ebsEncryption && efsAtRest && efsTransit && s3Encryption;
             if (hasRequirement) {
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -1911,7 +1911,7 @@ class PciDssRulesTest {
         customContext.put("stackName", "TestPciLog");
         customContext.put("securityProfile", profile);
         customContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        customContext.put("enableFlowlogs", String.valueOf(flowLogs));
         customContext.put("albAccessLogging", String.valueOf(albLogging));
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
@@ -2001,7 +2001,7 @@ class PciDssRulesTest {
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("logRetentionDays", "365");
                 customContext.putIfAbsent("authMode", "alb-oidc");
@@ -2074,7 +2074,7 @@ class PciDssRulesTest {
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -2320,7 +2320,7 @@ class PciDssRulesTest {
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -2522,7 +2522,7 @@ class PciDssRulesTest {
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("networkMode", "private-with-nat");
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLogging", String.valueOf(albLogging));
         cfcContext.put("complianceMode", complianceMode);
         stack.getNode().setContext("cfc", cfcContext);
@@ -2703,7 +2703,7 @@ class PciDssRulesTest {
         cfcContext.put("s3EncryptionEnabled", String.valueOf(s3Enc));
         cfcContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransEnc));
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLogging", String.valueOf(albLogging));
         cfcContext.put("guardDutyEnabled", String.valueOf(guardDuty));
         cfcContext.put("securityMonitoringEnabled", String.valueOf(secMon));
@@ -2828,7 +2828,7 @@ class PciDssRulesTest {
         cfcContext.put("securityProfile", profile);
         cfcContext.put("complianceMode", complianceMode);
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLogging", String.valueOf(albLogging));
         cfcContext.put("networkMode", "private-with-nat");
         cfcContext.put("enableSsl", "true");
@@ -3298,7 +3298,7 @@ class PciDssRulesTest {
         cfcContext.put("s3EncryptionEnabled", String.valueOf(s3Enc));
         cfcContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransEnc));
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLogging", String.valueOf(albLogging));
         cfcContext.put("kmsKeyRotationEnabled", String.valueOf(kmsRotation));
         cfcContext.put("automatedBackupEnabled", String.valueOf(automatedBackup));

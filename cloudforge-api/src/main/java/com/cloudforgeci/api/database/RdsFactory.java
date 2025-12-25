@@ -9,6 +9,8 @@ import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.IVpc;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
@@ -197,6 +199,26 @@ public class RdsFactory {
             .removalPolicy(RemovalPolicy.DESTROY)
             .build();
 
+        // Create explicit security group for RDS
+        // When restrictSecurityGroupEgress is enabled, restrict egress to VPC CIDR only
+        boolean restrictEgress = ctx.securityProfileConfig.get()
+            .map(config -> config.isRestrictSecurityGroupEgressEnabled())
+            .orElse(false);
+        SecurityGroup dbSecurityGroup = SecurityGroup.Builder.create(scope, instanceId + "SecurityGroup")
+            .vpc(vpc)
+            .description("Security group for " + instanceId + " database")
+            .allowAllOutbound(!restrictEgress) // Restrict egress when flag is enabled
+            .build();
+
+        // If egress is restricted, add explicit egress rule for VPC CIDR only
+        if (restrictEgress) {
+            dbSecurityGroup.addEgressRule(
+                Peer.ipv4(vpc.getVpcCidrBlock()),
+                Port.allTraffic(),
+                "Allow egress to VPC CIDR only"
+            );
+        }
+
         // Determine backup retention based on DeploymentConfig override or security profile
         int backupRetention;
         if (backupRetentionDaysOverride != null) {
@@ -219,6 +241,7 @@ public class RdsFactory {
             .instanceType(instanceType)
             .vpc(vpc)
             .subnetGroup(subnetGroup)
+            .securityGroups(List.of(dbSecurityGroup)) // Use explicit security group
             .databaseName(requirement.databaseName())
             .credentials(Credentials.fromSecret(databaseSecret))
             .parameterGroup(parameterGroup)
@@ -268,6 +291,9 @@ public class RdsFactory {
         // Register AWS Config rules for RDS compliance monitoring
         ctx.requireConfigRule(AwsConfigRule.RDS_STORAGE_ENCRYPTED);
         ctx.requireConfigRule(AwsConfigRule.DB_INSTANCE_BACKUP_ENABLED);
+        ctx.requireConfigRule(AwsConfigRule.RDS_INSTANCE_PUBLIC_ACCESS_CHECK);
+        ctx.requireConfigRule(AwsConfigRule.RDS_INSTANCE_DELETION_PROTECTION_ENABLED);
+        ctx.requireConfigRule(AwsConfigRule.RDS_LOGGING_ENABLED);
         if (multiAzOverride != null ? multiAzOverride : (security == SecurityProfile.PRODUCTION)) {
             ctx.requireConfigRule(AwsConfigRule.RDS_MULTI_AZ);
         }
@@ -302,13 +328,7 @@ public class RdsFactory {
         // Store database instance and its security group in SystemContext
         ctx.rdsDatabase.set(instance);
         ctx.dbCredentials.set(databaseSecret);
-
-        // Get the security group from the database instance connections
-        // RDS automatically creates a security group - we need to store it for Fargate to add ingress rules
-        if (!instance.getConnections().getSecurityGroups().isEmpty()) {
-            SecurityGroup dbSg = (SecurityGroup) instance.getConnections().getSecurityGroups().get(0);
-            ctx.dbSecurityGroup.set(dbSg);
-        }
+        ctx.dbSecurityGroup.set(dbSecurityGroup); // Store our explicit security group for Fargate to add ingress rules
 
         // Return connection information for application
         // Determine port based on engine (CDK Token can't be parsed to int)

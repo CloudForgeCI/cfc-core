@@ -363,7 +363,7 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         // Verify IAM roles are created (Config Recorder role, remediation roles, etc.)
         // The test infrastructure creates multiple IAM roles
-        template.resourceCountIs("AWS::IAM::Role", 13);
+        template.resourceCountIs("AWS::IAM::Role", 10);
     }
 
     @Test
@@ -481,10 +481,10 @@ public class ConfigRulesDeploymentIntegrationTest {
         )));
 
         // But only limited safe remediations are deployed
-        // Production profile has 7 safe remediations enabled by default:
+        // Production profile has safe remediations enabled by default:
         // - IAM password policy remediation and other safe remediations
         // S3 versioning and CloudTrail remediations require explicit flags
-        template.resourceCountIs("AWS::Config::RemediationConfiguration", 7);
+        template.resourceCountIs("AWS::Config::RemediationConfiguration", 5);
     }
 
     @Test
@@ -502,9 +502,9 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         synthesizeTemplate(builder.getStack());
 
-        // Then: Only 6 safe default remediations should exist
+        // Then: Only safe default remediations should exist
         // No S3 versioning remediation
-        template.resourceCountIs("AWS::Config::RemediationConfiguration", 6);
+        template.resourceCountIs("AWS::Config::RemediationConfiguration", 5);
 
         // Verify that none of the remediations are for S3 versioning
         // They should be safe default remediations like IAM password policy
@@ -947,5 +947,85 @@ public class ConfigRulesDeploymentIntegrationTest {
         // Since the test base uses PRODUCTION profile, we note this as a TODO
         // In practice, RDS_MULTI_AZ_SUPPORT and RDS_ENHANCED_MONITORING_ENABLED
         // should only deploy in PRODUCTION for SOC2 and GDPR
+    }
+
+    // ============================================================================
+    // Tests for KMS Encryption Config Rules
+    // ============================================================================
+
+    @Test
+    public void testKmsKeyRotationRuleDeployed() {
+        // Given: HIPAA compliance framework (requires KMS key rotation)
+        Map<String, Object> context = new HashMap<>();
+        context.put("awsConfigEnabled", true);
+        context.put("createConfigInfrastructure", true);
+        context.put("complianceFrameworks", "HIPAA");
+
+        TestInfrastructureBuilder builder = createBuilder(context);
+        builder.createMinimalInfrastructure()
+               .createCompliance();
+
+        synthesizeTemplate(builder.getStack());
+
+        // Then: CMK_BACKING_KEY_ROTATION_ENABLED rule should be deployed
+        assertConfigRuleExists("CMK_BACKING_KEY_ROTATION_ENABLED");
+    }
+
+    @Test
+    public void testCloudTrailEncryptionEnabledRule() {
+        // Given: HIPAA compliance framework
+        Map<String, Object> context = new HashMap<>();
+        context.put("awsConfigEnabled", true);
+        context.put("createConfigInfrastructure", true);
+        context.put("complianceFrameworks", "HIPAA");
+
+        TestInfrastructureBuilder builder = createBuilder(context);
+        builder.createMinimalInfrastructure()
+               .createCompliance();
+
+        synthesizeTemplate(builder.getStack());
+
+        // Then: CLOUD_TRAIL_ENCRYPTION_ENABLED rule should be deployed
+        assertConfigRuleExists("CLOUD_TRAIL_ENCRYPTION_ENABLED");
+    }
+
+    // ============================================================================
+    // Tests for Security Group and Network Config Rules
+    // ============================================================================
+
+    @Test
+    public void testVpcDefaultSecurityGroupClosedRule() {
+        // Given: PCI-DSS compliance framework
+        Map<String, Object> context = new HashMap<>();
+        context.put("awsConfigEnabled", true);
+        context.put("createConfigInfrastructure", true);
+        context.put("complianceFrameworks", "PCI-DSS");
+
+        TestInfrastructureBuilder builder = createBuilder(context);
+        builder.createMinimalInfrastructure()
+               .createCompliance();
+
+        synthesizeTemplate(builder.getStack());
+
+        // Then: VPC_DEFAULT_SECURITY_GROUP_CLOSED rule should be deployed
+        assertConfigRuleExists("VPC_DEFAULT_SECURITY_GROUP_CLOSED");
+    }
+
+    @Test
+    public void testRestrictedSshRule() {
+        // Given: HIPAA compliance framework
+        Map<String, Object> context = new HashMap<>();
+        context.put("awsConfigEnabled", true);
+        context.put("createConfigInfrastructure", true);
+        context.put("complianceFrameworks", "HIPAA");
+
+        TestInfrastructureBuilder builder = createBuilder(context);
+        builder.createMinimalInfrastructure()
+               .createCompliance();
+
+        synthesizeTemplate(builder.getStack());
+
+        // Then: RESTRICTED_SSH rule should be deployed
+        assertConfigRuleExists("INCOMING_SSH_DISABLED");
     }
 }

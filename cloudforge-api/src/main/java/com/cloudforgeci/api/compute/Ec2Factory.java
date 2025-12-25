@@ -11,6 +11,8 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
+import io.github.cdklabs.cdknag.NagPackSuppression;
+import io.github.cdklabs.cdknag.NagSuppressions;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
 import software.amazon.awscdk.services.ec2.BlockDevice;
@@ -22,6 +24,7 @@ import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.InstanceType;
 import software.amazon.awscdk.services.ec2.LaunchTemplate;
 import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
@@ -254,14 +257,44 @@ public class Ec2Factory extends BaseFactory {
       throw new IllegalStateException("ALB security group not available");
     }
 
+    // Check if egress should be restricted to VPC CIDR only (only for private subnets)
+    boolean restrictEgress = config.isRestrictSecurityGroupEgressEnabled()
+        && networkMode != NetworkMode.PUBLIC;
+
     SecurityGroup instanceSg = SecurityGroup.Builder.create(this, appId + "Ec2Sg")
             .vpc(vpc)
             .description(appId + " EC2 Instance Security Group")
-            .allowAllOutbound(true)
+            .allowAllOutbound(!restrictEgress)
             .build();
+
+    // If egress is restricted, add explicit egress rule for VPC CIDR only
+    // Instances need to communicate with EFS, RDS, and other VPC resources
+    if (restrictEgress) {
+      instanceSg.addEgressRule(
+          Peer.ipv4(vpc.getVpcCidrBlock()),
+          Port.allTraffic(),
+          "Allow egress to VPC CIDR only"
+      );
+    }
 
     // Add ingress rule from ALB security group
     instanceSg.addIngressRule(albSg, Port.tcp(appPort), "ALB_to_" + appId);
+
+    // Add EC23 suppression - EC2 instances may need public access for optional services
+    // The suppression covers optional ports like SSH, JNLP agents that require 0.0.0.0/0 access
+    NagSuppressions.addResourceSuppressions(
+        instanceSg,
+        List.of(
+            NagPackSuppression.builder()
+                .id("AwsSolutions-EC23")
+                .reason("EC2 security group requires open ingress for optional service ports " +
+                        "(SSH for debugging, JNLP for Jenkins agents, etc.). These ports are " +
+                        "explicitly enabled via deployment configuration and are necessary " +
+                        "for the application's operational requirements.")
+                .build()
+        ),
+        Boolean.TRUE
+    );
 
     // Add security group rules for optional inbound ports
     // These are NOT exposed by default - must be explicitly enabled via deployment config

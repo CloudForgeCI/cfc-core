@@ -166,6 +166,19 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                     ))
                     .build();
 
+            NagSuppressions.addResourceSuppressions(
+                ec2Role,
+                List.of(
+                    NagPackSuppression.builder()
+                        .id("AwsSolutions-IAM4")
+                        .reason("AmazonSSMManagedInstanceCore is an AWS-managed policy required for " +
+                                "EC2 instances to use Systems Manager. It provides minimal permissions " +
+                                "for SSM connectivity and is AWS-recommended for all EC2 deployments.")
+                        .build()
+                ),
+                Boolean.TRUE
+            );
+
             // Add CloudWatch permissions as inline policy for DEV/STAGING
             ec2Role.addToPolicy(PolicyStatement.Builder.create()
                     .sid("MinimalCloudWatchLogs")
@@ -316,6 +329,19 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
                     ))
                     .build();
+
+            NagSuppressions.addResourceSuppressions(
+                executionRole,
+                List.of(
+                    NagPackSuppression.builder()
+                        .id("AwsSolutions-IAM4")
+                        .reason("AmazonECSTaskExecutionRolePolicy is an AWS-managed policy specifically " +
+                                "designed for ECS task execution. It provides minimal required permissions " +
+                                "for pulling container images from ECR and writing logs to CloudWatch.")
+                        .build()
+                ),
+                Boolean.TRUE
+            );
 
             Role taskRole = Role.Builder.create(c, "MinimalTaskRole")
                     .assumedBy(new ServicePrincipal("ecs-tasks.amazonaws.com"))

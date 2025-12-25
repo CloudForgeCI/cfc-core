@@ -362,6 +362,33 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     @Override
+    public boolean isRestrictSecurityGroupEgressEnabled() {
+        // Check deployment context override FIRST
+        if (deploymentContext != null && deploymentContext.restrictSecurityGroupEgress() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.restrictSecurityGroupEgress());
+            LOG.info("STAGING profile: Security group egress restriction explicitly configured: " + enabled);
+            return enabled;
+        }
+
+        // Check if compliance matrix requires network segmentation
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION
+            )) {
+                LOG.info("STAGING profile: Security group egress restriction enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        return false; // Default: allow all outbound unless explicitly enabled
+    }
+
+    @Override
     public boolean isNatGatewayEnabled() {
         return true; // Use private subnets for staging
     }
@@ -377,11 +404,57 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isWafEnabled() {
-        // Check deployment context first, then fall back to profile default
+        // Check deployment context override FIRST
         if (deploymentContext != null && deploymentContext.wafEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.wafEnabled());
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.wafEnabled());
+            LOG.info("STAGING profile: WAF explicitly configured: " + enabled);
+            return enabled;
         }
-        return true; // Enabled for staging testing
+
+        // Check if compliance matrix requires WAF protection
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.WAF_PROTECTION
+            )) {
+                LOG.info("STAGING profile: WAF enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        return true; // Enabled by default for staging testing
+    }
+
+    @Override
+    public boolean isHttpsStrictEnabled() {
+        // Check deployment context override FIRST
+        if (deploymentContext != null && deploymentContext.httpsStrictEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.httpsStrictEnabled());
+            LOG.info("STAGING profile: HTTPS strict mode explicitly configured: " + enabled);
+            return enabled;
+        }
+
+        // Check if compliance matrix requires HTTPS strict mode
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.HTTPS_STRICT
+            )) {
+                LOG.info("STAGING profile: HTTPS strict mode enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Default: disabled (allow HTTP→HTTPS redirect for better UX)
+        return false;
     }
 
     @Override
@@ -655,8 +728,9 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isAdvancedSecurityEnabled() {
-        // Optional for testing - can enable to test adaptive auth
-        return false;
+        // Enable for CDK-nag COG3 compliance (requires Cognito Plus tier)
+        // Adaptive authentication detects suspicious login patterns
+        return true;
     }
 
     // ==================== Advanced Monitoring & Threat Detection ====================
@@ -803,5 +877,55 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         }
         // STAGING default: true (test image scanning pipeline)
         return true;
+    }
+
+    // ==================== Enhanced Compliance Controls ====================
+
+    @Override
+    public boolean isCloudWatchLogsKmsEncryptionEnabled() {
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.cloudWatchLogsKmsEncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.cloudWatchLogsKmsEncryptionEnabled());
+            LOG.info("STAGING profile: Overriding CloudWatch Logs KMS encryption from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (optional for testing)
+        return false;
+    }
+
+    @Override
+    public boolean isCloudTrailInsightsEnabled() {
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.cloudTrailInsightsEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.cloudTrailInsightsEnabled());
+            LOG.info("STAGING profile: Overriding CloudTrail Insights from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (optional for testing)
+        return false;
+    }
+
+    @Override
+    public boolean isRoute53QueryLoggingEnabled() {
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.route53QueryLoggingEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.route53QueryLoggingEnabled());
+            LOG.info("STAGING profile: Overriding Route53 Query Logging from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (optional for testing)
+        return false;
+    }
+
+    @Override
+    public boolean isS3ObjectLockEnabled() {
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.s3ObjectLockEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.s3ObjectLockEnabled());
+            LOG.info("STAGING profile: Overriding S3 Object Lock from deployment context: " + enabled);
+            return enabled;
+        }
+        // STAGING default: false (optional for testing - enable for HIPAA/PCI-DSS)
+        return false;
     }
 }

@@ -1,0 +1,247 @@
+# CDN and API Security - Cross-Framework Security Control
+#
+# CloudFormation Guard rules for CloudFront, API Gateway, and edge service validation
+# Applies across all compliance frameworks (HIPAA, PCI-DSS, SOC2, GDPR, ISO 27001, etc.)
+#
+# CloudForge Core - Multi-Layer Compliance Validation
+# Layer 3: Template-Level Policy Enforcement (cfn-guard)
+
+# ============================================================================
+# CloudFront Distribution Security
+# ============================================================================
+
+# CloudFront logging enabled
+# CloudForge Mapping: CDN_SECURITY control
+rule cdn_security_cloudfront_logging when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    Properties.DistributionConfig.Logging exists <<[CDN Security] CloudFront distributions must have access logging enabled>>
+    Properties.DistributionConfig.Logging.Bucket exists <<[CDN Security] CloudFront logging must specify a bucket>>
+}
+
+# CloudFront WAF integration
+# CloudForge Mapping: WEB_APPLICATION_FIREWALL control
+rule cdn_security_cloudfront_waf when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    Properties.DistributionConfig.WebACLId exists <<[CDN Security] CloudFront distributions should have WAF protection enabled>>
+}
+
+# CloudFront geographic restrictions
+# CloudForge Mapping: CDN_SECURITY control
+rule cdn_security_cloudfront_geo_restriction when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    when Properties.DistributionConfig.Restrictions exists {
+        when Properties.DistributionConfig.Restrictions.GeoRestriction exists {
+            Properties.DistributionConfig.Restrictions.GeoRestriction.RestrictionType != 'none' <<[CDN Security] CloudFront distributions should configure geographic restrictions>>
+        }
+    }
+}
+
+# CloudFront deprecated SSL protocols
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
+rule cdn_security_cloudfront_no_deprecated_ssl when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    when Properties.DistributionConfig.Origins exists {
+        Properties.DistributionConfig.Origins[*] {
+            when CustomOriginConfig exists {
+                when CustomOriginConfig.OriginSSLProtocols exists {
+                    CustomOriginConfig.OriginSSLProtocols[*] {
+                        this not in ['SSLv3', 'TLSv1', 'TLSv1.1'] <<[CDN Security] CloudFront must not use deprecated SSL protocols>>
+                    }
+                }
+            }
+        }
+    }
+}
+
+# CloudFront ACM certificate
+# CloudForge Mapping: CERTIFICATE_MANAGEMENT control
+rule cdn_security_cloudfront_acm_certificate when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    when Properties.DistributionConfig.ViewerCertificate exists {
+        Properties.DistributionConfig.ViewerCertificate.AcmCertificateArn exists OR
+        Properties.DistributionConfig.ViewerCertificate.CloudFrontDefaultCertificate == true <<[CDN Security] CloudFront should use ACM certificates for custom domains>>
+    }
+}
+
+# CloudFront minimum TLS version
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
+rule cdn_security_cloudfront_minimum_tls when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    when Properties.DistributionConfig.ViewerCertificate exists {
+        Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion in [
+            'TLSv1.2_2021',
+            'TLSv1.2_2019',
+            'TLSv1.2_2018'
+        ] <<[CDN Security] CloudFront distributions must use TLS 1.2 minimum>>
+    }
+}
+
+# CloudFront HTTPS-only viewer protocol
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
+rule cdn_security_cloudfront_https_only when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    when Properties.DistributionConfig.DefaultCacheBehavior exists {
+        Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy in [
+            'redirect-to-https',
+            'https-only'
+        ] <<[CDN Security] CloudFront should redirect HTTP to HTTPS or require HTTPS only>>
+    }
+}
+
+# CloudFront origin protocol policy
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
+rule cdn_security_cloudfront_origin_https when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    when Properties.DistributionConfig.Origins exists {
+        Properties.DistributionConfig.Origins[*] {
+            when CustomOriginConfig exists {
+                CustomOriginConfig.OriginProtocolPolicy in ['https-only', 'match-viewer'] <<[CDN Security] CloudFront origin connections should use HTTPS>>
+            }
+        }
+    }
+}
+
+# ============================================================================
+# API Gateway REST API Security
+# ============================================================================
+
+# API Gateway client certificate
+# CloudForge Mapping: API_SECURITY control
+rule api_security_restapi_client_certificate when
+    resourceType == 'AWS::ApiGateway::Stage' {
+
+    Properties.ClientCertificateId exists <<[API Security] API Gateway stages should use client certificates for backend authentication>>
+}
+
+# API Gateway private endpoint
+# CloudForge Mapping: API_SECURITY control
+rule api_security_restapi_private when
+    resourceType == 'AWS::ApiGateway::RestApi' {
+
+    when Properties.EndpointConfiguration exists {
+        Properties.EndpointConfiguration.Types[*] == 'PRIVATE' <<[API Security] API Gateway REST APIs should be PRIVATE for internal services>>
+    }
+}
+
+# API Gateway access logging
+# CloudForge Mapping: AUDIT_LOGGING control
+rule api_security_stage_access_logging when
+    resourceType == 'AWS::ApiGateway::Stage' {
+
+    Properties.AccessLogSetting exists <<[API Security] API Gateway stages must have access logging enabled>>
+    Properties.AccessLogSetting.DestinationArn exists <<[API Security] API Gateway access logging must specify destination>>
+}
+
+# API Gateway X-Ray tracing
+# CloudForge Mapping: MONITORING control
+rule api_security_stage_xray_tracing when
+    resourceType == 'AWS::ApiGateway::Stage' {
+
+    Properties.TracingEnabled exists
+    Properties.TracingEnabled == true <<[API Security] API Gateway stages should enable X-Ray tracing>>
+}
+
+# API Gateway method-level logging
+# CloudForge Mapping: AUDIT_LOGGING control
+rule api_security_stage_method_logging when
+    resourceType == 'AWS::ApiGateway::Stage' {
+
+    when Properties.MethodSettings exists {
+        Properties.MethodSettings[*] {
+            LoggingLevel in ['INFO', 'ERROR'] <<[API Security] API Gateway stages should enable method-level logging>>
+        }
+    }
+}
+
+# API Gateway cache encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule api_security_stage_cache_encryption when
+    resourceType == 'AWS::ApiGateway::Stage' {
+
+    when Properties.CacheClusterEnabled == true {
+        when Properties.MethodSettings exists {
+            Properties.MethodSettings[*] {
+                when CachingEnabled == true {
+                    CacheDataEncrypted == true <<[API Security] API Gateway cache data must be encrypted>>
+                }
+            }
+        }
+    }
+}
+
+# API Gateway WAF association
+# CloudForge Mapping: WEB_APPLICATION_FIREWALL control
+rule api_security_restapi_waf when
+    resourceType == 'AWS::ApiGateway::Stage' {
+
+    Properties.WebAclArn exists <<[API Security] API Gateway stages should be associated with WAF>>
+}
+
+# ============================================================================
+# API Gateway HTTP API Security
+# ============================================================================
+
+# HTTP API access logging
+# CloudForge Mapping: AUDIT_LOGGING control
+rule api_security_httpapi_logging when
+    resourceType == 'AWS::ApiGatewayV2::Stage' {
+
+    Properties.AccessLogSettings exists <<[API Security] HTTP API stages must have access logging enabled>>
+    Properties.AccessLogSettings.DestinationArn exists <<[API Security] HTTP API access logging must specify destination>>
+}
+
+# HTTP API throttling
+# CloudForge Mapping: API_SECURITY control
+rule api_security_httpapi_throttling when
+    resourceType == 'AWS::ApiGatewayV2::Stage' {
+
+    when Properties.DefaultRouteSettings exists {
+        Properties.DefaultRouteSettings.ThrottlingBurstLimit exists <<[API Security] HTTP API stages should configure throttling burst limit>>
+        Properties.DefaultRouteSettings.ThrottlingRateLimit exists <<[API Security] HTTP API stages should configure throttling rate limit>>
+    }
+}
+
+# ============================================================================
+# WAF Security
+# ============================================================================
+
+# Prevent use of WAF Classic
+# CloudForge Mapping: WEB_APPLICATION_FIREWALL control
+rule waf_security_no_classic when
+    resourceType == 'AWS::WAF::WebACL' {
+
+    FAIL <<[WAF Security] WAF Classic resources should be migrated to AWS WAFv2>>
+}
+
+# WAF v2 with rules
+# CloudForge Mapping: WEB_APPLICATION_FIREWALL control
+rule waf_security_wafv2_rules when
+    resourceType == 'AWS::WAFv2::WebACL' {
+
+    Properties.Rules exists <<[WAF Security] WAFv2 Web ACLs must have rules configured>>
+    Properties.Rules not empty <<[WAF Security] WAFv2 Web ACLs must not have empty rules>>
+}
+
+# WAF v2 default action
+# CloudForge Mapping: WEB_APPLICATION_FIREWALL control
+rule waf_security_wafv2_default_action when
+    resourceType == 'AWS::WAFv2::WebACL' {
+
+    Properties.DefaultAction exists <<[WAF Security] WAFv2 Web ACLs must specify a default action>>
+}
+
+# WAF v2 logging
+# CloudForge Mapping: AUDIT_LOGGING control
+rule waf_security_wafv2_logging when
+    resourceType == 'AWS::WAFv2::LoggingConfiguration' {
+
+    Properties.LogDestinationConfigs exists <<[WAF Security] WAFv2 should have logging configured>>
+}

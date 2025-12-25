@@ -1,2 +1,2 @@
-configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-FAIL_FARGATE_PCI-DSS_GDPR_insufficient-retention-180,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",180,true,FAIL,jenkins,,eu-west-1,
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+FAIL_FARGATE_PCI-DSS_GDPR_insufficient-retention-180,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",180,true,FAIL,jenkins,,eu-west-1,,,

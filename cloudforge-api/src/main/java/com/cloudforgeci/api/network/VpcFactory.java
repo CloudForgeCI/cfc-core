@@ -6,6 +6,7 @@ import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import software.amazon.awscdk.services.ec2.*;
 import software.constructs.Construct;
@@ -111,11 +112,17 @@ public final class VpcFactory extends BaseFactory {
         // Add flow logs if configured
         // NOTE: Read from ctx.flowlogs.get() directly rather than using injected field,
         // because FlowLogFactory.create() may have set the value after VpcFactory was constructed
-        ctx.flowlogs.get().ifPresent(flowLogOptions -> {
-            vpc.addFlowLog("VpcFlowlog", flowLogOptions);
+        if (ctx.flowlogs.get().isPresent()) {
+            vpc.addFlowLog("VpcFlowlog", ctx.flowlogs.get().get());
             ctx.requireConfigRule(AwsConfigRule.VPC_FLOW_LOGS_ENABLED);
-            LOG.info("VPC Flow Logs enabled with options: " + flowLogOptions);
-        });
+            LOG.info("VPC Flow Logs enabled with options: " + ctx.flowlogs.get().get());
+        } else {
+            if (config.getSecurityProfile() == SecurityProfile.PRODUCTION) {
+                LOG.warning("VPC Flow Logs disabled for PRODUCTION - will fail CDK-nag VPC7");
+            } else {
+                LOG.info("VPC Flow Logs disabled for " + config.getSecurityProfile());
+            }
+        }
 
         // Store VPC in SystemContext
         ctx.vpc.set(vpc);

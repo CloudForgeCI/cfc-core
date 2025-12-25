@@ -69,8 +69,8 @@ class InteractiveDeployerTest {
         assertEquals("dev", context.get("env"));
         assertEquals("grafana", context.get("applicationId"));
         assertEquals("FARGATE", context.get("runtime"));
-        assertEquals("JENKINS_SERVICE", context.get("topology"));
-        assertEquals("DEV", context.get("securityProfile"));
+        assertEquals("jenkins-service", context.get("topology"));  // kebab-case via Jackson serialization
+        assertEquals("dev", context.get("securityProfile"));  // lowercase via Jackson serialization
     }
 
     @Test

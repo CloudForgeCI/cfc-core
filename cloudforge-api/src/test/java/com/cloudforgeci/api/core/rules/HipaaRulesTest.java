@@ -35,6 +35,7 @@ class HipaaRulesTest {
         cfcContext.put("securityProfile", profile.name());
         cfcContext.put("auditManagerEnabled", "true");
         cfcContext.put("complianceFrameworks", "HIPAA");
+        cfcContext.put("enableFlowlogs", true);  // HIPAA requires VPC Flow Logs
         stack.getNode().setContext("cfc", cfcContext);
 
         return stack;
@@ -1199,7 +1200,7 @@ class HipaaRulesTest {
             boolean hasRequirement = securityMonitoring && guardDuty;
             if (hasRequirement) {
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
@@ -1286,7 +1287,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
@@ -1367,7 +1368,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
@@ -1436,7 +1437,7 @@ class HipaaRulesTest {
         customContext.put("securityProfile", profile);
         customContext.put("region", "us-east-1");  // Required for ALB logging
         customContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        customContext.put("enableFlowlogs", String.valueOf(flowLogs));
         customContext.put("albAccessLogging", String.valueOf(albLogging));
         customContext.put("complianceMode", complianceMode);
 
@@ -1549,7 +1550,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
@@ -1634,7 +1635,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
@@ -1719,7 +1720,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
@@ -1846,12 +1847,13 @@ class HipaaRulesTest {
         customContext.put("securityMonitoringEnabled", String.valueOf(secMonitoring));
         customContext.put("guardDutyEnabled", String.valueOf(guardDuty));
         customContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        customContext.put("enableFlowlogs", String.valueOf(flowLogs));
         customContext.put("crossRegionBackupEnabled", String.valueOf(crossRegion));
         customContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
         customContext.put("networkMode", networkMode);
         customContext.put("logRetentionDays", String.valueOf(retention));
         customContext.put("automatedBackupEnabled", "true");
+        customContext.put("albAccessLogging", "true");  // HIPAA requires ALB access logging
 
         if (!authMode.equals("none")) {
             customContext.put("enableSsl", "true");
@@ -2051,7 +2053,7 @@ class HipaaRulesTest {
         cfcContext.put("securityProfile", profile);
         cfcContext.put("complianceMode", complianceMode);
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLoggingEnabled", String.valueOf(albLogging));
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -2352,7 +2354,7 @@ class HipaaRulesTest {
         cfcContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsEnc));
         cfcContext.put("s3EncryptionEnabled", String.valueOf(s3Enc));
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLoggingEnabled", String.valueOf(albLogging));
         cfcContext.put("authMode", authMode);
         cfcContext.put("automatedBackupEnabled", String.valueOf(automatedBackup));

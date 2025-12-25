@@ -11,15 +11,11 @@
 # ============================================================================
 
 # Storage encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule database_security_rds_encryption when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.StorageEncrypted == true
-
-    <<
-        [Database Security] RDS instances must use encrypted storage.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.StorageEncrypted == true <<[Database Security] RDS instances must use encrypted storage>>
 }
 
 # ============================================================================
@@ -27,28 +23,20 @@ rule database_security_rds_encryption when
 # ============================================================================
 
 # Automated backups
+# CloudForge Mapping: BACKUP_RECOVERY control
 rule database_security_rds_backup when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.BackupRetentionPeriod exists
-    Properties.BackupRetentionPeriod >= 7
-
-    <<
-        [Database Security] RDS instances must have automated backups enabled with retention >= 7 days.
-        CloudForge Mapping: BACKUP_RECOVERY control
-    >>
+    Properties.BackupRetentionPeriod exists <<[Database Security] RDS must have backup retention configured>>
+    Properties.BackupRetentionPeriod >= 7 <<[Database Security] RDS backups must be retained for at least 7 days>>
 }
 
 # Deletion protection
+# CloudForge Mapping: DATA_PROTECTION control
 rule database_security_rds_deletion_protection when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.DeletionProtection == true
-
-    <<
-        [Database Security] RDS instances should have deletion protection enabled.
-        CloudForge Mapping: DATA_PROTECTION control
-    >>
+    Properties.DeletionProtection == true <<[Database Security] RDS instances should have deletion protection enabled>>
 }
 
 # ============================================================================
@@ -56,15 +44,11 @@ rule database_security_rds_deletion_protection when
 # ============================================================================
 
 # Multi-AZ deployment
+# CloudForge Mapping: HIGH_AVAILABILITY control
 rule database_security_rds_multi_az when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.MultiAZ == true
-
-    <<
-        [Database Security] RDS instances should use Multi-AZ for high availability.
-        CloudForge Mapping: HIGH_AVAILABILITY control
-    >>
+    Properties.MultiAZ == true <<[Database Security] RDS instances should use Multi-AZ for high availability>>
 }
 
 # ============================================================================
@@ -72,15 +56,11 @@ rule database_security_rds_multi_az when
 # ============================================================================
 
 # Public accessibility
+# CloudForge Mapping: ACCESS_CONTROL control
 rule database_security_rds_not_public when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.PubliclyAccessible == false
-
-    <<
-        [Database Security] RDS instances must not be publicly accessible.
-        CloudForge Mapping: ACCESS_CONTROL control
-    >>
+    Properties.PubliclyAccessible == false <<[Database Security] RDS instances must not be publicly accessible>>
 }
 
 # ============================================================================
@@ -88,28 +68,20 @@ rule database_security_rds_not_public when
 # ============================================================================
 
 # Enhanced monitoring
+# CloudForge Mapping: MONITORING control
 rule database_security_rds_enhanced_monitoring when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.MonitoringInterval exists
-    Properties.MonitoringInterval in [1, 5, 10, 15, 30, 60]
-
-    <<
-        [Database Security] RDS instances should have enhanced monitoring enabled.
-        CloudForge Mapping: MONITORING control
-    >>
+    Properties.MonitoringInterval exists <<[Database Security] RDS must have monitoring interval configured>>
+    Properties.MonitoringInterval in [1, 5, 10, 15, 30, 60] <<[Database Security] RDS monitoring interval must be valid>>
 }
 
 # CloudWatch log exports
+# CloudForge Mapping: AUDIT_LOGGING control
 rule database_security_rds_log_exports when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.EnableCloudwatchLogsExports exists
-
-    <<
-        [Database Security] RDS instances must export logs to CloudWatch.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
+    Properties.EnableCloudwatchLogsExports exists <<[Database Security] RDS must export logs to CloudWatch>>
 }
 
 # ============================================================================
@@ -117,16 +89,12 @@ rule database_security_rds_log_exports when
 # ============================================================================
 
 # Server-side encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule database_security_dynamodb_encryption when
     resourceType == 'AWS::DynamoDB::Table' {
 
-    Properties.SSESpecification exists
-    Properties.SSESpecification.SSEEnabled == true
-
-    <<
-        [Database Security] DynamoDB tables must use encryption at rest.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.SSESpecification exists <<[Database Security] DynamoDB must have SSE specification>>
+    Properties.SSESpecification.SSEEnabled == true <<[Database Security] DynamoDB tables must use encryption at rest>>
 }
 
 # ============================================================================
@@ -134,16 +102,12 @@ rule database_security_dynamodb_encryption when
 # ============================================================================
 
 # Point-in-time recovery
+# CloudForge Mapping: BACKUP_RECOVERY control
 rule database_security_dynamodb_pitr when
     resourceType == 'AWS::DynamoDB::Table' {
 
-    Properties.PointInTimeRecoverySpecification exists
-    Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled == true
-
-    <<
-        [Database Security] DynamoDB tables must have point-in-time recovery enabled.
-        CloudForge Mapping: BACKUP_RECOVERY control
-    >>
+    Properties.PointInTimeRecoverySpecification exists <<[Database Security] DynamoDB must have PITR specification>>
+    Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled == true <<[Database Security] DynamoDB must enable point-in-time recovery>>
 }
 
 # ============================================================================
@@ -151,28 +115,20 @@ rule database_security_dynamodb_pitr when
 # ============================================================================
 
 # Storage encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule database_security_docdb_encryption when
     resourceType == 'AWS::DocDB::DBCluster' {
 
-    Properties.StorageEncrypted == true
-
-    <<
-        [Database Security] DocumentDB clusters must use encrypted storage.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.StorageEncrypted == true <<[Database Security] DocumentDB clusters must use encrypted storage>>
 }
 
 # Backup retention
+# CloudForge Mapping: BACKUP_RECOVERY control
 rule database_security_docdb_backup when
     resourceType == 'AWS::DocDB::DBCluster' {
 
-    Properties.BackupRetentionPeriod exists
-    Properties.BackupRetentionPeriod >= 7
-
-    <<
-        [Database Security] DocumentDB clusters must have automated backups enabled.
-        CloudForge Mapping: BACKUP_RECOVERY control
-    >>
+    Properties.BackupRetentionPeriod exists <<[Database Security] DocumentDB must have backup retention configured>>
+    Properties.BackupRetentionPeriod >= 7 <<[Database Security] DocumentDB backups must be retained for at least 7 days>>
 }
 
 # ============================================================================
@@ -180,15 +136,11 @@ rule database_security_docdb_backup when
 # ============================================================================
 
 # Storage encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule database_security_neptune_encryption when
     resourceType == 'AWS::Neptune::DBCluster' {
 
-    Properties.StorageEncrypted == true
-
-    <<
-        [Database Security] Neptune clusters must use encrypted storage.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.StorageEncrypted == true <<[Database Security] Neptune clusters must use encrypted storage>>
 }
 
 # ============================================================================
@@ -196,38 +148,141 @@ rule database_security_neptune_encryption when
 # ============================================================================
 
 # Cluster encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule database_security_redshift_encryption when
     resourceType == 'AWS::Redshift::Cluster' {
 
-    Properties.Encrypted == true
-
-    <<
-        [Database Security] Redshift clusters must be encrypted.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.Encrypted == true <<[Database Security] Redshift clusters must be encrypted>>
 }
 
 # Public accessibility
+# CloudForge Mapping: ACCESS_CONTROL control
 rule database_security_redshift_not_public when
     resourceType == 'AWS::Redshift::Cluster' {
 
-    Properties.PubliclyAccessible == false
-
-    <<
-        [Database Security] Redshift clusters must not be publicly accessible.
-        CloudForge Mapping: ACCESS_CONTROL control
-    >>
+    Properties.PubliclyAccessible == false <<[Database Security] Redshift clusters must not be publicly accessible>>
 }
 
 # Audit logging
+# CloudForge Mapping: AUDIT_LOGGING control
 rule database_security_redshift_logging when
     resourceType == 'AWS::Redshift::Cluster' {
 
-    Properties.LoggingProperties exists
-    Properties.LoggingProperties.BucketName exists
+    Properties.LoggingProperties exists <<[Database Security] Redshift must have logging configured>>
+    Properties.LoggingProperties.BucketName exists <<[Database Security] Redshift logging must specify bucket>>
+}
 
-    <<
-        [Database Security] Redshift clusters should have audit logging enabled.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
+# Version upgrades
+# CloudForge Mapping: CONFIGURATION_MANAGEMENT control
+rule database_security_redshift_version_upgrades when
+    resourceType == 'AWS::Redshift::Cluster' {
+
+    Properties.AllowVersionUpgrade == true <<[Database Security] Redshift should allow automatic version upgrades>>
+}
+
+# Automated snapshots
+# CloudForge Mapping: BACKUP_RECOVERY control
+rule database_security_redshift_snapshots when
+    resourceType == 'AWS::Redshift::Cluster' {
+
+    Properties.AutomatedSnapshotRetentionPeriod exists <<[Database Security] Redshift must have snapshot retention configured>>
+    Properties.AutomatedSnapshotRetentionPeriod >= 1 <<[Database Security] Redshift snapshots must be retained for at least 1 day>>
+}
+
+# Enhanced VPC routing
+# CloudForge Mapping: NETWORK_SECURITY control
+rule database_security_redshift_enhanced_vpc when
+    resourceType == 'AWS::Redshift::Cluster' {
+
+    Properties.EnhancedVpcRouting == true <<[Database Security] Redshift should enable enhanced VPC routing>>
+}
+
+# ============================================================================
+# DAX (DynamoDB Accelerator) Security
+# ============================================================================
+
+# DAX encryption at rest
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule database_security_dax_encryption_at_rest when
+    resourceType == 'AWS::DAX::Cluster' {
+
+    Properties.SSESpecification exists <<[Database Security] DAX must have SSE specification>>
+    Properties.SSESpecification.SSEEnabled == true <<[Database Security] DAX clusters must use encryption at rest>>
+}
+
+# DAX encryption in transit
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
+rule database_security_dax_encryption_in_transit when
+    resourceType == 'AWS::DAX::Cluster' {
+
+    Properties.ClusterEndpointEncryptionType exists <<[Database Security] DAX must have endpoint encryption type configured>>
+    Properties.ClusterEndpointEncryptionType != 'NONE' <<[Database Security] DAX clusters must use encryption in transit>>
+}
+
+# DAX subnet group
+# CloudForge Mapping: NETWORK_SECURITY control
+rule database_security_dax_subnet_group when
+    resourceType == 'AWS::DAX::Cluster' {
+
+    Properties.SubnetGroupName exists <<[Database Security] DAX clusters should be deployed in a subnet group>>
+}
+
+# ============================================================================
+# RDS IAM Authentication
+# ============================================================================
+
+# RDS IAM database authentication
+# CloudForge Mapping: DATABASE_ACCESS_CONTROL control
+rule database_security_rds_iam_auth when
+    resourceType == 'AWS::RDS::DBInstance' {
+
+    Properties.EnableIAMDatabaseAuthentication == true <<[Database Security] RDS should enable IAM database authentication>>
+}
+
+# ============================================================================
+# RDS Performance and Minor Version Upgrades
+# ============================================================================
+
+# RDS auto minor version upgrade
+# CloudForge Mapping: CONFIGURATION_MANAGEMENT control
+rule database_security_rds_auto_minor_upgrade when
+    resourceType == 'AWS::RDS::DBInstance' {
+
+    Properties.AutoMinorVersionUpgrade == true <<[Database Security] RDS should enable auto minor version upgrades>>
+}
+
+# RDS Performance Insights
+# CloudForge Mapping: MONITORING control
+rule database_security_rds_performance_insights when
+    resourceType == 'AWS::RDS::DBInstance' {
+
+    Properties.EnablePerformanceInsights == true <<[Database Security] RDS should enable Performance Insights>>
+}
+
+# ============================================================================
+# ElastiCache Security
+# ============================================================================
+
+# ElastiCache encryption at rest
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule database_security_elasticache_encryption_at_rest when
+    resourceType == 'AWS::ElastiCache::ReplicationGroup' {
+
+    Properties.AtRestEncryptionEnabled == true <<[Database Security] ElastiCache must use encryption at rest>>
+}
+
+# ElastiCache encryption in transit
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
+rule database_security_elasticache_encryption_in_transit when
+    resourceType == 'AWS::ElastiCache::ReplicationGroup' {
+
+    Properties.TransitEncryptionEnabled == true <<[Database Security] ElastiCache must use encryption in transit>>
+}
+
+# ElastiCache automatic failover
+# CloudForge Mapping: HIGH_AVAILABILITY control
+rule database_security_elasticache_automatic_failover when
+    resourceType == 'AWS::ElastiCache::ReplicationGroup' {
+
+    Properties.AutomaticFailoverEnabled == true <<[Database Security] ElastiCache should enable automatic failover>>
 }

@@ -4,9 +4,12 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.efs.*;
@@ -51,6 +54,9 @@ public class EfsFactory extends BaseFactory {
   @SystemContext("applicationSpec")
   private ApplicationSpec applicationSpec;
 
+  @DeploymentContext("networkMode")
+  private NetworkMode networkMode;
+
   public EfsFactory(Construct scope, String id) {
     super(scope, id);
     // Fields are automatically injected by BaseFactory via @SystemContext and @DeploymentContext annotations
@@ -79,11 +85,26 @@ public class EfsFactory extends BaseFactory {
   }
 
   private SecurityGroup createSecurityGroup() {
-    return SecurityGroup.Builder.create(this, getNode().getId() + "EfsSg")
+    // Check if egress should be restricted to VPC CIDR only (only for private subnets)
+    boolean restrictEgress = config.isRestrictSecurityGroupEgressEnabled()
+        && networkMode != NetworkMode.PUBLIC;
+
+    SecurityGroup sg = SecurityGroup.Builder.create(this, getNode().getId() + "EfsSg")
             .vpc(vpc)
             .description("EFS Security Group")
-            .allowAllOutbound(true)
+            .allowAllOutbound(!restrictEgress)
             .build();
+
+    // If egress is restricted, add explicit egress rule for VPC CIDR only
+    if (restrictEgress) {
+      sg.addEgressRule(
+          Peer.ipv4(vpc.getVpcCidrBlock()),
+          Port.allTraffic(),
+          "Allow egress to VPC CIDR only"
+      );
+    }
+
+    return sg;
   }
 
   private FileSystem createFileSystem(SecurityGroup efsSg) {

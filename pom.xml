@@ -36,7 +36,8 @@
     <build.version.suffix></build.version.suffix> <!-- Blank by default -->
 
     <!-- AWS CDK Versions -->
-    <cdk.version>2.232.1</cdk.version>
+    <!-- Note: v2.197.0+ defaults to nodejs22.x for AwsCustomResource which isn't available in all regions -->
+    <cdk.version>2.196.0</cdk.version>
     <constructs.version>10.3.0</constructs.version>
     <cdknag.version>2.37.55</cdknag.version>
 

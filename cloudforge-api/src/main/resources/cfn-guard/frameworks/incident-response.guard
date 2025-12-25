@@ -11,41 +11,29 @@
 # ============================================================================
 
 # CloudTrail enabled with validation
+# CloudForge Mapping: AUDIT_LOGGING control
 rule incident_response_cloudtrail_enabled when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    Properties.IsLogging == true
-    Properties.EnableLogFileValidation == true
-
-    <<
-        [Incident Response] CloudTrail must be enabled for forensic analysis.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
+    Properties.IsLogging == true <<[Incident Response] CloudTrail must be enabled for forensic analysis>>
+    Properties.EnableLogFileValidation == true <<[Incident Response] CloudTrail must enable log file validation>>
 }
 
 # CloudTrail multi-region
+# CloudForge Mapping: AUDIT_LOGGING control
 rule incident_response_cloudtrail_multiregion when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    Properties.IsMultiRegionTrail == true
-    Properties.IncludeGlobalServiceEvents == true
-
-    <<
-        [Incident Response] CloudTrail should be multi-region for comprehensive incident tracking.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
+    Properties.IsMultiRegionTrail == true <<[Incident Response] CloudTrail should be multi-region>>
+    Properties.IncludeGlobalServiceEvents == true <<[Incident Response] CloudTrail should include global events>>
 }
 
 # CloudTrail log encryption (protect evidence)
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule incident_response_cloudtrail_encryption when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    Properties.KMSKeyId exists
-
-    <<
-        [Incident Response] CloudTrail logs should be encrypted to protect forensic evidence.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.KMSKeyId exists <<[Incident Response] CloudTrail logs should be encrypted to protect evidence>>
 }
 
 # ============================================================================
@@ -53,16 +41,12 @@ rule incident_response_cloudtrail_encryption when
 # ============================================================================
 
 # VPC Flow Logs enabled
+# CloudForge Mapping: NETWORK_MONITORING control
 rule incident_response_vpc_flow_logs when
     resourceType == 'AWS::EC2::FlowLog' {
 
-    Properties.ResourceType == 'VPC'
-    Properties.TrafficType == 'ALL'
-
-    <<
-        [Incident Response] VPC Flow Logs must be enabled for network forensics.
-        CloudForge Mapping: NETWORK_MONITORING control
-    >>
+    Properties.ResourceType == 'VPC' <<[Incident Response] VPC Flow Logs must target VPC>>
+    Properties.TrafficType == 'ALL' <<[Incident Response] VPC Flow Logs must capture ALL traffic>>
 }
 
 # ============================================================================
@@ -70,16 +54,12 @@ rule incident_response_vpc_flow_logs when
 # ============================================================================
 
 # CloudWatch log retention for incident analysis
+# CloudForge Mapping: AUDIT_LOGGING control
 rule incident_response_cloudwatch_retention when
     resourceType == 'AWS::Logs::LogGroup' {
 
-    Properties.RetentionInDays exists
-    Properties.RetentionInDays >= 90
-
-    <<
-        [Incident Response] CloudWatch log groups must retain logs for at least 90 days for incident analysis.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
+    Properties.RetentionInDays exists <<[Incident Response] CloudWatch log groups must have retention configured>>
+    Properties.RetentionInDays >= 90 <<[Incident Response] CloudWatch logs must retain for at least 90 days>>
 }
 
 # ============================================================================
@@ -87,16 +67,12 @@ rule incident_response_cloudwatch_retention when
 # ============================================================================
 
 # S3 bucket access logging
+# CloudForge Mapping: AUDIT_LOGGING control
 rule incident_response_s3_logging when
     resourceType == 'AWS::S3::Bucket' {
 
-    Properties.LoggingConfiguration exists
-    Properties.LoggingConfiguration.DestinationBucketName exists
-
-    <<
-        [Incident Response] S3 buckets must have access logging enabled for forensic analysis.
-        CloudForge Mapping: AUDIT_LOGGING control
-    >>
+    Properties.LoggingConfiguration exists <<[Incident Response] S3 buckets must have logging configured>>
+    Properties.LoggingConfiguration.DestinationBucketName exists <<[Incident Response] S3 logging must specify destination bucket>>
 }
 
 # ============================================================================
@@ -104,15 +80,11 @@ rule incident_response_s3_logging when
 # ============================================================================
 
 # GuardDuty enabled
+# CloudForge Mapping: THREAT_DETECTION control
 rule incident_response_guardduty_enabled when
     resourceType == 'AWS::GuardDuty::Detector' {
 
-    Properties.Enable == true
-
-    <<
-        [Incident Response] GuardDuty must be enabled for automated threat detection.
-        CloudForge Mapping: THREAT_DETECTION control
-    >>
+    Properties.Enable == true <<[Incident Response] GuardDuty must be enabled for automated threat detection>>
 }
 
 # ============================================================================
@@ -120,15 +92,11 @@ rule incident_response_guardduty_enabled when
 # ============================================================================
 
 # SNS topic encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule incident_response_sns_encryption when
     resourceType == 'AWS::SNS::Topic' {
 
-    Properties.KmsMasterKeyId exists
-
-    <<
-        [Incident Response] SNS topics used for incident notifications must be encrypted.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.KmsMasterKeyId exists <<[Incident Response] SNS topics for incident notifications must be encrypted>>
 }
 
 # ============================================================================
@@ -136,16 +104,12 @@ rule incident_response_sns_encryption when
 # ============================================================================
 
 # CloudWatch alarms with actions
+# CloudForge Mapping: MONITORING control
 rule incident_response_cloudwatch_alarm_actions when
     resourceType == 'AWS::CloudWatch::Alarm' {
 
-    Properties.ActionsEnabled == true
-    Properties.AlarmActions exists
-
-    <<
-        [Incident Response] CloudWatch alarms must have actions enabled for incident response.
-        CloudForge Mapping: MONITORING control
-    >>
+    Properties.ActionsEnabled == true <<[Incident Response] CloudWatch alarms must have actions enabled>>
+    Properties.AlarmActions exists <<[Incident Response] CloudWatch alarms must have alarm actions configured>>
 }
 
 # ============================================================================
@@ -153,29 +117,21 @@ rule incident_response_cloudwatch_alarm_actions when
 # ============================================================================
 
 # RDS automated backups
+# CloudForge Mapping: BACKUP_RECOVERY control
 rule incident_response_rds_backup when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.BackupRetentionPeriod exists
-    Properties.BackupRetentionPeriod >= 7
-
-    <<
-        [Incident Response] RDS instances must have automated backups for incident recovery.
-        CloudForge Mapping: BACKUP_RECOVERY control
-    >>
+    Properties.BackupRetentionPeriod exists <<[Incident Response] RDS instances must have backup retention configured>>
+    Properties.BackupRetentionPeriod >= 7 <<[Incident Response] RDS backups must be retained for at least 7 days>>
 }
 
 # S3 versioning for data recovery
+# CloudForge Mapping: DATA_PROTECTION control
 rule incident_response_s3_versioning when
     resourceType == 'AWS::S3::Bucket' {
 
-    Properties.VersioningConfiguration exists
-    Properties.VersioningConfiguration.Status == 'Enabled'
-
-    <<
-        [Incident Response] S3 buckets should enable versioning for incident recovery.
-        CloudForge Mapping: DATA_PROTECTION control
-    >>
+    Properties.VersioningConfiguration exists <<[Incident Response] S3 buckets should have versioning configured>>
+    Properties.VersioningConfiguration.Status == 'Enabled' <<[Incident Response] S3 versioning should be enabled>>
 }
 
 # ============================================================================
@@ -183,6 +139,7 @@ rule incident_response_s3_versioning when
 # ============================================================================
 
 # S3 bucket lifecycle policies (prevent premature deletion of evidence)
+# CloudForge Mapping: DATA_RETENTION control
 rule incident_response_s3_lifecycle when
     resourceType == 'AWS::S3::Bucket' {
 
@@ -190,28 +147,19 @@ rule incident_response_s3_lifecycle when
         when Properties.LifecycleConfiguration.Rules exists {
             Properties.LifecycleConfiguration.Rules[*] {
                 when ExpirationInDays exists {
-                    ExpirationInDays >= 90
+                    ExpirationInDays >= 90 <<[Incident Response] S3 lifecycle rules should retain data for at least 90 days>>
                 }
             }
         }
     }
-
-    <<
-        [Incident Response] S3 lifecycle rules should retain data for at least 90 days for forensics.
-        CloudForge Mapping: DATA_RETENTION control
-    >>
 }
 
 # RDS deletion protection
+# CloudForge Mapping: DATA_PROTECTION control
 rule incident_response_rds_deletion_protection when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.DeletionProtection == true
-
-    <<
-        [Incident Response] RDS instances should have deletion protection to preserve evidence.
-        CloudForge Mapping: DATA_PROTECTION control
-    >>
+    Properties.DeletionProtection == true <<[Incident Response] RDS instances should have deletion protection>>
 }
 
 # ============================================================================
@@ -219,31 +167,23 @@ rule incident_response_rds_deletion_protection when
 # ============================================================================
 
 # Lambda function tracing (X-Ray)
+# CloudForge Mapping: MONITORING control
 rule incident_response_lambda_tracing when
     resourceType == 'AWS::Lambda::Function' {
 
     when Properties.TracingConfig exists {
-        Properties.TracingConfig.Mode in ['Active', 'PassThrough']
+        Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Incident Response] Lambda tracing mode must be Active or PassThrough>>
     }
-
-    <<
-        [Incident Response] Lambda functions should enable X-Ray tracing for incident analysis.
-        CloudForge Mapping: MONITORING control
-    >>
 }
 
 # Lambda function dead letter queues
+# CloudForge Mapping: ERROR_HANDLING control
 rule incident_response_lambda_dlq when
     resourceType == 'AWS::Lambda::Function' {
 
     when Properties.DeadLetterConfig exists {
-        Properties.DeadLetterConfig.TargetArn exists
+        Properties.DeadLetterConfig.TargetArn exists <<[Incident Response] Lambda DLQ must specify target ARN>>
     }
-
-    <<
-        [Incident Response] Lambda functions should have dead letter queues for error tracking.
-        CloudForge Mapping: ERROR_HANDLING control
-    >>
 }
 
 # ============================================================================
@@ -251,15 +191,11 @@ rule incident_response_lambda_dlq when
 # ============================================================================
 
 # Config recorder enabled
+# CloudForge Mapping: CONFIGURATION_MANAGEMENT control
 rule incident_response_config_recorder when
     resourceType == 'AWS::Config::ConfigurationRecorder' {
 
-    Properties.RecordingGroup.AllSupported == true
-
-    <<
-        [Incident Response] AWS Config must record all resources for configuration change tracking.
-        CloudForge Mapping: CONFIGURATION_MANAGEMENT control
-    >>
+    Properties.RecordingGroup.AllSupported == true <<[Incident Response] AWS Config must record all resources>>
 }
 
 # ============================================================================
@@ -267,14 +203,10 @@ rule incident_response_config_recorder when
 # ============================================================================
 
 # EBS snapshot encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule incident_response_snapshot_encryption when
     resourceType == 'AWS::EC2::Snapshot' {
 
     Properties.Encrypted exists
-    Properties.Encrypted == true
-
-    <<
-        [Incident Response] EBS snapshots must be encrypted for evidence protection.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.Encrypted == true <<[Incident Response] EBS snapshots must be encrypted>>
 }

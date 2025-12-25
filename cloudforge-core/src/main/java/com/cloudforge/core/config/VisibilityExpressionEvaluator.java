@@ -10,10 +10,10 @@ import java.lang.reflect.Method;
  * <p>This evaluator implements a recursive descent parser that supports:
  * <ul>
  *   <li><b>Logical operators:</b> && (AND), || (OR), ! (NOT)</li>
- *   <li><b>Comparison operators:</b> == (equals), != (not equals)</li>
+ *   <li><b>Comparison operators:</b> == (equals), != (not equals), &gt;, &lt;, &gt;=, &lt;=</li>
  *   <li><b>Parentheses:</b> for grouping expressions</li>
  *   <li><b>Capability checks:</b> supportsDatabase, supportsOidc, etc.</li>
- *   <li><b>Field comparisons:</b> provisionDatabase == true, runtimeType == "fargate"</li>
+ *   <li><b>Field comparisons:</b> provisionDatabase == true, runtime == FARGATE, maxCapacity &gt; 1</li>
  * </ul>
  *
  * <h2>Grammar (BNF):</h2>
@@ -168,13 +168,25 @@ public class VisibilityExpressionEvaluator {
         String identifier = parseIdentifier();
         skipWhitespace();
 
-        // Check for comparison operators
+        // Check for comparison operators (order matters: >= before >, <= before <)
         if (matchOperator("==")) {
             Object value = parseValue();
-            return compareValues(identifier, value, true);
+            return compareValues(identifier, value, "==");
         } else if (matchOperator("!=")) {
             Object value = parseValue();
-            return compareValues(identifier, value, false);
+            return compareValues(identifier, value, "!=");
+        } else if (matchOperator(">=")) {
+            Object value = parseValue();
+            return compareValues(identifier, value, ">=");
+        } else if (matchOperator("<=")) {
+            Object value = parseValue();
+            return compareValues(identifier, value, "<=");
+        } else if (matchOperator(">")) {
+            Object value = parseValue();
+            return compareValues(identifier, value, ">");
+        } else if (matchOperator("<")) {
+            Object value = parseValue();
+            return compareValues(identifier, value, "<");
         }
 
         // No comparison operator - treat as capability check
@@ -222,6 +234,11 @@ public class VisibilityExpressionEvaluator {
         // Number literal
         if (position < expression.length() && (Character.isDigit(expression.charAt(position)) || expression.charAt(position) == '-')) {
             return parseNumber();
+        }
+
+        // Unquoted identifier (for enum values like FARGATE, EC2, PRODUCTION)
+        if (position < expression.length() && isIdentifierStart(expression.charAt(position))) {
+            return parseIdentifier();
         }
 
         throw new IllegalArgumentException("Expected value at position " + position);
@@ -306,17 +323,65 @@ public class VisibilityExpressionEvaluator {
     }
 
     /**
-     * Compares a field value with an expected value.
+     * Compares a field value with an expected value using the specified operator.
      *
      * @param identifier the field name
      * @param expectedValue the expected value
-     * @param equals true for ==, false for !=
+     * @param operator the comparison operator (==, !=, >, <, >=, <=)
      * @return comparison result
      */
-    private boolean compareValues(String identifier, Object expectedValue, boolean equals) {
+    private boolean compareValues(String identifier, Object expectedValue, String operator) {
         Object actualValue = getFieldValue(identifier);
-        boolean result = valuesEqual(actualValue, expectedValue);
-        return equals ? result : !result;
+
+        switch (operator) {
+            case "==":
+                return valuesEqual(actualValue, expectedValue);
+            case "!=":
+                return !valuesEqual(actualValue, expectedValue);
+            case ">":
+                return compareNumeric(actualValue, expectedValue) > 0;
+            case "<":
+                return compareNumeric(actualValue, expectedValue) < 0;
+            case ">=":
+                return compareNumeric(actualValue, expectedValue) >= 0;
+            case "<=":
+                return compareNumeric(actualValue, expectedValue) <= 0;
+            default:
+                throw new IllegalArgumentException("Unknown operator: " + operator);
+        }
+    }
+
+    /**
+     * Compares two values numerically.
+     *
+     * @return negative if actual < expected, 0 if equal, positive if actual > expected
+     */
+    private int compareNumeric(Object actual, Object expected) {
+        if (actual == null) {
+            return expected == null ? 0 : -1;
+        }
+        if (expected == null) {
+            return 1;
+        }
+
+        // Convert to numbers
+        double actualNum = toNumber(actual);
+        double expectedNum = toNumber(expected);
+        return Double.compare(actualNum, expectedNum);
+    }
+
+    /**
+     * Converts a value to a number.
+     */
+    private double toNumber(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /**

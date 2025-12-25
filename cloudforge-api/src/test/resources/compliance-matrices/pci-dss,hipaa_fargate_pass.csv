@@ -1,4 +1,4 @@
-configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-FARGATE_PRODUCTION_PCI-DSS_HIPAA_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",,true,PASS,jenkins,,,
-FARGATE_PRODUCTION_PCI-DSS_HIPAA_alb-oidc_private-with-nat_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",,true,PASS,jenkins,,,
-FARGATE_PRODUCTION_PCI-DSS_HIPAA_retention-2190,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",2190,true,PASS,jenkins,,,
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+FARGATE_PRODUCTION_PCI-DSS_HIPAA_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",,true,PASS,jenkins,,,,,
+FARGATE_PRODUCTION_PCI-DSS_HIPAA_alb-oidc_private-with-nat_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",,true,PASS,jenkins,,,,,
+FARGATE_PRODUCTION_PCI-DSS_HIPAA_retention-2190,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",2190,true,PASS,jenkins,,,,,

@@ -160,6 +160,15 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     }
 
     @Override
+    public boolean isRestrictSecurityGroupEgressEnabled() {
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.restrictSecurityGroupEgress() != null) {
+            return Boolean.TRUE.equals(deploymentContext.restrictSecurityGroupEgress());
+        }
+        return false; // Default: allow all outbound for dev simplicity
+    }
+
+    @Override
     public boolean isNatGatewayEnabled() {
         return false; // Use public subnets for dev
     }
@@ -180,6 +189,15 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
             return Boolean.TRUE.equals(deploymentContext.wafEnabled());
         }
         return false; // Not required for dev
+    }
+
+    @Override
+    public boolean isHttpsStrictEnabled() {
+        // Check deployment context first, then fall back to profile default
+        if (deploymentContext != null && deploymentContext.httpsStrictEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.httpsStrictEnabled());
+        }
+        return false; // Not required for dev (allow HTTP for easier testing)
     }
 
     @Override
@@ -485,6 +503,44 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
         // Allow deployment context to override profile default
         if (deploymentContext != null && deploymentContext.containerImageScanningEnabled() != null) {
             return Boolean.TRUE.equals(deploymentContext.containerImageScanningEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    // ==================== Enhanced Compliance Controls ====================
+
+    @Override
+    public boolean isCloudWatchLogsKmsEncryptionEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.cloudWatchLogsKmsEncryptionEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.cloudWatchLogsKmsEncryptionEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isCloudTrailInsightsEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.cloudTrailInsightsEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.cloudTrailInsightsEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isRoute53QueryLoggingEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.route53QueryLoggingEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.route53QueryLoggingEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isS3ObjectLockEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.s3ObjectLockEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.s3ObjectLockEnabled());
         }
         return false; // Not required for development
     }

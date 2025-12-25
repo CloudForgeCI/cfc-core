@@ -199,6 +199,19 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                     ))
                     .build();
 
+            NagSuppressions.addResourceSuppressions(
+                ec2Role,
+                List.of(
+                    NagPackSuppression.builder()
+                        .id("AwsSolutions-IAM4")
+                        .reason("AWS managed policies (AmazonSSMManagedInstanceCore, CloudWatchAgentServerPolicy) " +
+                                "are AWS-recommended for EC2 instances. They provide minimal permissions " +
+                                "for SSM connectivity and CloudWatch monitoring.")
+                        .build()
+                ),
+                Boolean.TRUE
+            );
+
             // Add CloudWatch Logs permissions
             ec2Role.addToPolicy(PolicyStatement.Builder.create()
                     .sid("StandardCloudWatchLogs")
@@ -411,6 +424,19 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
                     ))
                     .build();
+
+            NagSuppressions.addResourceSuppressions(
+                executionRole,
+                List.of(
+                    NagPackSuppression.builder()
+                        .id("AwsSolutions-IAM4")
+                        .reason("AmazonECSTaskExecutionRolePolicy is an AWS-managed policy specifically " +
+                                "designed for ECS task execution. It provides minimal required permissions " +
+                                "for pulling container images from ECR and writing logs to CloudWatch.")
+                        .build()
+                ),
+                Boolean.TRUE
+            );
 
             Role taskRole = Role.Builder.create(c, "StandardTaskRole")
                     .assumedBy(new ServicePrincipal("ecs-tasks.amazonaws.com"))

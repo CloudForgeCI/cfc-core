@@ -1,5 +1,7 @@
 package com.cloudforge.core.enums;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+
 /**
  * Compliance validation mode controlling how validation failures are handled.
  *
@@ -87,6 +89,18 @@ public enum ComplianceMode {
      * Not recommended - use ADVISORY instead for development.
      */
     DISABLED;
+
+    /**
+     * Parse compliance mode from string (case-insensitive) for Jackson deserialization.
+     * Returns DISABLED as default if input is null or invalid.
+     *
+     * @param value String value from JSON
+     * @return Parsed ComplianceMode or DISABLED as default
+     */
+    @JsonCreator
+    public static ComplianceMode fromJson(String value) {
+        return fromString(value, DISABLED);
+    }
 
     /**
      * Parse compliance mode from string (case-insensitive).

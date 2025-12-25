@@ -89,15 +89,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     // Flow Log Configuration - Comprehensive monitoring
     @Override
     public boolean isFlowLogsEnabled() {
-        // Check deployment context override FIRST (Boolean accessor - need null check)
-        // This allows validation to detect when flow logs are explicitly disabled despite being required
-        if (deploymentContext != null && deploymentContext.enableFlowlogs() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.enableFlowlogs());
-            LOG.info("PRODUCTION profile: Flow Logs explicitly configured in deployment context: " + enabled);
-            return enabled;
-        }
-
-        // Check if compliance matrix requires this control
+        // Check if compliance matrix REQUIRES this control (cannot be overridden)
         if (deploymentContext != null) {
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
@@ -112,7 +104,16 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
             }
         }
 
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.enableFlowlogs() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.enableFlowlogs());
+            LOG.info("PRODUCTION profile: Flow Logs explicitly configured in deployment context: " + enabled +
+                     " (raw value: " + deploymentContext.enableFlowlogs() + ")");
+            return enabled;
+        }
+
         // Default: always enabled for production
+        LOG.info("PRODUCTION profile: Flow Logs using default (true) - no explicit config");
         return true;
     }
 
@@ -362,6 +363,34 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     }
 
     @Override
+    public boolean isRestrictSecurityGroupEgressEnabled() {
+        // Check deployment context override FIRST
+        if (deploymentContext != null && deploymentContext.restrictSecurityGroupEgress() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.restrictSecurityGroupEgress());
+            LOG.info("PRODUCTION profile: Security group egress restriction explicitly configured: " + enabled);
+            return enabled;
+        }
+
+        // Check if compliance matrix requires network segmentation (which includes egress control)
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION
+            )) {
+                LOG.info("PRODUCTION profile: Security group egress restriction enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Default: allow all outbound - requires VPC endpoints to restrict
+        return false;
+    }
+
+    @Override
     public boolean isNatGatewayEnabled() {
         return true; // Always use private subnets for production
     }
@@ -378,21 +407,62 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
 
     @Override
     public boolean isWafEnabled() {
-        // Use deployment context wafEnabled field, default to false if not set
+        // Check deployment context override FIRST
         // The WafFactory configuration for Jenkins:
         // - CommonRuleSet: DISABLED (too many false positives on i18n, setup, config pages)
         // - SQL Injection rules: ACTIVE (blocks SQLi attacks)
         // - Linux OS rules: ACTIVE (blocks shell injection, path traversal)
         // - Known Bad Inputs: ACTIVE (with Java deserialization exceptions)
-        //
-        // This provides core security protection (SQLi + OS exploits)
-        // while allowing Jenkins to function without 403 errors.
-        //
-        // To enable: set wafEnabled = true in deployment-context.json
         if (deploymentContext != null && deploymentContext.wafEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.wafEnabled());
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.wafEnabled());
+            LOG.info("PRODUCTION profile: WAF explicitly configured: " + enabled);
+            return enabled;
         }
-        return false; // Default: disabled (opt-in)
+
+        // Check if compliance matrix requires WAF protection
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.WAF_PROTECTION
+            )) {
+                LOG.info("PRODUCTION profile: WAF enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        return false; // Default: disabled (opt-in when no compliance frameworks require it)
+    }
+
+    @Override
+    public boolean isHttpsStrictEnabled() {
+        // Check deployment context override FIRST
+        if (deploymentContext != null && deploymentContext.httpsStrictEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.httpsStrictEnabled());
+            LOG.info("PRODUCTION profile: HTTPS strict mode explicitly configured: " + enabled);
+            return enabled;
+        }
+
+        // Check if compliance matrix requires HTTPS strict mode
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.HTTPS_STRICT
+            )) {
+                LOG.info("PRODUCTION profile: HTTPS strict mode enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Default: disabled (allow HTTP→HTTPS redirect for better UX)
+        return false;
     }
 
     @Override
@@ -420,7 +490,22 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     // Backup and Recovery - Comprehensive for production
     @Override
     public boolean isAutomatedBackupEnabled() {
-        // Check deployment context override (Boolean accessor)
+        // Check if compliance matrix REQUIRES this control (cannot be overridden)
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
+            )) {
+                LOG.info("PRODUCTION profile: Automated Backup enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
         if (deploymentContext != null && deploymentContext.automatedBackupEnabled() != null) {
             boolean enabled = Boolean.TRUE.equals(deploymentContext.automatedBackupEnabled());
             LOG.info("PRODUCTION profile: Overriding automatedBackupEnabled from deployment context: " + enabled);
@@ -862,6 +947,121 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
             return enabled;
         }
         // PRODUCTION default: false (typically handled by ECR, requires explicit configuration)
+        return false;
+    }
+
+    // ==================== Enhanced Compliance Controls ====================
+
+    @Override
+    public boolean isCloudWatchLogsKmsEncryptionEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION
+            )) {
+                LOG.info("PRODUCTION profile: CloudWatch Logs KMS encryption enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.cloudWatchLogsKmsEncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.cloudWatchLogsKmsEncryptionEnabled());
+            LOG.info("PRODUCTION profile: Overriding CloudWatch Logs KMS encryption from deployment context: " + enabled);
+            return enabled;
+        }
+
+        // PRODUCTION default: false (opt-in, but required for compliance frameworks)
+        // Note: ComplianceMatrix will require this for PCI-DSS, HIPAA, SOC2 in ENFORCE mode
+        return false;
+    }
+
+    @Override
+    public boolean isCloudTrailInsightsEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.CLOUDTRAIL_INSIGHTS
+            )) {
+                LOG.info("PRODUCTION profile: CloudTrail Insights enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.cloudTrailInsightsEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.cloudTrailInsightsEnabled());
+            LOG.info("PRODUCTION profile: Overriding CloudTrail Insights from deployment context: " + enabled);
+            return enabled;
+        }
+
+        // PRODUCTION default: false (opt-in due to cost, but required for SOC2/NIST)
+        return false;
+    }
+
+    @Override
+    public boolean isRoute53QueryLoggingEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.ROUTE53_QUERY_LOGGING
+            )) {
+                LOG.info("PRODUCTION profile: Route53 Query Logging enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.route53QueryLoggingEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.route53QueryLoggingEnabled());
+            LOG.info("PRODUCTION profile: Overriding Route53 Query Logging from deployment context: " + enabled);
+            return enabled;
+        }
+
+        // PRODUCTION default: false (opt-in, but required for SOC2/NIST)
+        return false;
+    }
+
+    @Override
+    public boolean isS3ObjectLockEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.S3_OBJECT_LOCK
+            )) {
+                LOG.info("PRODUCTION profile: S3 Object Lock enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.s3ObjectLockEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.s3ObjectLockEnabled());
+            LOG.info("PRODUCTION profile: Overriding S3 Object Lock from deployment context: " + enabled);
+            return enabled;
+        }
+
+        // PRODUCTION default: false (opt-in, but required for HIPAA/PCI-DSS)
         return false;
     }
 }

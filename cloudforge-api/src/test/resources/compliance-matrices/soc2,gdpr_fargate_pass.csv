@@ -1,4 +1,4 @@
-configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-FARGATE_PRODUCTION_SOC2_GDPR_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,GDPR",,true,PASS,jenkins,,,true
-FARGATE_PRODUCTION_SOC2_GDPR_alb-oidc_private-with-nat_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,GDPR",,true,PASS,jenkins,,,true
-FARGATE_PRODUCTION_SOC2_GDPR_full-config,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,GDPR",730,true,PASS,jenkins,,,true
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+FARGATE_PRODUCTION_SOC2_GDPR_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,GDPR",,true,PASS,jenkins,,,true,,
+FARGATE_PRODUCTION_SOC2_GDPR_alb-oidc_private-with-nat_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,GDPR",,true,PASS,jenkins,,,true,,
+FARGATE_PRODUCTION_SOC2_GDPR_full-config,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,GDPR",730,true,PASS,jenkins,,,true,,

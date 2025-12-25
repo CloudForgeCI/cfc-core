@@ -103,7 +103,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             });
         }
 
-        // ALB security group - HTTPS primary, HTTP for redirect
+        // ALB security group - HTTPS primary, HTTP for redirect (unless HTTPS strict mode)
         whenBoth(c.vpc, c.albSg, (vpc, albSg) -> {
             // HTTPS allowed from anywhere (primary)
             albSg.addIngressRule(
@@ -113,15 +113,23 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
                 false
             );
 
-            // HTTP allowed from anywhere for redirect to HTTPS
-            // This is required even in production when SSL is enabled
-            // The HTTP listener will redirect all traffic to HTTPS
-            albSg.addIngressRule(
-                Peer.anyIpv4(),
-                Port.tcp(80),
-                "HTTP_for_HTTPS_redirect_(PRODUCTION)",
-                false
-            );
+            // Check if HTTPS strict mode is enabled (no HTTP listener)
+            boolean httpsStrict = c.securityProfileConfig.get()
+                .map(SecurityProfileConfiguration::isHttpsStrictEnabled)
+                .orElse(false);
+
+            if (!httpsStrict) {
+                // HTTP allowed from anywhere for redirect to HTTPS
+                // The HTTP listener will redirect all traffic to HTTPS
+                albSg.addIngressRule(
+                    Peer.anyIpv4(),
+                    Port.tcp(80),
+                    "HTTP_for_HTTPS_redirect_(PRODUCTION)",
+                    false
+                );
+            } else {
+                LOG.info("HTTPS strict mode enabled: Skipping port 80 ingress rule (PRODUCTION)");
+            }
         });
 
         // EFS security group - allow NFS from appropriate security group based on runtime

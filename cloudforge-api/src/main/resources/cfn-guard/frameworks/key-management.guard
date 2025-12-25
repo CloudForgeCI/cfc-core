@@ -11,29 +11,21 @@
 # ============================================================================
 
 # Automatic key rotation for customer-managed keys
+# CloudForge Mapping: KEY_MANAGEMENT control
 rule key_management_kms_rotation when
     resourceType == 'AWS::KMS::Key' {
 
-    Properties.EnableKeyRotation == true
-
-    <<
-        [Key Management] KMS keys must have automatic rotation enabled.
-        CloudForge Mapping: KEY_MANAGEMENT control
-    >>
+    Properties.EnableKeyRotation == true <<[Key Management] KMS keys must have automatic rotation enabled>>
 }
 
 # KMS key deletion window (prevent accidental deletion)
+# CloudForge Mapping: KEY_MANAGEMENT control
 rule key_management_kms_deletion_window when
     resourceType == 'AWS::KMS::Key' {
 
     when Properties.PendingWindowInDays exists {
-        Properties.PendingWindowInDays >= 7
+        Properties.PendingWindowInDays >= 7 <<[Key Management] KMS keys should have deletion window of at least 7 days>>
     }
-
-    <<
-        [Key Management] KMS keys should have deletion window of at least 7 days.
-        CloudForge Mapping: KEY_MANAGEMENT control
-    >>
 }
 
 # ============================================================================
@@ -41,70 +33,50 @@ rule key_management_kms_deletion_window when
 # ============================================================================
 
 # S3 bucket encryption with KMS
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule key_management_s3_kms when
     resourceType == 'AWS::S3::Bucket' {
 
-    Properties.BucketEncryption exists
-    Properties.BucketEncryption.ServerSideEncryptionConfiguration exists
+    Properties.BucketEncryption exists <<[Key Management] S3 buckets must have encryption configured>>
+    Properties.BucketEncryption.ServerSideEncryptionConfiguration exists <<[Key Management] S3 buckets must configure server-side encryption>>
 
     Properties.BucketEncryption.ServerSideEncryptionConfiguration[*] {
-        ServerSideEncryptionByDefault exists
-        ServerSideEncryptionByDefault.SSEAlgorithm in ['AES256', 'aws:kms']
+        ServerSideEncryptionByDefault exists <<[Key Management] S3 encryption must specify default algorithm>>
+        ServerSideEncryptionByDefault.SSEAlgorithm in ['AES256', 'aws:kms'] <<[Key Management] S3 must use AES256 or aws:kms encryption>>
     }
-
-    <<
-        [Key Management] S3 buckets must use encryption at rest.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
 }
 
 # RDS encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule key_management_rds_encryption when
     resourceType == 'AWS::RDS::DBInstance' {
 
-    Properties.StorageEncrypted == true
-
-    <<
-        [Key Management] RDS instances must use encrypted storage.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.StorageEncrypted == true <<[Key Management] RDS instances must use encrypted storage>>
 }
 
 # EBS volume encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule key_management_ebs_encryption when
     resourceType == 'AWS::EC2::Volume' {
 
-    Properties.Encrypted == true
-
-    <<
-        [Key Management] EBS volumes must be encrypted.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.Encrypted == true <<[Key Management] EBS volumes must be encrypted>>
 }
 
 # EFS encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule key_management_efs_encryption when
     resourceType == 'AWS::EFS::FileSystem' {
 
-    Properties.Encrypted == true
-
-    <<
-        [Key Management] EFS file systems must be encrypted.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.Encrypted == true <<[Key Management] EFS file systems must be encrypted>>
 }
 
 # DynamoDB encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule key_management_dynamodb_encryption when
     resourceType == 'AWS::DynamoDB::Table' {
 
-    Properties.SSESpecification exists
-    Properties.SSESpecification.SSEEnabled == true
-
-    <<
-        [Key Management] DynamoDB tables must use encryption at rest.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.SSESpecification exists <<[Key Management] DynamoDB tables must have SSE specification>>
+    Properties.SSESpecification.SSEEnabled == true <<[Key Management] DynamoDB tables must use encryption at rest>>
 }
 
 # ============================================================================
@@ -112,39 +84,30 @@ rule key_management_dynamodb_encryption when
 # ============================================================================
 
 # CloudFront TLS version
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
 rule key_management_cloudfront_tls when
     resourceType == 'AWS::CloudFront::Distribution' {
 
-    Properties.DistributionConfig.ViewerCertificate exists
-    Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion in ['TLSv1.2_2021', 'TLSv1.2_2019', 'TLSv1.2_2018']
-
-    <<
-        [Key Management] CloudFront distributions must use TLS 1.2+.
-        CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-    >>
+    Properties.DistributionConfig.ViewerCertificate exists <<[Key Management] CloudFront must have viewer certificate configured>>
+    Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion in ['TLSv1.2_2021', 'TLSv1.2_2019', 'TLSv1.2_2018'] <<[Key Management] CloudFront distributions must use TLS 1.2+>>
 }
 
 # ALB HTTPS listeners
 # Note: HTTP listeners with redirect actions to HTTPS are allowed (common pattern)
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
 rule key_management_alb_https when
     resourceType == 'AWS::ElasticLoadBalancingV2::Listener' {
 
     # Allow HTTPS/TLS or HTTP with redirect to HTTPS
     when Properties.Protocol == 'HTTP' {
         some Properties.DefaultActions[*] {
-            Type == 'redirect'
-            RedirectConfig.Protocol == 'HTTPS'
+            Type == 'redirect' <<[Key Management] HTTP listeners should redirect to HTTPS>>
         }
     }
 
     when Properties.Protocol in ['HTTPS', 'TLS'] {
-        Properties.Certificates exists
+        Properties.Certificates exists <<[Key Management] HTTPS/TLS listeners must have certificates>>
     }
-
-    <<
-        [Key Management] ALB listeners must use HTTPS/TLS or redirect HTTP to HTTPS.
-        CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-    >>
 }
 
 # ============================================================================
@@ -152,18 +115,14 @@ rule key_management_alb_https when
 # ============================================================================
 
 # Secrets Manager rotation
+# CloudForge Mapping: KEY_MANAGEMENT control
 rule key_management_secrets_rotation when
     resourceType == 'AWS::SecretsManager::Secret' {
 
     when Properties.RotationSchedule exists {
-        Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays exists
-        Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays <= 90
+        Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays exists <<[Key Management] Secrets rotation must specify interval>>
+        Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays <= 90 <<[Key Management] Secrets should rotate within 90 days>>
     }
-
-    <<
-        [Key Management] Secrets Manager secrets should have automatic rotation configured.
-        CloudForge Mapping: KEY_MANAGEMENT control
-    >>
 }
 
 # ============================================================================
@@ -171,13 +130,9 @@ rule key_management_secrets_rotation when
 # ============================================================================
 
 # CloudTrail log encryption with KMS
+# CloudForge Mapping: ENCRYPTION_AT_REST control
 rule key_management_cloudtrail_kms when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    Properties.KMSKeyId exists
-
-    <<
-        [Key Management] CloudTrail logs should be encrypted with KMS.
-        CloudForge Mapping: ENCRYPTION_AT_REST control
-    >>
+    Properties.KMSKeyId exists <<[Key Management] CloudTrail logs should be encrypted with KMS>>
 }

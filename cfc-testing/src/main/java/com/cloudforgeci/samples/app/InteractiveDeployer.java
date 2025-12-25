@@ -40,8 +40,13 @@ import software.amazon.awscdk.Environment;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -77,7 +82,24 @@ import java.util.logging.Logger;
 public class InteractiveDeployer {
 
     private static final Logger LOG = Logger.getLogger(InteractiveDeployer.class.getName());
-    private static final Scanner scanner = new Scanner(System.in);
+    private static final Scanner scanner = createScanner();
+
+    /**
+     * Create a Scanner that reads from /dev/tty on Unix systems.
+     * This bypasses stdin redirection when running as a CDK subprocess.
+     */
+    private static Scanner createScanner() {
+        // Try /dev/tty first (works on macOS/Linux even when stdin is redirected)
+        try {
+            java.io.File tty = new java.io.File("/dev/tty");
+            if (tty.exists()) {
+                return new Scanner(new java.io.FileInputStream(tty));
+            }
+        } catch (Exception e) {
+            // Fall back to System.in
+        }
+        return new Scanner(System.in);
+    }
 
     // Application Registry - Auto-discovered via ServiceLoader (includes built-in + custom plugins)
     private static final Map<String, ApplicationSpec> APPLICATION_REGISTRY = ApplicationLoader.discover();
@@ -118,17 +140,65 @@ public class InteractiveDeployer {
     }
 
     public static void main(String[] args) {
+        // Check if we're being called from our own subprocess or non-interactive CDK command
+        String cfcDeploying = System.getenv("CFC_DEPLOYING");
+
+        // Check parent process for cdk destroy/diff/list commands (skip menu for these)
+        boolean skipMenu = cfcDeploying != null;
+        if (!skipMenu) {
+            try {
+                // Check grandparent since CDK spawns node which spawns java
+                ProcessHandle current = ProcessHandle.current();
+                for (int i = 0; i < 3; i++) {  // Check up to 3 levels
+                    ProcessHandle ancestor = current.parent().orElse(null);
+                    if (ancestor == null) break;
+                    String cmd = ancestor.info().commandLine().orElse("");
+                    if (cmd.contains("cdk destroy") || cmd.contains("cdk diff") || cmd.contains("cdk list")) {
+                        skipMenu = true;
+                        break;
+                    }
+                    current = ancestor;
+                }
+            } catch (Exception e) {
+                // Ignore - can't determine parent process
+            }
+        }
+
+        if (skipMenu) {
+            // We're in a deploy subprocess or cdk destroy - just synthesize quietly without menu
+            try {
+                String contextFile = "deployment-context.json";
+                if (Files.exists(Paths.get(contextFile))) {
+                    DeploymentConfig config = DeploymentConfig.fromFile(contextFile);
+                    // Reconstruct applicationSpec from applicationId
+                    if (config.applicationId != null) {
+                        config.applicationSpec = APPLICATION_REGISTRY.get(config.applicationId);
+                    }
+                    // Pass "1" to force synth-only, false to not save context again
+                    deployInfrastructure(config, "1", false);
+                }
+            } catch (Exception e) {
+                System.err.println("❌ Synthesis failed: " + e.getMessage());
+                System.exit(1);
+            }
+            return;
+        }
+
         printWelcomeBanner();
 
         // Check for command line arguments
         String customStackName = null;
         String deploymentOption = null;
         boolean forceInteractive = false;
+        boolean forceDelete = false;
 
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("--interactive") || args[i].equals("-i")) {
                 forceInteractive = true;
-                System.out.println("🎯 Interactive mode enabled");
+                System.out.println("🎯 Interactive mode enabled via CLI flag");
+            } else if (args[i].equals("--force") || args[i].equals("-f")) {
+                forceDelete = true;
+                System.out.println("🗑️  Force mode enabled - will delete existing context");
             } else if (customStackName == null) {
                 customStackName = args[i];
                 System.out.println("📝 Using custom stack name: " + customStackName);
@@ -138,20 +208,40 @@ public class InteractiveDeployer {
             }
         }
 
+        // Also check INTERACTIVE environment variable
+        // This allows: INTERACTIVE=true cdk synth
+        if (!forceInteractive) {
+            String envInteractive = System.getenv("INTERACTIVE");
+            if (envInteractive != null &&
+                ("true".equalsIgnoreCase(envInteractive) || "1".equals(envInteractive) || "yes".equalsIgnoreCase(envInteractive))) {
+                forceInteractive = true;
+                System.out.println("🎯 Interactive mode enabled via INTERACTIVE env var");
+            }
+        }
+
         try {
             String contextFile = "deployment-context.json";
 
-            if (!forceInteractive && Files.exists(Paths.get(contextFile))) {
-                System.out.println("📁 Found saved deployment context, using it...");
-                System.out.println("   (Use --interactive flag to reconfigure)");
-                loadContextFromFileAndDeploy(contextFile, deploymentOption, customStackName);
-            } else {
-                if (forceInteractive && Files.exists(Paths.get(contextFile))) {
-                    System.out.println("🔄 Ignoring saved context, starting fresh configuration...");
-                }
+            // --force: delete existing context and start fresh
+            if (forceDelete && Files.exists(Paths.get(contextFile))) {
+                System.out.println("🗑️  Deleting existing deployment context...");
+                Files.delete(Paths.get(contextFile));
+                System.out.println("✅ Context deleted. Starting fresh configuration...\n");
+            }
 
-                System.out.println("📝 No saved configuration found, starting interactive setup...");
-                System.out.println("");
+            if (Files.exists(Paths.get(contextFile))) {
+                // Context exists - load it and go directly to deployment options
+                if (forceInteractive) {
+                    System.out.println("🔄 Ignoring saved context, starting fresh configuration...\n");
+                    DeploymentConfig config = collectConfiguration(customStackName);
+                    deployInfrastructure(config, deploymentOption);
+                } else {
+                    System.out.println("📁 Found saved deployment context: " + contextFile);
+                    loadContextFromFileAndDeploy(contextFile, deploymentOption, customStackName);
+                }
+            } else {
+                // No context exists - run interactive prompts
+                System.out.println("📝 No saved configuration found, starting interactive setup...\n");
                 DeploymentConfig config = collectConfiguration(customStackName);
                 deployInfrastructure(config, deploymentOption);
             }
@@ -160,6 +250,44 @@ public class InteractiveDeployer {
             e.printStackTrace();
             System.exit(1);
         }
+    }
+
+    /**
+     * Show action menu when existing context is found.
+     * Returns the deployment option (1-7) or null if user wants to reconfigure.
+     */
+    private static String showActionMenu() {
+        System.out.println("\n📋 What would you like to do?");
+        System.out.println("==============================");
+        System.out.println("1. Synthesize only");
+        System.out.println("2. Deploy");
+        System.out.println("3. Redeploy (delete + deploy)");
+        System.out.println("4. Dry-run (changeset)");
+        System.out.println("5. Export Template (YAML/JSON)");
+        System.out.println("6. Reconfigure (start fresh interactive setup)");
+        System.out.println("7. Cancel");
+        System.out.print("\nChoose option [1-7]: ");
+
+        try {
+            if (scanner.hasNextLine()) {
+                String choice = scanner.nextLine().trim();
+                switch (choice) {
+                    case "1", "2", "3", "4", "5":
+                        return choice;
+                    case "6":
+                        return null; // Signal to reconfigure
+                    case "7":
+                        System.out.println("❌ Cancelled by user");
+                        System.exit(0);
+                    default:
+                        System.out.println("Invalid choice. Defaulting to synthesis only.");
+                        return "1";
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Input error: " + e.getMessage());
+        }
+        return "1";
     }
 
     private static void printWelcomeBanner() {
@@ -900,7 +1028,18 @@ public class InteractiveDeployer {
         } else if (field.allowedValues().length > 0) {
             // Enum-like field → Choice prompt
             String defaultStr = defaultValue != null ? defaultValue.toString() : field.allowedValues()[0];
-            value = promptChoice(field.displayName(), field.allowedValues(), defaultStr);
+            String choiceStr = promptChoice(field.displayName(), field.allowedValues(), defaultStr);
+
+            // Convert to appropriate type based on field type
+            if (field.type() == int.class || field.type() == Integer.class) {
+                value = Integer.parseInt(choiceStr);
+            } else if (field.type() == long.class || field.type() == Long.class) {
+                value = Long.parseLong(choiceStr);
+            } else if (field.type() == double.class || field.type() == Double.class) {
+                value = Double.parseDouble(choiceStr);
+            } else {
+                value = choiceStr;
+            }
         } else if (field.type() == int.class || field.type() == Integer.class) {
             // Integer field → Numeric validation
             int defaultInt = defaultValue instanceof Number ? ((Number) defaultValue).intValue() : 0;
@@ -974,17 +1113,6 @@ public class InteractiveDeployer {
     private static void configureAdvancedSettings(DeploymentConfig config) {
         System.out.println("\n⚙️  Advanced Configuration:");
         System.out.println("==========================");
-
-        // Health Check Configuration - Use introspection to discover and prompt all fields
-        System.out.println("\n🏥 Health Check Configuration:");
-
-        List<ConfigFieldInfo> healthCheckFields = ConfigurationIntrospector.discoverVisibleFields(
-            config.applicationSpec, config, "resources"
-        );
-
-        for (ConfigFieldInfo field : healthCheckFields) {
-            promptForField(field, config);
-        }
 
         // Optional Ports Configuration - Only show if application has optional ports
         configureOptionalPorts(config);
@@ -1286,7 +1414,8 @@ public class InteractiveDeployer {
         }
 
         // OIDC/SAML Authentication
-        if (config.applicationSpec != null && config.applicationSpec.supportsOidcIntegration() && !config.oidcProvider.equals("none")) {
+        if (config.applicationSpec != null && config.applicationSpec.supportsOidcIntegration() &&
+            config.oidcProvider != null && !config.oidcProvider.equals("none")) {
             System.out.println("🔐 Authentication");
             System.out.println("═══════════════════════════════════════════════════════════════");
             System.out.println("  Provider:           " + config.oidcProvider);
@@ -1422,27 +1551,33 @@ public class InteractiveDeployer {
 
         System.out.println("\n🚀 Deployment Options:");
         System.out.println("========================");
-        System.out.println("1. Synthesize only (generate CloudFormation template)");
-        System.out.println("2. Deploy to AWS (synthesize + deploy)");
-        System.out.println("3. Delete existing stack and redeploy");
-        System.out.println("4. Dry-run deployment (create changeset without executing)");
-        System.out.println("5. Cancel");
+        System.out.println("1. Synthesize only");
+        System.out.println("2. Deploy");
+        System.out.println("3. Redeploy (delete + deploy)");
+        System.out.println("4. Dry-run (changeset)");
+        System.out.println("5. Export Template (YAML/JSON)");
+        System.out.println("6. Reconfigure (start fresh interactive setup)");
+        System.out.println("7. Cancel");
 
         String choice;
         if (deploymentOption != null && !deploymentOption.trim().isEmpty()) {
             choice = deploymentOption.trim();
             System.out.println("Using deployment option from command line: " + choice);
         } else {
-            System.out.print("Choose option [1-5]: ");
+            // Read from terminal
             try {
-                if (scanner.hasNextLine()) {
-                    choice = scanner.nextLine().trim();
-                } else {
-                    System.out.println("No input available, defaulting to synthesis only");
+                java.io.BufferedReader ttyReader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(new java.io.FileInputStream("/dev/tty")));
+                System.out.print("Choose option [1-7]: ");
+                System.out.flush();
+                choice = ttyReader.readLine();
+                if (choice == null || choice.trim().isEmpty()) {
                     choice = "1";
+                } else {
+                    choice = choice.trim();
                 }
             } catch (Exception e) {
-                System.out.println("Input error, defaulting to synthesis only: " + e.getMessage());
+                System.out.println("\nInput error, defaulting to synthesis only: " + e.getMessage());
                 choice = "1";
             }
         }
@@ -1463,6 +1598,15 @@ public class InteractiveDeployer {
                 System.out.println("\n🔍 Starting Dry-Run Deployment...");
                 break;
             case "5":
+                System.out.println("\n📄 Exporting CloudFormation Template...");
+                break;
+            case "6":
+                // Reconfigure - start fresh interactive setup
+                System.out.println("\n🔄 Starting fresh configuration...\n");
+                DeploymentConfig newConfig = collectConfiguration(null);
+                deployInfrastructure(newConfig, null);
+                return;
+            case "7":
                 System.out.println("❌ Deployment cancelled by user");
                 return;
             default:
@@ -1567,84 +1711,160 @@ public class InteractiveDeployer {
             ? config.complianceMode
             : ComplianceMode.defaultForProfile(config.securityProfile);
 
+        // Synthesize the stack
+        System.out.println("\n✅ CDK Stack synthesized successfully!");
+        app.synth();
+
+        // Run cfn-guard validation if enforce mode is enabled
+        if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty()) {
+            boolean guardPassed = runCfnGuardValidation(config);
+            if (!guardPassed) {
+                System.out.println("\n❌ cfn-guard validation FAILED!");
+                System.out.println("   Fix the violations or switch to ADVISORY mode to proceed.");
+                return;
+            }
+        }
+
+        // Execute deployment based on choice
         switch (choice) {
-            case "2", "3" -> {
-                System.out.println("\n✅ CDK Stack synthesized successfully!");
-                app.synth();
-
-                // Run cfn-guard validation if enforce mode is enabled
-                if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty()) {
-                    boolean guardPassed = runCfnGuardValidation(config);
-                    if (!guardPassed) {
-                        System.out.println("\n❌ cfn-guard validation FAILED!");
-                        System.out.println("   Deployment blocked due to compliance violations.");
-                        System.out.println("   Fix the violations or switch to ADVISORY mode to proceed.");
-                        return;
-                    }
-                }
-
-                System.out.println("🚀 Starting CDK deployment to AWS...");
-                try {
-                    System.out.println("⏳ Deploying stack '" + config.stackName + "' to AWS...");
-                    ProcessBuilder deployProcess = new ProcessBuilder("cdk", "deploy", "--require-approval", "never");
-                    deployProcess.inheritIO();
-                    Process deployProc = deployProcess.start();
-                    int deployExitCode = deployProc.waitFor();
-
-                    if (deployExitCode == 0) {
-                        System.out.println("✅ Stack '" + config.stackName + "' deployed successfully!");
-                    } else {
-                        System.out.println("❌ CDK deployment failed with exit code: " + deployExitCode);
-                    }
-                } catch (Exception e) {
-                    System.out.println("❌ Error during CDK deployment: " + e.getMessage());
-                }
+            case "2" -> {
+                runCdkDeploy();
+            }
+            case "3" -> {
+                System.out.println("\n🗑️  Deleting existing stack...");
+                runCdkDestroy(config.stackName);
+                System.out.println("\n🚀 Starting CDK deployment...");
+                runCdkDeploy("--require-approval", "never");
             }
             case "4" -> {
-                System.out.println("\n✅ CDK Stack synthesized successfully!");
-                app.synth();
-
-                // Run cfn-guard validation if enforce mode is enabled
-                if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty()) {
-                    boolean guardPassed = runCfnGuardValidation(config);
-                    if (!guardPassed) {
-                        System.out.println("\n❌ cfn-guard validation FAILED!");
-                        System.out.println("   Changeset creation blocked due to compliance violations.");
-                        return;
-                    }
-                }
-
-                System.out.println("🔍 Creating changeset for dry-run...");
-                try {
-                    ProcessBuilder deployProcess = new ProcessBuilder("cdk", "deploy", "--no-execute", "--require-approval", "never");
-                    deployProcess.inheritIO();
-                    Process deployProc = deployProcess.start();
-                    int deployExitCode = deployProc.waitFor();
-
-                    if (deployExitCode == 0) {
-                        System.out.println("✅ Changeset created successfully!");
-                    }
-                } catch (Exception e) {
-                    System.out.println("❌ Error during changeset creation: " + e.getMessage());
-                }
+                System.out.println("\n📋 Synthesis complete. To create changeset (dry-run), run:");
+                System.out.println("   cdk deploy --no-execute --require-approval never");
+            }
+            case "5" -> {
+                exportTemplate(config.stackName);
             }
             default -> {
-                System.out.println("\n✅ CDK Stack synthesized successfully!");
-                app.synth();
-
-                // Run cfn-guard validation if enforce mode is enabled
-                if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty()) {
-                    runCfnGuardValidation(config);
-                }
-
-                System.out.println("Run 'cdk deploy' to deploy to AWS");
+                System.out.println("\n📋 Synthesis complete. To deploy, run:");
+                System.out.println("   cdk deploy");
             }
+        }
+    }
+
+    private static void exportTemplate(String stackName) {
+        try {
+            // Read the synthesized JSON template from cdk.out
+            java.nio.file.Path templatePath = java.nio.file.Paths.get("cdk.out", stackName + ".template.json");
+            if (!java.nio.file.Files.exists(templatePath)) {
+                System.out.println("❌ Template not found: " + templatePath);
+                return;
+            }
+
+            String jsonContent = java.nio.file.Files.readString(templatePath);
+
+            // Ask user for format
+            System.out.println("\nExport format:");
+            System.out.println("  1. JSON");
+            System.out.println("  2. YAML");
+            System.out.print("Choose format [1-2]: ");
+            System.out.flush();
+
+            String formatChoice = "1";
+            try {
+                java.io.BufferedReader ttyReader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(new java.io.FileInputStream("/dev/tty")));
+                String input = ttyReader.readLine();
+                if (input != null && !input.trim().isEmpty()) {
+                    formatChoice = input.trim();
+                }
+            } catch (Exception e) {
+                // Default to JSON
+            }
+
+            String extension = formatChoice.equals("2") ? ".yaml" : ".json";
+            String outputFileName = stackName + "-template" + extension;
+
+            if (formatChoice.equals("2")) {
+                // Convert JSON to YAML using Jackson
+                com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                Object jsonObj = jsonMapper.readValue(jsonContent, Object.class);
+
+                com.fasterxml.jackson.dataformat.yaml.YAMLFactory yamlFactory = new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()
+                    .disable(com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.WRITE_DOC_START_MARKER);
+                com.fasterxml.jackson.databind.ObjectMapper yamlMapper = new com.fasterxml.jackson.databind.ObjectMapper(yamlFactory);
+                yamlMapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+
+                String yamlContent = yamlMapper.writeValueAsString(jsonObj);
+                java.nio.file.Files.writeString(java.nio.file.Paths.get(outputFileName), yamlContent);
+            } else {
+                // Pretty print JSON
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+                Object jsonObj = mapper.readValue(jsonContent, Object.class);
+                String prettyJson = mapper.writeValueAsString(jsonObj);
+                java.nio.file.Files.writeString(java.nio.file.Paths.get(outputFileName), prettyJson);
+            }
+
+            System.out.println("✅ Template exported to: " + outputFileName);
+
+        } catch (Exception e) {
+            System.out.println("❌ Error exporting template: " + e.getMessage());
+        }
+    }
+
+    private static void runCdkDeploy(String... extraArgs) {
+        try {
+            java.util.List<String> cmd = new java.util.ArrayList<>();
+            cmd.add("cdk");
+            cmd.add("deploy");
+            cmd.add("--output");
+            cmd.add("cdk.out.deploy");
+            for (String arg : extraArgs) {
+                cmd.add(arg);
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.inheritIO();
+            pb.environment().put("CFC_DEPLOYING", "true");
+            Process proc = pb.start();
+            int exitCode = proc.waitFor();
+
+            if (exitCode == 0) {
+                System.out.println("\n✅ Deployment completed successfully!");
+            } else {
+                System.out.println("\n❌ Deployment failed with exit code: " + exitCode);
+            }
+        } catch (Exception e) {
+            System.out.println("\n❌ Error during deployment: " + e.getMessage());
+        }
+    }
+
+    private static void runCdkDestroy(String stackName) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("cdk", "destroy", "--force", stackName);
+            pb.inheritIO();
+            pb.environment().put("CFC_DEPLOYING", "true");
+            Process proc = pb.start();
+            int exitCode = proc.waitFor();
+
+            if (exitCode != 0) {
+                System.out.println("⚠️  Stack deletion returned exit code: " + exitCode);
+            }
+        } catch (Exception e) {
+            System.out.println("❌ Error during stack deletion: " + e.getMessage());
         }
     }
 
     /**
      * Run cfn-guard validation on synthesized CloudFormation templates.
      * Returns true if validation passes, false if it fails.
+     *
+     * <p>Validation runs in two phases:</p>
+     * <ol>
+     *   <li><b>Cross-framework rules</b> - Security best practices that apply to ALL deployments
+     *       (IAM, compute, Lambda, CDN/API, ELB, database, messaging, monitoring, etc.)</li>
+     *   <li><b>Framework-specific rules</b> - Rules specific to selected compliance frameworks
+     *       (SOC2, PCI-DSS, HIPAA, GDPR, ISO 27001)</li>
+     * </ol>
      */
     private static boolean runCfnGuardValidation(DeploymentConfig config) {
         System.out.println("\n🛡️  Running cfn-guard validation (Layer 3)...");
@@ -1659,41 +1879,65 @@ public class InteractiveDeployer {
                 return true;
             }
 
-            // Iterate over selected frameworks
             boolean allPassed = true;
 
-            for (ComplianceFrameworkType framework : config.complianceFrameworks) {
-                // Map framework to guard rule file
-                String guardFile = switch (framework) {
-                    case SOC2 -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard";
-                    case PCI_DSS -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard";
-                    case HIPAA -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/hipaa-security-rule.guard";
-                    case GDPR -> "cloudforge-api/src/main/resources/cfn-guard/frameworks/gdpr-data-protection.guard";
-                };
+            // ================================================================
+            // Phase 1: Cross-framework security rules (always applied)
+            // Guard files are loaded from classpath (cloudforge-api resources)
+            // ================================================================
+            String[] crossFrameworkRules = {
+                "iam-security.guard",           // IAM policy least privilege, trust policies
+                "compute-security.guard",       // EC2, EKS, VPC subnet security
+                "lambda-security.guard",        // Lambda runtime, VPC, code signing
+                "cdn-api-security.guard",       // CloudFront, API Gateway, WAF
+                "elb-security.guard",           // ALB/NLB, Classic ELB security
+                "database-security.guard",      // RDS, DynamoDB, Redshift, DAX, ElastiCache
+                "messaging-security.guard",     // SQS, SNS, Secrets Manager, Kinesis
+                "key-management.guard",         // KMS, encryption at rest/transit
+                "advanced-monitoring.guard",    // CloudWatch, CloudTrail, VPC Flow Logs
+                "threat-protection.guard",      // GuardDuty, WAF, security groups
+                "incident-response.guard",      // Forensics, backup, evidence preservation
+                "iso-27001-controls.guard"      // ISO 27001 Annex A controls
+            };
 
-                if (!Files.exists(Paths.get(guardFile))) {
-                    System.out.println("⚠️  No guard rules found for framework: " + framework.getJsonValue());
-                    continue;
+            System.out.println("\n   Phase 1: Cross-framework security rules...");
+            for (String ruleFile : crossFrameworkRules) {
+                String guardFile = resolveGuardFile(ruleFile);
+                if (guardFile == null) {
+                    continue; // Skip missing rule files silently
                 }
 
-                System.out.println("\n   Validating against " + framework.getMatrixKey() + "...");
-
-                // Run cfn-guard validate
-                ProcessBuilder guardProcess = new ProcessBuilder(
-                    "cfn-guard", "validate",
-                    "--rules", guardFile,
-                    "--data", templatePath,
-                    "--show-summary", "fail"
-                );
-                guardProcess.inheritIO();
-                Process guardProc = guardProcess.start();
-                int exitCode = guardProc.waitFor();
-
-                if (exitCode != 0) {
-                    System.out.println("   ❌ " + framework.getMatrixKey() + " validation FAILED");
+                boolean passed = runGuardValidation(guardFile, templatePath, ruleFile.replace(".guard", ""));
+                if (!passed) {
                     allPassed = false;
-                } else {
-                    System.out.println("   ✅ " + framework.getMatrixKey() + " validation PASSED");
+                }
+            }
+
+            // ================================================================
+            // Phase 2: Framework-specific rules (based on selected frameworks)
+            // ================================================================
+            if (!config.complianceFrameworks.isEmpty()) {
+                System.out.println("\n   Phase 2: Framework-specific rules...");
+
+                for (ComplianceFrameworkType framework : config.complianceFrameworks) {
+                    // Map framework to guard rule file name
+                    String ruleFileName = switch (framework) {
+                        case SOC2 -> "soc2-trust-services.guard";
+                        case PCI_DSS -> "pci-dss-v4.0.1.guard";
+                        case HIPAA -> "hipaa-security-rule.guard";
+                        case GDPR -> "gdpr-data-protection.guard";
+                    };
+
+                    String guardFile = resolveGuardFile(ruleFileName);
+                    if (guardFile == null) {
+                        System.out.println("   ⚠️  No guard rules found for: " + framework.getJsonValue());
+                        continue;
+                    }
+
+                    boolean passed = runGuardValidation(guardFile, templatePath, framework.getMatrixKey());
+                    if (!passed) {
+                        allPassed = false;
+                    }
                 }
             }
 
@@ -1703,6 +1947,79 @@ public class InteractiveDeployer {
             System.out.println("⚠️  cfn-guard validation error: " + e.getMessage());
             System.out.println("   Proceeding without cfn-guard validation");
             return true; // Don't block on cfn-guard errors
+        }
+    }
+
+    /**
+     * Run cfn-guard validate for a single rule file.
+     * Returns true if validation passes, false if it fails.
+     */
+    private static boolean runGuardValidation(String guardFile, String templatePath, String ruleName) {
+        try {
+            ProcessBuilder guardProcess = new ProcessBuilder(
+                "cfn-guard", "validate",
+                "--rules", guardFile,
+                "--data", templatePath,
+                "--show-summary", "fail"
+            );
+            guardProcess.inheritIO();
+            Process guardProc = guardProcess.start();
+            int exitCode = guardProc.waitFor();
+
+            if (exitCode != 0) {
+                System.out.println("   ❌ " + ruleName + " validation FAILED");
+                return false;
+            } else {
+                System.out.println("   ✅ " + ruleName + " validation PASSED");
+                return true;
+            }
+        } catch (Exception e) {
+            System.out.println("   ⚠️  " + ruleName + " validation error: " + e.getMessage());
+            return true; // Don't block on individual rule errors
+        }
+    }
+
+    /**
+     * Resolve a guard rule file from the classpath (cloudforge-api resources).
+     *
+     * <p>Guard files are packaged as resources in cloudforge-api at /cfn-guard/frameworks/.
+     * This method finds them via the classpath and returns a filesystem path for cfn-guard CLI.</p>
+     *
+     * @param ruleFileName The guard rule file name (e.g., "soc2-trust-services.guard")
+     * @return The filesystem path to the guard file, or null if not found
+     */
+    private static String resolveGuardFile(String ruleFileName) {
+        String resourcePath = "/cfn-guard/frameworks/" + ruleFileName;
+
+        try {
+            // Try to find resource on classpath (from cloudforge-api dependency)
+            URL resourceUrl = InteractiveDeployer.class.getResource(resourcePath);
+            if (resourceUrl == null) {
+                return null;
+            }
+
+            // If it's a file:// URL (IDE/exploded classes), use the path directly
+            if ("file".equals(resourceUrl.getProtocol())) {
+                return Paths.get(resourceUrl.toURI()).toString();
+            }
+
+            // If it's a jar:// URL, extract to temp file for cfn-guard CLI
+            if ("jar".equals(resourceUrl.getProtocol())) {
+                Path tempFile = Files.createTempFile("cfn-guard-", "-" + ruleFileName);
+                tempFile.toFile().deleteOnExit();
+
+                try (InputStream is = InteractiveDeployer.class.getResourceAsStream(resourcePath)) {
+                    if (is != null) {
+                        Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
+                        return tempFile.toString();
+                    }
+                }
+            }
+
+            return null;
+        } catch (IOException | URISyntaxException e) {
+            LOG.warning("Failed to resolve guard file: " + ruleFileName + " - " + e.getMessage());
+            return null;
         }
     }
 
@@ -1751,30 +2068,13 @@ public class InteractiveDeployer {
 
     private static void saveContextToFile(Map<String, Object> context, String stackName) {
         try {
+            // Use Jackson for proper JSON serialization (handles nested objects, arrays, etc.)
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+
+            // Save flat structure (same format as deployment-contexts/*.json)
             FileWriter writer = new FileWriter("deployment-context.json");
-            writer.write("{\n");
-            writer.write("  \"stackName\": \"" + stackName + "\",\n");
-            writer.write("  \"context\": {\n");
-            boolean first = true;
-            for (Map.Entry<String, Object> entry : context.entrySet()) {
-                if (!first) writer.write(",\n");
-
-                Object value = entry.getValue();
-                String formattedValue;
-
-                if (value instanceof Boolean) {
-                    formattedValue = value.toString();
-                } else if (value instanceof Number) {
-                    formattedValue = value.toString();
-                } else {
-                    formattedValue = "\"" + value + "\"";
-                }
-
-                writer.write("    \"" + entry.getKey() + "\": " + formattedValue);
-                first = false;
-            }
-            writer.write("\n  }\n");
-            writer.write("}\n");
+            mapper.writeValue(writer, context);
             writer.close();
 
             // Debug: Print what was saved for key fields

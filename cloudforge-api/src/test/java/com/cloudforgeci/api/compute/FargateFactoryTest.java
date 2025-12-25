@@ -293,4 +293,41 @@ class FargateFactoryTest {
 
         assertTrue(integerFields >= 1, "Should have at least 1 Integer field for capacity/resource config");
     }
+
+    // ========== Security Hardening Tests ==========
+
+    @Test
+    void testFargateFactoryHasNetworkModeField() {
+        // When: Getting declared fields
+        var fields = FargateFactory.class.getDeclaredFields();
+
+        // Then: Should have NetworkMode field for egress restriction logic
+        long networkModeFields = java.util.Arrays.stream(fields)
+            .filter(f -> f.getType().getName().contains("NetworkMode"))
+            .count();
+
+        assertTrue(networkModeFields >= 1, "Should have NetworkMode field for egress restriction");
+    }
+
+    @Test
+    void testFargateFactoryUsesSecurityProfileConfiguration() {
+        // FargateFactory should use SecurityProfileConfiguration via inherited 'config' field from BaseFactory
+        Class<?> factoryClass = FargateFactory.class;
+        Class<?> superclass = factoryClass.getSuperclass();
+
+        // Then: BaseFactory should have config field
+        boolean hasConfigInBase = java.util.Arrays.stream(superclass.getDeclaredFields())
+            .anyMatch(f -> f.getName().equals("config"));
+
+        assertTrue(hasConfigInBase, "BaseFactory should have config field for SecurityProfileConfiguration");
+    }
+
+    @Test
+    void testFargateFactoryCreateMethodIsOverrideable() throws NoSuchMethodException {
+        // When: Getting create method
+        var method = FargateFactory.class.getDeclaredMethod("create");
+
+        // Then: Should not be final (allowing subclass override if needed)
+        assertFalse(java.lang.reflect.Modifier.isFinal(method.getModifiers()));
+    }
 }

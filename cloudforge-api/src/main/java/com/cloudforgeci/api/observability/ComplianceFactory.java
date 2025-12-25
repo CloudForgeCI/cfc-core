@@ -449,10 +449,13 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("CloudTrail bucket ARN will be tracked in SSM Parameter Store for reuse");
 
-        // HIPAA and PCI-DSS require KMS encryption for CloudTrail in PRODUCTION
+        // Enable KMS encryption for CloudTrail when:
+        // 1. HIPAA or PCI-DSS compliance in PRODUCTION (mandatory)
+        // 2. cloudWatchLogsKmsEncryptionEnabled is explicitly set to true (optional hardening)
         boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
         boolean isPciDss = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("PCI-DSS");
-        boolean useKms = security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss);
+        boolean useKms = (security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss))
+                || config.isCloudWatchLogsKmsEncryptionEnabled();
 
         // Create KMS-encrypted CloudWatch Log Group for CloudTrail (PCI-DSS Req 3.4)
         Key cloudTrailLogsKmsKey = null;
@@ -524,6 +527,22 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("CloudTrail removal policy: DESTROY (logs retained in S3 bucket)");
         LOG.info("CloudTrail name: " + trailName + " (stack-scoped to avoid conflicts)");
 
+        // Register AWS Config rules for CloudTrail compliance
+        ctx.requireConfigRule(AwsConfigRule.CLOUDTRAIL_ENABLED);
+        ctx.requireConfigRule(AwsConfigRule.CLOUDTRAIL_LOG_FILE_VALIDATION);
+        ctx.requireConfigRule(AwsConfigRule.MULTI_REGION_CLOUDTRAIL);
+
+        // Register KMS encryption Config rules when enabled
+        if (useKms) {
+            ctx.requireConfigRule(AwsConfigRule.CLOUDTRAIL_ENCRYPTION_ENABLED);
+            ctx.requireConfigRule(AwsConfigRule.CLOUDWATCH_LOG_GROUP_ENCRYPTED);
+        }
+
+        // Configure CloudTrail Insights when required by compliance frameworks (SOC2, NIST)
+        if (config.isCloudTrailInsightsEnabled()) {
+            configureCloudTrailInsights(trail);
+        }
+
         // Store CloudTrail ARN in SSM for future reference (stack-specific)
         AwsCustomResource cloudTrailSsmWriter = storeResourceArnInSSM("CloudTrailArn",
                 "/cloudforge/" + this.stackName + "/" + this.region + "/cloudtrail/arn",
@@ -577,6 +596,36 @@ public class ComplianceFactory extends BaseFactory {
         ));
 
         LOG.info("CloudTrail S3 data event logging configured for ALL S3 buckets using Advanced Event Selectors (SOC2/PCI-DSS/HIPAA compliance)");
+    }
+
+    /**
+     * Configure CloudTrail Insights for anomaly detection in API activity.
+     * This enables both API call rate and API error rate insights.
+     *
+     * <p>CloudTrail Insights identifies unusual operational activity, such as:
+     * <ul>
+     *   <li>Spikes in API call volume</li>
+     *   <li>Increases in error rates</li>
+     *   <li>Unusual patterns that may indicate security incidents</li>
+     * </ul>
+     *
+     * <p>Required for SOC2 CC7.2 (anomaly detection) and NIST SI-4 (system monitoring).
+     *
+     * @param trail The CloudTrail trail to configure Insights on
+     */
+    private void configureCloudTrailInsights(Trail trail) {
+        LOG.info("Enabling CloudTrail Insights for anomaly detection (SOC2/NIST compliance)");
+
+        // Get the underlying CfnTrail resource to configure Insights
+        CfnTrail cfnTrail = (CfnTrail) trail.getNode().getDefaultChild();
+
+        // Enable both API call rate and API error rate Insights
+        cfnTrail.addPropertyOverride("InsightSelectors", List.of(
+            Map.of("InsightType", "ApiCallRateInsight"),
+            Map.of("InsightType", "ApiErrorRateInsight")
+        ));
+
+        LOG.info("CloudTrail Insights enabled: ApiCallRateInsight, ApiErrorRateInsight");
     }
 
     /**
@@ -699,13 +748,16 @@ public class ComplianceFactory extends BaseFactory {
             LOG.info("    SSM Document: " + templateName);
 
             // Create Conformance Pack using SSM document reference
+            // Note: We use addPropertyOverride for TemplateSSMDocumentDetails because CDK 2.196.0
+            // has a bug where the Java bindings generate incorrect property casing (documentName
+            // instead of DocumentName). CloudFormation requires PascalCase for this property.
             CfnConformancePack conformancePack = CfnConformancePack.Builder.create(this, "ConformancePack" + normalizedFramework)
                     .conformancePackName(conformancePackName)
                     .deliveryS3Bucket("") // Empty string uses default Config bucket
-                    .templateSsmDocumentDetails(CfnConformancePack.TemplateSSMDocumentDetailsProperty.builder()
-                            .documentName(templateName)
-                            .build())
                     .build();
+
+            // Workaround for CDK 2.196.0 property casing bug - use L1 override to set correct casing
+            conformancePack.addPropertyOverride("TemplateSSMDocumentDetails.DocumentName", templateName);
 
             // Delete conformance packs on stack deletion - they can be recreated when needed
             conformancePack.applyRemovalPolicy(RemovalPolicy.DESTROY);
@@ -1364,30 +1416,15 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("  Remediation will fix bucket policy if CloudTrail cannot write logs");
 
         // Create IAM role for SSM Automation with CloudTrail and S3 permissions
-        // IMPORTANT: Permissions are scoped to specific resources following least privilege principle
+        // IMPORTANT: Permissions are scoped to EXACT resources (no wildcards) following least privilege
 
-        // Get account ID for scoped IAM permissions
-        String accountId = software.amazon.awscdk.Stack.of(this).getAccount();
-
-        // Build CloudTrail ARN pattern for this region (supports multiple trails with cloudforge prefix)
-        String cloudTrailArnPattern = String.format(
-            "arn:aws:cloudtrail:%s:%s:trail/cloudforge-cloudtrail-*",
-            this.region != null ? this.region : "*",
-            accountId
-        );
-
-        // Build S3 bucket ARN pattern for CloudTrail buckets only
-        String s3BucketArnPattern = String.format(
-            "arn:aws:s3:::cloudforge-cloudtrail-*-%s",
-            this.region != null ? this.region : "*"
-        );
+        // Use exact ARNs for the specific CloudTrail and bucket in this deployment
+        String exactTrailArn = this.trail.getTrailArn();
+        String exactBucketArn = this.trailBucket.getBucketArn();
 
         Role ssmAutomationRole = Role.Builder.create(this, "CloudTrailBucketAccessRemediationRole")
                 .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
-                .description("Role for automated CloudTrail S3 bucket access remediation - scoped to CloudForge resources")
-                .managedPolicies(List.of(
-                    ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
-                ))
+                .description("Role for automated CloudTrail S3 bucket access remediation - scoped to exact resources")
                 .inlinePolicies(Map.of(
                     "CloudTrailBucketAccessPermissions",
                     software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
@@ -1401,8 +1438,8 @@ public class ComplianceFactory extends BaseFactory {
                                     "s3:GetBucketAcl",
                                     "s3:PutBucketAcl"
                                 ))
-                                // Scoped to CloudForge CloudTrail buckets only (not wildcard)
-                                .resources(List.of(s3BucketArnPattern))
+                                // Scoped to exact CloudTrail bucket ARN (no wildcards)
+                                .resources(List.of(exactBucketArn))
                                 .build(),
                             PolicyStatement.Builder.create()
                                 .sid("CloudTrailReadAccess")
@@ -1412,8 +1449,8 @@ public class ComplianceFactory extends BaseFactory {
                                     "cloudtrail:DescribeTrails",
                                     "cloudtrail:GetEventSelectors"
                                 ))
-                                // Scoped to CloudForge trails only (not wildcard)
-                                .resources(List.of(cloudTrailArnPattern))
+                                // Scoped to exact CloudTrail ARN (no wildcards)
+                                .resources(List.of(exactTrailArn))
                                 .build()
                         ))
                         .build()
@@ -3358,14 +3395,38 @@ public class ComplianceFactory extends BaseFactory {
                 .build());
 
         // Add S3 permissions to read CloudTrail logs for evidence
+        // Scoped to CloudTrail and AuditManager buckets only (HIPAA/PCI-DSS least privilege)
+        List<String> s3BucketArns = new ArrayList<>();
+        List<String> s3ObjectArns = new ArrayList<>();
+
+        // Add CloudTrail bucket if available
+        if (this.trailBucket != null) {
+            s3BucketArns.add(this.trailBucket.getBucketArn());
+            s3ObjectArns.add(this.trailBucket.arnForObjects("*"));
+        }
+
+        // Add AuditManager report bucket
+        s3BucketArns.add(assessmentReportBucket.getBucketArn());
+        s3ObjectArns.add(assessmentReportBucket.arnForObjects("*"));
+
         auditManagerRole.addToPolicy(PolicyStatement.Builder.create()
                 .sid("S3ReadCloudTrail")
                 .effect(Effect.ALLOW)
                 .actions(List.of(
                         "s3:GetObject",
-                        "s3:ListBucket"
+                        "s3:GetObjectVersion"
                 ))
-                .resources(List.of("*"))
+                .resources(s3ObjectArns)
+                .build());
+
+        auditManagerRole.addToPolicy(PolicyStatement.Builder.create()
+                .sid("S3ListBuckets")
+                .effect(Effect.ALLOW)
+                .actions(List.of(
+                        "s3:ListBucket",
+                        "s3:ListBucketVersions"
+                ))
+                .resources(s3BucketArns)
                 .build());
 
         // Add IAM read permissions for IAM policy evidence
@@ -4210,24 +4271,36 @@ public class ComplianceFactory extends BaseFactory {
         boolean shouldRetain = security == SecurityProfile.PRODUCTION;
         boolean shouldAutoDelete = !shouldRetain;
 
-        // HIPAA and PCI-DSS require KMS encryption for compliance buckets in PRODUCTION
+        // Enable KMS encryption for compliance buckets when:
+        // 1. HIPAA or PCI-DSS compliance in PRODUCTION (mandatory)
+        // 2. cloudWatchLogsKmsEncryptionEnabled is explicitly set to true (optional hardening)
         boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
         boolean isPciDss = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("PCI-DSS");
-        boolean useKms = security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss);
+        boolean useKms = (security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss))
+                || config.isCloudWatchLogsKmsEncryptionEnabled();
+
+        // Enable Object Lock for compliance audit buckets when required by compliance matrix
+        // HIPAA § 164.312(c)(1) - Data integrity controls
+        // PCI-DSS Req 10.7 - Protect audit trail files
+        boolean enableObjectLock = config.isS3ObjectLockEnabled();
 
         LOG.info("Bucket " + id + " encryption decision:");
         LOG.info("  complianceFrameworks = " + complianceFrameworks);
         LOG.info("  security = " + security);
         LOG.info("  isHipaa = " + isHipaa + ", isPciDss = " + isPciDss);
+        LOG.info("  cloudWatchLogsKmsEncryptionEnabled = " + config.isCloudWatchLogsKmsEncryptionEnabled());
         LOG.info("  useKms = " + useKms);
+        LOG.info("  enableObjectLock = " + enableObjectLock);
 
         Bucket.Builder bucketBuilder = Bucket.Builder.create(this, id)
                 // NO bucketName specified - CloudFormation auto-generates unique name
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
                 .removalPolicy(shouldRetain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
                 // Enable autoDeleteObjects for non-production so CloudFormation can delete bucket contents
-                .autoDeleteObjects(shouldAutoDelete)
+                // Note: autoDeleteObjects is incompatible with Object Lock, so disable it when Object Lock is enabled
+                .autoDeleteObjects(shouldAutoDelete && !enableObjectLock)
                 .versioned(true)  // Required for compliance (SOC2/PCI-DSS/HIPAA)
+                .objectLockEnabled(enableObjectLock)  // Immutability for audit trails when required
                 .lifecycleRules(lifecycleRules);  // Compliance-driven retention policies
 
         // Apply KMS encryption for HIPAA/PCI-DSS compliance in PRODUCTION
@@ -4243,6 +4316,11 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         Bucket bucket = bucketBuilder.build();
+
+        // Register AWS Config rules for S3 bucket compliance
+        ctx.requireConfigRule(AwsConfigRule.S3_BUCKET_ENCRYPTION);
+        ctx.requireConfigRule(AwsConfigRule.S3_BUCKET_SSL_REQUESTS);
+        ctx.requireConfigRule(AwsConfigRule.S3_BUCKET_VERSIONING_ENABLED);
 
         // Enforce SSL for all S3 requests (HIPAA requirement)
         bucket.addToResourcePolicy(PolicyStatement.Builder.create()
@@ -4881,6 +4959,11 @@ public class ComplianceFactory extends BaseFactory {
                     .id("AwsSolutions-IAM5")
                     .reason("SSM parameter operations require wildcard resource patterns " +
                            "for parameter paths. This is a CDK custom resource limitation.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-L1")
+                    .reason("CDK AwsCustomResource manages its own Lambda runtime version. " +
+                           "Runtime is determined by the CDK framework version and updated via CDK upgrades.")
                     .build()
             ),
             Boolean.TRUE

@@ -1,5 +1,4 @@
-configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-FAIL_GDPR_SOC2_EC2_no-auth,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"GDPR,SOC2",true,,FAIL,jenkins,,eu-west-1,
-FAIL_GDPR_SOC2_EC2_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",30,,FAIL,jenkins,,eu-west-1,
-FAIL_GDPR_SOC2_EC2_flow-logs-disabled,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,false,FAIL,jenkins,,eu-west-1,
-FAIL_GDPR_SOC2_EC2_us-no-approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",true,,FAIL,jenkins,,us-east-1,
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+FAIL_GDPR_SOC2_EC2_no-auth,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"GDPR,SOC2",true,,FAIL,jenkins,,eu-west-1,,,
+FAIL_GDPR_SOC2_EC2_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",30,,FAIL,jenkins,,eu-west-1,,,
+FAIL_GDPR_SOC2_EC2_us-no-approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",true,,FAIL,jenkins,,us-east-1,,,

@@ -4,6 +4,12 @@ com.cloudforgeci.api.core.rules.DatabaseSecurityRules
 com.cloudforgeci.api.core.rules.AdvancedMonitoringRules
 com.cloudforgeci.api.core.rules.ThreatProtectionRules
 com.cloudforgeci.api.core.rules.IncidentResponseRules
+com.cloudforgeci.api.core.rules.ComputeSecurityRules
+com.cloudforgeci.api.core.rules.LambdaSecurityRules
+com.cloudforgeci.api.core.rules.CdnApiSecurityRules
+com.cloudforgeci.api.core.rules.ElbSecurityRules
+com.cloudforgeci.api.core.rules.MessagingSecurityRules
+com.cloudforgeci.api.core.rules.IamSecurityRules
 
 # Framework-specific validators
 com.cloudforgeci.api.core.rules.HipaaRules

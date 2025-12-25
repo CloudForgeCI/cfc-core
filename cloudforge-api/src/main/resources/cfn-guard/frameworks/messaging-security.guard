@@ -1,0 +1,182 @@
+# Messaging Security - Cross-Framework Security Control
+#
+# CloudFormation Guard rules for SQS, SNS, Secrets Manager, and messaging service validation
+# Applies across all compliance frameworks (HIPAA, PCI-DSS, SOC2, GDPR, ISO 27001, etc.)
+#
+# CloudForge Core - Multi-Layer Compliance Validation
+# Layer 3: Template-Level Policy Enforcement (cfn-guard)
+
+# ============================================================================
+# SQS Queue Security
+# ============================================================================
+
+# SQS encryption at rest
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule messaging_security_sqs_encryption when
+    resourceType == 'AWS::SQS::Queue' {
+
+    Properties.KmsMasterKeyId exists <<[Messaging Security] SQS queues must use KMS encryption at rest>>
+}
+
+# SQS SSE-SQS encryption alternative
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule messaging_security_sqs_sse when
+    resourceType == 'AWS::SQS::Queue' {
+
+    Properties.KmsMasterKeyId exists OR Properties.SqsManagedSseEnabled == true <<[Messaging Security] SQS queues must enable server-side encryption>>
+}
+
+# SQS dead letter queue
+# CloudForge Mapping: ERROR_HANDLING control
+rule messaging_security_sqs_dlq when
+    resourceType == 'AWS::SQS::Queue' {
+
+    when Properties.RedrivePolicy exists {
+        Properties.RedrivePolicy.deadLetterTargetArn exists <<[Messaging Security] SQS dead letter queue must specify target ARN>>
+        Properties.RedrivePolicy.maxReceiveCount exists <<[Messaging Security] SQS dead letter queue must specify max receive count>>
+    }
+}
+
+# SQS visibility timeout
+# CloudForge Mapping: CONFIGURATION_MANAGEMENT control
+rule messaging_security_sqs_visibility_timeout when
+    resourceType == 'AWS::SQS::Queue' {
+
+    Properties.VisibilityTimeout exists <<[Messaging Security] SQS queues should configure visibility timeout>>
+    Properties.VisibilityTimeout >= 30 <<[Messaging Security] SQS visibility timeout should be at least 30 seconds>>
+}
+
+# ============================================================================
+# SNS Topic Security
+# ============================================================================
+
+# SNS encryption at rest
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule messaging_security_sns_encryption when
+    resourceType == 'AWS::SNS::Topic' {
+
+    Properties.KmsMasterKeyId exists <<[Messaging Security] SNS topics must use KMS encryption at rest>>
+}
+
+# SNS topic policy restriction
+# CloudForge Mapping: ACCESS_CONTROL control
+rule messaging_security_sns_policy_restriction when
+    resourceType == 'AWS::SNS::TopicPolicy' {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Principal exists {
+                        Principal != '*' <<[Messaging Security] SNS topic policies must not allow public access (Principal: "*")>>
+                        when Principal.AWS exists {
+                            Principal.AWS != '*' <<[Messaging Security] SNS topic policies must not allow public access (Principal.AWS: "*")>>
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ============================================================================
+# Secrets Manager Security
+# ============================================================================
+
+# Secrets Manager cross-region replication
+# CloudForge Mapping: HIGH_AVAILABILITY control
+rule messaging_security_secretsmanager_replication when
+    resourceType == 'AWS::SecretsManager::Secret' {
+
+    Properties.ReplicaRegions exists <<[Messaging Security] Secrets Manager secrets should configure cross-region replication>>
+}
+
+# Secrets Manager automatic rotation
+# CloudForge Mapping: KEY_MANAGEMENT control
+rule messaging_security_secretsmanager_rotation when
+    resourceType == 'AWS::SecretsManager::RotationSchedule' {
+
+    Properties.RotationRules exists <<[Messaging Security] Secrets Manager secrets should have rotation rules>>
+    Properties.RotationRules.AutomaticallyAfterDays exists <<[Messaging Security] Secrets Manager rotation must specify rotation interval>>
+    Properties.RotationRules.AutomaticallyAfterDays <= 90 <<[Messaging Security] Secrets Manager secrets should rotate within 90 days>>
+}
+
+# Secrets Manager KMS encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule messaging_security_secretsmanager_kms when
+    resourceType == 'AWS::SecretsManager::Secret' {
+
+    Properties.KmsKeyId exists <<[Messaging Security] Secrets Manager secrets should use customer-managed KMS keys>>
+}
+
+# ============================================================================
+# EventBridge Security
+# ============================================================================
+
+# EventBridge rule with target
+# CloudForge Mapping: CONFIGURATION_MANAGEMENT control
+rule messaging_security_eventbridge_target when
+    resourceType == 'AWS::Events::Rule' {
+
+    Properties.Targets exists <<[Messaging Security] EventBridge rules must have targets configured>>
+    Properties.Targets not empty <<[Messaging Security] EventBridge rules must have at least one target>>
+}
+
+# EventBridge rule with DLQ
+# CloudForge Mapping: ERROR_HANDLING control
+rule messaging_security_eventbridge_dlq when
+    resourceType == 'AWS::Events::Rule' {
+
+    when Properties.Targets exists {
+        Properties.Targets[*] {
+            when DeadLetterConfig exists {
+                DeadLetterConfig.Arn exists <<[Messaging Security] EventBridge target dead letter config must specify ARN>>
+            }
+        }
+    }
+}
+
+# ============================================================================
+# Kinesis Stream Security
+# ============================================================================
+
+# Kinesis encryption at rest
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule messaging_security_kinesis_encryption when
+    resourceType == 'AWS::Kinesis::Stream' {
+
+    Properties.StreamEncryption exists <<[Messaging Security] Kinesis streams must have encryption configured>>
+    Properties.StreamEncryption.EncryptionType == 'KMS' <<[Messaging Security] Kinesis streams must use KMS encryption>>
+}
+
+# Kinesis enhanced monitoring
+# CloudForge Mapping: MONITORING control
+rule messaging_security_kinesis_monitoring when
+    resourceType == 'AWS::Kinesis::Stream' {
+
+    Properties.StreamModeDetails exists <<[Messaging Security] Kinesis streams should configure stream mode>>
+}
+
+# ============================================================================
+# Kinesis Firehose Security
+# ============================================================================
+
+# Firehose encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule messaging_security_firehose_encryption when
+    resourceType == 'AWS::KinesisFirehose::DeliveryStream' {
+
+    when Properties.DeliveryStreamEncryptionConfigurationInput exists {
+        Properties.DeliveryStreamEncryptionConfigurationInput.KeyType in ['AWS_OWNED_CMK', 'CUSTOMER_MANAGED_CMK'] <<[Messaging Security] Kinesis Firehose delivery streams should use encryption>>
+    }
+}
+
+# Firehose S3 destination encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule messaging_security_firehose_s3_encryption when
+    resourceType == 'AWS::KinesisFirehose::DeliveryStream' {
+
+    when Properties.S3DestinationConfiguration exists {
+        Properties.S3DestinationConfiguration.EncryptionConfiguration exists <<[Messaging Security] Kinesis Firehose S3 destination should use encryption>>
+    }
+}

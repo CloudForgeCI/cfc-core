@@ -99,12 +99,22 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
 
         // ALB security group - allow HTTP/HTTPS from anywhere (needed for external access)
         whenBoth(c.vpc, c.albSg, (vpc, albSg) -> {
-            albSg.addIngressRule(
-                Peer.anyIpv4(),
-                Port.tcp(80),
-                "HTTP_from_anywhere_(STAGING)",
-                false
-            );
+            // Check if HTTPS strict mode is enabled (no HTTP listener)
+            boolean httpsStrict = c.securityProfileConfig.get()
+                .map(SecurityProfileConfiguration::isHttpsStrictEnabled)
+                .orElse(false);
+
+            if (!httpsStrict) {
+                albSg.addIngressRule(
+                    Peer.anyIpv4(),
+                    Port.tcp(80),
+                    "HTTP_from_anywhere_(STAGING)",
+                    false
+                );
+            } else {
+                LOG.info("HTTPS strict mode enabled: Skipping port 80 ingress rule (STAGING)");
+            }
+
             albSg.addIngressRule(
                 Peer.anyIpv4(),
                 Port.tcp(443),

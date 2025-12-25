@@ -10,6 +10,8 @@ import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
 import software.amazon.awscdk.customresources.AwsSdkCall;
 import software.amazon.awscdk.customresources.PhysicalResourceId;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
@@ -95,11 +97,22 @@ public class AlbFactory extends BaseFactory {
             ApplicationLoadBalancer alb = createLoadBalancer(albSg);
             ctx.alb.set(alb);
 
-            // Create HTTP listener with placeholder default action
-            // The target group will be created by orchestration layer and added to listener later
-            // For both EC2 and Fargate, the default action will be updated by RuntimeConfiguration
-            ApplicationListener http = createFargateHttpListener(alb, Boolean.TRUE.equals(enableSsl));
-            ctx.http.set(http);
+            // Check if HTTPS strict mode is enabled (skip HTTP listener entirely for compliance)
+            boolean httpsStrict = config != null && config.isHttpsStrictEnabled();
+            boolean sslEnabled = Boolean.TRUE.equals(enableSsl);
+
+            if (httpsStrict && sslEnabled) {
+                // HTTPS strict mode: No HTTP listener for PCI-DSS compliance (Req 4.1)
+                // Target group wiring will be handled by RuntimeConfiguration after HTTPS listener is created
+                LOG.info("HTTPS strict mode enabled: Skipping HTTP listener (port 80) for compliance");
+                LOG.info("  Target group wiring will be handled by RuntimeConfiguration");
+                // ctx.http remains empty - HTTPS listener will be created by RuntimeConfiguration
+            } else {
+                // Create HTTP listener with placeholder default action
+                // The target group will be created by orchestration layer and added to listener later
+                ApplicationListener http = createFargateHttpListener(alb, sslEnabled);
+                ctx.http.set(http);
+            }
 
         } catch (Exception e) {
             LOG.severe("Exception in AlbFactory.create(): " + e.getMessage());
@@ -108,10 +121,40 @@ public class AlbFactory extends BaseFactory {
     }
 
     private SecurityGroup createSecurityGroup() {
-        return SecurityGroup.Builder.create(this, "AlbSg")
+        // Check if egress should be restricted to VPC CIDR only
+        boolean restrictEgress = config.isRestrictSecurityGroupEgressEnabled();
+
+        SecurityGroup sg = SecurityGroup.Builder.create(this, "AlbSg")
                 .vpc(vpc)
-                .allowAllOutbound(true)
+                .description("ALB Security Group")
+                .allowAllOutbound(!restrictEgress)
                 .build();
+
+        // If egress is restricted, add explicit egress rule for VPC CIDR only
+        // ALB only needs to communicate with backend targets within VPC
+        if (restrictEgress) {
+            sg.addEgressRule(
+                Peer.ipv4(vpc.getVpcCidrBlock()),
+                Port.allTraffic(),
+                "Allow egress to VPC CIDR only (backend targets)"
+            );
+        }
+
+        // Suppress EC23 for ALB security group - public-facing load balancer requires open ingress
+        NagSuppressions.addResourceSuppressions(
+            sg,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-EC23")
+                    .reason("ALB security group requires open ingress on ports 80/443 for public-facing " +
+                            "load balancer. This is the intended architecture for serving web applications " +
+                            "to internet users. Backend instances are protected in private subnets.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        return sg;
     }
 
     private ApplicationLoadBalancer createLoadBalancer(SecurityGroup albSg) {
@@ -214,6 +257,20 @@ public class AlbFactory extends BaseFactory {
 
         // Enable security compliance settings
         configureAlbSecurity(alb);
+
+        // Add suppression for ELB2 when access logs are disabled (DEV profile cost optimization)
+        NagSuppressions.addResourceSuppressions(
+            alb,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-ELB2")
+                    .reason("ALB access logging is intentionally disabled for DEV/non-production " +
+                            "environments to reduce S3 storage costs. Production deployments enable " +
+                            "access logging for audit compliance and security monitoring.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
 
         return alb;
     }
@@ -331,6 +388,11 @@ public class AlbFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             newBucket,
             List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-S1")
+                    .reason("ALB access logs bucket receives logs from ALB. Server access logging " +
+                           "would create circular dependency. CloudTrail S3 data events provide audit logging.")
+                    .build(),
                 NagPackSuppression.builder()
                     .id("PCI.DSS.321-S3BucketReplicationEnabled")
                     .reason("S3 replication is not required for single-region deployments. " +

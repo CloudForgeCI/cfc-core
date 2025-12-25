@@ -20,6 +20,7 @@ import io.github.cdklabs.cdknag.NagPack;
 import software.amazon.awscdk.Aspects;
 
 import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.*;
 import java.util.logging.Logger;
@@ -86,16 +87,14 @@ public final class SecurityRules {
         .map(String::toUpperCase)
         .collect(java.util.stream.Collectors.toSet());
 
-    // AUTO-APPLY CDK-NAG (v3.1.0+)
-    // Apply cdk-nag validation packs BEFORE checking auditManagerEnabled
-    // cdk-nag construct-level validation is independent of AWS Audit Manager
-    applyCdkNagValidation(ctx, enabledFrameworks);
+    // CDK-nag validation only runs for PRODUCTION
+    if (ctx.security == SecurityProfile.PRODUCTION) {
+      applyCdkNagValidation(ctx, enabledFrameworks);
+    }
 
-    // Install multi-framework compliance validation rules
-    // Only run CloudForge FrameworkRules validation if auditManagerEnabled is true
+    // CloudForge FrameworkRules validation requires auditManagerEnabled
     if (!Boolean.TRUE.equals(ctx.cfc.auditManagerEnabled())) {
       LOG.info("Skipping CloudForge FrameworkRules validation (auditManagerEnabled = false)");
-      LOG.info("  Note: cdk-nag validation still applied for enabled frameworks");
       return;
     }
 

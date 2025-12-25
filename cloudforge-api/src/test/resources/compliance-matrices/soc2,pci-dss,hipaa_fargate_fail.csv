@@ -1,4 +1,4 @@
-configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved
-FAIL_SOC2_PCIDSS_HIPAA_FARGATE_no-auth,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"SOC2,PCI-DSS,HIPAA",,true,FAIL,jenkins,,,
-FAIL_SOC2_PCIDSS_HIPAA_FARGATE_public-network,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA",,true,FAIL,jenkins,,,
-FAIL_SOC2_PCIDSS_HIPAA_FARGATE_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",30,true,FAIL,jenkins,,,
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+FAIL_SOC2_PCIDSS_HIPAA_FARGATE_no-auth,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"SOC2,PCI-DSS,HIPAA",,true,FAIL,jenkins,,,,,
+FAIL_SOC2_PCIDSS_HIPAA_FARGATE_public-network,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA",,true,FAIL,jenkins,,,,,
+FAIL_SOC2_PCIDSS_HIPAA_FARGATE_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",30,true,FAIL,jenkins,,,,,

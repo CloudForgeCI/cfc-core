@@ -88,18 +88,20 @@ public enum ComplianceFrameworkType {
     }
 
     /**
-     * Parses a comma-separated string of frameworks into a list.
+     * Parses a delimited string of frameworks into a list.
+     * Supports comma, space, and + as delimiters.
      * Empty/null strings return an empty list.
      *
-     * @param commaSeparated comma-separated framework values (e.g., "soc2,pci-dss,hipaa")
+     * @param delimited delimited framework values (e.g., "soc2,pci-dss,hipaa" or "PCI-DSS HIPAA" or "GDPR+HIPAA")
      * @return list of ComplianceFrameworkType values
      */
-    public static List<ComplianceFrameworkType> parseCommaSeparated(String commaSeparated) {
-        if (commaSeparated == null || commaSeparated.isBlank()) {
+    public static List<ComplianceFrameworkType> parseCommaSeparated(String delimited) {
+        if (delimited == null || delimited.isBlank()) {
             return Collections.emptyList();
         }
 
-        return Arrays.stream(commaSeparated.split(","))
+        // Support comma, space, and + as delimiters
+        return Arrays.stream(delimited.split("[,\\s+]+"))
             .map(String::trim)
             .filter(s -> !s.isEmpty())
             .map(ComplianceFrameworkType::fromString)

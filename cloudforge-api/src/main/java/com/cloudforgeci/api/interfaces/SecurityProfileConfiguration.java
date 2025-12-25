@@ -100,6 +100,23 @@ public interface SecurityProfileConfiguration {
     boolean isVpcEndpointsEnabled();
 
     /**
+     * Whether security group egress should be restricted to VPC CIDR only.
+     *
+     * <p>When enabled, security groups are created with allowAllOutbound=false
+     * and egress is restricted to the VPC CIDR range. This requires VPC endpoints
+     * for AWS services (CloudWatch, RDS monitoring, etc.) to function properly.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Allow all outbound for simplicity</li>
+     *   <li>STAGING: false - Allow all outbound unless explicitly enabled</li>
+     *   <li>PRODUCTION: false - Requires VPC endpoints, enable via deployment context</li>
+     * </ul>
+     *
+     * @return true if egress should be restricted to VPC CIDR only
+     */
+    boolean isRestrictSecurityGroupEgressEnabled();
+
+    /**
      * Whether NAT Gateway should be used for outbound internet access.
      */
     boolean isNatGatewayEnabled();
@@ -120,6 +137,21 @@ public interface SecurityProfileConfiguration {
      * Whether WAF should be enabled for web application protection.
      */
     boolean isWafEnabled();
+
+    /**
+     * Whether HTTPS-only mode should be enforced (no HTTP listener).
+     *
+     * <p>When enabled with SSL, the ALB will only listen on port 443 (HTTPS).
+     * No HTTP listener on port 80 will be created, meaning users must explicitly
+     * use https:// in their URLs. This provides stricter security by eliminating
+     * any unencrypted traffic path.</p>
+     *
+     * <p>This is required by PCI-DSS and NIST for strict TLS enforcement.
+     * When disabled (default), HTTP requests are redirected to HTTPS.</p>
+     *
+     * @return true if HTTPS-only mode should be enforced
+     */
+    boolean isHttpsStrictEnabled();
 
     /**
      * Whether CloudFront should be enabled for DDoS protection.
@@ -577,4 +609,77 @@ public interface SecurityProfileConfiguration {
      * @return true if container image scanning should be enabled
      */
     boolean isContainerImageScanningEnabled();
+
+    // ==================== Enhanced Compliance Controls ====================
+
+    /**
+     * Whether CloudWatch Logs should be encrypted with KMS.
+     *
+     * <p>KMS encryption provides customer-managed encryption keys for CloudWatch
+     * Logs, ensuring audit logs are protected at rest with customer-controlled keys.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Standard CloudWatch encryption is sufficient</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when compliance frameworks require it (PCI-DSS, HIPAA, SOC2)</li>
+     * </ul>
+     *
+     * @return true if CloudWatch Logs should use KMS encryption
+     */
+    boolean isCloudWatchLogsKmsEncryptionEnabled();
+
+    /**
+     * Whether CloudTrail Insights should be enabled for anomaly detection.
+     *
+     * <p>CloudTrail Insights analyzes API activity and detects unusual patterns
+     * that may indicate security incidents or operational issues.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when compliance frameworks require it (SOC2, NIST)</li>
+     * </ul>
+     *
+     * @return true if CloudTrail Insights should be enabled
+     */
+    boolean isCloudTrailInsightsEnabled();
+
+    /**
+     * Whether Route53 DNS query logging should be enabled.
+     *
+     * <p>DNS query logging captures all DNS queries made to Route53 hosted zones,
+     * providing network visibility for security monitoring and forensics.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when compliance frameworks require it (SOC2, NIST)</li>
+     * </ul>
+     *
+     * @return true if Route53 query logging should be enabled
+     */
+    boolean isRoute53QueryLoggingEnabled();
+
+    /**
+     * Whether S3 Object Lock should be enabled for compliance audit buckets.
+     *
+     * <p>S3 Object Lock prevents objects from being deleted or overwritten for a
+     * specified retention period, ensuring immutability of audit trails.</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>HIPAA § 164.312(c)(1) - Data integrity controls</li>
+     *   <li>PCI-DSS Req 10.7 - Audit log retention</li>
+     *   <li>SEC 17a-4 - Record retention for financial services</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when HIPAA or PCI-DSS compliance is required</li>
+     * </ul>
+     *
+     * @return true if S3 Object Lock should be enabled
+     */
+    boolean isS3ObjectLockEnabled();
 }

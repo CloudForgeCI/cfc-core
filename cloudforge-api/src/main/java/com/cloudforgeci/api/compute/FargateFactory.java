@@ -10,6 +10,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
@@ -18,6 +19,8 @@ import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.efs.AccessPoint;
 import software.amazon.awscdk.services.iam.Role;
 import software.constructs.Construct;
+import io.github.cdklabs.cdknag.NagSuppressions;
+import io.github.cdklabs.cdknag.NagPackSuppression;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -224,6 +227,15 @@ public class FargateFactory extends BaseFactory {
             .taskRole(fargateTaskRole)
             .build();
 
+    // Add CDK-nag suppressions for standard ECS patterns
+    NagSuppressions.addResourceSuppressions(taskDef, List.of(
+        NagPackSuppression.builder()
+            .id("AwsSolutions-ECS2")
+            .reason("Environment variables are used for non-sensitive container configuration. " +
+                    "Sensitive values like secrets use AWS Secrets Manager references.")
+            .build()
+    ), true);
+
     // Validate that EFS and Access Point are available (created by EfsFactory)
     if (efs == null) {
       throw new IllegalStateException("EFS not available - EfsFactory should have created it");
@@ -245,9 +257,26 @@ public class FargateFactory extends BaseFactory {
 
  
     cluster.applyRemovalPolicy(RemovalPolicy.DESTROY);
+
+    // Check if egress should be restricted to VPC CIDR only (only for private subnets)
+    boolean restrictEgress = config != null && config.isRestrictSecurityGroupEgressEnabled()
+        && networkMode != NetworkMode.PUBLIC;
+
     SecurityGroup serviceSg = SecurityGroup.Builder.create(this, getNode().getId() + "SvcSg")
             .vpc(vpc)
-            .allowAllOutbound(true).build();
+            .description("Fargate Service Security Group")
+            .allowAllOutbound(!restrictEgress)
+            .build();
+
+    // If egress is restricted, add explicit egress rule for VPC CIDR only
+    if (restrictEgress) {
+      serviceSg.addEgressRule(
+          Peer.ipv4(vpc.getVpcCidrBlock()),
+          Port.allTraffic(),
+          "Allow egress to VPC CIDR only"
+      );
+    }
+
     ctx.fargateServiceSg.set(serviceSg);
     // Determine subnet type and public IP assignment based on network mode
     boolean assignPublicIp = networkMode == NetworkMode.PUBLIC;

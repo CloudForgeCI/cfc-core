@@ -19,12 +19,16 @@ import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationTargetGroupsProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
 import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.CfnListener;
 import software.amazon.awscdk.services.elasticloadbalancingv2.FixedResponseOptions;
+import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate;
 import software.amazon.awscdk.services.elasticloadbalancingv2.SslPolicy;
+import software.amazon.awscdk.services.elasticloadbalancingv2.TargetType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,9 +58,20 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     // Always required
     rules.add(require("vpc", x -> x.vpc));
     rules.add(require("alb", x -> x.alb));
-    rules.add(require("targetGroup", x -> x.albTargetGroup));
     rules.add(require("instanceSg", x -> x.instanceSg));
     rules.add(forbid("fargate", x -> x.fargateService));
+
+    // Target group is required UNLESS HTTPS_STRICT mode is enabled
+    // In HTTPS_STRICT mode, target group is created in wire() after HTTPS listener
+    boolean httpsStrict = c.securityProfileConfig.get()
+        .map(config -> config.isHttpsStrictEnabled())
+        .orElse(false);
+    boolean sslEnabled = Boolean.TRUE.equals(c.cfc.enableSsl());
+
+    if (!(httpsStrict && sslEnabled)) {
+      // Standard mode: target group created by SystemContext.createTargetGroups()
+      rules.add(require("targetGroup", x -> x.albTargetGroup));
+    }
 
     // AutoScalingGroup is only required for JENKINS_SERVICE topology when maxInstanceCapacity > 1
     // When maxInstanceCapacity <= 1, JenkinsFactory creates a single instance instead of ASG
@@ -87,7 +102,47 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     final boolean haveHost = (domain != null && !domain.isBlank()) || (fqdn != null && !fqdn.isBlank());
     final boolean wantSslDns = ssl && haveHost; // SSL mode with host → cert + HTTPS + redirect
 
-    // ── 0) DNS A record for ALB (works with or without SSL) ──────────────────────
+    // Check if HTTPS strict mode is enabled (for PCI-DSS compliance)
+    final boolean httpsStrict = c.securityProfileConfig.get()
+        .map(config -> config.isHttpsStrictEnabled())
+        .orElse(false);
+
+    // ── 0a) HTTPS_STRICT: Create target group here (deferred from SystemContext) ────
+    // In HTTPS_STRICT mode, no HTTP listener exists, so target group wasn't created earlier
+    if (httpsStrict && ssl && c.albTargetGroup.get().isEmpty()) {
+      c.alb.onSet(alb -> {
+        if (c.albTargetGroup.get().isPresent()) return; // Already created
+
+        LOG.info("HTTPS_STRICT mode: Creating target group for HTTPS-only deployment");
+
+        int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
+        String healthPath = c.applicationSpec.get().map(spec -> spec.healthCheckPath()).orElse("/login");
+
+        ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(c, "HttpsStrictTg")
+            .vpc(c.vpc.get().orElseThrow())
+            .port(appPort)
+            .protocol(ApplicationProtocol.HTTP)
+            .targetType(TargetType.INSTANCE)
+            .healthCheck(HealthCheck.builder()
+                .path(healthPath)
+                .healthyHttpCodes("200-299")
+                .interval(software.amazon.awscdk.Duration.seconds(
+                    c.cfc.healthCheckInterval() != null ? c.cfc.healthCheckInterval() : 30))
+                .timeout(software.amazon.awscdk.Duration.seconds(
+                    c.cfc.healthCheckTimeout() != null ? c.cfc.healthCheckTimeout() : 5))
+                .healthyThresholdCount(
+                    c.cfc.healthyThreshold() != null ? c.cfc.healthyThreshold() : 2)
+                .unhealthyThresholdCount(
+                    c.cfc.unhealthyThreshold() != null ? c.cfc.unhealthyThreshold() : 3)
+                .build())
+            .build();
+
+        c.albTargetGroup.set(targetGroup);
+        LOG.info("HTTPS_STRICT target group created for port " + appPort);
+      });
+    }
+
+    // ── 0b) DNS A record for ALB (works with or without SSL) ──────────────────────
     // Note: DNS record creation is handled by topology configurations to avoid conflicts
     // if (wantDns) {
     //   whenBoth(c.zone, c.alb, (zone, alb) -> {

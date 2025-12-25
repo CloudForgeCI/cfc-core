@@ -22,11 +22,17 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvFileSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.Aspects;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Match;
 import software.amazon.awscdk.assertions.Template;
+
+import io.github.cdklabs.cdknag.AwsSolutionsChecks;
+import io.github.cdklabs.cdknag.HIPAASecurityChecks;
+import io.github.cdklabs.cdknag.NagPack;
+import io.github.cdklabs.cdknag.PCIDSS321Checks;
 
 import java.io.File;
 import java.io.IOException;
@@ -358,6 +364,8 @@ class TruthTableValidationTest {
             );
         }
 
+        applyCdkNagAspects(app, null, securityProfile);
+
         // Synthesize and validate
         Template template;
         try {
@@ -367,6 +375,17 @@ class TruthTableValidationTest {
                 "Failed to synthesize template for config: " + configName + "\n" +
                 "Error: " + e.getMessage(), e
             );
+        }
+
+        // Extract and validate CDK-nag errors (only for PRODUCTION)
+        if ("PRODUCTION".equals(securityProfile)) {
+            List<String> cdkNagErrors = extractCdkNagErrors(stack);
+            if (!cdkNagErrors.isEmpty()) {
+                throw new AssertionError(
+                    "CDK-nag errors found for config: " + configName + "\n" +
+                    "Errors:\n  - " + String.join("\n  - ", cdkNagErrors)
+                );
+            }
         }
 
         // NOTE: Skipping truth table expected_resources validation
@@ -456,7 +475,9 @@ class TruthTableValidationTest {
             ApplicationFactory.createFargate(stack, "TestApp", cfc, secProfile, iamProfile, new JenkinsApplicationSpec());
         }
 
-        // Synthesize template (validates that cdk-nag doesn't block in advisory mode)
+        applyCdkNagAspects(app, complianceFramework, securityProfile);
+
+        // Synthesize template
         try {
             Template.fromStack(stack);
         } catch (Exception e) {
@@ -466,8 +487,19 @@ class TruthTableValidationTest {
             );
         }
 
-        // Success: Template synthesized with cdk-nag validation in advisory mode
-        System.out.println("   ✅ Template synthesized successfully with cdk-nag " + complianceFramework + " validation (advisory mode)");
+        // Extract and validate CDK-nag errors (only for PRODUCTION)
+        if ("PRODUCTION".equals(securityProfile)) {
+            List<String> cdkNagErrors = extractCdkNagErrors(stack);
+            if (!cdkNagErrors.isEmpty()) {
+                throw new AssertionError(
+                    "CDK-nag errors found for compliance config: " + configName + " [" + complianceFramework + "]\n" +
+                    "Errors:\n  - " + String.join("\n  - ", cdkNagErrors)
+                );
+            }
+            System.out.println("   ✅ Template synthesized successfully with cdk-nag " + complianceFramework + " validation");
+        } else {
+            System.out.println("   ✅ Template synthesized successfully (CDK-nag skipped for " + securityProfile + ")");
+        }
     }
 
     /**
@@ -518,6 +550,10 @@ class TruthTableValidationTest {
             // GDPR requires EU region or approved data transfer mechanism
             cfcContext.put("gdprDataTransferApproved", true);
         }
+        // PCI-DSS requires VPC Flow Logs for network traffic monitoring (Req 11.4)
+        if (complianceFramework.contains("PCI-DSS")) {
+            cfcContext.put("enableFlowlogs", true);
+        }
 
         // Configure stack with deployment context
         stack.getNode().setContext("cfc", cfcContext);
@@ -534,6 +570,8 @@ class TruthTableValidationTest {
             ApplicationFactory.createFargate(stack, "TestApp", cfc, secProfile, iamProfile, new JenkinsApplicationSpec());
         }
 
+        applyCdkNagAspects(app, complianceFramework, securityProfile);
+
         // Synthesize template
         Template template;
         try {
@@ -543,6 +581,17 @@ class TruthTableValidationTest {
                 "Failed to synthesize template for Config test: " + configName + " [" + complianceFramework + "]\n" +
                 "Error: " + e.getMessage(), e
             );
+        }
+
+        // Extract and validate CDK-nag errors (only for PRODUCTION)
+        if ("PRODUCTION".equals(securityProfile)) {
+            List<String> cdkNagErrors = extractCdkNagErrors(stack);
+            if (!cdkNagErrors.isEmpty()) {
+                throw new AssertionError(
+                    "CDK-nag errors found for Config test: " + configName + " [" + complianceFramework + "]\n" +
+                    "Errors:\n  - " + String.join("\n  - ", cdkNagErrors)
+                );
+            }
         }
 
         // Validate AWS Config infrastructure and rules
@@ -661,7 +710,9 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Determine if this test should fail (negative test case)
         boolean expectFailure = "FAIL".equalsIgnoreCase(expectedResult != null ? expectedResult.trim() : "");
@@ -685,7 +736,9 @@ class TruthTableValidationTest {
 
         // Add compliance framework and mode
         cfcContext.put("complianceFrameworks", complianceFramework);
-        cfcContext.put("complianceMode", "enforce");  // Enable cfn-guard validation (enforce mode)
+        // Use advisory mode for advisory tests, enforce mode for all others
+        boolean isAdvisoryTest = configName != null && configName.startsWith("ADVISORY_");
+        cfcContext.put("complianceMode", isAdvisoryTest ? "advisory" : "enforce");
         cfcContext.put("auditManagerEnabled", true);  // Enable Audit Manager
         cfcContext.put("awsConfigEnabled", true);  // Enable AWS Config rules (Layer 4)
         cfcContext.put("createConfigInfrastructure", false);  // Skip Config infrastructure (avoid AWS CLI calls during synthesis)
@@ -781,6 +834,18 @@ class TruthTableValidationTest {
             System.out.println("   ⚠️  Override: enableFlowlogs = " + overrideValue);
         }
 
+        if (restrictSecurityGroupEgress != null && !restrictSecurityGroupEgress.trim().isEmpty()) {
+            boolean overrideValue = Boolean.parseBoolean(restrictSecurityGroupEgress.trim());
+            cfcContext.put("restrictSecurityGroupEgress", overrideValue);
+            System.out.println("   ⚠️  Override: restrictSecurityGroupEgress = " + overrideValue);
+        }
+
+        if (cloudWatchLogsKmsEncryptionEnabled != null && !cloudWatchLogsKmsEncryptionEnabled.trim().isEmpty()) {
+            boolean overrideValue = Boolean.parseBoolean(cloudWatchLogsKmsEncryptionEnabled.trim());
+            cfcContext.put("cloudWatchLogsKmsEncryptionEnabled", overrideValue);
+            System.out.println("   ⚠️  Override: cloudWatchLogsKmsEncryptionEnabled = " + overrideValue);
+        }
+
         // Configure stack with deployment context
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -813,6 +878,8 @@ class TruthTableValidationTest {
             ApplicationFactory.createFargate(stack, "TestApp", cfc, secProfile, iamProfile, appSpec);
         }
 
+        applyCdkNagAspects(app, complianceFramework, securityProfile);
+
         // Track layer results - run all layers regardless of previous failures
         List<String> layer1Failures = new ArrayList<>();
         List<String> layer2Failures = new ArrayList<>();
@@ -822,18 +889,33 @@ class TruthTableValidationTest {
 
         // Layer 1 & 2: Synthesize template (triggers both cdk-nag and FrameworkRules validation)
         List<String> cdkNagWarnings = new ArrayList<>();
+        List<String> cdkNagErrors = new ArrayList<>();
         try {
             template = Template.fromStack(stack);
 
-            // Check for cdk-nag warnings (advisories) from CDK Annotations
-            cdkNagWarnings = extractCdkNagWarnings(stack);
-            if (cdkNagWarnings.isEmpty()) {
-                System.out.println("   ✅ Layer 1 (cdk-nag): Synthesis passed");
+            // Check for cdk-nag ERRORS (violations) from CDK Annotations (only for PRODUCTION)
+            if ("PRODUCTION".equals(securityProfile)) {
+                cdkNagErrors = extractCdkNagErrors(stack);
+                if (!cdkNagErrors.isEmpty()) {
+                    layer1Failures.addAll(cdkNagErrors);
+                    System.out.println("   ❌ Layer 1 (cdk-nag): " + cdkNagErrors.size() + " violations found");
+                    System.out.println("\n   📋 cdk-nag Violations:");
+                    cdkNagErrors.forEach(e -> System.out.println("      ❌ " + e));
+                    System.out.println();
+                }
+
+                // Check for cdk-nag warnings (advisories) from CDK Annotations
+                cdkNagWarnings = extractCdkNagWarnings(stack);
+                if (cdkNagErrors.isEmpty() && cdkNagWarnings.isEmpty()) {
+                    System.out.println("   ✅ Layer 1 (cdk-nag): Synthesis passed");
+                } else if (cdkNagErrors.isEmpty() && !cdkNagWarnings.isEmpty()) {
+                    System.out.println("   ⚠️ Layer 1 (cdk-nag): Passed with " + cdkNagWarnings.size() + " advisories");
+                    System.out.println("\n   📋 cdk-nag Advisories (non-blocking warnings):");
+                    cdkNagWarnings.forEach(w -> System.out.println("      ⚠ " + w));
+                    System.out.println();
+                }
             } else {
-                System.out.println("   ⚠️ Layer 1 (cdk-nag): Passed with " + cdkNagWarnings.size() + " advisories");
-                System.out.println("\n   📋 cdk-nag Advisories (non-blocking warnings):");
-                cdkNagWarnings.forEach(w -> System.out.println("      ⚠ " + w));
-                System.out.println();
+                System.out.println("   ⏭️ Layer 1 (cdk-nag): Skipped for " + securityProfile);
             }
         } catch (Exception e) {
             String errorMessage = e.getMessage();
@@ -1291,22 +1373,36 @@ class TruthTableValidationTest {
                     return;
                 }
 
-                // Validate against each framework
+                // Build list of all guard files to validate:
+                // 1. Framework-specific guards (from complianceFramework parameter)
+                // 2. Cross-framework guards (always validated for all deployments)
+                List<String> guardFilesToValidate = new ArrayList<>();
+
+                // Add framework-specific guards
                 for (String framework : frameworks) {
                     framework = framework.trim();
-
-                    // Map framework to guard rule file
                     String guardRuleFile = mapFrameworkToGuardFile(framework);
-                    if (guardRuleFile == null) {
-                        System.out.println("   ⚠️  No cfn-guard rules for " + framework + " (skipping)");
-                        continue;
+                    if (guardRuleFile != null && !guardFilesToValidate.contains(guardRuleFile)) {
+                        guardFilesToValidate.add(guardRuleFile);
                     }
+                }
 
+                // Add cross-framework guards (service-specific security)
+                for (String crossFrameworkGuard : getCrossFrameworkGuards()) {
+                    if (!guardFilesToValidate.contains(crossFrameworkGuard)) {
+                        guardFilesToValidate.add(crossFrameworkGuard);
+                    }
+                }
+
+                // Validate against each guard file
+                for (String guardRuleFile : guardFilesToValidate) {
                     Path guardRulePath = guardRulesDir.resolve(guardRuleFile);
                     if (!guardRulePath.toFile().exists()) {
                         System.out.println("   ⚠️  cfn-guard rules not found: " + guardRulePath + " (skipping)");
                         continue;
                     }
+
+                    String guardName = guardRuleFile.replace(".guard", "");
 
                     // Run cfn-guard validation for this framework using the actual generated template
                     ProcessBuilder pb = new ProcessBuilder(
@@ -1333,14 +1429,14 @@ class TruthTableValidationTest {
                     boolean completed = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
                     if (!completed) {
                         process.destroyForcibly();
-                        throw new RuntimeException("cfn-guard validation timed out after 30 seconds for framework: " + framework);
+                        throw new RuntimeException("cfn-guard validation timed out after 30 seconds for guard: " + guardName);
                     }
 
                     int exitCode = process.exitValue();
 
                     if (exitCode != 0) {
-                        failedFrameworks.add(framework);
-                        allErrors.append("\n--- " + framework + " ---\n");
+                        failedFrameworks.add(guardName);
+                        allErrors.append("\n--- " + guardName + " ---\n");
                         allErrors.append("Exit code: " + exitCode + "\n");
                         allErrors.append(output.toString());
                     }
@@ -1350,7 +1446,7 @@ class TruthTableValidationTest {
                 if (!failedFrameworks.isEmpty()) {
                     throw new AssertionError(
                         "cfn-guard validation failed for " + configName + " [" + complianceFramework + "]:\n" +
-                        "Failed frameworks: " + String.join(", ", failedFrameworks) + "\n" +
+                        "Failed guards: " + String.join(", ", failedFrameworks) + "\n" +
                         "Output:" + allErrors.toString()
                     );
                 }
@@ -1424,18 +1520,48 @@ class TruthTableValidationTest {
      */
     private String mapFrameworkToGuardFile(String framework) {
         return switch (framework.toUpperCase()) {
+            // Framework-specific guards (compliance-focused)
             case "HIPAA" -> "hipaa-security-rule.guard";
             case "PCI-DSS", "PCI" -> "pci-dss-v4.0.1.guard";
             case "SOC2" -> "soc2-trust-services.guard";
             case "GDPR" -> "gdpr-data-protection.guard";
             case "ISO-27001", "ISO27001" -> "iso-27001-controls.guard";
+            // Cross-framework guards (service-focused, apply to all)
             case "KEYMANAGEMENT" -> "key-management.guard";
             case "DATABASESECURITY" -> "database-security.guard";
             case "THREATPROTECTION" -> "threat-protection.guard";
             case "INCIDENTRESPONSE" -> "incident-response.guard";
             case "ADVANCEDMONITORING" -> "advanced-monitoring.guard";
+            case "IAMSECURITY" -> "iam-security.guard";
+            case "COMPUTESECURITY" -> "compute-security.guard";
+            case "LAMBDASECURITY" -> "lambda-security.guard";
+            case "CDNAPISECURITY" -> "cdn-api-security.guard";
+            case "ELBSECURITY" -> "elb-security.guard";
+            case "MESSAGINGSECURITY" -> "messaging-security.guard";
             default -> null;
         };
+    }
+
+    /**
+     * Get the list of cross-framework guard files that should always be validated.
+     * These guards apply to all compliance frameworks and validate service-specific security.
+     *
+     * @return list of cross-framework guard filenames
+     */
+    private List<String> getCrossFrameworkGuards() {
+        return List.of(
+            "iam-security.guard",
+            "compute-security.guard",
+            "lambda-security.guard",
+            "cdn-api-security.guard",
+            "elb-security.guard",
+            "messaging-security.guard",
+            "key-management.guard",
+            "database-security.guard",
+            "threat-protection.guard",
+            "incident-response.guard",
+            "advanced-monitoring.guard"
+        );
     }
 
     /**
@@ -1474,6 +1600,61 @@ class TruthTableValidationTest {
             // This can happen in edge cases during synthesis
         }
         return warnings;
+    }
+
+    /**
+     * Extract cdk-nag ERRORS from CDK Annotations API.
+     * CDK-nag produces errors (not warnings) for rule violations.
+     * Uses software.amazon.awscdk.assertions.Annotations to get errors
+     * that were added to the construct tree during synthesis.
+     *
+     * @param stack the CDK stack after synthesis
+     * @return list of error messages from cdk-nag
+     */
+    private List<String> extractCdkNagErrors(Stack stack) {
+        List<String> errors = new ArrayList<>();
+        try {
+            // Use CDK Assertions Annotations API to extract errors
+            software.amazon.awscdk.assertions.Annotations annotations =
+                software.amazon.awscdk.assertions.Annotations.fromStack(stack);
+
+            // Find all errors matching any pattern (use regex .* to match all)
+            var allErrors = annotations.findError("*", Match.anyValue());
+
+            for (var error : allErrors) {
+                String message = error.getEntry().getData().toString();
+                if (message != null && !message.isEmpty()) {
+                    errors.add(message);
+                }
+            }
+        } catch (Exception e) {
+            // Silently ignore if Annotations API fails
+            // This can happen in edge cases during synthesis
+        }
+        return errors;
+    }
+
+    /**
+     * Apply CDK-nag aspects only for PRODUCTION security profile.
+     * CDK-nag validation is intentionally skipped for DEV and STAGING profiles because:
+     * - DEV: Relaxed security settings for developer convenience (no flow logs, open security groups, etc.)
+     * - STAGING: Compliance matrix validation applies, but CDK-nag/cfn-guard enforcement is skipped
+     * - PRODUCTION: Full CDK-nag validation is required
+     */
+    private void applyCdkNagAspects(App app, String complianceFramework, String securityProfile) {
+        // Only apply CDK-nag aspects for PRODUCTION
+        if (!"PRODUCTION".equals(securityProfile)) {
+            return;
+        }
+
+        Aspects.of(app).add(AwsSolutionsChecks.Builder.create().verbose(false).build());
+
+        if (complianceFramework != null) {
+            switch (complianceFramework.toUpperCase().replace("-", "").replace("_", "")) {
+                case "HIPAA" -> Aspects.of(app).add(HIPAASecurityChecks.Builder.create().verbose(false).build());
+                case "PCIDSS", "PCI" -> Aspects.of(app).add(PCIDSS321Checks.Builder.create().verbose(false).build());
+            }
+        }
     }
 
     /**
@@ -1631,6 +1812,7 @@ class TruthTableValidationTest {
             context.put("auditManagerEnabled", true);
             context.put("createConfigInfrastructure", false);  // Skip Config infrastructure in tests
             context.put("inspectorEnabled", true);  // Required for SOC2/PCI-DSS/HIPAA/GDPR vulnerability scanning
+            context.put("enableFlowlogs", true);    // Production/Staging require VPC flow logs
 
             // EC2-specific security settings
             if ("EC2".equals(runtime)) {
@@ -1829,14 +2011,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -1863,14 +2048,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -1897,14 +2085,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -1931,14 +2122,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -1965,14 +2159,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -1999,14 +2196,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2033,14 +2233,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2067,14 +2270,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2101,14 +2307,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2135,14 +2344,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2169,14 +2381,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2203,14 +2418,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2237,14 +2455,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2271,14 +2492,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2305,14 +2529,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2339,14 +2566,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2373,14 +2603,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2407,14 +2640,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2441,14 +2677,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2475,14 +2714,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2509,14 +2751,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2543,14 +2788,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2577,14 +2825,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2611,14 +2862,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2645,14 +2899,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2679,14 +2936,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2713,14 +2973,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2747,14 +3010,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2781,14 +3047,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2815,14 +3084,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2849,14 +3121,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2883,14 +3158,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2917,14 +3195,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2951,14 +3232,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -2985,14 +3269,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3019,14 +3306,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3053,14 +3343,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3087,14 +3380,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3121,14 +3417,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3155,14 +3454,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3189,14 +3491,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3223,14 +3528,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3257,14 +3565,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3291,14 +3602,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3325,14 +3639,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3359,14 +3676,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3393,14 +3713,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3427,14 +3750,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3464,14 +3790,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3498,14 +3827,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3532,14 +3864,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3566,14 +3901,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3600,14 +3938,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3634,14 +3975,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3668,14 +4012,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3702,14 +4049,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3736,14 +4086,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3770,14 +4123,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3804,14 +4160,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3838,14 +4197,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3872,14 +4234,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3906,14 +4271,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3940,14 +4308,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -3974,14 +4345,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4008,14 +4382,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4042,14 +4419,17 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4078,7 +4458,9 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         System.out.println("\n[INCIDENTRESPONSE TEST] EC2 Configuration: " + configName);
         System.out.println("   Framework: " + complianceFramework);
@@ -4090,7 +4472,8 @@ class TruthTableValidationTest {
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4116,7 +4499,9 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         System.out.println("\n[INCIDENTRESPONSE TEST] Fargate Configuration: " + configName);
         System.out.println("   Framework: " + complianceFramework);
@@ -4128,7 +4513,8 @@ class TruthTableValidationTest {
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4157,7 +4543,9 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         System.out.println("\n[ADVANCEDMONITORING TEST] EC2 Configuration: " + configName);
         System.out.println("   Framework: " + complianceFramework);
@@ -4170,7 +4558,8 @@ class TruthTableValidationTest {
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4196,7 +4585,9 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         System.out.println("\n[ADVANCEDMONITORING TEST] Fargate Configuration: " + configName);
         System.out.println("   Framework: " + complianceFramework);
@@ -4209,7 +4600,8 @@ class TruthTableValidationTest {
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4237,7 +4629,9 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         System.out.println("\n[L1 VIOLATION TEST] Testing cdk-nag violations: " + configName);
         System.out.println("   Expected: L1 (cdk-nag) should FAIL with violations");
@@ -4248,7 +4642,8 @@ class TruthTableValidationTest {
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4276,7 +4671,9 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         System.out.println("\n[L2 VIOLATION TEST] Testing FrameworkRules violations: " + configName);
         System.out.println("   Expected: L2 (FrameworkRules) should FAIL with violations");
@@ -4287,7 +4684,8 @@ class TruthTableValidationTest {
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 
@@ -4315,7 +4713,9 @@ class TruthTableValidationTest {
             String applicationId,
             String provisionDatabase,
             String region,
-            String gdprDataTransferApproved) {
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
 
         System.out.println("\n[ADVISORY TEST] Testing edge case: " + configName);
         System.out.println("   Expected: PASS (may have advisories)");
@@ -4327,7 +4727,8 @@ class TruthTableValidationTest {
             configName, runtime, securityProfile, domainConfig, sslConfig,
             subdomainConfig, authMode, networkMode, complianceFramework,
             logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
         );
     }
 

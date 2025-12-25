@@ -729,7 +729,7 @@ class GdprRulesTest {
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
             customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
             customContext.putIfAbsent("cloudTrailEnabled", "true");
-            customContext.putIfAbsent("flowLogsEnabled", "true");
+            customContext.putIfAbsent("enableFlowlogs", "true");
             customContext.putIfAbsent("albAccessLogging", "true");
             customContext.putIfAbsent("guardDutyEnabled", "true");
             customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -804,7 +804,7 @@ class GdprRulesTest {
             if (hasRequirement) {
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -880,7 +880,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -953,7 +953,7 @@ class GdprRulesTest {
         customContext.put("securityProfile", profile);
         customContext.put("complianceMode", complianceMode);
         customContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        customContext.put("enableFlowlogs", String.valueOf(flowLogs));
         customContext.put("albAccessLogging", String.valueOf(albLogging));
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -1067,7 +1067,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -1147,7 +1147,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
@@ -1223,7 +1223,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -1306,7 +1306,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("authMode", "alb-oidc");
@@ -1379,7 +1379,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
@@ -1462,7 +1462,7 @@ class GdprRulesTest {
         cfcContext.put("guardDutyEnabled", String.valueOf(guardDuty));
         cfcContext.put("authMode", authMode);
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("securityMonitoringEnabled", String.valueOf(securityMonitoring));
         cfcContext.put("wafEnabled", String.valueOf(waf));
         cfcContext.put("networkMode", networkMode);
@@ -1597,7 +1597,7 @@ class GdprRulesTest {
         cfcContext.put("securityProfile", profile);
         cfcContext.put("complianceMode", complianceMode);
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLogging", String.valueOf(albLogging));
         cfcContext.put("awsConfigEnabled", String.valueOf(awsConfig));
         cfcContext.put("networkMode", "private-with-nat");
@@ -1870,7 +1870,7 @@ class GdprRulesTest {
         cfcContext.put("s3EncryptionEnabled", String.valueOf(s3Enc));
         cfcContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransEnc));
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLogging", String.valueOf(albLogging));
         cfcContext.put("awsConfigEnabled", String.valueOf(awsConfig));
         cfcContext.put("guardDutyEnabled", String.valueOf(guardDuty));

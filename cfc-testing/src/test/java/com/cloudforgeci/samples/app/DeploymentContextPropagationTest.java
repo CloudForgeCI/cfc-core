@@ -97,7 +97,7 @@ class DeploymentContextPropagationTest {
         assertEquals(true, cfc.auditManagerEnabled());
         assertEquals(true, cfc.awsConfigEnabled());
         // Note: createConfigInfrastructure is injected directly into ComplianceFactory, not exposed as a getter
-        assertEquals("HIPAA,SOC2,GDPR", cfc.complianceFrameworks());
+        assertEquals("hipaa,soc2,gdpr", cfc.complianceFrameworks());
         assertEquals(2190, cfc.logRetentionDays());
 
         // Resource sizing
@@ -169,16 +169,14 @@ class DeploymentContextPropagationTest {
         DeploymentContext cfc = DeploymentContext.from(app);
 
         // Then - Verify defaults based on actual implementation
-        // Fields using boolOrNull() return null when not set
-        assertNull(cfc.guardDutyEnabled());
-
-        // Fields using boolOrNull() return null when not set - use null-safe comparison
-        assertFalse(Boolean.TRUE.equals(cfc.auditManagerEnabled()));
-        assertFalse(Boolean.TRUE.equals(cfc.wafEnabled()));
-        assertFalse(Boolean.TRUE.equals(cfc.cloudfrontEnabled()));
+        // With Jackson/DeploymentConfig integration, Boolean fields have explicit defaults
+        assertEquals(false, cfc.guardDutyEnabled());  // DeploymentConfig default
+        assertEquals(false, cfc.auditManagerEnabled());  // DeploymentConfig default
+        assertNull(cfc.wafEnabled());  // No default in DeploymentConfig
+        assertNull(cfc.cloudfrontEnabled());  // No default in DeploymentConfig
         assertFalse(cfc.enableSsl());
-        assertEquals(false, cfc.cognitoAutoProvision());  // Boolean type but has default false
-        assertEquals(false, cfc.cognitoMfaEnabled());     // Boolean type but has default false
+        assertEquals(false, cfc.cognitoAutoProvision());  // Boolean type with default false
+        assertEquals(false, cfc.cognitoMfaEnabled());     // Boolean type with default false
     }
 
     /**
@@ -279,7 +277,8 @@ class DeploymentContextPropagationTest {
         app.getNode().setContext("cfc", context);
 
         DeploymentContext cfc = DeploymentContext.from(app);
-        assertEquals("HIPAA,SOC2,GDPR,PCI-DSS", cfc.complianceFrameworks());
+        // Compliance frameworks are normalized to lowercase by Jackson/ComplianceFrameworkType deserializer
+        assertEquals("hipaa,soc2,gdpr,pci-dss", cfc.complianceFrameworks());
     }
 
     /**
