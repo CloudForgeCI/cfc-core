@@ -7,11 +7,15 @@ import com.cloudforgeci.api.core.util.RetentionDaysConverter;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -111,6 +115,15 @@ public class LoggingCwFactory extends BaseFactory {
                         .removalPolicy(config.getLogRemovalPolicy() == RemovalPolicy.RETAIN
                                 ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
                         .build();
+
+                // Grant CloudWatch Logs service permission to use the KMS key
+                logsKmsKey.addToResourcePolicy(PolicyStatement.Builder.create()
+                        .sid("Allow CloudWatch Logs")
+                        .principals(List.of(new ServicePrincipal("logs." + Stack.of(this).getRegion() + ".amazonaws.com")))
+                        .actions(List.of("kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:CreateGrant", "kms:DescribeKey"))
+                        .resources(List.of("*"))
+                        .build());
+
                 logGroupBuilder.encryptionKey(logsKmsKey);
             }
 

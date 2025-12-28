@@ -271,12 +271,8 @@ class TruthTableValidationTest {
             false
         )
         .filter(entry -> entry.getValue().get("valid").asBoolean())
-        .filter(entry -> {
-            // Filter out configurations that violate business constraints
-            // Note: alb-oidc can work without domain using Private CA + ALB DNS for OIDC callback
-            // All configurations in the truth table CSV should be valid
-            return true;
-        })
+        // Note: All configurations in truth table CSV are pre-validated
+        // Invalid combinations (e.g., alb-oidc without domain) are excluded from the CSV
         .map(entry -> {
             String configName = entry.getKey();
             JsonNode config = entry.getValue().get("configuration");
@@ -546,12 +542,12 @@ class TruthTableValidationTest {
         cfcContext.put("createConfigInfrastructure", true);
 
         // Add framework-specific settings for compliance validation
-        if (complianceFramework.contains("GDPR")) {
+        if (complianceFramework != null && complianceFramework.contains("GDPR")) {
             // GDPR requires EU region or approved data transfer mechanism
             cfcContext.put("gdprDataTransferApproved", true);
         }
         // PCI-DSS requires VPC Flow Logs for network traffic monitoring (Req 11.4)
-        if (complianceFramework.contains("PCI-DSS")) {
+        if (complianceFramework != null && complianceFramework.contains("PCI-DSS")) {
             cfcContext.put("enableFlowlogs", true);
         }
 
@@ -1305,6 +1301,36 @@ class TruthTableValidationTest {
     }
 
     /**
+     * Escape a string for safe inclusion in JSON.
+     * Handles special characters like quotes, backslashes, and control characters.
+     *
+     * @param value the string to escape
+     * @return JSON-escaped string
+     */
+    private String escapeJsonString(String value) {
+        if (value == null) return "null";
+        StringBuilder escaped = new StringBuilder();
+        for (char c : value.toCharArray()) {
+            switch (c) {
+                case '"':  escaped.append("\\\""); break;
+                case '\\': escaped.append("\\\\"); break;
+                case '\b': escaped.append("\\b"); break;
+                case '\f': escaped.append("\\f"); break;
+                case '\n': escaped.append("\\n"); break;
+                case '\r': escaped.append("\\r"); break;
+                case '\t': escaped.append("\\t"); break;
+                default:
+                    if (c < 32 || c > 126) {
+                        escaped.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        escaped.append(c);
+                    }
+            }
+        }
+        return escaped.toString();
+    }
+
+    /**
      * Format deployment context as JSON for dashboard display.
      *
      * @param context the deployment context map
@@ -1316,14 +1342,16 @@ class TruthTableValidationTest {
         for (Map.Entry<String, Object> entry : context.entrySet()) {
             if (!first) json.append(", ");
             first = false;
-            json.append("\"").append(entry.getKey()).append("\": ");
+            json.append("\"").append(escapeJsonString(entry.getKey())).append("\": ");
             Object value = entry.getValue();
             if (value instanceof String) {
-                json.append("\"").append(value).append("\"");
+                json.append("\"").append(escapeJsonString((String) value)).append("\"");
             } else if (value instanceof Boolean || value instanceof Number) {
                 json.append(value);
+            } else if (value == null) {
+                json.append("null");
             } else {
-                json.append("\"").append(value).append("\"");
+                json.append("\"").append(escapeJsonString(value.toString())).append("\"");
             }
         }
         json.append("}");

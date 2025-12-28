@@ -125,8 +125,8 @@ public class ComplianceFactory extends BaseFactory {
     @DeploymentContext("enableGuardDutyRemediation")
     private Boolean enableGuardDutyRemediation;
 
-    @DeploymentContext("enableEcrImageScanningRemediation")
-    private Boolean enableEcrImageScanningRemediation;
+    // Note: ECR image scanning remediation removed - not implemented
+    // If needed in future, add: @DeploymentContext("enableEcrImageScanningRemediation")
 
     @DeploymentContext("scopeConfigRulesToDeployment")
     private Boolean scopeConfigRulesToDeployment;
@@ -262,7 +262,11 @@ public class ComplianceFactory extends BaseFactory {
 
         // STEP 4: Deploy Config rules collected from factories
         // This deploys only the rules that match actually-provisioned infrastructure
-        deployCollectedConfigRules();
+        if (configRulesEnabled) {
+            deployCollectedConfigRules();
+        } else {
+            LOG.info("Skipping collected Config rules deployment (configRulesEnabled = false)");
+        }
     }
 
     /**
@@ -506,7 +510,7 @@ public class ComplianceFactory extends BaseFactory {
                     .sid("Enable CloudTrail log encryption")
                     .effect(Effect.ALLOW)
                     .principals(List.of(new ServicePrincipal("cloudtrail.amazonaws.com")))
-                    .actions(List.of("kms:GenerateDataKey*", "kms:DecryptDataKey"))
+                    .actions(List.of("kms:GenerateDataKey*", "kms:Decrypt"))
                     .resources(List.of("*"))
                     .build());
 
@@ -4292,7 +4296,8 @@ public class ComplianceFactory extends BaseFactory {
         Bucket.Builder bucketBuilder = Bucket.Builder.create(this, id)
                 // NO bucketName specified - CloudFormation auto-generates unique name
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
-                .removalPolicy(shouldRetain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                // Object Lock requires RETAIN - CloudFormation cannot delete buckets with Object Lock enabled
+                .removalPolicy(shouldRetain || enableObjectLock ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
                 // Enable autoDeleteObjects for non-production so CloudFormation can delete bucket contents
                 // Note: autoDeleteObjects is incompatible with Object Lock, so disable it when Object Lock is enabled
                 .autoDeleteObjects(shouldAutoDelete && !enableObjectLock)
@@ -4850,11 +4855,12 @@ public class ComplianceFactory extends BaseFactory {
      */
     private void createGuardDutyRemediation(CfnConfigRule guardDutyRule) {
         // Create SSM Automation document for GuardDuty enablement
+        // Uses idempotent approach: check if detector exists before creating
         CfnDocument guardDutyDocument = CfnDocument.Builder.create(this, "GuardDutyEnablementDocument")
                 .documentType("Automation")
                 .content(Map.of(
                     "schemaVersion", "0.3",
-                    "description", "Enables AWS GuardDuty if not already enabled",
+                    "description", "Enables AWS GuardDuty if not already enabled (idempotent)",
                     "assumeRole", "{{ AutomationAssumeRole }}",
                     "parameters", Map.of(
                         "AutomationAssumeRole", Map.of(
@@ -4864,15 +4870,53 @@ public class ComplianceFactory extends BaseFactory {
                     ),
                     "mainSteps", List.of(
                         Map.of(
-                            "name", "EnableGuardDuty",
+                            "name", "CheckGuardDutyStatus",
                             "action", "aws:executeAwsApi",
                             "onFailure", "Continue",
+                            "inputs", Map.of(
+                                "Service", "guardduty",
+                                "Api", "ListDetectors"
+                            ),
+                            "outputs", List.of(
+                                Map.of(
+                                    "Name", "DetectorIds",
+                                    "Selector", "$.DetectorIds",
+                                    "Type", "StringList"
+                                )
+                            )
+                        ),
+                        Map.of(
+                            "name", "EnableGuardDuty",
+                            "action", "aws:branch",
+                            "inputs", Map.of(
+                                "Choices", List.of(
+                                    Map.of(
+                                        "NextStep", "CreateDetector",
+                                        "Variable", "{{ CheckGuardDutyStatus.DetectorIds }}",
+                                        "StringEquals", "[]"
+                                    )
+                                ),
+                                "Default", "AlreadyEnabled"
+                            )
+                        ),
+                        Map.of(
+                            "name", "CreateDetector",
+                            "action", "aws:executeAwsApi",
                             "inputs", Map.of(
                                 "Service", "guardduty",
                                 "Api", "CreateDetector",
                                 "Enable", true,
                                 "FindingPublishingFrequency", "FIFTEEN_MINUTES"
-                            )
+                            ),
+                            "isEnd", true
+                        ),
+                        Map.of(
+                            "name", "AlreadyEnabled",
+                            "action", "aws:sleep",
+                            "inputs", Map.of(
+                                "Duration", "PT0S"
+                            ),
+                            "isEnd", true
                         )
                     )
                 ))

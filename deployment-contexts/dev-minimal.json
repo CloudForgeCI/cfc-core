@@ -1,8 +1,9 @@
 {
   "description": "Minimal development environment - fast setup, no compliance overhead",
   "stackName": "CloudForge-Dev",
+  "applicationId": "jenkins",
   "runtime": "fargate",
-  "topology": "jenkins-service",
+  "topology": "application-service",
   "securityProfile": "dev",
   "region": "us-east-1",
 
@@ -14,6 +15,8 @@
   "guardDutyEnabled": false,
   "logRetentionDays": 7,
 
+  "cpu": 1024,
+  "memory": 2048,
   "minInstanceCapacity": 1,
   "maxInstanceCapacity": 1,
   "enableAutoScaling": false,

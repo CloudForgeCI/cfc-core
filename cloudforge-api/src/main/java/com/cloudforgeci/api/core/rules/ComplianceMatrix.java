@@ -766,7 +766,9 @@ public final class ComplianceMatrix {
 
         // Support comma, space, and + as delimiters (consistent with ComplianceFrameworkType)
         for (String framework : frameworksStr.split("[,\\s+]+")) {
-            String normalized = framework.trim().toUpperCase();
+            // Normalize: uppercase + replace underscores with hyphens (PCI_DSS → PCI-DSS)
+            // This handles both enum.name() (PCI_DSS) and enum.getMatrixKey() (PCI-DSS) inputs
+            String normalized = framework.trim().toUpperCase().replace("_", "-");
             if (normalized.isEmpty()) continue;
             ValidationResult result = validateControl(control, normalized, isEnabled, complianceMode);
 
@@ -961,7 +963,9 @@ public final class ComplianceMatrix {
 
             // Support comma, space, and + as delimiters (consistent with ComplianceFrameworkType)
             for (String framework : frameworksStr.split("[,\\s+]+")) {
-                String normalized = framework.trim().toUpperCase();
+                // Normalize: uppercase + replace underscores with hyphens (PCI_DSS → PCI-DSS)
+                // This handles both enum.name() (PCI_DSS) and enum.getMatrixKey() (PCI-DSS) inputs
+                String normalized = framework.trim().toUpperCase().replace("_", "-");
                 if (normalized.isEmpty()) continue;
                 if (control.isRequired(normalized)) {
                     LOG.fine("Control " + control.name() + " REQUIRED by framework: " + normalized);
@@ -1008,7 +1012,9 @@ public final class ComplianceMatrix {
         // Check if any framework has requirements (REQUIRED or ADVISORY)
         // Support comma, space, and + as delimiters (consistent with ComplianceFrameworkType)
         for (String framework : frameworksStr.split("[,\\s+]+")) {
-            String normalized = framework.trim().toUpperCase();
+            // Normalize: uppercase + replace underscores with hyphens (PCI_DSS → PCI-DSS)
+            // This handles both enum.name() (PCI_DSS) and enum.getMatrixKey() (PCI-DSS) inputs
+            String normalized = framework.trim().toUpperCase().replace("_", "-");
             if (normalized.isEmpty()) continue;
             RequirementLevel level = control.getRequirementLevel(normalized);
             if (level != RequirementLevel.NOT_APPLICABLE) {

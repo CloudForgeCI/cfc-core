@@ -1197,6 +1197,7 @@ class Soc2RulesTest {
             customContext.putIfAbsent("awsConfigEnabled", "true");
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
             customContext.putIfAbsent("networkMode", "private-with-nat");
+            customContext.putIfAbsent("logRetentionDays", "365");
             if (secProfile == SecurityProfile.PRODUCTION) {
                 customContext.putIfAbsent("multiAzEnforced", "true");
                 customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -1603,6 +1604,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
+                customContext.putIfAbsent("logRetentionDays", "365");
             }
         } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
             // STAGING doesn't require availability criteria, so add baseline for other requirements
@@ -1620,6 +1622,7 @@ class Soc2RulesTest {
             customContext.putIfAbsent("awsConfigEnabled", "true");
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
             customContext.putIfAbsent("networkMode", "private-with-nat");
+            customContext.putIfAbsent("logRetentionDays", "365");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -1774,6 +1777,7 @@ class Soc2RulesTest {
         customContext.put("automatedBackupEnabled", multiAz); // Use multiAz as proxy for backup
         customContext.put("crossRegionBackupEnabled", multiAz); // Use multiAz as proxy
         customContext.put("networkMode", networkMode);
+        customContext.put("logRetentionDays", "365"); // SOC2 requires 365 days minimum
 
         if ("alb-oidc".equals(authMode)) {
             customContext.put("enableSsl", "true");
@@ -2281,6 +2285,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
+                customContext.putIfAbsent("logRetentionDays", "365");
                 if (secProfile == SecurityProfile.PRODUCTION) {
                     customContext.putIfAbsent("multiAzEnforced", "true");
                     customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -2377,6 +2382,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("awsConfigEnabled", "true");
+                customContext.putIfAbsent("logRetentionDays", "365");
                 if (secProfile == SecurityProfile.PRODUCTION) {
                     customContext.putIfAbsent("multiAzEnforced", "true");
                     customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -2467,8 +2473,8 @@ class Soc2RulesTest {
             if (!cloudTrail || !flowLogs || !awsConfig) {
                 shouldFailLogging = true;
             }
-            // Insufficient log retention causes failure (SOC2 requires 90 days minimum)
-            if (retentionDays < 90) {
+            // Insufficient log retention causes failure (SOC2 requires 365 days minimum)
+            if (retentionDays < 365) {
                 shouldFailLogging = true;
             }
         }
@@ -2579,6 +2585,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
+                customContext.putIfAbsent("logRetentionDays", "365");
             }
         } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
             // STAGING doesn't require availability criteria
@@ -2596,6 +2603,7 @@ class Soc2RulesTest {
             customContext.putIfAbsent("enableFlowlogs", "true");
             customContext.putIfAbsent("awsConfigEnabled", "true");
             customContext.putIfAbsent("networkMode", "private-with-nat");
+            customContext.putIfAbsent("logRetentionDays", "365");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2678,6 +2686,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("enableSsl", "true");
                 customContext.putIfAbsent("fqdn", "soc2.example.com");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
+                customContext.putIfAbsent("logRetentionDays", "365");
                 if (secProfile == SecurityProfile.PRODUCTION) {
                     customContext.putIfAbsent("automatedBackupEnabled", "true");
                     customContext.putIfAbsent("crossRegionBackupEnabled", "true");
@@ -2690,6 +2699,7 @@ class Soc2RulesTest {
             customContext.putIfAbsent("enableSsl", "true");
             customContext.putIfAbsent("fqdn", "soc2.example.com");
             customContext.putIfAbsent("networkMode", "private-with-nat");
+            customContext.putIfAbsent("logRetentionDays", "365");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2791,11 +2801,13 @@ class Soc2RulesTest {
             if (baseRequirementsMet) {
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("crossRegionBackupEnabled", "true");
+                customContext.putIfAbsent("logRetentionDays", "365");
             }
         } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
             boolean baseRequirementsMet = auth && encryption && waf && monitoring && cloudTrail && flowLogs;
             if (baseRequirementsMet) {
                 // STAGING doesn't need availability features
+                customContext.putIfAbsent("logRetentionDays", "365");
             }
         }
 
@@ -2900,6 +2912,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("fqdn", "soc2.example.com");
                 customContext.putIfAbsent("wafEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
+                customContext.putIfAbsent("logRetentionDays", "365");
             }
         } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
             boolean hasRequirement = encryption && transit && monitoring && audit;
@@ -2909,6 +2922,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("fqdn", "soc2.example.com");
                 customContext.putIfAbsent("wafEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
+                customContext.putIfAbsent("logRetentionDays", "365");
             }
         }
 
@@ -2998,6 +3012,7 @@ class Soc2RulesTest {
             customContext.putIfAbsent("enableFlowlogs", "true");
             customContext.putIfAbsent("awsConfigEnabled", "true");
             customContext.putIfAbsent("networkMode", "private-with-nat");
+            customContext.putIfAbsent("logRetentionDays", "365");
             if (secProfile == SecurityProfile.PRODUCTION) {
                 customContext.putIfAbsent("multiAzEnforced", "true");
                 customContext.putIfAbsent("autoScalingEnabled", "true");

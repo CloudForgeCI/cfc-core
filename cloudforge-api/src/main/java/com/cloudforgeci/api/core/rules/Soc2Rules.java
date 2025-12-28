@@ -307,21 +307,22 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
 
         // CC7.2: Log retention for audit trail
         // SOC2 requires adequate log retention for security monitoring and incident investigation
-        // Common practice: 90 days minimum for audit trails (THREE_MONTHS or longer)
+        // SOC2 standard: 365 days (ONE_YEAR) minimum for audit trails
         var retentionDays = config.getLogRetentionDays();
         if (!isRetentionSufficient(retentionDays)) {
+            String currentRetention = (retentionDays != null) ? retentionDays.toString() : "not set";
             rules.add(ComplianceRule.fail(
                 "SOC2-CC7.2-LogRetention",
-                "Log retention must be at least 90 days for audit trails (SOC2 CC7.2)",
+                "Log retention must be at least 365 days for audit trails (SOC2 CC7.2)",
                 "CloudWatchLogGroupRetention",
-                "Log retention must be at least 90 days (THREE_MONTHS). Current: " +
-                retentionDays.toString() + ". " +
+                "Log retention must be at least 365 days (ONE_YEAR). Current: " +
+                currentRetention + ". " +
                 "SOC2 CC7.2 requires adequate log retention for security monitoring and incident investigation."
             ));
         } else {
             rules.add(ComplianceRule.pass(
                 "SOC2-CC7.2-LogRetention",
-                "Log retention meets 90-day requirement (SOC2 CC7.2)",
+                "Log retention meets 365-day requirement (SOC2 CC7.2)",
                 "CloudWatchLogGroupRetention"
             ));
         }
@@ -330,17 +331,14 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Check if log retention meets SOC2 requirement (90 days minimum).
+     * Check if log retention meets SOC2 requirement (365 days / 1 year minimum).
      * CC7.2: System monitoring requires adequate log retention for audit trails.
+     * SOC2 requires minimum 1 year retention for security and audit logs.
      */
     private boolean isRetentionSufficient(RetentionDays retention) {
-        // SOC2 CC7.2 requires adequate retention for security monitoring
-        // Industry standard: 90 days minimum (THREE_MONTHS or longer)
-        return retention == RetentionDays.THREE_MONTHS ||
-               retention == RetentionDays.FOUR_MONTHS ||
-               retention == RetentionDays.FIVE_MONTHS ||
-               retention == RetentionDays.SIX_MONTHS ||
-               retention == RetentionDays.ONE_YEAR ||
+        // SOC2 CC7.2 requires 1 year minimum retention for security monitoring and audit trails
+        // Reference: SOC2 CC7.2, AICPA Trust Services Criteria
+        return retention == RetentionDays.ONE_YEAR ||
                retention == RetentionDays.THIRTEEN_MONTHS ||
                retention == RetentionDays.EIGHTEEN_MONTHS ||
                retention == RetentionDays.TWO_YEARS ||

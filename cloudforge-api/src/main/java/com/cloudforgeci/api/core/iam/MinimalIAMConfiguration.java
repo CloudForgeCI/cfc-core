@@ -128,8 +128,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                                 "logs:DescribeLogStreams"
                             ))
                             .resources(List.of(
-                                // Log group ARN for CreateLogGroup/DescribeLogGroups
-                                "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern,
+                                // Log group ARN for CreateLogGroup/DescribeLogGroups (requires :* suffix)
+                                "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*",
                                 // Log stream ARN for CreateLogStream/PutLogEvents/DescribeLogStreams
                                 "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*"
                             ))
@@ -190,8 +190,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                             "logs:DescribeLogStreams"
                     ))
                     .resources(List.of(
-                            // Log group ARN for CreateLogGroup/DescribeLogGroups
-                            "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern,
+                            // Log group ARN for CreateLogGroup/DescribeLogGroups (requires :* suffix)
+                            "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*",
                             // Log stream ARN for CreateLogStream/PutLogEvents/DescribeLogStreams
                             "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*"
                     ))
@@ -233,8 +233,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                                 "logs:PutLogEvents"
                             ))
                             .resources(List.of(
-                                // Log group ARN
-                                "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:/aws/ecs/" + c.stackName + "*",
+                                // Log group ARN (requires :* suffix)
+                                "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:/aws/ecs/" + c.stackName + "*:*",
                                 // Log stream ARN for CreateLogStream/PutLogEvents
                                 "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:/aws/ecs/" + c.stackName + "*:*"
                             ))

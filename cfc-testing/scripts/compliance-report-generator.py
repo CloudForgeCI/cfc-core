@@ -15,7 +15,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
-import xml.etree.ElementTree as ET
+
+# Use defusedxml to prevent XML vulnerabilities (XXE, billion laughs, etc.)
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    # Fallback to standard library if defusedxml is not available
+    # This should trigger a warning in production environments
+    import xml.etree.ElementTree as ET
+    print("⚠️  WARNING: defusedxml not found. Using standard xml.etree.ElementTree.", file=sys.stderr)
+    print("⚠️  Install defusedxml for secure XML parsing: pip install defusedxml", file=sys.stderr)
 
 
 class ComplianceTestResult:
@@ -97,6 +106,7 @@ class ComplianceReportGenerator:
         print(f"   📝 Streaming output to: {output_file}")
         print(f"   📊 Incremental results: {self.incremental_results_file}")
 
+        process = None  # Initialize to prevent UnboundLocalError in exception handler
         try:
             with open(output_file, 'w') as log_file:
                 all_passed = True
@@ -153,11 +163,25 @@ class ComplianceReportGenerator:
                         print(f"      📁 Saved JUnit XML: {saved_xml.name}")
 
                     # Kill lingering JSII processes between tests
+                    # Use more specific pattern to avoid matching unintended processes
                     try:
-                        subprocess.run(["pkill", "-9", "-f", "jsii-java-runtime"],
-                                     capture_output=True, timeout=2)
-                    except:
-                        pass  # Ignore errors from pkill
+                        # Use full command pattern for safer matching
+                        result = subprocess.run(
+                            ["pkill", "-9", "-f", "jsii-runtime.Runtime.*jsii-java-runtime"],
+                            capture_output=True,
+                            timeout=2,
+                            text=True
+                        )
+                        if result.returncode == 0:
+                            print(f"      🧹 Cleaned up JSII processes")
+                    except subprocess.TimeoutExpired:
+                        print(f"      ⚠️  Process cleanup timed out", file=sys.stderr)
+                    except FileNotFoundError:
+                        # pkill not available on this system
+                        pass
+                    except Exception as e:
+                        # Log unexpected errors but don't fail the test run
+                        print(f"      ⚠️  Process cleanup failed: {e}", file=sys.stderr)
 
                 print(f"   ✅ All test methods completed")
 
@@ -684,7 +708,9 @@ class ComplianceReportGenerator:
                     f.write(json.dumps(result) + '\n')
 
         except Exception as e:
+            import traceback
             print(f"   ⚠️  Failed to parse {xml_file.name}: {e}")
+            print(f"   Traceback: {traceback.format_exc()}", file=sys.stderr)
 
     def _parse_junit_xml_incremental(self):
         """Parse JUnit XML and create/update results with timing, error info, and layer status."""
@@ -882,10 +908,11 @@ class ComplianceReportGenerator:
                     if deployment_context:
                         result['deployment_context'] = deployment_context
 
-                    # For negative tests: test passing means deployment would fail
-                    # For positive tests: test failing means deployment failed
+                    # For negative tests: test passing means deployment correctly failed (expected) → status='passed'
+                    # For negative tests: test failing means deployment succeeded when it shouldn't → status='failed'
+                    # For positive tests: test failing means deployment failed → status='failed'
                     if is_negative_test:
-                        result['status'] = 'failed' if not test_failed else 'error'
+                        result['status'] = 'passed' if not test_failed else 'failed'
                         if test_failed:
                             error_text = failure_elem.text or ''
                             message = failure_elem.get('message', '')
@@ -899,10 +926,11 @@ class ComplianceReportGenerator:
                     updated_count += 1
                 else:
                     # Create new result from JUnit XML
-                    # For negative tests: test passing means deployment would fail
+                    # For negative tests: test passing means deployment correctly failed (expected) → status='passed'
+                    # For negative tests: test failing means deployment succeeded when it shouldn't → status='failed'
                     # For positive tests: use normal test status
                     if is_negative_test:
-                        status = 'failed' if not test_failed else 'error'
+                        status = 'passed' if not test_failed else 'failed'
                     else:
                         status = 'failed' if test_failed else 'passed'
 
@@ -951,7 +979,9 @@ class ComplianceReportGenerator:
                 print(f"   ⚠️  WARNING: No compliance test results extracted from JUnit XML!")
 
         except Exception as e:
+            import traceback
             print(f"   ⚠️  Failed to parse JUnit XML: {e}")
+            print(f"   Traceback: {traceback.format_exc()}", file=sys.stderr)
 
     def _load_incremental_results(self):
         """Load all results from the incremental JSONL file."""
@@ -1167,7 +1197,9 @@ class ComplianceReportGenerator:
             self._update_layer_statuses_for_failures()
 
         except Exception as e:
+            import traceback
             print(f"   ⚠️  Failed to parse JUnit XML: {e}")
+            print(f"   Traceback: {traceback.format_exc()}", file=sys.stderr)
 
     def _update_layer_statuses_for_failures(self):
         """Update layer statuses based on error message patterns."""

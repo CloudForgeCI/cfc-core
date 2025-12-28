@@ -98,13 +98,14 @@ rule key_management_cloudfront_tls when
 rule key_management_alb_https when
     resourceType == 'AWS::ElasticLoadBalancingV2::Listener' {
 
-    # Allow HTTPS/TLS or HTTP with redirect to HTTPS
+    # Require HTTPS/TLS, or HTTP must have redirect actions
     when Properties.Protocol == 'HTTP' {
         some Properties.DefaultActions[*] {
-            Type == 'redirect' <<[Key Management] HTTP listeners should redirect to HTTPS>>
+            Type == 'redirect' <<[Key Management] HTTP listeners must redirect to HTTPS>>
         }
     }
 
+    # HTTPS/TLS listeners must have certificates
     when Properties.Protocol in ['HTTPS', 'TLS'] {
         Properties.Certificates exists <<[Key Management] HTTPS/TLS listeners must have certificates>>
     }

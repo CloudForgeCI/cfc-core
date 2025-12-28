@@ -31,6 +31,9 @@
   "guardDutyEnabled": true,
   "guardDutyAlertsConfigured": true,
   "auditManagerEnabled": true,
+  "securityHubEnabled": true,
+  "inspectorEnabled": true,
+  "macieEnabled": true,
 
   "logRetentionDays": 2190,
   "albAccessLogging": true,

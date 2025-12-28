@@ -119,7 +119,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "logs:PutRetentionPolicy"
                     ))
                     .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern
+                        "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*"
                     ))
                     .build());
 
@@ -224,7 +224,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "logs:PutRetentionPolicy"
                     ))
                     .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:" + appLogPattern
+                        "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*"
                     ))
                     .build());
 
@@ -307,7 +307,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                                 "logs:PutLogEvents"
                             ))
                             .resources(List.of(
-                                "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:/aws/ecs/" + c.stackName + "*"
+                                "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:/aws/ecs/" + c.stackName + "*:*"
                             ))
                             .build()
                     ))
@@ -350,7 +350,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "logs:PutRetentionPolicy"
                     ))
                     .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern
+                        "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*"
                     ))
                     .build());
 
@@ -471,7 +471,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "logs:PutRetentionPolicy"
                     ))
                     .resources(List.of(
-                        "arn:aws:logs:" + c.cfc.region() + ":*:log-group:" + appLogPattern
+                        "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*"
                     ))
                     .build());
 
