@@ -31,10 +31,17 @@ import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.UserData;
 
+import software.amazon.awscdk.services.autoscaling.NotificationConfiguration;
+import software.amazon.awscdk.services.autoscaling.ScalingEvents;
+import software.amazon.awscdk.services.iam.AnyPrincipal;
+import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.LogGroup;
+import software.amazon.awscdk.services.sns.Topic;
 
 import java.util.logging.Logger;
 import software.constructs.Construct;
@@ -449,7 +456,8 @@ public class Ec2Factory extends BaseFactory {
             .instanceType(parsedInstanceType)
             .securityGroup(instanceSg)
             .role(ec2Role)
-            .userData(userData);
+            .userData(userData)
+            .requireImdsv2(config.isImdsv2Required());  // HIPAA: IMDSv2 controlled by SecurityProfileConfiguration
 
     // Determine EBS retention policy based on retainStorage configuration
     // Root volume is always deleted (system disk), but data volume can be retained
@@ -579,14 +587,51 @@ public class Ec2Factory extends BaseFactory {
     }
 
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
-    return AutoScalingGroup.Builder.create(this, appId + "Asg")
+
+    // Create SNS topic for ASG notifications (required for STAGING/PRODUCTION - AwsSolutions-AS3)
+    // Notifications provide visibility into instance lifecycle events for operational monitoring
+    Topic.Builder topicBuilder = Topic.Builder.create(this, appId + "AsgNotifications")
+            .displayName(stackName + " Auto Scaling Notifications");
+
+    // HIPAA/PCI-DSS requires KMS encryption for SNS topics - controlled by SecurityProfileConfiguration
+    if (config.isSnsKmsEncryptionEnabled()) {
+      Key asgNotificationsKey = Key.Builder.create(this, appId + "AsgNotificationsKey")
+              .description("KMS key for ASG notifications SNS topic")
+              .enableKeyRotation(true)
+              .build();
+      topicBuilder.masterKey(asgNotificationsKey);
+    }
+
+    Topic asgNotificationTopic = topicBuilder.build();
+
+    // AwsSolutions-SNS3: Require SSL/TLS for publishers
+    asgNotificationTopic.addToResourcePolicy(PolicyStatement.Builder.create()
+            .sid("EnforceSSL")
+            .effect(Effect.DENY)
+            .principals(List.of(new AnyPrincipal()))
+            .actions(List.of("sns:Publish"))
+            .resources(List.of(asgNotificationTopic.getTopicArn()))
+            .conditions(java.util.Map.of(
+                    "Bool", java.util.Map.of("aws:SecureTransport", "false")
+            ))
+            .build());
+
+    // Build ASG with notifications for all scaling events
+    AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, appId + "Asg")
             .vpc(vpc)
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
             .minCapacity(minCapacity)
             .desiredCapacity(desiredCapacity)
             .maxCapacity(maxCapacity)
             .launchTemplate(launchTemplate)
+            .notifications(List.of(NotificationConfiguration.builder()
+                    .topic(asgNotificationTopic)
+                    .scalingEvents(ScalingEvents.ALL)
+                    .build()))
             .build();
+
+    LOG.info("ASG notifications configured for all scaling events -> " + asgNotificationTopic.getTopicName());
+    return asg;
   }
 
 }

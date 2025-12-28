@@ -390,9 +390,13 @@ public class ContainerFactory extends BaseFactory {
 
                         // For distroless, just set the startup command directly (no shell wrapper)
                         // All configuration is already in environment variables
-                        List<String> command = List.of(startupCommand);
-                        containerOptionsBuilder.command(command);
-                        LOG.info("✅ Configured direct startup command for distroless " + applicationSpec.applicationId());
+                        if (startupCommand != null) {
+                            List<String> command = List.of(startupCommand);
+                            containerOptionsBuilder.command(command);
+                            LOG.info("✅ Configured direct startup command for distroless " + applicationSpec.applicationId());
+                        } else {
+                            LOG.info("✅ Using default container entrypoint for " + applicationSpec.applicationId());
+                        }
                     } else {
                         // Normal container with shell - use wrapper to write config file
                         // Create startup command that writes OIDC config and starts application

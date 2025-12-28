@@ -14,7 +14,6 @@ import software.amazon.awscdk.services.backup.BackupPlanRule;
 import software.amazon.awscdk.services.backup.BackupResource;
 import software.amazon.awscdk.services.backup.BackupSelectionOptions;
 import software.amazon.awscdk.services.backup.BackupVault;
-import software.amazon.awscdk.services.backup.LockConfiguration;
 import software.amazon.awscdk.services.events.CronOptions;
 import software.amazon.awscdk.services.events.Schedule;
 import software.constructs.Construct;
@@ -96,25 +95,30 @@ public class BackupFactory extends BaseFactory {
     private BackupVault createBackupVault() {
         String vaultName = sanitizeResourceName(stackName, "-vault");
 
+        // Determine removal policy based on security profile configuration
+        RemovalPolicy removalPolicy = config.isBackupVaultRetentionEnabled()
+            ? RemovalPolicy.RETAIN
+            : RemovalPolicy.DESTROY;
+
         BackupVault.Builder builder = BackupVault.Builder.create(this, "BackupVault")
                 .backupVaultName(vaultName)
                 // AWS Backup encrypts with AWS-managed key by default
                 // For customer-managed KMS key, add .encryptionKey(key)
-                .removalPolicy(security == SecurityProfile.PRODUCTION
-                    ? RemovalPolicy.RETAIN
-                    : RemovalPolicy.DESTROY);
+                .removalPolicy(removalPolicy);
 
-        // Enable vault lock for PRODUCTION to prevent manual deletion (PCI-DSS compliance)
-        // Vault lock prevents recovery points from being deleted before retention expires
-        if (security == SecurityProfile.PRODUCTION) {
-            builder.lockConfiguration(LockConfiguration.builder()
-                    .minRetention(Duration.days(config.getBackupRetentionDays()))
-                    .build());
-            LOG.info("Backup vault lock enabled for PRODUCTION profile");
+        // Add vault lock based on security profile configuration
+        if (config.isBackupVaultLockEnabled()) {
+            int retentionDays = config.getBackupRetentionDays();
+            builder.lockConfiguration(software.amazon.awscdk.services.backup.LockConfiguration.builder()
+                .minRetention(Duration.days(retentionDays))
+                // AWS Backup requires minimum 72-hour cooling-off period before lock becomes immutable
+                .changeableFor(Duration.days(3))
+                .build());
+            LOG.info("Vault lock enabled for compliance: min retention = " + retentionDays + " days, changeable for 3 days");
         }
 
         BackupVault vault = builder.build();
-        LOG.info("Created backup vault: " + vaultName);
+        LOG.info("Created backup vault: " + vaultName + " (RemovalPolicy: " + removalPolicy + ")");
         return vault;
     }
 

@@ -1614,7 +1614,12 @@ public class InteractiveDeployer {
                 System.out.println("\n🚀 Starting CDK Synthesis...");
         }
 
-        App app = new App();
+        // Create App with output suppression properties
+        App app = App.Builder.create()
+                .analyticsReporting(false)  // Disable analytics
+                .autoSynth(false)           // Disable auto-synthesis
+                .treeMetadata(false)        // Disable tree metadata
+                .build();
         app.getNode().setContext("cfc", cfcContext);
 
         // Only save context if this is from interactive configuration, not when loaded from file
@@ -1711,12 +1716,43 @@ public class InteractiveDeployer {
             ? config.complianceMode
             : ComplianceMode.defaultForProfile(config.securityProfile);
 
-        // Synthesize the stack
-        System.out.println("\n✅ CDK Stack synthesized successfully!");
-        app.synth();
+        // Synthesize the stack (suppress CDK's template output to stdout and stderr)
+        try {
+            // Temporarily redirect both stdout and stderr to suppress CDK template output
+            java.io.PrintStream originalOut = System.out;
+            java.io.PrintStream originalErr = System.err;
+            java.io.ByteArrayOutputStream suppressedOutput = new java.io.ByteArrayOutputStream();
+            java.io.ByteArrayOutputStream suppressedError = new java.io.ByteArrayOutputStream();
+
+            // Create print streams that suppress output
+            java.io.PrintStream nullOut = new java.io.PrintStream(suppressedOutput);
+            java.io.PrintStream nullErr = new java.io.PrintStream(suppressedError);
+
+            System.setOut(nullOut);
+            System.setErr(nullErr);
+
+            try {
+                app.synth();
+            } finally {
+                // Restore original stdout and stderr
+                System.setOut(originalOut);
+                System.setErr(originalErr);
+            }
+
+            System.out.println("\n✅ CDK Stack synthesized successfully!");
+        } catch (Exception e) {
+            // Make sure stdout/stderr are restored before printing error
+            System.err.println("\n❌ CDK Synthesis FAILED!");
+            System.err.println("   Error: " + e.getMessage());
+            if (complianceMode == ComplianceMode.ENFORCE) {
+                System.err.println("\n   Tip: Switch to ADVISORY mode to see all violations without blocking synthesis.");
+            }
+            throw e;
+        }
 
         // Run cfn-guard validation if enforce mode is enabled
-        if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty()) {
+        // Skip validation for export-only option (5) since no deployment occurs
+        if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty() && !choice.equals("5")) {
             boolean guardPassed = runCfnGuardValidation(config);
             if (!guardPassed) {
                 System.out.println("\n❌ cfn-guard validation FAILED!");
@@ -1761,10 +1797,14 @@ public class InteractiveDeployer {
 
             String jsonContent = java.nio.file.Files.readString(templatePath);
 
-            // Ask user for format
+            // Ask user for format with clear visual separation
+            System.out.println("\n" + "=".repeat(80));
+            System.out.println("📄 CLOUDFORMATION TEMPLATE EXPORT");
+            System.out.println("=".repeat(80));
             System.out.println("\nExport format:");
-            System.out.println("  1. JSON");
+            System.out.println("  1. JSON (default)");
             System.out.println("  2. YAML");
+            System.out.println();
             System.out.print("Choose format [1-2]: ");
             System.out.flush();
 
@@ -1960,9 +2000,13 @@ public class InteractiveDeployer {
                 "cfn-guard", "validate",
                 "--rules", guardFile,
                 "--data", templatePath,
-                "--show-summary", "fail"
+                "--show-summary", "none"  // Completely suppress summary output
             );
-            guardProcess.inheritIO();
+
+            // Redirect ALL output to /dev/null to completely suppress cfn-guard output
+            guardProcess.redirectOutput(new java.io.File("/dev/null"));
+            guardProcess.redirectError(new java.io.File("/dev/null"));
+
             Process guardProc = guardProcess.start();
             int exitCode = guardProc.waitFor();
 
@@ -2843,19 +2887,19 @@ public class InteractiveDeployer {
 
         return switch (framework) {
             case "HIPAA" -> HIPAASecurityChecks.Builder.create()
-                    .verbose(true)
+                    .verbose(false)
                     .reports(true)
                     .reportFormats(reportFormats)
                     .logIgnores(!enforce)
                     .build();
             case "PCI-DSS", "PCIDSS", "PCI" -> PCIDSS321Checks.Builder.create()
-                    .verbose(true)
+                    .verbose(false)
                     .reports(true)
                     .reportFormats(reportFormats)
                     .logIgnores(!enforce)
                     .build();
             case "SOC2", "SOC-2" -> AwsSolutionsChecks.Builder.create()
-                    .verbose(true)
+                    .verbose(false)
                     .reports(true)
                     .reportFormats(reportFormats)
                     .logIgnores(!enforce)
@@ -2875,7 +2919,7 @@ public class InteractiveDeployer {
             default -> {
                 System.out.println("      (Using AwsSolutionsChecks as fallback for " + framework + ")");
                 yield AwsSolutionsChecks.Builder.create()
-                        .verbose(true)
+                        .verbose(false)
                         .reports(true)
                         .reportFormats(reportFormats)
                         .logIgnores(!enforce)

@@ -888,6 +888,11 @@ class SynthesisValidationIntegrationTest {
         Map<String, Object> cfcContext = new HashMap<>();
         cfcContext.put("stackName", "DatabaseTest");
         cfcContext.put("lbType", "alb");
+        // Add compliance frameworks for PRODUCTION to enable deletion protection
+        if (profile == SecurityProfile.PRODUCTION) {
+            cfcContext.put("complianceFrameworks", "pci-dss");
+            cfcContext.put("complianceMode", "enforce");
+        }
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);
@@ -988,6 +993,9 @@ class SynthesisValidationIntegrationTest {
         cfcContext.put("stackName", "OptionalDatabaseTest");
         cfcContext.put("lbType", "alb");
         cfcContext.put("provisionDatabase", true);  // Request database
+        // Add compliance frameworks for PRODUCTION to enable deletion protection
+        cfcContext.put("complianceFrameworks", "pci-dss");
+        cfcContext.put("complianceMode", "enforce");
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);

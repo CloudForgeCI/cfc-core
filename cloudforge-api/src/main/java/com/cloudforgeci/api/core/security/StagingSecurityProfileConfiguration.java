@@ -240,8 +240,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             return Boolean.TRUE.equals(deploymentContext.awsConfigEnabled());
         }
 
-        // Default: enabled for staging compliance
-        return true;
+        return false;
     }
 
     @Override
@@ -266,8 +265,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             return Boolean.TRUE.equals(deploymentContext.auditManagerEnabled());
         }
 
-        // Default: enabled for staging to test compliance frameworks
-        return true;
+        return false;
     }
 
     // Encryption Configuration - Full encryption
@@ -503,6 +501,49 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         return false;
     }
 
+    @Override
+    public boolean isBackupVaultLockEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
+            )) {
+                LOG.severe("STAGING profile: Backup Vault Lock enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Default: Vault lock typically not enabled in staging to allow easy cleanup
+        return false;
+    }
+
+    @Override
+    public boolean isBackupVaultRetentionEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
+            )) {
+                LOG.severe("STAGING profile: Backup Vault Retention enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Default: Staging environments typically don't retain backup vaults
+        // to allow easy cleanup and recreation
+        return false;
+    }
+
     // Compliance and Audit - Moderate for staging
     @Override
     public boolean isDetailedBillingEnabled() {
@@ -643,6 +684,56 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     public boolean isRdsEncryptionRemediationEnabled() {
         // Disabled by default - complex operation requiring snapshot recreation
         // Enable in staging to test RDS encryption process before production
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDeletionProtectionRemediationEnabled() {
+        // Disabled by default - deletion protection is set during RDS creation
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDeletionProtectionEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.DELETION_PROTECTION
+            )) {
+                LOG.severe("STAGING profile: RDS Deletion Protection enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Default: Staging environments typically don't require deletion protection
+        // to allow easy cleanup and recreation
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDatabaseMultiAzEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ
+            )) {
+                LOG.severe("STAGING profile: RDS Multi-AZ enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Default: Staging environments typically use single-AZ for cost savings
+        // unless compliance testing requires multi-AZ
         return false;
     }
 
@@ -927,5 +1018,17 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         }
         // STAGING default: false (optional for testing - enable for HIPAA/PCI-DSS)
         return false;
+    }
+
+    @Override
+    public boolean isSnsKmsEncryptionEnabled() {
+        // STAGING: false - Optional for testing
+        return false;
+    }
+
+    @Override
+    public boolean isImdsv2Required() {
+        // STAGING: true - Test production security behavior
+        return true;
     }
 }

@@ -1273,8 +1273,8 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     .generateStringKey("placeholder")
                     .secretStringTemplate("{}")
                     .build())
-                .removalPolicy(securityProfileConfig.getSecurityProfile() == SecurityProfile.PRODUCTION ?
-                    RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                // Always destroy - Cognito regenerates client secrets, this is just a synchronized copy
+                .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
         // Suppress SMG4 - Cognito client secrets cannot be rotated by Secrets Manager

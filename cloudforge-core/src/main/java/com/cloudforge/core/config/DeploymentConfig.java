@@ -974,7 +974,7 @@ public class DeploymentConfig {
         allowedValues = {"enforce", "advisory", "disabled"},
         order = 310
     )
-    public ComplianceMode complianceMode = ComplianceMode.ADVISORY;
+    public ComplianceMode complianceMode;  // null = use defaultForProfile(securityProfile)
 
     /** CloudWatch Logs retention days */
     @ConfigField(
@@ -1459,14 +1459,19 @@ public class DeploymentConfig {
 
     /**
      * Coerces common boolean-like string values to actual Boolean objects.
-     * Supports: "1", "yes", "on" → true; "0", "no", "off" → false.
+     * Supports: "yes", "on" → true; "no", "off" → false.
+     *
+     * <p>Note: "1" and "0" are NOT coerced to boolean because they could be valid
+     * integer values (e.g., minInstanceCapacity="1"). Jackson handles "true"/"false"
+     * natively, so we only need to handle non-standard boolean representations.</p>
      */
     private static Object coerceBooleanIfNeeded(Object value) {
         if (value instanceof String str) {
             String lower = str.trim().toLowerCase();
             return switch (lower) {
-                case "1", "yes", "on" -> Boolean.TRUE;
-                case "0", "no", "off" -> Boolean.FALSE;
+                // Note: "1" and "0" removed - they're ambiguous with integer values
+                case "yes", "on" -> Boolean.TRUE;
+                case "no", "off" -> Boolean.FALSE;
                 default -> value; // Keep original string for Jackson to parse
             };
         }

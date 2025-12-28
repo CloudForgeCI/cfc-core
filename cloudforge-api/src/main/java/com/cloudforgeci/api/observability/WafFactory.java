@@ -6,6 +6,10 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.wafv2.CfnWebACL;
@@ -144,8 +148,32 @@ public class WafFactory extends BaseFactory {
         Key wafLogsKmsKey = Key.Builder.create(this, getNode().getId() + "-WafLogsKmsKey")
                 .description("KMS key for WAF CloudWatch Logs (PCI-DSS compliance)")
                 .enableKeyRotation(true)
-                .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                // Always destroy - WAF logs are for operational monitoring, not long-term audit retention
+                .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
+
+        // Grant CloudWatch Logs service permission to use the KMS key
+        // Required for CloudWatch Logs to encrypt log data
+        wafLogsKmsKey.addToResourcePolicy(PolicyStatement.Builder.create()
+                .sid("Allow CloudWatch Logs to use the key")
+                .effect(Effect.ALLOW)
+                .principals(List.of(new ServicePrincipal("logs." + cfc.region() + ".amazonaws.com")))
+                .actions(List.of(
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*",
+                        "kms:CreateGrant",
+                        "kms:DescribeKey"
+                ))
+                .resources(List.of("*"))
+                .conditions(Map.of(
+                        "ArnLike", Map.of(
+                                "kms:EncryptionContext:aws:logs:arn",
+                                "arn:aws:logs:" + cfc.region() + ":" + Stack.of(this).getAccount() + ":*"
+                        )
+                ))
+                .build());
 
         // Create CloudWatch Logs group for WAF logging (PCI-DSS Req 10.2)
         // WAFv2 requires log group name to start with "aws-waf-logs-"
@@ -153,7 +181,8 @@ public class WafFactory extends BaseFactory {
         LogGroup wafLogGroup = LogGroup.Builder.create(this, getNode().getId() + "-WafLogs")
                 .logGroupName("aws-waf-logs-" + appId + "-" + stackName.toLowerCase())
                 .retention(config.getLogRetentionDays())  // Compliance-aware retention from security profile
-                .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                // Always destroy - WAF logs are for operational monitoring, not long-term audit retention
+                .removalPolicy(RemovalPolicy.DESTROY)
                 .encryptionKey(wafLogsKmsKey)  // KMS encryption for PCI-DSS
                 .build();
 

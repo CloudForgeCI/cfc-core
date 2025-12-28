@@ -53,7 +53,8 @@ class PciDssComplianceExtendedTest extends IntegrationTestBase {
         cfcContext.put("enableFlowlogs", true);
         cfcContext.put("awsConfigEnabled", true);
         cfcContext.put("createConfigInfrastructure", true);
-        cfcContext.put("complianceFrameworks", "PCI-DSS");
+        cfcContext.put("complianceFrameworks", "pci-dss");
+        cfcContext.put("complianceMode", "enforce");
 
         builder = new com.cloudforgeci.api.test.TestInfrastructureBuilder(
             "PciDssExtendedTest",

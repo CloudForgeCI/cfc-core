@@ -547,6 +547,41 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         return true;
     }
 
+    @Override
+    public boolean isBackupVaultLockEnabled() {
+        // Enable vault lock based on compliance matrix
+        // Vault lock is required for PCI-DSS and HIPAA when BACKUP_RECOVERY control is enforced
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            return ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
+            );
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isBackupVaultRetentionEnabled() {
+        // Retain backup vault based on compliance matrix
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
+            )) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Compliance and Audit - Comprehensive for production
     @Override
     public boolean isDetailedBillingEnabled() {
@@ -705,6 +740,52 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         // 3. Updating application connection strings
         // Enable manually with proper planning
         return false;
+    }
+
+    @Override
+    public boolean isRdsDeletionProtectionRemediationEnabled() {
+        // Disabled by default - deletion protection is set during RDS creation
+        // This remediation would enable protection on existing instances
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDeletionProtectionEnabled() {
+        // Enable deletion protection based on compliance matrix
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.DELETION_PROTECTION
+            )) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDatabaseMultiAzEnabled() {
+        // Enable Multi-AZ based on compliance matrix
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ
+            )) {
+                LOG.severe("PRODUCTION profile: RDS Multi-AZ enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Default: Enable for PRODUCTION even without compliance frameworks (best practice)
+        return true;
     }
 
     @Override
@@ -1063,5 +1144,45 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
 
         // PRODUCTION default: false (opt-in, but required for HIPAA/PCI-DSS)
         return false;
+    }
+
+    @Override
+    public boolean isSnsKmsEncryptionEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION
+            )) {
+                LOG.info("PRODUCTION profile: SNS KMS encryption enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+        // PRODUCTION default: true when HIPAA or PCI-DSS compliance is required
+        return false;
+    }
+
+    @Override
+    public boolean isImdsv2Required() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.EC2_IMDSV2
+            )) {
+                LOG.info("PRODUCTION profile: IMDSv2 enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+        // PRODUCTION default: true - Required for HIPAA compliance
+        return true;
     }
 }

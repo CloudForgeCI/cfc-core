@@ -374,7 +374,7 @@ class CdkNagControlMapperTest {
         assertTrue(totalRulesMapped > 0, "Should have mapped rules");
 
         Integer totalSecurityControls = (Integer) stats.get("totalSecurityControls");
-        assertEquals(41, totalSecurityControls, "Should have 41 SecurityControl enums");
+        assertEquals(43, totalSecurityControls, "Should have 43 SecurityControl enums");
     }
 
     @Test
@@ -465,8 +465,12 @@ class CdkNagControlMapperTest {
         assertTrue(encryptionRules.stream().anyMatch(r -> r.contains("EBS") || r.contains("EC2")),
                 "Should cover EBS/EC2 encryption");
         assertTrue(encryptionRules.stream().anyMatch(r -> r.contains("EFS")), "Should cover EFS encryption");
-        assertTrue(encryptionRules.stream().anyMatch(r -> r.contains("SNS")), "Should cover SNS encryption");
+        // Note: SNS encryption moved to SNS_KMS_ENCRYPTION control for KMS-specific requirements
         assertTrue(encryptionRules.stream().anyMatch(r -> r.contains("SQS")), "Should cover SQS encryption");
+
+        // Verify SNS encryption is covered by SNS_KMS_ENCRYPTION control
+        List<String> snsKmsRules = CdkNagControlMapper.getRulesForControl(SecurityControl.SNS_KMS_ENCRYPTION);
+        assertTrue(snsKmsRules.stream().anyMatch(r -> r.contains("SNS")), "SNS_KMS_ENCRYPTION should cover SNS encryption");
     }
 
     @Test

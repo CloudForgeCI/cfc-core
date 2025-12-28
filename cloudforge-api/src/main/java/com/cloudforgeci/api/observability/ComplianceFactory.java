@@ -464,14 +464,14 @@ public class ComplianceFactory extends BaseFactory {
             cloudTrailLogsKmsKey = Key.Builder.create(this, "CloudTrailLogsKmsKey")
                     .description("KMS key for CloudTrail CloudWatch Logs (HIPAA/PCI-DSS compliance)")
                     .enableKeyRotation(true)
-                    .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                    .removalPolicy(RemovalPolicy.DESTROY)
                     .build();
 
             cloudTrailLogGroup = LogGroup.Builder.create(this, "CloudTrailLogGroup")
                     .logGroupName("/aws/cloudtrail/" + this.trailName)
                     .retention(config.getLogRetentionDays())
                     .encryptionKey(cloudTrailLogsKmsKey)
-                    .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                    .removalPolicy(RemovalPolicy.DESTROY)
                     .build();
         }
 
@@ -498,7 +498,7 @@ public class ComplianceFactory extends BaseFactory {
             Key cloudTrailKmsKey = Key.Builder.create(this, "CloudTrailKmsKey")
                     .description("KMS key for CloudTrail (HIPAA/PCI-DSS compliance)")
                     .enableKeyRotation(true)
-                    .removalPolicy(security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                    .removalPolicy(RemovalPolicy.DESTROY)
                     .build();
 
             // Grant CloudTrail service permission to use the key
@@ -1457,11 +1457,8 @@ public class ComplianceFactory extends BaseFactory {
                 ))
                 .build();
 
-        // RETAIN the remediation role when CloudTrail is retained (production)
-        // CloudTrail uses this role for auto-remediation of bucket access issues
-        ssmAutomationRole.applyRemovalPolicy(
-            security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY
-        );
+        // Destroy remediation role with stack deletion
+        ssmAutomationRole.applyRemovalPolicy(RemovalPolicy.DESTROY);
 
         // Create custom SSM Automation document for CloudTrail bucket policy fix
         software.amazon.awscdk.services.ssm.CfnDocument cloudTrailFixDocument =
@@ -4308,7 +4305,8 @@ public class ComplianceFactory extends BaseFactory {
             Key kmsKey = Key.Builder.create(this, id + "KmsKey")
                     .description("KMS key for " + id + " (HIPAA/PCI-DSS compliance)")
                     .enableKeyRotation(true)
-                    .removalPolicy(shouldRetain ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                    // Always destroy - if bucket is retained, key is useless without encrypted data
+                    .removalPolicy(RemovalPolicy.DESTROY)
                     .build();
             bucketBuilder.encryptionKey(kmsKey).encryption(BucketEncryption.KMS);
         } else {

@@ -167,16 +167,9 @@ class DeploymentContextComputedFieldsTest {
             assertTrue(ctx.enableSsl(), "enableSsl should parse string 'true' as boolean");
         }
 
-        @Test
-        @DisplayName("enableSsl should parse string '1' as true")
-        void enableSslParsesString1() {
-            Map<String, Object> config = new LinkedHashMap<>();
-            config.put("enableSsl", "1");
-            config.put("domain", "example.com");
-            DeploymentContext ctx = createContext(config);
-
-            assertTrue(ctx.enableSsl(), "enableSsl should parse string '1' as true");
-        }
+        // Note: "1" and "0" are NOT supported as boolean values in DeploymentConfig
+        // to avoid ambiguity with integer values. Only "true"/"false", "yes"/"no", "on"/"off"
+        // are supported. This is intentional design - see DeploymentConfig.coerceBooleanIfNeeded()
     }
 
     @Nested
@@ -397,7 +390,7 @@ class DeploymentContextComputedFieldsTest {
             config.put("domain", "example.org");
             config.put("subdomain", "test");
             config.put("enableSsl", "true");
-            config.put("createZone", "1");
+            config.put("createZone", "yes");
             DeploymentContext ctx = createContext(config);
 
             // Verify all fields are consistent

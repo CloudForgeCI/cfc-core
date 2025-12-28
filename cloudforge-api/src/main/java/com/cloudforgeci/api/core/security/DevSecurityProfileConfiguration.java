@@ -233,6 +233,18 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
         return false; // Not required for dev
     }
 
+    @Override
+    public boolean isBackupVaultLockEnabled() {
+        // Vault lock not required in dev environments
+        return false;
+    }
+
+    @Override
+    public boolean isBackupVaultRetentionEnabled() {
+        // Dev environments don't retain backup vaults
+        return false;
+    }
+
     // Compliance and Audit - Minimal for dev
     @Override
     public boolean isDetailedBillingEnabled() {
@@ -344,6 +356,25 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     @Override
     public boolean isRdsEncryptionRemediationEnabled() {
         // Disabled for dev - encryption not required for development data
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDeletionProtectionRemediationEnabled() {
+        // Disabled for dev - deletion protection not needed in development
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDeletionProtectionEnabled() {
+        // Dev environments don't require deletion protection
+        // to allow easy cleanup and rapid iteration
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDatabaseMultiAzEnabled() {
+        // Dev environments use single-AZ for cost savings
         return false;
     }
 
@@ -543,5 +574,15 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
             return Boolean.TRUE.equals(deploymentContext.s3ObjectLockEnabled());
         }
         return false; // Not required for development
+    }
+
+    @Override
+    public boolean isSnsKmsEncryptionEnabled() {
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isImdsv2Required() {
+        return false; // IMDSv1 allowed for development convenience
     }
 }

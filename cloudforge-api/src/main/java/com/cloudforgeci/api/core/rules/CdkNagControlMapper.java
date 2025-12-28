@@ -66,10 +66,10 @@ public final class CdkNagControlMapper {
         map.put("HIPAA.Security-EFSEncrypted", SecurityControl.ENCRYPTION_AT_REST);
         map.put("PCI.DSS.321-EFSEncrypted", SecurityControl.ENCRYPTION_AT_REST);
 
-        // SNS encryption
-        map.put("AwsSolutions-SNS-2", SecurityControl.ENCRYPTION_AT_REST);
-        map.put("HIPAA.Security-SNSEncryptedKMS", SecurityControl.ENCRYPTION_AT_REST);
-        map.put("PCI.DSS.321-SNSEncryptedKMS", SecurityControl.ENCRYPTION_AT_REST);
+        // SNS encryption - mapped to SNS_KMS_ENCRYPTION for SNS-specific KMS requirements
+        map.put("AwsSolutions-SNS-2", SecurityControl.SNS_KMS_ENCRYPTION);
+        map.put("HIPAA.Security-SNSEncryptedKMS", SecurityControl.SNS_KMS_ENCRYPTION);
+        map.put("PCI.DSS.321-SNSEncryptedKMS", SecurityControl.SNS_KMS_ENCRYPTION);
 
         // SQS encryption
         map.put("AwsSolutions-SQS-2", SecurityControl.ENCRYPTION_AT_REST);
@@ -309,6 +309,12 @@ public final class CdkNagControlMapper {
         map.put("AwsSolutions-VPC-7", SecurityControl.NETWORK_FLOW_LOGS);
         map.put("HIPAA.Security-VPCFlowLogsEnabled", SecurityControl.NETWORK_FLOW_LOGS);
         map.put("PCI.DSS.321-VPCFlowLogsEnabled", SecurityControl.NETWORK_FLOW_LOGS);
+
+        // ========== EC2_IMDSV2 ==========
+        // EC2 Instance Metadata Service V2 (IMDSv2)
+        map.put("AwsSolutions-EC2-8", SecurityControl.EC2_IMDSV2);
+        map.put("HIPAA.Security-EC2IMDSv2Enabled", SecurityControl.EC2_IMDSV2);
+        map.put("PCI.DSS.321-EC2IMDSv2Enabled", SecurityControl.EC2_IMDSV2);
 
         return Collections.unmodifiableMap(map);
     }

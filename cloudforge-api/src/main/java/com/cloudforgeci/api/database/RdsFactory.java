@@ -154,14 +154,16 @@ public class RdsFactory {
             encryptionKey = Key.Builder.create(scope, instanceId + "EncryptionKey")
                 .description("RDS encryption key for " + stackName + "-" + instanceId)
                 .enableKeyRotation(true)
-                .removalPolicy(security == SecurityProfile.PRODUCTION ?
-                    RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                // Always destroy - if database is deleted, encrypted data is gone anyway
+                .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
         }
 
         // Create database credentials in Secrets Manager
+        // Always destroy - if the database is deleted, credentials are useless
+        // Note: No secretName specified - CloudFormation will auto-generate unique name
+        // This prevents "AlreadyExists" errors from retained secrets in previous deployments
         Secret databaseSecret = Secret.Builder.create(scope, instanceId + "Secret")
-            .secretName(stackName + "-" + instanceId + "-credentials")
             .description("Database credentials for " + stackName + "-" + instanceId)
             .generateSecretString(SecretStringGenerator.builder()
                 .secretStringTemplate("{\"username\":\"" + requirement.databaseName() + "admin\"}")
@@ -169,8 +171,7 @@ public class RdsFactory {
                 .excludePunctuation(true)
                 .passwordLength(32)
                 .build())
-            .removalPolicy(security == SecurityProfile.PRODUCTION ?
-                RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+            .removalPolicy(RemovalPolicy.DESTROY)
             .build();
 
         // TODO: Enable automatic credential rotation for production
@@ -234,9 +235,12 @@ public class RdsFactory {
         // Parse instance type from instance class
         InstanceType instanceType = parseInstanceType(requirement.instanceClass());
 
+        // Build instance identifier with 63 character limit (RDS constraint)
+        String dbInstanceIdentifier = truncateDbIdentifier(stackName + "-" + instanceId, 63);
+
         // Create database instance builder
         DatabaseInstance.Builder instanceBuilder = DatabaseInstance.Builder.create(scope, instanceId)
-            .instanceIdentifier(stackName + "-" + instanceId)
+            .instanceIdentifier(dbInstanceIdentifier)
             .engine(engine)
             .instanceType(instanceType)
             .vpc(vpc)
@@ -246,13 +250,16 @@ public class RdsFactory {
             .credentials(Credentials.fromSecret(databaseSecret))
             .parameterGroup(parameterGroup)
 
-            .removalPolicy(security == SecurityProfile.PRODUCTION ?
-                RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+            // Allow stack deletion to remove database
+            .removalPolicy(RemovalPolicy.DESTROY)
 
             // Security configurations
             .storageEncrypted(enableEncryption)
             .publiclyAccessible(false)
-            .deletionProtection(security == SecurityProfile.PRODUCTION)
+            // Enable deletion protection based on security profile configuration
+            .deletionProtection(ctx.securityProfileConfig.get()
+                .map(config -> config.isRdsDeletionProtectionEnabled())
+                .orElse(false))
             .autoMinorVersionUpgrade(security == SecurityProfile.PRODUCTION)
             .iamAuthentication(security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING)
 
@@ -262,7 +269,11 @@ public class RdsFactory {
             .preferredMaintenanceWindow("sun:04:00-sun:05:00")
             .copyTagsToSnapshot(true)
 
-            .multiAz(multiAzOverride != null ? multiAzOverride : (security == SecurityProfile.PRODUCTION))
+            // Enable Multi-AZ based on deployment context override, security profile configuration, or compliance requirements
+            .multiAz(multiAzOverride != null ? multiAzOverride :
+                ctx.securityProfileConfig.get()
+                    .map(config -> config.isRdsDatabaseMultiAzEnabled())
+                    .orElse(security == SecurityProfile.PRODUCTION))
 
             // Storage configuration
             .allocatedStorage(requirement.allocatedStorageGB())
@@ -539,6 +550,7 @@ public class RdsFactory {
             .engine(instanceEngine)
             .description("Optimized parameter group for " + id)
             .parameters(parameters)
+            .removalPolicy(RemovalPolicy.DESTROY)
             .build();
     }
 
@@ -597,5 +609,40 @@ public class RdsFactory {
             case "mariadb" -> 3306;
             default -> 5432;
         };
+    }
+
+    /**
+     * Truncate DB instance identifier to meet RDS constraints.
+     *
+     * <p>RDS DBInstanceIdentifier must be:
+     * <ul>
+     *   <li>1-63 characters long</li>
+     *   <li>Contain only alphanumeric characters and hyphens</li>
+     *   <li>First character must be a letter</li>
+     *   <li>Cannot end with a hyphen</li>
+     *   <li>Cannot contain two consecutive hyphens</li>
+     * </ul>
+     *
+     * @param identifier The proposed identifier
+     * @param maxLength Maximum allowed length (63 for RDS)
+     * @return Truncated identifier that meets RDS constraints
+     */
+    private static String truncateDbIdentifier(String identifier, int maxLength) {
+        if (identifier == null || identifier.isEmpty()) {
+            return "db-instance";
+        }
+
+        // Already within limit
+        if (identifier.length() <= maxLength) {
+            return identifier;
+        }
+
+        // Truncate and ensure it doesn't end with a hyphen
+        String truncated = identifier.substring(0, maxLength);
+        while (truncated.endsWith("-") && truncated.length() > 1) {
+            truncated = truncated.substring(0, truncated.length() - 1);
+        }
+
+        return truncated;
     }
 }

@@ -23,7 +23,8 @@ public class DeploymentContextParsingTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "true", "1", "yes", "TRUE" })
+    // Note: "1" and "0" NOT supported to avoid ambiguity with integer values
+    @ValueSource(strings = { "true", "yes", "on", "TRUE" })
     void booleanParsingTrueVariants(String v) throws Exception {
         Map<String,Object> m = new LinkedHashMap<>();
         m.put("wafEnabled", v);

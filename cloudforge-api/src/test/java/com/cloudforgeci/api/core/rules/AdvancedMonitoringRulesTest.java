@@ -690,6 +690,13 @@ class AdvancedMonitoringRulesTest {
         customContext.put("macieEnabled", macieEnabled);
         customContext.put("macieAutomatedDiscovery", automatedDiscovery);
 
+        // PCI-DSS and NIST require Inspector for vulnerability scanning
+        // Enable Inspector to satisfy those requirements in this Macie-focused test
+        if (complianceFramework.toUpperCase().contains("PCI-DSS") ||
+            complianceFramework.toUpperCase().contains("NIST")) {
+            customContext.put("inspectorEnabled", "true");
+        }
+
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "TestMacie", secProfile, RuntimeType.FARGATE, customContext);

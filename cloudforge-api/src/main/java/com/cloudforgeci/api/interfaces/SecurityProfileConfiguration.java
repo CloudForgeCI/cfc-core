@@ -174,6 +174,45 @@ public interface SecurityProfileConfiguration {
      */
     boolean isCrossRegionBackupEnabled();
 
+    /**
+     * Whether backup vault lock should be enabled.
+     *
+     * <p>Vault lock prevents backups from being deleted or modified for a
+     * specified retention period, ensuring immutability of backup data.</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>PCI-DSS - Immutable backup retention</li>
+     *   <li>HIPAA - Data integrity and retention requirements</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when PCI-DSS or HIPAA compliance is required</li>
+     * </ul>
+     *
+     * @return true if backup vault lock should be enabled
+     */
+    boolean isBackupVaultLockEnabled();
+
+    /**
+     * Whether backup vault should be retained on stack deletion.
+     *
+     * <p>When enabled, the backup vault and its backups are retained even
+     * after the CloudFormation stack is deleted, ensuring compliance with
+     * data retention policies.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Allow cleanup for development</li>
+     *   <li>STAGING: false - Allow cleanup for staging</li>
+     *   <li>PRODUCTION: true when compliance frameworks are enabled</li>
+     * </ul>
+     *
+     * @return true if backup vault should be retained
+     */
+    boolean isBackupVaultRetentionEnabled();
+
     // Compliance and Audit
     /**
      * Whether detailed billing should be enabled.
@@ -288,6 +327,53 @@ public interface SecurityProfileConfiguration {
      * WARNING: Complex operation requiring snapshot recreation.
      */
     boolean isRdsEncryptionRemediationEnabled();
+
+    /**
+     * Whether RDS deletion protection remediation should be enabled.
+     * Automatically enables deletion protection on RDS instances.
+     */
+    boolean isRdsDeletionProtectionRemediationEnabled();
+
+    /**
+     * Whether RDS deletion protection should be enabled.
+     *
+     * <p>Deletion protection prevents accidental deletion of RDS instances.
+     * Required for production deployments with compliance frameworks (PCI-DSS, HIPAA, SOC2, GDPR).</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Allow easy cleanup during development</li>
+     *   <li>STAGING: false - Allow cleanup of staging environments</li>
+     *   <li>PRODUCTION: true when compliance frameworks are enabled</li>
+     * </ul>
+     *
+     * @return true if deletion protection should be enabled
+     */
+    boolean isRdsDeletionProtectionEnabled();
+
+    /**
+     * Whether RDS database Multi-AZ deployment should be enabled.
+     *
+     * <p>Multi-AZ provides high availability and automatic failover for RDS instances.
+     * Required for production deployments with compliance frameworks (PCI-DSS, HIPAA, SOC2, GDPR, NIST).</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>PCI-DSS - Req 12.10.4: Critical system availability</li>
+     *   <li>HIPAA - §164.308(a)(7)(ii)(B): Disaster recovery</li>
+     *   <li>SOC2 - A1.2: System availability</li>
+     *   <li>GDPR - Art. 32(1)(b): System resilience</li>
+     *   <li>NIST - CP-6: Alternate Storage Site</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - Single AZ for cost savings</li>
+     *   <li>STAGING: false by default, true when compliance frameworks require it</li>
+     *   <li>PRODUCTION: true when compliance frameworks are enabled</li>
+     * </ul>
+     *
+     * @return true if RDS Multi-AZ should be enabled
+     */
+    boolean isRdsDatabaseMultiAzEnabled();
 
     /**
      * Whether Security Hub remediation should be enabled.
@@ -682,4 +768,51 @@ public interface SecurityProfileConfiguration {
      * @return true if S3 Object Lock should be enabled
      */
     boolean isS3ObjectLockEnabled();
+
+    /**
+     * Whether SNS topics should be encrypted with KMS.
+     *
+     * <p>KMS encryption provides customer-managed encryption keys for SNS topics,
+     * ensuring messages at rest are protected with customer-controlled keys.</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>HIPAA § 164.312(a)(2)(iv) - Encryption of ePHI</li>
+     *   <li>HIPAA § 164.312(e)(2)(ii) - Encryption mechanism</li>
+     *   <li>PCI-DSS Req 8.2.1 - Data at rest encryption</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - Standard SNS encryption is sufficient</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when HIPAA or PCI-DSS compliance is required</li>
+     * </ul>
+     *
+     * @return true if SNS topics should use KMS encryption
+     */
+    boolean isSnsKmsEncryptionEnabled();
+
+    /**
+     * Whether EC2 instances must use IMDSv2 (Instance Metadata Service Version 2).
+     *
+     * <p>IMDSv2 uses session-based tokens and provides better protection against
+     * SSRF attacks and unauthorized access to instance metadata.</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>HIPAA § 164.308(a)(3)(i) - Access controls</li>
+     *   <li>HIPAA § 164.308(a)(4)(ii)(A) - Access authorization</li>
+     *   <li>HIPAA § 164.312(a)(1) - Access control</li>
+     *   <li>PCI-DSS - Defense in depth</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - IMDSv1 allowed for development convenience</li>
+     *   <li>STAGING: true - Test production security behavior</li>
+     *   <li>PRODUCTION: true - Required for HIPAA compliance</li>
+     * </ul>
+     *
+     * @return true if IMDSv2 should be required
+     */
+    boolean isImdsv2Required();
 }

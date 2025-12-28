@@ -553,6 +553,32 @@ public final class ComplianceMatrix {
                 "NIST", FrameworkRequirement.required("CP-9/SC-28 - Information protection"),
                 "FedRAMP", FrameworkRequirement.required("CP-9 - Information system backup")
             )
+        ),
+
+        // ==================== SNS KMS Encryption ====================
+        SNS_KMS_ENCRYPTION(
+            "SNS topic encryption with customer-managed KMS keys",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.required("Req 8.2.1 - Data at rest encryption"),
+                "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption of ePHI"),
+                "SOC2", FrameworkRequirement.advisory("CC6.1 - Message encryption"),
+                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(a) - Encryption of personal data"),
+                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
+                "FedRAMP", FrameworkRequirement.required("SC-28 - Information at rest")
+            )
+        ),
+
+        // ==================== EC2 IMDSv2 ====================
+        EC2_IMDSV2(
+            "EC2 Instance Metadata Service Version 2 (IMDSv2) enforcement",
+            Map.of(
+                "PCI-DSS", FrameworkRequirement.advisory("Defense in depth for instance metadata"),
+                "HIPAA", FrameworkRequirement.required("§164.308(a)(3)(i) - Access controls"),
+                "SOC2", FrameworkRequirement.required("CC6.1 - Instance metadata protection"),
+                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Access security"),
+                "NIST", FrameworkRequirement.required("AC-3 - Access Enforcement"),
+                "FedRAMP", FrameworkRequirement.required("AC-3 - Access control enforcement")
+            )
         );
 
         private final String description;

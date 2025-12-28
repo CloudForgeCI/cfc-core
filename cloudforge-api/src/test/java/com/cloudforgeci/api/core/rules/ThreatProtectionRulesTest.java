@@ -958,6 +958,11 @@ class ThreatProtectionRulesTest {
             customContext.put("antiMalwareEnabled", "true");  // PCI-DSS requires anti-malware for EC2
         }
 
+        // HIPAA requires GuardDuty for network intrusion detection
+        if (framework.toUpperCase().contains("HIPAA")) {
+            customContext.put("guardDutyEnabled", "true");  // HIPAA requires GuardDuty
+        }
+
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -1036,6 +1041,11 @@ class ThreatProtectionRulesTest {
             customContext.put("antiMalwareEnabled", "true");  // PCI-DSS requires anti-malware for EC2
             customContext.put("fileIntegrityMonitoring", "true");  // PCI-DSS requires FIM
             customContext.put("awsConfigEnabled", "true");  // PCI-DSS requires Config
+        }
+
+        // HIPAA requires GuardDuty for network intrusion detection
+        if (framework.toUpperCase().contains("HIPAA")) {
+            customContext.put("guardDutyEnabled", "true");  // HIPAA requires GuardDuty
         }
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);

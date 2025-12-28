@@ -77,9 +77,13 @@ class BackupFactoryTest {
 
     @Test
     void testProductionProfileCreatesBackupsWithVaultLock() {
-        // Given: PRODUCTION security profile
+        // Given: PRODUCTION security profile with PCI-DSS compliance in enforce mode
+        Map<String, Object> context = new HashMap<>();
+        context.put("complianceFrameworks", "pci-dss");
+        context.put("complianceMode", "enforce");
+
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
-            "BackupProdTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE);
+            "BackupProdTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, context);
         builder.createCompleteInfrastructure();
 
         // When: BackupFactory is created
@@ -139,9 +143,13 @@ class BackupFactoryTest {
 
     @Test
     void testBackupVaultRemovalPolicyProduction() {
-        // Given: PRODUCTION profile
+        // Given: PRODUCTION profile with compliance frameworks in enforce mode
+        Map<String, Object> context = new HashMap<>();
+        context.put("complianceFrameworks", "pci-dss,hipaa");
+        context.put("complianceMode", "enforce");
+
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
-            "BackupRetainTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE);
+            "BackupRetainTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, context);
         builder.createCompleteInfrastructure();
 
         BackupFactory backupFactory = new BackupFactory(builder.getStack(), "Backup");
@@ -149,7 +157,7 @@ class BackupFactoryTest {
 
         Template t = Template.fromStack(builder.getStack());
 
-        // Then: PRODUCTION should have RETAIN removal policy
+        // Then: PRODUCTION with compliance frameworks should have RETAIN removal policy
         t.hasResource("AWS::Backup::BackupVault", Map.of(
             "DeletionPolicy", "Retain",
             "UpdateReplacePolicy", "Retain"
@@ -368,9 +376,10 @@ class BackupFactoryTest {
 
     @Test
     void testPciDssEfsBackupCompliance() {
-        // Given: PRODUCTION profile for PCI-DSS compliance
+        // Given: PRODUCTION profile for PCI-DSS compliance in enforce mode
         Map<String, Object> context = new HashMap<>();
-        context.put("complianceFrameworks", "PCI-DSS");
+        context.put("complianceFrameworks", "pci-dss");
+        context.put("complianceMode", "enforce");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "BackupPciDssTest", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, context);
