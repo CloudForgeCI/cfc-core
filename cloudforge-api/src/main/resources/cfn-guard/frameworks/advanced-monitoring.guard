@@ -24,7 +24,7 @@ rule advanced_monitoring_cloudwatch_retention when
 rule advanced_monitoring_log_encryption when
     resourceType == 'AWS::Logs::LogGroup' {
 
-    Properties.KmsKeyId exists <<[Advanced Monitoring] CloudWatch log groups should be encrypted with KMS>>
+    Properties.KmsKeyId exists <<[Advanced Monitoring] CloudWatch log groups must be encrypted with KMS>>
 }
 
 # ============================================================================
@@ -124,9 +124,9 @@ rule advanced_monitoring_rds_performance_insights when
 rule advanced_monitoring_lambda_tracing when
     resourceType == 'AWS::Lambda::Function' {
 
-    when Properties.TracingConfig exists {
-        Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Advanced Monitoring] Lambda tracing mode must be Active or PassThrough>>
-    }
+    Properties.TracingConfig exists <<[Advanced Monitoring] Lambda functions must enable X-Ray tracing>>
+    Properties.TracingConfig.Mode exists <<[Advanced Monitoring] Must specify tracing mode>>
+    Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Advanced Monitoring] Lambda tracing mode must be Active or PassThrough>>
 }
 
 # Lambda dead letter queue
@@ -134,9 +134,8 @@ rule advanced_monitoring_lambda_tracing when
 rule advanced_monitoring_lambda_dlq when
     resourceType == 'AWS::Lambda::Function' {
 
-    when Properties.DeadLetterConfig exists {
-        Properties.DeadLetterConfig.TargetArn exists <<[Advanced Monitoring] Lambda DLQ must specify target ARN>>
-    }
+    Properties.DeadLetterConfig exists <<[Advanced Monitoring] Lambda functions must have dead letter queues configured>>
+    Properties.DeadLetterConfig.TargetArn exists <<[Advanced Monitoring] Lambda DLQ must specify target ARN>>
 }
 
 # ============================================================================
@@ -148,9 +147,8 @@ rule advanced_monitoring_lambda_dlq when
 rule advanced_monitoring_s3_logging when
     resourceType == 'AWS::S3::Bucket' {
 
-    when Properties.LoggingConfiguration exists {
-        Properties.LoggingConfiguration.DestinationBucketName exists <<[Advanced Monitoring] S3 logging must specify destination bucket>>
-    }
+    Properties.LoggingConfiguration exists <<[Advanced Monitoring] S3 buckets must have logging configured>>
+    Properties.LoggingConfiguration.DestinationBucketName exists <<[Advanced Monitoring] S3 logging must specify destination bucket>>
 }
 
 # ============================================================================
@@ -162,12 +160,11 @@ rule advanced_monitoring_s3_logging when
 rule advanced_monitoring_alb_logging when
     resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
 
-    when Properties.LoadBalancerAttributes exists {
-        Properties.LoadBalancerAttributes[*] {
-            when Key == 'access_logs.s3.enabled' {
-                Value == 'true' <<[Advanced Monitoring] ALB access logging should be enabled>>
-            }
-        }
+    Properties.LoadBalancerAttributes exists <<[Advanced Monitoring] Load balancers must configure attributes>>
+
+    some Properties.LoadBalancerAttributes[*] {
+        Key == 'access_logs.s3.enabled'
+        Value == 'true' <<[Advanced Monitoring] ALB/NLB must have access logging enabled>>
     }
 }
 
@@ -189,12 +186,10 @@ rule advanced_monitoring_apigateway_logging when
 rule advanced_monitoring_apigateway_execution_logging when
     resourceType == 'AWS::ApiGateway::Stage' {
 
-    when Properties.MethodSettings exists {
-        Properties.MethodSettings[*] {
-            when LoggingLevel exists {
-                LoggingLevel in ['INFO', 'ERROR'] <<[Advanced Monitoring] API Gateway logging level must be INFO or ERROR>>
-            }
-        }
+    Properties.MethodSettings exists <<[Advanced Monitoring] API Gateway stages must configure method settings>>
+    Properties.MethodSettings[*] {
+        LoggingLevel exists <<[Advanced Monitoring] Method settings must specify logging level>>
+        LoggingLevel in ['INFO', 'ERROR'] <<[Advanced Monitoring] API Gateway logging level must be INFO or ERROR>>
     }
 }
 
@@ -266,12 +261,10 @@ rule advanced_monitoring_redshift_logging when
 rule advanced_monitoring_ecs_logging when
     resourceType == 'AWS::ECS::TaskDefinition' {
 
-    when Properties.ContainerDefinitions exists {
-        Properties.ContainerDefinitions[*] {
-            when LogConfiguration exists {
-                LogConfiguration.LogDriver exists <<[Advanced Monitoring] ECS container must have log driver configured>>
-            }
-        }
+    Properties.ContainerDefinitions exists <<[Advanced Monitoring] ECS task definitions must define containers>>
+    Properties.ContainerDefinitions[*] {
+        LogConfiguration exists <<[Advanced Monitoring] ECS containers must have log configuration>>
+        LogConfiguration.LogDriver exists <<[Advanced Monitoring] ECS container must have log driver configured>>
     }
 }
 
@@ -300,13 +293,12 @@ rule advanced_monitoring_cloudtrail_organization when
 rule advanced_monitoring_cloudtrail_s3_data_events when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    when Properties.EventSelectors exists {
-        some Properties.EventSelectors[*] {
-            when DataResources exists {
-                some DataResources[*] {
-                    Type == 'AWS::S3::Object' <<[Advanced Monitoring] CloudTrail should log S3 data events>>
-                }
-            }
+    Properties.EventSelectors exists <<[Advanced Monitoring] CloudTrail should configure event selectors>>
+
+    some Properties.EventSelectors[*] {
+        DataResources exists <<[Advanced Monitoring] Event selectors should include data resources>>
+        some DataResources[*] {
+            Type == 'AWS::S3::Object' <<[Advanced Monitoring] CloudTrail should log S3 data events>>
         }
     }
 }

@@ -106,7 +106,7 @@ rule messaging_security_secretsmanager_rotation when
 rule messaging_security_secretsmanager_kms when
     resourceType == 'AWS::SecretsManager::Secret' {
 
-    Properties.KmsKeyId exists <<[Messaging Security] Secrets Manager secrets should use customer-managed KMS keys>>
+    Properties.KmsKeyId exists <<[Messaging Security] Secrets Manager secrets must use customer-managed KMS keys>>
 }
 
 # ============================================================================
@@ -146,6 +146,7 @@ rule messaging_security_kinesis_encryption when
     resourceType == 'AWS::Kinesis::Stream' {
 
     Properties.StreamEncryption exists <<[Messaging Security] Kinesis streams must have encryption configured>>
+    Properties.StreamEncryption.EncryptionType exists <<[Messaging Security] Must specify encryption type>>
     Properties.StreamEncryption.EncryptionType == 'KMS' <<[Messaging Security] Kinesis streams must use KMS encryption>>
 }
 
@@ -166,9 +167,9 @@ rule messaging_security_kinesis_monitoring when
 rule messaging_security_firehose_encryption when
     resourceType == 'AWS::KinesisFirehose::DeliveryStream' {
 
-    when Properties.DeliveryStreamEncryptionConfigurationInput exists {
-        Properties.DeliveryStreamEncryptionConfigurationInput.KeyType in ['AWS_OWNED_CMK', 'CUSTOMER_MANAGED_CMK'] <<[Messaging Security] Kinesis Firehose delivery streams should use encryption>>
-    }
+    Properties.DeliveryStreamEncryptionConfigurationInput exists <<[Messaging Security] Kinesis Firehose must configure encryption>>
+    Properties.DeliveryStreamEncryptionConfigurationInput.KeyType exists <<[Messaging Security] Must specify encryption key type>>
+    Properties.DeliveryStreamEncryptionConfigurationInput.KeyType in ['AWS_OWNED_CMK', 'CUSTOMER_MANAGED_CMK'] <<[Messaging Security] Kinesis Firehose delivery streams must use encryption>>
 }
 
 # Firehose S3 destination encryption
@@ -177,6 +178,10 @@ rule messaging_security_firehose_s3_encryption when
     resourceType == 'AWS::KinesisFirehose::DeliveryStream' {
 
     when Properties.S3DestinationConfiguration exists {
-        Properties.S3DestinationConfiguration.EncryptionConfiguration exists <<[Messaging Security] Kinesis Firehose S3 destination should use encryption>>
+        Properties.S3DestinationConfiguration.EncryptionConfiguration exists <<[Messaging Security] Kinesis Firehose S3 destination must use encryption>>
+    }
+
+    when Properties.ExtendedS3DestinationConfiguration exists {
+        Properties.ExtendedS3DestinationConfiguration.EncryptionConfiguration exists <<[Messaging Security] Kinesis Firehose Extended S3 destination must use encryption>>
     }
 }

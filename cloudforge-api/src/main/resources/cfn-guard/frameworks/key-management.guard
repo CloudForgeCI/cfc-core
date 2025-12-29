@@ -120,10 +120,10 @@ rule key_management_alb_https when
 rule key_management_secrets_rotation when
     resourceType == 'AWS::SecretsManager::Secret' {
 
-    when Properties.RotationSchedule exists {
-        Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays exists <<[Key Management] Secrets rotation must specify interval>>
-        Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays <= 90 <<[Key Management] Secrets should rotate within 90 days>>
-    }
+    Properties.RotationSchedule exists <<[Key Management] Secrets Manager secrets must configure rotation>>
+    Properties.RotationSchedule.RotationRules exists <<[Key Management] Must specify rotation rules>>
+    Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays exists <<[Key Management] Secrets rotation must specify interval>>
+    Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays <= 90 <<[Key Management] Secrets must rotate within 90 days>>
 }
 
 # ============================================================================
@@ -135,5 +135,5 @@ rule key_management_secrets_rotation when
 rule key_management_cloudtrail_kms when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    Properties.KMSKeyId exists <<[Key Management] CloudTrail logs should be encrypted with KMS>>
+    Properties.KMSKeyId exists <<[Key Management] CloudTrail logs must be encrypted with KMS>>
 }

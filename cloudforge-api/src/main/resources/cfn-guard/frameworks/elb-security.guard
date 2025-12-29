@@ -15,11 +15,11 @@
 rule elb_security_alb_access_logging when
     resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
 
-    when Properties.LoadBalancerAttributes exists {
-        some Properties.LoadBalancerAttributes[*] {
-            Key == 'access_logs.s3.enabled'
-            Value == 'true' <<[ELB Security] Application and Network Load Balancers must have access logging enabled>>
-        }
+    Properties.LoadBalancerAttributes exists <<[ELB Security] Load balancers must configure attributes>>
+
+    some Properties.LoadBalancerAttributes[*] {
+        Key == 'access_logs.s3.enabled'
+        Value == 'true' <<[ELB Security] Application and Network Load Balancers must have access logging enabled>>
     }
 }
 
@@ -28,11 +28,11 @@ rule elb_security_alb_access_logging when
 rule elb_security_alb_deletion_protection when
     resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
 
-    when Properties.LoadBalancerAttributes exists {
-        some Properties.LoadBalancerAttributes[*] {
-            Key == 'deletion_protection.enabled'
-            Value == 'true' <<[ELB Security] Application and Network Load Balancers should have deletion protection enabled>>
-        }
+    Properties.LoadBalancerAttributes exists <<[ELB Security] Load balancers must configure attributes>>
+
+    some Properties.LoadBalancerAttributes[*] {
+        Key == 'deletion_protection.enabled'
+        Value == 'true' <<[ELB Security] Application and Network Load Balancers must have deletion protection enabled>>
     }
 }
 

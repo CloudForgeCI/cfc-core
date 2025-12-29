@@ -50,11 +50,10 @@ rule compute_security_ec2_iam_profile when
 rule compute_security_ec2_block_device_encryption when
     resourceType == 'AWS::EC2::Instance' {
 
-    when Properties.BlockDeviceMappings exists {
-        Properties.BlockDeviceMappings[*] {
-            when Ebs exists {
-                Ebs.Encrypted == true <<[Compute Security] EC2 instance block devices must be encrypted>>
-            }
+    Properties.BlockDeviceMappings exists <<[Compute Security] EC2 instances must explicitly define block device mappings>>
+    Properties.BlockDeviceMappings[*] {
+        when Ebs exists {
+            Ebs.Encrypted == true <<[Compute Security] EC2 instance block devices must be encrypted>>
         }
     }
 }
@@ -64,9 +63,9 @@ rule compute_security_ec2_block_device_encryption when
 rule compute_security_ec2_imdsv2 when
     resourceType == 'AWS::EC2::Instance' {
 
-    when Properties.MetadataOptions exists {
-        Properties.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 instances should require IMDSv2 (HttpTokens: required)>>
-    }
+    Properties.MetadataOptions exists <<[Compute Security] EC2 instances must configure metadata options>>
+    Properties.MetadataOptions.HttpTokens exists <<[Compute Security] EC2 instances must specify HttpTokens setting>>
+    Properties.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 instances must require IMDSv2 (HttpTokens: required)>>
 }
 
 # ============================================================================
@@ -78,9 +77,10 @@ rule compute_security_ec2_imdsv2 when
 rule compute_security_launch_template_imdsv2 when
     resourceType == 'AWS::EC2::LaunchTemplate' {
 
-    when Properties.LaunchTemplateData.MetadataOptions exists {
-        Properties.LaunchTemplateData.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 launch templates should require IMDSv2>>
-    }
+    Properties.LaunchTemplateData exists <<[Compute Security] Launch templates must define LaunchTemplateData>>
+    Properties.LaunchTemplateData.MetadataOptions exists <<[Compute Security] Launch templates must configure metadata options>>
+    Properties.LaunchTemplateData.MetadataOptions.HttpTokens exists <<[Compute Security] Launch templates must specify HttpTokens>>
+    Properties.LaunchTemplateData.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 launch templates must require IMDSv2>>
 }
 
 # Launch template encryption
@@ -88,11 +88,11 @@ rule compute_security_launch_template_imdsv2 when
 rule compute_security_launch_template_encryption when
     resourceType == 'AWS::EC2::LaunchTemplate' {
 
-    when Properties.LaunchTemplateData.BlockDeviceMappings exists {
-        Properties.LaunchTemplateData.BlockDeviceMappings[*] {
-            when Ebs exists {
-                Ebs.Encrypted == true <<[Compute Security] EC2 launch template block devices must be encrypted>>
-            }
+    Properties.LaunchTemplateData exists <<[Compute Security] Launch templates must define LaunchTemplateData>>
+    Properties.LaunchTemplateData.BlockDeviceMappings exists <<[Compute Security] Launch templates must explicitly define block device mappings with encryption>>
+    Properties.LaunchTemplateData.BlockDeviceMappings[*] {
+        when Ebs exists {
+            Ebs.Encrypted == true <<[Compute Security] EC2 launch template block devices must be encrypted>>
         }
     }
 }
@@ -130,12 +130,14 @@ rule compute_security_eks_private_only when
 rule compute_security_eks_public_access_restricted when
     resourceType == 'AWS::EKS::Cluster' {
 
-    when Properties.ResourcesVpcConfig exists {
-        when Properties.ResourcesVpcConfig.EndpointPublicAccess == true {
-            Properties.ResourcesVpcConfig.PublicAccessCidrs exists <<[EKS Security] EKS public access must specify allowed CIDRs>>
-            Properties.ResourcesVpcConfig.PublicAccessCidrs[*] {
-                this != '0.0.0.0/0' <<[EKS Security] EKS public access must not allow unrestricted CIDR (0.0.0.0/0)>>
-            }
+    Properties.ResourcesVpcConfig exists <<[EKS Security] EKS clusters must configure VPC settings>>
+    Properties.ResourcesVpcConfig.EndpointPublicAccess exists <<[EKS Security] Must explicitly configure public access>>
+
+    when Properties.ResourcesVpcConfig.EndpointPublicAccess == true {
+        Properties.ResourcesVpcConfig.PublicAccessCidrs exists <<[EKS Security] EKS public access must specify allowed CIDRs>>
+        Properties.ResourcesVpcConfig.PublicAccessCidrs not empty <<[EKS Security] PublicAccessCidrs must not be empty>>
+        Properties.ResourcesVpcConfig.PublicAccessCidrs[*] {
+            this != '0.0.0.0/0' <<[EKS Security] EKS public access must not allow unrestricted CIDR (0.0.0.0/0)>>
         }
     }
 }
@@ -166,9 +168,8 @@ rule compute_security_eks_control_plane_logging when
 rule compute_security_eks_nodegroup_launch_template when
     resourceType == 'AWS::EKS::Nodegroup' {
 
-    when Properties.LaunchTemplate exists {
-        Properties.LaunchTemplate.Id exists OR Properties.LaunchTemplate.Name exists <<[EKS Security] EKS node groups should use launch templates for consistent configuration>>
-    }
+    Properties.LaunchTemplate exists <<[EKS Security] EKS node groups should use launch templates for consistent configuration>>
+    Properties.LaunchTemplate.Id exists OR Properties.LaunchTemplate.Name exists <<[EKS Security] Launch template must specify Id or Name>>
 }
 
 # EKS node group remote access restrictions
@@ -178,6 +179,7 @@ rule compute_security_eks_nodegroup_remote_access when
 
     when Properties.RemoteAccess exists {
         Properties.RemoteAccess.SourceSecurityGroups exists <<[EKS Security] EKS node group SSH access must be restricted via security groups>>
+        Properties.RemoteAccess.SourceSecurityGroups not empty <<[EKS Security] Must specify at least one source security group>>
     }
 }
 

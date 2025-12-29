@@ -33,7 +33,7 @@ rule incident_response_cloudtrail_multiregion when
 rule incident_response_cloudtrail_encryption when
     resourceType == 'AWS::CloudTrail::Trail' {
 
-    Properties.KMSKeyId exists <<[Incident Response] CloudTrail logs should be encrypted to protect evidence>>
+    Properties.KMSKeyId exists <<[Incident Response] CloudTrail logs must be encrypted with KMS to protect evidence>>
 }
 
 # ============================================================================
@@ -171,9 +171,9 @@ rule incident_response_rds_deletion_protection when
 rule incident_response_lambda_tracing when
     resourceType == 'AWS::Lambda::Function' {
 
-    when Properties.TracingConfig exists {
-        Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Incident Response] Lambda tracing mode must be Active or PassThrough>>
-    }
+    Properties.TracingConfig exists <<[Incident Response] Lambda functions must enable X-Ray tracing>>
+    Properties.TracingConfig.Mode exists <<[Incident Response] Must specify tracing mode>>
+    Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Incident Response] Lambda tracing mode must be Active or PassThrough>>
 }
 
 # Lambda function dead letter queues
@@ -181,9 +181,8 @@ rule incident_response_lambda_tracing when
 rule incident_response_lambda_dlq when
     resourceType == 'AWS::Lambda::Function' {
 
-    when Properties.DeadLetterConfig exists {
-        Properties.DeadLetterConfig.TargetArn exists <<[Incident Response] Lambda DLQ must specify target ARN>>
-    }
+    Properties.DeadLetterConfig exists <<[Incident Response] Lambda functions must have dead letter queues configured>>
+    Properties.DeadLetterConfig.TargetArn exists <<[Incident Response] Lambda DLQ must specify target ARN>>
 }
 
 # ============================================================================
@@ -207,6 +206,6 @@ rule incident_response_config_recorder when
 rule incident_response_snapshot_encryption when
     resourceType == 'AWS::EC2::Snapshot' {
 
-    Properties.Encrypted exists
+    Properties.Encrypted exists <<[Incident Response] EBS snapshots must have encryption property configured>>
     Properties.Encrypted == true <<[Incident Response] EBS snapshots must be encrypted>>
 }

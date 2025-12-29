@@ -52,7 +52,7 @@ rule lambda_security_in_vpc when
 rule lambda_security_dead_letter_queue when
     resourceType == 'AWS::Lambda::Function' {
 
-    Properties.DeadLetterConfig exists <<[Lambda Security] Lambda functions should have dead letter queues configured>>
+    Properties.DeadLetterConfig exists <<[Lambda Security] Lambda functions must have dead letter queues configured>>
     Properties.DeadLetterConfig.TargetArn exists <<[Lambda Security] Lambda DeadLetterConfig must specify TargetArn>>
 }
 
@@ -65,7 +65,7 @@ rule lambda_security_dead_letter_queue when
 rule lambda_security_code_signing when
     resourceType == 'AWS::Lambda::Function' {
 
-    Properties.CodeSigningConfigArn exists <<[Lambda Security] Lambda functions should use code signing>>
+    Properties.CodeSigningConfigArn exists <<[Lambda Security] Lambda functions must use code signing>>
 }
 
 # ============================================================================
@@ -109,7 +109,8 @@ rule lambda_security_timeout_configured when
 rule lambda_security_xray_tracing when
     resourceType == 'AWS::Lambda::Function' {
 
-    Properties.TracingConfig exists <<[Lambda Security] Lambda functions should enable X-Ray tracing>>
+    Properties.TracingConfig exists <<[Lambda Security] Lambda functions must enable X-Ray tracing>>
+    Properties.TracingConfig.Mode exists <<[Lambda Security] Must specify tracing mode>>
     Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Lambda Security] Lambda TracingConfig Mode must be Active or PassThrough>>
 }
 
@@ -124,7 +125,7 @@ rule lambda_security_env_encryption when
 
     when Properties.Environment exists {
         when Properties.Environment.Variables exists {
-            Properties.KmsKeyArn exists <<[Lambda Security] Lambda functions with environment variables should use KMS encryption>>
+            Properties.KmsKeyArn exists <<[Lambda Security] Lambda functions with environment variables must use KMS encryption>>
         }
     }
 }

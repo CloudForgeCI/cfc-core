@@ -122,8 +122,9 @@ class CdnApiSecurityGuardTest {
     @Test
     void testCloudfrontOriginHttpsRule() throws IOException {
         String content = loadGuardFile();
-        assertTrue(content.contains("rule cdn_security_cloudfront_origin_https"),
-            "Should have origin HTTPS rule");
+        // Origin HTTPS check is now integrated into the deprecated SSL rule
+        assertTrue(content.contains("rule cdn_security_cloudfront_no_deprecated_ssl"),
+            "Should have deprecated SSL rule that includes origin HTTPS check");
         assertTrue(content.contains("OriginProtocolPolicy"),
             "Should check for OriginProtocolPolicy property");
     }

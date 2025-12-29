@@ -32,11 +32,10 @@ rule cdn_security_cloudfront_waf when
 rule cdn_security_cloudfront_geo_restriction when
     resourceType == 'AWS::CloudFront::Distribution' {
 
-    when Properties.DistributionConfig.Restrictions exists {
-        when Properties.DistributionConfig.Restrictions.GeoRestriction exists {
-            Properties.DistributionConfig.Restrictions.GeoRestriction.RestrictionType != 'none' <<[CDN Security] CloudFront distributions should configure geographic restrictions>>
-        }
-    }
+    Properties.DistributionConfig.Restrictions exists <<[CDN Security] CloudFront must configure restrictions>>
+    Properties.DistributionConfig.Restrictions.GeoRestriction exists <<[CDN Security] Must define geographic restrictions>>
+    Properties.DistributionConfig.Restrictions.GeoRestriction.RestrictionType exists <<[CDN Security] Must specify restriction type>>
+    Properties.DistributionConfig.Restrictions.GeoRestriction.RestrictionType != 'none' <<[CDN Security] CloudFront distributions should configure geographic restrictions>>
 }
 
 # CloudFront deprecated SSL protocols
@@ -44,15 +43,17 @@ rule cdn_security_cloudfront_geo_restriction when
 rule cdn_security_cloudfront_no_deprecated_ssl when
     resourceType == 'AWS::CloudFront::Distribution' {
 
-    when Properties.DistributionConfig.Origins exists {
-        Properties.DistributionConfig.Origins[*] {
-            when CustomOriginConfig exists {
-                when CustomOriginConfig.OriginSSLProtocols exists {
-                    CustomOriginConfig.OriginSSLProtocols[*] {
-                        this not in ['SSLv3', 'TLSv1', 'TLSv1.1'] <<[CDN Security] CloudFront must not use deprecated SSL protocols>>
-                    }
-                }
+    Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
+    Properties.DistributionConfig.Origins exists <<[CDN Security] CloudFront must define origins>>
+
+    Properties.DistributionConfig.Origins[*] {
+        when CustomOriginConfig exists {
+            CustomOriginConfig.OriginSSLProtocols exists <<[CDN Security] Custom origins must explicitly define SSL protocols>>
+            CustomOriginConfig.OriginSSLProtocols[*] {
+                this not in ['SSLv3', 'TLSv1', 'TLSv1.1'] <<[CDN Security] CloudFront must not use deprecated SSL protocols>>
             }
+            CustomOriginConfig.OriginProtocolPolicy exists <<[CDN Security] Must explicitly define origin protocol policy>>
+            CustomOriginConfig.OriginProtocolPolicy in ['https-only', 'match-viewer'] <<[CDN Security] CloudFront origin connections must use HTTPS>>
         }
     }
 }
@@ -73,13 +74,14 @@ rule cdn_security_cloudfront_acm_certificate when
 rule cdn_security_cloudfront_minimum_tls when
     resourceType == 'AWS::CloudFront::Distribution' {
 
-    when Properties.DistributionConfig.ViewerCertificate exists {
-        Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion in [
-            'TLSv1.2_2021',
-            'TLSv1.2_2019',
-            'TLSv1.2_2018'
-        ] <<[CDN Security] CloudFront distributions must use TLS 1.2 minimum>>
-    }
+    Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
+    Properties.DistributionConfig.ViewerCertificate exists <<[CDN Security] CloudFront must configure viewer certificate>>
+    Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion exists <<[CDN Security] Must explicitly define minimum TLS version>>
+    Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion in [
+        'TLSv1.2_2021',
+        'TLSv1.2_2019',
+        'TLSv1.2_2018'
+    ] <<[CDN Security] CloudFront distributions must use TLS 1.2 minimum>>
 }
 
 # CloudFront HTTPS-only viewer protocol
@@ -87,27 +89,18 @@ rule cdn_security_cloudfront_minimum_tls when
 rule cdn_security_cloudfront_https_only when
     resourceType == 'AWS::CloudFront::Distribution' {
 
-    when Properties.DistributionConfig.DefaultCacheBehavior exists {
-        Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy in [
-            'redirect-to-https',
-            'https-only'
-        ] <<[CDN Security] CloudFront should redirect HTTP to HTTPS or require HTTPS only>>
-    }
+    Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
+    Properties.DistributionConfig.DefaultCacheBehavior exists <<[CDN Security] CloudFront must define default cache behavior>>
+    Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy exists <<[CDN Security] Must specify viewer protocol policy>>
+    Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy in [
+        'redirect-to-https',
+        'https-only'
+    ] <<[CDN Security] CloudFront must redirect HTTP to HTTPS or require HTTPS only>>
 }
 
 # CloudFront origin protocol policy
-# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-rule cdn_security_cloudfront_origin_https when
-    resourceType == 'AWS::CloudFront::Distribution' {
-
-    when Properties.DistributionConfig.Origins exists {
-        Properties.DistributionConfig.Origins[*] {
-            when CustomOriginConfig exists {
-                CustomOriginConfig.OriginProtocolPolicy in ['https-only', 'match-viewer'] <<[CDN Security] CloudFront origin connections should use HTTPS>>
-            }
-        }
-    }
-}
+# NOTE: This rule is now integrated into cdn_security_cloudfront_no_deprecated_ssl above
+# to avoid duplication and ensure both SSL protocols and HTTPS enforcement are checked together
 
 # ============================================================================
 # API Gateway REST API Security
@@ -203,10 +196,9 @@ rule api_security_httpapi_logging when
 rule api_security_httpapi_throttling when
     resourceType == 'AWS::ApiGatewayV2::Stage' {
 
-    when Properties.DefaultRouteSettings exists {
-        Properties.DefaultRouteSettings.ThrottlingBurstLimit exists <<[API Security] HTTP API stages should configure throttling burst limit>>
-        Properties.DefaultRouteSettings.ThrottlingRateLimit exists <<[API Security] HTTP API stages should configure throttling rate limit>>
-    }
+    Properties.DefaultRouteSettings exists <<[API Security] HTTP API stages must configure default route settings>>
+    Properties.DefaultRouteSettings.ThrottlingBurstLimit exists <<[API Security] Must configure throttling burst limit>>
+    Properties.DefaultRouteSettings.ThrottlingRateLimit exists <<[API Security] Must configure throttling rate limit>>
 }
 
 # ============================================================================
