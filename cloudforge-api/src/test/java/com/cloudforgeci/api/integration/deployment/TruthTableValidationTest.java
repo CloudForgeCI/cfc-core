@@ -851,43 +851,74 @@ class TruthTableValidationTest {
         // Configure stack with deployment context
         stack.getNode().setContext("cfc", cfcContext);
 
-        // Create deployment context and security profile
-        DeploymentContext cfc = DeploymentContext.from(stack);
-
-        // Output the FULL resolved deployment context as JSON for dashboard
-        // This includes all defaults and resolved values - same as InteractiveDeployer would produce
-        Map<String, Object> fullContext = cfc.toContextMap();
-        // Add applicationId which is from ApplicationSpec, not DeploymentContext
-        fullContext.put("applicationId", applicationId);
-        System.out.println("   📋 DEPLOYMENT_CONTEXT_JSON: " + formatContextAsJson(fullContext));
-        SecurityProfile secProfile = SecurityProfile.valueOf(securityProfile);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(secProfile);
-
-        // Select ApplicationSpec based on applicationId
-        ApplicationSpec appSpec;
-        if ("mattermost".equalsIgnoreCase(applicationId)) {
-            appSpec = new MattermostApplicationSpec();
-        } else if ("gitlab".equalsIgnoreCase(applicationId)) {
-            appSpec = new GitLabApplicationSpec();
-        } else {
-            appSpec = new JenkinsApplicationSpec();
-        }
-
-        // Create infrastructure based on runtime
-        if ("EC2".equals(runtime)) {
-            ApplicationFactory.createEc2(stack, "TestApp", cfc, secProfile, iamProfile, appSpec);
-        } else {
-            ApplicationFactory.createFargate(stack, "TestApp", cfc, secProfile, iamProfile, appSpec);
-        }
-
-        applyCdkNagAspects(app, complianceFramework, securityProfile);
-
         // Track layer results - run all layers regardless of previous failures
         List<String> layer1Failures = new ArrayList<>();
         List<String> layer2Failures = new ArrayList<>();
         List<String> layer3Failures = new ArrayList<>();
         List<String> knownGaps = new ArrayList<>();
         Template template = null;
+
+        // Layer 0: DeploymentContext validation (catches early validation errors like OIDC without SSL)
+        DeploymentContext cfc = null;
+        SecurityProfile secProfile = null;
+        IAMProfile iamProfile = null;
+        ApplicationSpec appSpec = null;
+
+        try {
+            // Create deployment context and security profile
+            cfc = DeploymentContext.from(stack);
+
+            // Output the FULL resolved deployment context as JSON for dashboard
+            // This includes all defaults and resolved values - same as InteractiveDeployer would produce
+            Map<String, Object> fullContext = cfc.toContextMap();
+            // Add applicationId which is from ApplicationSpec, not DeploymentContext
+            fullContext.put("applicationId", applicationId);
+            System.out.println("   📋 DEPLOYMENT_CONTEXT_JSON: " + formatContextAsJson(fullContext));
+            secProfile = SecurityProfile.valueOf(securityProfile);
+            iamProfile = IAMProfileMapper.mapFromSecurity(secProfile);
+
+            // Select ApplicationSpec based on applicationId
+            if ("mattermost".equalsIgnoreCase(applicationId)) {
+                appSpec = new MattermostApplicationSpec();
+            } else if ("gitlab".equalsIgnoreCase(applicationId)) {
+                appSpec = new GitLabApplicationSpec();
+            } else {
+                appSpec = new JenkinsApplicationSpec();
+            }
+
+            // Create infrastructure based on runtime
+            if ("EC2".equals(runtime)) {
+                ApplicationFactory.createEc2(stack, "TestApp", cfc, secProfile, iamProfile, appSpec);
+            } else {
+                ApplicationFactory.createFargate(stack, "TestApp", cfc, secProfile, iamProfile, appSpec);
+            }
+
+            applyCdkNagAspects(app, complianceFramework, securityProfile);
+
+        } catch (IllegalArgumentException e) {
+            // DeploymentContext validation failed (e.g., OIDC without SSL)
+            String errorMessage = e.getMessage();
+
+            // Extract individual validation errors from the message
+            // Format: "DeploymentContext validation failed:\n - error1\n - error2"
+            if (errorMessage != null && errorMessage.contains("DeploymentContext validation failed")) {
+                String[] errorLines = errorMessage.split("\n");
+                for (String line : errorLines) {
+                    String trimmed = line.trim();
+                    if (trimmed.startsWith("- ")) {
+                        layer1Failures.add("DeploymentContext: " + trimmed.substring(2));
+                    }
+                }
+            } else {
+                layer1Failures.add("DeploymentContext validation failed: " + errorMessage);
+            }
+
+            System.out.println("   ❌ Layer 0 (DeploymentContext): Pre-validation failed");
+            System.out.println("\n   📋 DeploymentContext Validation Errors:");
+            System.out.println("   " + "=".repeat(70));
+            layer1Failures.forEach(f -> System.out.println("   • " + f));
+            System.out.println("   " + "=".repeat(70) + "\n");
+        }
 
         // Layer 1 & 2: Synthesize template (triggers both cdk-nag and FrameworkRules validation)
         List<String> cdkNagWarnings = new ArrayList<>();

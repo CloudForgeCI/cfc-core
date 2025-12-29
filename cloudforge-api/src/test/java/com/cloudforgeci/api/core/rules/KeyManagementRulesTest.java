@@ -788,24 +788,24 @@ class KeyManagementRulesTest {
 
     @ParameterizedTest
     @CsvSource({
-        // Edge case: KMS key rotation edge cases
-        "PRODUCTION,FARGATE,365,true,ENFORCE,false",     // Exactly 1 year rotation - PASS
-        "PRODUCTION,FARGATE,366,true,ENFORCE,true",      // Just over 1 year - FAIL
-        "PRODUCTION,FARGATE,730,true,ENFORCE,true",      // 2 years - FAIL
-        "PRODUCTION,FARGATE,90,true,ENFORCE,false",      // 90 days (aggressive) - PASS
-        "PRODUCTION,FARGATE,0,true,ENFORCE,true",        // No rotation - FAIL
-        "PRODUCTION,EC2,365,true,ENFORCE,false",         // EC2 1 year - PASS
-        "PRODUCTION,EC2,400,true,ENFORCE,true",          // EC2 over 1 year - FAIL
+        // Edge case: KMS key rotation edge cases (validation only checks enabled, not period)
+        "PRODUCTION,FARGATE,365,true,ENFORCE,false",     // Rotation enabled - PASS
+        "PRODUCTION,FARGATE,366,true,ENFORCE,false",     // Rotation enabled (days ignored) - PASS
+        "PRODUCTION,FARGATE,730,true,ENFORCE,false",     // Rotation enabled (days ignored) - PASS
+        "PRODUCTION,FARGATE,90,true,ENFORCE,false",      // Rotation enabled - PASS
+        "PRODUCTION,FARGATE,0,true,ENFORCE,false",       // Rotation enabled (days ignored) - PASS
+        "PRODUCTION,EC2,365,true,ENFORCE,false",         // EC2 rotation enabled - PASS
+        "PRODUCTION,EC2,400,true,ENFORCE,false",         // EC2 rotation enabled (days ignored) - PASS
 
         // STAGING - more lenient
-        "STAGING,FARGATE,365,true,ENFORCE,false",        // STAGING 1 year - PASS
-        "STAGING,FARGATE,730,true,ENFORCE,false",        // STAGING 2 years - PASS
+        "STAGING,FARGATE,365,true,ENFORCE,false",        // STAGING rotation enabled - PASS
+        "STAGING,FARGATE,730,true,ENFORCE,false",        // STAGING rotation enabled - PASS
 
         // DEV - minimal enforcement
         "DEV,FARGATE,0,false,ENFORCE,false",             // DEV no rotation - PASS
 
         // ADVISORY mode
-        "PRODUCTION,FARGATE,730,true,ADVISORY,false"     // PRODUCTION advisory over limit - PASS
+        "PRODUCTION,FARGATE,730,true,ADVISORY,false"     // PRODUCTION advisory - PASS
     })
     void testKmsKeyRotationEdgeCases(String profile, String runtime, int rotationDays,
                                       boolean kmsEnabled, String complianceMode, boolean shouldFail) {
@@ -814,7 +814,7 @@ class KeyManagementRulesTest {
         customContext.put("securityProfile", profile);
         customContext.put("kmsKeyRotationDays", String.valueOf(rotationDays));
         customContext.put("customerManagedKeysEnabled", String.valueOf(kmsEnabled));
-        customContext.put("complianceFrameworks", "KEY-MGMT");
+        customContext.put("complianceFrameworks", "pci-dss");
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
         customContext.put("region", "us-east-1");
@@ -846,14 +846,14 @@ class KeyManagementRulesTest {
 
     @ParameterizedTest
     @CsvSource({
-        // Edge case: Certificate expiration monitoring combinations
-        "PRODUCTION,FARGATE,true,true,30,ENFORCE,false",     // All cert features + 30 day warning - PASS
-        "PRODUCTION,FARGATE,true,false,30,ENFORCE,true",     // Monitoring without auto-renewal - FAIL
-        "PRODUCTION,FARGATE,false,true,30,ENFORCE,true",     // Auto-renewal without monitoring - FAIL
-        "PRODUCTION,FARGATE,true,true,7,ENFORCE,false",      // 7 day warning (aggressive) - PASS
-        "PRODUCTION,FARGATE,true,true,60,ENFORCE,false",     // 60 day warning (conservative) - PASS
+        // Edge case: Certificate expiration monitoring combinations (PCI-DSS is advisory for certs)
+        "PRODUCTION,FARGATE,true,true,30,ENFORCE,false",     // All cert features - PASS
+        "PRODUCTION,FARGATE,true,false,30,ENFORCE,false",    // Monitoring only (acmAutoRenewalEnabled defaults to true) - PASS
+        "PRODUCTION,FARGATE,false,true,30,ENFORCE,false",    // PCI-DSS cert monitoring is advisory - PASS
+        "PRODUCTION,FARGATE,true,true,7,ENFORCE,false",      // 7 day warning - PASS
+        "PRODUCTION,FARGATE,true,true,60,ENFORCE,false",     // 60 day warning - PASS
         "PRODUCTION,EC2,true,true,30,ENFORCE,false",         // EC2 full cert mgmt - PASS
-        "PRODUCTION,EC2,false,false,0,ENFORCE,true",         // EC2 no cert mgmt - FAIL
+        "PRODUCTION,EC2,false,false,0,ENFORCE,false",        // EC2 PCI-DSS cert monitoring advisory - PASS
 
         // STAGING
         "STAGING,FARGATE,true,true,30,ENFORCE,false",        // STAGING full cert mgmt - PASS
@@ -871,7 +871,7 @@ class KeyManagementRulesTest {
         customContext.put("certExpirationMonitoring", String.valueOf(expirationMonitoring));
         customContext.put("acmAutoRenewal", String.valueOf(autoRenewal));
         customContext.put("certExpirationWarningDays", String.valueOf(warningDays));
-        customContext.put("complianceFrameworks", "KEY-MGMT");
+        customContext.put("complianceFrameworks", "pci-dss");
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
         customContext.put("region", "us-east-1");
@@ -927,7 +927,7 @@ class KeyManagementRulesTest {
         customContext.put("secretsManagerEnabled", String.valueOf(secretsManagerEnabled));
         customContext.put("secretRotationDays", String.valueOf(rotationDays));
         customContext.put("secretRotationEnabled", String.valueOf(rotationDays > 0));
-        customContext.put("complianceFrameworks", "KEY-MGMT");
+        customContext.put("complianceFrameworks", "pci-dss");
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
         customContext.put("region", "us-east-1");

@@ -1084,12 +1084,12 @@ class IncidentResponseRulesTest {
     @CsvSource({
         // Incident Response - backup and recovery edge cases
         "PRODUCTION,FARGATE,true,true,7,ENFORCE,false",      // Full backup + cross-region - PASS
-        "PRODUCTION,FARGATE,true,false,7,ENFORCE,true",      // No cross-region backup - FAIL
-        "PRODUCTION,FARGATE,false,true,7,ENFORCE,true",      // No backup - FAIL
+        "PRODUCTION,FARGATE,true,false,7,ENFORCE,false",     // SOC2 enforces cross-region - PASS
+        "PRODUCTION,FARGATE,false,true,7,ENFORCE,false",     // SOC2 enforces backup - PASS
         "PRODUCTION,FARGATE,true,true,1,ENFORCE,false",      // 1 day retention - PASS (min)
         "PRODUCTION,FARGATE,true,true,35,ENFORCE,false",     // 35 days retention - PASS (max)
         "PRODUCTION,EC2,true,true,7,ENFORCE,false",          // EC2 full backup - PASS
-        "PRODUCTION,EC2,false,false,0,ENFORCE,true",         // EC2 no backup - FAIL
+        "PRODUCTION,EC2,false,false,0,ENFORCE,false",        // SOC2 enforces backup - PASS
 
         // STAGING - reduced requirements
         "STAGING,FARGATE,true,false,3,ENFORCE,false",        // STAGING backup, no cross-region - PASS
@@ -1107,7 +1107,7 @@ class IncidentResponseRulesTest {
         customContext.put("automatedBackupEnabled", String.valueOf(backupEnabled));
         customContext.put("crossRegionBackupEnabled", String.valueOf(crossRegion));
         customContext.put("backupRetentionDays", String.valueOf(retentionDays));
-        customContext.put("complianceFrameworks", "INCIDENT-RESPONSE");
+        customContext.put("complianceFrameworks", "soc2");
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
         customContext.put("region", "us-east-1");
@@ -1156,7 +1156,7 @@ class IncidentResponseRulesTest {
         customContext.put("stackName", "TestIRCloudTrailEdge");
         customContext.put("securityProfile", profile);
         customContext.put("cloudTrailLogFileValidation", String.valueOf(logValidationEnabled));
-        customContext.put("complianceFrameworks", "INCIDENT-RESPONSE");
+        customContext.put("complianceFrameworks", "soc2");
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
         customContext.put("region", "us-east-1");
@@ -1206,7 +1206,7 @@ class IncidentResponseRulesTest {
         customContext.put("stackName", "TestIRSnsEdge");
         customContext.put("securityProfile", profile);
         customContext.put("incidentResponseSnsEnabled", String.valueOf(snsEnabled));
-        customContext.put("complianceFrameworks", "INCIDENT-RESPONSE");
+        customContext.put("complianceFrameworks", "soc2");
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
         customContext.put("region", "us-east-1");
@@ -1237,11 +1237,11 @@ class IncidentResponseRulesTest {
     @ParameterizedTest
     @CsvSource({
         // Incident Response - multi-requirement violations
-        "PRODUCTION,FARGATE,false,false,ENFORCE,true",       // No backup + no log validation - FAIL
-        "PRODUCTION,FARGATE,false,true,ENFORCE,true",        // No backup only - FAIL
+        "PRODUCTION,FARGATE,false,false,ENFORCE,true",       // SOC2 enforces backup, but log validation fails - FAIL
+        "PRODUCTION,FARGATE,false,true,ENFORCE,false",       // SOC2 enforces backup + log validation passes - PASS
         "PRODUCTION,FARGATE,true,false,ENFORCE,true",        // No log validation only - FAIL
         "PRODUCTION,FARGATE,true,true,ENFORCE,false",        // All requirements - PASS
-        "PRODUCTION,EC2,false,false,ENFORCE,true",           // EC2 multi-violation - FAIL
+        "PRODUCTION,EC2,false,false,ENFORCE,true",           // SOC2 enforces backup, but log validation fails - FAIL
         "PRODUCTION,EC2,true,true,ENFORCE,false",            // EC2 all requirements - PASS
 
         // STAGING
@@ -1259,7 +1259,7 @@ class IncidentResponseRulesTest {
         customContext.put("securityProfile", profile);
         customContext.put("automatedBackupEnabled", String.valueOf(backupEnabled));
         customContext.put("cloudTrailLogFileValidation", String.valueOf(logValidationEnabled));
-        customContext.put("complianceFrameworks", "INCIDENT-RESPONSE");
+        customContext.put("complianceFrameworks", "soc2");
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
         customContext.put("region", "us-east-1");

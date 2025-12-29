@@ -2422,10 +2422,11 @@ class HipaaRulesTest {
             customContext.put("cloudTrailEnabled", "true");
             customContext.put("albAccessLogging", "true");
             customContext.put("guardDutyEnabled", "true");
-            customContext.put("logRetentionDays", "365");
+            customContext.put("logRetentionDays", "2190");  // HIPAA requires 6 years
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "hipaa.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
             customContext.put("ebsEncryptionEnabled", "true");
             customContext.put("efsEncryptionAtRestEnabled", "true");
@@ -2492,10 +2493,11 @@ class HipaaRulesTest {
             customContext.put("enableFlowlogs", "true");
             customContext.put("albAccessLogging", "true");
             customContext.put("guardDutyEnabled", "true");
-            customContext.put("logRetentionDays", "365");
+            customContext.put("logRetentionDays", "2190");  // HIPAA requires 6 years
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "hipaa.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
         }
 
@@ -2518,20 +2520,24 @@ class HipaaRulesTest {
 
     @ParameterizedTest
     @CsvSource({
-        // HIPAA 164.312(b) - Audit log retention requirements
-        "PRODUCTION,FARGATE,365,ENFORCE,false",     // 1 year retention - PASS
+        // HIPAA 164.316(b)(2)(i) - Audit log retention requirements (6 years minimum = 2190 days)
+        "PRODUCTION,FARGATE,2190,ENFORCE,false",    // 6 years retention - PASS
         "PRODUCTION,FARGATE,2555,ENFORCE,false",    // 7 years retention - PASS
-        "PRODUCTION,FARGATE,90,ENFORCE,true",       // 90 days - FAIL (< 365)
+        "PRODUCTION,FARGATE,365,ENFORCE,true",      // 1 year - FAIL (< 2190)
+        "PRODUCTION,FARGATE,90,ENFORCE,true",       // 90 days - FAIL (< 2190)
         "PRODUCTION,FARGATE,180,ENFORCE,true",      // 180 days - FAIL
-        "PRODUCTION,EC2,365,ENFORCE,false",         // EC2 1 year - PASS
-        "PRODUCTION,EC2,90,ENFORCE,true",           // EC2 90 days - FAIL
+        "PRODUCTION,EC2,2190,ENFORCE,false",        // EC2 6 years - PASS
+        "PRODUCTION,EC2,365,ENFORCE,true",          // EC2 1 year - FAIL (< 2190)
 
-        // STAGING - reduced retention allowed
-        "STAGING,FARGATE,90,ENFORCE,false",         // STAGING 90 days - PASS
-        "STAGING,EC2,30,ENFORCE,false",             // STAGING 30 days - PASS
+        // STAGING - HIPAA requires 6 years for all profiles
+        "STAGING,FARGATE,2190,ENFORCE,false",       // STAGING 6 years - PASS
+        "STAGING,FARGATE,90,ENFORCE,true",          // STAGING 90 days - FAIL (< 2190)
+        "STAGING,EC2,2190,ENFORCE,false",           // STAGING EC2 6 years - PASS
+        "STAGING,EC2,30,ENFORCE,true",              // STAGING EC2 30 days - FAIL (< 2190)
 
-        // DEV - minimal retention
-        "DEV,FARGATE,7,ENFORCE,false",              // DEV 7 days - PASS
+        // DEV - HIPAA validation not enforced for DEV (returns early)
+        "DEV,FARGATE,2190,ENFORCE,false",           // DEV 6 years - PASS (no validation)
+        "DEV,FARGATE,7,ENFORCE,false",              // DEV 7 days - PASS (no validation)
 
         // ADVISORY mode
         "PRODUCTION,FARGATE,90,ADVISORY,false"      // PRODUCTION advisory - PASS
@@ -2559,6 +2565,7 @@ class HipaaRulesTest {
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "hipaa.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
             customContext.put("ebsEncryptionEnabled", "true");
             customContext.put("efsEncryptionAtRestEnabled", "true");
@@ -2587,15 +2594,16 @@ class HipaaRulesTest {
     @CsvSource({
         // HIPAA multi-requirement violations
         "PRODUCTION,FARGATE,false,false,90,ENFORCE,true",       // No flow logs + encryption + retention - FAIL
-        "PRODUCTION,FARGATE,false,true,365,ENFORCE,true",       // No flow logs only - FAIL
-        "PRODUCTION,FARGATE,true,false,365,ENFORCE,true",       // No encryption only - FAIL
-        "PRODUCTION,FARGATE,true,true,90,ENFORCE,true",         // No retention only - FAIL
+        "PRODUCTION,FARGATE,false,true,2190,ENFORCE,true",      // No flow logs only - FAIL
+        "PRODUCTION,FARGATE,true,false,2190,ENFORCE,true",      // No encryption only - FAIL
+        "PRODUCTION,FARGATE,true,true,90,ENFORCE,true",         // No retention only (< 2190 days) - FAIL
         "PRODUCTION,EC2,false,false,90,ENFORCE,true",           // EC2 multi-violation - FAIL
-        "PRODUCTION,EC2,true,true,365,ENFORCE,false",           // EC2 all requirements - PASS
+        "PRODUCTION,EC2,true,true,2190,ENFORCE,false",          // EC2 all requirements (6 years) - PASS
 
-        // STAGING - partial requirements OK
-        "STAGING,FARGATE,false,false,14,ENFORCE,false",         // STAGING minimal - PASS
-        "STAGING,FARGATE,true,true,90,ENFORCE,false",           // STAGING partial - PASS
+        // STAGING - HIPAA requires 6-year retention even for STAGING
+        "STAGING,FARGATE,false,false,2190,ENFORCE,false",       // STAGING minimal (6yr retention) - PASS
+        "STAGING,FARGATE,true,true,2190,ENFORCE,false",         // STAGING full (6yr retention) - PASS
+        "STAGING,FARGATE,true,true,90,ENFORCE,true",            // STAGING with 90 days - FAIL (< 2190)
 
         // ADVISORY mode
         "PRODUCTION,FARGATE,false,false,90,ADVISORY,false"      // PRODUCTION advisory - PASS
@@ -2628,6 +2636,7 @@ class HipaaRulesTest {
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "hipaa.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
         }
 

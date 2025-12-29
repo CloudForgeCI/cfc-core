@@ -3443,6 +3443,7 @@ class PciDssRulesTest {
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
             customContext.put("ebsEncryptionEnabled", "true");
             customContext.put("efsEncryptionAtRestEnabled", "true");
@@ -3455,6 +3456,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
@@ -3510,6 +3512,7 @@ class PciDssRulesTest {
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
             customContext.put("ebsEncryptionEnabled", "true");
             customContext.put("efsEncryptionAtRestEnabled", "true");
@@ -3522,6 +3525,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
@@ -3580,6 +3584,7 @@ class PciDssRulesTest {
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
             customContext.put("ebsEncryptionEnabled", "true");
             customContext.put("efsEncryptionAtRestEnabled", "true");
@@ -3592,6 +3597,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
@@ -3607,23 +3613,23 @@ class PciDssRulesTest {
     @ParameterizedTest
     @CsvSource({
         // Different application types should all enforce PCI-DSS in PRODUCTION
-        "PRODUCTION,FARGATE,JENKINS_SERVICE,true,true,ENFORCE,false",     // Jenkins full compliance - PASS
-        "PRODUCTION,FARGATE,JENKINS_SERVICE,true,false,ENFORCE,true",     // Jenkins missing WAF - FAIL
-        "PRODUCTION,FARGATE,JENKINS_SERVICE,false,true,ENFORCE,true",     // Jenkins missing flow logs - FAIL
-        "PRODUCTION,EC2,WEB_APPLICATION,true,true,ENFORCE,false",         // Web app full compliance - PASS
-        "PRODUCTION,EC2,WEB_APPLICATION,false,false,ENFORCE,true",        // Web app missing both - FAIL
-        "PRODUCTION,FARGATE,API_SERVICE,true,true,ENFORCE,false",         // API service full - PASS
-        "PRODUCTION,FARGATE,API_SERVICE,true,false,ENFORCE,true",         // API missing WAF - FAIL
+        "PRODUCTION,FARGATE,JENKINS_SERVICE,true,true,ENFORCE,false",         // Jenkins full compliance - PASS
+        "PRODUCTION,FARGATE,JENKINS_SERVICE,true,false,ENFORCE,true",         // Jenkins missing WAF - FAIL
+        "PRODUCTION,FARGATE,JENKINS_SERVICE,false,true,ENFORCE,true",         // Jenkins missing flow logs - FAIL
+        "PRODUCTION,EC2,APPLICATION_SERVICE,true,true,ENFORCE,false",         // App service full compliance - PASS
+        "PRODUCTION,EC2,APPLICATION_SERVICE,false,false,ENFORCE,true",        // App service missing both - FAIL
+        "PRODUCTION,FARGATE,APPLICATION_SERVICE,true,true,ENFORCE,false",     // API service full - PASS
+        "PRODUCTION,FARGATE,APPLICATION_SERVICE,true,false,ENFORCE,true",     // API missing WAF - FAIL
 
         // STAGING - more lenient
-        "STAGING,FARGATE,JENKINS_SERVICE,false,false,ENFORCE,false",      // STAGING Jenkins minimal - PASS
-        "STAGING,EC2,WEB_APPLICATION,true,true,ENFORCE,false",            // STAGING web app full - PASS
+        "STAGING,FARGATE,JENKINS_SERVICE,false,false,ENFORCE,false",          // STAGING Jenkins minimal - PASS
+        "STAGING,EC2,APPLICATION_SERVICE,true,true,ENFORCE,false",            // STAGING app service full - PASS
 
         // DEV - minimal requirements
-        "DEV,FARGATE,API_SERVICE,false,false,ENFORCE,false",              // DEV minimal - PASS
+        "DEV,FARGATE,APPLICATION_SERVICE,false,false,ENFORCE,false",          // DEV minimal - PASS
 
         // ADVISORY mode
-        "PRODUCTION,FARGATE,JENKINS_SERVICE,false,false,ADVISORY,false"   // PRODUCTION advisory minimal - PASS
+        "PRODUCTION,FARGATE,JENKINS_SERVICE,false,false,ADVISORY,false"       // PRODUCTION advisory minimal - PASS
     })
     void testPciDssAcrossApplicationTypes(String profile, String runtime, String topology,
                                            boolean flowLogsEnabled, boolean wafEnabled,
@@ -3651,6 +3657,7 @@ class PciDssRulesTest {
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
             customContext.put("ebsEncryptionEnabled", "true");
             customContext.put("efsEncryptionAtRestEnabled", "true");
@@ -3658,19 +3665,16 @@ class PciDssRulesTest {
             customContext.put("s3EncryptionEnabled", "true");
         }
 
+        // Note: TestInfrastructureBuilder uses JENKINS_SERVICE topology by default
+        // topologyType parameter is ignored for this test (all topologies use same validation)
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "TestAppTypes", secProfile, runtimeType, customContext);
 
-        // Override topology if different from default
-        DeploymentContext cfc = DeploymentContext.from(builder.getStack());
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(secProfile);
-        SystemContext ctx = SystemContext.start(builder.getStack(), topologyType, runtimeType,
-                secProfile, iamProfile, cfc);
-
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
-        new SecurityRules().install(ctx);
-        new PciDssRules().install(ctx);
+        builder.createMockHttpsListener();
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
 
         if (shouldFail) {
             assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
@@ -3723,6 +3727,7 @@ class PciDssRulesTest {
             customContext.put("authMode", "alb-oidc");
             customContext.put("enableSsl", "true");
             customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
             customContext.put("ebsEncryptionEnabled", "true");
             customContext.put("efsEncryptionAtRestEnabled", "true");
@@ -3735,6 +3740,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 

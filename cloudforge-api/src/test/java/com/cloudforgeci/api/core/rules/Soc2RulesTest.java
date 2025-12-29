@@ -3190,9 +3190,9 @@ class Soc2RulesTest {
         "PRODUCTION,EC2,365,ENFORCE,false",         // EC2 1 year - PASS
         "PRODUCTION,EC2,90,ENFORCE,true",           // EC2 90 days - FAIL
 
-        // STAGING - reduced retention allowed
-        "STAGING,FARGATE,90,ENFORCE,false",         // STAGING 90 days - PASS
-        "STAGING,EC2,30,ENFORCE,false",             // STAGING 30 days - PASS
+        // STAGING - SOC2 still requires 365 days
+        "STAGING,FARGATE,90,ENFORCE,true",          // STAGING 90 days - FAIL (< 365)
+        "STAGING,EC2,30,ENFORCE,true",              // STAGING 30 days - FAIL (< 365)
 
         // DEV - minimal retention
         "DEV,FARGATE,7,ENFORCE,false",              // DEV 7 days - PASS
@@ -3256,9 +3256,9 @@ class Soc2RulesTest {
         "PRODUCTION,EC2,false,false,90,ENFORCE,true",           // EC2 multi-violation - FAIL
         "PRODUCTION,EC2,true,true,365,ENFORCE,false",           // EC2 all requirements - PASS
 
-        // STAGING - partial requirements OK
-        "STAGING,FARGATE,false,false,14,ENFORCE,false",         // STAGING minimal - PASS
-        "STAGING,FARGATE,true,true,90,ENFORCE,false",           // STAGING partial - PASS
+        // STAGING - SOC2 requires 365 days retention
+        "STAGING,FARGATE,false,false,14,ENFORCE,true",          // STAGING minimal - FAIL (< 365 days)
+        "STAGING,FARGATE,true,true,90,ENFORCE,true",            // STAGING partial - FAIL (< 365 days)
 
         // ADVISORY mode
         "PRODUCTION,FARGATE,false,false,90,ADVISORY,false"      // PRODUCTION advisory - PASS
