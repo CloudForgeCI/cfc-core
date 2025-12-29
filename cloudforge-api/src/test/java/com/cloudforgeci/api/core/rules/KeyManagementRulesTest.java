@@ -785,4 +785,175 @@ class KeyManagementRulesTest {
                 ", secretRotation=" + secretRotation);
         }
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: KMS key rotation edge cases
+        "PRODUCTION,FARGATE,365,true,ENFORCE,false",     // Exactly 1 year rotation - PASS
+        "PRODUCTION,FARGATE,366,true,ENFORCE,true",      // Just over 1 year - FAIL
+        "PRODUCTION,FARGATE,730,true,ENFORCE,true",      // 2 years - FAIL
+        "PRODUCTION,FARGATE,90,true,ENFORCE,false",      // 90 days (aggressive) - PASS
+        "PRODUCTION,FARGATE,0,true,ENFORCE,true",        // No rotation - FAIL
+        "PRODUCTION,EC2,365,true,ENFORCE,false",         // EC2 1 year - PASS
+        "PRODUCTION,EC2,400,true,ENFORCE,true",          // EC2 over 1 year - FAIL
+
+        // STAGING - more lenient
+        "STAGING,FARGATE,365,true,ENFORCE,false",        // STAGING 1 year - PASS
+        "STAGING,FARGATE,730,true,ENFORCE,false",        // STAGING 2 years - PASS
+
+        // DEV - minimal enforcement
+        "DEV,FARGATE,0,false,ENFORCE,false",             // DEV no rotation - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,730,true,ADVISORY,false"     // PRODUCTION advisory over limit - PASS
+    })
+    void testKmsKeyRotationEdgeCases(String profile, String runtime, int rotationDays,
+                                      boolean kmsEnabled, String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestKmsRotationEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("kmsKeyRotationDays", String.valueOf(rotationDays));
+        customContext.put("customerManagedKeysEnabled", String.valueOf(kmsEnabled));
+        customContext.put("complianceFrameworks", "KEY-MGMT");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("secretsManagerEnabled", "true");
+            customContext.put("secretRotationEnabled", "true");
+            customContext.put("acmAutoRenewal", "true");
+            customContext.put("certExpirationMonitoring", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestKmsRotationEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new KeyManagementRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected KMS rotation validation to fail for: " + rotationDays + " days");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected KMS rotation validation to pass for: " + rotationDays + " days");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: Certificate expiration monitoring combinations
+        "PRODUCTION,FARGATE,true,true,30,ENFORCE,false",     // All cert features + 30 day warning - PASS
+        "PRODUCTION,FARGATE,true,false,30,ENFORCE,true",     // Monitoring without auto-renewal - FAIL
+        "PRODUCTION,FARGATE,false,true,30,ENFORCE,true",     // Auto-renewal without monitoring - FAIL
+        "PRODUCTION,FARGATE,true,true,7,ENFORCE,false",      // 7 day warning (aggressive) - PASS
+        "PRODUCTION,FARGATE,true,true,60,ENFORCE,false",     // 60 day warning (conservative) - PASS
+        "PRODUCTION,EC2,true,true,30,ENFORCE,false",         // EC2 full cert mgmt - PASS
+        "PRODUCTION,EC2,false,false,0,ENFORCE,true",         // EC2 no cert mgmt - FAIL
+
+        // STAGING
+        "STAGING,FARGATE,true,true,30,ENFORCE,false",        // STAGING full cert mgmt - PASS
+        "STAGING,FARGATE,false,false,0,ENFORCE,false",       // STAGING no cert mgmt - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,0,ADVISORY,false"    // PRODUCTION advisory no cert mgmt - PASS
+    })
+    void testCertificateManagementEdgeCases(String profile, String runtime, boolean expirationMonitoring,
+                                             boolean autoRenewal, int warningDays,
+                                             String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestCertEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("certExpirationMonitoring", String.valueOf(expirationMonitoring));
+        customContext.put("acmAutoRenewal", String.valueOf(autoRenewal));
+        customContext.put("certExpirationWarningDays", String.valueOf(warningDays));
+        customContext.put("complianceFrameworks", "KEY-MGMT");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("kmsKeyRotationDays", "365");
+            customContext.put("customerManagedKeysEnabled", "true");
+            customContext.put("secretsManagerEnabled", "true");
+            customContext.put("secretRotationEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestCertEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new KeyManagementRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected cert management validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected cert management validation to pass");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: Secrets rotation edge cases
+        "PRODUCTION,FARGATE,true,30,ENFORCE,false",      // 30 day rotation - PASS
+        "PRODUCTION,FARGATE,true,7,ENFORCE,false",       // 7 day rotation (aggressive) - PASS
+        "PRODUCTION,FARGATE,true,90,ENFORCE,false",      // 90 day rotation - PASS
+        "PRODUCTION,FARGATE,true,0,ENFORCE,true",        // No rotation - FAIL
+        "PRODUCTION,FARGATE,false,0,ENFORCE,true",       // Secrets manager disabled - FAIL
+        "PRODUCTION,EC2,true,30,ENFORCE,false",          // EC2 30 day rotation - PASS
+        "PRODUCTION,EC2,false,0,ENFORCE,true",           // EC2 no secrets mgmt - FAIL
+
+        // STAGING
+        "STAGING,FARGATE,true,90,ENFORCE,false",         // STAGING 90 day rotation - PASS
+        "STAGING,FARGATE,false,0,ENFORCE,false",         // STAGING no secrets mgmt - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,0,ADVISORY,false"      // PRODUCTION advisory no secrets - PASS
+    })
+    void testSecretsRotationEdgeCases(String profile, String runtime, boolean secretsManagerEnabled,
+                                       int rotationDays, String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestSecretsRotationEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("secretsManagerEnabled", String.valueOf(secretsManagerEnabled));
+        customContext.put("secretRotationDays", String.valueOf(rotationDays));
+        customContext.put("secretRotationEnabled", String.valueOf(rotationDays > 0));
+        customContext.put("complianceFrameworks", "KEY-MGMT");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("kmsKeyRotationDays", "365");
+            customContext.put("customerManagedKeysEnabled", "true");
+            customContext.put("acmAutoRenewal", "true");
+            customContext.put("certExpirationMonitoring", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestSecretsRotationEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new KeyManagementRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected secrets rotation validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected secrets rotation validation to pass");
+        }
+    }
 }

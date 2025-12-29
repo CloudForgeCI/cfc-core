@@ -76,19 +76,17 @@ public final class SecurityRules {
 
     // Get enabled compliance frameworks (comma-separated list)
     String frameworksConfig = ctx.cfc.complianceFrameworks();
-    if (frameworksConfig == null || frameworksConfig.trim().isEmpty()) {
-      LOG.info("No compliance frameworks specified - skipping all compliance validation");
-      return;
-    }
 
     // Parse enabled frameworks into a set for fast lookup
-    Set<String> enabledFrameworks = Arrays.stream(frameworksConfig.split(","))
-        .map(String::trim)
-        .map(String::toUpperCase)
-        .collect(java.util.stream.Collectors.toSet());
+    Set<String> enabledFrameworks = (frameworksConfig == null || frameworksConfig.trim().isEmpty())
+        ? Collections.emptySet()
+        : Arrays.stream(frameworksConfig.split(","))
+            .map(String::trim)
+            .map(String::toUpperCase)
+            .collect(java.util.stream.Collectors.toSet());
 
-    // CDK-nag validation only runs for PRODUCTION
-    if (ctx.security == SecurityProfile.PRODUCTION) {
+    // CDK-nag validation only runs for PRODUCTION with enabled frameworks
+    if (ctx.security == SecurityProfile.PRODUCTION && !enabledFrameworks.isEmpty()) {
       applyCdkNagValidation(ctx, enabledFrameworks);
     }
 
@@ -98,7 +96,12 @@ public final class SecurityRules {
       return;
     }
 
-    LOG.info("Installing CloudForge FrameworkRules validation for: " + frameworksConfig);
+    // Log what we're doing
+    if (enabledFrameworks.isEmpty()) {
+      LOG.info("No compliance frameworks specified - installing only alwaysLoad validators (e.g., ConfigurationValidationRules)");
+    } else {
+      LOG.info("Installing CloudForge FrameworkRules validation for: " + frameworksConfig);
+    }
 
     // Discover all available compliance frameworks (v3.0.0 plugin architecture)
     List<FrameworkRules<SystemContext>> allFrameworks = FrameworkLoader.discover();

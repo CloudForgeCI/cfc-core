@@ -3397,4 +3397,353 @@ class PciDssRulesTest {
         // When/Then: PCI-DSS rules should install without error
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        // PRODUCTION - WAF REQUIRED for PCI-DSS
+        "PRODUCTION,FARGATE,true,ENFORCE,false",    // WAF enabled - PASS
+        "PRODUCTION,FARGATE,false,ENFORCE,true",    // WAF disabled - FAIL (Req 6.6)
+        "PRODUCTION,EC2,true,ENFORCE,false",        // EC2 with WAF - PASS
+        "PRODUCTION,EC2,false,ENFORCE,true",        // EC2 without WAF - FAIL
+
+        // STAGING - WAF recommended but not required
+        "STAGING,FARGATE,true,ENFORCE,false",       // STAGING with WAF - PASS
+        "STAGING,FARGATE,false,ENFORCE,false",      // STAGING without WAF - PASS
+        "STAGING,EC2,true,ENFORCE,false",           // STAGING EC2 with WAF - PASS
+        "STAGING,EC2,false,ENFORCE,false",          // STAGING EC2 without WAF - PASS
+
+        // DEV - No WAF requirement
+        "DEV,FARGATE,false,ENFORCE,false",          // DEV without WAF - PASS
+
+        // ADVISORY mode - never fails
+        "PRODUCTION,FARGATE,false,ADVISORY,false",  // PRODUCTION advisory without WAF - PASS
+        "PRODUCTION,EC2,false,ADVISORY,false"       // EC2 advisory without WAF - PASS
+    })
+    void testPciDssWafEnforcementAcrossProfiles(String profile, String runtime, boolean wafEnabled,
+                                                 String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestWafEnforcement");
+        customContext.put("securityProfile", profile);
+        customContext.put("wafEnabled", String.valueOf(wafEnabled));
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("logRetentionDays", "365");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestWafEnforcement", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected WAF validation to fail for: " + profile + " with wafEnabled=" + wafEnabled);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected WAF validation to pass: " + profile + " with wafEnabled=" + wafEnabled);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // PCI-DSS Requirement 10.11 - Flow logs for audit trail
+        "PRODUCTION,FARGATE,true,ENFORCE,false",    // Flow logs enabled - PASS
+        "PRODUCTION,FARGATE,false,ENFORCE,true",    // Flow logs disabled - FAIL (Req 10.11)
+        "PRODUCTION,EC2,true,ENFORCE,false",        // EC2 with flow logs - PASS
+        "PRODUCTION,EC2,false,ENFORCE,true",        // EC2 without flow logs - FAIL
+
+        // STAGING - flow logs recommended
+        "STAGING,FARGATE,true,ENFORCE,false",       // STAGING with flow logs - PASS
+        "STAGING,FARGATE,false,ENFORCE,false",      // STAGING without flow logs - PASS (not enforced)
+        "STAGING,EC2,false,ENFORCE,false",          // STAGING EC2 without - PASS
+
+        // DEV - flow logs optional
+        "DEV,FARGATE,false,ENFORCE,false",          // DEV without flow logs - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,ADVISORY,false"   // PRODUCTION advisory - PASS (warning only)
+    })
+    void testPciDssFlowLogsEnforcement(String profile, String runtime, boolean flowLogsEnabled,
+                                        String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestFlowLogs");
+        customContext.put("securityProfile", profile);
+        customContext.put("enableFlowlogs", String.valueOf(flowLogsEnabled));
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("wafEnabled", "true");
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("logRetentionDays", "365");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestFlowLogs", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected flow logs validation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected flow logs validation to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // PCI-DSS Requirement 10.7 - Retain audit trail for at least 1 year
+        "PRODUCTION,FARGATE,365,ENFORCE,false",     // 1 year retention - PASS
+        "PRODUCTION,FARGATE,730,ENFORCE,false",     // 2 years retention - PASS
+        "PRODUCTION,FARGATE,90,ENFORCE,true",       // 90 days - FAIL (< 365)
+        "PRODUCTION,FARGATE,180,ENFORCE,true",      // 180 days - FAIL (< 365)
+        "PRODUCTION,FARGATE,0,ENFORCE,true",        // No retention - FAIL
+        "PRODUCTION,EC2,365,ENFORCE,false",         // EC2 with 1 year - PASS
+        "PRODUCTION,EC2,90,ENFORCE,true",           // EC2 with 90 days - FAIL
+
+        // STAGING - reduced retention allowed
+        "STAGING,FARGATE,90,ENFORCE,false",         // STAGING 90 days - PASS
+        "STAGING,FARGATE,14,ENFORCE,false",         // STAGING 14 days - PASS
+        "STAGING,EC2,30,ENFORCE,false",             // STAGING EC2 30 days - PASS
+
+        // DEV - minimal retention
+        "DEV,FARGATE,7,ENFORCE,false",              // DEV 7 days - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,90,ADVISORY,false"      // PRODUCTION advisory 90 days - PASS (warning)
+    })
+    void testPciDssLogRetentionRequirements(String profile, String runtime, int retentionDays,
+                                             String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestLogRetention");
+        customContext.put("securityProfile", profile);
+        customContext.put("logRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("wafEnabled", "true");
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestLogRetention", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected log retention validation to fail for: " + profile + " with " + retentionDays + " days");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected log retention validation to pass: " + profile + " with " + retentionDays + " days");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Different application types should all enforce PCI-DSS in PRODUCTION
+        "PRODUCTION,FARGATE,JENKINS_SERVICE,true,true,ENFORCE,false",     // Jenkins full compliance - PASS
+        "PRODUCTION,FARGATE,JENKINS_SERVICE,true,false,ENFORCE,true",     // Jenkins missing WAF - FAIL
+        "PRODUCTION,FARGATE,JENKINS_SERVICE,false,true,ENFORCE,true",     // Jenkins missing flow logs - FAIL
+        "PRODUCTION,EC2,WEB_APPLICATION,true,true,ENFORCE,false",         // Web app full compliance - PASS
+        "PRODUCTION,EC2,WEB_APPLICATION,false,false,ENFORCE,true",        // Web app missing both - FAIL
+        "PRODUCTION,FARGATE,API_SERVICE,true,true,ENFORCE,false",         // API service full - PASS
+        "PRODUCTION,FARGATE,API_SERVICE,true,false,ENFORCE,true",         // API missing WAF - FAIL
+
+        // STAGING - more lenient
+        "STAGING,FARGATE,JENKINS_SERVICE,false,false,ENFORCE,false",      // STAGING Jenkins minimal - PASS
+        "STAGING,EC2,WEB_APPLICATION,true,true,ENFORCE,false",            // STAGING web app full - PASS
+
+        // DEV - minimal requirements
+        "DEV,FARGATE,API_SERVICE,false,false,ENFORCE,false",              // DEV minimal - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,JENKINS_SERVICE,false,false,ADVISORY,false"   // PRODUCTION advisory minimal - PASS
+    })
+    void testPciDssAcrossApplicationTypes(String profile, String runtime, String topology,
+                                           boolean flowLogsEnabled, boolean wafEnabled,
+                                           String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestAppTypes");
+        customContext.put("securityProfile", profile);
+        customContext.put("enableFlowlogs", String.valueOf(flowLogsEnabled));
+        customContext.put("wafEnabled", String.valueOf(wafEnabled));
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+        TopologyType topologyType = TopologyType.valueOf(topology);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("logRetentionDays", "365");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestAppTypes", secProfile, runtimeType, customContext);
+
+        // Override topology if different from default
+        DeploymentContext cfc = DeploymentContext.from(builder.getStack());
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(secProfile);
+        SystemContext ctx = SystemContext.start(builder.getStack(), topologyType, runtimeType,
+                secProfile, iamProfile, cfc);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        new SecurityRules().install(ctx);
+        new PciDssRules().install(ctx);
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected validation to fail for: " + topology + " on " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected validation to pass: " + topology + " on " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Multi-violation scenarios - testing combination of missing requirements
+        "PRODUCTION,FARGATE,false,false,90,ENFORCE,true",       // Missing WAF + flow logs + retention - FAIL
+        "PRODUCTION,FARGATE,false,true,365,ENFORCE,true",       // Missing WAF only - FAIL
+        "PRODUCTION,FARGATE,true,false,365,ENFORCE,true",       // Missing flow logs only - FAIL
+        "PRODUCTION,FARGATE,true,true,90,ENFORCE,true",         // Missing retention only - FAIL
+        "PRODUCTION,EC2,false,false,90,ENFORCE,true",           // EC2 multi-violation - FAIL
+        "PRODUCTION,EC2,true,true,365,ENFORCE,false",           // EC2 all requirements - PASS
+
+        // STAGING - partial requirements OK
+        "STAGING,FARGATE,false,false,14,ENFORCE,false",         // STAGING minimal - PASS
+        "STAGING,FARGATE,true,true,90,ENFORCE,false",           // STAGING full - PASS
+
+        // ADVISORY mode - all pass
+        "PRODUCTION,FARGATE,false,false,90,ADVISORY,false"      // PRODUCTION advisory multi-violation - PASS
+    })
+    void testPciDssMultiViolationScenarios(String profile, String runtime, boolean wafEnabled,
+                                            boolean flowLogsEnabled, int retentionDays,
+                                            String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestMultiViolation");
+        customContext.put("securityProfile", profile);
+        customContext.put("wafEnabled", String.valueOf(wafEnabled));
+        customContext.put("enableFlowlogs", String.valueOf(flowLogsEnabled));
+        customContext.put("logRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "app.example.com");
+            customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestMultiViolation", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        new SecurityRules().install(builder.getSystemContext());
+        new PciDssRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected multi-violation validation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected multi-violation validation to pass: " + profile);
+        }
+    }
 }

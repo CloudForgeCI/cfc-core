@@ -315,19 +315,20 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         );
 
         // Requirement 6.6: WAF or application security review
+        // WAF is REQUIRED for PRODUCTION environments processing cardholder data
         if (!config.isWafEnabled()) {
             rules.add(ComplianceRule.fail(
                 "PCI-DSS-Req-6.6-WAF",
-                "Web Application Firewall (WAF) strongly recommended for production",
+                "Web Application Firewall (WAF) REQUIRED for PCI-DSS compliance in PRODUCTION",
                 "WafEnabled",
-                "PCI-DSS Req 6.6: Web Application Firewall (WAF) strongly recommended for production. " +
-                "Set wafEnabled = true in deployment context. " +
-                "Alternative: Document regular application security reviews per PCI-DSS 6.6."
+                "PCI-DSS Req 6.6: Protect all public-facing web applications from known attacks by " +
+                "installing a web application firewall. WAF is required for PRODUCTION environments " +
+                "processing cardholder data. Set wafEnabled = true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
                 "PCI-DSS-Req-6.6-WAF",
-                "WAF protection enabled",
+                "WAF protection enabled for PCI-DSS compliance",
                 "WafEnabled"
             ));
         }
@@ -521,6 +522,26 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
                 "PCI-DSS-Req-11.4-GuardDuty",
                 "GuardDuty threat detection enabled",
                 "GuardDutyEnabled"
+            ));
+        }
+
+        // Requirement 10 & 11: Track and monitor all access to network resources
+        // VPC Flow Logs are required for network traffic monitoring and audit trail
+        if (!config.isFlowLogsEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-10.11-FlowLogs",
+                "VPC Flow Logs required for network monitoring (PCI-DSS Req 10 & 11)",
+                "FlowLogsEnabled",
+                "PCI-DSS Requirement 10 (logging and monitoring) and Requirement 11 (security testing) " +
+                "require tracking and monitoring all access to network resources and cardholder data. " +
+                "Enable VPC Flow Logs to capture network traffic for audit trail and anomaly detection. " +
+                "Set flowLogsEnabled = true in deployment context."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-10.11-FlowLogs",
+                "VPC Flow Logs enabled for network monitoring",
+                "FlowLogsEnabled"
             ));
         }
 

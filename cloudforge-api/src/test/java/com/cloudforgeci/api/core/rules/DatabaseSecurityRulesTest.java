@@ -929,4 +929,177 @@ class DatabaseSecurityRulesTest {
                 "Expected validation to pass for comprehensive scenario: " + profile);
         }
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: RDS backup retention edge cases
+        "PRODUCTION,FARGATE,7,true,ENFORCE,false",       // Exactly 7 days - PASS
+        "PRODUCTION,FARGATE,6,true,ENFORCE,true",        // Just under 7 days - FAIL
+        "PRODUCTION,FARGATE,35,true,ENFORCE,false",      // 35 days (max) - PASS
+        "PRODUCTION,FARGATE,1,true,ENFORCE,true",        // 1 day - FAIL
+        "PRODUCTION,FARGATE,0,true,ENFORCE,true",        // No backup - FAIL
+        "PRODUCTION,EC2,7,true,ENFORCE,false",           // EC2 7 days - PASS
+        "PRODUCTION,EC2,3,true,ENFORCE,true",            // EC2 under 7 days - FAIL
+
+        // STAGING - reduced retention allowed
+        "STAGING,FARGATE,3,true,ENFORCE,false",          // STAGING 3 days - PASS
+        "STAGING,FARGATE,0,true,ENFORCE,false",          // STAGING no backup - PASS
+
+        // DEV - no requirements
+        "DEV,FARGATE,0,false,ENFORCE,false",             // DEV no backup - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,1,true,ADVISORY,false"       // PRODUCTION advisory under limit - PASS
+    })
+    void testRdsBackupRetentionEdgeCases(String profile, String runtime, int backupRetentionDays,
+                                          boolean rdsEnabled, String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestRdsBackupEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("rdsEnabled", String.valueOf(rdsEnabled));
+        customContext.put("rdsBackupRetentionDays", String.valueOf(backupRetentionDays));
+        customContext.put("complianceFrameworks", "DB-SECURITY");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("rdsEncryptionEnabled", "true");
+            customContext.put("rdsMultiAzEnabled", "true");
+            customContext.put("rdsDeleteProtection", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestRdsBackupEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new DatabaseSecurityRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected RDS backup retention validation to fail for: " + backupRetentionDays + " days");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected RDS backup retention validation to pass for: " + backupRetentionDays + " days");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: Performance Insights encryption requirements
+        "PRODUCTION,FARGATE,true,true,true,ENFORCE,false",     // PI enabled + encrypted - PASS
+        "PRODUCTION,FARGATE,true,true,false,ENFORCE,true",     // PI enabled + not encrypted - FAIL
+        "PRODUCTION,FARGATE,true,false,false,ENFORCE,false",   // PI disabled - PASS
+        "PRODUCTION,FARGATE,false,false,false,ENFORCE,true",   // RDS disabled - FAIL (PRODUCTION needs RDS)
+        "PRODUCTION,EC2,true,true,true,ENFORCE,false",         // EC2 PI encrypted - PASS
+        "PRODUCTION,EC2,true,true,false,ENFORCE,true",         // EC2 PI not encrypted - FAIL
+
+        // STAGING
+        "STAGING,FARGATE,true,true,true,ENFORCE,false",        // STAGING PI encrypted - PASS
+        "STAGING,FARGATE,true,true,false,ENFORCE,false",       // STAGING PI not encrypted - PASS
+
+        // DEV
+        "DEV,FARGATE,false,false,false,ENFORCE,false",         // DEV no RDS - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,true,true,false,ADVISORY,false"    // PRODUCTION advisory PI not encrypted - PASS
+    })
+    void testPerformanceInsightsEncryptionEdgeCases(String profile, String runtime, boolean rdsEnabled,
+                                                     boolean performanceInsights, boolean piEncrypted,
+                                                     String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestPIEncryptionEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("rdsEnabled", String.valueOf(rdsEnabled));
+        customContext.put("rdsPerformanceInsightsEnabled", String.valueOf(performanceInsights));
+        customContext.put("rdsPerformanceInsightsEncrypted", String.valueOf(piEncrypted));
+        customContext.put("complianceFrameworks", "DB-SECURITY");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("rdsEncryptionEnabled", "true");
+            customContext.put("rdsMultiAzEnabled", "true");
+            customContext.put("rdsBackupRetentionDays", "7");
+            customContext.put("rdsDeleteProtection", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestPIEncryptionEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new DatabaseSecurityRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected Performance Insights encryption validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected Performance Insights encryption validation to pass");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: Multi-AZ and delete protection combinations
+        "PRODUCTION,FARGATE,true,true,ENFORCE,false",    // Multi-AZ + delete protection - PASS
+        "PRODUCTION,FARGATE,true,false,ENFORCE,true",    // Multi-AZ only - FAIL (needs both)
+        "PRODUCTION,FARGATE,false,true,ENFORCE,true",    // Delete protection only - FAIL (needs both)
+        "PRODUCTION,FARGATE,false,false,ENFORCE,true",   // Neither - FAIL
+        "PRODUCTION,EC2,true,true,ENFORCE,false",        // EC2 both enabled - PASS
+        "PRODUCTION,EC2,false,false,ENFORCE,true",       // EC2 neither - FAIL
+
+        // STAGING
+        "STAGING,FARGATE,true,true,ENFORCE,false",       // STAGING both enabled - PASS
+        "STAGING,FARGATE,false,false,ENFORCE,false",     // STAGING neither - PASS
+
+        // DEV
+        "DEV,FARGATE,false,false,ENFORCE,false",         // DEV neither - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,ADVISORY,false"  // PRODUCTION advisory neither - PASS
+    })
+    void testRdsHighAvailabilityEdgeCases(String profile, String runtime, boolean multiAz,
+                                           boolean deleteProtection, String complianceMode,
+                                           boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestRdsHAEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("rdsEnabled", "true");
+        customContext.put("rdsMultiAzEnabled", String.valueOf(multiAz));
+        customContext.put("rdsDeleteProtection", String.valueOf(deleteProtection));
+        customContext.put("complianceFrameworks", "DB-SECURITY");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("rdsEncryptionEnabled", "true");
+            customContext.put("rdsBackupRetentionDays", "7");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestRdsHAEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new DatabaseSecurityRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected RDS HA validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected RDS HA validation to pass");
+        }
+    }
 }

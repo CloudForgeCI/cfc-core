@@ -3048,4 +3048,265 @@ class Soc2RulesTest {
                 "Expected validation to pass for backup scenario: " + profile + ", backupEnabled=" + backupEnabled);
         }
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        // SOC2 Availability - monitoring and logging requirements
+        "PRODUCTION,FARGATE,true,true,ENFORCE,false",    // All monitoring - PASS
+        "PRODUCTION,FARGATE,false,true,ENFORCE,true",    // No CloudTrail - FAIL
+        "PRODUCTION,FARGATE,true,false,ENFORCE,true",    // No GuardDuty - FAIL
+        "PRODUCTION,FARGATE,false,false,ENFORCE,true",   // No monitoring - FAIL
+        "PRODUCTION,EC2,true,true,ENFORCE,false",        // EC2 all monitoring - PASS
+        "PRODUCTION,EC2,false,false,ENFORCE,true",       // EC2 no monitoring - FAIL
+
+        // STAGING - monitoring recommended
+        "STAGING,FARGATE,true,true,ENFORCE,false",       // STAGING full - PASS
+        "STAGING,FARGATE,false,false,ENFORCE,false",     // STAGING minimal - PASS
+
+        // DEV - minimal monitoring
+        "DEV,FARGATE,false,false,ENFORCE,false",         // DEV minimal - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,ADVISORY,false"  // PRODUCTION advisory - PASS
+    })
+    void testSoc2AvailabilityMonitoring(String profile, String runtime, boolean cloudTrailEnabled,
+                                         boolean guardDutyEnabled, String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestSoc2Availability");
+        customContext.put("securityProfile", profile);
+        customContext.put("cloudTrailEnabled", String.valueOf(cloudTrailEnabled));
+        customContext.put("guardDutyEnabled", String.valueOf(guardDutyEnabled));
+        customContext.put("complianceFrameworks", "SOC2");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("logRetentionDays", "365");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "soc2.example.com");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestSoc2Availability", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected SOC2 availability monitoring to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected SOC2 availability monitoring to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // SOC2 Confidentiality - encryption requirements
+        "PRODUCTION,FARGATE,true,true,true,true,ENFORCE,false",    // All encryption - PASS
+        "PRODUCTION,FARGATE,false,true,true,true,ENFORCE,true",    // No EBS encryption - FAIL
+        "PRODUCTION,FARGATE,true,false,true,true,ENFORCE,true",    // No EFS at-rest - FAIL
+        "PRODUCTION,FARGATE,true,true,false,true,ENFORCE,true",    // No EFS transit - FAIL
+        "PRODUCTION,FARGATE,true,true,true,false,ENFORCE,true",    // No S3 encryption - FAIL
+        "PRODUCTION,EC2,true,true,true,true,ENFORCE,false",        // EC2 all encryption - PASS
+        "PRODUCTION,EC2,false,false,false,false,ENFORCE,true",     // EC2 no encryption - FAIL
+
+        // STAGING - encryption recommended
+        "STAGING,FARGATE,true,true,true,true,ENFORCE,false",       // STAGING full - PASS
+        "STAGING,FARGATE,false,false,false,false,ENFORCE,false",   // STAGING none - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,false,false,ADVISORY,false" // PRODUCTION advisory - PASS
+    })
+    void testSoc2ConfidentialityEncryption(String profile, String runtime, boolean ebsEncryption,
+                                            boolean efsAtRest, boolean efsTransit, boolean s3Encryption,
+                                            String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestSoc2Confidentiality");
+        customContext.put("securityProfile", profile);
+        customContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
+        customContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsAtRest));
+        customContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
+        customContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        customContext.put("complianceFrameworks", "SOC2");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("logRetentionDays", "365");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "soc2.example.com");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestSoc2Confidentiality", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected SOC2 confidentiality encryption to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected SOC2 confidentiality encryption to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // SOC2 Processing Integrity - audit log retention
+        "PRODUCTION,FARGATE,365,ENFORCE,false",     // 1 year retention - PASS
+        "PRODUCTION,FARGATE,730,ENFORCE,false",     // 2 years retention - PASS
+        "PRODUCTION,FARGATE,90,ENFORCE,true",       // 90 days - FAIL
+        "PRODUCTION,FARGATE,180,ENFORCE,true",      // 180 days - FAIL
+        "PRODUCTION,EC2,365,ENFORCE,false",         // EC2 1 year - PASS
+        "PRODUCTION,EC2,90,ENFORCE,true",           // EC2 90 days - FAIL
+
+        // STAGING - reduced retention allowed
+        "STAGING,FARGATE,90,ENFORCE,false",         // STAGING 90 days - PASS
+        "STAGING,EC2,30,ENFORCE,false",             // STAGING 30 days - PASS
+
+        // DEV - minimal retention
+        "DEV,FARGATE,7,ENFORCE,false",              // DEV 7 days - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,90,ADVISORY,false"      // PRODUCTION advisory - PASS
+    })
+    void testSoc2ProcessingIntegrityAuditLogs(String profile, String runtime, int retentionDays,
+                                               String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestSoc2ProcessingIntegrity");
+        customContext.put("securityProfile", profile);
+        customContext.put("logRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "SOC2");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "soc2.example.com");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestSoc2ProcessingIntegrity", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected SOC2 processing integrity to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected SOC2 processing integrity to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // SOC2 multi-criterion violations
+        "PRODUCTION,FARGATE,false,false,90,ENFORCE,true",       // No monitoring + encryption + retention - FAIL
+        "PRODUCTION,FARGATE,false,true,365,ENFORCE,true",       // No monitoring only - FAIL
+        "PRODUCTION,FARGATE,true,false,365,ENFORCE,true",       // No encryption only - FAIL
+        "PRODUCTION,FARGATE,true,true,90,ENFORCE,true",         // No retention only - FAIL
+        "PRODUCTION,EC2,false,false,90,ENFORCE,true",           // EC2 multi-violation - FAIL
+        "PRODUCTION,EC2,true,true,365,ENFORCE,false",           // EC2 all requirements - PASS
+
+        // STAGING - partial requirements OK
+        "STAGING,FARGATE,false,false,14,ENFORCE,false",         // STAGING minimal - PASS
+        "STAGING,FARGATE,true,true,90,ENFORCE,false",           // STAGING partial - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,90,ADVISORY,false"      // PRODUCTION advisory - PASS
+    })
+    void testSoc2MultiCriterionViolations(String profile, String runtime, boolean monitoringEnabled,
+                                           boolean encryptionEnabled, int retentionDays,
+                                           String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestSoc2MultiViolation");
+        customContext.put("securityProfile", profile);
+        customContext.put("cloudTrailEnabled", String.valueOf(monitoringEnabled));
+        customContext.put("guardDutyEnabled", String.valueOf(monitoringEnabled));
+        customContext.put("ebsEncryptionEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("efsEncryptionAtRestEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("efsEncryptionInTransitEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("s3EncryptionEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("logRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "SOC2");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "soc2.example.com");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestSoc2MultiViolation", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new Soc2Rules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected SOC2 multi-criterion violation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected SOC2 multi-criterion violation to pass: " + profile);
+        }
+    }
 }

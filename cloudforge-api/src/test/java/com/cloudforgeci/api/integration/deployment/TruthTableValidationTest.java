@@ -842,6 +842,12 @@ class TruthTableValidationTest {
             System.out.println("   ⚠️  Override: cloudWatchLogsKmsEncryptionEnabled = " + overrideValue);
         }
 
+        // Special handling for negative test cases that intentionally disable WAF
+        if (configName != null && configName.contains("no_WAF")) {
+            cfcContext.put("wafEnabled", false);
+            System.out.println("   ⚠️  Test Override: wafEnabled = false (negative test case)");
+        }
+
         // Configure stack with deployment context
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -1810,11 +1816,11 @@ class TruthTableValidationTest {
         if (hasDomain) {
             context.put("domain", "example.com");
             context.put("createZone", true);
+        }
 
-            // Subdomain
-            if ("with-subdomain".equals(subdomainConfig)) {
-                context.put("subdomain", "app");
-            }
+        // Subdomain (can be set even without domain to test invalid configurations)
+        if ("with-subdomain".equals(subdomainConfig)) {
+            context.put("subdomain", "app");
         }
 
         // SSL configuration
@@ -4749,6 +4755,93 @@ class TruthTableValidationTest {
         System.out.println("   Expected: PASS (may have advisories)");
         System.out.println("   Framework: " + complianceFramework);
         System.out.println("   Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default"));
+
+        // Delegate to main CSV test method
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
+        );
+    }
+
+    // ========== NEGATIVE EDGE CASE TESTS ==========
+    // Tests that should FAIL validation (invalid configurations)
+    // Validates that our validation logic correctly rejects bad configurations
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/negative_edge_cases.csv",
+        numLinesToSkip = 1
+    )
+    void testNegativeEdgeCases(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
+
+        System.out.println("\n[NEGATIVE TEST] Testing invalid configuration: " + configName);
+        System.out.println("   Expected: FAIL (validation should reject this config)");
+        System.out.println("   Framework: " + complianceFramework);
+        System.out.println("   This test validates that validation logic works correctly");
+
+        // Delegate to main CSV test method - should fail at some layer
+        testComplianceFrameworkIntegrationCsv(
+            configName, runtime, securityProfile, domainConfig, sslConfig,
+            subdomainConfig, authMode, networkMode, complianceFramework,
+            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
+            applicationId, provisionDatabase, region, gdprDataTransferApproved,
+            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
+        );
+    }
+
+    // ========== LOG RETENTION VALIDATION TESTS ==========
+    // Comprehensive tests for log retention requirements across all compliance frameworks
+
+    @ParameterizedTest(name = "{0}")
+    @CsvFileSource(
+        resources = "/compliance-matrices/log_retention_validation.csv",
+        numLinesToSkip = 1
+    )
+    void testLogRetentionValidation(
+            String configName,
+            String runtime,
+            String securityProfile,
+            String domainConfig,
+            String sslConfig,
+            String subdomainConfig,
+            String authMode,
+            String networkMode,
+            String complianceFramework,
+            String logRetentionDaysOverride,
+            String flowLogsEnabledOverride,
+            String expectedResult,
+            String applicationId,
+            String provisionDatabase,
+            String region,
+            String gdprDataTransferApproved,
+            String restrictSecurityGroupEgress,
+            String cloudWatchLogsKmsEncryptionEnabled) {
+
+        System.out.println("\n[LOG RETENTION TEST] " + configName);
+        System.out.println("   Framework: " + complianceFramework);
+        System.out.println("   Retention: " + logRetentionDaysOverride + " days");
+        System.out.println("   Expected: " + expectedResult);
 
         // Delegate to main CSV test method
         testComplianceFrameworkIntegrationCsv(

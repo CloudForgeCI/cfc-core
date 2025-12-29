@@ -279,3 +279,635 @@ FAIL_HIPAA_EC2_ssl-disabled,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain
 FAIL_HIPAA_FARGATE_ssl-disabled,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,,FAIL,jenkins,,,
 FAIL_PCI-DSS_EC2_ssl-disabled,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
 FAIL_PCI-DSS_FARGATE_ssl-disabled,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+# ConfigurationValidationRules: Subdomain without domain validation
+FAIL_CONFIG_EC2_subdomain-without-domain_no-framework,EC2,DEV,no-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_no-framework,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_subdomain-without-domain_SOC2,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_SOC2,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_subdomain-without-domain_PCI-DSS,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_PCI-DSS,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_subdomain-without-domain_HIPAA,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,HIPAA,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_HIPAA,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,HIPAA,,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_subdomain-without-domain_GDPR,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_GDPR,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_EC2_subdomain-without-domain_ALL,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_ALL,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_EC2_subdomain-without-domain_SOC2_PCI-DSS,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_SOC2_PCI-DSS,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_subdomain-without-domain_HIPAA_GDPR,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"HIPAA,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_HIPAA_GDPR,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"HIPAA,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_EC2_subdomain-without-domain_STAGING,EC2,STAGING,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-without-domain_STAGING,FARGATE,STAGING,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+
+# ConfigurationValidationRules: OIDC without HTTPS validation
+FAIL_CONFIG_EC2_oidc-without-https_no-framework,EC2,DEV,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_oidc-without-https_no-framework,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_oidc-without-https_SOC2,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_oidc-without-https_SOC2,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_oidc-without-https_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_oidc-without-https_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_oidc-without-https_HIPAA,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_oidc-without-https_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_oidc-without-https_GDPR,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_FARGATE_oidc-without-https_GDPR,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_EC2_oidc-without-https_ALL,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_FARGATE_oidc-without-https_ALL,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_EC2_oidc-without-https_SOC2_HIPAA,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_oidc-without-https_SOC2_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_oidc-without-https_PCI-DSS_GDPR,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_FARGATE_oidc-without-https_PCI-DSS_GDPR,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_EC2_oidc-without-https_STAGING,EC2,STAGING,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_oidc-without-https_STAGING,FARGATE,STAGING,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_oidc-without-https_with-subdomain,EC2,PRODUCTION,with-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_oidc-without-https_with-subdomain,FARGATE,PRODUCTION,with-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+
+# ConfigurationValidationRules: Combined violations (subdomain + OIDC without HTTPS)
+FAIL_CONFIG_EC2_subdomain-no-domain_oidc-no-https,EC2,DEV,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_oidc-no-https,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_subdomain-no-domain_oidc-no-https_SOC2,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_oidc-no-https_SOC2,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_subdomain-no-domain_oidc-no-https_ALL,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_oidc-no-https_ALL,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+
+# PCI-DSS WAF requirement validation (uses special test infrastructure - configName contains "no_WAF")
+FAIL_PCI-DSS_EC2_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_retention-365,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_retention-365,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_flow-logs,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_flow-logs,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_STAGING,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_STAGING,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_SOC2_PCI-DSS_EC2_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",,,FAIL,jenkins,,,
+FAIL_SOC2_PCI-DSS_FARGATE_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",,,FAIL,jenkins,,,
+FAIL_PCI-DSS_HIPAA_EC2_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",,,FAIL,jenkins,,,
+FAIL_PCI-DSS_HIPAA_FARGATE_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",,,FAIL,jenkins,,,
+FAIL_PCI-DSS_GDPR_EC2_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_PCI-DSS_GDPR_FARGATE_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_ALL_FRAMEWORKS_EC2_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_ALL_FRAMEWORKS_FARGATE_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_ALL_FRAMEWORKS_EC2_no_WAF_subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_ALL_FRAMEWORKS_FARGATE_no_WAF_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_SOC2_PCI-DSS_HIPAA_EC2_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",2190,,FAIL,jenkins,,,
+FAIL_SOC2_PCI-DSS_HIPAA_FARGATE_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",2190,,FAIL,jenkins,,,
+FAIL_SOC2_PCI-DSS_GDPR_EC2_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_SOC2_PCI-DSS_GDPR_FARGATE_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_PCI-DSS_HIPAA_GDPR_EC2_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+FAIL_PCI-DSS_HIPAA_GDPR_FARGATE_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,eu-west-1,
+
+# Flow logs validation in DEV/STAGING profiles (tests validation without ComplianceMatrix enforcement)
+FAIL_HIPAA_EC2_DEV_no-flow-logs,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,jenkins,,,
+FAIL_HIPAA_FARGATE_DEV_no-flow-logs,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_DEV_no-flow-logs,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_DEV_no-flow-logs,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_HIPAA_EC2_STAGING_no-flow-logs,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,jenkins,,,
+FAIL_HIPAA_FARGATE_STAGING_no-flow-logs,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_STAGING_no-flow-logs,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_STAGING_no-flow-logs,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_SOC2_HIPAA_EC2_DEV_no-flow-logs,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,false,FAIL,jenkins,,,
+FAIL_SOC2_HIPAA_FARGATE_DEV_no-flow-logs,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_HIPAA_EC2_DEV_no-flow-logs,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_HIPAA_FARGATE_DEV_no-flow-logs,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA",,false,FAIL,jenkins,,,
+FAIL_ALL_FRAMEWORKS_EC2_DEV_no-flow-logs,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,false,FAIL,jenkins,,eu-west-1,
+FAIL_ALL_FRAMEWORKS_FARGATE_DEV_no-flow-logs,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,false,FAIL,jenkins,,eu-west-1,
+
+# Multi-violation test cases (PCI-DSS without WAF + other violations)
+FAIL_PCI-DSS_EC2_no_WAF_no-auth,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_no-auth,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_public-network,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_public-network,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,30,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,30,,FAIL,jenkins,,,
+FAIL_ALL_EC2_no_WAF_no-auth_public_zero-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",0,false,FAIL,jenkins,,eu-west-1,
+FAIL_ALL_FARGATE_no_WAF_no-auth_public_zero-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",0,false,FAIL,jenkins,,eu-west-1,
+
+# ConfigurationValidationRules + PCI-DSS WAF combined violations
+FAIL_CONFIG_PCI-DSS_EC2_subdomain-no-domain_no_WAF,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_PCI-DSS_FARGATE_subdomain-no-domain_no_WAF,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_PCI-DSS_EC2_oidc-no-https_no_WAF,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_PCI-DSS_FARGATE_oidc-no-https_no_WAF,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_ALL_EC2_subdomain-no-domain_oidc-no-https_no_WAF,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_ALL_FARGATE_subdomain-no-domain_oidc-no-https_no_WAF,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,,FAIL,jenkins,,eu-west-1,
+
+# Edge case: PCI-DSS with various application types and WAF requirement
+FAIL_PCI-DSS_EC2_no_WAF_mattermost,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,mattermost,true,,
+FAIL_PCI-DSS_FARGATE_no_WAF_mattermost,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,mattermost,true,,
+FAIL_PCI-DSS_EC2_no_WAF_gitlab,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,gitlab,true,,
+FAIL_PCI-DSS_FARGATE_no_WAF_gitlab,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,gitlab,true,,
+
+# Edge case: GDPR data residency + new validation rules
+FAIL_CONFIG_GDPR_EC2_subdomain-no-domain_us-east-1,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,us-east-1,
+FAIL_CONFIG_GDPR_FARGATE_subdomain-no-domain_us-east-1,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,us-east-1,
+FAIL_CONFIG_GDPR_EC2_oidc-no-https_eu-west-1,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_GDPR_FARGATE_oidc-no-https_eu-west-1,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_ALL_EC2_subdomain-no-domain_no-approval_us-east-1,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,us-east-1,
+FAIL_CONFIG_ALL_FARGATE_subdomain-no-domain_no-approval_us-east-1,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,FAIL,jenkins,,us-east-1,
+
+# Boundary testing: Valid configurations that should pass
+PASS_CONFIG_EC2_valid-subdomain-with-domain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_valid-subdomain-with-domain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_CONFIG_EC2_oidc-with-https,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_oidc-with-https,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_PCI-DSS_EC2_with-WAF-implied,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+PASS_PCI-DSS_FARGATE_with-WAF-implied,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+PASS_ALL_EC2_valid-config-all-rules,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
+PASS_ALL_FARGATE_valid-config-all-rules,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
+# COMPLIANCE TEST MATRIX EXPANSION - PHASE 2
+# Additional comprehensive edge cases
+# Generated: 2025-12-28
+# Target: Expand from 1,297 to 1,500+ test cases
+# ========================================
+
+# Network Mode Edge Cases (private-with-nat vs public-no-nat)
+# Testing ConfigurationValidationRules across network modes
+FAIL_CONFIG_EC2_subdomain-no-domain_public-network,EC2,DEV,no-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_public-network,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_oidc-no-https_public-network,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,public-no-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_oidc-no-https_public-network,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,public-no-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_PCI-DSS_EC2_subdomain-no-domain_public,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_CONFIG_PCI-DSS_FARGATE_subdomain-no-domain_public,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,FAIL,jenkins,,,
+
+# Auth Mode Variations (none, alb-oidc) with ConfigurationValidationRules
+FAIL_CONFIG_EC2_subdomain-no-domain_no-auth,EC2,DEV,no-domain,ssl-disabled,with-subdomain,none,private-with-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_no-auth,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,none,private-with-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_SOC2_EC2_oidc-no-https_no-auth,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_SOC2_FARGATE_oidc-no-https_no-auth,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,SOC2,,,FAIL,jenkins,,,
+
+# Application Type Variations (jenkins, gitlab, mattermost, sonarqube, harbor)
+FAIL_CONFIG_EC2_subdomain-no-domain_gitlab,EC2,DEV,no-domain,ssl-disabled,with-subdomain,none,private-with-nat,,,true,FAIL,gitlab,,,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_gitlab,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,none,private-with-nat,,,true,FAIL,gitlab,,,
+FAIL_CONFIG_EC2_subdomain-no-domain_mattermost,EC2,DEV,no-domain,ssl-disabled,with-subdomain,none,private-with-nat,,,true,FAIL,mattermost,true,,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_mattermost,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,none,private-with-nat,,,true,FAIL,mattermost,true,,
+FAIL_CONFIG_EC2_oidc-no-https_sonarqube,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,sonarqube,true,,
+FAIL_CONFIG_FARGATE_oidc-no-https_sonarqube,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,sonarqube,true,,
+FAIL_CONFIG_EC2_oidc-no-https_harbor,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,harbor,true,,
+FAIL_CONFIG_FARGATE_oidc-no-https_harbor,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,harbor,true,,
+
+# PCI-DSS WAF requirement with application variations
+FAIL_PCI-DSS_EC2_no_WAF_sonarqube,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,sonarqube,true,,
+FAIL_PCI-DSS_FARGATE_no_WAF_sonarqube,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,sonarqube,true,,
+FAIL_PCI-DSS_EC2_no_WAF_harbor,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,harbor,true,,
+FAIL_PCI-DSS_FARGATE_no_WAF_harbor,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,harbor,true,,
+FAIL_PCI-DSS_EC2_no_WAF_nexus,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,nexus,true,,
+FAIL_PCI-DSS_FARGATE_no_WAF_nexus,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,nexus,true,,
+
+# Retention Period Edge Cases with WAF violations
+FAIL_PCI-DSS_EC2_no_WAF_retention-7days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_retention-7days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_retention-30days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,30,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_retention-30days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,30,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_retention-90days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,90,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_retention-90days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,90,,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_retention-180days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,180,,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_retention-180days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,180,,FAIL,jenkins,,,
+
+# Regional Variations (GDPR in different regions)
+FAIL_CONFIG_GDPR_EC2_subdomain-no-domain_eu-central-1,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-central-1,
+FAIL_CONFIG_GDPR_FARGATE_subdomain-no-domain_eu-central-1,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-central-1,
+FAIL_CONFIG_GDPR_EC2_oidc-no-https_eu-north-1,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-north-1,
+FAIL_CONFIG_GDPR_FARGATE_oidc-no-https_eu-north-1,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-north-1,
+FAIL_CONFIG_GDPR_EC2_subdomain-no-domain_ap-southeast-1,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,ap-southeast-1,
+FAIL_CONFIG_GDPR_FARGATE_subdomain-no-domain_ap-southeast-1,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,ap-southeast-1,
+
+# Multi-Framework Combinations with CONFIG violations
+FAIL_CONFIG_SOC2_HIPAA_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,,FAIL,jenkins,,,
+FAIL_CONFIG_SOC2_HIPAA_FARGATE_subdomain-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,,FAIL,jenkins,,,
+FAIL_CONFIG_PCI-DSS_GDPR_EC2_oidc-no-https,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_PCI-DSS_GDPR_FARGATE_oidc-no-https,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_HIPAA_GDPR_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"HIPAA,GDPR",2190,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_HIPAA_GDPR_FARGATE_subdomain-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"HIPAA,GDPR",2190,,FAIL,jenkins,,eu-west-1,
+
+# Triple Framework Combinations
+FAIL_CONFIG_SOC2_PCI-DSS_HIPAA_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",2190,,FAIL,jenkins,,,
+FAIL_CONFIG_SOC2_PCI-DSS_HIPAA_FARGATE_subdomain-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA",2190,,FAIL,jenkins,,,
+FAIL_CONFIG_SOC2_PCI-DSS_GDPR_EC2_oidc-no-https,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_SOC2_PCI-DSS_GDPR_FARGATE_oidc-no-https,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,GDPR",,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_PCI-DSS_HIPAA_GDPR_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA,GDPR",2190,,FAIL,jenkins,,eu-west-1,
+FAIL_CONFIG_PCI-DSS_HIPAA_GDPR_FARGATE_subdomain-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA,GDPR",2190,,FAIL,jenkins,,eu-west-1,
+
+# PCI-DSS WAF + Flow Logs combined violations
+FAIL_PCI-DSS_EC2_no_WAF_DEV_no-flow-logs,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_DEV_no-flow-logs,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_EC2_no_WAF_STAGING_no-flow-logs,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_PCI-DSS_FARGATE_no_WAF_STAGING_no-flow-logs,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,
+
+# HIPAA Flow Logs with different applications
+FAIL_HIPAA_EC2_DEV_no-flow-logs_gitlab,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,gitlab,,,
+FAIL_HIPAA_FARGATE_DEV_no-flow-logs_gitlab,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,gitlab,,,
+FAIL_HIPAA_EC2_DEV_no-flow-logs_mattermost,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,mattermost,true,,
+FAIL_HIPAA_FARGATE_DEV_no-flow-logs_mattermost,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,mattermost,true,,
+FAIL_HIPAA_EC2_STAGING_no-flow-logs_sonarqube,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,sonarqube,true,,
+FAIL_HIPAA_FARGATE_STAGING_no-flow-logs_sonarqube,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,sonarqube,true,,
+
+# Extreme Multi-Violation Scenarios (CONFIG + PCI-DSS WAF + Flow Logs + Retention)
+FAIL_EXTREME_EC2_all-violations,EC2,DEV,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,PCI-DSS,7,false,FAIL,jenkins,,,
+FAIL_EXTREME_FARGATE_all-violations,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,PCI-DSS,7,false,FAIL,jenkins,,,
+FAIL_EXTREME_EC2_all-violations_HIPAA,EC2,DEV,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,HIPAA,7,false,FAIL,jenkins,,,
+FAIL_EXTREME_FARGATE_all-violations_HIPAA,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,HIPAA,7,false,FAIL,jenkins,,,
+FAIL_EXTREME_ALL_EC2_all-violations,EC2,DEV,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,jenkins,,eu-west-1,
+FAIL_EXTREME_ALL_FARGATE_all-violations,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,jenkins,,eu-west-1,
+
+# STAGING Profile Comprehensive Coverage
+FAIL_STAGING_EC2_subdomain-no-domain_SOC2,EC2,STAGING,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_STAGING_FARGATE_subdomain-no-domain_SOC2,FARGATE,STAGING,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_STAGING_EC2_oidc-no-https_PCI-DSS,EC2,STAGING,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_STAGING_FARGATE_oidc-no-https_PCI-DSS,FARGATE,STAGING,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_STAGING_EC2_no_WAF_PCI-DSS,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_STAGING_FARGATE_no_WAF_PCI-DSS,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_STAGING_EC2_no-flow-logs_HIPAA,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,jenkins,,,
+FAIL_STAGING_FARGATE_no-flow-logs_HIPAA,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,jenkins,,,
+FAIL_STAGING_SOC2_HIPAA_EC2_subdomain-no-domain,EC2,STAGING,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,,FAIL,jenkins,,,
+FAIL_STAGING_SOC2_HIPAA_FARGATE_subdomain-no-domain,FARGATE,STAGING,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,,FAIL,jenkins,,,
+
+# Subdomain Variations (different subdomain patterns)
+FAIL_CONFIG_EC2_subdomain-no-domain_api,EC2,DEV,no-domain,ssl-disabled,with-subdomain,none,private-with-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_api,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,none,private-with-nat,,,true,FAIL,jenkins,,,
+FAIL_CONFIG_EC2_subdomain-no-domain_www,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_CONFIG_FARGATE_subdomain-no-domain_www,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,jenkins,,,
+
+# With-Subdomain + Valid Domain (Boundary Testing - Should PASS)
+PASS_CONFIG_EC2_subdomain-with-domain_DEV,EC2,DEV,with-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_subdomain-with-domain_DEV,FARGATE,DEV,with-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,PASS,jenkins,,,
+PASS_CONFIG_EC2_subdomain-with-domain_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_subdomain-with-domain_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_CONFIG_EC2_subdomain-with-domain_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_subdomain-with-domain_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+PASS_CONFIG_EC2_subdomain-with-domain_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_subdomain-with-domain_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+PASS_CONFIG_EC2_subdomain-with-domain_GDPR,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-west-1,
+PASS_CONFIG_FARGATE_subdomain-with-domain_GDPR,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-west-1,
+PASS_CONFIG_ALL_EC2_subdomain-with-domain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
+PASS_CONFIG_ALL_FARGATE_subdomain-with-domain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
+
+# OIDC with HTTPS (Boundary Testing - Should PASS)
+PASS_CONFIG_EC2_oidc-with-https_DEV,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,,,true,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_oidc-with-https_DEV,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,,,true,PASS,jenkins,,,
+PASS_CONFIG_EC2_oidc-with-https_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_oidc-with-https_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_CONFIG_EC2_oidc-with-https_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_oidc-with-https_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+PASS_CONFIG_EC2_oidc-with-https_with-subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_CONFIG_FARGATE_oidc-with-https_with-subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,jenkins,,,
+
+# PCI-DSS WAF Enabled (Boundary Testing - Should PASS)
+PASS_PCI-DSS_EC2_WAF-enabled,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,
+PASS_PCI-DSS_FARGATE_WAF-enabled,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,
+PASS_PCI-DSS_EC2_WAF-enabled_with-subdomain,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,
+PASS_PCI-DSS_FARGATE_WAF-enabled_with-subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,
+PASS_SOC2_PCI-DSS_EC2_WAF-enabled,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",365,true,PASS,jenkins,,,
+PASS_SOC2_PCI-DSS_FARGATE_WAF-enabled,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS",365,true,PASS,jenkins,,,
+PASS_ALL_EC2_WAF-enabled_all-valid,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
+PASS_ALL_FARGATE_WAF-enabled_all-valid,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
+
+# Flow Logs Enabled (Boundary Testing - Should PASS)
+PASS_HIPAA_EC2_flow-logs-enabled_DEV,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+PASS_HIPAA_FARGATE_flow-logs-enabled_DEV,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+PASS_PCI-DSS_EC2_flow-logs-enabled_DEV,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,
+PASS_PCI-DSS_FARGATE_flow-logs-enabled_DEV,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,
+PASS_HIPAA_PCI-DSS_EC2_flow-logs-enabled_STAGING,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"HIPAA,PCI-DSS",2190,true,PASS,jenkins,,,
+PASS_HIPAA_PCI-DSS_FARGATE_flow-logs-enabled_STAGING,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"HIPAA,PCI-DSS",2190,true,PASS,jenkins,,,
+
+# Complete Valid Configurations (All Frameworks, All Validations Passing)
+PASS_COMPLETE_EC2_DEV_minimal,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,,90,true,PASS,jenkins,,,
+PASS_COMPLETE_FARGATE_DEV_minimal,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,,90,true,PASS,jenkins,,,
+PASS_COMPLETE_EC2_STAGING_SOC2,EC2,STAGING,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,jenkins,,,
+PASS_COMPLETE_FARGATE_STAGING_SOC2,FARGATE,STAGING,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,jenkins,,,
+PASS_COMPLETE_EC2_PRODUCTION_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,
+PASS_COMPLETE_FARGATE_PRODUCTION_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,
+PASS_COMPLETE_EC2_PRODUCTION_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+PASS_COMPLETE_FARGATE_PRODUCTION_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+PASS_COMPLETE_EC2_PRODUCTION_GDPR_EU,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,365,true,PASS,jenkins,,eu-west-1,
+PASS_COMPLETE_FARGATE_PRODUCTION_GDPR_EU,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,365,true,PASS,jenkins,,eu-west-1,
+PASS_COMPLETE_ALL_EC2_PRODUCTION_maximum,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
+PASS_COMPLETE_ALL_FARGATE_PRODUCTION_maximum,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
+
+# Application Type PASS Cases
+PASS_CONFIG_EC2_gitlab_all-valid,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,gitlab,,,
+PASS_CONFIG_FARGATE_gitlab_all-valid,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,gitlab,,,
+PASS_CONFIG_EC2_mattermost_all-valid,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,mattermost,true,,
+PASS_CONFIG_FARGATE_mattermost_all-valid,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,mattermost,true,,
+PASS_CONFIG_EC2_sonarqube_all-valid,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,sonarqube,true,,
+PASS_CONFIG_FARGATE_sonarqube_all-valid,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,sonarqube,true,,
+PASS_CONFIG_EC2_harbor_all-valid,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,harbor,true,,
+PASS_CONFIG_FARGATE_harbor_all-valid,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,harbor,true,,
+PASS_CONFIG_EC2_nexus_all-valid,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,nexus,true,,
+PASS_CONFIG_FARGATE_nexus_all-valid,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,nexus,true,,
+
+# PCI-DSS + Application Type PASS Cases
+PASS_PCI-DSS_EC2_gitlab_WAF-enabled,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,gitlab,,,
+PASS_PCI-DSS_FARGATE_gitlab_WAF-enabled,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,gitlab,,,
+PASS_PCI-DSS_EC2_mattermost_WAF-enabled,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,mattermost,true,,
+PASS_PCI-DSS_FARGATE_mattermost_WAF-enabled,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,mattermost,true,,
+# Frameworks: SOC2, PCI-DSS, HIPAA, GDPR (implemented frameworks only)
+
+# =================================================================
+# AUTH MODE VARIATIONS - No OIDC (32 test cases)
+# =================================================================
+
+# Auth mode 'none' in DEV
+PASS_AUTH_NONE_EC2_DEV,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,jenkins,,,
+PASS_AUTH_NONE_FARGATE_DEV,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,jenkins,,,
+PASS_AUTH_NONE_EC2_DEV_private,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,,,true,PASS,jenkins,,,
+PASS_AUTH_NONE_FARGATE_DEV_private,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,,,true,PASS,jenkins,,,
+
+# Auth mode 'none' in PRODUCTION with SSL
+PASS_AUTH_NONE_EC2_PROD_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_AUTH_NONE_FARGATE_PROD_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,,PASS,jenkins,,,
+PASS_AUTH_NONE_EC2_PROD_GDPR,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,GDPR,,,PASS,jenkins,,eu-west-1,true
+PASS_AUTH_NONE_FARGATE_PROD_GDPR,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,GDPR,,,PASS,jenkins,,eu-west-1,true
+
+# Auth mode 'none' with PCI-DSS (should still require WAF in PRODUCTION)
+PASS_AUTH_NONE_EC2_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+PASS_AUTH_NONE_FARGATE_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
+
+# Auth mode 'none' with HIPAA (should still require flow logs in PRODUCTION)
+PASS_AUTH_NONE_EC2_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+PASS_AUTH_NONE_FARGATE_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+
+# Auth mode 'none' Config Violations still apply
+FAIL_AUTH_NONE_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,none,private-with-nat,SOC2,,,FAIL,jenkins,,,
+FAIL_AUTH_NONE_FARGATE_subdomain-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,none,private-with-nat,SOC2,,,FAIL,jenkins,,,
+
+# Auth mode 'none' with different applications
+PASS_AUTH_NONE_EC2_gitlab,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,,PASS,gitlab,,,
+PASS_AUTH_NONE_FARGATE_mattermost,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,,PASS,mattermost,,,
+PASS_AUTH_NONE_EC2_sonarqube,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,,PASS,sonarqube,true,,
+PASS_AUTH_NONE_FARGATE_harbor,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,,PASS,harbor,true,,
+
+# Auth mode 'none' multi-framework
+PASS_AUTH_NONE_SOC2_HIPAA_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,"SOC2,HIPAA",2190,true,PASS,jenkins,,,
+PASS_AUTH_NONE_SOC2_HIPAA_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,"SOC2,HIPAA",2190,true,PASS,jenkins,,,
+PASS_AUTH_NONE_PCI-DSS_GDPR_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,"PCI-DSS,GDPR",,,PASS,jenkins,,eu-west-1,true
+PASS_AUTH_NONE_PCI-DSS_GDPR_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,"PCI-DSS,GDPR",,,PASS,jenkins,,eu-west-1,true
+PASS_AUTH_NONE_ALL_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,true
+PASS_AUTH_NONE_ALL_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,true
+
+# Auth mode 'none' in DEV with frameworks
+PASS_AUTH_NONE_DEV_SOC2_EC2,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,SOC2,,,PASS,jenkins,,,
+PASS_AUTH_NONE_DEV_SOC2_FARGATE,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,SOC2,,,PASS,jenkins,,,
+FAIL_AUTH_NONE_DEV_PCI-DSS_no_flow_logs_EC2,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_AUTH_NONE_DEV_PCI-DSS_no_flow_logs_FARGATE,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,PCI-DSS,,false,FAIL,jenkins,,,
+FAIL_AUTH_NONE_DEV_HIPAA_no_flow_logs_EC2,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,HIPAA,,false,FAIL,jenkins,,,
+FAIL_AUTH_NONE_DEV_HIPAA_no_flow_logs_FARGATE,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,HIPAA,,false,FAIL,jenkins,,,
+
+# =================================================================
+# DATABASE PROVISION TESTS (32 test cases)
+# =================================================================
+
+# Database + Different Frameworks
+PASS_DB_EC2_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,sonarqube,true,,
+PASS_DB_FARGATE_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,sonarqube,true,,
+PASS_DB_EC2_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,sonarqube,true,,
+PASS_DB_FARGATE_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,sonarqube,true,,
+PASS_DB_EC2_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,sonarqube,true,,
+PASS_DB_FARGATE_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,sonarqube,true,,
+PASS_DB_EC2_GDPR,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,sonarqube,true,eu-west-1,true
+PASS_DB_FARGATE_GDPR,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,sonarqube,true,eu-west-1,true
+
+# Database + Config Violations
+FAIL_DB_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,sonarqube,true,,
+FAIL_DB_FARGATE_subdomain-no-domain,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,sonarqube,true,,
+FAIL_DB_EC2_oidc-no-https,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,sonarqube,true,,
+FAIL_DB_FARGATE_oidc-no-https,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,sonarqube,true,,
+
+# Database + PCI-DSS/HIPAA violations
+FAIL_DB_EC2_no_WAF_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,sonarqube,true,,
+FAIL_DB_FARGATE_no_WAF_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,sonarqube,true,,
+FAIL_DB_EC2_no_flow_logs_HIPAA,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,sonarqube,true,,
+FAIL_DB_FARGATE_no_flow_logs_HIPAA,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,sonarqube,true,,
+
+# Database + Multi-Framework
+PASS_DB_SOC2_HIPAA_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,true,PASS,sonarqube,true,,
+PASS_DB_SOC2_HIPAA_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,true,PASS,sonarqube,true,,
+PASS_DB_PCI-DSS_GDPR_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",,,PASS,sonarqube,true,eu-west-1,true
+PASS_DB_PCI-DSS_GDPR_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,GDPR",,,PASS,sonarqube,true,eu-west-1,true
+PASS_DB_ALL_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,sonarqube,true,eu-west-1,true
+PASS_DB_ALL_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,sonarqube,true,eu-west-1,true
+
+# Database in DEV/STAGING
+PASS_DB_DEV_EC2,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,sonarqube,true,,
+PASS_DB_DEV_FARGATE,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,sonarqube,true,,
+PASS_DB_STAGING_EC2,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,sonarqube,true,,
+PASS_DB_STAGING_FARGATE,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,sonarqube,true,,
+
+# Database + Different Apps
+PASS_DB_EC2_gitlab,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,gitlab,true,,
+PASS_DB_FARGATE_mattermost,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,mattermost,true,,
+PASS_DB_EC2_nexus,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,nexus,true,,
+PASS_DB_FARGATE_harbor,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,harbor,true,,
+
+# =================================================================
+# APPLICATION TYPE VARIATIONS (48 test cases)
+# =================================================================
+
+# GitLab Tests
+PASS_GITLAB_EC2_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,gitlab,,,
+PASS_GITLAB_FARGATE_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,gitlab,,,
+PASS_GITLAB_EC2_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,gitlab,,,
+PASS_GITLAB_FARGATE_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,gitlab,,,
+PASS_GITLAB_EC2_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,gitlab,,,
+PASS_GITLAB_FARGATE_GDPR,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,gitlab,,eu-west-1,true
+FAIL_GITLAB_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,gitlab,,,
+FAIL_GITLAB_FARGATE_oidc-no-https,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,gitlab,,,
+PASS_GITLAB_ALL_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,gitlab,,eu-west-1,true
+PASS_GITLAB_ALL_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,gitlab,,eu-west-1,true
+PASS_GITLAB_DEV_EC2,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,gitlab,,,
+PASS_GITLAB_STAGING_FARGATE,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,gitlab,,,
+
+# Mattermost Tests
+PASS_MATTERMOST_EC2_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,mattermost,,,
+PASS_MATTERMOST_FARGATE_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,mattermost,,,
+PASS_MATTERMOST_EC2_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,mattermost,,,
+PASS_MATTERMOST_FARGATE_GDPR,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,mattermost,,eu-west-1,true
+FAIL_MATTERMOST_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,mattermost,,,
+FAIL_MATTERMOST_FARGATE_oidc-no-https,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,FAIL,mattermost,,,
+PASS_MATTERMOST_ALL_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,mattermost,,eu-west-1,true
+PASS_MATTERMOST_ALL_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,mattermost,,eu-west-1,true
+PASS_MATTERMOST_DEV_EC2,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,mattermost,,,
+PASS_MATTERMOST_STAGING_FARGATE,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,mattermost,,,
+
+# SonarQube Tests (with database)
+PASS_SONARQUBE_EC2_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,sonarqube,true,,
+PASS_SONARQUBE_FARGATE_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,sonarqube,true,,
+PASS_SONARQUBE_EC2_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,sonarqube,true,,
+PASS_SONARQUBE_FARGATE_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,sonarqube,true,,
+FAIL_SONARQUBE_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,sonarqube,true,,
+FAIL_SONARQUBE_FARGATE_oidc-no-https,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,sonarqube,true,,
+PASS_SONARQUBE_ALL_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,sonarqube,true,eu-west-1,true
+PASS_SONARQUBE_ALL_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,sonarqube,true,eu-west-1,true
+
+# Harbor Tests (with database)
+PASS_HARBOR_EC2_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,harbor,true,,
+PASS_HARBOR_FARGATE_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,harbor,true,,
+PASS_HARBOR_EC2_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,harbor,true,,
+PASS_HARBOR_FARGATE_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,harbor,true,,
+FAIL_HARBOR_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,harbor,true,,
+FAIL_HARBOR_FARGATE_oidc-no-https,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,harbor,true,,
+PASS_HARBOR_ALL_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,harbor,true,eu-west-1,true
+PASS_HARBOR_ALL_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,harbor,true,eu-west-1,true
+
+# Nexus Tests (with database)
+PASS_NEXUS_EC2_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,nexus,true,,
+PASS_NEXUS_FARGATE_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,,PASS,nexus,true,,
+PASS_NEXUS_EC2_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,nexus,true,,
+PASS_NEXUS_FARGATE_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,nexus,true,,
+FAIL_NEXUS_EC2_subdomain-no-domain,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,SOC2,,,FAIL,nexus,true,,
+FAIL_NEXUS_FARGATE_oidc-no-https,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,nexus,true,,
+PASS_NEXUS_ALL_EC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,nexus,true,eu-west-1,true
+PASS_NEXUS_ALL_FARGATE,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,nexus,true,eu-west-1,true
+
+# =================================================================
+# GDPR REGIONAL VARIATIONS (28 test cases)
+# =================================================================
+
+# Different EU regions
+PASS_GDPR_EC2_eu-west-1,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-west-1,true
+PASS_GDPR_FARGATE_eu-west-1,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-west-1,true
+PASS_GDPR_EC2_eu-west-2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-west-2,true
+PASS_GDPR_FARGATE_eu-west-2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-west-2,true
+PASS_GDPR_EC2_eu-central-1,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-central-1,true
+PASS_GDPR_FARGATE_eu-central-1,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-central-1,true
+PASS_GDPR_EC2_eu-north-1,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-north-1,true
+PASS_GDPR_FARGATE_eu-north-1,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,jenkins,,eu-north-1,true
+
+# GDPR without data transfer approval (should fail if not in EU)
+FAIL_GDPR_EC2_us-east-1_no_approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,us-east-1,false
+FAIL_GDPR_FARGATE_us-east-1_no_approval,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,us-east-1,false
+FAIL_GDPR_EC2_ap-southeast-1_no_approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,ap-southeast-1,false
+FAIL_GDPR_FARGATE_ap-southeast-1_no_approval,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,ap-southeast-1,false
+
+# GDPR + Multi-Framework in different regions
+PASS_GDPR_SOC2_EC2_eu-west-1,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,,PASS,jenkins,,eu-west-1,true
+PASS_GDPR_SOC2_FARGATE_eu-central-1,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,,PASS,jenkins,,eu-central-1,true
+PASS_GDPR_PCI-DSS_EC2_eu-west-2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,PCI-DSS",,,PASS,jenkins,,eu-west-2,true
+PASS_GDPR_PCI-DSS_FARGATE_eu-north-1,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,PCI-DSS",,,PASS,jenkins,,eu-north-1,true
+PASS_GDPR_HIPAA_EC2_eu-west-1,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,HIPAA",2190,true,PASS,jenkins,,eu-west-1,true
+PASS_GDPR_HIPAA_FARGATE_eu-central-1,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,HIPAA",2190,true,PASS,jenkins,,eu-central-1,true
+
+# GDPR Config Violations in EU regions
+FAIL_GDPR_EC2_subdomain-no-domain_eu-west-1,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-1,true
+FAIL_GDPR_FARGATE_subdomain-no-domain_eu-central-1,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-central-1,true
+FAIL_GDPR_EC2_oidc-no-https_eu-west-2,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-west-2,true
+FAIL_GDPR_FARGATE_oidc-no-https_eu-north-1,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,FAIL,jenkins,,eu-north-1,true
+
+# GDPR + Different Applications in EU
+PASS_GDPR_EC2_gitlab_eu-west-1,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,gitlab,,eu-west-1,true
+PASS_GDPR_FARGATE_mattermost_eu-central-1,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,mattermost,,eu-central-1,true
+PASS_GDPR_EC2_sonarqube_eu-west-2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,sonarqube,true,eu-west-2,true
+PASS_GDPR_FARGATE_harbor_eu-north-1,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,,PASS,harbor,true,eu-north-1,true
+
+# =================================================================
+# LOG RETENTION EDGE CASES (24 test cases)
+# =================================================================
+
+# Different retention periods
+PASS_RETENTION_EC2_30_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,30,true,PASS,jenkins,,,
+PASS_RETENTION_FARGATE_30_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,30,true,PASS,jenkins,,,
+PASS_RETENTION_EC2_90_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,90,true,PASS,jenkins,,,
+PASS_RETENTION_FARGATE_90_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,90,true,PASS,jenkins,,,
+PASS_RETENTION_EC2_365_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,jenkins,,,
+PASS_RETENTION_FARGATE_365_SOC2,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,jenkins,,,
+PASS_RETENTION_EC2_730_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,730,true,PASS,jenkins,,,
+PASS_RETENTION_FARGATE_730_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,730,true,PASS,jenkins,,,
+PASS_RETENTION_EC2_2190_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+PASS_RETENTION_FARGATE_2190_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,
+
+# Retention too low for frameworks
+FAIL_RETENTION_EC2_7_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,
+FAIL_RETENTION_FARGATE_7_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,
+FAIL_RETENTION_EC2_30_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,30,true,FAIL,jenkins,,,
+FAIL_RETENTION_FARGATE_30_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,30,true,FAIL,jenkins,,,
+FAIL_RETENTION_EC2_90_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,90,true,FAIL,jenkins,,,
+FAIL_RETENTION_FARGATE_90_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,90,true,FAIL,jenkins,,,
+FAIL_RETENTION_EC2_180_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,180,true,FAIL,jenkins,,,
+FAIL_RETENTION_FARGATE_180_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,180,true,FAIL,jenkins,,,
+
+# Multi-framework with retention
+PASS_RETENTION_ALL_EC2_2190,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,true
+PASS_RETENTION_ALL_FARGATE_2190,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,true
+FAIL_RETENTION_ALL_EC2_30,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",30,true,FAIL,jenkins,,eu-west-1,true
+FAIL_RETENTION_ALL_FARGATE_30,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",30,true,FAIL,jenkins,,eu-west-1,true
+FAIL_RETENTION_ALL_EC2_365,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",365,true,FAIL,jenkins,,eu-west-1,true
+FAIL_RETENTION_ALL_FARGATE_365,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",365,true,FAIL,jenkins,,eu-west-1,true
+
+# =================================================================
+# NETWORK MODE PUBLIC VARIATIONS (20 test cases)
+# =================================================================
+
+# Public network mode in DEV (allowed)
+PASS_PUBLIC_EC2_DEV,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,jenkins,,,
+PASS_PUBLIC_FARGATE_DEV,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,jenkins,,,
+PASS_PUBLIC_EC2_DEV_SOC2,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,SOC2,,,PASS,jenkins,,,
+PASS_PUBLIC_FARGATE_DEV_SOC2,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,SOC2,,,PASS,jenkins,,,
+
+# Public network mode in STAGING
+PASS_PUBLIC_EC2_STAGING_SOC2,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,SOC2,,,PASS,jenkins,,,
+PASS_PUBLIC_FARGATE_STAGING_SOC2,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,SOC2,,,PASS,jenkins,,,
+PASS_PUBLIC_EC2_STAGING_PCI-DSS,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,PASS,jenkins,,,
+PASS_PUBLIC_FARGATE_STAGING_PCI-DSS,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,PASS,jenkins,,,
+
+# Public network mode in PRODUCTION (should be restricted for some frameworks)
+FAIL_PUBLIC_EC2_PROD_HIPAA,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,HIPAA,2190,true,FAIL,jenkins,,,
+FAIL_PUBLIC_FARGATE_PROD_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,HIPAA,2190,true,FAIL,jenkins,,,
+FAIL_PUBLIC_EC2_PROD_PCI-DSS,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_PUBLIC_FARGATE_PROD_PCI-DSS,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,,FAIL,jenkins,,,
+
+# Public network + Config Violations
+FAIL_PUBLIC_EC2_subdomain-no-domain,EC2,DEV,no-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,
+FAIL_PUBLIC_FARGATE_subdomain-no-domain,FARGATE,DEV,no-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,
+
+# Public network + Different Applications
+PASS_PUBLIC_EC2_gitlab_DEV,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,gitlab,,,
+PASS_PUBLIC_FARGATE_mattermost_DEV,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,mattermost,,,
+PASS_PUBLIC_EC2_sonarqube_DEV,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,sonarqube,true,,
+PASS_PUBLIC_FARGATE_harbor_DEV,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,,,true,PASS,harbor,true,,
+
+# =================================================================
+# COMPLEX MULTI-VIOLATION SCENARIOS (28 test cases)
+# =================================================================
+
+# 5-way violations (CONFIG + PCI-DSS WAF + Flow Logs + Retention + Public Network)
+FAIL_5WAY_EC2_PCI-DSS,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,PCI-DSS,7,false,FAIL,jenkins,,,
+FAIL_5WAY_FARGATE_PCI-DSS,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,PCI-DSS,7,false,FAIL,jenkins,,,
+FAIL_5WAY_EC2_HIPAA,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,HIPAA,7,false,FAIL,jenkins,,,
+FAIL_5WAY_FARGATE_HIPAA,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,HIPAA,7,false,FAIL,jenkins,,,
+
+# 6-way violations (all above + GDPR data transfer)
+FAIL_6WAY_EC2_ALL,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,jenkins,,us-east-1,false
+FAIL_6WAY_FARGATE_ALL,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,jenkins,,us-east-1,false
+
+# Triple framework violations (CONFIG + compliance specific)
+FAIL_TRIPLE_EC2_subdomain_WAF_retention,EC2,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,
+FAIL_TRIPLE_FARGATE_subdomain_WAF_retention,FARGATE,PRODUCTION,no-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,
+FAIL_TRIPLE_EC2_oidc_flow_retention_HIPAA,EC2,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,30,false,FAIL,jenkins,,,
+FAIL_TRIPLE_FARGATE_oidc_flow_retention_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,30,false,FAIL,jenkins,,,
+
+# Quadruple violations
+FAIL_QUAD_EC2_subdomain_oidc_WAF_retention,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,
+FAIL_QUAD_FARGATE_subdomain_oidc_WAF_retention,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,
+FAIL_QUAD_EC2_subdomain_oidc_flow_retention_HIPAA,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,HIPAA,30,false,FAIL,jenkins,,,
+FAIL_QUAD_FARGATE_subdomain_oidc_flow_retention_HIPAA,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,private-with-nat,HIPAA,30,false,FAIL,jenkins,,,
+
+# All frameworks + multiple violations
+FAIL_EXTREME_ALL_EC2_max_violations,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,jenkins,,us-east-1,false
+FAIL_EXTREME_ALL_FARGATE_max_violations,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,jenkins,,us-east-1,false
+
+# Extreme scenarios with different apps
+FAIL_EXTREME_EC2_gitlab_all_violations,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,gitlab,,us-east-1,false
+FAIL_EXTREME_FARGATE_mattermost_all_violations,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,mattermost,,us-east-1,false
+FAIL_EXTREME_EC2_sonarqube_all_violations,EC2,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,sonarqube,true,us-east-1,false
+FAIL_EXTREME_FARGATE_harbor_all_violations,FARGATE,PRODUCTION,no-domain,ssl-disabled,with-subdomain,alb-oidc,public-no-nat,"SOC2,PCI-DSS,HIPAA,GDPR",7,false,FAIL,harbor,true,us-east-1,false
+
+# Partial violations (some pass, some fail)
+FAIL_PARTIAL_EC2_subdomain_ok_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,
+FAIL_PARTIAL_FARGATE_oidc_ok_retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,30,true,FAIL,jenkins,,,
+
+# Mixed scenarios (some configs pass, some fail)
+FAIL_MIXED_EC2_valid_subdomain_no_WAF,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,
+FAIL_MIXED_FARGATE_valid_oidc_low_retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,90,true,FAIL,jenkins,,,
+FAIL_MIXED_EC2_all_frameworks_retention_issue,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",365,true,FAIL,jenkins,,eu-west-1,true
+FAIL_MIXED_FARGATE_all_frameworks_flow_logs_issue,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",,false,FAIL,jenkins,,eu-west-1,true
+FAIL_MIXED_EC2_STAGING_WAF_issue,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,
+FAIL_MIXED_FARGATE_STAGING_flow_logs_issue,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,jenkins,,,

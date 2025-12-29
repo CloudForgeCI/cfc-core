@@ -5,6 +5,7 @@ import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
@@ -907,7 +908,9 @@ class GdprRulesTest {
 
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
-            if (networkMode.equals("public-no-nat")) {
+            // Check against NetworkMode.PUBLIC's JSON value (legacy "public-no-nat" is converted to "public")
+            NetworkMode mode = NetworkMode.fromString(networkMode);
+            if (mode == NetworkMode.PUBLIC) {
                 shouldFail = true;
             }
         }
@@ -1893,5 +1896,258 @@ class GdprRulesTest {
                 secProfile, iamProfile, cfc);
 
         assertDoesNotThrow(() -> new GdprRules().install(ctx));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // GDPR data residency requirements - EU regions only
+        "PRODUCTION,FARGATE,eu-west-1,ENFORCE,false",       // EU Ireland - PASS
+        "PRODUCTION,FARGATE,eu-central-1,ENFORCE,false",    // EU Frankfurt - PASS
+        "PRODUCTION,FARGATE,us-east-1,ENFORCE,true",        // US region - FAIL
+        "PRODUCTION,FARGATE,ap-southeast-1,ENFORCE,true",   // Asia region - FAIL
+        "PRODUCTION,EC2,eu-west-1,ENFORCE,false",           // EC2 EU - PASS
+        "PRODUCTION,EC2,us-east-1,ENFORCE,true",            // EC2 US - FAIL
+
+        // STAGING - data residency enforced
+        "STAGING,FARGATE,eu-west-1,ENFORCE,false",          // STAGING EU - PASS
+        "STAGING,FARGATE,us-east-1,ENFORCE,true",           // STAGING US - FAIL
+
+        // DEV - more lenient
+        "DEV,FARGATE,us-east-1,ENFORCE,false",              // DEV US - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,us-east-1,ADVISORY,false"       // PRODUCTION advisory US - PASS
+    })
+    void testGdprDataResidencyEnforcement(String profile, String runtime, String region,
+                                           String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestGdprDataResidency");
+        customContext.put("securityProfile", profile);
+        customContext.put("region", region);
+        customContext.put("complianceFrameworks", "GDPR");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("logRetentionDays", "365");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "gdpr.example.com");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestGdprDataResidency", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected GDPR data residency validation to fail for region: " + region);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected GDPR data residency validation to pass for region: " + region);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // GDPR encryption requirements (Art. 32 - Security of processing)
+        "PRODUCTION,FARGATE,true,true,true,true,ENFORCE,false",    // All encryption - PASS
+        "PRODUCTION,FARGATE,false,true,true,true,ENFORCE,true",    // No EBS encryption - FAIL
+        "PRODUCTION,FARGATE,true,false,true,true,ENFORCE,true",    // No EFS at-rest - FAIL
+        "PRODUCTION,FARGATE,true,true,false,true,ENFORCE,true",    // No EFS transit - FAIL
+        "PRODUCTION,FARGATE,true,true,true,false,ENFORCE,true",    // No S3 encryption - FAIL
+        "PRODUCTION,EC2,true,true,true,true,ENFORCE,false",        // EC2 all encryption - PASS
+        "PRODUCTION,EC2,false,false,false,false,ENFORCE,true",     // EC2 no encryption - FAIL
+
+        // STAGING - encryption required
+        "STAGING,FARGATE,true,true,true,true,ENFORCE,false",       // STAGING full - PASS
+        "STAGING,FARGATE,false,false,false,false,ENFORCE,true",    // STAGING none - FAIL
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,false,false,ADVISORY,false" // PRODUCTION advisory - PASS
+    })
+    void testGdprEncryptionRequirements(String profile, String runtime, boolean ebsEncryption,
+                                         boolean efsAtRest, boolean efsTransit, boolean s3Encryption,
+                                         String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestGdprEncryption");
+        customContext.put("securityProfile", profile);
+        customContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
+        customContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsAtRest));
+        customContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
+        customContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        customContext.put("complianceFrameworks", "GDPR");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "eu-west-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("logRetentionDays", "365");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "gdpr.example.com");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestGdprEncryption", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected GDPR encryption validation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected GDPR encryption validation to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // GDPR audit trail retention (Art. 5 - Accountability)
+        "PRODUCTION,FARGATE,365,ENFORCE,false",     // 1 year - PASS
+        "PRODUCTION,FARGATE,730,ENFORCE,false",     // 2 years - PASS
+        "PRODUCTION,FARGATE,90,ENFORCE,true",       // 90 days - FAIL
+        "PRODUCTION,FARGATE,180,ENFORCE,true",      // 180 days - FAIL
+        "PRODUCTION,EC2,365,ENFORCE,false",         // EC2 1 year - PASS
+        "PRODUCTION,EC2,90,ENFORCE,true",           // EC2 90 days - FAIL
+
+        // STAGING - reduced retention may fail
+        "STAGING,FARGATE,365,ENFORCE,false",        // STAGING 1 year - PASS
+        "STAGING,FARGATE,90,ENFORCE,true",          // STAGING 90 days - FAIL
+
+        // DEV - minimal retention
+        "DEV,FARGATE,7,ENFORCE,false",              // DEV 7 days - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,90,ADVISORY,false"      // PRODUCTION advisory - PASS
+    })
+    void testGdprAuditTrailRetention(String profile, String runtime, int retentionDays,
+                                       String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestGdprAuditRetention");
+        customContext.put("securityProfile", profile);
+        customContext.put("logRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "GDPR");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "eu-west-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "gdpr.example.com");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestGdprAuditRetention", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected GDPR audit retention validation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected GDPR audit retention validation to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // GDPR multi-violation scenarios
+        "PRODUCTION,FARGATE,us-east-1,false,90,ENFORCE,true",       // US region + no encryption + retention - FAIL
+        "PRODUCTION,FARGATE,eu-west-1,false,90,ENFORCE,true",       // EU + no encryption + retention - FAIL
+        "PRODUCTION,FARGATE,us-east-1,true,365,ENFORCE,true",       // US region only - FAIL
+        "PRODUCTION,FARGATE,eu-west-1,false,365,ENFORCE,true",      // No encryption only - FAIL
+        "PRODUCTION,FARGATE,eu-west-1,true,90,ENFORCE,true",        // No retention only - FAIL
+        "PRODUCTION,FARGATE,eu-west-1,true,365,ENFORCE,false",      // All requirements - PASS
+        "PRODUCTION,EC2,eu-west-1,true,365,ENFORCE,false",          // EC2 all requirements - PASS
+
+        // STAGING
+        "STAGING,FARGATE,eu-west-1,true,365,ENFORCE,false",         // STAGING compliant - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,us-east-1,false,90,ADVISORY,false"      // PRODUCTION advisory - PASS
+    })
+    void testGdprMultiViolationScenarios(String profile, String runtime, String region,
+                                          boolean encryptionEnabled, int retentionDays,
+                                          String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestGdprMultiViolation");
+        customContext.put("securityProfile", profile);
+        customContext.put("region", region);
+        customContext.put("ebsEncryptionEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("efsEncryptionAtRestEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("efsEncryptionInTransitEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("s3EncryptionEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("logRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "GDPR");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "gdpr.example.com");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestGdprMultiViolation", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new GdprRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected GDPR multi-violation to fail for: " + profile + " in " + region);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected GDPR multi-violation to pass: " + profile + " in " + region);
+        }
     }
 }

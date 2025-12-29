@@ -1,0 +1,45 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+# Category: Invalid Domain/SSL Combinations
+# NOTE: FAIL_SSL_without_domain is VALID (uses private CA) - removed to avoid JSII synthesis lockup
+# FAIL_SSL_without_domain,EC2,DEV,no-domain,ssl-enabled,no-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,,,
+FAIL_subdomain_without_domain,EC2,DEV,no-domain,ssl-disabled,with-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,,,
+# NOTE: FAIL_SSL_subdomain_without_domain removed - SSL without domain is valid, subdomain invalid is covered above
+# FAIL_SSL_subdomain_without_domain,FARGATE,DEV,no-domain,ssl-enabled,with-subdomain,none,public-no-nat,,,true,FAIL,jenkins,,,,,
+# Category: Invalid Authentication Configurations
+FAIL_OIDC_without_HTTPS_staging,EC2,STAGING,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,true,FAIL,jenkins,,,,,
+FAIL_OIDC_without_HTTPS_production,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,true,FAIL,jenkins,,,,,
+FAIL_OIDC_without_domain,EC2,STAGING,no-domain,ssl-disabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,true,FAIL,jenkins,,,,,
+# Category: Invalid Security Profile Configurations
+FAIL_PRODUCTION_no_WAF_PCI,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,FAIL,jenkins,,,,,
+FAIL_PRODUCTION_no_auth_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,true,FAIL,jenkins,,,,,
+FAIL_PRODUCTION_public_network_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,HIPAA,,true,FAIL,jenkins,,,,,
+FAIL_STAGING_no_auth,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,true,FAIL,jenkins,,,,,
+# Category: Invalid Compliance Configurations - GDPR Data Residency
+FAIL_GDPR_US_no_transfer_approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,true,FAIL,jenkins,,us-east-1,false,,
+FAIL_GDPR_US_no_approval_fargate,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,,true,FAIL,jenkins,,us-east-1,false,,
+FAIL_GDPR_SOC2_US_no_approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,true,FAIL,jenkins,,us-east-1,false,,
+# Category: Invalid Log Retention for Compliance (more comprehensive in log_retention_validation.csv)
+FAIL_HIPAA_retention_7days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,7,true,FAIL,jenkins,,,,,
+FAIL_SOC2_retention_7days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,7,true,FAIL,jenkins,,,,,
+FAIL_PCI_retention_30days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,30,true,FAIL,jenkins,,,,,
+FAIL_multi_framework_retention_60days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA,PCI-DSS,GDPR",60,true,FAIL,jenkins,,,,,
+# Category: Invalid Network Configurations
+FAIL_PCI_public_no_nat,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,PCI-DSS,,true,FAIL,jenkins,,,,,
+FAIL_HIPAA_public_network,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,HIPAA,,true,FAIL,jenkins,,,,,
+# Category: DEV Profile with Compliance Claims (should fail validation)
+FAIL_DEV_claims_SOC2,EC2,DEV,no-domain,ssl-disabled,no-subdomain,none,public-no-nat,SOC2,,false,FAIL,jenkins,,,,,
+FAIL_DEV_claims_HIPAA,FARGATE,DEV,no-domain,ssl-disabled,no-subdomain,none,public-no-nat,HIPAA,,false,FAIL,jenkins,,,,,
+FAIL_DEV_claims_PCI,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,PCI-DSS,,false,FAIL,jenkins,,,,,
+FAIL_DEV_claims_all_frameworks,FARGATE,DEV,no-domain,ssl-disabled,no-subdomain,none,public-no-nat,"SOC2,HIPAA,PCI-DSS,GDPR",,false,FAIL,jenkins,,,,,
+# Category: Conflicting Parameters - SSL without proper domain setup
+# NOTE: This test requires actual invalid domain format validation to be implemented
+# FAIL_SSL_invalid_domain,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,,true,FAIL,jenkins,,,,,
+# Category: PRODUCTION with Minimal Security (multiple violations)
+FAIL_PRODUCTION_minimal_security_multi,EC2,PRODUCTION,no-domain,ssl-disabled,no-subdomain,none,public-no-nat,"SOC2,HIPAA,PCI-DSS,GDPR",,false,FAIL,jenkins,,,,,
+FAIL_PRODUCTION_no_ssl_multi_frameworks,FARGATE,PRODUCTION,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,"SOC2,HIPAA",,true,FAIL,jenkins,,,,,
+# Category: Missing Authentication for Customer-Facing Systems
+FAIL_customer_facing_no_auth,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,private-with-nat,SOC2,,true,FAIL,jenkins,,,,,
+# Category: Insufficient Flow Logs for Compliance
+# Using DEV profile to test validation without ComplianceMatrix auto-enforcement
+FAIL_no_flowlogs_HIPAA,EC2,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,,false,FAIL,jenkins,,,,,
+FAIL_no_flowlogs_PCI,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,false,FAIL,jenkins,,,,,
