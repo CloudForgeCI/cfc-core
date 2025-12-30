@@ -617,7 +617,7 @@ class ComplianceTruthTableGenerator:
 
             # Build detailed requirements table with test case breakdowns
             req_rows = ""
-            for req, tests in sorted(requirements_map.items()):
+            for req, tests in sorted((k, v) for k, v in requirements_map.items() if k is not None):
                 test_count = len(tests)
                 case_count = sum(len(t.test_cases) for t in tests)
                 compliant = sum(1 for t in tests for tc in t.test_cases if tc.expected_compliant)
