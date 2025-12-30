@@ -265,6 +265,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: docs/web/package-lock.json
 
       - name: Build Docusaurus documentation
         run: |
