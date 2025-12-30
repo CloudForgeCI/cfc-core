@@ -1582,7 +1582,7 @@ class ComplianceReportGenerator:
                 <h2>🎯 Framework Breakdown</h2>
                 <div class="framework-grid" id="framework-grid">"""
 
-        for framework, stats in sorted(frameworks.items()):
+        for framework, stats in sorted((k, v) for k, v in frameworks.items() if k is not None):
             pass_rate = (stats['passed'] / stats['total'] * 100) if stats['total'] > 0 else 0
             framework_class = framework.lower().replace('-', '').replace('_', '')
             html_content += f"""
