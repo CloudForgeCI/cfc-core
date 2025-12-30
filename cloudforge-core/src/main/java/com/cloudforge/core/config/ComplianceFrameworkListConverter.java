@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * Jackson serializer/deserializer for converting between comma-separated strings
- * and List<ComplianceFrameworkType>.
+ * and {@code List<ComplianceFrameworkType>}.
  *
  * <p>Enables backward-compatible JSON format:
  * <pre>{@code
@@ -33,7 +33,7 @@ public class ComplianceFrameworkListConverter {
     private ComplianceFrameworkListConverter() {}
 
     /**
-     * Deserializes a comma-separated string to List<ComplianceFrameworkType>.
+     * Deserializes a comma-separated string to {@code List<ComplianceFrameworkType>}.
      */
     public static class Deserializer extends JsonDeserializer<List<ComplianceFrameworkType>> {
         @Override
@@ -45,7 +45,7 @@ public class ComplianceFrameworkListConverter {
     }
 
     /**
-     * Serializes List<ComplianceFrameworkType> to a comma-separated string.
+     * Serializes {@code List<ComplianceFrameworkType>} to a comma-separated string.
      */
     public static class Serializer extends JsonSerializer<List<ComplianceFrameworkType>> {
         @Override

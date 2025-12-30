@@ -9,7 +9,7 @@ import java.lang.reflect.Method;
  *
  * <p>This evaluator implements a recursive descent parser that supports:
  * <ul>
- *   <li><b>Logical operators:</b> && (AND), || (OR), ! (NOT)</li>
+ *   <li><b>Logical operators:</b> &amp;&amp; (AND), || (OR), ! (NOT)</li>
  *   <li><b>Comparison operators:</b> == (equals), != (not equals), &gt;, &lt;, &gt;=, &lt;=</li>
  *   <li><b>Parentheses:</b> for grouping expressions</li>
  *   <li><b>Capability checks:</b> supportsDatabase, supportsOidc, etc.</li>
@@ -20,7 +20,7 @@ import java.lang.reflect.Method;
  * <pre>
  * expression     ::= orExpression
  * orExpression   ::= andExpression ( "||" andExpression )*
- * andExpression  ::= notExpression ( "&&" notExpression )*
+ * andExpression  ::= notExpression ( "&amp;&amp;" notExpression )*
  * notExpression  ::= "!" primary | primary
  * primary        ::= "(" expression ")" | comparison | capability
  * comparison     ::= identifier ( "==" | "!=" ) value
@@ -34,10 +34,10 @@ import java.lang.reflect.Method;
  * supportsDatabase                           → Check if ApplicationSpec supports databases
  * provisionDatabase == true                  → Check if provisionDatabase field is true
  * runtimeType == "fargate"                   → Check if runtimeType equals "fargate"
- * supportsDatabase && provisionDatabase      → Logical AND
+ * supportsDatabase &amp;&amp; provisionDatabase      → Logical AND
  * multiAz || databaseEngine == "aurora"      → Logical OR
  * !provisionDatabase                         → Logical NOT
- * (supportsDatabase && provisionDatabase) || useEmbeddedDb  → Parentheses for grouping
+ * (supportsDatabase &amp;&amp; provisionDatabase) || useEmbeddedDb  → Parentheses for grouping
  * </pre>
  */
 public class VisibilityExpressionEvaluator {

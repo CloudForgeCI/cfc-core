@@ -770,6 +770,11 @@ public final class SystemContext extends Construct {
   /**
    * Container for infrastructure factories created by the orchestration layer.
    * This provides a clean interface for accessing infrastructure components.
+   *
+   * @param vpc the VPC factory
+   * @param alb the Application Load Balancer factory
+   * @param efs the Elastic File System factory
+   * @param logging the CloudWatch logging factory
    */
   public record InfrastructureFactories(
       VpcFactory vpc,
@@ -781,6 +786,12 @@ public final class SystemContext extends Construct {
   /**
    * Container for Jenkins-specific factories.
    * Note: JenkinsBootstrap removed - logic migrated to FargateFactory
+   *
+   * @param fargate the Fargate factory for container orchestration
+   * @param container the container factory for Docker configuration
+   * @param alarms the alarm factory for monitoring
+   * @param ec2 the EC2 factory for VM-based deployments
+   * @param singleInstance the single instance factory (if applicable)
    */
   public record JenkinsSpecificFactories(
       FargateFactory fargate,
@@ -792,6 +803,9 @@ public final class SystemContext extends Construct {
 
   /**
    * Container for S3 and CloudFront factories.
+   *
+   * @param s3 the S3 bucket factory
+   * @param cloudfront the CloudFront distribution factory
    */
   public record S3CloudFrontFactories(
       Object s3,
@@ -800,6 +814,9 @@ public final class SystemContext extends Construct {
 
   /**
    * Container for domain and SSL factories.
+   *
+   * @param domain the domain name factory
+   * @param ssl the SSL certificate factory (handled by runtime configurations)
    */
   public record DomainAndSslFactories(
       DomainFactory domain,
@@ -808,6 +825,10 @@ public final class SystemContext extends Construct {
 
   /**
    * Container for complete Jenkins deployment.
+   *
+   * @param infrastructure the infrastructure factories (VPC, ALB, EFS, logging)
+   * @param jenkins the Jenkins-specific factories (Fargate, container, alarms, EC2)
+   * @param domainSsl the domain and SSL factories
    */
   public record JenkinsDeployment(
       InfrastructureFactories infrastructure,
@@ -817,6 +838,9 @@ public final class SystemContext extends Construct {
 
   /**
    * Container for complete S3 + CloudFront deployment.
+   *
+   * @param s3CloudFront the S3 and CloudFront factories
+   * @param domainSsl the domain and SSL factories
    */
   public record S3CloudFrontDeployment(
       S3CloudFrontFactories s3CloudFront,

@@ -112,6 +112,14 @@ public interface DatabaseSpec {
 
     /**
      * Database requirement specification.
+     *
+     * @param type the requirement type (REQUIRED, OPTIONAL, or NONE)
+     * @param engine the database engine (e.g., "postgres", "mysql")
+     * @param version the database engine version
+     * @param instanceClass the RDS instance class (e.g., "db.t3.micro")
+     * @param allocatedStorageGB the allocated storage in GB
+     * @param databaseName the name of the database to create
+     * @param publiclyAccessible whether the database should be publicly accessible
      */
     record DatabaseRequirement(
         RequirementType type,
@@ -182,6 +190,15 @@ public interface DatabaseSpec {
 
     /**
      * Database connection information provided to applications.
+     *
+     * @param endpoint the database endpoint hostname
+     * @param port the database port number
+     * @param databaseName the name of the database
+     * @param username the database username
+     * @param passwordSecretArn the ARN of the secret containing the database password
+     * @param engine the database engine type
+     * @param version the database engine version
+     * @param readReplicaEndpoints list of read replica endpoints (if any)
      */
     record DatabaseConnection(
         String endpoint,

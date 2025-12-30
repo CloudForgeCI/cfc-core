@@ -360,6 +360,11 @@ public interface ApplicationSpec {
     record OptionalPort(int port, String protocol, String configKey, String service, boolean inbound) {
         /**
          * Convenience constructor for inbound TCP ports.
+         *
+         * @param port the port number
+         * @param configKey the deployment config key to enable this port
+         * @param service the service name using this port
+         * @return an OptionalPort configured for inbound TCP
          */
         public static OptionalPort inboundTcp(int port, String configKey, String service) {
             return new OptionalPort(port, "tcp", configKey, service, true);
@@ -367,6 +372,11 @@ public interface ApplicationSpec {
 
         /**
          * Convenience constructor for outbound TCP ports (no security group rule needed).
+         *
+         * @param port the port number
+         * @param configKey the deployment config key to enable this port
+         * @param service the service name using this port
+         * @return an OptionalPort configured for outbound TCP
          */
         public static OptionalPort outboundTcp(int port, String configKey, String service) {
             return new OptionalPort(port, "tcp", configKey, service, false);

@@ -3,8 +3,8 @@ package com.cloudforge.core.annotation;
 /**
  * Migration guide for converting existing factory classes to use annotation-based context injection.
  *
- * BEFORE (Old Pattern):
- * ```java
+ * <p>BEFORE (Old Pattern):</p>
+ * <pre>{@code
  * public class VpcFactory extends Construct {
  *   public VpcFactory(Construct scope, String id) {
  *     super(scope, id);
@@ -23,10 +23,10 @@ package com.cloudforge.core.annotation;
  *             .build();
  *   }
  * }
- * ```
+ * }</pre>
  *
- * AFTER (New Pattern):
- * ```java
+ * <p>AFTER (New Pattern):</p>
+ * <pre>{@code
  * public class VpcFactory extends BaseFactory {
  *   public VpcFactory(Construct scope, String id) {
  *     super(scope, id);
@@ -45,7 +45,7 @@ package com.cloudforge.core.annotation;
  *             .build();
  *   }
  * }
- * ```
+ * }</pre>
  *
  * BENEFITS:
  * 1. No need to pass SystemContext as parameters
@@ -55,10 +55,10 @@ package com.cloudforge.core.annotation;
  * 5. Automatic context injection
  * 6. Type safety with annotations
  *
- * USAGE PATTERNS:
+ * <p>USAGE PATTERNS:</p>
  *
- * 1. Basic Factory (extends BaseFactory):
- * ```java
+ * <p>1. Basic Factory (extends BaseFactory):</p>
+ * <pre>{@code
  * public class MyFactory extends BaseFactory {
  *   public MyFactory(Construct scope, String id) {
  *     super(scope, id);
@@ -71,10 +71,10 @@ package com.cloudforge.core.annotation;
  *     Vpc vpc = ctx.vpc.get().orElseThrow();
  *   }
  * }
- * ```
+ * }</pre>
  *
- * 2. Custom Injection (using @InjectSystemContext and @InjectDeploymentContext):
- * ```java
+ * <p>2. Custom Injection (using annotation-based injection):</p>
+ * <pre>{@code
  * public class MyFactory extends Construct {
  *   @InjectSystemContext
  *   private SystemContext ctx;
@@ -87,10 +87,10 @@ package com.cloudforge.core.annotation;
  *     ContextInjector.injectFromConstruct(this, this);
  *   }
  * }
- * ```
+ * }</pre>
  *
- * 3. Manual Injection:
- * ```java
+ * <p>3. Manual Injection:</p>
+ * <pre>{@code
  * public class MyFactory extends Construct {
  *   @InjectSystemContext
  *   private SystemContext ctx;
@@ -100,7 +100,7 @@ package com.cloudforge.core.annotation;
  *     ContextInjector.injectContexts(this, systemContext, DeploymentContext.from(scope));
  *   }
  * }
- * ```
+ * }</pre>
  */
 public class MigrationGuide {
     // This class serves as documentation only

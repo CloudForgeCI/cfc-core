@@ -59,7 +59,7 @@ import java.util.logging.Logger;
  *   <li>Enable AWS Audit Manager in your AWS account via the AWS Console</li>
  *   <li>Configure data source connections (CloudTrail, Config, Security Hub, etc.)</li>
  *   <li>Choose appropriate compliance framework (SOC2, HIPAA, PCI-DSS, etc.)</li>
- *   <li>Update framework IDs in {@link #getFrameworkId()} to match your account</li>
+ *   <li>Update framework IDs to match your account</li>
  * </ol>
  *
  * <h2>Configuration</h2>

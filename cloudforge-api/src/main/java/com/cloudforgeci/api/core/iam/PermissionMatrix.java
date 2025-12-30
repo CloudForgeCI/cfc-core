@@ -226,6 +226,9 @@ public final class PermissionMatrix {
 
     /**
      * Validation result containing success status and any issues found.
+     *
+     * @param isValid whether the validation passed
+     * @param issues list of validation issues found (empty if valid)
      */
     public static record ValidationResult(boolean isValid, List<String> issues) {
         public boolean hasIssues() {

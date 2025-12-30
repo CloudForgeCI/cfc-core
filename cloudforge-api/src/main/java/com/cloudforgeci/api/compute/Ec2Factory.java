@@ -85,7 +85,7 @@ import java.util.List;
  * @since 1.0.0
  * @see SystemContext
  * @see ScalingFactory
- * @see DeploymentContext#networkMode()
+ * @see com.cloudforgeci.api.core.DeploymentContext#networkMode()
  */
 public class Ec2Factory extends BaseFactory {
   private static final Logger LOG = Logger.getLogger(Ec2Factory.class.getName());

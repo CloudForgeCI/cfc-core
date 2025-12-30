@@ -58,6 +58,9 @@ public final class ComplianceMatrix {
 
     /**
      * Framework-specific requirement with enforcement level.
+     *
+     * @param citation the framework control citation (e.g., "AC-2", "CIP-007-6 R2")
+     * @param level the requirement enforcement level
      */
     public record FrameworkRequirement(
         String citation,

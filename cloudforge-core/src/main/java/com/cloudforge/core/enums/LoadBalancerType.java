@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
  *
  * <h2>Feature Comparison</h2>
  * <table>
+ *   <caption>ALB vs NLB Features</caption>
  *   <tr><th>Feature</th><th>ALB</th><th>NLB</th></tr>
  *   <tr><td>OIDC Authentication</td><td>✓</td><td>✗</td></tr>
  *   <tr><td>WAF Integration</td><td>✓</td><td>✗</td></tr>

@@ -66,8 +66,8 @@ import java.util.logging.Logger;
  * @author CloudForgeCI
  * @since 1.0.0
  * @see BaseFactory
- * @see DeploymentContext#networkMode()
- * @see SystemContext#flowlogs
+ * @see com.cloudforgeci.api.core.DeploymentContext#networkMode()
+ * @see com.cloudforgeci.api.core.SystemContext#flowlogs
  */
 public final class VpcFactory extends BaseFactory {
 
@@ -96,8 +96,8 @@ public final class VpcFactory extends BaseFactory {
      * <p>The created VPC is stored in the SystemContext for use by other factories.</p>
      *
      * @see #createVpc()
-     * @see SystemContext#vpc
-     * @see SystemContext#flowlogs
+     * @see com.cloudforgeci.api.core.SystemContext#vpc
+     * @see com.cloudforgeci.api.core.SystemContext#flowlogs
      */
     @Override
     public void create() {

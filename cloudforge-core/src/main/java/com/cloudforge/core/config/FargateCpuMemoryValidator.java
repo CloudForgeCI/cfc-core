@@ -13,6 +13,7 @@ import java.util.Map;
  *
  * <h2>Valid Combinations:</h2>
  * <table border="1">
+ *   <caption>AWS Fargate CPU and Memory Combinations</caption>
  *   <tr><th>CPU (vCPU)</th><th>Memory (MB)</th></tr>
  *   <tr><td>256 (0.25 vCPU)</td><td>512, 1024, 2048</td></tr>
  *   <tr><td>512 (0.5 vCPU)</td><td>1024, 2048, 3072, 4096</td></tr>

@@ -121,6 +121,10 @@ public class ApplicationFactory extends BaseFactory {
 
     /**
      * Container for application system components created by the factory.
+     *
+     * @param vpc the VPC factory that created the network infrastructure
+     * @param alb the ALB factory that created the load balancer
+     * @param efs the EFS factory that created the shared file system
      */
     public record ApplicationSystem(
         VpcFactory vpc,
