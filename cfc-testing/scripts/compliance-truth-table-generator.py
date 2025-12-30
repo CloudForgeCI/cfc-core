@@ -1581,18 +1581,26 @@ class ComplianceTruthTableGenerator:
         return json_file, html_file
 
 def main():
-    # Determine script directory and project root (2 levels up from scripts dir)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(script_dir))
+    try:
+        # Determine script directory and project root (2 levels up from scripts dir)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(script_dir))
 
-    if len(sys.argv) > 1:
-        output_dir = sys.argv[1]
-    else:
-        # Default to validation-results in scripts directory
-        output_dir = os.path.join(script_dir, "validation-results")
+        if len(sys.argv) > 1:
+            output_dir = sys.argv[1]
+        else:
+            # Default to validation-results in scripts directory
+            output_dir = os.path.join(script_dir, "validation-results")
 
-    generator = ComplianceTruthTableGenerator(project_root, output_dir)
-    generator.run()
+        generator = ComplianceTruthTableGenerator(project_root, output_dir)
+        generator.run()
+        print("\n✅ Compliance truth table generation completed successfully")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n❌ Error generating compliance truth table: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

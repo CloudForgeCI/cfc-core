@@ -1424,7 +1424,7 @@ class TruthTableGenerator:
             <div class="framework-cards">"""
 
         # Generate framework cards
-        for framework, stats in sorted(framework_stats.items()):
+        for framework, stats in sorted((k, v) for k, v in framework_stats.items() if k is not None):
             pass_rate = (stats['passed'] / stats['total'] * 100) if stats['total'] > 0 else 0
             html_content += f"""
                 <div class="framework-card">
@@ -1490,7 +1490,7 @@ class TruthTableGenerator:
                 <tbody>"""
 
         # Generate result rows
-        for config_name, result in sorted(test_results.items()):
+        for config_name, result in sorted((k, v) for k, v in test_results.items() if k is not None):
             framework = result.get('framework', 'UNKNOWN')
             overall_status = result.get('overall_status', 'UNKNOWN')
             layers = result.get('layers', {})
@@ -1709,15 +1709,23 @@ def main():
 
     args = parser.parse_args()
 
-    if args.output_dir:
-        output_dir = args.output_dir
-    else:
-        # Dynamically determine script location
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        output_dir = os.path.join(script_dir, "validation-results")
+    try:
+        if args.output_dir:
+            output_dir = args.output_dir
+        else:
+            # Dynamically determine script location
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            output_dir = os.path.join(script_dir, "validation-results")
 
-    generator = TruthTableGenerator(output_dir)
-    generator.run(with_validation=args.with_validation)
+        generator = TruthTableGenerator(output_dir)
+        generator.run(with_validation=args.with_validation)
+        print("\n✅ Truth table generation completed successfully")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n❌ Error generating truth table: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
