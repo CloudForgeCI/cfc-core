@@ -945,7 +945,7 @@ void testEc2Deployment() {
 
 ```xml
 <dependency>
-    <groupId>com.example</groupId>
+    <groupId>com.yourcompany</groupId>
     <artifactId>vault-application</artifactId>
     <version>1.0.0</version>
 </dependency>
@@ -954,8 +954,8 @@ void testEc2Deployment() {
 ### GitHub Releases
 
 ```bash
-# Download JAR
-wget https://github.com/your-org/vault-application/releases/download/v1.0.0/vault-application-1.0.0.jar
+# Download JAR from your plugin repository
+wget https://github.com/yourcompany/vault-application/releases/download/v1.0.0/vault-application-1.0.0.jar
 
 # Add to classpath
 java -cp "cloudforge-api.jar:vault-application-1.0.0.jar" ...

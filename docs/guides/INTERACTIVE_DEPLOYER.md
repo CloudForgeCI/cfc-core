@@ -31,16 +31,24 @@ An interactive command-line tool that guides you through configuring and deployi
 
 ### Running the Interactive Deployer
 
+The Interactive Deployer **automatically activates** when `deployment-context.json` is not found. Simply run:
+
 ```bash
-# From the cfc-testing directory
-cd cfc-testing
-./deploy-interactive.sh
+# Synthesize CloudFormation template (option 1)
+cdk synth
+
+# Deploy to AWS (option 2)
+cdk deploy
+
+# Create changeset without executing (option 4)
+cdk deploy --no-execute
 ```
 
-Or manually:
+The interactive prompts will guide you through configuration and generate `deployment-context.json`.
+
+**Manual Invocation** (if deployment-context.json exists but you want to reconfigure):
 
 ```bash
-# From the cfc-testing directory
 cd cfc-testing
 mvn compile
 mvn exec:java -Dexec.mainClass="com.cloudforgeci.samples.app.InteractiveDeployer"

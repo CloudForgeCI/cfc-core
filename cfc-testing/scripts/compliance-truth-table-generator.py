@@ -706,6 +706,54 @@ class ComplianceTruthTableGenerator:
                 <p>This section provides comprehensive evidence of automated compliance testing for regulatory audits (SOC 2 Type II, HIPAA, PCI-DSS, GDPR). All test evidence is version-controlled, reproducible, and mapped to specific regulatory controls.</p>
             </div>
 
+            <div class="info-box" style="background: #d1ecf1; border-left-color: #17a2b8;">
+                <h4>🆕 Recent Validation Enhancements</h4>
+                <p><strong>Four critical validation improvements have been implemented and tested:</strong></p>
+                <table class="simple-table" style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Enhancement</th>
+                            <th>Impact</th>
+                            <th>Test Coverage</th>
+                            <th>Evidence Location</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>ConfigurationValidationRules (NEW)</strong></td>
+                            <td>alwaysLoad framework validates basic config errors before compliance checks</td>
+                            <td>44 test cases (subdomain, OIDC-HTTPS)</td>
+                            <td><code>ConfigurationValidationRules.java</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>PCI-DSS WAF Requirement (STRENGTHENED)</strong></td>
+                            <td>WAF changed from "recommended" to REQUIRED for PRODUCTION</td>
+                            <td>48 WAF test cases across all runtimes/profiles</td>
+                            <td><code>PciDssRules.java:317-334</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>PCI-DSS Flow Logs (NEW)</strong></td>
+                            <td>Flow logs validation for DEV/STAGING (auto-enabled in PRODUCTION via ComplianceMatrix)</td>
+                            <td>14 flow logs test cases</td>
+                            <td><code>PciDssRules.java:527-545</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Test Matrix Expansion</strong></td>
+                            <td>Comprehensive edge case coverage for all validation rules</td>
+                            <td>+467 edge cases (281 → 748 test scenarios)</td>
+                            <td><code>compliance-test-matrix.csv</code> (548 test cases total)</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="margin-top: 15px;"><strong>Documentation References:</strong></p>
+                <ul style="margin-top: 10px; line-height: 1.8;">
+                    <li><code>docs/compliance/PCI_DSS_CONTROLS_GAP_ANALYSIS.md</code> - Updated to v1.2 with corrected WAF evidence</li>
+                    <li><code>docs/compliance/AUDITOR_EVIDENCE_UPDATES.md</code> - Complete audit evidence with validation fixes</li>
+                    <li><code>docs/compliance/CSV_PARAMETERIZED_TESTING_EXPANSION.md</code> - Test expansion details</li>
+                    <li><code>docs/compliance/COMPLIANCE_DOCUMENTATION_UPDATE_SUMMARY.md</code> - Complete change summary</li>
+                </ul>
+            </div>
+
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 30px 0;">
                 <div class="audit-metric">
                     <div class="audit-metric-number">{total_frameworks}</div>

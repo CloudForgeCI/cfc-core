@@ -48,6 +48,57 @@ To achieve compliance, organizations must also implement:
 - **Organizational Controls**: HR processes, vendor management, business continuity planning
 - **Evidence Collection**: Documentation beyond automated infrastructure evidence
 
+## Configuration Validation Rules (alwaysLoad Framework)
+
+### Overview
+
+**Framework ID**: `CONFIG`
+**Priority**: 1 (runs first)
+**alwaysLoad**: true (runs regardless of compliance frameworks specified)
+**File**: [ConfigurationValidationRules.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ConfigurationValidationRules.java)
+
+**Purpose**: Validates basic deployment configuration requirements before compliance-specific rules run. This framework catches common configuration errors that would cause deployment failures regardless of compliance requirements.
+
+### Validation Rules
+
+#### CONFIG-SUBDOMAIN-DOMAIN
+- **Requirement**: Subdomain requires a parent domain
+- **Validation**: Fails if subdomain is specified without domain
+- **Severity**: FAIL (blocks deployment)
+- **Example Violation**:
+  ```json
+  {
+    "subdomain": "app",
+    "domain": ""  // ❌ FAIL: Subdomain requires parent domain
+  }
+  ```
+- **Evidence**: 18 test cases in compliance-test-matrix.csv
+- **Test Coverage**: All runtimes (EC2, Fargate), all profiles (DEV, STAGING, PRODUCTION), all frameworks
+
+**Rationale**: A subdomain like "app.example.com" requires a parent domain "example.com" for DNS configuration. This is a fundamental infrastructure requirement.
+
+#### CONFIG-OIDC-HTTPS
+- **Requirement**: ALB OIDC authentication requires HTTPS
+- **Validation**: Fails if authMode=alb-oidc and enableSsl=false
+- **Severity**: FAIL (blocks deployment)
+- **Example Violation**:
+  ```json
+  {
+    "authMode": "alb-oidc",
+    "enableSsl": false  // ❌ FAIL: OIDC requires HTTPS
+  }
+  ```
+- **Evidence**: 20 test cases in compliance-test-matrix.csv
+- **Test Coverage**: All runtimes, all profiles, all frameworks
+
+**Rationale**: OIDC authentication exchanges tokens over HTTP. Using OIDC without HTTPS would expose authentication tokens to network interception.
+
+### Design Pattern: alwaysLoad
+
+The `alwaysLoad = true` attribute ensures these basic validations run even for deployments that don't specify any compliance frameworks. This prevents common configuration errors in development environments.
+
+**Example**: A developer deploying to DEV without compliance can still catch the subdomain/domain mismatch before wasting time on a failed deployment.
+
 ## SOC 2 Controls Implementation ✅ Tested
 
 ### CC6.1: Logical and Physical Access Controls

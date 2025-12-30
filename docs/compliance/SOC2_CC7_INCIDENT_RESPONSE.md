@@ -175,10 +175,10 @@ aws iam put-role-policy \
 
 | Incident Type | Eradication Steps |
 |---------------|-------------------|
-| **Compromised Credentials** | 1. Rotate all affected credentials<br>2. Review CloudTrail for actions taken<br>3. Revert unauthorized changes |
-| **Malware** | 1. Terminate affected instances<br>2. Deploy fresh instances from known-good AMI<br>3. Scan all connected systems |
-| **Vulnerability Exploit** | 1. Patch vulnerable systems<br>2. Update WAF rules<br>3. Scan for indicators of compromise |
-| **Data Breach** | 1. Close access vector<br>2. Assess data accessed<br>3. Preserve evidence for forensics |
+| **Compromised Credentials** | 1. Rotate all affected credentials<br/>2. Review CloudTrail for actions taken<br/>3. Revert unauthorized changes |
+| **Malware** | 1. Terminate affected instances<br/>2. Deploy fresh instances from known-good AMI<br/>3. Scan all connected systems |
+| **Vulnerability Exploit** | 1. Patch vulnerable systems<br/>2. Update WAF rules<br/>3. Scan for indicators of compromise |
+| **Data Breach** | 1. Close access vector<br/>2. Assess data accessed<br/>3. Preserve evidence for forensics |
 
 ---
 

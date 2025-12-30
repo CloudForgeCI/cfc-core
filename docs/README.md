@@ -50,7 +50,7 @@ Comprehensive guides for each application with deployment-context examples:
 | **Nexus** | Available | [Nexus Guide](guides/applications/nexus.md) |
 | **SonarQube** | Plugin | [SonarQube Guide](guides/applications/sonarqube.md) |
 
-**[All Application Guides](guides/applications/)** | **[Deployment Context Examples](../deployment-contexts/examples/)**
+**[All Application Guides](guides/applications/)** | **[Deployment Context Examples](examples/applications/)**
 
 ### Application Catalog
 
@@ -84,8 +84,8 @@ Comprehensive guides for each application with deployment-context examples:
 
 | Document | Description |
 |----------|-------------|
-| **[deployment-context.json Reference](../README.md#configuration-reference)** | All configuration properties |
-| **[Compliance Configurations](../README.md#compliance-framework-configurations)** | Framework-specific settings |
+| **[deployment-context.json Reference](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#configuration-reference)** | All configuration properties |
+| **[Compliance Configurations](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#compliance-framework-configurations)** | Framework-specific settings |
 
 ---
 
@@ -97,10 +97,10 @@ Comprehensive guides for each application with deployment-context examples:
 |-----------|----------|--------------|
 | **SOC 2** | [Multi-Framework Guide](compliance/MULTI_FRAMEWORK_COMPLIANCE.md) | Access controls, monitoring, 2-year logs |
 | **HIPAA** | [Multi-Framework Guide](compliance/MULTI_FRAMEWORK_COMPLIANCE.md) | Encryption, 6-year logs, private network |
-| **PCI-DSS** | [PCI-DSS Guide](compliance/PCI_DSS_README.md) | WAF, threat detection, 1-year logs |
+| **PCI-DSS** | [PCI-DSS Guide](compliance/PCI_DSS_COMPLIANCE.md) | WAF, threat detection, 1-year logs |
 | **GDPR** | [Multi-Framework Guide](compliance/MULTI_FRAMEWORK_COMPLIANCE.md) | Encryption, data protection, EU regions |
 
-**[Framework Comparison Table](../README.md#framework-comparison)** - See requirements side-by-side
+**[Framework Comparison Table](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#framework-comparison)** - See requirements side-by-side
 
 ### Automated Compliance
 
@@ -117,7 +117,7 @@ Comprehensive guides for each application with deployment-context examples:
 
 | Document | Description |
 |----------|-------------|
-| **[Security Hardening](../SECURITY.md)** | Security best practices and policies |
+| **[Security Hardening](https://github.com/CloudForgeCI/cfc-core/blob/main/SECURITY.md)** | Security best practices and policies |
 | **[Security Rules](guides/SECURITY_RULES_README.md)** | Comprehensive security guidelines |
 | **[IAM Rules](guides/IAM_RULES.md)** | IAM best practices and policies |
 
@@ -130,15 +130,14 @@ Comprehensive guides for each application with deployment-context examples:
 | Document | Description |
 |----------|-------------|
 | **[AWS Audit Manager](AUDIT_MANAGER.md)** | Continuous audit automation setup |
-| **[Config to Audit Manager Linkage](CONFIG_TO_AUDIT_MANAGER_LINKAGE.md)** | Integrate Config with Audit Manager |
-| **[Removal Policy Audit](REMOVAL_POLICY_AUDIT.md)** | Data retention policy analysis |
+| **[Auditor Compliance Mapping](AUDITOR_COMPLIANCE_MAPPING.md)** | Control mappings for external audits |
 
 ### Testing & Validation
 
 | Document | Description |
 |----------|-------------|
 | **[Extended Testing](guides/EXTENDED-TESTING.md)** | Comprehensive testing guide |
-| **[Testing Recommendations](guides/TESTING_RECOMMENDATIONS.md)** | Best practices for testing |
+| **[Compliance Truth Tables](testing/COMPLIANCE_TRUTH_TABLES.md)** | Systematic compliance rules testing |
 
 ### Developer Resources
 
@@ -153,14 +152,14 @@ Comprehensive guides for each application with deployment-context examples:
 
 ### Indexes & Catalogs
 
-- **[Compliance Analysis Index](compliance/COMPLIANCE_ANALYSIS_INDEX.md)** - All compliance documentation
-- **[Configuration Reference](../README.md#configuration-reference)** - All deployment-context.json properties
+- **[Compliance Overview](compliance/README.md)** - All compliance documentation
+- **[Configuration Reference](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#configuration-reference)** - All deployment-context.json properties
 
 ### Quick Links
 
-- **[Main README](../README.md)** - Project overview and quick start
-- **[CHANGELOG](../CHANGELOG.md)** - Release history
-- **[CONTRIBUTING](../CONTRIBUTING.md)** - How to contribute
+- **[Main README](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md)** - Project overview and quick start
+- **[CHANGELOG](https://github.com/CloudForgeCI/cfc-core/blob/main/CHANGELOG.md)** - Release history
+- **[CONTRIBUTING](https://github.com/CloudForgeCI/cfc-core/blob/main/CONTRIBUTING.md)** - How to contribute
 - **[LICENSE](../LICENSE)** - Apache 2.0 License
 
 ---
@@ -169,27 +168,27 @@ Comprehensive guides for each application with deployment-context examples:
 
 ### "I want to deploy an application"
 1. [Application Guides](guides/applications/) - Comprehensive guides for each app
-2. [Deployment Context Examples](../deployment-contexts/examples/) - Ready-to-use JSON configs
+2. [Deployment Context Examples](docs/examples/) - Ready-to-use JSON configs
 3. [Interactive Deployer](guides/INTERACTIVE_DEPLOYER.md) - CLI deployment tool
 
 ### "I want to deploy Jenkins quickly"
 1. [Jenkins Guide](guides/applications/jenkins.md)
-2. [Jenkins Dev Example](../deployment-contexts/examples/jenkins-dev.json)
+2. [Jenkins Dev Example](docs/examples/jenkins-dev.json)
 3. [Quick Start Guide](compliance/QUICK_START_GUIDE.md)
 
 ### "I need SOC2 compliance"
-1. [SOC2 Configuration Example](../README.md#soc-2-compliance-simplest)
+1. [SOC2 Configuration Example](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#soc-2-compliance-simplest)
 2. [Multi-Framework Guide](compliance/MULTI_FRAMEWORK_COMPLIANCE.md)
 3. [Automated Compliance](compliance/AUTOMATED_COMPLIANCE.md)
 
 ### "I need HIPAA compliance"
-1. [HIPAA Configuration Example](../README.md#hipaa-compliance-healthcare)
+1. [HIPAA Configuration Example](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#hipaa-compliance-healthcare)
 2. [Multi-Framework Guide](compliance/MULTI_FRAMEWORK_COMPLIANCE.md)
-3. [Security Hardening](../SECURITY.md)
+3. [Security Hardening](https://github.com/CloudForgeCI/cfc-core/blob/main/SECURITY.md)
 
 ### "I need PCI-DSS compliance"
-1. [PCI-DSS Configuration Example](../README.md#pci-dss-compliance-payment-processing)
-2. [PCI-DSS Guide](compliance/PCI_DSS_README.md)
+1. [PCI-DSS Configuration Example](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#pci-dss-compliance-payment-processing)
+2. [PCI-DSS Guide](compliance/PCI_DSS_COMPLIANCE.md)
 3. [PCI-DSS Application Security](compliance/PCI_DSS_APPLICATION_SECURITY.md)
 
 ### "I want to set up authentication"
@@ -215,7 +214,7 @@ Comprehensive guides for each application with deployment-context examples:
 
 Found a documentation error or want to improve something?
 
-1. Read [CONTRIBUTING.md](../CONTRIBUTING.md)
+1. Read [CONTRIBUTING.md](https://github.com/CloudForgeCI/cfc-core/blob/main/CONTRIBUTING.md)
 2. Submit a pull request
 3. Help others by sharing your knowledge
 

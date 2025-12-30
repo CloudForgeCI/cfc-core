@@ -377,5 +377,5 @@ Or for EC2:
 ## Related Documentation
 
 - [Plugin Development Guide](../../plugins/APPLICATION-PLUGIN-GUIDE.md)
-- [Compliance Guide](../compliance/README.md)
+- [Compliance Guide](../../compliance/README.md)
 - [SonarQube Documentation](https://docs.sonarsource.com/sonarqube/)

@@ -255,6 +255,28 @@ jobs:
           mvn surefire-report:report -B
           echo "Surefire HTML reports generated"
 
+      - name: Generate aggregated JavaDoc
+        run: |
+          echo "Generating aggregated JavaDoc for all modules..."
+          mvn javadoc:aggregate -B
+          echo "JavaDoc generated at target/site/apidocs"
+
+      - name: Set up Node.js for Docusaurus
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: docs/web/package-lock.json
+
+      - name: Build Docusaurus documentation
+        run: |
+          echo "Installing Docusaurus dependencies..."
+          cd docs/web
+          npm ci
+          echo "Building Docusaurus site..."
+          npm run build
+          echo "Docusaurus build complete at docs/web/build"
+
       - name: Prepare CDK dependencies for validation
         run: |
           cd cfc-testing
@@ -864,6 +886,30 @@ jobs:
           copy_dependency_report "json"
           copy_dependency_report "xml"
 
+      - name: Copy Docusaurus documentation
+        run: |
+          echo "Copying Docusaurus documentation..."
+
+          if [ -d "docs/web/build" ]; then
+            mkdir -p github-pages-reports/documentation
+            cp -r docs/web/build/* github-pages-reports/documentation/
+            echo "✅ Copied Docusaurus documentation"
+          else
+            echo "⚠️  Docusaurus build not found at docs/web/build"
+          fi
+
+      - name: Copy JavaDoc
+        run: |
+          echo "Copying aggregated JavaDoc..."
+
+          if [ -d "target/site/apidocs" ]; then
+            mkdir -p github-pages-reports/javadoc
+            cp -r target/site/apidocs/* github-pages-reports/javadoc/
+            echo "✅ Copied aggregated JavaDoc"
+          else
+            echo "⚠️  JavaDoc not found at target/site/apidocs"
+          fi
+
       - name: Generate reports index page
         run: |
           cat > github-pages-reports/index.html << 'EOF'
@@ -1109,10 +1155,11 @@ jobs:
                       <div class="card">
                           <div class="card-icon">📚</div>
                           <h2>Documentation</h2>
-                          <p>Project documentation and resources</p>
+                          <p>User guides, API reference, and resources</p>
                           <ul>
+                              <li><a href="documentation/">Browse Documentation</a> <span class="badge badge-success">Docusaurus</span></li>
+                              <li><a href="javadoc/">Java API Reference (JavaDoc)</a> <span class="badge badge-info">API</span></li>
                               <li><a href="https://github.com/CloudForgeCI/cfc-core">GitHub Repository</a></li>
-                              <li><a href="https://github.com/CloudForgeCI/cfc-core/blob/develop/README.md">README</a></li>
                               <li><a href="https://github.com/CloudForgeCI/cfc-core/blob/develop/CONTRIBUTING.md">Contributing Guide</a></li>
                           </ul>
                       </div>
@@ -1359,7 +1406,7 @@ jobs:
           mkdir -p "${HISTORY_DIR}"
 
           # Copy current reports to history (excluding history folder itself)
-          for dir in coverage validation drift sbom deployment-metrics changeset-validation; do
+          for dir in coverage validation drift sbom deployment-metrics changeset-validation documentation javadoc; do
             if [ -d "github-pages-reports/${dir}" ]; then
               echo "  Archiving ${dir}..."
               cp -r "github-pages-reports/${dir}" "${HISTORY_DIR}/" 2>/dev/null || true

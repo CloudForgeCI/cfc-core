@@ -179,5 +179,5 @@ Vault requires **manual initialization** after first deployment:
 
 ## Related Documentation
 
-- [Compliance Guide](../compliance/README.md)
+- [Compliance Guide](../../compliance/README.md)
 - [Vault Documentation](https://developer.hashicorp.com/vault/docs)

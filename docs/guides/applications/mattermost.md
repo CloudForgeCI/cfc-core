@@ -727,5 +727,5 @@ ssh ec2-user@instance 'tail -f /opt/mattermost/logs/mattermost.log'
 
 - [OIDC Integration](../../applications/OIDC.md)
 - [Database Deployment Guide](../../databases/DATABASE-DEPLOYMENT-GUIDE.md)
-- [Compliance Guide](../compliance/README.md)
-- [Deployment Context Reference](../../../deployment-contexts/README.md)
+- [Compliance Guide](../../compliance/README.md)
+- [Deployment Context Reference](../../examples/README.md)

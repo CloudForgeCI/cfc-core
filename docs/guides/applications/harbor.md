@@ -231,4 +231,4 @@ Harbor is an open-source container registry that secures artifacts with policies
 ## Related Documentation
 
 - [Harbor Documentation](https://goharbor.io/docs/)
-- [Compliance Guide](../compliance/README.md)
+- [Compliance Guide](../../compliance/README.md)

@@ -204,4 +204,4 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
 ## Related Documentation
 
 - [Nexus Documentation](https://help.sonatype.com/repomanager3)
-- [Compliance Guide](../compliance/README.md)
+- [Compliance Guide](../../compliance/README.md)

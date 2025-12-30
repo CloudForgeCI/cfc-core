@@ -8,13 +8,13 @@ Choose a template based on your requirements and customize it for your environme
 
 ```bash
 # Copy template to your project
-cp deployment-contexts/dev-minimal.json deployment-context.json
+cp docs/examples/dev-minimal.json deployment-context.json
 
 # Edit with your settings (domain, region, etc.)
 vim deployment-context.json
 
 # Deploy
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ## Available Templates
@@ -307,25 +307,25 @@ All templates require the following customizations before deployment:
 
 ```bash
 # 1. Quick start with minimal dev
-cp deployment-contexts/dev-minimal.json deployment-context.json
-cdk deploy -c cfc=@deployment-context.json
+cp docs/examples/dev-minimal.json deployment-context.json
+cdk deploy
 
 # 2. Upgrade to standard dev
-cp deployment-contexts/dev-standard.json deployment-context.json
+cp docs/examples/dev-standard.json deployment-context.json
 # Update cognitoDomainPrefix
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 
 # 3. Test staging with compliance
-cp deployment-contexts/staging-soc2.json deployment-context.json
+cp docs/examples/staging-soc2.json deployment-context.json
 # Update domain and cognitoDomainPrefix
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ### Production Deployment
 
 ```bash
 # 1. Choose compliance template
-cp deployment-contexts/production-soc2.json deployment-context.json
+cp docs/examples/production-soc2.json deployment-context.json
 
 # 2. Customize required fields
 vim deployment-context.json
@@ -338,10 +338,10 @@ vim deployment-context.json
 cat deployment-context.json
 
 # 4. Synthesize and review template
-cdk synth -c cfc=@deployment-context.json > template.yaml
+cdk synth > template.yaml
 
 # 5. Deploy
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 
 # 6. Verify compliance
 aws configservice describe-compliance-by-config-rule \
@@ -396,7 +396,7 @@ aws configservice describe-compliance-by-config-rule \
 ### From Dev to Staging
 ```bash
 # Start with dev configuration
-cat deployment-contexts/dev-standard.json > deployment-context.json
+cat docs/examples/dev-standard.json > deployment-context.json
 
 # Add compliance controls
 jq '.awsConfigEnabled = true |
@@ -404,7 +404,7 @@ jq '.awsConfigEnabled = true |
     .guardDutyEnabled = true' deployment-context.json
 
 # Redeploy
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ### From Staging to Production
@@ -421,7 +421,7 @@ jq '.stackName = "CloudForge-Prod" |
     .scopeConfigRulesToDeployment = false' deployment-context-prod.json
 
 # Deploy to production
-cdk deploy -c cfc=@deployment-context-prod.json
+cdk deploy
 ```
 
 ## Troubleshooting
@@ -495,16 +495,16 @@ jq '.createConfigInfrastructure = false' deployment-context.json
 
 ## Additional Resources
 
-- [Full Deployment Guide](../docs/compliance/DEPLOYMENT_GUIDE.md)
-- [Compliance Quick Start](../docs/compliance/QUICK_START_GUIDE.md)
-- [AWS Config Multi-Stack](../docs/compliance/AWS_CONFIG_MULTI_STACK.md)
-- [Cognito MFA Setup](../docs/setup/COGNITO_MFA_COMPLIANCE_SETUP.md)
-- [IAM Rules Guide](../docs/guides/IAM_RULES.md)
+- [Full Deployment Guide](../compliance/DEPLOYMENT_GUIDE.md)
+- [Compliance Quick Start](../compliance/QUICK_START_GUIDE.md)
+- [AWS Config Multi-Stack](../compliance/AWS_CONFIG_MULTI_STACK.md)
+- [Cognito MFA Setup](../setup/COGNITO_MFA_COMPLIANCE_SETUP.md)
+- [IAM Rules Guide](../guides/IAM_RULES.md)
 
 ## Support
 
 For issues or questions:
 1. Check existing documentation in `/docs`
-2. Review [GitHub Issues](https://github.com/your-org/cfc-core/issues)
+2. Review [GitHub Issues](https://github.com/CloudForgeCI/cfc-core/issues)
 3. Consult [AWS Config documentation](https://docs.aws.amazon.com/config/)
-4. Review [SOC 2 compliance guide](../docs/compliance/COMPLIANCE_POSTURE.md)
+4. Review [SOC 2 compliance guide](../COMPLIANCE_POSTURE.md)

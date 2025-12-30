@@ -83,14 +83,14 @@ Browse the guides above to find detailed documentation for each application.
 Each guide includes ready-to-use `deployment-context.json` examples that you can copy directly:
 
 ```bash
-# Copy an example from the deployment-contexts directory
-cp deployment-contexts/examples/jenkins-dev.json deployment-context.json
+# Copy an example from the docs/examples directory
+cp docs/examples/applications/jenkins-dev.json deployment-context.json
 
 # Customize required fields
 vim deployment-context.json
 
 # Deploy
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ### 3. Customize for Your Environment
@@ -117,10 +117,10 @@ Each application guide includes:
 
 ## Deployment Context Examples
 
-The `deployment-contexts/examples/` directory contains application-specific examples:
+The `docs/examples/applications/` directory contains application-specific examples:
 
 ```
-deployment-contexts/examples/
+docs/examples/applications/
 ├── jenkins-dev.json           # Jenkins development
 ├── jenkins-production.json    # Jenkins production with SOC2
 ├── mattermost-dev.json        # Mattermost development
@@ -155,9 +155,9 @@ CloudForge supports three authentication modes:
 
 ## Related Documentation
 
-- [Deployment Context Reference](../../deployment-contexts/README.md) - Complete configuration options
-- [Plugin System](../plugins/PLUGIN-SYSTEM.md) - Create custom applications
-- [Compliance Guide](../compliance/README.md) - Security frameworks
+- [Deployment Context Reference](../../examples/README.md) - Complete configuration options
+- [Plugin System](../../plugins/PLUGIN-SYSTEM.md) - Create custom applications
+- [Compliance Guide](../../compliance/README.md) - Security frameworks
 - [OIDC Integration](../../applications/OIDC.md) - Authentication details
 
 ## Support

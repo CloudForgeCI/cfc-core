@@ -630,6 +630,6 @@ aws secretsmanager put-secret-value \
 ## Related Documentation
 
 - [Database Deployment Guide](../../databases/DATABASE-DEPLOYMENT-GUIDE.md)
-- [Compliance Guide](../compliance/README.md)
-- [Deployment Context Reference](../../../deployment-contexts/README.md)
+- [Compliance Guide](../../compliance/README.md)
+- [Deployment Context Reference](../../examples/README.md)
 - [Metabase Documentation](https://www.metabase.com/docs/latest/)

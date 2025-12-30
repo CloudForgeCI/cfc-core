@@ -649,9 +649,9 @@ CloudForge CI automatically collects evidence through AWS Audit Manager:
 "ssoTargetAccountId": "123456789012"
 ```
 
-**Error**: "WAF strongly recommended for production"
+**Error**: "Web Application Firewall (WAF) REQUIRED for PCI-DSS compliance in PRODUCTION"
 ```bash
-# Solution: Enable WAF
+# Solution: Enable WAF (REQUIRED for PCI-DSS)
 "wafEnabled": true
 ```
 

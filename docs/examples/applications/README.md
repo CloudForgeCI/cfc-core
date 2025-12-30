@@ -6,13 +6,13 @@ Ready-to-use deployment context configurations for CloudForge applications. Copy
 
 ```bash
 # Copy an example
-cp deployment-contexts/examples/jenkins-dev.json deployment-context.json
+cp docs/examples/applications/jenkins-dev.json deployment-context.json
 
 # Edit required fields
 vim deployment-context.json
 
 # Deploy
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ## Required Customizations
@@ -137,5 +137,5 @@ compliance-{framework}-{environment}.json
 ## Related Documentation
 
 - [Deployment Context Reference](../README.md)
-- [Application Guides](../../docs/guides/applications/)
-- [Compliance Guide](../../docs/compliance/README.md)
+- [Application Guides](../../guides/applications/)
+- [Compliance Guide](../../compliance/README.md)

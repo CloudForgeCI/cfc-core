@@ -21,8 +21,8 @@ CloudForge CI provides **automated compliance enforcement** for HIPAA, SOC2, PCI
 
 ### For Compliance Teams
 - **[Quick Start Guide](QUICK_START_GUIDE.md)** - Fast path to compliance
-- **[Compliance Analysis Index](COMPLIANCE_ANALYSIS_INDEX.md)** - Detailed framework mapping
 - **[PCI-DSS Compliance](PCI_DSS_COMPLIANCE.md)** - PCI-DSS specific requirements
+- **[Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md)** - Detailed framework mapping
 
 ### For Customers
 - **[This README](#features)** - Feature overview and benefits
@@ -300,18 +300,19 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
 git clone https://github.com/cloudforgeci/cfc-core.git
 cd cfc-core
 
-# 2. Configure compliance
-cat > cfc-testing/deployment-context.properties <<EOF
-complianceFrameworks=HIPAA,SOC2
-security=PRODUCTION
-awsConfigEnabled=true
-albAccessLogging=true
-EOF
-
-# 3. Build and deploy
+# 2. Build
 cd cloudforge-api
 mvn clean install
-cdk deploy jenkinsTSoc
+
+# 3. Deploy (Interactive Deployer will prompt for configuration)
+cd ../cfc-testing
+cdk deploy
+
+# When prompted, select:
+# - Compliance Frameworks: HIPAA, SOC2
+# - Security Profile: PRODUCTION
+# - Enable AWS Config: Yes
+# - Enable ALB Access Logging: Yes
 
 # 4. Verify compliance
 aws configservice describe-compliance-by-config-rule \
@@ -465,7 +466,7 @@ For more troubleshooting, see **[Deployment Guide - Troubleshooting](DEPLOYMENT_
 ### Framework-Specific
 - [PCI-DSS Compliance](PCI_DSS_COMPLIANCE.md) - PCI-DSS requirements
 - [PCI-DSS Application Security](PCI_DSS_APPLICATION_SECURITY.md) - App security
-- [Compliance Analysis Index](COMPLIANCE_ANALYSIS_INDEX.md) - Framework mapping
+- [Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md) - Framework mapping
 
 ---
 
@@ -477,10 +478,10 @@ For more troubleshooting, see **[Deployment Guide - Troubleshooting](DEPLOYMENT_
 - **Documentation**: [docs/compliance/](.)
 
 ### Contributing
-We welcome contributions! See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+We welcome contributions! See CONTRIBUTING.md in the project root for guidelines.
 
 ### License
-Apache 2.0 - See [LICENSE](../../LICENSE) for details
+Apache 2.0 - See LICENSE file in the project root for details
 
 ---
 

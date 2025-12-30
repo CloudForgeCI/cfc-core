@@ -697,14 +697,15 @@ The following applications are planned for future releases:
 ## References
 
 - [ApplicationSpec Interface](../../../cloudforge-core/src/main/java/com/cloudforge/core/interfaces/ApplicationSpec.java)
-- [CloudForge 3.0.0 Universal Application Framework](/tmp/cloudforge-universal-app-framework-design.md)
+- [DatabaseSpec Interface](../../../cloudforge-core/src/main/java/com/cloudforge/core/interfaces/DatabaseSpec.java)
 - [Interactive Deployer](../../../cfc-testing/src/main/java/com/cloudforgeci/samples/app/InteractiveDeployer.java)
+- [Plugin System Guide](../plugins/PLUGIN-SYSTEM.md)
 
 ## Support
 
 For questions or issues with ApplicationSpecs:
-- GitHub Issues: https://github.com/anthropics/cloudforge-core/issues
-- Documentation: Coming soon
+- GitHub Issues: https://github.com/CloudForgeCI/cfc-core/issues
+- [Documentation Index](../README.md)
 
 ---
 

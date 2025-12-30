@@ -181,8 +181,8 @@ audit-evidence-*/
 ### Support
 
 For questions about this evidence package, refer to:
-- [Audit Readiness Guide](../docs/AUDIT_READINESS_GUIDE.md)
-- [Auditor Compliance Mapping](../docs/AUDITOR_COMPLIANCE_MAPPING.md)
+- [Audit Readiness Guide](../AUDIT_READINESS_GUIDE.md)
+- [Auditor Compliance Mapping](../AUDITOR_COMPLIANCE_MAPPING.md)
 ```
 
 ## Compliance Matrix Sample (compliance/compliance-matrix.md)

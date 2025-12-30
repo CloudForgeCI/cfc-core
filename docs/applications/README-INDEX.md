@@ -49,5 +49,5 @@ This directory contains documentation for CloudForge application deployments.
 ## Related Documentation
 
 - **[Plugin System](../plugins/README.md)** - Build custom application plugins
-- **[Compliance Documentation](../compliance/README.md)** - Compliance frameworks and controls
+- **[Compliance Documentation](../../compliance/README.md)** - Compliance frameworks and controls
 - **[Setup Guides](../setup/)** - Authentication and infrastructure setup guides

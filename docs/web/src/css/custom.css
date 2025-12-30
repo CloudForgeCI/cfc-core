@@ -1,0 +1,55 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #667eea;
+  --ifm-color-primary-dark: #4c63e8;
+  --ifm-color-primary-darker: #3d54e6;
+  --ifm-color-primary-darkest: #2538d9;
+  --ifm-color-primary-light: #8099ec;
+  --ifm-color-primary-lighter: #8fa8ee;
+  --ifm-color-primary-lightest: #b8c7f3;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #8099ec;
+  --ifm-color-primary-dark: #6684e9;
+  --ifm-color-primary-darker: #5777e7;
+  --ifm-color-primary-darkest: #2f4cdc;
+  --ifm-color-primary-light: #9aaeef;
+  --ifm-color-primary-lighter: #a9bdf1;
+  --ifm-color-primary-lightest: #d0daf7;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Custom styles for CloudForge CI docs */
+.hero__title {
+  font-size: 3rem;
+}
+
+.navbar__logo {
+  height: 2rem;
+}
+
+/* Improved code blocks */
+.prism-code {
+  font-size: 0.9rem;
+}
+
+/* Better table styling */
+table {
+  display: table;
+  width: 100%;
+}
+
+/* Admonitions styling */
+.admonition {
+  margin-bottom: 1em;
+}

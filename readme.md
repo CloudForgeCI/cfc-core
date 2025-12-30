@@ -26,7 +26,6 @@ Deploy secure, compliance-ready application infrastructure on AWS in minutes. **
 - **[Plugin System Guide](docs/plugins/PLUGIN-SYSTEM.md)** - Architecture and development
 - **[Application Plugin Guide](docs/plugins/APPLICATION-PLUGIN-GUIDE.md)** - Build custom application plugins
 - **[Compliance Plugin Guide](docs/plugins/COMPLIANCE-PLUGIN-GUIDE.md)** - Build compliance framework plugins
-- **[Plugin Examples](cfc-testing/PLUGIN-EXAMPLES.md)** - SonarQube + custom compliance examples
 
 ### 🔐 Security & Authentication
 - **[OIDC Integration Guide](docs/applications/OIDC.md)** - Application-level OIDC (Grafana, GitLab, Jenkins)
@@ -73,7 +72,7 @@ git clone https://github.com/CloudForgeCI/cloudforge-sample.git
 cd cloudforge-sample
 vi deployment-context.json  # Edit with your settings
 mvn clean package
-cdk deploy --context cfc=@deployment-context.json
+cdk deploy
 ```
 
 Includes example configurations for all scenarios: OIDC/Cognito auth, SOC2/HIPAA/PCI-DSS/GDPR compliance, EC2 and Fargate runtimes.
@@ -679,7 +678,7 @@ Combines all security controls: 14-char passwords, 6-year retention, WAF, GuardD
 
 ```bash
 cd cfc-testing
-cdk synth --context cfc=@deployment-context.json
+cdk synth
 ```
 
 ### Full Test Suite

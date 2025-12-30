@@ -57,6 +57,39 @@ GuardDuty is automatically enabled with PRODUCTION security profile.
 | **SOC 2** | No | Yes | Yes |
 | **GDPR** | No | Yes | Yes |
 
+## alwaysLoad Frameworks
+
+### ConfigurationValidationRules (Priority 1)
+
+**Special Characteristic**: This framework runs **regardless of which compliance frameworks are enabled**.
+
+**Purpose**: Validate basic deployment configuration before compliance-specific rules run. This catches common configuration errors (e.g., subdomain without domain, OIDC without HTTPS) that would cause deployment failures regardless of compliance requirements.
+
+**Framework ID**: `CONFIG`
+**Priority**: 1 (runs first, before all compliance frameworks)
+**alwaysLoad**: true (always runs, even for deployments with no compliance frameworks)
+
+**Validation Rules**:
+1. **CONFIG-SUBDOMAIN-DOMAIN** - Subdomain requires parent domain
+2. **CONFIG-OIDC-HTTPS** - ALB OIDC authentication requires HTTPS
+
+**Use Case**: A developer deploying to DEV without any compliance frameworks will still get these basic configuration validations, preventing common deployment errors early.
+
+**Implementation**: See [ConfigurationValidationRules.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ConfigurationValidationRules.java)
+
+**Testing**: 44 test cases in compliance-test-matrix.csv covering all runtimes, profiles, and framework combinations.
+
+**Example - Multi-Framework Scenario**:
+```json
+{
+  "complianceFrameworks": "PCI-DSS,HIPAA,SOC2",
+  "subdomain": "app",
+  "domain": ""  // ❌ FAIL: CONFIG-SUBDOMAIN-DOMAIN runs first and fails
+}
+```
+
+Even though PCI-DSS, HIPAA, and SOC2 are specified, the ConfigurationValidationRules framework runs **first** (priority 1) and catches the subdomain/domain mismatch before any compliance-specific validation runs.
+
 ## Control Mappings
 
 Here's how infrastructure controls map to multiple frameworks:
@@ -222,9 +255,8 @@ You still need to provide:
 
 ## More Info
 
-- [PCI_DSS_COMPLIANCE.md](PCI_DSS_COMPLIANCE.md) - PCI-DSS deployment guide
+- [PCI_DSS_COMPLIANCE.md](PCI_DSS_COMPLIANCE.md) - PCI-DSS deployment guide and overview
 - [PCI_DSS_APPLICATION_SECURITY.md](PCI_DSS_APPLICATION_SECURITY.md) - Jenkins hardening for PCI
-- [PCI_DSS_README.md](PCI_DSS_README.md) - PCI-DSS overview
 
 ## Files
 
