@@ -3,6 +3,7 @@ package com.cloudforgeci.api.security;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.SecretValue;
@@ -35,7 +36,7 @@ public class IdentityCenterFactory extends BaseFactory {
     private static final Logger LOG = Logger.getLogger(IdentityCenterFactory.class.getName());
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("ssoInstanceArn")
     private String ssoInstanceArn;
@@ -56,8 +57,8 @@ public class IdentityCenterFactory extends BaseFactory {
 
     @Override
     public void create() {
-        // Only provision if authMode is alb-oidc
-        if (!"alb-oidc".equals(authMode)) {
+        // Only provision if authMode is ALB_OIDC
+        if (authMode != AuthMode.ALB_OIDC) {
             LOG.info("ALB-OIDC not enabled - skipping Identity Center setup");
             return;
         }

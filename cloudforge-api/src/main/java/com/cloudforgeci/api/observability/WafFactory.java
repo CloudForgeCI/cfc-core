@@ -1,11 +1,20 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.kms.Key;
+import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.wafv2.CfnWebACL;
 import software.amazon.awscdk.services.wafv2.CfnWebACLAssociation;
+import software.amazon.awscdk.services.wafv2.CfnLoggingConfiguration;
 import software.constructs.Construct;
 
 import java.util.ArrayList;
@@ -17,6 +26,21 @@ import java.util.logging.Logger;
 /**
  * Factory for creating AWS WAF WebACL resources.
  * Creates Web Application Firewall protection for Application Load Balancers.
+ *
+ * <p><strong>Compliance Coverage:</strong></p>
+ * <ul>
+ *   <li>SOC2-CC6.6-WAF: Web Application Firewall for boundary protection</li>
+ *   <li>PCI-DSS Req 6.6: Web application security (WAF or code review)</li>
+ *   <li>HIPAA §164.312(e)(1): Transmission security controls</li>
+ *   <li>GDPR Art. 32: Security of processing (protection against attacks)</li>
+ * </ul>
+ *
+ * <p><strong>Managed Rule Groups:</strong></p>
+ * <ul>
+ *   <li>AWSManagedRulesKnownBadInputsRuleSet: Protection against known malicious inputs</li>
+ *   <li>AWSManagedRulesSQLiRuleSet: SQL injection protection</li>
+ *   <li>AWSManagedRulesLinuxRuleSet: Linux-specific vulnerability protection</li>
+ * </ul>
  */
 public class WafFactory extends BaseFactory {
 
@@ -120,6 +144,56 @@ public class WafFactory extends BaseFactory {
 
         ctx.wafWebAcl.set(webAcl);
 
+        // Create KMS key for CloudWatch Logs encryption (PCI-DSS Req 3.4)
+        Key wafLogsKmsKey = Key.Builder.create(this, getNode().getId() + "-WafLogsKmsKey")
+                .description("KMS key for WAF CloudWatch Logs (PCI-DSS compliance)")
+                .enableKeyRotation(true)
+                // Always destroy - WAF logs are for operational monitoring, not long-term audit retention
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
+
+        // Grant CloudWatch Logs service permission to use the KMS key
+        // Required for CloudWatch Logs to encrypt log data
+        wafLogsKmsKey.addToResourcePolicy(PolicyStatement.Builder.create()
+                .sid("Allow CloudWatch Logs to use the key")
+                .effect(Effect.ALLOW)
+                .principals(List.of(new ServicePrincipal("logs." + cfc.region() + ".amazonaws.com")))
+                .actions(List.of(
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*",
+                        "kms:CreateGrant",
+                        "kms:DescribeKey"
+                ))
+                .resources(List.of("*"))
+                .conditions(Map.of(
+                        "ArnLike", Map.of(
+                                "kms:EncryptionContext:aws:logs:arn",
+                                "arn:aws:logs:" + cfc.region() + ":" + Stack.of(this).getAccount() + ":*"
+                        )
+                ))
+                .build());
+
+        // Create CloudWatch Logs group for WAF logging (PCI-DSS Req 10.2)
+        // WAFv2 requires log group name to start with "aws-waf-logs-"
+        // Use config.getLogRetentionDays() for compliance-aware retention (HIPAA requires 6 years)
+        LogGroup wafLogGroup = LogGroup.Builder.create(this, getNode().getId() + "-WafLogs")
+                .logGroupName("aws-waf-logs-" + appId + "-" + stackName.toLowerCase())
+                .retention(config.getLogRetentionDays())  // Compliance-aware retention from security profile
+                // Always destroy - WAF logs are for operational monitoring, not long-term audit retention
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .encryptionKey(wafLogsKmsKey)  // KMS encryption for PCI-DSS
+                .build();
+
+        // Enable WAF logging to CloudWatch Logs
+        CfnLoggingConfiguration.Builder.create(this, getNode().getId() + "-WafLogging")
+                .resourceArn(webAcl.getAttrArn())
+                .logDestinationConfigs(List.of(wafLogGroup.getLogGroupArn()))
+                .build();
+
+        LOG.info("WAF logging enabled to CloudWatch Logs: " + wafLogGroup.getLogGroupName());
+
         // Associate WAF WebACL with ALB
         // The ALB must be available before WafFactory.create() is called
         // This is ensured by SecurityRules calling this factory AFTER infrastructure creation
@@ -133,6 +207,10 @@ public class WafFactory extends BaseFactory {
                 .resourceArn(albArn)
                 .webAclArn(webAcl.getAttrArn())
                 .build();
+
+        // Register AWS Config rules for WAF compliance monitoring
+        ctx.requireConfigRule(AwsConfigRule.ALB_WAF_ENABLED);
+        ctx.requireConfigRule(AwsConfigRule.WAFV2_LOGGING_ENABLED);
 
         LOG.info("WAF WebACL created: " + webAcl.getAttrArn());
         LOG.info("WAF WebACL associated with ALB: " + albArn);

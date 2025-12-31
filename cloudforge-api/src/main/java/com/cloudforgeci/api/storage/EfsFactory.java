@@ -1,11 +1,15 @@
 package com.cloudforgeci.api.storage;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.efs.*;
@@ -22,6 +26,14 @@ import java.util.logging.Logger;
  *   <li>Reusing existing file systems for disaster recovery workflows</li>
  *   <li>Applying security groups and encryption settings</li>
  *   <li>Creating Access Points with application-specific ownership and permissions</li>
+ * </ul>
+ *
+ * <p><strong>Compliance Coverage:</strong></p>
+ * <ul>
+ *   <li>SOC2-C1.1-EFS: Encryption at rest for confidentiality</li>
+ *   <li>HIPAA §164.312(a)(2)(iv): Encryption of ePHI at rest</li>
+ *   <li>PCI-DSS Req 3.4: Protect stored cardholder data</li>
+ *   <li>GDPR Art. 32: Security of processing (encryption)</li>
  * </ul>
  *
  * <p>CloudForge 3.0.0: Uses ApplicationSpec to determine Access Point configuration</p>
@@ -41,6 +53,9 @@ public class EfsFactory extends BaseFactory {
 
   @SystemContext("applicationSpec")
   private ApplicationSpec applicationSpec;
+
+  @DeploymentContext("networkMode")
+  private NetworkMode networkMode;
 
   public EfsFactory(Construct scope, String id) {
     super(scope, id);
@@ -70,11 +85,26 @@ public class EfsFactory extends BaseFactory {
   }
 
   private SecurityGroup createSecurityGroup() {
-    return SecurityGroup.Builder.create(this, getNode().getId() + "EfsSg")
+    // Check if egress should be restricted to VPC CIDR only (only for private subnets)
+    boolean restrictEgress = config.isRestrictSecurityGroupEgressEnabled()
+        && networkMode != NetworkMode.PUBLIC;
+
+    SecurityGroup sg = SecurityGroup.Builder.create(this, getNode().getId() + "EfsSg")
             .vpc(vpc)
             .description("EFS Security Group")
-            .allowAllOutbound(true)
+            .allowAllOutbound(!restrictEgress)
             .build();
+
+    // If egress is restricted, add explicit egress rule for VPC CIDR only
+    if (restrictEgress) {
+      sg.addEgressRule(
+          Peer.ipv4(vpc.getVpcCidrBlock()),
+          Port.allTraffic(),
+          "Allow egress to VPC CIDR only"
+      );
+    }
+
+    return sg;
   }
 
   private FileSystem createFileSystem(SecurityGroup efsSg) {
@@ -88,6 +118,9 @@ public class EfsFactory extends BaseFactory {
     } else {
       LOG.info("EFS file system will be DESTROYED with stack (retainStorage = false)");
     }
+
+    // Register AWS Config rule for EFS encryption compliance
+    ctx.requireConfigRule(AwsConfigRule.EFS_ENCRYPTED);
 
     return FileSystem.Builder.create(this, "Efs")
             .securityGroup(efsSg)

@@ -1,0 +1,9 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+ADVISORY_EC2_SOC2_boundary-retention-365,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,jenkins,,,,,
+ADVISORY_FARGATE_SOC2_boundary-retention-365,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,jenkins,,,,,
+ADVISORY_EC2_HIPAA_exact-min-2190,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,,,
+ADVISORY_FARGATE_HIPAA_exact-min-2190,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,,,
+ADVISORY_EC2_PCI-DSS_boundary-365,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,,,
+ADVISORY_FARGATE_PCI-DSS_boundary-365,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,,,
+ADVISORY_EC2_GDPR_eu-region-approved,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,90,true,PASS,jenkins,,eu-west-1,true,,
+ADVISORY_FARGATE_GDPR_eu-region-approved,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,90,true,PASS,jenkins,,eu-west-1,true,,

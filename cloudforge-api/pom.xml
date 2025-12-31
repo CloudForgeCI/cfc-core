@@ -4,11 +4,11 @@
   <parent>
     <groupId>com.cloudforgeci</groupId>
     <artifactId>cfc-core</artifactId>
-    <version>3.0.1-SNAPSHOT</version>
+    <version>3.1.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>cloudforge-api</artifactId>
-  <version>3.0.1-SNAPSHOT</version>
+  <version>3.1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>CloudForge API</name>
 
@@ -38,6 +38,11 @@
       <groupId>software.constructs</groupId>
       <artifactId>constructs</artifactId>
     </dependency>
+    <!-- CDK Nag for compliance validation (version from parent BOM) -->
+    <dependency>
+      <groupId>io.github.cdklabs</groupId>
+      <artifactId>cdknag</artifactId>
+    </dependency>
     <!-- JUnit 5 for testing (version and scope from parent BOM) -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -59,6 +64,12 @@
     <dependency>
       <groupId>org.glassfish</groupId>
       <artifactId>jakarta.el</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Jackson YAML for CloudFormation template YAML generation -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

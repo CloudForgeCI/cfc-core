@@ -518,6 +518,9 @@ class KeyManagementRulesTest {
         // Explicitly set KMS properties to override defaults
         customContext.put("kmsKeyRotationEnabled", String.valueOf(kmsRotation));
         customContext.put("useCustomerManagedKeys", String.valueOf(customerManagedKeys));
+        // Add PCI-DSS framework to make KMS rotation REQUIRED
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", "enforce");
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -529,10 +532,11 @@ class KeyManagementRulesTest {
         new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
-        // PRODUCTION requires BOTH kmsRotation AND customerManagedKeys
+        // NOTE: KMS_KEY_ROTATION is REQUIRED for PCI-DSS, HIPAA, GDPR, NIST (ADVISORY for SOC2)
         boolean shouldFail = false;
         if (secProfile == SecurityProfile.PRODUCTION) {
-            if (!kmsRotation || !customerManagedKeys) {
+            // With PCI-DSS framework, KMS rotation is REQUIRED
+            if (!kmsRotation) {
                 shouldFail = true;
             }
         }
@@ -628,6 +632,9 @@ class KeyManagementRulesTest {
         // Explicitly set secrets properties to override defaults
         customContext.put("secretsManagerEnabled", String.valueOf(secretsManager));
         customContext.put("secretRotationEnabled", String.valueOf(secretRotation));
+        // Add PCI-DSS framework to make Secrets Manager and rotation REQUIRED
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", "enforce");
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -639,11 +646,18 @@ class KeyManagementRulesTest {
         new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
-        // PRODUCTION requires BOTH secretsManager AND secretRotation
+        // NOTE: SECRETS_MANAGER and SECRETS_ROTATION are REQUIRED for PCI-DSS, HIPAA, NIST
+        // Secret rotation is only checked if Secrets Manager is enabled
         boolean shouldFail = false;
         if (secProfile == SecurityProfile.PRODUCTION) {
-            if (!secretsManager || !secretRotation) {
+            // Secrets Manager is REQUIRED for PCI-DSS
+            if (!secretsManager) {
                 shouldFail = true;
+            } else {
+                // If Secrets Manager is enabled, rotation is also REQUIRED
+                if (!secretRotation) {
+                    shouldFail = true;
+                }
             }
         }
         // STAGING and DEV are advisory only (never fail)
@@ -715,6 +729,9 @@ class KeyManagementRulesTest {
         customContext.put("acmAutoRenewalEnabled", String.valueOf(acmAutoRenewal));
         customContext.put("secretsManagerEnabled", String.valueOf(secretsManager));
         customContext.put("secretRotationEnabled", String.valueOf(secretRotation));
+        // Add PCI-DSS framework to make controls REQUIRED
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", "enforce");
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -726,22 +743,30 @@ class KeyManagementRulesTest {
         new KeyManagementRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
-        // PRODUCTION has three independent validation checks:
-        // 1. KMS: requires BOTH kmsRotation AND customerManagedKeys
-        // 2. Certificates: requires BOTH certExpirationMonitoring AND acmAutoRenewal
-        //    NOTE: Certificate validation only runs when ctx.cert.get().isPresent()
-        //    Since no certificate is created, this validation always passes
-        // 3. Secrets: requires BOTH secretsManager AND secretRotation
+        // NOTE: With ComplianceMatrix and PCI-DSS framework:
+        // - KMS_KEY_ROTATION: REQUIRED (only rotation, customerManagedKeys not checked)
+        // - CERTIFICATE_EXPIRATION_MONITORING: ADVISORY (never fails)
+        // - SECRETS_MANAGER: REQUIRED
+        // - SECRETS_ROTATION: REQUIRED (only if Secrets Manager enabled)
         boolean shouldFail = false;
         if (secProfile == SecurityProfile.PRODUCTION) {
-            boolean kmsValid = kmsRotation && customerManagedKeys;
-            boolean secretsValid = secretsManager && secretRotation;
-
-            // Any validation failure causes overall failure
-            // Certificate validation is not checked since no certificate exists
-            if (!kmsValid || !secretsValid) {
+            // KMS rotation is REQUIRED for PCI-DSS
+            if (!kmsRotation) {
                 shouldFail = true;
             }
+
+            // Secrets Manager is REQUIRED for PCI-DSS
+            if (!secretsManager) {
+                shouldFail = true;
+            } else {
+                // If Secrets Manager is enabled, rotation is also REQUIRED
+                if (!secretRotation) {
+                    shouldFail = true;
+                }
+            }
+
+            // Certificate monitoring is ADVISORY - doesn't cause failures
+            // ACM auto-renewal is advisory - doesn't cause failures
         }
         // STAGING and DEV are advisory only (never fail)
 
@@ -758,6 +783,177 @@ class KeyManagementRulesTest {
                 ", customerManagedKeys=" + customerManagedKeys + ", certExpirationMonitoring=" + certExpirationMonitoring +
                 ", acmAutoRenewal=" + acmAutoRenewal + ", secretsManager=" + secretsManager +
                 ", secretRotation=" + secretRotation);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: KMS key rotation edge cases (validation only checks enabled, not period)
+        "PRODUCTION,FARGATE,365,true,ENFORCE,false",     // Rotation enabled - PASS
+        "PRODUCTION,FARGATE,366,true,ENFORCE,false",     // Rotation enabled (days ignored) - PASS
+        "PRODUCTION,FARGATE,730,true,ENFORCE,false",     // Rotation enabled (days ignored) - PASS
+        "PRODUCTION,FARGATE,90,true,ENFORCE,false",      // Rotation enabled - PASS
+        "PRODUCTION,FARGATE,0,true,ENFORCE,false",       // Rotation enabled (days ignored) - PASS
+        "PRODUCTION,EC2,365,true,ENFORCE,false",         // EC2 rotation enabled - PASS
+        "PRODUCTION,EC2,400,true,ENFORCE,false",         // EC2 rotation enabled (days ignored) - PASS
+
+        // STAGING - more lenient
+        "STAGING,FARGATE,365,true,ENFORCE,false",        // STAGING rotation enabled - PASS
+        "STAGING,FARGATE,730,true,ENFORCE,false",        // STAGING rotation enabled - PASS
+
+        // DEV - minimal enforcement
+        "DEV,FARGATE,0,false,ENFORCE,false",             // DEV no rotation - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,730,true,ADVISORY,false"     // PRODUCTION advisory - PASS
+    })
+    void testKmsKeyRotationEdgeCases(String profile, String runtime, int rotationDays,
+                                      boolean kmsEnabled, String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestKmsRotationEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("kmsKeyRotationDays", String.valueOf(rotationDays));
+        customContext.put("customerManagedKeysEnabled", String.valueOf(kmsEnabled));
+        customContext.put("complianceFrameworks", "pci-dss");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("secretsManagerEnabled", "true");
+            customContext.put("secretRotationEnabled", "true");
+            customContext.put("acmAutoRenewal", "true");
+            customContext.put("certExpirationMonitoring", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestKmsRotationEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new KeyManagementRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected KMS rotation validation to fail for: " + rotationDays + " days");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected KMS rotation validation to pass for: " + rotationDays + " days");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: Certificate expiration monitoring combinations (PCI-DSS is advisory for certs)
+        "PRODUCTION,FARGATE,true,true,30,ENFORCE,false",     // All cert features - PASS
+        "PRODUCTION,FARGATE,true,false,30,ENFORCE,false",    // Monitoring only (acmAutoRenewalEnabled defaults to true) - PASS
+        "PRODUCTION,FARGATE,false,true,30,ENFORCE,false",    // PCI-DSS cert monitoring is advisory - PASS
+        "PRODUCTION,FARGATE,true,true,7,ENFORCE,false",      // 7 day warning - PASS
+        "PRODUCTION,FARGATE,true,true,60,ENFORCE,false",     // 60 day warning - PASS
+        "PRODUCTION,EC2,true,true,30,ENFORCE,false",         // EC2 full cert mgmt - PASS
+        "PRODUCTION,EC2,false,false,0,ENFORCE,false",        // EC2 PCI-DSS cert monitoring advisory - PASS
+
+        // STAGING
+        "STAGING,FARGATE,true,true,30,ENFORCE,false",        // STAGING full cert mgmt - PASS
+        "STAGING,FARGATE,false,false,0,ENFORCE,false",       // STAGING no cert mgmt - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,0,ADVISORY,false"    // PRODUCTION advisory no cert mgmt - PASS
+    })
+    void testCertificateManagementEdgeCases(String profile, String runtime, boolean expirationMonitoring,
+                                             boolean autoRenewal, int warningDays,
+                                             String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestCertEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("certExpirationMonitoring", String.valueOf(expirationMonitoring));
+        customContext.put("acmAutoRenewal", String.valueOf(autoRenewal));
+        customContext.put("certExpirationWarningDays", String.valueOf(warningDays));
+        customContext.put("complianceFrameworks", "pci-dss");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("kmsKeyRotationDays", "365");
+            customContext.put("customerManagedKeysEnabled", "true");
+            customContext.put("secretsManagerEnabled", "true");
+            customContext.put("secretRotationEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestCertEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new KeyManagementRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected cert management validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected cert management validation to pass");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Edge case: Secrets rotation edge cases
+        "PRODUCTION,FARGATE,true,30,ENFORCE,false",      // 30 day rotation - PASS
+        "PRODUCTION,FARGATE,true,7,ENFORCE,false",       // 7 day rotation (aggressive) - PASS
+        "PRODUCTION,FARGATE,true,90,ENFORCE,false",      // 90 day rotation - PASS
+        "PRODUCTION,FARGATE,true,0,ENFORCE,true",        // No rotation - FAIL
+        "PRODUCTION,FARGATE,false,0,ENFORCE,true",       // Secrets manager disabled - FAIL
+        "PRODUCTION,EC2,true,30,ENFORCE,false",          // EC2 30 day rotation - PASS
+        "PRODUCTION,EC2,false,0,ENFORCE,true",           // EC2 no secrets mgmt - FAIL
+
+        // STAGING
+        "STAGING,FARGATE,true,90,ENFORCE,false",         // STAGING 90 day rotation - PASS
+        "STAGING,FARGATE,false,0,ENFORCE,false",         // STAGING no secrets mgmt - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,0,ADVISORY,false"      // PRODUCTION advisory no secrets - PASS
+    })
+    void testSecretsRotationEdgeCases(String profile, String runtime, boolean secretsManagerEnabled,
+                                       int rotationDays, String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestSecretsRotationEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("secretsManagerEnabled", String.valueOf(secretsManagerEnabled));
+        customContext.put("secretRotationDays", String.valueOf(rotationDays));
+        customContext.put("secretRotationEnabled", String.valueOf(rotationDays > 0));
+        customContext.put("complianceFrameworks", "pci-dss");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("kmsKeyRotationDays", "365");
+            customContext.put("customerManagedKeysEnabled", "true");
+            customContext.put("acmAutoRenewal", "true");
+            customContext.put("certExpirationMonitoring", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestSecretsRotationEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new KeyManagementRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected secrets rotation validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected secrets rotation validation to pass");
         }
     }
 }

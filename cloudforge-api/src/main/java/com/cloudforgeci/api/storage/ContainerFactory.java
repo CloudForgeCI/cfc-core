@@ -4,6 +4,7 @@ package com.cloudforgeci.api.storage;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
@@ -34,7 +35,7 @@ public class ContainerFactory extends BaseFactory {
     private Boolean enableSsl;
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     // ========== Optional Port Configuration ==========
     // These flags control which optional ports are exposed for applications
@@ -121,24 +122,24 @@ public class ContainerFactory extends BaseFactory {
                     );
                     @SuppressWarnings("unchecked")
                     Map<String, String> dbEnv = (Map<String, String>) method.invoke(
-                        applicationSpec, fqdn, sslEnabled, authMode, dbConnection
+                        applicationSpec, fqdn, sslEnabled, authMode.getValue(), dbConnection
                     );
                     environment.putAll(dbEnv);
                 } catch (NoSuchMethodException e) {
                     // Application doesn't have 4-parameter method, use standard 3-parameter
                     LOG.info("Application " + applicationSpec.applicationId() + " doesn't support database connection parameter");
-                    environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                    environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode.getValue()));
                 } catch (Exception e) {
                     LOG.warning("Error calling containerEnvironmentVariables with database connection: " + e.getMessage());
-                    environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                    environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode.getValue()));
                 }
             } else if (applicationSpec instanceof DatabaseSpec) {
                 // No database connection - use embedded database fallback
                 LOG.info("No database connection - " + applicationSpec.applicationId() + " will use embedded database");
-                environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode.getValue()));
             } else {
                 // Standard applications without database support
-                environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode));
+                environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode.getValue()));
             }
         }
 
@@ -227,8 +228,8 @@ public class ContainerFactory extends BaseFactory {
             }
         }
 
-        // Add OIDC environment variables if application-oidc mode is enabled
-        if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+        // Add OIDC environment variables if APPLICATION_OIDC mode is enabled
+        if (authMode == AuthMode.APPLICATION_OIDC && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
             LOG.info("ContainerFactory: application-oidc mode detected for " + applicationSpec.applicationId());
 
             if (applicationOidcConfig != null) {
@@ -355,9 +356,9 @@ public class ContainerFactory extends BaseFactory {
         String samlCertPath = null;
         String samlCertEnvVar = null;
 
-        // Add entrypoint/command override for application-oidc mode
+        // Add entrypoint/command override for APPLICATION_OIDC mode
         // This creates the OIDC config file before starting the application
-        if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+        if (authMode == AuthMode.APPLICATION_OIDC && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
             LOG.info("ContainerFactory: Configuring OIDC entrypoint wrapper...");
 
             if (applicationOidcConfig != null) {
@@ -389,9 +390,13 @@ public class ContainerFactory extends BaseFactory {
 
                         // For distroless, just set the startup command directly (no shell wrapper)
                         // All configuration is already in environment variables
-                        List<String> command = List.of(startupCommand);
-                        containerOptionsBuilder.command(command);
-                        LOG.info("✅ Configured direct startup command for distroless " + applicationSpec.applicationId());
+                        if (startupCommand != null) {
+                            List<String> command = List.of(startupCommand);
+                            containerOptionsBuilder.command(command);
+                            LOG.info("✅ Configured direct startup command for distroless " + applicationSpec.applicationId());
+                        } else {
+                            LOG.info("✅ Using default container entrypoint for " + applicationSpec.applicationId());
+                        }
                     } else {
                         // Normal container with shell - use wrapper to write config file
                         // Create startup command that writes OIDC config and starts application
@@ -430,7 +435,7 @@ public class ContainerFactory extends BaseFactory {
 
         // Check if we need SAML certificate init container
         // Uses OidcIntegration.needsSamlCertificate() to determine if app needs SAML cert
-        if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+        if (authMode == AuthMode.APPLICATION_OIDC && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
             OidcIntegration oidcIntegration = applicationSpec.getOidcIntegration();
 
             if (oidcIntegration != null && oidcIntegration.needsSamlCertificate()) {

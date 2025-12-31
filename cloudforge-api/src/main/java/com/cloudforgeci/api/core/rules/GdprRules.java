@@ -2,10 +2,13 @@ package com.cloudforgeci.api.core.rules;
 
 
 import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
+import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,14 +60,14 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         LOG.info("Installing GDPR technical safeguards validation for " + ctx.security);
 
         ctx.getNode().addValidation(() -> {
-            // Read compliance mode from deployment context
-            ComplianceMode complianceMode = ComplianceMode.fromString(
-                ctx.cfc.complianceMode(),
-                ComplianceMode.defaultForProfile(ctx.security)
-            );
+            // Get compliance mode (already resolved to enum with proper default)
+            ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
             // Collect all validation results
             List<ComplianceRule> rules = new ArrayList<>();
+
+            // GDPR Chapter V: Data Residency and Cross-Border Transfers (Articles 44-50)
+            rules.addAll(validateDataResidency(ctx));
 
             // Article 25: Data Protection by Design and by Default
             rules.addAll(validateDataProtectionByDesign(ctx));
@@ -105,6 +108,55 @@ public class GdprRules implements FrameworkRules<SystemContext> {
                 return List.of();
             }
         });
+    }
+
+    /**
+     * GDPR Chapter V: Data Residency and Cross-Border Transfers (Articles 44-50).
+     * GDPR requires that personal data of EU residents be processed in the EU or in countries
+     * with adequate data protection unless proper transfer mechanisms are in place.
+     */
+    private List<ComplianceRule> validateDataResidency(SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+
+        String region = ctx.cfc.region();
+        boolean isEuRegion = isEuropeanUnionRegion(region);
+
+        // Check if gdprDataTransferApproved flag is set
+        boolean transferApproved = Optional.ofNullable(ctx.cfc.gdprDataTransferApproved())
+            .orElse(false);
+
+        if (!isEuRegion && !transferApproved) {
+            rules.add(ComplianceRule.fail(
+                "GDPR-DATA-RESIDENCY",
+                "GDPR requires EU data residency or approved transfer mechanisms (Art. 44-50)",
+                "DataResidencyRule",
+                "Deploying to non-EU region '" + region + "' without approved data transfer mechanism. " +
+                "Either deploy to an EU region (eu-west-1, eu-central-1, etc.) or set " +
+                "gdprDataTransferApproved=true to confirm Standard Contractual Clauses (SCCs) or " +
+                "other valid transfer mechanisms are in place."
+            ));
+        } else if (!isEuRegion && transferApproved) {
+            rules.add(ComplianceRule.pass(
+                "GDPR-DATA-RESIDENCY",
+                "GDPR data transfer approved for non-EU region (Art. 44-50): " + region,
+                "DataResidencyRule"
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "GDPR-DATA-RESIDENCY",
+                "GDPR compliant EU region deployment (Art. 44-50): " + region,
+                "DataResidencyRule"
+            ));
+        }
+
+        return rules;
+    }
+
+    /**
+     * Check if the given AWS region is in the European Union.
+     */
+    private boolean isEuropeanUnionRegion(String region) {
+        return region != null && region.startsWith("eu-");
     }
 
     /**
@@ -184,7 +236,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // Art. 25: Network isolation for data protection
-        if ("public-no-nat".equals(ctx.cfc.networkMode()) && ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC && ctx.security == SecurityProfile.PRODUCTION) {
             rules.add(ComplianceRule.fail(
                 "GDPR-NETWORK-ISOLATION",
                 "Private network mode recommended for production systems (GDPR Art. 25(1))",
@@ -259,6 +311,29 @@ public class GdprRules implements FrameworkRules<SystemContext> {
             ));
         }
 
+        // Art. 30(1) & Art. 32(1)(d): Log retention for audit trail and security assessment
+        // GDPR doesn't specify exact retention period, but requires adequate retention
+        // for maintaining records of processing activities and security monitoring
+        // Industry standard: 90 days minimum for security logs (aligns with SOC2 CC7.2)
+        var retentionDays = config.getLogRetentionDays();
+        if (!isRetentionSufficient(retentionDays)) {
+            rules.add(ComplianceRule.fail(
+                "GDPR-LOG-RETENTION",
+                "Log retention must be adequate for processing records and security assessment (GDPR Art. 30(1) & 32(1)(d))",
+                "CloudWatchLogGroupRetention",
+                "Log retention must be at least 90 days (THREE_MONTHS) to maintain adequate records of processing activities. Current: " +
+                retentionDays.toString() + ". " +
+                "GDPR Article 30(1) requires maintaining records of processing activities, and Article 32(1)(d) " +
+                "requires ability to regularly test and evaluate security measures."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "GDPR-LOG-RETENTION",
+                "Log retention adequate for processing records and security assessment (GDPR Art. 30(1) & 32(1)(d))",
+                "CloudWatchLogGroupRetention"
+            ));
+        }
+
         return rules;
     }
 
@@ -278,18 +353,34 @@ public class GdprRules implements FrameworkRules<SystemContext> {
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
         );
 
-        // Art. 32(1)(a): Encryption of personal data - TLS
+        // Art. 32(1)(a): SSL/TLS must be enabled for encrypted transmission of personal data
+        if (!ctx.cfc.enableSsl()) {
+            rules.add(ComplianceRule.fail(
+                "GDPR-SSL-ENCRYPTION",
+                "SSL/TLS must be enabled for data in transit (GDPR Art. 32(1)(a))",
+                "ALBHttpsOnly",
+                "Set enableSsl=true for production GDPR compliance to protect personal data in transit."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "GDPR-SSL-ENCRYPTION",
+                "SSL/TLS enabled for data in transit (GDPR Art. 32(1)(a))",
+                "ALBHttpsOnly"
+            ));
+        }
+
+        // Art. 32(1)(a): Encryption of personal data - TLS certificate
         if (ctx.cert.get().isEmpty()) {
             rules.add(ComplianceRule.fail(
                 "GDPR-TLS-ENCRYPTION",
-                "TLS encryption required for data in transit (GDPR Art. 32(1)(a))",
+                "TLS certificate required for data in transit (GDPR Art. 32(1)(a))",
                 "ALBHttpsOnly",
                 "TLS certificate not configured. Configure HTTPS to encrypt transmission of personal data."
             ));
         } else {
             rules.add(ComplianceRule.pass(
                 "GDPR-TLS-ENCRYPTION",
-                "TLS encryption required for data in transit (GDPR Art. 32(1)(a))",
+                "TLS certificate configured for data in transit (GDPR Art. 32(1)(a))",
                 "ALBHttpsOnly"
             ));
         }
@@ -311,8 +402,8 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // Art. 32(1)(b): Confidentiality through access controls
-        String authMode = ctx.cfc.authMode();
-        if ("none".equals(authMode)) {
+        AuthMode authMode = ctx.cfc.authMode();
+        if (authMode == AuthMode.NONE) {
             rules.add(ComplianceRule.fail(
                 "GDPR-AUTHENTICATION",
                 "Authentication required to ensure confidentiality (GDPR Art. 32(1)(b))",
@@ -386,17 +477,12 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         );
 
         // Art. 33(1): Breach detection capability
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-GUARDDUTY",
-                "GuardDuty required for breach detection (GDPR Art. 33(1))",
-                "GuardDutyEnabled",
-                "GuardDuty is disabled. Enable GuardDuty to detect potential data breaches within required timeframe."
-            ));
-        } else {
+        // NOTE: GuardDuty validation is now handled by ThreatProtectionRules using ComplianceMatrix
+        // which marks it as ADVISORY for GDPR (recommended but not required)
+        if (config.isGuardDutyEnabled()) {
             rules.add(ComplianceRule.pass(
                 "GDPR-GUARDDUTY",
-                "GuardDuty required for breach detection (GDPR Art. 33(1))",
+                "GuardDuty enabled for breach detection (GDPR Art. 33(1))",
                 "GuardDutyEnabled"
             ));
         }
@@ -451,6 +537,36 @@ public class GdprRules implements FrameworkRules<SystemContext> {
     }
 
     /**
+     * Check if log retention meets GDPR requirement (90 days minimum).
+     * GDPR Art. 30(1): Maintain records of processing activities.
+     * GDPR Art. 32(1)(d): Regularly test, assess, and evaluate effectiveness of security measures.
+     *
+     * While GDPR doesn't specify exact retention periods, it requires adequate retention
+     * to maintain records of processing activities and assess security measures.
+     * Industry standard: 90 days minimum (THREE_MONTHS or longer).
+     */
+    private boolean isRetentionSufficient(RetentionDays retention) {
+        // GDPR requires adequate retention for processing records and security assessment
+        // Industry standard: 90 days minimum (THREE_MONTHS or longer) - aligns with SOC2 CC7.2
+        return retention == RetentionDays.THREE_MONTHS ||
+               retention == RetentionDays.FOUR_MONTHS ||
+               retention == RetentionDays.FIVE_MONTHS ||
+               retention == RetentionDays.SIX_MONTHS ||
+               retention == RetentionDays.ONE_YEAR ||
+               retention == RetentionDays.THIRTEEN_MONTHS ||
+               retention == RetentionDays.EIGHTEEN_MONTHS ||
+               retention == RetentionDays.TWO_YEARS ||
+               retention == RetentionDays.THREE_YEARS ||
+               retention == RetentionDays.FIVE_YEARS ||
+               retention == RetentionDays.SIX_YEARS ||
+               retention == RetentionDays.SEVEN_YEARS ||
+               retention == RetentionDays.EIGHT_YEARS ||
+               retention == RetentionDays.NINE_YEARS ||
+               retention == RetentionDays.TEN_YEARS ||
+               retention == RetentionDays.INFINITE;
+    }
+
+    /**
      * Generate GDPR technical safeguards compliance report.
      */
     public String generateComplianceReport(SystemContext ctx) {
@@ -468,7 +584,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         report.append("Article 25 - Data Protection by Design:\n");
         report.append("  ✓ Encryption at Rest (Art. 25(1)): ").append(config.isEbsEncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Access Controls (Art. 25(2)): ").append(ctx.iamProfile != null ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Network Isolation (Art. 25(1)): ").append(!"public-no-nat".equals(ctx.cfc.networkMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Network Isolation (Art. 25(1)): ").append(ctx.cfc.networkMode() != NetworkMode.PUBLIC ? "ENABLED" : "DISABLED").append("\n");
         report.append("\n");
 
         report.append("Article 30 - Records of Processing:\n");
@@ -479,7 +595,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
 
         report.append("Article 32 - Security of Processing:\n");
         report.append("  ✓ Encryption in Transit (Art. 32(1)(a)): ").append(ctx.cert.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Authentication (Art. 32(1)(b)): ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Authentication (Art. 32(1)(b)): ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Security Monitoring (Art. 32(1)(b)): ").append(config.isSecurityMonitoringEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Backup & Recovery (Art. 32(1)(c)): ").append(config.isAutomatedBackupEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Security Assessment (Art. 32(1)(d)): ").append(config.isAwsConfigEnabled() ? "ENABLED" : "DISABLED").append("\n");

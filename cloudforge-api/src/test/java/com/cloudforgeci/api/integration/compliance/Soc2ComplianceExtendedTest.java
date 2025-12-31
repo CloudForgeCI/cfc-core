@@ -11,6 +11,7 @@ import com.cloudforgeci.api.storage.BackupFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.assertions.Match;
+import software.amazon.awscdk.assertions.Template;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -50,6 +51,7 @@ class Soc2ComplianceExtendedTest extends IntegrationTestBase {
         cfcContext.put("complianceFrameworks", "SOC2");
         cfcContext.put("logRetentionDays", 90);
         cfcContext.put("albAccessLogging", true);
+        cfcContext.put("securityMonitoringEnabled", true);
 
         builder = new com.cloudforgeci.api.test.TestInfrastructureBuilder(
             "Soc2ExtendedTest",
@@ -403,9 +405,9 @@ class Soc2ComplianceExtendedTest extends IntegrationTestBase {
 
         synthesizeTemplate();
 
-        // Then: Verify compliance frameworks are enabled
+        // Then: Verify compliance frameworks are enabled (case-insensitive check)
         assertNotNull(cfc.complianceFrameworks());
-        assertTrue(cfc.complianceFrameworks().contains("SOC2"),
+        assertTrue(cfc.complianceFrameworks().toUpperCase().contains("SOC2"),
             "SOC2 framework must be explicitly enabled");
     }
 
@@ -529,5 +531,64 @@ class Soc2ComplianceExtendedTest extends IntegrationTestBase {
 
         // Then: Verify EFS is protected by backup plan (SOC2-A1.3)
         assertEfsProtectedByBackupPlan();
+    }
+
+    // ========== Security Hardening Tests ==========
+
+    @Test
+    void testCC65KmsEncryptionForCloudWatchLogs() {
+        // Given: Infrastructure with KMS encryption enabled for CloudWatch Logs
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "soc2-kms-test");
+        cfcContext.put("region", "us-east-1");
+        cfcContext.put("enableFlowlogs", true);
+        cfcContext.put("cloudWatchLogsKmsEncryptionEnabled", true);
+        cfcContext.put("complianceFrameworks", "SOC2");
+
+        var kmsBuilder = new com.cloudforgeci.api.test.TestInfrastructureBuilder(
+            "Soc2KmsTest",
+            SecurityProfile.PRODUCTION,
+            RuntimeType.FARGATE,
+            cfcContext
+        );
+
+        kmsBuilder.createCompleteInfrastructure();
+
+        FlowLogFactory flowLogFactory = new FlowLogFactory(kmsBuilder.getStack(), "FlowLogs");
+        flowLogFactory.create();
+
+        var kmsTemplate = Template.fromStack(kmsBuilder.getStack());
+
+        // Then: Verify KMS key is created for CloudWatch Logs encryption (CC6.5 - Logical access security)
+        kmsTemplate.hasResourceProperties("AWS::KMS::Key", Match.objectLike(Map.of(
+            "EnableKeyRotation", true
+        )));
+    }
+
+    @Test
+    void testCC61RestrictSecurityGroupEgress() {
+        // Given: Infrastructure with security group egress restriction enabled
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "soc2-egress-test");
+        cfcContext.put("region", "us-east-1");
+        cfcContext.put("restrictSecurityGroupEgress", true);
+        cfcContext.put("complianceFrameworks", "SOC2");
+
+        var egressBuilder = new com.cloudforgeci.api.test.TestInfrastructureBuilder(
+            "Soc2EgressTest",
+            SecurityProfile.PRODUCTION,
+            RuntimeType.FARGATE,
+            cfcContext
+        );
+
+        egressBuilder.createCompleteInfrastructure();
+        var egressTemplate = Template.fromStack(egressBuilder.getStack());
+
+        // Then: Verify security group exists (CC6.1 - Logical and physical access controls)
+        // When restrictSecurityGroupEgress is enabled, egress rules are explicitly controlled
+        egressTemplate.hasResourceProperties("AWS::EC2::SecurityGroup", Match.objectLike(Map.of(
+            "GroupDescription", Match.anyValue(),
+            "VpcId", Match.anyValue()
+        )));
     }
 }

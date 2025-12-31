@@ -234,10 +234,21 @@ create_deployment_context() {
         fi
     fi
 
-    # Enable AWS Config for STAGING/PRODUCTION (compliance requirement)
-    if [[ "$security_profile" == "STAGING" || "$security_profile" == "PRODUCTION" ]]; then
+    # Set compliance frameworks for all profiles to validate the compliance matrix works correctly
+    # DEV should run cfn-guard and fail (proving controls are absent by design)
+    # STAGING/PRODUCTION should run cfn-guard and pass (proving controls are present)
+    local compliance_frameworks=""
+    if [[ "$security_profile" == "DEV" ]]; then
+        # DEV tests against all frameworks to prove it correctly lacks compliance controls
+        compliance_frameworks="SOC2,HIPAA,PCI-DSS,GDPR"
+    elif [[ "$security_profile" == "STAGING" ]]; then
         aws_config_enabled="true"
         create_config_infra="true"
+        compliance_frameworks="SOC2"
+    elif [[ "$security_profile" == "PRODUCTION" ]]; then
+        aws_config_enabled="true"
+        create_config_infra="true"
+        compliance_frameworks="SOC2,HIPAA,PCI-DSS,GDPR"
     fi
 
     # Enable WAF for PRODUCTION (compliance requirement)
@@ -283,6 +294,7 @@ create_deployment_context() {
   "createConfigInfrastructure": "$create_config_infra",
   "guardDutyEnabled": "false",
   "auditManagerEnabled": "false",
+  "complianceFrameworks": "$compliance_frameworks",
   "cognitoDomainPrefix": "$cognito_domain_prefix",
   "cognitoAutoProvision": "$([[ -n "$cognito_domain_prefix" ]] && echo "true" || echo "false")"
 }

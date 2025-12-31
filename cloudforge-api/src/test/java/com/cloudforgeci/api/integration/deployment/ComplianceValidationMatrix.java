@@ -47,10 +47,10 @@ public class ComplianceValidationMatrix {
         Map<String, List<String>> requirements = new HashMap<>();
 
         // SOC2 requirements (subset of actual rules)
+        // NOTE: GuardDuty is ADVISORY for SOC2 (recommended but not required)
         requirements.put("SOC2", List.of(
             "s3-bucket-versioning-enabled",
             "cloudtrail-enabled",
-            "guardduty-enabled-centralized",
             "ebs-encryption-enabled",
             "efs-encrypted-check",
             "alb-http-to-https-redirection-check",
@@ -69,6 +69,7 @@ public class ComplianceValidationMatrix {
         ));
 
         // HIPAA requirements (subset of actual rules)
+        // GuardDuty is REQUIRED per §164.308(a)(1)(ii)(D) - Security incident procedures
         requirements.put("HIPAA", List.of(
             "encrypted-volumes",
             "s3-bucket-server-side-encryption-enabled",
@@ -76,10 +77,12 @@ public class ComplianceValidationMatrix {
             "access-keys-rotated",
             "iam-password-policy",
             "rds-encryption-enabled",
-            "vpc-flow-logs-enabled"
+            "vpc-flow-logs-enabled",
+            "guardduty-enabled-centralized"
         ));
 
         // GDPR requirements (subset of actual rules)
+        // NOTE: GuardDuty is ADVISORY for GDPR (Art. 33(1) - recommended but not required)
         requirements.put("GDPR", List.of(
             "ebs-encryption-enabled",
             "s3-bucket-server-side-encryption-enabled",
@@ -94,7 +97,7 @@ public class ComplianceValidationMatrix {
     /**
      * Validate compliance framework requirements.
      *
-     * @param complianceFramework The compliance framework (SOC2, PCI-DSS, HIPAA, GDPR)
+     * @param complianceFramework The compliance framework (SOC2, PCI-DSS, HIPAA, GDPR) or comma-separated list
      * @param securityProfile The security profile (DEV, STAGING, PRODUCTION)
      */
     public void validateCompliance(String complianceFramework, SecurityProfile securityProfile) {
@@ -102,21 +105,26 @@ public class ComplianceValidationMatrix {
             return; // No compliance validation needed
         }
 
-        switch (complianceFramework) {
-            case "SOC2":
-                validateSoc2Compliance(securityProfile);
-                break;
-            case "PCI-DSS":
-                validatePciDssCompliance(securityProfile);
-                break;
-            case "HIPAA":
-                validateHipaaCompliance(securityProfile);
-                break;
-            case "GDPR":
-                validateGdprCompliance(securityProfile);
-                break;
-            default:
-                violations.add("Unknown compliance framework: " + complianceFramework);
+        // Support multi-framework configurations (e.g., "SOC2,PCI-DSS")
+        String[] frameworks = complianceFramework.split(",");
+        for (String framework : frameworks) {
+            String trimmedFramework = framework.trim();
+            switch (trimmedFramework) {
+                case "SOC2":
+                    validateSoc2Compliance(securityProfile);
+                    break;
+                case "PCI-DSS":
+                    validatePciDssCompliance(securityProfile);
+                    break;
+                case "HIPAA":
+                    validateHipaaCompliance(securityProfile);
+                    break;
+                case "GDPR":
+                    validateGdprCompliance(securityProfile);
+                    break;
+                default:
+                    violations.add("Unknown compliance framework: " + trimmedFramework);
+            }
         }
     }
 
@@ -144,14 +152,9 @@ public class ComplianceValidationMatrix {
             }
         }
 
-        // 3. Threat Detection - GuardDuty (auto-enabled for SOC2 compliance)
-        if (securityProfile == SecurityProfile.PRODUCTION) {
-            try {
-                template.hasResourceProperties("AWS::GuardDuty::Detector", Match.objectLike(Collections.emptyMap()));
-            } catch (Exception e) {
-                violations.add("SOC2: GuardDuty detector required for PRODUCTION threat detection");
-            }
-        }
+        // 3. Threat Detection - GuardDuty
+        // NOTE: GuardDuty is ADVISORY for SOC2 (not required), so we don't check for it
+        // It's handled by ThreatProtectionRules using ComplianceMatrix which marks it as recommended but not required
 
         // 4. Encryption at Rest - EFS
         try {
@@ -182,6 +185,15 @@ public class ComplianceValidationMatrix {
             } catch (AssertionError e) {
                 violations.add("SOC2: VPC Flow Logs required for " + securityProfile);
             }
+        }
+
+        // 7. HTTPS/TLS - Encryption in transit (SOC2 CC6.7)
+        try {
+            template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike(Map.of(
+                "Protocol", "HTTPS"
+            )));
+        } catch (AssertionError e) {
+            violations.add("SOC2: HTTPS listener required for data transmission encryption (CC6.7)");
         }
     }
 
@@ -242,6 +254,15 @@ public class ComplianceValidationMatrix {
         } catch (AssertionError e) {
             violations.add("PCI-DSS: Security groups required");
         }
+
+        // 7. HTTPS/TLS - Encryption in transit (PCI-DSS Req 4.1)
+        try {
+            template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike(Map.of(
+                "Protocol", "HTTPS"
+            )));
+        } catch (AssertionError e) {
+            violations.add("PCI-DSS: HTTPS listener required for encrypted transmission of cardholder data (Req 4.1)");
+        }
     }
 
     /**
@@ -252,6 +273,7 @@ public class ComplianceValidationMatrix {
      * - Audit trails
      * - Access controls
      * - Breach notification mechanisms
+     * - Threat detection (GuardDuty) - REQUIRED per §164.308(a)(1)(ii)(D)
      */
     private void validateHipaaCompliance(SecurityProfile securityProfile) {
         // 1. EFS Encryption (for PHI storage)
@@ -280,14 +302,27 @@ public class ComplianceValidationMatrix {
             violations.add("HIPAA: VPC Flow Logs required for audit trails");
         }
 
-        // 4. HTTPS/TLS - Encryption in transit
-        // Validated separately in SSL configuration tests
+        // 4. HTTPS/TLS - Encryption in transit (HIPAA §164.312(e)(2)(i))
+        try {
+            template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike(Map.of(
+                "Protocol", "HTTPS"
+            )));
+        } catch (AssertionError e) {
+            violations.add("HIPAA: HTTPS listener required for encryption in transit (§164.312(e)(2)(i))");
+        }
 
         // 5. Access Controls - IAM roles should exist
         try {
             template.hasResourceProperties("AWS::IAM::Role", Match.objectLike(Collections.emptyMap()));
         } catch (AssertionError e) {
             violations.add("HIPAA: IAM roles required for access control");
+        }
+
+        // 6. Threat Detection - GuardDuty (REQUIRED per §164.308(a)(1)(ii)(D) - Security incident procedures)
+        try {
+            template.hasResourceProperties("AWS::GuardDuty::Detector", Match.objectLike(Collections.emptyMap()));
+        } catch (Exception e) {
+            violations.add("HIPAA: GuardDuty detector required for security incident procedures (§164.308(a)(1)(ii)(D))");
         }
     }
 
@@ -299,6 +334,7 @@ public class ComplianceValidationMatrix {
      * - Audit logging
      * - Right to be forgotten (data deletion capabilities)
      * - Data protection officer (DPO) designation
+     * - NOTE: GuardDuty is ADVISORY for GDPR (Art. 33(1) - breach detection recommended but not required)
      */
     private void validateGdprCompliance(SecurityProfile securityProfile) {
         // 1. Encryption - Required for personal data protection

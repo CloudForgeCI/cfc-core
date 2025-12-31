@@ -17,7 +17,7 @@ Get CloudForge CI running in your AWS account in **under 10 minutes** with zero 
 ### Step 1: Clone and Setup
 
 ```bash
-git clone https://github.com/your-org/cfc-core.git
+git clone https://github.com/CloudForgeCI/cfc-core.git
 cd cfc-core
 mvn clean install -DskipTests
 cd cfc-testing
@@ -26,7 +26,7 @@ cd cfc-testing
 ### Step 2: Use Minimal Dev Template
 
 ```bash
-cp ../deployment-contexts/dev-minimal.json deployment-context.json
+cp docs/examples/dev-minimal.json deployment-context.json
 ```
 
 ### Step 3: Bootstrap CDK (First Time Only)
@@ -38,8 +38,10 @@ cdk bootstrap
 ### Step 4: Deploy
 
 ```bash
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
+
+**Note**: The Interactive Deployer will automatically prompt you to configure if `deployment-context.json` doesn't exist.
 
 ### Step 5: Access Jenkins
 
@@ -79,7 +81,7 @@ Navigate to the DNS name in your browser. **No authentication required** for dev
 
 ```bash
 cd cfc-testing
-cp ../deployment-contexts/dev-standard.json deployment-context.json
+cp docs/examples/dev-standard.json deployment-context.json
 ```
 
 ### Step 2: Customize Configuration
@@ -96,7 +98,7 @@ Edit `deployment-context.json`:
 ### Step 3: Deploy
 
 ```bash
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ### Step 4: Access Jenkins
@@ -130,7 +132,7 @@ Navigate to ALB DNS, authenticate with Cognito (you'll create an account on firs
 
 ```bash
 cd cfc-testing
-cp ../deployment-contexts/production-soc2.json deployment-context.json
+cp docs/examples/production-soc2.json deployment-context.json
 ```
 
 ### Step 2: Customize for Your Environment
@@ -164,7 +166,7 @@ aws configservice describe-configuration-recorders
 
 ```bash
 # Synthesize and review CloudFormation template
-cdk synth -c cfc=@deployment-context.json > /tmp/template.yaml
+cdk synth > /tmp/template.yaml
 
 # Check resource counts
 grep "Type: AWS::" /tmp/template.yaml | wc -l
@@ -173,7 +175,7 @@ grep "Type: AWS::" /tmp/template.yaml | wc -l
 ### Step 5: Deploy
 
 ```bash
-cdk deploy -c cfc=@deployment-context.json --require-approval never
+cdk deploy --require-approval never
 ```
 
 Deployment takes 15-20 minutes. Components deployed:
@@ -253,13 +255,13 @@ Navigate to `https://jenkins.mycompany.com` (or ALB DNS if domain not configured
 
 ```bash
 cd cfc-testing
-cp ../deployment-contexts/production-hipaa.json deployment-context.json
+cp docs/examples/production-hipaa.json deployment-context.json
 
 # Customize (same as SOC 2 Path 3 above)
 vim deployment-context.json
 
 # Deploy
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ### What's Different from SOC 2?
@@ -280,13 +282,13 @@ cdk deploy -c cfc=@deployment-context.json
 
 ```bash
 cd cfc-testing
-cp ../deployment-contexts/production-pci-dss.json deployment-context.json
+cp docs/examples/production-pci-dss.json deployment-context.json
 
 # Customize
 vim deployment-context.json
 
 # Deploy
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ### What's Different?
@@ -325,7 +327,7 @@ cat > deployment-context.json <<EOF
 EOF
 
 # Deploy (database automatically provisioned)
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 ```
 
 ### What's Different?
@@ -439,7 +441,7 @@ jq -s '.[0] * .[1]' deployment-context-staging.json patch.json > temp.json
 mv temp.json deployment-context-staging.json
 
 # Deploy
-cdk deploy -c cfc=@deployment-context-staging.json
+cdk deploy
 ```
 
 ### Staging → Production
@@ -461,7 +463,7 @@ jq '.stackName = "MyCompany-Jenkins-Prod" |
 mv temp.json deployment-context-prod.json
 
 # Deploy
-cdk deploy -c cfc=@deployment-context-prod.json
+cdk deploy
 ```
 
 ---
@@ -506,7 +508,7 @@ aws cloudformation describe-stack-events \
   --max-items 20
 
 # Rollback if needed
-cdk destroy -c cfc=@deployment-context.json
+cdk destroy
 ```
 
 ---
@@ -612,7 +614,7 @@ aws cloudformation get-template \
 ## Support
 
 - **Documentation**: `/docs` directory
-- **Issues**: [GitHub Issues](https://github.com/your-org/cfc-core/issues)
+- **Issues**: [GitHub Issues](https://github.com/CloudForgeCI/cfc-core/issues)
 - **AWS Support**: [AWS Support Center](https://console.aws.amazon.com/support)
 - **Compliance**: See [Auditor Compliance Mapping](AUDITOR_COMPLIANCE_MAPPING.md)
 
@@ -622,7 +624,7 @@ aws cloudformation get-template \
 
 ```bash
 # Deploy
-cdk deploy -c cfc=@deployment-context.json
+cdk deploy
 
 # Check status
 aws cloudformation describe-stacks --stack-name StackName
@@ -639,5 +641,5 @@ aws configservice describe-compliance-by-config-rule
 aws logs tail /aws/ecs/jenkins --follow
 
 # Destroy stack
-cdk destroy -c cfc=@deployment-context.json
+cdk destroy
 ```

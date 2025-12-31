@@ -550,11 +550,11 @@ class AdvancedMonitoringRulesTest {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestSecHub");
         customContext.put("securityProfile", profile);
-        customContext.put("securityHubEnabled", String.valueOf(securityHubEnabled));
-        customContext.put("securityHubPciDssEnabled", String.valueOf(pciDss));
-        customContext.put("securityHubCisEnabled", String.valueOf(cis));
-        customContext.put("securityHubAwsFoundationalEnabled", String.valueOf(awsFoundational));
-        customContext.put("securityHubAutoRemediation", String.valueOf(autoRemediation));
+        customContext.put("securityHubEnabled", securityHubEnabled);
+        customContext.put("securityHubPciDssEnabled", pciDss);
+        customContext.put("securityHubCisEnabled", cis);
+        customContext.put("securityHubAwsFoundationalEnabled", awsFoundational);
+        customContext.put("securityHubAutoRemediation", autoRemediation);
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -564,24 +564,11 @@ class AdvancedMonitoringRulesTest {
         new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
+        // NOTE: After ComplianceMatrix refactoring, Security Hub is ADVISORY for all frameworks
+        // (PCI-DSS, HIPAA, SOC2, GDPR, NIST). Without a complianceFrameworks setting,
+        // validation returns PASS. Security Hub never causes hard FAIL anymore, only WARN.
         boolean shouldFail = false;
-        if (secProfile == SecurityProfile.PRODUCTION) {
-            // PRODUCTION requires SecurityHub enabled
-            if (!securityHubEnabled) {
-                shouldFail = true;
-            } else {
-                // If SecurityHub enabled, at least one standard must be enabled
-                // Note: awsFoundational defaults to true, so we need to check explicitly
-                if (!pciDss && !cis && !awsFoundational) {
-                    shouldFail = true;
-                }
-                // Auto-remediation is recommended (source line 159-165), which means it FAILS
-                if (!autoRemediation) {
-                    shouldFail = true;
-                }
-            }
-        }
-        // STAGING and DEV are advisory, always pass
+        // All scenarios pass now - Security Hub is advisory-only
 
         // Trigger synthesis to execute validations
         if (shouldFail) {
@@ -626,10 +613,13 @@ class AdvancedMonitoringRulesTest {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestInspector");
         customContext.put("securityProfile", profile);
-        customContext.put("inspectorEnabled", String.valueOf(inspectorEnabled));
-        customContext.put("inspectorEc2Scanning", String.valueOf(ec2Scanning));
-        customContext.put("inspectorEcrScanning", String.valueOf(ecrScanning));
-        customContext.put("inspectorContinuousScanning", String.valueOf(continuousScanning));
+        customContext.put("inspectorEnabled", inspectorEnabled);
+        customContext.put("inspectorEc2Scanning", ec2Scanning);
+        customContext.put("inspectorEcrScanning", ecrScanning);
+        customContext.put("inspectorContinuousScanning", continuousScanning);
+        // Add PCI-DSS framework to make Inspector REQUIRED (otherwise it's advisory-only)
+        customContext.put("complianceFrameworks", "PCI-DSS");
+        customContext.put("complianceMode", "enforce");
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -639,17 +629,14 @@ class AdvancedMonitoringRulesTest {
         new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
+        // NOTE: Inspector is REQUIRED for PCI-DSS and NIST, ADVISORY for HIPAA/SOC2/GDPR
         boolean shouldFail = false;
         if (secProfile == SecurityProfile.PRODUCTION) {
-            // PRODUCTION requires Inspector enabled
+            // With PCI-DSS framework, Inspector is REQUIRED
             if (!inspectorEnabled) {
                 shouldFail = true;
-            } else {
-                // Continuous scanning is recommended (source line 248-254), which means it FAILS
-                if (!continuousScanning) {
-                    shouldFail = true;
-                }
             }
+            // Continuous scanning is advisory, not required, so don't fail for it
         }
         // STAGING and DEV are advisory, always pass
 
@@ -700,8 +687,15 @@ class AdvancedMonitoringRulesTest {
         if (!complianceFramework.equals("NONE")) {
             customContext.put("complianceFrameworks", complianceFramework);
         }
-        customContext.put("macieEnabled", String.valueOf(macieEnabled));
-        customContext.put("macieAutomatedDiscovery", String.valueOf(automatedDiscovery));
+        customContext.put("macieEnabled", macieEnabled);
+        customContext.put("macieAutomatedDiscovery", automatedDiscovery);
+
+        // PCI-DSS and NIST require Inspector for vulnerability scanning
+        // Enable Inspector to satisfy those requirements in this Macie-focused test
+        if (complianceFramework.toUpperCase().contains("PCI-DSS") ||
+            complianceFramework.toUpperCase().contains("NIST")) {
+            customContext.put("inspectorEnabled", "true");
+        }
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -747,15 +741,15 @@ class AdvancedMonitoringRulesTest {
      */
     @ParameterizedTest
     @CsvSource({
-        // PRODUCTION scenarios
-        "PRODUCTION,true,false,false",                        // Security monitoring only (defaults) - partial PASS
-        "PRODUCTION,false,false,false",                       // No centralized monitoring - FAIL
-        "PRODUCTION,false,true,false",                        // Dashboard only - FAIL (missing alerting)
-        "PRODUCTION,false,false,true",                        // Alerting only - FAIL (missing dashboard)
+        // PRODUCTION scenarios - Dashboard and alerting are advisory (warnings only)
+        "PRODUCTION,true,false,false",                        // Security monitoring only (defaults) - PASS (advisory warnings)
+        "PRODUCTION,false,false,false",                       // No centralized monitoring - PASS (advisory warnings)
+        "PRODUCTION,false,true,false",                        // Dashboard only - PASS (advisory warnings)
+        "PRODUCTION,false,false,true",                        // Alerting only - PASS (advisory warnings)
         "PRODUCTION,false,true,true",                         // Dashboard + alerting - PASS
         "PRODUCTION,true,true,true",                          // Security monitoring + all features - PASS
-        "PRODUCTION,true,false,true",                         // Monitoring + alerting - partial PASS
-        "PRODUCTION,true,true,false",                         // Monitoring + dashboard - partial PASS
+        "PRODUCTION,true,false,true",                         // Monitoring + alerting - PASS (advisory warnings)
+        "PRODUCTION,true,true,false",                         // Monitoring + dashboard - PASS (advisory warnings)
 
         // STAGING scenarios (no requirements)
         "STAGING,false,false,false",                          // Minimal STAGING - PASS
@@ -781,13 +775,10 @@ class AdvancedMonitoringRulesTest {
         new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
+        // Dashboard and alerting are now advisory (recommendations) for PRODUCTION
+        // They no longer cause hard failures
         boolean shouldFail = false;
-        if (secProfile == SecurityProfile.PRODUCTION) {
-            // PRODUCTION requires both dashboard and alerting (both are recommended, which means they fail)
-            if (!complianceDashboard || !securityAlerting) {
-                shouldFail = true;
-            }
-        }
+        // All scenarios now pass with advisory warnings
         // STAGING and DEV are advisory, always pass
 
         // Trigger synthesis to execute validations
@@ -856,18 +847,18 @@ class AdvancedMonitoringRulesTest {
         if (!complianceFramework.equals("NONE")) {
             customContext.put("complianceFrameworks", complianceFramework);
         }
-        customContext.put("securityHubEnabled", String.valueOf(securityHubEnabled));
-        customContext.put("securityHubPciDssEnabled", String.valueOf(pciDss));
-        customContext.put("securityHubAwsFoundationalEnabled", String.valueOf(awsFoundational));
-        customContext.put("securityHubAutoRemediation", String.valueOf(autoRemediation));
-        customContext.put("inspectorEnabled", String.valueOf(inspectorEnabled));
-        customContext.put("inspectorEc2Scanning", String.valueOf(ec2Scanning));
-        customContext.put("inspectorEcrScanning", String.valueOf(ecrScanning));
-        customContext.put("inspectorContinuousScanning", String.valueOf(continuousScanning));
-        customContext.put("macieEnabled", String.valueOf(macieEnabled));
-        customContext.put("macieAutomatedDiscovery", String.valueOf(automatedDiscovery));
-        customContext.put("complianceDashboardEnabled", String.valueOf(complianceDashboard));
-        customContext.put("securityAlertingEnabled", String.valueOf(securityAlerting));
+        customContext.put("securityHubEnabled", securityHubEnabled);
+        customContext.put("securityHubPciDssEnabled", pciDss);
+        customContext.put("securityHubAwsFoundationalEnabled", awsFoundational);
+        customContext.put("securityHubAutoRemediation", autoRemediation);
+        customContext.put("inspectorEnabled", inspectorEnabled);
+        customContext.put("inspectorEc2Scanning", ec2Scanning);
+        customContext.put("inspectorEcrScanning", ecrScanning);
+        customContext.put("inspectorContinuousScanning", continuousScanning);
+        customContext.put("macieEnabled", macieEnabled);
+        customContext.put("macieAutomatedDiscovery", automatedDiscovery);
+        customContext.put("complianceDashboardEnabled", complianceDashboard);
+        customContext.put("securityAlertingEnabled", securityAlerting);
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -877,44 +868,30 @@ class AdvancedMonitoringRulesTest {
         new AdvancedMonitoringRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
+        // NOTE: After ComplianceMatrix refactoring, validation is framework-specific:
+        // - Security Hub: ADVISORY for all frameworks (never fails, only warns)
+        // - Inspector: REQUIRED for PCI-DSS/NIST, ADVISORY for HIPAA/SOC2/GDPR
+        // - Macie: REQUIRED for GDPR/HIPAA, NOT_APPLICABLE for others
         boolean shouldFail = false;
-        if (secProfile == SecurityProfile.PRODUCTION) {
-            // SecurityHub required, with at least one standard
-            if (!securityHubEnabled) {
-                shouldFail = true;
-            } else if (!pciDss && !awsFoundational) {
-                // No standards enabled (note: cis is not in params, checking pciDss and awsFoundational)
-                shouldFail = true;
-            } else if (!autoRemediation) {
-                // Auto-remediation is required (fails validation per AdvancedMonitoringRules line 159-165)
+        if (secProfile == SecurityProfile.PRODUCTION && !complianceFramework.equals("NONE")) {
+            // Inspector REQUIRED for PCI-DSS and NIST only
+            boolean requiresInspector = complianceFramework.toUpperCase().contains("PCI-DSS") ||
+                                       complianceFramework.toUpperCase().contains("NIST");
+            if (requiresInspector && !inspectorEnabled) {
                 shouldFail = true;
             }
 
-            // Inspector required
-            if (!inspectorEnabled) {
-                shouldFail = true;
-            } else {
-                // Continuous scanning recommended (fails if not enabled)
-                if (!continuousScanning) {
-                    shouldFail = true;
-                }
-            }
-
-            // Macie required for GDPR/HIPAA
-            boolean requiresMacie = !complianceFramework.equals("NONE") &&
-                (complianceFramework.toUpperCase().contains("GDPR") ||
-                 complianceFramework.toUpperCase().contains("HIPAA"));
+            // Macie REQUIRED for GDPR/HIPAA
+            boolean requiresMacie = complianceFramework.toUpperCase().contains("GDPR") ||
+                                   complianceFramework.toUpperCase().contains("HIPAA");
             if (requiresMacie) {
                 if (!macieEnabled || !automatedDiscovery) {
                     shouldFail = true;
                 }
             }
-
-            // Dashboard and alerting required
-            if (!complianceDashboard || !securityAlerting) {
-                shouldFail = true;
-            }
         }
+        // Security Hub is ADVISORY everywhere - never fails
+        // Dashboard and alerting are advisory features - don't cause failures
         // STAGING and DEV are advisory, always pass
 
         // Trigger synthesis to execute validations

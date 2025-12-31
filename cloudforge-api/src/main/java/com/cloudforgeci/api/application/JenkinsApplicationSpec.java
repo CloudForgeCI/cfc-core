@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.application;
 
 import com.cloudforge.core.annotation.ApplicationPlugin;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.OidcIntegration;
@@ -145,9 +146,9 @@ public class JenkinsApplicationSpec implements ApplicationSpec {
             javaOpts.append("-Djenkins.model.Jenkins.rootUrl=").append(jenkinsRootUrl).append(" ");
         }
 
-        // Skip setup wizard when using application-oidc mode
+        // Skip setup wizard when using APPLICATION_OIDC mode
         // OIDC configuration will be applied via JenkinsOidcIntegration
-        if ("application-oidc".equals(authMode)) {
+        if (AuthMode.APPLICATION_OIDC == AuthMode.fromString(authMode)) {
             javaOpts.append("-Djenkins.install.runSetupWizard=false ");
         }
 

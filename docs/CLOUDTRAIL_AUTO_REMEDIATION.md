@@ -494,5 +494,5 @@ Complete example with CloudTrail remediation enabled:
 
 For issues or questions:
 - GitHub Issues: https://github.com/CloudForgeCI/cfc-core/issues
-- Documentation: [docs/](../docs/)
+- Documentation: [docs/](../)
 - Compliance Guide: [AUDITOR_COMPLIANCE_MAPPING.md](./AUDITOR_COMPLIANCE_MAPPING.md)

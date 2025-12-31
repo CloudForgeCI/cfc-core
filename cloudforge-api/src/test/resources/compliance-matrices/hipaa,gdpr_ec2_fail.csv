@@ -1,0 +1,4 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+FAIL_HIPAA_GDPR_EC2_no-auth,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"HIPAA,GDPR",true,,FAIL,jenkins,,eu-west-1,,,
+FAIL_HIPAA_GDPR_EC2_public-network,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,"HIPAA,GDPR",true,,FAIL,jenkins,,eu-west-1,,,
+FAIL_HIPAA_GDPR_EC2_insufficient-retention,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"HIPAA,GDPR",30,,FAIL,jenkins,,eu-west-1,,,

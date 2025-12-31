@@ -1,0 +1,194 @@
+# ISO 27001:2013 - Information Security Management System Controls
+#
+# CloudFormation Guard rules for ISO 27001 compliance validation
+# Based on Annex A controls
+#
+# CloudForge Core - Multi-Layer Compliance Validation
+# Layer 3: Template-Level Policy Enforcement (cfn-guard)
+
+# ============================================================================
+# A.8 - Asset Management
+# ============================================================================
+
+# A.8.2.3 - Handling of assets
+# CloudForge Mapping: DATA_PROTECTION control
+rule iso27001_s3_versioning when
+    resourceType == 'AWS::S3::Bucket' {
+
+    Properties.VersioningConfiguration exists <<[ISO 27001 A.8.2.3] S3 buckets must have versioning configured>>
+    Properties.VersioningConfiguration.Status == 'Enabled' <<[ISO 27001 A.8.2.3] S3 versioning should be enabled>>
+}
+
+# ============================================================================
+# A.9 - Access Control
+# ============================================================================
+
+# A.9.1.2 - Access to networks and network services
+# CloudForge Mapping: NETWORK_SECURITY control
+rule iso27001_security_groups_restricted when
+    resourceType == 'AWS::EC2::SecurityGroup' {
+
+    when Properties.SecurityGroupIngress exists {
+        Properties.SecurityGroupIngress[*] {
+            when CidrIp exists {
+                CidrIp != '0.0.0.0/0' <<[ISO 27001 A.9.1.2] Security groups must not allow unrestricted access>>
+            }
+            when CidrIpv6 exists {
+                CidrIpv6 != '::/0' <<[ISO 27001 A.9.1.2] Security groups must not allow unrestricted IPv6 access>>
+            }
+        }
+    }
+}
+
+# A.9.4.1 - Information access restriction
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iso27001_s3_public_access when
+    resourceType == 'AWS::S3::Bucket' {
+
+    Properties.PublicAccessBlockConfiguration exists <<[ISO 27001 A.9.4.1] S3 must have public access block configured>>
+    Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true <<[ISO 27001 A.9.4.1] S3 must block public ACLs>>
+    Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true <<[ISO 27001 A.9.4.1] S3 must block public policy>>
+    Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true <<[ISO 27001 A.9.4.1] S3 must ignore public ACLs>>
+    Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true <<[ISO 27001 A.9.4.1] S3 must restrict public buckets>>
+}
+
+# ============================================================================
+# A.10 - Cryptography
+# ============================================================================
+
+# A.10.1.1 - Policy on the use of cryptographic controls
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule iso27001_s3_encryption when
+    resourceType == 'AWS::S3::Bucket' {
+
+    Properties.BucketEncryption exists <<[ISO 27001 A.10.1.1] S3 buckets must have encryption configured>>
+    Properties.BucketEncryption.ServerSideEncryptionConfiguration exists <<[ISO 27001 A.10.1.1] S3 must configure server-side encryption>>
+
+    Properties.BucketEncryption.ServerSideEncryptionConfiguration[*] {
+        ServerSideEncryptionByDefault exists <<[ISO 27001 A.10.1.1] S3 encryption must specify default algorithm>>
+        ServerSideEncryptionByDefault.SSEAlgorithm in ['AES256', 'aws:kms'] <<[ISO 27001 A.10.1.1] S3 must use AES256 or aws:kms>>
+    }
+}
+
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule iso27001_ebs_encryption when
+    resourceType == 'AWS::EC2::Volume' {
+
+    Properties.Encrypted == true <<[ISO 27001 A.10.1.1] EBS volumes must be encrypted>>
+}
+
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule iso27001_rds_encryption when
+    resourceType == 'AWS::RDS::DBInstance' {
+
+    Properties.StorageEncrypted == true <<[ISO 27001 A.10.1.1] RDS instances must use encrypted storage>>
+}
+
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule iso27001_efs_encryption when
+    resourceType == 'AWS::EFS::FileSystem' {
+
+    Properties.Encrypted == true <<[ISO 27001 A.10.1.1] EFS file systems must be encrypted>>
+}
+
+# A.10.1.2 - Key management
+# CloudForge Mapping: KEY_MANAGEMENT control
+rule iso27001_kms_rotation when
+    resourceType == 'AWS::KMS::Key' {
+
+    Properties.EnableKeyRotation == true <<[ISO 27001 A.10.1.2] KMS keys should have automatic rotation enabled>>
+}
+
+# ============================================================================
+# A.12 - Operations Security
+# ============================================================================
+
+# A.12.2.1 - Controls against malware
+# CloudForge Mapping: THREAT_DETECTION control
+rule iso27001_guardduty_enabled when
+    resourceType == 'AWS::GuardDuty::Detector' {
+
+    Properties.Enable == true <<[ISO 27001 A.12.2.1] GuardDuty should be enabled for threat detection>>
+}
+
+# A.12.4.1 - Event logging
+# CloudForge Mapping: AUDIT_LOGGING control
+rule iso27001_cloudtrail_enabled when
+    resourceType == 'AWS::CloudTrail::Trail' {
+
+    Properties.IsLogging == true <<[ISO 27001 A.12.4.1] CloudTrail must be enabled>>
+    Properties.EnableLogFileValidation == true <<[ISO 27001 A.12.4.1] CloudTrail must enable log file validation>>
+}
+
+# A.12.4.2 - Protection of log information
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule iso27001_cloudtrail_encryption when
+    resourceType == 'AWS::CloudTrail::Trail' {
+
+    Properties.KMSKeyId exists <<[ISO 27001 A.12.4.2] CloudTrail logs should be encrypted with KMS>>
+}
+
+# A.12.4.3 - Administrator and operator logs
+# CloudForge Mapping: NETWORK_MONITORING control
+rule iso27001_vpc_flow_logs when
+    resourceType == 'AWS::EC2::FlowLog' {
+
+    Properties.ResourceType == 'VPC' <<[ISO 27001 A.12.4.3] VPC Flow Logs must target VPC>>
+    Properties.TrafficType == 'ALL' <<[ISO 27001 A.12.4.3] VPC Flow Logs must capture ALL traffic>>
+}
+
+# ============================================================================
+# A.13 - Communications Security
+# ============================================================================
+
+# A.13.1.1 - Network controls
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
+rule iso27001_alb_https when
+    resourceType == 'AWS::ElasticLoadBalancingV2::Listener' {
+
+    Properties.Protocol in ['HTTPS', 'TLS'] <<[ISO 27001 A.13.1.1] ALB listeners must use HTTPS/TLS>>
+    Properties.Certificates exists <<[ISO 27001 A.13.1.1] ALB listeners must have certificates configured>>
+}
+
+# A.13.2.3 - Electronic messaging
+# CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
+rule iso27001_cloudfront_https when
+    resourceType == 'AWS::CloudFront::Distribution' {
+
+    Properties.DistributionConfig.ViewerCertificate exists <<[ISO 27001 A.13.2.3] CloudFront must have viewer certificate configured>>
+    Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion in ['TLSv1.2_2021', 'TLSv1.2_2019', 'TLSv1.2_2018'] <<[ISO 27001 A.13.2.3] CloudFront must use TLS 1.2+>>
+}
+
+# ============================================================================
+# A.17 - Information Security Aspects of Business Continuity Management
+# ============================================================================
+
+# A.17.1.2 - Implementing information security continuity
+# CloudForge Mapping: BACKUP_RECOVERY control
+rule iso27001_rds_backup when
+    resourceType == 'AWS::RDS::DBInstance' {
+
+    Properties.BackupRetentionPeriod exists <<[ISO 27001 A.17.1.2] RDS must have backup retention configured>>
+    Properties.BackupRetentionPeriod >= 7 <<[ISO 27001 A.17.1.2] RDS backups must be retained for at least 7 days>>
+}
+
+# A.17.2.1 - Availability of information processing facilities
+# CloudForge Mapping: HIGH_AVAILABILITY control
+rule iso27001_rds_multi_az when
+    resourceType == 'AWS::RDS::DBInstance' {
+
+    Properties.MultiAZ == true <<[ISO 27001 A.17.2.1] RDS instances should use Multi-AZ for high availability>>
+}
+
+# ============================================================================
+# A.18 - Compliance
+# ============================================================================
+
+# A.18.1.3 - Protection of records
+# CloudForge Mapping: AUDIT_LOGGING control
+rule iso27001_cloudwatch_log_retention when
+    resourceType == 'AWS::Logs::LogGroup' {
+
+    Properties.RetentionInDays exists <<[ISO 27001 A.18.1.3] CloudWatch logs must have retention configured>>
+    Properties.RetentionInDays >= 90 <<[ISO 27001 A.18.1.3] CloudWatch logs must retain for at least 90 days>>
+}

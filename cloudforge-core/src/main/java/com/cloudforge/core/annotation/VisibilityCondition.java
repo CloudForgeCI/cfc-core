@@ -11,7 +11,7 @@ package com.cloudforge.core.annotation;
  * <pre>
  * condition    := "always" | expression
  * expression   := term ( "||" term )*
- * term         := factor ( "&&" factor )*
+ * term         := factor ( "&amp;&amp;" factor )*
  * factor       := "!" factor | "(" expression ")" | predicate
  * predicate    := capability | fieldCheck | appCheck
  *
@@ -27,7 +27,7 @@ package com.cloudforge.core.annotation;
  * <h2>Operator Precedence</h2>
  * <ol>
  *   <li><b>!</b> (NOT) - Highest precedence</li>
- *   <li><b>&&</b> (AND)</li>
+ *   <li><b>&amp;&amp;</b> (AND)</li>
  *   <li><b>||</b> (OR) - Lowest precedence</li>
  *   <li><b>()</b> - Parentheses for grouping</li>
  * </ol>

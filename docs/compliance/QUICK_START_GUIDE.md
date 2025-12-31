@@ -16,8 +16,10 @@ This guide shows you how to enable compliance validation for your CloudForge dep
 
 ```bash
 cd cfc-testing
-./scripts/deploy-interactive.sh
+cdk deploy
 ```
+
+The Interactive Deployer will automatically activate if `deployment-context.json` is not found.
 
 ### Step 2: Answer Compliance Prompts
 
@@ -617,15 +619,6 @@ Both must be set for validation to run.
 3. **Deploy to AWS**: Run `cdk deploy` to create infrastructure
 4. **Monitor compliance**: Check Security Hub, Config, Audit Manager dashboards
 5. **Iterate**: Add more controls, switch to ENFORCE mode when ready
-
----
-
-## Additional Resources
-
-- [Comprehensive Framework Summary](COMPREHENSIVE_COMPLIANCE_FRAMEWORK_SUMMARY.md) - Complete technical documentation
-- [Integration Summary](INTEGRATION_SUMMARY.md) - How validation integrates with deployment
-- [Gap Analysis](detailed_gap_analysis.md) - Framework-by-framework coverage
-- [Implementation Roadmap](implementation_roadmap.md) - Phased adoption plan
 
 ---
 

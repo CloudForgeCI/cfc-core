@@ -1,0 +1,188 @@
+# Threat Protection - Cross-Framework Security Control
+#
+# CloudFormation Guard rules for threat detection and protection validation
+# Applies across all compliance frameworks (HIPAA, PCI-DSS, SOC2, GDPR, ISO 27001, etc.)
+#
+# CloudForge Core - Multi-Layer Compliance Validation
+# Layer 3: Template-Level Policy Enforcement (cfn-guard)
+
+# ============================================================================
+# GuardDuty Threat Detection
+# ============================================================================
+
+# GuardDuty detector enabled
+# CloudForge Mapping: THREAT_DETECTION control
+rule threat_protection_guardduty_enabled when
+    resourceType == 'AWS::GuardDuty::Detector' {
+
+    Properties.Enable == true <<[Threat Protection] GuardDuty must be enabled for threat detection>>
+}
+
+# GuardDuty S3 protection
+# CloudForge Mapping: THREAT_DETECTION control
+rule threat_protection_guardduty_s3 when
+    resourceType == 'AWS::GuardDuty::Detector' {
+
+    when Properties.DataSources exists {
+        when Properties.DataSources.S3Logs exists {
+            Properties.DataSources.S3Logs.Enable == true <<[Threat Protection] GuardDuty S3 protection should be enabled>>
+        }
+    }
+}
+
+# ============================================================================
+# Network Security
+# ============================================================================
+
+# VPC Flow Logs for threat detection
+# CloudForge Mapping: NETWORK_MONITORING control
+rule threat_protection_vpc_flow_logs when
+    resourceType == 'AWS::EC2::FlowLog' {
+
+    Properties.ResourceType == 'VPC' <<[Threat Protection] VPC Flow Logs must target VPC>>
+    Properties.TrafficType == 'ALL' <<[Threat Protection] VPC Flow Logs must capture ALL traffic>>
+}
+
+# Security Group ingress restrictions
+# CloudForge Mapping: NETWORK_SECURITY control
+rule threat_protection_security_groups_restricted when
+    resourceType == 'AWS::EC2::SecurityGroup' {
+
+    when Properties.SecurityGroupIngress exists {
+        Properties.SecurityGroupIngress[*] {
+            when CidrIp exists {
+                CidrIp != '0.0.0.0/0' <<[Threat Protection] Security groups must not allow unrestricted inbound access>>
+            }
+            when CidrIpv6 exists {
+                CidrIpv6 != '::/0' <<[Threat Protection] Security groups must not allow unrestricted IPv6 inbound access>>
+            }
+        }
+    }
+}
+
+# WAF Web ACL association
+# CloudForge Mapping: WEB_APPLICATION_FIREWALL control
+rule threat_protection_waf_enabled when
+    resourceType == 'AWS::WAFv2::WebACLAssociation' {
+
+    Properties.WebACLArn exists <<[Threat Protection] WAF Web ACL should be associated with resources>>
+}
+
+# ============================================================================
+# Access Control and Prevention
+# ============================================================================
+
+# S3 bucket public access block
+# CloudForge Mapping: ACCESS_CONTROL control
+rule threat_protection_s3_public_access when
+    resourceType == 'AWS::S3::Bucket' {
+
+    Properties.PublicAccessBlockConfiguration exists <<[Threat Protection] S3 buckets must have public access block configured>>
+    Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true <<[Threat Protection] S3 must block public ACLs>>
+    Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true <<[Threat Protection] S3 must block public policy>>
+    Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true <<[Threat Protection] S3 must ignore public ACLs>>
+    Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true <<[Threat Protection] S3 must restrict public buckets>>
+}
+
+# RDS instances not publicly accessible
+# CloudForge Mapping: ACCESS_CONTROL control
+rule threat_protection_rds_not_public when
+    resourceType == 'AWS::RDS::DBInstance' {
+
+    Properties.PubliclyAccessible == false <<[Threat Protection] RDS instances must not be publicly accessible>>
+}
+
+# Redshift clusters not publicly accessible
+# CloudForge Mapping: ACCESS_CONTROL control
+rule threat_protection_redshift_not_public when
+    resourceType == 'AWS::Redshift::Cluster' {
+
+    Properties.PubliclyAccessible == false <<[Threat Protection] Redshift clusters must not be publicly accessible>>
+}
+
+# ============================================================================
+# CloudTrail Monitoring for Threat Detection
+# ============================================================================
+
+# CloudTrail enabled
+# CloudForge Mapping: AUDIT_LOGGING control
+rule threat_protection_cloudtrail_enabled when
+    resourceType == 'AWS::CloudTrail::Trail' {
+
+    Properties.IsLogging == true <<[Threat Protection] CloudTrail must be enabled>>
+    Properties.EnableLogFileValidation == true <<[Threat Protection] CloudTrail must enable log file validation>>
+}
+
+# CloudTrail multi-region
+# CloudForge Mapping: AUDIT_LOGGING control
+rule threat_protection_cloudtrail_multiregion when
+    resourceType == 'AWS::CloudTrail::Trail' {
+
+    Properties.IsMultiRegionTrail == true <<[Threat Protection] CloudTrail should be multi-region>>
+    Properties.IncludeGlobalServiceEvents == true <<[Threat Protection] CloudTrail should include global service events>>
+}
+
+# ============================================================================
+# Intrusion Detection and Prevention
+# ============================================================================
+
+# Network ACL rules (prevent unrestricted access)
+# CloudForge Mapping: NETWORK_SECURITY control
+rule threat_protection_nacl_restricted when
+    resourceType == 'AWS::EC2::NetworkAclEntry' {
+
+    when Properties.Egress == false {
+        when Properties.CidrBlock exists {
+            Properties.CidrBlock != '0.0.0.0/0' <<[Threat Protection] Network ACL ingress rules should restrict source CIDR blocks>>
+        }
+    }
+}
+
+# ============================================================================
+# Data Exfiltration Prevention
+# ============================================================================
+
+# S3 bucket versioning (protect against malicious deletion)
+# CloudForge Mapping: DATA_PROTECTION control
+rule threat_protection_s3_versioning when
+    resourceType == 'AWS::S3::Bucket' {
+
+    Properties.VersioningConfiguration exists <<[Threat Protection] S3 buckets should have versioning configured>>
+    Properties.VersioningConfiguration.Status == 'Enabled' <<[Threat Protection] S3 versioning should be enabled>>
+}
+
+# S3 bucket logging (detect unauthorized access)
+# CloudForge Mapping: AUDIT_LOGGING control
+rule threat_protection_s3_logging when
+    resourceType == 'AWS::S3::Bucket' {
+
+    when Properties.LoggingConfiguration exists {
+        Properties.LoggingConfiguration.DestinationBucketName exists <<[Threat Protection] S3 logging must specify destination bucket>>
+    }
+}
+
+# ============================================================================
+# Encryption for Data Protection
+# ============================================================================
+
+# S3 encryption (prevent data theft)
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule threat_protection_s3_encryption when
+    resourceType == 'AWS::S3::Bucket' {
+
+    Properties.BucketEncryption exists <<[Threat Protection] S3 buckets must have encryption configured>>
+    Properties.BucketEncryption.ServerSideEncryptionConfiguration exists <<[Threat Protection] S3 must configure server-side encryption>>
+
+    Properties.BucketEncryption.ServerSideEncryptionConfiguration[*] {
+        ServerSideEncryptionByDefault exists <<[Threat Protection] S3 encryption must specify default algorithm>>
+        ServerSideEncryptionByDefault.SSEAlgorithm in ['AES256', 'aws:kms'] <<[Threat Protection] S3 must use AES256 or aws:kms>>
+    }
+}
+
+# EBS encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule threat_protection_ebs_encryption when
+    resourceType == 'AWS::EC2::Volume' {
+
+    Properties.Encrypted == true <<[Threat Protection] EBS volumes must be encrypted to protect data>>
+}

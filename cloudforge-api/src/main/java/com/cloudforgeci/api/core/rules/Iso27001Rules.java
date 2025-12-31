@@ -67,14 +67,9 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         LOG.info("Installing ISO/IEC 27001:2022 compliance validation for " + ctx.security);
 
         // Determine compliance mode
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
-        LOG.info("  Compliance mode: " + complianceMode +
-                (complianceModeStr == null ? " (default for " + ctx.security + ")" : " (explicit)"));
+        LOG.info("  Compliance mode: " + complianceMode);
 
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();

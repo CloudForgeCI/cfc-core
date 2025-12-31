@@ -2,6 +2,7 @@ package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.SecretValue;
 import software.amazon.awscdk.Stack;
@@ -57,7 +58,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
     private static final Logger LOG = Logger.getLogger(OidcAuthenticationFactory.class.getName());
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("stackName")
     private String stackName;
@@ -88,14 +89,29 @@ public class OidcAuthenticationFactory extends BaseFactory {
     @DeploymentContext("region")
     private String region;
 
+    // ========== Path-Based Authentication ==========
+    // These settings control which paths require authentication at the ALB level
+
+    @DeploymentContext("protectedPaths")
+    private java.util.List<String> protectedPaths;
+
+    @DeploymentContext("additionalProtectedPaths")
+    private java.util.List<String> additionalProtectedPaths;
+
+    @DeploymentContext("publicPaths")
+    private java.util.List<String> publicPaths;
+
+    @com.cloudforge.core.annotation.SystemContext("applicationSpec")
+    private com.cloudforge.core.interfaces.ApplicationSpec applicationSpec;
+
     public OidcAuthenticationFactory(Construct scope, String id) {
         super(scope, id);
     }
 
     @Override
     public void create() {
-        // Only configure OIDC if authMode is "alb-oidc"
-        if (!"alb-oidc".equals(authMode)) {
+        // Only configure OIDC if authMode is ALB_OIDC
+        if (authMode != AuthMode.ALB_OIDC) {
             LOG.info("ALB-OIDC authentication not enabled (authMode = " + authMode + ")");
             return;
         }
@@ -138,6 +154,15 @@ public class OidcAuthenticationFactory extends BaseFactory {
      * Configure OIDC authentication on the HTTPS listener.
      * This adds a listener rule with OIDC authentication that forwards to the target group.
      * Uses manual endpoints if provided, otherwise auto-constructs from ssoInstanceArn.
+     *
+     * <p>Path-based authentication allows protecting only specific paths while
+     * leaving other paths public. This is configured via:</p>
+     * <ul>
+     *   <li>ApplicationSpec.protectedPaths() - Application default protected paths</li>
+     *   <li>DeploymentContext.protectedPaths - Override/replace application defaults</li>
+     *   <li>DeploymentContext.additionalProtectedPaths - Add to application defaults</li>
+     *   <li>DeploymentContext.publicPaths - Explicitly exclude paths from protection</li>
+     * </ul>
      *
      * Creates a placeholder secret as a CDK resource if it doesn't exist, ensuring graceful
      * stack deletion. Users must update the secret value after deployment.
@@ -204,39 +229,195 @@ public class OidcAuthenticationFactory extends BaseFactory {
             LOG.info("Note: Update the secret with your IAM Identity Center client secret after deployment");
         }
 
+        // Store OIDC config for use in listener rules
+        final String finalIssuer = issuer;
+        final String finalAuthEndpoint = authorizationEndpoint;
+        final String finalTokenEndpoint = tokenEndpoint;
+        final String finalUserInfoEndpoint = userInfoEndpoint;
+        final String finalClientId = clientId;
+        final String finalSecretName = secretName;
+
         // Wait for HTTPS listener to be available
         ctx.https.onSet(https -> {
             // Also need target group to forward to after authentication
             ctx.albTargetGroup.onSet(targetGroup -> {
                 LOG.info("Adding OIDC authentication rule to HTTPS listener");
 
-                // Create OIDC authentication action with forward to target group
-                https.addAction("OidcAuth", AddApplicationActionProps.builder()
-                    .priority(1)  // High priority to catch all requests before default action
-                    .conditions(List.of(
-                        ListenerCondition.pathPatterns(List.of("/*"))  // Match all paths
-                    ))
-                    .action(ListenerAction.authenticateOidc(
-                        AuthenticateOidcOptions.builder()
-                            .issuer(issuer)
-                            .authorizationEndpoint(authorizationEndpoint)
-                            .tokenEndpoint(tokenEndpoint)
-                            .userInfoEndpoint(userInfoEndpoint)
-                            .clientId(clientId)
-                            .clientSecret(SecretValue.secretsManager(secretName))
-                            .scope("openid")
-                            .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
-                            .next(ListenerAction.forward(List.of(targetGroup)))  // Forward to target group after authentication
-                            .build()
-                    ))
-                    .build());
+                // Calculate effective protected paths
+                List<String> effectiveProtectedPaths = calculateEffectiveProtectedPaths();
+
+                if (effectiveProtectedPaths.isEmpty()) {
+                    // No specific paths defined - protect everything (existing behavior)
+                    LOG.info("No specific protected paths defined - protecting all paths");
+                    configureFullOidcAuthenticationRule(https, targetGroup, finalIssuer, finalAuthEndpoint,
+                            finalTokenEndpoint, finalUserInfoEndpoint, finalClientId, finalSecretName);
+                } else {
+                    // Specific paths defined - create path-based authentication rules
+                    LOG.info("Path-based authentication enabled with " + effectiveProtectedPaths.size() + " protected path(s)");
+                    configurePathBasedOidcAuthenticationRules(https, targetGroup, finalIssuer, finalAuthEndpoint,
+                            finalTokenEndpoint, finalUserInfoEndpoint, finalClientId, finalSecretName, effectiveProtectedPaths);
+                }
 
                 LOG.info("OIDC authentication configured successfully");
                 LOG.info("  Target Group: " + targetGroup.getTargetGroupName());
-                LOG.info("  Priority: 1 (authenticate then forward to target group)");
-                LOG.info("  Authentication: All requests require OIDC authentication before reaching application");
             });
         });
+    }
+
+    /**
+     * Calculate the effective list of protected paths based on ApplicationSpec and DeploymentContext.
+     *
+     * <p>Priority:</p>
+     * <ol>
+     *   <li>If DeploymentContext.protectedPaths is set, it replaces ApplicationSpec defaults</li>
+     *   <li>Otherwise, use ApplicationSpec.protectedPaths()</li>
+     *   <li>Add any DeploymentContext.additionalProtectedPaths</li>
+     *   <li>Remove any DeploymentContext.publicPaths from the result</li>
+     * </ol>
+     *
+     * @return List of path patterns requiring authentication (empty = protect everything)
+     */
+    private List<String> calculateEffectiveProtectedPaths() {
+        java.util.Set<String> paths = new java.util.LinkedHashSet<>();
+
+        // Step 1: Start with base protected paths
+        if (protectedPaths != null && !protectedPaths.isEmpty()) {
+            // DeploymentContext overrides ApplicationSpec
+            paths.addAll(protectedPaths);
+            LOG.info("Using DeploymentContext.protectedPaths: " + protectedPaths);
+        } else if (applicationSpec != null && !applicationSpec.protectedPaths().isEmpty()) {
+            // Use ApplicationSpec defaults
+            paths.addAll(applicationSpec.protectedPaths());
+            LOG.info("Using ApplicationSpec.protectedPaths(): " + applicationSpec.protectedPaths());
+        }
+
+        // Step 2: Add additional protected paths from DeploymentContext
+        if (additionalProtectedPaths != null && !additionalProtectedPaths.isEmpty()) {
+            paths.addAll(additionalProtectedPaths);
+            LOG.info("Adding DeploymentContext.additionalProtectedPaths: " + additionalProtectedPaths);
+        }
+
+        // Step 3: Remove public paths from DeploymentContext
+        if (publicPaths != null && !publicPaths.isEmpty()) {
+            paths.removeAll(publicPaths);
+            LOG.info("Removing DeploymentContext.publicPaths: " + publicPaths);
+        }
+
+        // Step 4: Remove public paths from ApplicationSpec
+        if (applicationSpec != null && !applicationSpec.publicPaths().isEmpty()) {
+            paths.removeAll(applicationSpec.publicPaths());
+            LOG.info("Removing ApplicationSpec.publicPaths(): " + applicationSpec.publicPaths());
+        }
+
+        List<String> result = new java.util.ArrayList<>(paths);
+        LOG.info("Effective protected paths: " + (result.isEmpty() ? "[ALL PATHS]" : result));
+        return result;
+    }
+
+    /**
+     * Configure OIDC authentication rule that protects all paths (original behavior).
+     */
+    private void configureFullOidcAuthenticationRule(
+            ApplicationListener https,
+            IApplicationTargetGroup targetGroup,
+            String issuer,
+            String authorizationEndpoint,
+            String tokenEndpoint,
+            String userInfoEndpoint,
+            String clientId,
+            String secretName) {
+
+        // Create OIDC authentication action with forward to target group
+        https.addAction("OidcAuth", AddApplicationActionProps.builder()
+            .priority(1)  // High priority to catch all requests before default action
+            .conditions(List.of(
+                ListenerCondition.pathPatterns(List.of("/*"))  // Match all paths
+            ))
+            .action(ListenerAction.authenticateOidc(
+                AuthenticateOidcOptions.builder()
+                    .issuer(issuer)
+                    .authorizationEndpoint(authorizationEndpoint)
+                    .tokenEndpoint(tokenEndpoint)
+                    .userInfoEndpoint(userInfoEndpoint)
+                    .clientId(clientId)
+                    .clientSecret(SecretValue.secretsManager(secretName))
+                    .scope("openid")
+                    .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
+                    .next(ListenerAction.forward(List.of(targetGroup)))
+                    .build()
+            ))
+            .build());
+
+        LOG.info("  Priority: 1 (authenticate then forward to target group)");
+        LOG.info("  Authentication: All requests require OIDC authentication before reaching application");
+    }
+
+    /**
+     * Configure path-based OIDC authentication rules.
+     *
+     * <p>Creates separate rules:</p>
+     * <ul>
+     *   <li>Priority 1-N: Protected paths require authentication</li>
+     *   <li>Priority N+1: Catch-all rule forwards without authentication</li>
+     * </ul>
+     */
+    private void configurePathBasedOidcAuthenticationRules(
+            ApplicationListener https,
+            IApplicationTargetGroup targetGroup,
+            String issuer,
+            String authorizationEndpoint,
+            String tokenEndpoint,
+            String userInfoEndpoint,
+            String clientId,
+            String secretName,
+            List<String> protectedPathPatterns) {
+
+        // ALB rules can have multiple path patterns per rule (up to 5 values per condition)
+        // Group paths into batches of 5 for efficiency
+        int batchSize = 5;
+        int priority = 1;
+
+        for (int i = 0; i < protectedPathPatterns.size(); i += batchSize) {
+            int endIndex = Math.min(i + batchSize, protectedPathPatterns.size());
+            List<String> batch = protectedPathPatterns.subList(i, endIndex);
+
+            String ruleName = "OidcAuth" + (priority > 1 ? "-" + priority : "");
+
+            https.addAction(ruleName, AddApplicationActionProps.builder()
+                .priority(priority)
+                .conditions(List.of(
+                    ListenerCondition.pathPatterns(batch)
+                ))
+                .action(ListenerAction.authenticateOidc(
+                    AuthenticateOidcOptions.builder()
+                        .issuer(issuer)
+                        .authorizationEndpoint(authorizationEndpoint)
+                        .tokenEndpoint(tokenEndpoint)
+                        .userInfoEndpoint(userInfoEndpoint)
+                        .clientId(clientId)
+                        .clientSecret(SecretValue.secretsManager(secretName))
+                        .scope("openid")
+                        .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
+                        .next(ListenerAction.forward(List.of(targetGroup)))
+                        .build()
+                ))
+                .build());
+
+            LOG.info("  Rule '" + ruleName + "' (priority " + priority + "): Authenticate for paths " + batch);
+            priority++;
+        }
+
+        // Add catch-all rule that forwards without authentication (lower priority)
+        https.addAction("PublicForward", AddApplicationActionProps.builder()
+            .priority(priority)
+            .conditions(List.of(
+                ListenerCondition.pathPatterns(List.of("/*"))
+            ))
+            .action(ListenerAction.forward(List.of(targetGroup)))
+            .build());
+
+        LOG.info("  Rule 'PublicForward' (priority " + priority + "): Forward without auth for all other paths");
+        LOG.info("  Authentication: Only protected paths require OIDC authentication");
     }
 
 

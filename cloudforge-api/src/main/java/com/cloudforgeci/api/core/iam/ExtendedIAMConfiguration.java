@@ -8,6 +8,8 @@ import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforgeci.api.interfaces.IAMConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
+import io.github.cdklabs.cdknag.NagPackSuppression;
+import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
@@ -26,6 +28,9 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
  * - Extended monitoring capabilities
  * - Development tools access
  * - Administrative permissions for troubleshooting
+ *
+ * WARNING: This IAM profile is NOT recommended for PRODUCTION security profile.
+ * Use MINIMAL or STANDARD profiles for production deployments with compliance requirements.
  */
 public final class ExtendedIAMConfiguration implements IAMConfiguration {
 
@@ -74,6 +79,26 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
                         ManagedPolicy.fromAwsManagedPolicyName("AmazonS3ReadOnlyAccess")
                 ))
                 .build();
+
+        // Suppress IAM4 for AWS managed policies - these are AWS-recommended for EC2 operations
+        NagSuppressions.addResourceSuppressions(
+            ec2Role,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM4")
+                    .reason("AWS managed policies (AmazonSSMManagedInstanceCore, CloudWatchAgentServerPolicy, " +
+                            "AmazonS3ReadOnlyAccess) are AWS-recommended for EC2 instances. These provide " +
+                            "minimal permissions for SSM connectivity, CloudWatch monitoring, and S3 read access.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("Extended IAM profile is designed for DEV environments with broad permissions " +
+                            "for debugging and development. Wildcard permissions enable full CloudWatch, S3, " +
+                            "and EFS access for development flexibility. Production uses MinimalIAMConfiguration.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
 
         // Add extended CloudWatch permissions
         ec2Role.addToPolicy(PolicyStatement.Builder.create()
@@ -163,6 +188,19 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
                 ))
                 .build();
+
+        NagSuppressions.addResourceSuppressions(
+            executionRole,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM4")
+                    .reason("AmazonECSTaskExecutionRolePolicy is an AWS-managed policy specifically " +
+                            "designed for ECS task execution. It provides minimal required permissions " +
+                            "for pulling container images from ECR and writing logs to CloudWatch.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
 
         // Extended ECS Task Role
         Role taskRole = Role.Builder.create(c, "ExtendedTaskRole")

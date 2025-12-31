@@ -3,6 +3,7 @@ package com.cloudforgeci.api.security;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcIntegration;
@@ -66,7 +67,7 @@ public class CognitoSamlFactory extends BaseFactory {
     private static final Logger LOG = Logger.getLogger(CognitoSamlFactory.class.getName());
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("cognitoAutoProvision")
     private Boolean cognitoAutoProvision;
@@ -110,8 +111,8 @@ public class CognitoSamlFactory extends BaseFactory {
 
     @Override
     public void create() {
-        // Only configure if authMode is application-oidc (for SAML apps)
-        if (!"application-oidc".equals(authMode)) {
+        // Only configure if authMode is APPLICATION_OIDC (for SAML apps)
+        if (authMode != AuthMode.APPLICATION_OIDC) {
             LOG.info("Application-level OIDC not enabled - skipping Cognito SAML setup");
             return;
         }

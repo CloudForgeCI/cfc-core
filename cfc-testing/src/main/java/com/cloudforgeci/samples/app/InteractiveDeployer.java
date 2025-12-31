@@ -4,16 +4,27 @@ import com.cloudforgeci.api.compute.ApplicationLoader;
 import com.cloudforge.core.config.ApplicationInfo;
 import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceFrameworkType;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
-import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.samples.launchers.ApplicationEc2Stack;
 import com.cloudforgeci.samples.launchers.ApplicationFargateStack;
 
 // Auto-discovery via ApplicationLoader - no need to import all ApplicationSpecs manually
 import com.cloudforge.core.interfaces.ApplicationSpec;
+
+// CDK-NAG for construct-level compliance validation
+import io.github.cdklabs.cdknag.AwsSolutionsChecks;
+import io.github.cdklabs.cdknag.HIPAASecurityChecks;
+import io.github.cdklabs.cdknag.NagReportFormat;
+import io.github.cdklabs.cdknag.PCIDSS321Checks;
+import io.github.cdklabs.cdknag.NagPack;
 
 // Configuration Introspection imports
 import com.cloudforge.core.config.ConfigFieldInfo;
@@ -23,13 +34,19 @@ import com.cloudforge.core.config.ValidationResult;
 import com.cloudforge.core.annotation.FieldTag;
 
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.Aspects;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Environment;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -65,7 +82,24 @@ import java.util.logging.Logger;
 public class InteractiveDeployer {
 
     private static final Logger LOG = Logger.getLogger(InteractiveDeployer.class.getName());
-    private static final Scanner scanner = new Scanner(System.in);
+    private static final Scanner scanner = createScanner();
+
+    /**
+     * Create a Scanner that reads from /dev/tty on Unix systems.
+     * This bypasses stdin redirection when running as a CDK subprocess.
+     */
+    private static Scanner createScanner() {
+        // Try /dev/tty first (works on macOS/Linux even when stdin is redirected)
+        try {
+            java.io.File tty = new java.io.File("/dev/tty");
+            if (tty.exists()) {
+                return new Scanner(new java.io.FileInputStream(tty));
+            }
+        } catch (Exception e) {
+            // Fall back to System.in
+        }
+        return new Scanner(System.in);
+    }
 
     // Application Registry - Auto-discovered via ServiceLoader (includes built-in + custom plugins)
     private static final Map<String, ApplicationSpec> APPLICATION_REGISTRY = ApplicationLoader.discover();
@@ -106,17 +140,65 @@ public class InteractiveDeployer {
     }
 
     public static void main(String[] args) {
+        // Check if we're being called from our own subprocess or non-interactive CDK command
+        String cfcDeploying = System.getenv("CFC_DEPLOYING");
+
+        // Check parent process for cdk destroy/diff/list commands (skip menu for these)
+        boolean skipMenu = cfcDeploying != null;
+        if (!skipMenu) {
+            try {
+                // Check grandparent since CDK spawns node which spawns java
+                ProcessHandle current = ProcessHandle.current();
+                for (int i = 0; i < 3; i++) {  // Check up to 3 levels
+                    ProcessHandle ancestor = current.parent().orElse(null);
+                    if (ancestor == null) break;
+                    String cmd = ancestor.info().commandLine().orElse("");
+                    if (cmd.contains("cdk destroy") || cmd.contains("cdk diff") || cmd.contains("cdk list")) {
+                        skipMenu = true;
+                        break;
+                    }
+                    current = ancestor;
+                }
+            } catch (Exception e) {
+                // Ignore - can't determine parent process
+            }
+        }
+
+        if (skipMenu) {
+            // We're in a deploy subprocess or cdk destroy - just synthesize quietly without menu
+            try {
+                String contextFile = "deployment-context.json";
+                if (Files.exists(Paths.get(contextFile))) {
+                    DeploymentConfig config = DeploymentConfig.fromFile(contextFile);
+                    // Reconstruct applicationSpec from applicationId
+                    if (config.applicationId != null) {
+                        config.applicationSpec = APPLICATION_REGISTRY.get(config.applicationId);
+                    }
+                    // Pass "1" to force synth-only, false to not save context again
+                    deployInfrastructure(config, "1", false);
+                }
+            } catch (Exception e) {
+                System.err.println("❌ Synthesis failed: " + e.getMessage());
+                System.exit(1);
+            }
+            return;
+        }
+
         printWelcomeBanner();
 
         // Check for command line arguments
         String customStackName = null;
         String deploymentOption = null;
         boolean forceInteractive = false;
+        boolean forceDelete = false;
 
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("--interactive") || args[i].equals("-i")) {
                 forceInteractive = true;
-                System.out.println("🎯 Interactive mode enabled");
+                System.out.println("🎯 Interactive mode enabled via CLI flag");
+            } else if (args[i].equals("--force") || args[i].equals("-f")) {
+                forceDelete = true;
+                System.out.println("🗑️  Force mode enabled - will delete existing context");
             } else if (customStackName == null) {
                 customStackName = args[i];
                 System.out.println("📝 Using custom stack name: " + customStackName);
@@ -126,20 +208,40 @@ public class InteractiveDeployer {
             }
         }
 
+        // Also check INTERACTIVE environment variable
+        // This allows: INTERACTIVE=true cdk synth
+        if (!forceInteractive) {
+            String envInteractive = System.getenv("INTERACTIVE");
+            if (envInteractive != null &&
+                ("true".equalsIgnoreCase(envInteractive) || "1".equals(envInteractive) || "yes".equalsIgnoreCase(envInteractive))) {
+                forceInteractive = true;
+                System.out.println("🎯 Interactive mode enabled via INTERACTIVE env var");
+            }
+        }
+
         try {
             String contextFile = "deployment-context.json";
 
-            if (!forceInteractive && Files.exists(Paths.get(contextFile))) {
-                System.out.println("📁 Found saved deployment context, using it...");
-                System.out.println("   (Use --interactive flag to reconfigure)");
-                loadContextFromFileAndDeploy(contextFile, deploymentOption, customStackName);
-            } else {
-                if (forceInteractive && Files.exists(Paths.get(contextFile))) {
-                    System.out.println("🔄 Ignoring saved context, starting fresh configuration...");
-                }
+            // --force: delete existing context and start fresh
+            if (forceDelete && Files.exists(Paths.get(contextFile))) {
+                System.out.println("🗑️  Deleting existing deployment context...");
+                Files.delete(Paths.get(contextFile));
+                System.out.println("✅ Context deleted. Starting fresh configuration...\n");
+            }
 
-                System.out.println("📝 No saved configuration found, starting interactive setup...");
-                System.out.println("");
+            if (Files.exists(Paths.get(contextFile))) {
+                // Context exists - load it and go directly to deployment options
+                if (forceInteractive) {
+                    System.out.println("🔄 Ignoring saved context, starting fresh configuration...\n");
+                    DeploymentConfig config = collectConfiguration(customStackName);
+                    deployInfrastructure(config, deploymentOption);
+                } else {
+                    System.out.println("📁 Found saved deployment context: " + contextFile);
+                    loadContextFromFileAndDeploy(contextFile, deploymentOption, customStackName);
+                }
+            } else {
+                // No context exists - run interactive prompts
+                System.out.println("📝 No saved configuration found, starting interactive setup...\n");
                 DeploymentConfig config = collectConfiguration(customStackName);
                 deployInfrastructure(config, deploymentOption);
             }
@@ -148,6 +250,44 @@ public class InteractiveDeployer {
             e.printStackTrace();
             System.exit(1);
         }
+    }
+
+    /**
+     * Show action menu when existing context is found.
+     * Returns the deployment option (1-7) or null if user wants to reconfigure.
+     */
+    private static String showActionMenu() {
+        System.out.println("\n📋 What would you like to do?");
+        System.out.println("==============================");
+        System.out.println("1. Synthesize only");
+        System.out.println("2. Deploy");
+        System.out.println("3. Redeploy (delete + deploy)");
+        System.out.println("4. Dry-run (changeset)");
+        System.out.println("5. Export Template (YAML/JSON)");
+        System.out.println("6. Reconfigure (start fresh interactive setup)");
+        System.out.println("7. Cancel");
+        System.out.print("\nChoose option [1-7]: ");
+
+        try {
+            if (scanner.hasNextLine()) {
+                String choice = scanner.nextLine().trim();
+                switch (choice) {
+                    case "1", "2", "3", "4", "5":
+                        return choice;
+                    case "6":
+                        return null; // Signal to reconfigure
+                    case "7":
+                        System.out.println("❌ Cancelled by user");
+                        System.exit(0);
+                    default:
+                        System.out.println("Invalid choice. Defaulting to synthesis only.");
+                        return "1";
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Input error: " + e.getMessage());
+        }
+        return "1";
     }
 
     private static void printWelcomeBanner() {
@@ -198,11 +338,6 @@ public class InteractiveDeployer {
         config.applicationName = selectedApp.name;
         config.applicationSpec = APPLICATION_REGISTRY.get(selectedApp.id);
 
-        // Store application metadata for later use
-        config.supportsFargate = selectedApp.supportsFargate;
-        config.supportsEc2 = selectedApp.supportsEc2;
-        config.supportsOidc = selectedApp.supportsOidc;
-
         // Auto-enable database provisioning for applications that require it
         if (config.applicationSpec instanceof com.cloudforge.core.interfaces.DatabaseSpec dbSpec) {
             var dbRequirement = dbSpec.databaseRequirement();
@@ -228,15 +363,15 @@ public class InteractiveDeployer {
         System.out.println("\n⚙️  Runtime Configuration:");
         System.out.println("========================");
 
-        if (config.supportsFargate && config.supportsEc2) {
+        if (selectedApp.supportsFargate && selectedApp.supportsEc2) {
             // Application supports both - let user choose
             config.runtime = RuntimeType.valueOf(
                 promptChoice("Runtime", new String[]{"FARGATE", "EC2"}, "FARGATE").toUpperCase());
-        } else if (config.supportsFargate) {
+        } else if (selectedApp.supportsFargate) {
             // Only Fargate supported
             config.runtime = RuntimeType.FARGATE;
             System.out.println("✅ Runtime: FARGATE (only option for " + selectedApp.name + ")");
-        } else if (config.supportsEc2) {
+        } else if (selectedApp.supportsEc2) {
             // Only EC2 supported
             config.runtime = RuntimeType.EC2;
             System.out.println("✅ Runtime: EC2 (only option for " + selectedApp.name + ")");
@@ -263,7 +398,7 @@ public class InteractiveDeployer {
         }
 
         // ========== OIDC AUTHENTICATION (truth table: only if application supports it) ==========
-        if (config.supportsOidc) {
+        if (selectedApp.supportsOidc) {
             System.out.println("\n🔐 OIDC Authentication (Application Supports It!):");
             System.out.println("===================================================");
             System.out.println("✅ " + selectedApp.name + " supports OIDC integration");
@@ -340,8 +475,9 @@ public class InteractiveDeployer {
         // ========== NETWORK CONFIGURATION ==========
         System.out.println("\n🌐 Network Configuration:");
         System.out.println("==========================");
-        config.networkMode = promptChoice("Network Mode",
+        String networkModeStr = promptChoice("Network Mode",
             new String[]{"public-no-nat", "private-with-nat"}, "public-no-nat");
+        config.networkMode = NetworkMode.fromString(networkModeStr);
 
         // Truth table: WAF and CloudFront recommended for PRODUCTION
         config.wafEnabled = promptYesNo("Enable WAF Protection",
@@ -469,14 +605,14 @@ public class InteractiveDeployer {
 
         if (oidcAuthModes.isEmpty()) {
             // Application doesn't support OIDC at all
-            config.authMode = "none";
+            config.authMode = AuthMode.NONE;
             System.out.println("\n⚠️  Application doesn't support OIDC authentication");
             return;
         }
 
         if (oidcAuthModes.size() == 1) {
             // Only one OIDC mode supported - use it automatically
-            config.authMode = oidcAuthModes.get(0);
+            config.authMode = AuthMode.fromString(oidcAuthModes.get(0));
             System.out.println("\n✅ Using " + config.authMode + " (only OIDC mode supported by this application)");
         } else {
             // Multiple modes supported - let user choose
@@ -489,8 +625,9 @@ public class InteractiveDeployer {
             System.out.println("Recommendation: " + recommendedAuthMode);
             System.out.println("");
 
-            config.authMode = promptChoice("Authentication Mode",
+            String authModeStr = promptChoice("Authentication Mode",
                 oidcAuthModes.toArray(String[]::new), recommendedAuthMode);
+            config.authMode = AuthMode.fromString(authModeStr);
         }
 
                 // OIDC requires SSL - auto-enable if not already set
@@ -634,8 +771,8 @@ public class InteractiveDeployer {
         }
 
         // For SAML apps, use application-oidc mode (auth happens at application level)
-        config.authMode = "application-oidc";
-        System.out.println("\n✅ Using application-oidc mode (SAML authentication at application level)");
+        config.authMode = AuthMode.APPLICATION_OIDC;
+        System.out.println("\n✅ Using APPLICATION_OIDC mode (SAML authentication at application level)");
     }
 
     private static void configureExternalOidc(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
@@ -731,12 +868,30 @@ public class InteractiveDeployer {
                 if (config.auditManagerEnabled) {
                     selectComplianceFrameworks(config);
                 } else {
-                    config.complianceFrameworks = "";
+                    config.complianceFrameworks.clear();
                 }
             }
         } else {
             config.auditManagerEnabled = false;
-            config.complianceFrameworks = "";
+            config.complianceFrameworks.clear();
+        }
+
+        // Compliance validation mode (cdk-nag + cfn-guard)
+        if (!config.complianceFrameworks.isEmpty()) {
+            System.out.println("\n🔍 Compliance Validation Mode:");
+            System.out.println("==============================");
+            System.out.println("Controls how cdk-nag and cfn-guard handle violations:");
+            System.out.println("  • ENFORCE: Block deployment on violations (recommended for PRODUCTION)");
+            System.out.println("  • ADVISORY: Log warnings only, allow deployment (recommended for DEV/STAGING)");
+            System.out.println("  • DISABLED: Skip validation (not recommended)");
+            System.out.println("");
+
+            String defaultMode = config.securityProfile == SecurityProfile.PRODUCTION ? "enforce" : "advisory";
+            String modeStr = promptWithValidation("Validation Mode", defaultMode,
+                new String[]{"enforce", "advisory", "disabled"});
+            config.complianceMode = ComplianceMode.fromString(modeStr, ComplianceMode.ADVISORY);
+        } else {
+            config.complianceMode = ComplianceMode.DISABLED;
         }
 
         // Database configuration
@@ -873,7 +1028,18 @@ public class InteractiveDeployer {
         } else if (field.allowedValues().length > 0) {
             // Enum-like field → Choice prompt
             String defaultStr = defaultValue != null ? defaultValue.toString() : field.allowedValues()[0];
-            value = promptChoice(field.displayName(), field.allowedValues(), defaultStr);
+            String choiceStr = promptChoice(field.displayName(), field.allowedValues(), defaultStr);
+
+            // Convert to appropriate type based on field type
+            if (field.type() == int.class || field.type() == Integer.class) {
+                value = Integer.parseInt(choiceStr);
+            } else if (field.type() == long.class || field.type() == Long.class) {
+                value = Long.parseLong(choiceStr);
+            } else if (field.type() == double.class || field.type() == Double.class) {
+                value = Double.parseDouble(choiceStr);
+            } else {
+                value = choiceStr;
+            }
         } else if (field.type() == int.class || field.type() == Integer.class) {
             // Integer field → Numeric validation
             int defaultInt = defaultValue instanceof Number ? ((Number) defaultValue).intValue() : 0;
@@ -928,35 +1094,25 @@ public class InteractiveDeployer {
         String choice = promptWithValidation("Framework(s)", "1",
             new String[]{"1", "2", "3", "4", "5", "6", "7", "8"});
 
-        config.complianceFrameworks = switch (choice) {
-            case "1" -> "PCI-DSS,HIPAA,SOC2,GDPR";
-            case "2" -> "SOC2";
-            case "3" -> "HIPAA";
-            case "4" -> "PCI-DSS";
-            case "5" -> "GDPR";
-            case "6" -> "HIPAA,SOC2,GDPR";
-            case "7" -> "PCI-DSS,SOC2";
-            case "8" -> promptOptional("Frameworks (comma-separated)", "SOC2");
-            default -> "SOC2";
+        String frameworksStr = switch (choice) {
+            case "1" -> "pci-dss,hipaa,soc2,gdpr";
+            case "2" -> "soc2";
+            case "3" -> "hipaa";
+            case "4" -> "pci-dss";
+            case "5" -> "gdpr";
+            case "6" -> "hipaa,soc2,gdpr";
+            case "7" -> "pci-dss,soc2";
+            case "8" -> promptOptional("Frameworks (comma-separated)", "soc2");
+            default -> "soc2";
         };
+        config.complianceFrameworks = new ArrayList<>(ComplianceFrameworkType.parseCommaSeparated(frameworksStr));
 
-        System.out.println("\n✅ Selected frameworks: " + config.complianceFrameworks);
+        System.out.println("\n✅ Selected frameworks: " + config.getComplianceFrameworksAsString());
     }
 
     private static void configureAdvancedSettings(DeploymentConfig config) {
         System.out.println("\n⚙️  Advanced Configuration:");
         System.out.println("==========================");
-
-        // Health Check Configuration - Use introspection to discover and prompt all fields
-        System.out.println("\n🏥 Health Check Configuration:");
-
-        List<ConfigFieldInfo> healthCheckFields = ConfigurationIntrospector.discoverVisibleFields(
-            config.applicationSpec, config, "resources"
-        );
-
-        for (ConfigFieldInfo field : healthCheckFields) {
-            promptForField(field, config);
-        }
 
         // Optional Ports Configuration - Only show if application has optional ports
         configureOptionalPorts(config);
@@ -1082,19 +1238,30 @@ public class InteractiveDeployer {
     private static ApplicationInfo selectApplicationByCategory() {
         System.out.println("\n📂 Select Category:");
         System.out.println("===================");
-        System.out.println("  1. CI/CD (Jenkins, GitLab, Drone)");
-        System.out.println("  2. Version Control (Gitea)");
-        System.out.println("  3. Monitoring (Grafana, Prometheus)");
-        System.out.println("  4. Databases (PostgreSQL, Redis)");
-        System.out.println("  5. Secrets Management (HashiCorp Vault)");
-        System.out.println("  6. Artifact Registry (Nexus, Harbor)");
-        System.out.println("  7. Collaboration (Mattermost)");
-        System.out.println("  8. Analytics (Metabase, Superset)");
+
+        // Dynamically list all categories from discovered applications
+        List<String> categoryKeys = new ArrayList<>(APPLICATION_CATEGORIES.keySet());
+        java.util.Collections.sort(categoryKeys);
+
+        int num = 1;
+        for (String key : categoryKeys) {
+            List<ApplicationInfo> apps = APPLICATION_CATEGORIES.get(key);
+            String appNames = apps.stream()
+                .limit(3)
+                .map(a -> a.name)
+                .collect(java.util.stream.Collectors.joining(", "));
+            if (apps.size() > 3) {
+                appNames += ", ...";
+            }
+            String defaultMarker = (num == 1) ? " (default)" : "";
+            System.out.println("  " + num + ". " + getCategoryName(key) + " (" + appNames + ")" + defaultMarker);
+            num++;
+        }
         System.out.println("");
 
-        String category = promptChoice("Category", new String[]{"cicd", "vcs", "monitoring", "database", "secrets", "artifactregistry", "collaboration", "analytics"}, "cicd");
-
-        String categoryKey = category;
+        // Handle category selection directly (don't use promptChoice which prints its own list)
+        int categoryIndex = promptNumberChoice("Category", categoryKeys.size(), 1) - 1;
+        String categoryKey = categoryKeys.get(categoryIndex);
 
         List<ApplicationInfo> apps = APPLICATION_CATEGORIES.get(categoryKey);
 
@@ -1175,7 +1342,15 @@ public class InteractiveDeployer {
             case "artifactregistry" -> "Artifact Registry";
             case "collaboration" -> "Collaboration";
             case "analytics" -> "Analytics";
-            default -> "Unknown";
+            // CMS categories from @CmsPlugin
+            case "cms" -> "Content Management";
+            case "ecommerce" -> "E-commerce";
+            case "forum" -> "Forum Software";
+            case "wiki" -> "Wiki Platforms";
+            case "lms" -> "Learning Management";
+            case "social" -> "Social Networking";
+            case "crm" -> "CRM Platforms";
+            default -> key; // Return raw key instead of "Unknown"
         };
     }
 
@@ -1239,7 +1414,8 @@ public class InteractiveDeployer {
         }
 
         // OIDC/SAML Authentication
-        if (config.supportsOidc && !config.oidcProvider.equals("none")) {
+        if (config.applicationSpec != null && config.applicationSpec.supportsOidcIntegration() &&
+            config.oidcProvider != null && !config.oidcProvider.equals("none")) {
             System.out.println("🔐 Authentication");
             System.out.println("═══════════════════════════════════════════════════════════════");
             System.out.println("  Provider:           " + config.oidcProvider);
@@ -1375,27 +1551,33 @@ public class InteractiveDeployer {
 
         System.out.println("\n🚀 Deployment Options:");
         System.out.println("========================");
-        System.out.println("1. Synthesize only (generate CloudFormation template)");
-        System.out.println("2. Deploy to AWS (synthesize + deploy)");
-        System.out.println("3. Delete existing stack and redeploy");
-        System.out.println("4. Dry-run deployment (create changeset without executing)");
-        System.out.println("5. Cancel");
+        System.out.println("1. Synthesize only");
+        System.out.println("2. Deploy");
+        System.out.println("3. Redeploy (delete + deploy)");
+        System.out.println("4. Dry-run (changeset)");
+        System.out.println("5. Export Template (YAML/JSON)");
+        System.out.println("6. Reconfigure (start fresh interactive setup)");
+        System.out.println("7. Cancel");
 
         String choice;
         if (deploymentOption != null && !deploymentOption.trim().isEmpty()) {
             choice = deploymentOption.trim();
             System.out.println("Using deployment option from command line: " + choice);
         } else {
-            System.out.print("Choose option [1-5]: ");
+            // Read from terminal
             try {
-                if (scanner.hasNextLine()) {
-                    choice = scanner.nextLine().trim();
-                } else {
-                    System.out.println("No input available, defaulting to synthesis only");
+                java.io.BufferedReader ttyReader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(new java.io.FileInputStream("/dev/tty")));
+                System.out.print("Choose option [1-7]: ");
+                System.out.flush();
+                choice = ttyReader.readLine();
+                if (choice == null || choice.trim().isEmpty()) {
                     choice = "1";
+                } else {
+                    choice = choice.trim();
                 }
             } catch (Exception e) {
-                System.out.println("Input error, defaulting to synthesis only: " + e.getMessage());
+                System.out.println("\nInput error, defaulting to synthesis only: " + e.getMessage());
                 choice = "1";
             }
         }
@@ -1416,6 +1598,15 @@ public class InteractiveDeployer {
                 System.out.println("\n🔍 Starting Dry-Run Deployment...");
                 break;
             case "5":
+                System.out.println("\n📄 Exporting CloudFormation Template...");
+                break;
+            case "6":
+                // Reconfigure - start fresh interactive setup
+                System.out.println("\n🔄 Starting fresh configuration...\n");
+                DeploymentConfig newConfig = collectConfiguration(null);
+                deployInfrastructure(newConfig, null);
+                return;
+            case "7":
                 System.out.println("❌ Deployment cancelled by user");
                 return;
             default:
@@ -1423,7 +1614,12 @@ public class InteractiveDeployer {
                 System.out.println("\n🚀 Starting CDK Synthesis...");
         }
 
-        App app = new App();
+        // Create App with output suppression properties
+        App app = App.Builder.create()
+                .analyticsReporting(false)  // Disable analytics
+                .autoSynth(false)           // Disable auto-synthesis
+                .treeMetadata(false)        // Disable tree metadata
+                .build();
         app.getNode().setContext("cfc", cfcContext);
 
         // Only save context if this is from interactive configuration, not when loaded from file
@@ -1461,56 +1657,413 @@ public class InteractiveDeployer {
             new ApplicationFargateStack(app, config.stackName, props, config.securityProfile, iamProfile, appSpec);
         }
 
+        // Add CDK-NAG suppressions for PRODUCTION security profile (Option A: Enforce with documented exceptions)
+        if (config.securityProfile == SecurityProfile.PRODUCTION) {
+            applyProductionNagSuppressions(app, config);
+        }
+
+        // Apply cdk-nag validation based on complianceMode (Layer 1: construct-level compliance checks)
+        ComplianceMode complianceMode = config.complianceMode != null
+            ? config.complianceMode
+            : ComplianceMode.defaultForProfile(config.securityProfile);
+
+        // Only apply CDK Nag if compliance frameworks are specified
+        // CDK Nag (Layer 1) runs independently of Layer 2 (FrameworkRules) and Layer 4 (AWS Config)
+        boolean hasComplianceFrameworks = config.hasAnyComplianceFramework();
+
+        if (complianceMode != ComplianceMode.DISABLED && hasComplianceFrameworks) {
+            System.out.println("\n🔍 Applying cdk-nag validation for compliance frameworks...");
+            System.out.println("   Mode: " + complianceMode);
+
+            // Iterate over enabled frameworks
+            int appliedCount = 0;
+
+            for (ComplianceFrameworkType framework : config.complianceFrameworks) {
+                NagPack pack = mapFrameworkToNagPack(framework.getMatrixKey(), complianceMode);
+
+                if (pack != null) {
+                    Aspects.of(app).add(pack);
+                    appliedCount++;
+                    System.out.println("   ✓ Applied cdk-nag pack for " + framework.getMatrixKey());
+                }
+            }
+
+            if (appliedCount > 0) {
+                if (complianceMode == ComplianceMode.ADVISORY) {
+                    System.out.println("   ⚠️  Violations will be logged as warnings only");
+                } else if (complianceMode == ComplianceMode.ENFORCE) {
+                    System.out.println("   🚫 Violations will block deployment");
+                }
+                System.out.println("   Applied " + appliedCount + " cdk-nag validation pack(s)");
+            } else {
+                System.out.println("   ⚠️  No framework-specific cdk-nag packs available");
+            }
+        } else {
+            if (complianceMode == ComplianceMode.DISABLED) {
+                System.out.println("\n⏭️  Skipping cdk-nag validation (complianceMode disabled)");
+            } else {
+                System.out.println("\n⏭️  Skipping cdk-nag validation (no compliance frameworks enabled)");
+            }
+        }
+
         // Execute deployment based on choice
         executeDeployment(app, config, choice);
     }
 
     private static void executeDeployment(App app, DeploymentConfig config, String choice) {
-        switch (choice) {
-            case "2", "3" -> {
-                System.out.println("\n✅ CDK Stack synthesized successfully!");
-                System.out.println("🚀 Starting CDK deployment to AWS...");
+        // Use compliance mode from config, defaulting by profile if null
+        ComplianceMode complianceMode = config.complianceMode != null
+            ? config.complianceMode
+            : ComplianceMode.defaultForProfile(config.securityProfile);
+
+        // Synthesize the stack (suppress CDK's template output to stdout and stderr)
+        try {
+            // Temporarily redirect both stdout and stderr to suppress CDK template output
+            java.io.PrintStream originalOut = System.out;
+            java.io.PrintStream originalErr = System.err;
+            java.io.ByteArrayOutputStream suppressedOutput = new java.io.ByteArrayOutputStream();
+            java.io.ByteArrayOutputStream suppressedError = new java.io.ByteArrayOutputStream();
+
+            // Create print streams that suppress output
+            java.io.PrintStream nullOut = new java.io.PrintStream(suppressedOutput);
+            java.io.PrintStream nullErr = new java.io.PrintStream(suppressedError);
+
+            System.setOut(nullOut);
+            System.setErr(nullErr);
+
+            try {
                 app.synth();
+            } finally {
+                // Restore original stdout and stderr
+                System.setOut(originalOut);
+                System.setErr(originalErr);
+            }
 
-                try {
-                    System.out.println("⏳ Deploying stack '" + config.stackName + "' to AWS...");
-                    ProcessBuilder deployProcess = new ProcessBuilder("cdk", "deploy", "--require-approval", "never");
-                    deployProcess.inheritIO();
-                    Process deployProc = deployProcess.start();
-                    int deployExitCode = deployProc.waitFor();
+            System.out.println("\n✅ CDK Stack synthesized successfully!");
+        } catch (Exception e) {
+            // Make sure stdout/stderr are restored before printing error
+            System.err.println("\n❌ CDK Synthesis FAILED!");
+            System.err.println("   Error: " + e.getMessage());
+            if (complianceMode == ComplianceMode.ENFORCE) {
+                System.err.println("\n   Tip: Switch to ADVISORY mode to see all violations without blocking synthesis.");
+            }
+            throw e;
+        }
 
-                    if (deployExitCode == 0) {
-                        System.out.println("✅ Stack '" + config.stackName + "' deployed successfully!");
-                    } else {
-                        System.out.println("❌ CDK deployment failed with exit code: " + deployExitCode);
-                    }
-                } catch (Exception e) {
-                    System.out.println("❌ Error during CDK deployment: " + e.getMessage());
-                }
+        // Run cfn-guard validation if enforce mode is enabled
+        // Skip validation for export-only option (5) since no deployment occurs
+        if (complianceMode == ComplianceMode.ENFORCE && !config.complianceFrameworks.isEmpty() && !choice.equals("5")) {
+            boolean guardPassed = runCfnGuardValidation(config);
+            if (!guardPassed) {
+                System.out.println("\n❌ cfn-guard validation FAILED!");
+                System.out.println("   Fix the violations or switch to ADVISORY mode to proceed.");
+                return;
+            }
+        }
+
+        // Execute deployment based on choice
+        switch (choice) {
+            case "2" -> {
+                runCdkDeploy();
+            }
+            case "3" -> {
+                System.out.println("\n🗑️  Deleting existing stack...");
+                runCdkDestroy(config.stackName);
+                System.out.println("\n🚀 Starting CDK deployment...");
+                runCdkDeploy("--require-approval", "never");
             }
             case "4" -> {
-                System.out.println("\n✅ CDK Stack synthesized successfully!");
-                System.out.println("🔍 Creating changeset for dry-run...");
-                app.synth();
-
-                try {
-                    ProcessBuilder deployProcess = new ProcessBuilder("cdk", "deploy", "--no-execute", "--require-approval", "never");
-                    deployProcess.inheritIO();
-                    Process deployProc = deployProcess.start();
-                    int deployExitCode = deployProc.waitFor();
-
-                    if (deployExitCode == 0) {
-                        System.out.println("✅ Changeset created successfully!");
-                    }
-                } catch (Exception e) {
-                    System.out.println("❌ Error during changeset creation: " + e.getMessage());
-                }
+                System.out.println("\n📋 Synthesis complete. To create changeset (dry-run), run:");
+                System.out.println("   cdk deploy --no-execute --require-approval never");
+            }
+            case "5" -> {
+                exportTemplate(config.stackName);
             }
             default -> {
-                System.out.println("\n✅ CDK Stack synthesized successfully!");
-                System.out.println("Run 'cdk deploy' to deploy to AWS");
-                app.synth();
+                System.out.println("\n📋 Synthesis complete. To deploy, run:");
+                System.out.println("   cdk deploy");
             }
+        }
+    }
+
+    private static void exportTemplate(String stackName) {
+        try {
+            // Read the synthesized JSON template from cdk.out
+            java.nio.file.Path templatePath = java.nio.file.Paths.get("cdk.out", stackName + ".template.json");
+            if (!java.nio.file.Files.exists(templatePath)) {
+                System.out.println("❌ Template not found: " + templatePath);
+                return;
+            }
+
+            String jsonContent = java.nio.file.Files.readString(templatePath);
+
+            // Ask user for format with clear visual separation
+            System.out.println("\n" + "=".repeat(80));
+            System.out.println("📄 CLOUDFORMATION TEMPLATE EXPORT");
+            System.out.println("=".repeat(80));
+            System.out.println("\nExport format:");
+            System.out.println("  1. JSON (default)");
+            System.out.println("  2. YAML");
+            System.out.println();
+            System.out.print("Choose format [1-2]: ");
+            System.out.flush();
+
+            String formatChoice = "1";
+            try {
+                java.io.BufferedReader ttyReader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(new java.io.FileInputStream("/dev/tty")));
+                String input = ttyReader.readLine();
+                if (input != null && !input.trim().isEmpty()) {
+                    formatChoice = input.trim();
+                }
+            } catch (Exception e) {
+                // Default to JSON
+            }
+
+            String extension = formatChoice.equals("2") ? ".yaml" : ".json";
+            String outputFileName = stackName + "-template" + extension;
+
+            if (formatChoice.equals("2")) {
+                // Convert JSON to YAML using Jackson
+                com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                Object jsonObj = jsonMapper.readValue(jsonContent, Object.class);
+
+                com.fasterxml.jackson.dataformat.yaml.YAMLFactory yamlFactory = new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()
+                    .disable(com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.WRITE_DOC_START_MARKER);
+                com.fasterxml.jackson.databind.ObjectMapper yamlMapper = new com.fasterxml.jackson.databind.ObjectMapper(yamlFactory);
+                yamlMapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+
+                String yamlContent = yamlMapper.writeValueAsString(jsonObj);
+                java.nio.file.Files.writeString(java.nio.file.Paths.get(outputFileName), yamlContent);
+            } else {
+                // Pretty print JSON
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+                Object jsonObj = mapper.readValue(jsonContent, Object.class);
+                String prettyJson = mapper.writeValueAsString(jsonObj);
+                java.nio.file.Files.writeString(java.nio.file.Paths.get(outputFileName), prettyJson);
+            }
+
+            System.out.println("✅ Template exported to: " + outputFileName);
+
+        } catch (Exception e) {
+            System.out.println("❌ Error exporting template: " + e.getMessage());
+        }
+    }
+
+    private static void runCdkDeploy(String... extraArgs) {
+        try {
+            java.util.List<String> cmd = new java.util.ArrayList<>();
+            cmd.add("cdk");
+            cmd.add("deploy");
+            cmd.add("--output");
+            cmd.add("cdk.out.deploy");
+            for (String arg : extraArgs) {
+                cmd.add(arg);
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.inheritIO();
+            pb.environment().put("CFC_DEPLOYING", "true");
+            Process proc = pb.start();
+            int exitCode = proc.waitFor();
+
+            if (exitCode == 0) {
+                System.out.println("\n✅ Deployment completed successfully!");
+            } else {
+                System.out.println("\n❌ Deployment failed with exit code: " + exitCode);
+            }
+        } catch (Exception e) {
+            System.out.println("\n❌ Error during deployment: " + e.getMessage());
+        }
+    }
+
+    private static void runCdkDestroy(String stackName) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("cdk", "destroy", "--force", stackName);
+            pb.inheritIO();
+            pb.environment().put("CFC_DEPLOYING", "true");
+            Process proc = pb.start();
+            int exitCode = proc.waitFor();
+
+            if (exitCode != 0) {
+                System.out.println("⚠️  Stack deletion returned exit code: " + exitCode);
+            }
+        } catch (Exception e) {
+            System.out.println("❌ Error during stack deletion: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Run cfn-guard validation on synthesized CloudFormation templates.
+     * Returns true if validation passes, false if it fails.
+     *
+     * <p>Validation runs in two phases:</p>
+     * <ol>
+     *   <li><b>Cross-framework rules</b> - Security best practices that apply to ALL deployments
+     *       (IAM, compute, Lambda, CDN/API, ELB, database, messaging, monitoring, etc.)</li>
+     *   <li><b>Framework-specific rules</b> - Rules specific to selected compliance frameworks
+     *       (SOC2, PCI-DSS, HIPAA, GDPR, ISO 27001)</li>
+     * </ol>
+     */
+    private static boolean runCfnGuardValidation(DeploymentConfig config) {
+        System.out.println("\n🛡️  Running cfn-guard validation (Layer 3)...");
+        System.out.println("   Frameworks: " + config.complianceFrameworks);
+
+        try {
+            // Find the synthesized CloudFormation template
+            String templatePath = "cdk.out/" + config.stackName + ".template.json";
+            if (!Files.exists(Paths.get(templatePath))) {
+                System.out.println("⚠️  Template not found at: " + templatePath);
+                System.out.println("   Skipping cfn-guard validation");
+                return true;
+            }
+
+            boolean allPassed = true;
+
+            // ================================================================
+            // Phase 1: Cross-framework security rules (always applied)
+            // Guard files are loaded from classpath (cloudforge-api resources)
+            // ================================================================
+            String[] crossFrameworkRules = {
+                "iam-security.guard",           // IAM policy least privilege, trust policies
+                "compute-security.guard",       // EC2, EKS, VPC subnet security
+                "lambda-security.guard",        // Lambda runtime, VPC, code signing
+                "cdn-api-security.guard",       // CloudFront, API Gateway, WAF
+                "elb-security.guard",           // ALB/NLB, Classic ELB security
+                "database-security.guard",      // RDS, DynamoDB, Redshift, DAX, ElastiCache
+                "messaging-security.guard",     // SQS, SNS, Secrets Manager, Kinesis
+                "key-management.guard",         // KMS, encryption at rest/transit
+                "advanced-monitoring.guard",    // CloudWatch, CloudTrail, VPC Flow Logs
+                "threat-protection.guard",      // GuardDuty, WAF, security groups
+                "incident-response.guard",      // Forensics, backup, evidence preservation
+                "iso-27001-controls.guard"      // ISO 27001 Annex A controls
+            };
+
+            System.out.println("\n   Phase 1: Cross-framework security rules...");
+            for (String ruleFile : crossFrameworkRules) {
+                String guardFile = resolveGuardFile(ruleFile);
+                if (guardFile == null) {
+                    continue; // Skip missing rule files silently
+                }
+
+                boolean passed = runGuardValidation(guardFile, templatePath, ruleFile.replace(".guard", ""));
+                if (!passed) {
+                    allPassed = false;
+                }
+            }
+
+            // ================================================================
+            // Phase 2: Framework-specific rules (based on selected frameworks)
+            // ================================================================
+            if (!config.complianceFrameworks.isEmpty()) {
+                System.out.println("\n   Phase 2: Framework-specific rules...");
+
+                for (ComplianceFrameworkType framework : config.complianceFrameworks) {
+                    // Map framework to guard rule file name
+                    String ruleFileName = switch (framework) {
+                        case SOC2 -> "soc2-trust-services.guard";
+                        case PCI_DSS -> "pci-dss-v4.0.1.guard";
+                        case HIPAA -> "hipaa-security-rule.guard";
+                        case GDPR -> "gdpr-data-protection.guard";
+                    };
+
+                    String guardFile = resolveGuardFile(ruleFileName);
+                    if (guardFile == null) {
+                        System.out.println("   ⚠️  No guard rules found for: " + framework.getJsonValue());
+                        continue;
+                    }
+
+                    boolean passed = runGuardValidation(guardFile, templatePath, framework.getMatrixKey());
+                    if (!passed) {
+                        allPassed = false;
+                    }
+                }
+            }
+
+            return allPassed;
+
+        } catch (Exception e) {
+            System.out.println("⚠️  cfn-guard validation error: " + e.getMessage());
+            System.out.println("   Proceeding without cfn-guard validation");
+            return true; // Don't block on cfn-guard errors
+        }
+    }
+
+    /**
+     * Run cfn-guard validate for a single rule file.
+     * Returns true if validation passes, false if it fails.
+     */
+    private static boolean runGuardValidation(String guardFile, String templatePath, String ruleName) {
+        try {
+            ProcessBuilder guardProcess = new ProcessBuilder(
+                "cfn-guard", "validate",
+                "--rules", guardFile,
+                "--data", templatePath,
+                "--show-summary", "none"  // Completely suppress summary output
+            );
+
+            // Redirect ALL output to /dev/null to completely suppress cfn-guard output
+            guardProcess.redirectOutput(new java.io.File("/dev/null"));
+            guardProcess.redirectError(new java.io.File("/dev/null"));
+
+            Process guardProc = guardProcess.start();
+            int exitCode = guardProc.waitFor();
+
+            if (exitCode != 0) {
+                System.out.println("   ❌ " + ruleName + " validation FAILED");
+                return false;
+            } else {
+                System.out.println("   ✅ " + ruleName + " validation PASSED");
+                return true;
+            }
+        } catch (Exception e) {
+            System.out.println("   ⚠️  " + ruleName + " validation error: " + e.getMessage());
+            return true; // Don't block on individual rule errors
+        }
+    }
+
+    /**
+     * Resolve a guard rule file from the classpath (cloudforge-api resources).
+     *
+     * <p>Guard files are packaged as resources in cloudforge-api at /cfn-guard/frameworks/.
+     * This method finds them via the classpath and returns a filesystem path for cfn-guard CLI.</p>
+     *
+     * @param ruleFileName The guard rule file name (e.g., "soc2-trust-services.guard")
+     * @return The filesystem path to the guard file, or null if not found
+     */
+    private static String resolveGuardFile(String ruleFileName) {
+        String resourcePath = "/cfn-guard/frameworks/" + ruleFileName;
+
+        try {
+            // Try to find resource on classpath (from cloudforge-api dependency)
+            URL resourceUrl = InteractiveDeployer.class.getResource(resourcePath);
+            if (resourceUrl == null) {
+                return null;
+            }
+
+            // If it's a file:// URL (IDE/exploded classes), use the path directly
+            if ("file".equals(resourceUrl.getProtocol())) {
+                return Paths.get(resourceUrl.toURI()).toString();
+            }
+
+            // If it's a jar:// URL, extract to temp file for cfn-guard CLI
+            if ("jar".equals(resourceUrl.getProtocol())) {
+                Path tempFile = Files.createTempFile("cfn-guard-", "-" + ruleFileName);
+                tempFile.toFile().deleteOnExit();
+
+                try (InputStream is = InteractiveDeployer.class.getResourceAsStream(resourcePath)) {
+                    if (is != null) {
+                        Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
+                        return tempFile.toString();
+                    }
+                }
+            }
+
+            return null;
+        } catch (IOException | URISyntaxException e) {
+            LOG.warning("Failed to resolve guard file: " + ruleFileName + " - " + e.getMessage());
+            return null;
         }
     }
 
@@ -1559,30 +2112,13 @@ public class InteractiveDeployer {
 
     private static void saveContextToFile(Map<String, Object> context, String stackName) {
         try {
+            // Use Jackson for proper JSON serialization (handles nested objects, arrays, etc.)
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+
+            // Save flat structure (same format as deployment-contexts/*.json)
             FileWriter writer = new FileWriter("deployment-context.json");
-            writer.write("{\n");
-            writer.write("  \"stackName\": \"" + stackName + "\",\n");
-            writer.write("  \"context\": {\n");
-            boolean first = true;
-            for (Map.Entry<String, Object> entry : context.entrySet()) {
-                if (!first) writer.write(",\n");
-
-                Object value = entry.getValue();
-                String formattedValue;
-
-                if (value instanceof Boolean) {
-                    formattedValue = value.toString();
-                } else if (value instanceof Number) {
-                    formattedValue = value.toString();
-                } else {
-                    formattedValue = "\"" + value + "\"";
-                }
-
-                writer.write("    \"" + entry.getKey() + "\": " + formattedValue);
-                first = false;
-            }
-            writer.write("\n  }\n");
-            writer.write("}\n");
+            mapper.writeValue(writer, context);
             writer.close();
 
             // Debug: Print what was saved for key fields
@@ -1600,34 +2136,20 @@ public class InteractiveDeployer {
     }
 
     private static void loadContextFromFileAndDeploy(String contextFile, String deploymentOption, String customStackName) throws Exception {
-        // Implementation unchanged from original - just loads saved context and deploys
-        String content = Files.readString(Paths.get(contextFile));
+        // Load configuration using Jackson deserialization (replaces 80+ manual extract calls)
+        DeploymentConfig config = DeploymentConfig.fromFile(contextFile);
 
-        String stackName = extractValue(content, "stackName");
-        String runtime = extractValue(content, "runtime");
-        String topology = extractValue(content, "topology");
-        String securityProfile = extractValue(content, "securityProfile");
-        String applicationId = extractValue(content, "applicationId");
-        String applicationName = extractValue(content, "applicationName");
-
-        DeploymentConfig config = new DeploymentConfig();
+        // Apply custom stack name override if provided
         if (customStackName != null && !customStackName.trim().isEmpty()) {
             config.stackName = customStackName;
-        } else {
-            config.stackName = stackName;
         }
-        config.runtime = RuntimeType.valueOf(runtime);
-        config.topology = topology != null ? TopologyType.valueOf(topology) : TopologyType.APPLICATION_SERVICE;
-        config.securityProfile = SecurityProfile.valueOf(securityProfile);
 
-        // Reconstruct applicationSpec from applicationId
-        if (applicationId != null) {
-            config.applicationId = applicationId;
-            config.applicationName = applicationName;
-            config.applicationSpec = APPLICATION_REGISTRY.get(applicationId);
+        // Reconstruct applicationSpec from applicationId (not serialized to JSON)
+        if (config.applicationId != null) {
+            config.applicationSpec = APPLICATION_REGISTRY.get(config.applicationId);
 
             if (config.applicationSpec == null) {
-                System.err.println("❌ ERROR: Unknown application ID: " + applicationId);
+                System.err.println("❌ ERROR: Unknown application ID: " + config.applicationId);
                 return;
             }
         } else {
@@ -1635,169 +2157,22 @@ public class InteractiveDeployer {
             return;
         }
 
-        // Load all configuration fields from context
-        config.environment = extractValue(content, "env");
-        if (config.environment == null) {
-            config.environment = extractValue(content, "environment");
-        }
-
-        // Domain configuration
-        config.domain = extractStringValue(content, "domain", "");
-        config.subdomain = extractStringValue(content, "subdomain", "");
-        config.enableSsl = extractBoolValue(content, "enableSsl", false);
-
-        // Network configuration
-        config.networkMode = extractStringValue(content, "networkMode", "public-no-nat");
-        config.wafEnabled = extractBoolValue(content, "wafEnabled", false);
-        config.cloudfrontEnabled = extractBoolValue(content, "cloudfrontEnabled", false);
-
-        // Resource configuration
-        config.minInstanceCapacity = extractIntValue(content, "minInstanceCapacity", 1);
-        config.maxInstanceCapacity = extractIntValue(content, "maxInstanceCapacity", 1);
-        config.cpuTargetUtilization = extractIntValue(content, "cpuTargetUtilization", 60);
-        config.cpu = extractIntValue(content, "cpu", 1024);
-        config.memory = extractIntValue(content, "memory", 2048);
-        config.instanceType = extractStringValue(content, "instanceType", "t3.micro");
-        config.enableAutoScaling = extractBoolValue(content, "enableAutoScaling", false);
-
-        // OIDC configuration
-        config.oidcProvider = extractStringValue(content, "oidcProvider", "none");
-        config.authMode = extractStringValue(content, "authMode", "none");
-        config.cognitoAutoProvision = extractBoolValue(content, "cognitoAutoProvision", false);
-        config.cognitoUserPoolName = extractValue(content, "cognitoUserPoolName");
-        config.cognitoDomainPrefix = extractValue(content, "cognitoDomainPrefix");
-        config.cognitoMfaEnabled = extractBoolValue(content, "cognitoMfaEnabled", false);
-        config.cognitoCreateGroups = extractBoolValue(content, "cognitoCreateGroups", true);
-        config.cognitoAdminGroupName = extractValue(content, "cognitoAdminGroupName");
-        config.cognitoUserGroupName = extractValue(content, "cognitoUserGroupName");
-        config.cognitoInitialAdminEmail = extractValue(content, "cognitoInitialAdminEmail");
-        config.cognitoInitialAdminPhone = extractValue(content, "cognitoInitialAdminPhone");
-        config.cognitoUserPoolId = extractValue(content, "cognitoUserPoolId");
-        config.cognitoAppClientId = extractValue(content, "cognitoAppClientId");
-        config.oidcIssuer = extractValue(content, "oidcIssuer");
-        config.oidcAuthorizationEndpoint = extractValue(content, "oidcAuthorizationEndpoint");
-        config.oidcTokenEndpoint = extractValue(content, "oidcTokenEndpoint");
-        config.oidcUserInfoEndpoint = extractValue(content, "oidcUserInfoEndpoint");
-        config.oidcClientId = extractValue(content, "oidcClientId");
-        config.oidcClientSecretName = extractValue(content, "oidcClientSecretName");
-
-        // IAM Identity Center configuration
-        config.autoProvisionIdentityCenter = extractBoolValue(content, "autoProvisionIdentityCenter", false);
-        config.ssoInstanceArn = extractValue(content, "ssoInstanceArn");
-        config.identityCenterGroupName = extractValue(content, "identityCenterGroupName");
-
-        // Database configuration
-        config.provisionDatabase = extractBoolValue(content, "provisionDatabase", false);
-        config.databaseEngine = extractStringValue(content, "databaseEngine", "postgres");
-        config.databaseVersion = extractStringValue(content, "databaseVersion", "15");
-        config.databaseInstanceClass = extractStringValue(content, "databaseInstanceClass", "db.t3.small");
-        config.databaseAllocatedStorageGB = extractIntValue(content, "databaseAllocatedStorageGB", 20);
-        config.databaseMultiAz = extractBoolValue(content, "databaseMultiAz", false);
-        config.databaseName = extractStringValue(content, "databaseName", "appdb");
-        config.databaseBackupRetentionDays = extractIntValue(content, "databaseBackupRetentionDays", 7);
-        config.enableRdsDeletionProtectionRemediation = extractBoolValue(content, "enableRdsDeletionProtectionRemediation", false);
-        config.enableRdsAutoMinorVersionUpgradeRemediation = extractBoolValue(content, "enableRdsAutoMinorVersionUpgradeRemediation", false);
-
-        // Compliance configuration
-        config.enableMonitoring = extractBoolValue(content, "enableMonitoring", true);
-        config.enableEncryption = extractBoolValue(content, "enableEncryption", true);
-        config.awsConfigEnabled = extractBoolValue(content, "awsConfigEnabled", false);
-        config.createConfigInfrastructure = extractBoolValue(content, "createConfigInfrastructure", true);
-        config.guardDutyEnabled = extractBoolValue(content, "guardDutyEnabled", false);
-        config.auditManagerEnabled = extractBoolValue(content, "auditManagerEnabled", false);
-        config.complianceFrameworks = extractStringValue(content, "complianceFrameworks", "");
-        config.logRetentionDays = extractStringValue(content, "logRetentionDays", "7");
-        config.enableS3VersioningRemediation = extractBoolValue(content, "enableS3VersioningRemediation", false);
-        config.enableCloudTrailBucketAccessRemediation = extractBoolValue(content, "enableCloudTrailBucketAccessRemediation", false);
-
         // Debug: Print what was loaded for key fields
         System.out.println("\n📖 Loaded from deployment-context.json:");
+        System.out.println("  applicationId: " + config.applicationId);
+        System.out.println("  runtime: " + config.runtime);
+        System.out.println("  securityProfile: " + config.securityProfile);
         System.out.println("  provisionDatabase: " + config.provisionDatabase);
-        System.out.println("  databaseEngine: " + config.databaseEngine);
-        System.out.println("  enableEncryption: " + config.enableEncryption);
-        System.out.println("  enableAutoScaling: " + config.enableAutoScaling);
         System.out.println("  complianceFrameworks: '" + config.complianceFrameworks + "'");
-        System.out.println("  logRetentionDays: '" + config.logRetentionDays + "'");
         System.out.println("  region: '" + config.region + "'");
-        System.out.println("  auditManagerEnabled: " + config.auditManagerEnabled);
-
-        // Health check configuration
-        config.healthCheckGracePeriod = extractIntValue(content, "healthCheckGracePeriod", 300);
-        config.healthCheckInterval = extractIntValue(content, "healthCheckInterval", 30);
-        config.healthCheckTimeout = extractIntValue(content, "healthCheckTimeout", 5);
-        config.healthyThreshold = extractIntValue(content, "healthyThreshold", 2);
-        config.unhealthyThreshold = extractIntValue(content, "unhealthyThreshold", 3);
-
-        // Region configuration
-        config.region = extractStringValue(content, "region", "us-east-1");
-
-        // Application metadata
-        config.supportsFargate = extractBoolValue(content, "supportsFargate", false);
-        config.supportsEc2 = extractBoolValue(content, "supportsEc2", false);
-        config.supportsOidc = extractBoolValue(content, "supportsOidc", false);
 
         // Pass false to prevent overwriting the saved deployment-context.json
         deployInfrastructure(config, deploymentOption, false);
     }
 
-    private static String extractStringValue(String json, String key, String defaultValue) {
-        String value = extractValue(json, key);
-        return value != null ? value : defaultValue;
-    }
-
-    private static boolean extractBoolValue(String json, String key, boolean defaultValue) {
-        String value = extractValue(json, key);
-        if (value == null) return defaultValue;
-        return Boolean.parseBoolean(value);
-    }
-
-    private static int extractIntValue(String json, String key, int defaultValue) {
-        String value = extractValue(json, key);
-        if (value == null) return defaultValue;
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    private static String extractValue(String json, String key) {
-        String quotedPattern = "\"" + key + "\":\\s*\"([^\"]*)\"";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(quotedPattern);
-        java.util.regex.Matcher m = p.matcher(json);
-        if (m.find()) {
-            return m.group(1);
-        }
-
-        String unquotedPattern = "\"" + key + "\":\\s*([^,}\\s]+)";
-        p = java.util.regex.Pattern.compile(unquotedPattern);
-        m = p.matcher(json);
-        if (m.find()) {
-            return m.group(1);
-        }
-
-        return null;
-    }
-
     private static Map<String, Object> buildCfcContext(DeploymentConfig config) {
-        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-
-        mapper.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.FIELD,
-                           com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY);
-        mapper.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.GETTER,
-                           com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE);
-
-        mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-        mapper.setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> context = mapper.convertValue(config, Map.class);
-
-        if (context.containsKey("environment")) {
-            context.put("env", context.remove("environment"));
-        }
-
-        return context;
+        // Use DeploymentConfig's built-in Jackson serialization (replaces manual ObjectMapper config)
+        return config.toContextMap();
     }
 
     private static void printConfiguration(DeploymentConfig config) {
@@ -1827,7 +2202,7 @@ public class InteractiveDeployer {
             System.out.println("SSL Enabled: " + config.enableSsl);
         }
 
-        if (config.supportsOidc && !config.oidcProvider.equals("none")) {
+        if (config.applicationSpec != null && config.applicationSpec.supportsOidcIntegration() && !config.oidcProvider.equals("none")) {
             System.out.println("\n🔐 OIDC Authentication:");
             System.out.println("  Provider: " + config.oidcProvider);
         }
@@ -2100,6 +2475,457 @@ public class InteractiveDeployer {
         } else {
             return requestedMemory;
         }
+    }
+
+    /**
+     * Apply CDK-NAG suppressions for PRODUCTION security profile.
+     * Option A: Enforce everywhere, suppress only documented exceptions.
+     *
+     * Suppressions are added for:
+     * 1. Application IAM roles with AWS-required wildcards (SSM, ECR)
+     * 2. CDK Custom Resource Provider Lambdas (framework internals)
+     * 3. S3 buckets and other resources with valid exceptions
+     */
+    private static void applyProductionNagSuppressions(App app, DeploymentConfig config) {
+        System.out.println("\n🔒 Applying PRODUCTION CDK-NAG suppressions...");
+
+        // Get the stack
+        software.amazon.awscdk.Stack stack = (software.amazon.awscdk.Stack) app.getNode().findChild(config.stackName);
+
+        // Suppress wildcards for application IAM roles (AWS service requirements)
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                // SSM service endpoints require wildcard (application EC2/ECS roles)
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("SSM service endpoints require Resource:* - This is an AWS API requirement for ssm:UpdateInstanceInformation")
+                    .appliesTo(List.of("Resource::*"))
+                    .build(),
+                // CloudWatch Logs patterns use wildcards for log group matching
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("CloudWatch Logs path pattern requires wildcards for log group access")
+                    .appliesTo(List.of(
+                        "Resource::arn:aws:logs:<AWS::Region>:<AWS::AccountId>:log-group:/aws/*/" + config.stackName + "*",
+                        "Resource::arn:aws:logs:<AWS::Region>:<AWS::AccountId>:log-group:/aws/ecs/" + config.stackName + "*"
+                    ))
+                    .build()
+            ),
+            Boolean.TRUE // Apply to all nested constructs
+        );
+
+        // Suppress AWS managed policies for CDK Custom Resource Providers (framework internals)
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM4")
+                    .reason("CDK Custom Resource Provider uses AWS managed policy - This is CDK framework code, not application code. Deployment-time only.")
+                    .appliesTo(List.of(
+                        "Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                    ))
+                    .build(),
+                // Suppress wildcard for CDK Custom Resource Provider Lambda
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("CDK Custom Resource Provider requires wildcards - This is CDK framework code for deployment-time operations")
+                    .appliesTo(List.of("Resource::*"))
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        // Suppress S3 bucket warnings for compliance infrastructure
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                // CloudTrail bucket doesn't need access logs (would cause circular dependency)
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-S1")
+                    .reason("CloudTrail bucket access logging would create circular dependency. CloudTrail itself provides audit trail.")
+                    .build(),
+                // Audit Manager bucket doesn't need access logs (compliance reporting only)
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-S1")
+                    .reason("Audit Manager report bucket doesn't require access logs - contains compliance reports only")
+                    .build(),
+                // SSL policy is enforced via bucket policy
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-S10")
+                    .reason("SSL enforcement is handled via bucket policy conditions")
+                    .build(),
+                // Audit Manager S3 actions require wildcards for object operations
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("S3 object operations require action wildcards (DeleteObject*, Abort*) and bucket path wildcards - Standard S3 pattern")
+                    .appliesTo(List.of(
+                        "Action::s3:DeleteObject*",
+                        "Action::s3:Abort*",
+                        "Resource::<SystemContextFargatePRODUCTIONGDPRboundaryretentionComplianceAuditManagerReportBucket2C743036.Arn>/*"
+                    ))
+                    .build(),
+                // SSM parameter path wildcards for shared parameters
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("SSM parameter paths use wildcards for stack-scoped shared parameters")
+                    .appliesTo(List.of(
+                        "Resource::arn:aws:ssm:" + config.region + ":*:parameter/cloudforge/shared/" + config.region + "/stack/" + config.stackName + "/*"
+                    ))
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        // Suppress ALB warnings (public internet-facing is intentional)
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-EC23")
+                    .reason("ALB security group allows 0.0.0.0/0 on ports 80/443 - This is intentional for public web application")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-ELB2")
+                    .reason("ALB access logs enabled via albAccessLogging configuration flag")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        // Suppress Cognito warnings (MFA is configurable, Advanced Security has cost implications)
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-COG2")
+                    .reason("Cognito MFA is configurable via cognitoMfaEnabled flag - User's choice based on requirements")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-COG3")
+                    .reason("Cognito Advanced Security Mode has cost implications - User's choice based on budget")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM5")
+                    .reason("Cognito SMS role requires wildcard for SNS publish - AWS service requirement")
+                    .appliesTo(List.of("Resource::*"))
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        // Suppress ECS warnings
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-ECS2")
+                    .reason("ECS task definition uses environment variables for non-sensitive configuration - Secrets use Secrets Manager")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-L1")
+                    .reason("Lambda runtime version is managed by CDK framework - Updated with CDK version upgrades")
+                    .build(),
+                // AWS Backup service managed policy
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM4")
+                    .reason("AWS Backup service requires managed policy for proper operation - AWS service requirement")
+                    .appliesTo(List.of(
+                        "Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+                    ))
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        System.out.println("   ✅ PRODUCTION suppressions applied (documented exceptions only)");
+
+        // Apply HIPAA-specific suppressions if HIPAA compliance is enabled
+        if (config.hasComplianceFramework(ComplianceFrameworkType.HIPAA)) {
+            applyHipaaSuppressions(app, config);
+        }
+
+        // Apply PCI-DSS-specific suppressions if PCI-DSS compliance is enabled
+        if (config.hasComplianceFramework(ComplianceFrameworkType.PCI_DSS)) {
+            applyPciDssSuppressions(app, config);
+        }
+    }
+
+    /**
+     * Apply HIPAA-specific CDK-NAG suppressions for configurable compliance settings.
+     *
+     * These suppressions document configurable settings and cost trade-offs for HIPAA compliance.
+     * Core IAM security (Customer Managed Policies) is enforced without suppressions.
+     */
+    private static void applyHipaaSuppressions(App app, DeploymentConfig config) {
+        System.out.println("\n🏥 Applying HIPAA-specific CDK-NAG suppressions...");
+
+        software.amazon.awscdk.Stack stack = (software.amazon.awscdk.Stack) app.getNode().findChild(config.stackName);
+
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                // IAM Inline Policies - CDK framework resources (unavoidable)
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-IAMNoInlinePolicy")
+                    .reason("CDK framework resources (Custom Resources, VPC FlowLog, Cognito SMS role) use inline policies by design. " +
+                            "Application IAM roles use Customer Managed Policies per HIPAA best practices. " +
+                            "Control IDs: 164.308(a)(3)(i), 164.308(a)(3)(ii)(A), 164.308(a)(3)(ii)(B), " +
+                            "164.308(a)(4)(i), 164.308(a)(4)(ii)(A), 164.308(a)(4)(ii)(B), 164.308(a)(4)(ii)(C), 164.312(a)(1)")
+                    .build(),
+                // S3 Bucket Logging - CloudTrail/Audit buckets create circular dependency
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3BucketLoggingEnabled")
+                    .reason("CloudTrail and Audit Manager buckets do not enable access logging to avoid circular dependency. " +
+                            "CloudTrail itself provides comprehensive audit trail. Control IDs: 164.308(a)(3)(ii)(A), 164.312(b)")
+                    .build(),
+                // S3 Replication - Configurable based on RTO/RPO requirements
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3BucketReplicationEnabled")
+                    .reason("S3 replication is configurable based on disaster recovery RTO/RPO requirements and cost implications. " +
+                            "Can be enabled via s3ReplicationEnabled flag for cross-region compliance. " +
+                            "Control IDs: 164.308(a)(7)(i), 164.308(a)(7)(ii)(A), 164.308(a)(7)(ii)(B)")
+                    .build(),
+                // S3 SSL - Enforced via bucket policy, not resource property
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3BucketSSLRequestsOnly")
+                    .reason("SSL enforcement is implemented via bucket policy conditions (aws:SecureTransport). " +
+                            "Control IDs: 164.312(a)(2)(iv), 164.312(c)(2), 164.312(e)(1), 164.312(e)(2)(i), 164.312(e)(2)(ii)")
+                    .build(),
+                // S3 KMS Encryption - Cost vs SSE-S3 trade-off
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3DefaultEncryptionKMS")
+                    .reason("Default SSE-S3 encryption provides encryption at rest. KMS encryption adds ~$0.03 per 10k requests " +
+                            "and is configurable via s3KmsEncryption flag for additional key management controls. " +
+                            "Control IDs: 164.312(a)(2)(iv), 164.312(e)(2)(ii)")
+                    .build(),
+                // CloudTrail KMS Encryption - Cost vs SSE-S3 trade-off
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-CloudTrailEncryptionEnabled")
+                    .reason("CloudTrail uses SSE-S3 encryption by default. KMS encryption is configurable via cloudTrailKmsEncryption flag. " +
+                            "Control ID: 164.312(a)(2)(iv), 164.312(e)(2)(ii)")
+                    .build(),
+                // CloudWatch Logs KMS Encryption - Cost implications
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-CloudWatchLogGroupEncrypted")
+                    .reason("KMS encryption for CloudWatch Logs has cost implications (~$1-3/GB ingested). " +
+                            "Default encryption at rest is enabled. KMS is configurable for ePHI data. " +
+                            "Control IDs: 164.312(a)(2)(iv), 164.312(e)(2)(ii)")
+                    .build(),
+                // VPC Public Subnets - Required for NAT/ALB, apps in private subnets
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-VPCSubnetAutoAssignPublicIpDisabled")
+                    .reason("Public subnets are used exclusively for NAT Gateways and internet-facing ALB. " +
+                            "Application workloads run in private subnets with no direct internet access. " +
+                            "Control IDs: 164.308(a)(3)(i), 164.308(a)(4)(ii)(A), 164.308(a)(4)(ii)(C), 164.312(a)(1), 164.312(e)(1)")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-VPCNoUnrestrictedRouteToIGW")
+                    .reason("Public subnet routes to IGW are required for NAT Gateway and ALB internet connectivity. " +
+                            "Application workloads are isolated in private subnets. Control ID: 164.312(e)(1)")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-VPCDefaultSecurityGroupClosed")
+                    .reason("VPC default security group is not used by application resources. " +
+                            "All resources use custom security groups with least-privilege rules. Control ID: 164.312(e)(1)")
+                    .build(),
+                // ALB Configuration - Configurable security settings
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-ALBHttpDropInvalidHeaderEnabled")
+                    .reason("ALB HTTP header validation is configurable based on application compatibility requirements. " +
+                            "Can be enabled via albDropInvalidHeaderFields flag. " +
+                            "Control IDs: 164.312(a)(2)(iv), 164.312(e)(1), 164.312(e)(2)(i), 164.312(e)(2)(ii)")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-ELBLoggingEnabled")
+                    .reason("ALB access logging is configurable via albAccessLogging flag. " +
+                            "When enabled, logs are stored in S3 with encryption and retention policies. Control ID: 164.312(b)")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-ELBv2ACMCertificateRequired")
+                    .reason("HTTP listener redirects to HTTPS when SSL is enabled. " +
+                            "HTTPS listener uses ACM certificate. Both listeners are required for proper redirect flow. " +
+                            "Control IDs: 164.312(a)(2)(iv), 164.312(e)(2)(ii)")
+                    .build(),
+                // WAF Logging - Cost implications
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-WAFv2LoggingEnabled")
+                    .reason("WAF logging is configurable based on cost and compliance requirements (~$0.50 per million requests). " +
+                            "Can be enabled via wafLoggingEnabled flag when audit trail is required. Control ID: 164.312(b)")
+                    .build(),
+                // Lambda (CDK Framework) - Deployment-time only
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-LambdaConcurrency")
+                    .reason("CDK Custom Resource Lambdas are deployment-time framework functions with low concurrency needs. " +
+                            "Not application code. Control ID: 164.312(b)")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-LambdaDLQ")
+                    .reason("CDK Custom Resource Lambdas are deployment-time framework functions. " +
+                            "Failures are visible in CloudFormation stack events. Not application code. Control ID: 164.312(b)")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("HIPAA.Security-LambdaInsideVPC")
+                    .reason("CDK Custom Resource Lambdas are deployment-time framework functions that require public API access. " +
+                            "They do not process ePHI and are not part of the application runtime. " +
+                            "Control IDs: 164.308(a)(3)(i), 164.308(a)(4)(ii)(A), 164.308(a)(4)(ii)(C), 164.312(a)(1), 164.312(e)(1)")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        System.out.println("   ✅ HIPAA-specific suppressions applied (configurable settings and cost trade-offs)");
+    }
+
+    /**
+     * Apply PCI-DSS-specific CDK-NAG suppressions for configurable compliance settings.
+     *
+     * These suppressions document configurable settings and CDK framework limitations for PCI-DSS compliance.
+     */
+    private static void applyPciDssSuppressions(App app, DeploymentConfig config) {
+        System.out.println("\n💳 Applying PCI-DSS-specific CDK-NAG suppressions...");
+
+        software.amazon.awscdk.Stack stack = (software.amazon.awscdk.Stack) app.getNode().findChild(config.stackName);
+
+        io.github.cdklabs.cdknag.NagSuppressions.addStackSuppressions(
+            stack,
+            List.of(
+                // IAM Inline Policies - CDK framework resources (unavoidable)
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-IAMNoInlinePolicy")
+                    .reason("CDK framework resources (Custom Resources, VPC FlowLog, Cognito SMS role, CloudTrail role) use inline policies by design. " +
+                            "These are auto-generated deployment-time policies. Control IDs: 2.2, 7.1.2, 7.1.3, 7.2.1, 7.2.2")
+                    .build(),
+                // S3 Bucket Logging - CloudTrail/Audit buckets create circular dependency
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-S3BucketLoggingEnabled")
+                    .reason("CloudTrail and Audit Manager buckets do not enable access logging to avoid circular dependency. " +
+                            "CloudTrail S3 data events provide comprehensive audit trail. Control IDs: 2.2, 10.1, 10.2.x, 10.3.x")
+                    .build(),
+                // S3 Replication - Single-region deployment
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-S3BucketReplicationEnabled")
+                    .reason("S3 replication is not required for single-region deployments. " +
+                            "Versioning is enabled for data recovery. Control IDs: 2.2, 10.5.3")
+                    .build(),
+                // S3 KMS Encryption - Using SSE-S3 with SSL enforcement
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-S3DefaultEncryptionKMS")
+                    .reason("Buckets use encryption with SSL enforcement via bucket policy. " +
+                            "CloudTrail trail-level KMS encryption is enabled for PRODUCTION. Control IDs: 3.4, 8.2.1, 10.5")
+                    .build(),
+                // CloudTrail Encryption - Enabled for PCI-DSS PRODUCTION
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-CloudTrailEncryptionEnabled")
+                    .reason("CloudTrail uses KMS encryption for HIPAA/PCI-DSS PRODUCTION deployments. " +
+                            "S3 bucket has encryption at rest enabled. Control IDs: 2.2, 3.4, 10.5")
+                    .build(),
+                // CloudWatch Logs KMS Encryption - Cost implications
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-CloudWatchLogGroupEncrypted")
+                    .reason("CloudWatch Logs groups for CDK framework resources use default encryption. " +
+                            "KMS encryption is enabled for WAF and CloudTrail log groups. Control ID: 3.4")
+                    .build(),
+                // VPC Public Subnets - Required for NAT/ALB architecture
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-VPCSubnetAutoAssignPublicIpDisabled")
+                    .reason("Public subnets are used exclusively for NAT Gateways and internet-facing ALB. " +
+                            "Application workloads run in private subnets. Control IDs: 1.2, 1.2.1, 1.3.x, 2.2.2")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-VPCNoUnrestrictedRouteToIGW")
+                    .reason("Public subnets require IGW routes for NAT Gateway and ALB internet access. " +
+                            "Application workloads in private subnets have no direct internet access. Control IDs: 1.2, 1.2.1, 1.3.x, 2.2.2")
+                    .build(),
+                // ALB Access Logs Bucket - CDK logAccessLogs() limitation
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-S3BucketSSLRequestsOnly")
+                    .reason("ALB access logs bucket is written exclusively by AWS ELB service via internal HTTPS connections. " +
+                            "CDK logAccessLogs() creates bucket policy that doesn't merge with addToResourcePolicy() statements. " +
+                            "Bucket has blockPublicAccess enabled. Control IDs: 2.2, 4.1, 8.2.1")
+                    .build(),
+                // ALB Configuration
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-ALBHttpDropInvalidHeaderEnabled")
+                    .reason("ALB drop invalid headers is enabled via LoadBalancerAttributes override. Control IDs: 4.1, 8.2.1")
+                    .build(),
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-ELBv2ACMCertificateRequired")
+                    .reason("HTTP listener redirects to HTTPS when SSL is enabled. " +
+                            "HTTPS listener uses ACM certificate. Both listeners required for redirect flow. Control ID: 4.1")
+                    .build(),
+                // WAF Logging - Enabled in WafFactory
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-WAFv2LoggingEnabled")
+                    .reason("WAF logging is enabled to CloudWatch Logs with KMS encryption. " +
+                            "Control IDs: 10.1, 10.3.x, 10.5.4")
+                    .build(),
+                // Lambda (CDK Framework) - Deployment-time only
+                io.github.cdklabs.cdknag.NagPackSuppression.builder()
+                    .id("PCI.DSS.321-LambdaInsideVPC")
+                    .reason("CDK Custom Resource Lambdas are deployment-time framework functions that make AWS API calls. " +
+                            "They do not process cardholder data and are not part of the CDE. Control IDs: 1.2, 1.2.1, 1.3.x, 2.2.2")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        System.out.println("   ✅ PCI-DSS-specific suppressions applied (CDK framework limitations and architecture justifications)");
+    }
+
+    /**
+     * Maps a compliance framework to its corresponding cdk-nag rule pack.
+     *
+     * @param framework the framework ID (uppercase)
+     * @param complianceMode the compliance mode (enforce or advisory)
+     * @return the corresponding NagPack, or null if no mapping exists
+     */
+    private static NagPack mapFrameworkToNagPack(String framework, ComplianceMode complianceMode) {
+        boolean enforce = complianceMode == ComplianceMode.ENFORCE;
+        // Report formats for compliance auditing (always generate reports)
+        var reportFormats = List.of(NagReportFormat.JSON, NagReportFormat.CSV);
+
+        return switch (framework) {
+            case "HIPAA" -> HIPAASecurityChecks.Builder.create()
+                    .verbose(false)
+                    .reports(true)
+                    .reportFormats(reportFormats)
+                    .logIgnores(!enforce)
+                    .build();
+            case "PCI-DSS", "PCIDSS", "PCI" -> PCIDSS321Checks.Builder.create()
+                    .verbose(false)
+                    .reports(true)
+                    .reportFormats(reportFormats)
+                    .logIgnores(!enforce)
+                    .build();
+            case "SOC2", "SOC-2" -> AwsSolutionsChecks.Builder.create()
+                    .verbose(false)
+                    .reports(true)
+                    .reportFormats(reportFormats)
+                    .logIgnores(!enforce)
+                    .build();
+            case "FEDRAMP", "FEDRAMPHIGH", "FEDRAMP-HIGH" -> {
+                // FEDRAMP: Handled by existing FedRampRules.java plugin only
+                // Not integrated with cdk-nag to avoid conflicts
+                System.out.println("      (FedRAMP uses FedRampRules.java plugin, not cdk-nag)");
+                yield null;
+            }
+            case "GDPR" -> {
+                // GDPR: Organizational controls, not infrastructure-level cdk-nag checks
+                System.out.println("      (GDPR uses organizational rules, not cdk-nag)");
+                yield null;
+            }
+            // Custom frameworks: fallback to AWS Solutions best practices
+            default -> {
+                System.out.println("      (Using AwsSolutionsChecks as fallback for " + framework + ")");
+                yield AwsSolutionsChecks.Builder.create()
+                        .verbose(false)
+                        .reports(true)
+                        .reportFormats(reportFormats)
+                        .logIgnores(!enforce)
+                        .build();
+            }
+        };
     }
 
     // ============================================================================

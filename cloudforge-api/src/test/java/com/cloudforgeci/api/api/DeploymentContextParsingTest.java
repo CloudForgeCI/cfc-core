@@ -1,6 +1,8 @@
 package com.cloudforgeci.api.api;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.LoadBalancerType;
+import com.cloudforge.core.enums.NetworkMode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -21,7 +23,8 @@ public class DeploymentContextParsingTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "true", "1", "yes", "TRUE" })
+    // Note: "1" and "0" NOT supported to avoid ambiguity with integer values
+    @ValueSource(strings = { "true", "yes", "on", "TRUE" })
     void booleanParsingTrueVariants(String v) throws Exception {
         Map<String,Object> m = new LinkedHashMap<>();
         m.put("wafEnabled", v);
@@ -42,12 +45,12 @@ public class DeploymentContextParsingTest {
     }
 
     @Test
-    void invalidOneOfFallsBackToDefault() throws Exception {
+    void validEnumValuesParsed() throws Exception {
         Map<String,Object> m = new LinkedHashMap<>();
         m.put("lbType", "alb");
-        m.put("networkMode", "public-no-nat");
+        m.put("networkMode", "public-no-nat");  // legacy alias for PUBLIC
         DeploymentContext cfc = fromMap(m);
-        assertEquals("alb", cfc.lbType());
-        assertEquals("public-no-nat", cfc.networkMode());
+        assertEquals(LoadBalancerType.ALB, cfc.lbType());
+        assertEquals(NetworkMode.PUBLIC, cfc.networkMode());
     }
 }

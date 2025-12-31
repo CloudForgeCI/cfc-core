@@ -184,7 +184,7 @@ Tests validate AWS Cognito User Pool authentication for user management:
 - `testCognitoTokenValidity()` - Access, ID, and refresh token validity
 - `testAlbAuthenticateCognitoAction()` - ALB authenticate-cognito action
 
-**See:** [COGNITO_AUTH_TESTS.md](../../../../COGNITO_AUTH_TESTS.md) for detailed documentation.
+**See:** [Cognito MFA Setup](../setup/COGNITO_MFA_COMPLIANCE_SETUP.md) for configuration details.
 
 #### OIDC Authentication ⏭️ ([OidcAuthenticationIntegrationTest.java](security/OidcAuthenticationIntegrationTest.java))
 
@@ -363,7 +363,6 @@ Tests simulate actual deployment workflows including:
 
 ## Related Documentation
 
-- [Compliance Documentation](../../../../docs/compliance/)
-- [Maven Release Process](../../../../docs/MAVEN_RELEASE_PROCESS.md)
-- [Security Checklist](../../../../docs/RELEASE_SECURITY_CHECKLIST.md)
-- [CloudTrail Auto-Remediation](../../../../docs/CLOUDTRAIL_AUTO_REMEDIATION.md)
+- [Compliance Documentation](../compliance/README.md)
+- [Security Best Practices](../guides/SECURITY_RULES_README.md)
+- [Automated Compliance](../compliance/AUTOMATED_COMPLIANCE.md)

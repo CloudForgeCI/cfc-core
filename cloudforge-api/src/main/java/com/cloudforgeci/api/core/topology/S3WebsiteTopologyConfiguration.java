@@ -37,16 +37,16 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
     var r = new ArrayList<Rule>();
 
     boolean domainEnabled = c.cfc != null && c.cfc.domain() != null && !c.cfc.domain().isBlank();
-    boolean cfEnabled = c.cfc != null && c.cfc.cloudfrontEnabled();
+    boolean cfEnabled = c.cfc != null && Boolean.TRUE.equals(c.cfc.cloudfrontEnabled());
 
     // S3 website topology does not provision Jenkins compute (runtime is irrelevant here).
     // If TLS is enabled, we front with CloudFront (viewer TLS at edge).
-    r.add(ctx -> ctx.cfc.enableSsl() && !ctx.cfc.cloudfrontEnabled()
+    r.add(ctx -> ctx.cfc.enableSsl() && !Boolean.TRUE.equals(ctx.cfc.cloudfrontEnabled())
             ? List.of("S3_WEBSITE with enableSsl = true requires cloudfront = true (viewer TLS at edge)") : List.of());
 
     // If cloudfront + custom host expected, ensure fqdn (or can compute).
     r.add(ctx -> {
-      if (!ctx.cfc.cloudfrontEnabled()) return List.of();
+      if (!Boolean.TRUE.equals(ctx.cfc.cloudfrontEnabled())) return List.of();
       boolean hasFqdn = ctx.cfc.fqdn() != null && !ctx.cfc.fqdn().isBlank();
       boolean canCompute = ctx.cfc.subdomain() != null && ctx.cfc.domain() != null;
       return (hasFqdn || canCompute) ? List.of() : List.of("cloudfront = true requires fqdn OR (subdomain + domain)");
@@ -86,7 +86,7 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
 
     // 2) CloudFront distribution (optional; required if enableSsl = true)
     c.once("S3:Distribution", () -> {
-      if (!c.cfc.cloudfrontEnabled()) return;
+      if (!Boolean.TRUE.equals(c.cfc.cloudfrontEnabled())) return;
 
       var origin = new S3Origin(c.websiteBucket.get().orElseThrow(
               () -> new IllegalStateException("websiteBucket must exist before creating CloudFront Distribution")));
@@ -124,7 +124,7 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
   }
 
   private static java.util.List<String> resolveDomainNames(SystemContext c) {
-    if (!c.cfc.cloudfrontEnabled()) return java.util.List.of();
+    if (!Boolean.TRUE.equals(c.cfc.cloudfrontEnabled())) return java.util.List.of();
     String fqdn = c.cfc.fqdn();
     if (fqdn == null || fqdn.isBlank()) {
       if (c.cfc.subdomain() != null && c.cfc.domain() != null) {

@@ -325,8 +325,8 @@ class ComplianceFactoryTest {
         cfcContext.put("awsConfigEnabled", true);
         cfcContext.put("auditManagerEnabled", true);
         cfcContext.put("auditManagerFrameworkId", "test-framework-id");
-        // Use mock UUIDs instead of framework short names to avoid AWS CLI dependency in CI
-        cfcContext.put("complianceFrameworks", "12345678-1234-1234-1234-123456789012,23456789-2345-2345-2345-234567890123,34567890-3456-3456-3456-345678901234,45678901-4567-4567-4567-456789012345");
+        // Use valid compliance framework short names
+        cfcContext.put("complianceFrameworks", "soc2,pci-dss,hipaa,gdpr");
         cfcContext.put("createConfigInfrastructure", true);
         cfcContext.put("enableS3VersioningRemediation", true);
         cfcContext.put("enableCloudTrailBucketAccessRemediation", true);
@@ -343,6 +343,86 @@ class ComplianceFactoryTest {
         ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
 
         // Then: Should handle maximal configuration
+        assertDoesNotThrow(factory::create);
+    }
+
+    // ========== Security Hardening Tests (KMS Encryption) ==========
+
+    @Test
+    void testComplianceFactoryWithKmsEncryptionEnabled() {
+        // Given: A stack with KMS encryption enabled
+        App app = new App();
+        Stack stack = new Stack(app, "TestComplianceKms");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestComplianceKms");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("cloudWatchLogsKmsEncryptionEnabled", true);
+        cfcContext.put("cloudTrailEnabled", true);
+        cfcContext.put("domain", "example.com");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext.start(stack, TopologyType.APPLICATION_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        // When: Creating ComplianceFactory with KMS encryption
+        ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
+
+        // Then: Should create with KMS encryption enabled
+        assertDoesNotThrow(factory::create);
+    }
+
+    @Test
+    void testComplianceFactoryKmsEncryptionWithHipaa() {
+        // Given: A stack with HIPAA compliance (should enable KMS)
+        App app = new App();
+        Stack stack = new Stack(app, "TestComplianceHipaaKms");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestComplianceHipaaKms");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("complianceFrameworks", "hipaa");
+        cfcContext.put("cloudTrailEnabled", true);
+        cfcContext.put("domain", "example.com");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext.start(stack, TopologyType.APPLICATION_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        // When: Creating ComplianceFactory with HIPAA
+        ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
+
+        // Then: Should create with KMS encryption for HIPAA compliance
+        assertDoesNotThrow(factory::create);
+    }
+
+    @Test
+    void testComplianceFactoryKmsEncryptionWithPciDss() {
+        // Given: A stack with PCI-DSS compliance (should enable KMS)
+        App app = new App();
+        Stack stack = new Stack(app, "TestCompliancePciKms");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestCompliancePciKms");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("complianceFrameworks", "pci-dss");
+        cfcContext.put("cloudTrailEnabled", true);
+        cfcContext.put("domain", "example.com");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext.start(stack, TopologyType.APPLICATION_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        // When: Creating ComplianceFactory with PCI-DSS
+        ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
+
+        // Then: Should create with KMS encryption for PCI-DSS compliance
         assertDoesNotThrow(factory::create);
     }
 }

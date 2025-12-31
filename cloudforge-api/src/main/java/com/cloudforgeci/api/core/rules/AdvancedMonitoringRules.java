@@ -3,6 +3,7 @@ package com.cloudforgeci.api.core.rules;
 import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
@@ -112,19 +113,37 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         // PRODUCTION profile enables security monitoring which includes Security Hub
         boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
-        boolean securityHubEnabled = getBooleanSetting(ctx, "securityHubEnabled", securityMonitoringEnabled);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean securityHubEnabled = ctx.cfc.securityHubEnabled() != null ?
+            ctx.cfc.securityHubEnabled() : securityMonitoringEnabled;
+
+        // Check ComplianceMatrix to determine if Security Hub is REQUIRED or ADVISORY
+        String complianceFrameworks = ctx.cfc.complianceFrameworks();
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
+
+        ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
+            ComplianceMatrix.SecurityControl.SECURITY_HUB,
+            complianceFrameworks,
+            securityHubEnabled,
+            complianceMode
+        );
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
-            if (!securityHubEnabled) {
+            if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "SECURITYHUB-ENABLED",
-                    "AWS Security Hub required for production compliance dashboard",
+                    "AWS Security Hub required for " + complianceFrameworks + " compliance dashboard",
                     "SecurityHubEnabled",
                     "Enable Security Hub for centralized compliance monitoring and reporting. " +
                     "Provides PCI-DSS, CIS AWS Foundations, and AWS Foundational Security Best Practices. " +
-                    "PCI-DSS Req 10, 11; HIPAA §164.308(a)(1)(ii)(D); SOC2 CC7.2; GDPR Art.32(1)(d). " +
-                    "Note: PRODUCTION security profile enables security monitoring by default. " +
                     "Set securityHubEnabled = true in deployment context."
+                ));
+            } else if (result == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("Security Hub recommended but not required for " +
+                    (complianceFrameworks != null ? complianceFrameworks : "this deployment"));
+                rules.add(ComplianceRule.pass(
+                    "SECURITYHUB-ENABLED",
+                    "Security Hub is advisory for " + complianceFrameworks + " (recommended but not required)"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -135,19 +154,20 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                 ));
             }
 
-            // Security Hub standards enabled
+            // Security Hub standards enabled (advisory - best practice recommendation)
+            if (securityHubEnabled) {
+            // Security Hub standards enabled (advisory - best practice recommendation)
             if (securityHubEnabled) {
                 boolean pciDssStandardEnabled = getBooleanSetting(ctx, "securityHubPciDssEnabled", false);
                 boolean cisStandardEnabled = getBooleanSetting(ctx, "securityHubCisEnabled", false);
                 boolean awsFoundationalEnabled = getBooleanSetting(ctx, "securityHubAwsFoundationalEnabled", true);
 
-                // Check if at least one standard is enabled
+                // Check if at least one standard is enabled (advisory recommendation)
                 if (!pciDssStandardEnabled && !cisStandardEnabled && !awsFoundationalEnabled) {
-                    rules.add(ComplianceRule.fail(
+                    LOG.warning("Security Hub best practice: At least one compliance standard should be enabled");
+                    rules.add(ComplianceRule.pass(
                         "SECURITYHUB-STANDARDS",
-                        "At least one Security Hub standard must be enabled",
-                        "Enable PCI-DSS, CIS, or AWS Foundational Security Best Practices standard. " +
-                        "Set securityHubPciDssEnabled = true or securityHubCisEnabled = true."
+                        "Security Hub standards recommended but not required (Enable PCI-DSS, CIS, or AWS Foundational for enhanced compliance tracking)"
                     ));
                 } else {
                     rules.add(ComplianceRule.pass(
@@ -166,14 +186,13 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                         (securityMonitoringEnabled ? " (via security profile)" : "")
                     ));
                 } else {
-                    rules.add(ComplianceRule.fail(
+                    LOG.warning("Security Hub best practice: Automated remediation recommended for production");
+                    rules.add(ComplianceRule.pass(
                         "SECURITYHUB-AUTO-REMEDIATION",
-                        "Automated remediation recommended for Security Hub findings",
-                        "Configure EventBridge rules for automatic remediation of common findings. " +
-                        "Set securityHubAutoRemediation = true when implemented."
+                        "Security Hub auto-remediation recommended but not required"
                     ));
                 }
-            }
+            }            }
         } else {
             // For non-production, advisory
             if (securityHubEnabled) {
@@ -211,18 +230,37 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         // PRODUCTION profile enables security monitoring which includes Inspector
         boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
-        boolean inspectorEnabled = getBooleanSetting(ctx, "inspectorEnabled", securityMonitoringEnabled);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean inspectorEnabled = ctx.cfc.inspectorEnabled() != null ?
+            ctx.cfc.inspectorEnabled() : securityMonitoringEnabled;
+
+        // Check ComplianceMatrix to determine if Inspector is REQUIRED or ADVISORY
+        String complianceFrameworks = ctx.cfc.complianceFrameworks();
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
+
+        ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
+            ComplianceMatrix.SecurityControl.VULNERABILITY_SCANNING,
+            complianceFrameworks,
+            inspectorEnabled,
+            complianceMode
+        );
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
-            if (!inspectorEnabled) {
+            if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "INSPECTOR-ENABLED",
-                    "Amazon Inspector required for production vulnerability scanning",
+                    "Amazon Inspector required for " + complianceFrameworks + " vulnerability scanning",
                     "InspectorEnabled",
                     "Enable Inspector for automated vulnerability scanning of EC2 instances and containers. " +
-                    "PCI-DSS Req 6.2, 11.2; HIPAA §164.308(a)(8); SOC2 CC7.1; GDPR Art.32(1)(d). " +
-                    "Note: PRODUCTION security profile enables security monitoring by default. " +
+                    "PCI-DSS Req 6.2, 11.2 requires vulnerability scanning. " +
                     "Set inspectorEnabled = true in deployment context."
+                ));
+            } else if (result == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("Inspector recommended but not required for " +
+                    (complianceFrameworks != null ? complianceFrameworks : "this deployment"));
+                rules.add(ComplianceRule.pass(
+                    "INSPECTOR-ENABLED",
+                    "Inspector is advisory for " + complianceFrameworks + " (recommended but not required)"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -245,7 +283,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                     ));
                 }
 
-                // Continuous scanning (default to true for PRODUCTION)
+                // Continuous scanning (advisory - best practice recommendation)
                 boolean inspectorContinuousScanning = getBooleanSetting(ctx, "inspectorContinuousScanning", securityMonitoringEnabled);
 
                 if (inspectorContinuousScanning) {
@@ -255,11 +293,10 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                         (securityMonitoringEnabled ? " (via security profile)" : "")
                     ));
                 } else {
-                    rules.add(ComplianceRule.fail(
+                    LOG.warning("Inspector best practice: Continuous scanning recommended for production");
+                    rules.add(ComplianceRule.pass(
                         "INSPECTOR-CONTINUOUS",
-                        "Continuous scanning recommended for production",
-                        "Enable continuous vulnerability scanning in Inspector. " +
-                        "Set inspectorContinuousScanning = true."
+                        "Inspector continuous scanning recommended but not required"
                     ));
                 }
             }
@@ -296,7 +333,9 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
     private List<ComplianceRule> validateMacie(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        boolean macieEnabled = getBooleanSetting(ctx, "macieEnabled", false);
+        // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+        boolean macieEnabled = ctx.cfc.macieEnabled() != null ?
+            ctx.cfc.macieEnabled() : false;
 
         // Macie is critical for GDPR and HIPAA compliance
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
@@ -325,7 +364,9 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
             // Automated discovery jobs
             if (macieEnabled) {
-                boolean macieAutomatedDiscovery = getBooleanSetting(ctx, "macieAutomatedDiscovery", false);
+                // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
+                boolean macieAutomatedDiscovery = ctx.cfc.macieAutomatedDiscoveryEnabled() != null ?
+                    ctx.cfc.macieAutomatedDiscoveryEnabled() : false;
 
                 if (!macieAutomatedDiscovery) {
                     rules.add(ComplianceRule.fail(
@@ -380,12 +421,10 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!complianceDashboardEnabled) {
-                rules.add(ComplianceRule.fail(
+                LOG.warning("Best practice: CloudWatch compliance dashboard recommended for production monitoring");
+                rules.add(ComplianceRule.pass(
                     "COMPLIANCE-DASHBOARD",
-                    "CloudWatch compliance dashboard recommended for production",
-                    "Create CloudWatch dashboard to visualize compliance metrics. " +
-                    "Note: PRODUCTION security profile enables security monitoring by default. " +
-                    "Set complianceDashboardEnabled = true when dashboard is created."
+                    "Compliance dashboard recommended but not required"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -401,13 +440,10 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         if (ctx.security == SecurityProfile.PRODUCTION) {
             if (!securityAlertingEnabled) {
-                rules.add(ComplianceRule.fail(
+                LOG.warning("Best practice: Security alerting (SNS) recommended for production incidents");
+                rules.add(ComplianceRule.pass(
                     "SECURITY-ALERTING",
-                    "Security alerting (SNS) required for production incidents",
-                    "Configure SNS topics for security alerts from GuardDuty, Security Hub, Config. " +
-                    "PCI-DSS Req 10, 12.10; HIPAA §164.308(a)(6); SOC2 CC7.3. " +
-                    "Note: PRODUCTION security profile enables security monitoring by default. " +
-                    "Set securityAlertingEnabled = true when SNS topics are configured."
+                    "Security alerting recommended but not required"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(

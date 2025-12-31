@@ -33,6 +33,20 @@ CloudForge 3.0 introduces automatic database provisioning for applications that 
 
 ---
 
+## Supported Database Engines
+
+CloudForge 3.0 supports the following RDS database engines:
+
+| Engine | Supported Versions | Use Cases |
+|--------|-------------------|-----------|
+| **PostgreSQL** | 11, 12, 13, 14, 15, 16 | Most applications (GitLab, Mattermost, Harbor, Superset, Metabase, Grafana) |
+| **MySQL** | 5.7, 8.0, 8.0.32-35 | Legacy applications requiring MySQL |
+| **MariaDB** | 10.6, 10.11 | MySQL-compatible alternative |
+
+> **Note:** Aurora PostgreSQL and Aurora MySQL are defined in the interface but not yet implemented in RdsFactory. Regular RDS instances are provisioned instead.
+
+---
+
 ## Database Requirements by Application
 
 CloudForge applications have three types of database requirements:
@@ -366,6 +380,142 @@ INFO: RDS deletion protection remediation disabled (enableRdsDeletionProtectionR
 
 ---
 
+## Advanced Database Configuration
+
+### Custom Database Parameters
+
+Applications can override database parameter group settings through the `DatabaseSpec` interface:
+
+```java
+public class MyApplicationSpec implements ApplicationSpec, DatabaseSpec {
+    @Override
+    public Map<String, String> databaseParameters() {
+        return Map.of(
+            "max_connections", "200",
+            "shared_buffers", "256MB",
+            "work_mem", "16MB",
+            "log_statement", "all"  // Log all SQL statements for audit
+        );
+    }
+}
+```
+
+**Default Parameters by Engine:**
+
+| Engine | Parameters | Purpose |
+|--------|-----------|---------|
+| PostgreSQL | `log_statement=ddl`, `log_connections=1`, `log_disconnections=1` | Audit logging |
+| MySQL | `general_log=1`, `slow_query_log=1`, `long_query_time=2` | Performance monitoring |
+| MariaDB | `general_log=1`, `slow_query_log=1`, `long_query_time=2` | Performance monitoring |
+
+### Database Initialization Scripts
+
+Run SQL scripts after database creation:
+
+```java
+public class MyApplicationSpec implements ApplicationSpec, DatabaseSpec {
+    @Override
+    public List<String> databaseInitScripts() {
+        return List.of(
+            "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;",
+            "CREATE EXTENSION IF NOT EXISTS pgcrypto;",
+            "CREATE SCHEMA IF NOT EXISTS app_schema;"
+        );
+    }
+}
+```
+
+> **⚠️ Status:** Init scripts are defined in the `DatabaseSpec` interface but automatic execution is not yet implemented in RdsFactory. Scripts must be run manually after database creation.
+
+### Custom Backup Retention
+
+Override default backup retention periods:
+
+```java
+public class MyApplicationSpec implements ApplicationSpec, DatabaseSpec {
+    @Override
+    public int backupRetentionDays() {
+        return 30;  // 30-day retention (1-35 days allowed)
+    }
+}
+```
+
+**Default Retention by Security Profile:**
+- **DEV:** 7 days
+- **STAGING:** 14 days
+- **PRODUCTION:** 30 days
+
+### Read Replicas for Scaling
+
+For read-heavy workloads, applications can request read replicas:
+
+```java
+public class MyApplicationSpec implements ApplicationSpec, DatabaseSpec {
+    @Override
+    public boolean requiresReadReplicas() {
+        return true;
+    }
+
+    @Override
+    public int readReplicaCount() {
+        return 2;  // 0-5 replicas allowed
+    }
+
+    @Override
+    public Map<String, String> containerEnvironmentVariables(
+            String fqdn, boolean sslEnabled, String authMode, DatabaseConnection dbConn) {
+        // Access read replica endpoints
+        if (dbConn != null && dbConn.hasReadReplicas()) {
+            List<String> readEndpoints = dbConn.readReplicaEndpoints();
+            // Configure app to use read replicas for queries
+        }
+        return Map.of(/*...*/);
+    }
+}
+```
+
+> **⚠️ Status:** Read replica methods are defined in the `DatabaseSpec` interface but automatic provisioning is not yet implemented in RdsFactory. Read replicas must be created manually via AWS Console or CLI.
+
+### Performance Insights
+
+Performance Insights is automatically enabled for PRODUCTION security profile:
+
+- **PRODUCTION:** Enabled with long-term retention (7 years), 60-second monitoring
+- **STAGING/DEV:** Disabled (cost optimization)
+
+**Implementation Detail:**
+```java
+// From RdsFactory.java:285-298
+if (security == SecurityProfile.PRODUCTION) {
+    instanceBuilder
+        .enablePerformanceInsights(true)
+        .performanceInsightRetention(PerformanceInsightRetention.LONG_TERM)
+        .monitoringInterval(Duration.seconds(60));
+}
+```
+
+> **Note:** Performance Insights cannot be configured via deployment context - it's automatic based on security profile.
+
+### Credential Rotation
+
+**Current Status:** Credentials are stored in AWS Secrets Manager but automatic rotation is not yet enabled.
+
+```java
+// From RdsFactory.java:177-184
+// TODO: Enable automatic credential rotation for production
+// Requires Lambda function or hosted rotation setup
+// if (security == SecurityProfile.PRODUCTION) {
+//     databaseSecret.addRotationSchedule(instanceId + "Rotation",
+//         RotationScheduleOptions.builder()
+//             .automaticallyAfter(Duration.days(30))
+//             .build());
+// }
+```
+
+**Manual Rotation:** You can manually rotate credentials through AWS Secrets Manager console or CLI.
+
+---
+
 ## Best Practices
 
 ### 1. Production Deployments
@@ -671,16 +821,10 @@ aws rds create-db-instance-read-replica \
 - [DatabaseSpec Interface](../../cloudforge-core/src/main/java/com/cloudforge/core/interfaces/DatabaseSpec.java) - Database requirement specification
 - [RdsFactory](../../cloudforge-api/src/main/java/com/cloudforgeci/api/database/RdsFactory.java) - RDS provisioning implementation
 
-### Integration Summaries
-- [DATABASE-INTEGRATION-SUMMARY.md](../../DATABASE-INTEGRATION-SUMMARY.md) - Complete integration overview
-- [DATABASE-REMEDIATIONS.md](../../DATABASE-REMEDIATIONS.md) - Remediation implementation details
-- [DATABASE-PHASE2-AND-REMEDIATIONS-COMPLETE.md](../../DATABASE-PHASE2-AND-REMEDIATIONS-COMPLETE.md) - Phase 2 completion status
-
 ### Compliance Frameworks
-- [PCI-DSS Compliance](../compliance/PCI-DSS.md)
-- [HIPAA Compliance](../compliance/HIPAA.md)
-- [SOC2 Compliance](../compliance/SOC2.md)
-- [GDPR Compliance](../compliance/GDPR.md)
+- [Compliance Overview](../compliance/README.md) - All compliance documentation
+- [PCI-DSS Compliance](../compliance/PCI_DSS_COMPLIANCE.md)
+- [Multi-Framework Guide](../compliance/MULTI_FRAMEWORK_COMPLIANCE.md)
 
 ---
 
@@ -688,8 +832,8 @@ aws rds create-db-instance-read-replica \
 
 For issues or questions:
 1. Check the [Troubleshooting](#troubleshooting) section
-2. Review [DATABASE-IMPLEMENTATION-GAPS.md](../../DATABASE-IMPLEMENTATION-GAPS.md) for known limitations
-3. Open an issue at [github.com/anthropics/cloudforge](https://github.com/anthropics/cloudforge/issues)
+2. Review [Advanced Database Configuration](#advanced-database-configuration) section for features in development
+3. Open an issue at [github.com/CloudForgeCI/cfc-core](https://github.com/CloudForgeCI/cfc-core/issues)
 
 ---
 

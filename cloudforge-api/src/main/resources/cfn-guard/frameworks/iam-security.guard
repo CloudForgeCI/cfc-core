@@ -1,0 +1,261 @@
+# IAM Security - Cross-Framework Security Control
+#
+# CloudFormation Guard rules for IAM policy and role validation
+# Applies across all compliance frameworks (HIPAA, PCI-DSS, SOC2, GDPR, ISO 27001, etc.)
+#
+# CloudForge Core - Multi-Layer Compliance Validation
+# Layer 3: Template-Level Policy Enforcement (cfn-guard)
+
+# ============================================================================
+# IAM Policy - Least Privilege Violations
+# ============================================================================
+
+# Detect full administrator permissions (Action: "*", Resource: "*")
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_policy_full_admin when
+    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy', 'AWS::IAM::Role', 'AWS::IAM::User', 'AWS::IAM::Group'] {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Action exists {
+                        Action != '*' <<[IAM Security] Policies must not grant full administrator access (Action: "*")>>
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Detect policies with unrestricted resource access
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_policy_unrestricted_resource when
+    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Action == '*' {
+                        when Resource exists {
+                            Resource != '*' <<[IAM Security] Policies with Action: "*" must restrict Resource scope>>
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Detect unrestricted STS AssumeRole permissions
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_policy_sts_assume when
+    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Action exists {
+                        when Action == 'sts:AssumeRole' OR Action == 'sts:*' {
+                            when Resource exists {
+                                Resource != '*' <<[IAM Security] sts:AssumeRole permissions must specify restricted resources>>
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Detect unrestricted iam:PassRole permissions
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_policy_iam_passrole when
+    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Action exists {
+                        when Action == 'iam:PassRole' OR Action == 'iam:*' {
+                            when Resource exists {
+                                Resource != '*' <<[IAM Security] iam:PassRole permissions must specify restricted resources>>
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Detect overly permissive S3 access (s3:*)
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_policy_s3_allaccess when
+    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Action exists {
+                        when Action == 's3:*' {
+                            when Resource exists {
+                                Resource != '*' <<[IAM Security] s3:* permissions must specify restricted bucket resources>>
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ============================================================================
+# IAM Role Trust Policy
+# ============================================================================
+
+# Detect IAM roles with public trust policies
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_role_assume_public when
+    resourceType == 'AWS::IAM::Role' {
+
+    when Properties.AssumeRolePolicyDocument exists {
+        when Properties.AssumeRolePolicyDocument.Statement exists {
+            Properties.AssumeRolePolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Principal exists {
+                        Principal != '*' <<[IAM Security] IAM roles must not allow public trust (Principal: "*")>>
+                        when Principal.AWS exists {
+                            Principal.AWS != '*' <<[IAM Security] IAM roles must not allow public trust (Principal.AWS: "*")>>
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ============================================================================
+# IAM User and Group Best Practices
+# ============================================================================
+
+# Detect policies directly attached to users
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_user_attached_policies when
+    resourceType == 'AWS::IAM::User' {
+
+    when Properties.Policies exists {
+        Properties.Policies empty <<[IAM Security] Policies should not be directly attached to IAM users. Use IAM groups or roles instead.>>
+    }
+}
+
+# Detect inline policies on users, groups, and roles
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_no_inline_policies when
+    resourceType in ['AWS::IAM::User', 'AWS::IAM::Group', 'AWS::IAM::Role'] {
+
+    when Properties.Policies exists {
+        Properties.Policies empty <<[IAM Security] Avoid inline policies. Use managed policies for consistent, auditable access control.>>
+    }
+}
+
+# ============================================================================
+# IAM Sensitive Actions
+# ============================================================================
+
+# Detect sensitive IAM actions granted without restriction
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_sensitive_actions when
+    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Action exists {
+                        when Action in ['iam:CreateAccessKey', 'iam:AttachUserPolicy', 'iam:AttachRolePolicy',
+                                       'iam:AttachGroupPolicy', 'iam:CreatePolicyVersion', 'iam:SetDefaultPolicyVersion',
+                                       'iam:UpdateAssumeRolePolicy', 'iam:CreateLoginProfile', 'iam:UpdateLoginProfile'] {
+                            when Resource exists {
+                                Resource != '*' <<[IAM Security] Sensitive IAM actions must have resource restrictions>>
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Detect unrestricted Lambda invoke permissions
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_lambda_invoke_all when
+    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Action exists {
+                        when Action in ['lambda:InvokeFunction', 'lambda:*'] {
+                            when Resource exists {
+                                Resource != '*' <<[IAM Security] Lambda invoke permissions must specify function resources>>
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Detect unrestricted Secrets Manager access
+# CloudForge Mapping: ACCESS_CONTROL control
+rule iam_security_secretsmanager_allaccess when
+    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+
+    when Properties.PolicyDocument exists {
+        when Properties.PolicyDocument.Statement exists {
+            Properties.PolicyDocument.Statement[*] {
+                when Effect == 'Allow' {
+                    when Action exists {
+                        when Action in ['secretsmanager:GetSecretValue', 'secretsmanager:*'] {
+                            when Resource exists {
+                                Resource != '*' <<[IAM Security] Secrets Manager access must specify secret resources>>
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ============================================================================
+# KMS Key Policy Public Access
+# ============================================================================
+
+# Detect KMS key policies with public access
+# CloudForge Mapping: KEY_MANAGEMENT control
+rule iam_security_kms_public when
+    resourceType == 'AWS::KMS::Key' {
+
+    when Properties.KeyPolicy exists {
+        when Properties.KeyPolicy.Statement exists {
+            Properties.KeyPolicy.Statement[*] {
+                when Effect == 'Allow' {
+                    when Principal exists {
+                        Principal != '*' <<[IAM Security] KMS key policies must not allow public access (Principal: "*")>>
+                        when Principal.AWS exists {
+                            Principal.AWS != '*' <<[IAM Security] KMS key policies must not allow public access (Principal.AWS: "*")>>
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

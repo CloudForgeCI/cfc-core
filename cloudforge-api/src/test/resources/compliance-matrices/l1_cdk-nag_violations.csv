@@ -1,0 +1,7 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+L1_VIOLATION_EC2_SOC2_no-ssl-public,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,SOC2,,,FAIL,jenkins,,,,,
+L1_VIOLATION_FARGATE_SOC2_no-ssl-public,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,public-no-nat,SOC2,,,FAIL,jenkins,,,,,
+L1_VIOLATION_EC2_HIPAA_no-ssl,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,HIPAA,,,FAIL,jenkins,,,,,
+L1_VIOLATION_FARGATE_HIPAA_no-ssl,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,HIPAA,,,FAIL,jenkins,,,,,
+L1_VIOLATION_EC2_PCI-DSS_no-ssl,EC2,DEV,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,,,
+L1_VIOLATION_FARGATE_PCI-DSS_no-ssl,FARGATE,DEV,with-domain,ssl-disabled,no-subdomain,none,private-with-nat,PCI-DSS,,,FAIL,jenkins,,,,,

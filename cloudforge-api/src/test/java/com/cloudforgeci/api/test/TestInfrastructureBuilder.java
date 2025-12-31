@@ -220,6 +220,34 @@ public class TestInfrastructureBuilder {
         return this;
     }
 
+    public TestInfrastructureBuilder createMockHttpsListener() {
+        ensureSystemContextCreated();
+        // Create a mock HTTPS listener to satisfy HTTPS_STRICT mode requirements
+        if (ctx.alb.get().isEmpty()) {
+            throw new IllegalStateException("ALB must be created before HTTPS listener");
+        }
+        if (ctx.cert.get().isEmpty()) {
+            throw new IllegalStateException("Certificate must be created before HTTPS listener");
+        }
+
+        software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener httpsListener =
+            software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener.Builder
+                .create(stack, "MockHttpsListener")
+                .loadBalancer(ctx.alb.get().orElseThrow())
+                .port(443)
+                .protocol(software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol.HTTPS)
+                .certificates(java.util.List.of(
+                    software.amazon.awscdk.services.elasticloadbalancingv2.ListenerCertificate.fromCertificateManager(
+                        ctx.cert.get().orElseThrow()
+                    )
+                ))
+                .defaultAction(software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction.fixedResponse(200))
+                .build();
+
+        ctx.https.set(httpsListener);
+        return this;
+    }
+
     public TestInfrastructureBuilder createFargate() {
         // Create Fargate factory (which will create the container internally)
         FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");

@@ -90,50 +90,52 @@ class GitLabOidcIntegrationTest {
 
     @Test
     void testGetConfigurationFileWithCognito() {
+        // GitLab uses environment variables for container configuration
         String config = integration.getConfigurationFile(cognitoConfig);
-        assertNotNull(config);
+        assertNull(config);
+    }
 
-        // Verify it contains gitlab.rb configuration
+    @Test
+    void testGetConfigurationFileWithIdentityCenter() {
+        // GitLab uses environment variables for container configuration
+        String config = integration.getConfigurationFile(identityCenterConfig);
+        assertNull(config);
+    }
+
+    @Test
+    void testEnvironmentVariablesContainGitLabConfig() {
+        Map<String, String> envVars = integration.getEnvironmentVariables(cognitoConfig);
+        assertNotNull(envVars);
+        assertTrue(envVars.containsKey("GITLAB_OMNIBUS_CONFIG"));
+
+        String config = envVars.get("GITLAB_OMNIBUS_CONFIG");
+        // Verify it contains gitlab_rails OIDC configuration
         assertTrue(config.contains("omniauth"));
         assertTrue(config.contains("openid_connect"));
         assertTrue(config.contains("cognito-client-id"));
     }
 
     @Test
-    void testGetConfigurationFileWithIdentityCenter() {
-        String config = integration.getConfigurationFile(identityCenterConfig);
-        assertNotNull(config);
+    void testEnvironmentVariablesContainOidcEndpoints() {
+        Map<String, String> envVars = integration.getEnvironmentVariables(cognitoConfig);
+        String config = envVars.get("GITLAB_OMNIBUS_CONFIG");
 
-        assertTrue(config.contains("omniauth"));
-        assertTrue(config.contains("ic-client-id"));
-    }
-
-    @Test
-    void testConfigurationContainsEndpoints() {
-        String config = integration.getConfigurationFile(cognitoConfig);
-
-        // Should contain OIDC endpoints
-        assertTrue(config.contains("discovery") || config.contains("issuer") || config.contains("authorize"));
-    }
-
-    @Test
-    void testConfigurationContainsClientIdPlaceholder() {
-        String config = integration.getConfigurationFile(cognitoConfig);
-        
-        // Should reference client secret placeholder
-        assertTrue(config.contains("client_secret") || config.contains("secret"));
+        // Should contain OIDC configuration
+        assertTrue(config.contains("discovery"));
+        assertTrue(config.contains("issuer"));
     }
 
     @Test
     void testGetConfigurationFilePath() {
+        // GitLab uses environment variables for container configuration
         String path = integration.getConfigurationFilePath();
-        assertEquals("/etc/gitlab/gitlab.rb", path);
+        assertNull(path);
     }
 
     @Test
     void testGetContainerStartupCommand() {
         String command = integration.getContainerStartupCommand();
-        assertEquals("/assets/wrapper", command);
+        assertEquals("/assets/init-container", command);
     }
 
     @Test

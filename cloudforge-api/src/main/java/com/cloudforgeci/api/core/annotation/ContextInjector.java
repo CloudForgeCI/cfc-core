@@ -15,11 +15,12 @@ import java.lang.reflect.Method;
 /**
  * Standalone utility for injecting context values into annotated fields.
  *
- * <p>This allows any class (not just BaseFactory subclasses) to use @DeploymentContext,
- * @SystemContext, and @SecurityProfileConfiguration annotations for dependency injection.</p>
+ * <p>This allows any class (not just BaseFactory subclasses) to use the
+ * {@code @DeploymentContext}, {@code @SystemContext}, and
+ * {@code @SecurityProfileConfiguration} annotations for dependency injection.</p>
  *
  * <h2>Slot Auto-Extraction</h2>
- * <p>When a @SystemContext field references a Slot, the injector automatically extracts
+ * <p>When a {@code @SystemContext} field references a Slot, the injector automatically extracts
  * the value from the Slot. No need for manual {@code .get().orElseThrow()} calls!</p>
  *
  * <p>Usage examples:</p>

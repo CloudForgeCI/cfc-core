@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.api;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforge.core.enums.AuthMode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -333,11 +334,11 @@ class DeploymentContextBoundaryTest {
         }
 
         @Test
-        @DisplayName("logRetentionDays should default to 7 when not specified")
+        @DisplayName("logRetentionDays should default to null when not specified (SecurityProfileConfiguration provides default)")
         void logRetentionDaysDefault() {
             DeploymentContext ctx = createContext(new LinkedHashMap<>());
 
-            assertEquals(7, ctx.logRetentionDays(), "Log retention should default to 7 days");
+            assertNull(ctx.logRetentionDays(), "Log retention should default to null (SecurityProfileConfiguration provides actual default)");
         }
     }
 
@@ -457,10 +458,11 @@ class DeploymentContextBoundaryTest {
         @DisplayName("authMode should handle kebab-case")
         void authModeKebabCase() {
             Map<String, Object> config = new LinkedHashMap<>();
-            config.put("authMode", "jenkins-oidc");
+            config.put("authMode", "application-oidc");
+            config.put("enableSsl", true);  // OIDC requires SSL
             DeploymentContext ctx = createContext(config);
 
-            assertEquals("jenkins-oidc", ctx.authMode(), "Auth mode should handle kebab-case");
+            assertEquals(AuthMode.APPLICATION_OIDC, ctx.authMode(), "Auth mode should handle kebab-case");
         }
     }
 
@@ -600,7 +602,7 @@ class DeploymentContextBoundaryTest {
             assertEquals(1, ctx.minInstanceCapacity());
             assertEquals(1, ctx.maxInstanceCapacity());
             assertEquals(60, ctx.cpuTargetUtilization());
-            assertEquals(7, ctx.logRetentionDays());
+            assertNull(ctx.logRetentionDays()); // null = SecurityProfileConfiguration provides default
         }
 
         @Test

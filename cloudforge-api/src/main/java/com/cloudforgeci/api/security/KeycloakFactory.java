@@ -3,6 +3,7 @@ package com.cloudforgeci.api.security;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import software.amazon.awscdk.services.ec2.IVpc;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ecs.FargateService;
@@ -75,7 +76,7 @@ public class KeycloakFactory extends BaseFactory {
     private String oidcProvider;
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("stackName")
     private String stackName;
@@ -128,7 +129,7 @@ public class KeycloakFactory extends BaseFactory {
         }
 
         // Only deploy for application-level authentication
-        if (!"application-oidc".equals(authMode)) {
+        if (authMode != AuthMode.APPLICATION_OIDC) {
             LOG.info("Keycloak not needed - authMode is '" + authMode + "' (expected 'application-oidc')");
             return;
         }

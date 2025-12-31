@@ -1,8 +1,9 @@
 package com.cloudforgeci.api.interfaces;
 
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
-import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.RemovalPolicy;
@@ -99,6 +100,23 @@ public interface SecurityProfileConfiguration {
     boolean isVpcEndpointsEnabled();
 
     /**
+     * Whether security group egress should be restricted to VPC CIDR only.
+     *
+     * <p>When enabled, security groups are created with allowAllOutbound=false
+     * and egress is restricted to the VPC CIDR range. This requires VPC endpoints
+     * for AWS services (CloudWatch, RDS monitoring, etc.) to function properly.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Allow all outbound for simplicity</li>
+     *   <li>STAGING: false - Allow all outbound unless explicitly enabled</li>
+     *   <li>PRODUCTION: false - Requires VPC endpoints, enable via deployment context</li>
+     * </ul>
+     *
+     * @return true if egress should be restricted to VPC CIDR only
+     */
+    boolean isRestrictSecurityGroupEgressEnabled();
+
+    /**
      * Whether NAT Gateway should be used for outbound internet access.
      */
     boolean isNatGatewayEnabled();
@@ -113,12 +131,27 @@ public interface SecurityProfileConfiguration {
      * @param networkMode The network mode (public-no-nat, private-with-nat)
      * @return The number of NAT gateways to create (0, 1, or 2)
      */
-    int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode);
+    int getNatGatewayCount(TopologyType topology, RuntimeType runtime, NetworkMode networkMode);
 
     /**
      * Whether WAF should be enabled for web application protection.
      */
     boolean isWafEnabled();
+
+    /**
+     * Whether HTTPS-only mode should be enforced (no HTTP listener).
+     *
+     * <p>When enabled with SSL, the ALB will only listen on port 443 (HTTPS).
+     * No HTTP listener on port 80 will be created, meaning users must explicitly
+     * use https:// in their URLs. This provides stricter security by eliminating
+     * any unencrypted traffic path.</p>
+     *
+     * <p>This is required by PCI-DSS and NIST for strict TLS enforcement.
+     * When disabled (default), HTTP requests are redirected to HTTPS.</p>
+     *
+     * @return true if HTTPS-only mode should be enforced
+     */
+    boolean isHttpsStrictEnabled();
 
     /**
      * Whether CloudFront should be enabled for DDoS protection.
@@ -140,6 +173,45 @@ public interface SecurityProfileConfiguration {
      * Whether cross-region backup replication should be enabled.
      */
     boolean isCrossRegionBackupEnabled();
+
+    /**
+     * Whether backup vault lock should be enabled.
+     *
+     * <p>Vault lock prevents backups from being deleted or modified for a
+     * specified retention period, ensuring immutability of backup data.</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>PCI-DSS - Immutable backup retention</li>
+     *   <li>HIPAA - Data integrity and retention requirements</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when PCI-DSS or HIPAA compliance is required</li>
+     * </ul>
+     *
+     * @return true if backup vault lock should be enabled
+     */
+    boolean isBackupVaultLockEnabled();
+
+    /**
+     * Whether backup vault should be retained on stack deletion.
+     *
+     * <p>When enabled, the backup vault and its backups are retained even
+     * after the CloudFormation stack is deleted, ensuring compliance with
+     * data retention policies.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Allow cleanup for development</li>
+     *   <li>STAGING: false - Allow cleanup for staging</li>
+     *   <li>PRODUCTION: true when compliance frameworks are enabled</li>
+     * </ul>
+     *
+     * @return true if backup vault should be retained
+     */
+    boolean isBackupVaultRetentionEnabled();
 
     // Compliance and Audit
     /**
@@ -255,6 +327,81 @@ public interface SecurityProfileConfiguration {
      * WARNING: Complex operation requiring snapshot recreation.
      */
     boolean isRdsEncryptionRemediationEnabled();
+
+    /**
+     * Whether RDS deletion protection remediation should be enabled.
+     * Automatically enables deletion protection on RDS instances.
+     */
+    boolean isRdsDeletionProtectionRemediationEnabled();
+
+    /**
+     * Whether RDS deletion protection should be enabled.
+     *
+     * <p>Deletion protection prevents accidental deletion of RDS instances.
+     * Required for production deployments with compliance frameworks (PCI-DSS, HIPAA, SOC2, GDPR).</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Allow easy cleanup during development</li>
+     *   <li>STAGING: false - Allow cleanup of staging environments</li>
+     *   <li>PRODUCTION: true when compliance frameworks are enabled</li>
+     * </ul>
+     *
+     * @return true if deletion protection should be enabled
+     */
+    boolean isRdsDeletionProtectionEnabled();
+
+    /**
+     * Whether RDS database Multi-AZ deployment should be enabled.
+     *
+     * <p>Multi-AZ provides high availability and automatic failover for RDS instances.
+     * Required for production deployments with compliance frameworks (PCI-DSS, HIPAA, SOC2, GDPR, NIST).</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>PCI-DSS - Req 12.10.4: Critical system availability</li>
+     *   <li>HIPAA - §164.308(a)(7)(ii)(B): Disaster recovery</li>
+     *   <li>SOC2 - A1.2: System availability</li>
+     *   <li>GDPR - Art. 32(1)(b): System resilience</li>
+     *   <li>NIST - CP-6: Alternate Storage Site</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - Single AZ for cost savings</li>
+     *   <li>STAGING: false by default, true when compliance frameworks require it</li>
+     *   <li>PRODUCTION: true when compliance frameworks are enabled</li>
+     * </ul>
+     *
+     * @return true if RDS Multi-AZ should be enabled
+     */
+    boolean isRdsDatabaseMultiAzEnabled();
+
+    /**
+     * Whether Security Hub remediation should be enabled.
+     * Automatically enables AWS Security Hub if not already enabled.
+     * Security Hub aggregates security findings from GuardDuty, Inspector, Macie, and other services.
+     */
+    boolean isSecurityHubRemediationEnabled();
+
+    /**
+     * Whether Inspector remediation should be enabled.
+     * Automatically enables Amazon Inspector v2 for vulnerability scanning if not already enabled.
+     * Inspector continuously scans EC2, ECR, and Lambda for software vulnerabilities.
+     */
+    boolean isInspectorRemediationEnabled();
+
+    /**
+     * Whether Macie remediation should be enabled.
+     * Automatically enables Amazon Macie for sensitive data discovery if not already enabled.
+     * WARNING: Has cost implications - charges per GB of data scanned.
+     */
+    boolean isMacieRemediationEnabled();
+
+    /**
+     * Whether ECR image scanning remediation should be enabled.
+     * Automatically enables scan-on-push for ECR repositories if not already enabled.
+     * Scans container images for vulnerabilities before they can be deployed.
+     */
+    boolean isEcrImageScanningRemediationEnabled();
 
     // ==================== Authentication Configuration ====================
 
@@ -418,4 +565,254 @@ public interface SecurityProfileConfiguration {
      * @return true if advanced security features should be enabled
      */
     boolean isAdvancedSecurityEnabled();
+
+    // ==================== Advanced Monitoring & Threat Detection ====================
+
+    /**
+     * Whether Amazon Macie should be enabled for sensitive data discovery.
+     *
+     * <p>Macie uses machine learning to automatically discover, classify, and protect
+     * sensitive data like PII and PHI in S3 buckets.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true - Required for HIPAA/GDPR compliance</li>
+     * </ul>
+     *
+     * @return true if Macie should be enabled
+     */
+    boolean isMacieEnabled();
+
+    /**
+     * Whether Macie automated discovery jobs should be enabled.
+     *
+     * <p>Automated discovery continuously scans S3 buckets for sensitive data.
+     * Only applicable when Macie is enabled.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not applicable</li>
+     *   <li>STAGING: false - Manual discovery preferred</li>
+     *   <li>PRODUCTION: true - Continuous monitoring required for compliance</li>
+     * </ul>
+     *
+     * @return true if automated discovery should be enabled
+     */
+    boolean isMacieAutomatedDiscoveryEnabled();
+
+    /**
+     * Whether AWS Security Hub should be enabled for centralized security findings.
+     *
+     * <p>Security Hub aggregates security findings from multiple AWS services
+     * (GuardDuty, Inspector, Macie, etc.) and provides compliance checks.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not needed for development</li>
+     *   <li>STAGING: true - Test security monitoring</li>
+     *   <li>PRODUCTION: true - Centralized security monitoring</li>
+     * </ul>
+     *
+     * @return true if Security Hub should be enabled
+     */
+    boolean isSecurityHubEnabled();
+
+    /**
+     * Whether Amazon Inspector should be enabled for vulnerability scanning.
+     *
+     * <p>Inspector automatically discovers workloads and continuously scans
+     * for software vulnerabilities and network exposure.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not needed for development</li>
+     *   <li>STAGING: true - Test vulnerability scanning</li>
+     *   <li>PRODUCTION: true - Required for PCI-DSS and security best practices</li>
+     * </ul>
+     *
+     * @return true if Inspector should be enabled
+     */
+    boolean isInspectorEnabled();
+
+    /**
+     * Whether anti-malware protection should be enabled on EC2 instances.
+     *
+     * <p>Deploys and configures anti-malware software on EC2 instances.
+     * Only applicable for EC2 runtime (not Fargate).</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true (EC2 only) - Required for PCI-DSS Req 5.1</li>
+     * </ul>
+     *
+     * @return true if anti-malware should be enabled
+     */
+    boolean isAntiMalwareEnabled();
+
+    /**
+     * Whether file integrity monitoring should be enabled on EC2 instances.
+     *
+     * <p>Monitors critical system files for unauthorized changes.
+     * Only applicable for EC2 runtime (not Fargate).</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true (EC2 only) - Required for PCI-DSS Req 11.5</li>
+     * </ul>
+     *
+     * @return true if file integrity monitoring should be enabled
+     */
+    boolean isFileIntegrityMonitoringEnabled();
+
+    /**
+     * Whether container runtime security monitoring should be enabled.
+     *
+     * <p>Monitors container behavior at runtime for suspicious activity.
+     * Only applicable for containerized workloads (Fargate, ECS, EKS).</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true (Fargate/ECS only) - Security best practice</li>
+     * </ul>
+     *
+     * @return true if container runtime security should be enabled
+     */
+    boolean isContainerRuntimeSecurityEnabled();
+
+    /**
+     * Whether container image scanning should be enabled.
+     *
+     * <p>Scans container images for vulnerabilities before deployment.
+     * Typically handled by ECR image scanning.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: true - Test image scanning pipeline</li>
+     *   <li>PRODUCTION: true - Required for secure container deployments</li>
+     * </ul>
+     *
+     * @return true if container image scanning should be enabled
+     */
+    boolean isContainerImageScanningEnabled();
+
+    // ==================== Enhanced Compliance Controls ====================
+
+    /**
+     * Whether CloudWatch Logs should be encrypted with KMS.
+     *
+     * <p>KMS encryption provides customer-managed encryption keys for CloudWatch
+     * Logs, ensuring audit logs are protected at rest with customer-controlled keys.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Standard CloudWatch encryption is sufficient</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when compliance frameworks require it (PCI-DSS, HIPAA, SOC2)</li>
+     * </ul>
+     *
+     * @return true if CloudWatch Logs should use KMS encryption
+     */
+    boolean isCloudWatchLogsKmsEncryptionEnabled();
+
+    /**
+     * Whether CloudTrail Insights should be enabled for anomaly detection.
+     *
+     * <p>CloudTrail Insights analyzes API activity and detects unusual patterns
+     * that may indicate security incidents or operational issues.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when compliance frameworks require it (SOC2, NIST)</li>
+     * </ul>
+     *
+     * @return true if CloudTrail Insights should be enabled
+     */
+    boolean isCloudTrailInsightsEnabled();
+
+    /**
+     * Whether Route53 DNS query logging should be enabled.
+     *
+     * <p>DNS query logging captures all DNS queries made to Route53 hosted zones,
+     * providing network visibility for security monitoring and forensics.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when compliance frameworks require it (SOC2, NIST)</li>
+     * </ul>
+     *
+     * @return true if Route53 query logging should be enabled
+     */
+    boolean isRoute53QueryLoggingEnabled();
+
+    /**
+     * Whether S3 Object Lock should be enabled for compliance audit buckets.
+     *
+     * <p>S3 Object Lock prevents objects from being deleted or overwritten for a
+     * specified retention period, ensuring immutability of audit trails.</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>HIPAA § 164.312(c)(1) - Data integrity controls</li>
+     *   <li>PCI-DSS Req 10.7 - Audit log retention</li>
+     *   <li>SEC 17a-4 - Record retention for financial services</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - Not required for development</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when HIPAA or PCI-DSS compliance is required</li>
+     * </ul>
+     *
+     * @return true if S3 Object Lock should be enabled
+     */
+    boolean isS3ObjectLockEnabled();
+
+    /**
+     * Whether SNS topics should be encrypted with KMS.
+     *
+     * <p>KMS encryption provides customer-managed encryption keys for SNS topics,
+     * ensuring messages at rest are protected with customer-controlled keys.</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>HIPAA § 164.312(a)(2)(iv) - Encryption of ePHI</li>
+     *   <li>HIPAA § 164.312(e)(2)(ii) - Encryption mechanism</li>
+     *   <li>PCI-DSS Req 8.2.1 - Data at rest encryption</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - Standard SNS encryption is sufficient</li>
+     *   <li>STAGING: false - Optional for testing</li>
+     *   <li>PRODUCTION: true when HIPAA or PCI-DSS compliance is required</li>
+     * </ul>
+     *
+     * @return true if SNS topics should use KMS encryption
+     */
+    boolean isSnsKmsEncryptionEnabled();
+
+    /**
+     * Whether EC2 instances must use IMDSv2 (Instance Metadata Service Version 2).
+     *
+     * <p>IMDSv2 uses session-based tokens and provides better protection against
+     * SSRF attacks and unauthorized access to instance metadata.</p>
+     *
+     * <p>Required for:</p>
+     * <ul>
+     *   <li>HIPAA § 164.308(a)(3)(i) - Access controls</li>
+     *   <li>HIPAA § 164.308(a)(4)(ii)(A) - Access authorization</li>
+     *   <li>HIPAA § 164.312(a)(1) - Access control</li>
+     *   <li>PCI-DSS - Defense in depth</li>
+     * </ul>
+     *
+     * <ul>
+     *   <li>DEV: false - IMDSv1 allowed for development convenience</li>
+     *   <li>STAGING: true - Test production security behavior</li>
+     *   <li>PRODUCTION: true - Required for HIPAA compliance</li>
+     * </ul>
+     *
+     * @return true if IMDSv2 should be required
+     */
+    boolean isImdsv2Required();
 }

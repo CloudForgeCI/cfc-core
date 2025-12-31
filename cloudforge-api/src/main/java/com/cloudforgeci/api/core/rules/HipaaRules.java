@@ -1,10 +1,12 @@
 package com.cloudforgeci.api.core.rules;
 
 import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
@@ -61,15 +63,10 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
 
         LOG.info("Installing HIPAA Security Rule compliance validation for " + ctx.security);
 
-        // Determine compliance mode
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        // Get compliance mode (already resolved to enum with proper default)
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
-        LOG.info("  Compliance mode: " + complianceMode +
-                 (complianceModeStr == null ? " (default for " + ctx.security + ")" : " (explicit)"));
+        LOG.info("  Compliance mode: " + complianceMode);
 
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();
@@ -242,8 +239,8 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // §164.312(a)(2)(i) - Unique User Identification (Required)
-        String authMode = ctx.cfc.authMode();
-        if ("none".equals(authMode)) {
+        AuthMode authMode = ctx.cfc.authMode();
+        if (authMode == AuthMode.NONE) {
             rules.add(ComplianceRule.fail(
                 "HIPAA-164.312(a)(2)(i)-Auth",
                 "Unique user identification required for PHI access (HIPAA §164.312(a)(2)(i))",
@@ -373,8 +370,8 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // §164.312(d) - Authentication (Required)
-        String authMode = ctx.cfc.authMode();
-        if ("none".equals(authMode)) {
+        AuthMode authMode = ctx.cfc.authMode();
+        if (authMode == AuthMode.NONE) {
             rules.add(ComplianceRule.fail(
                 "HIPAA-164.312(d)-Auth",
                 "Authentication required for all users accessing ePHI (HIPAA §164.312(d))",
@@ -388,7 +385,7 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         }
 
         // Multi-factor authentication (Addressable - but highly recommended)
-        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
+        if (authMode == AuthMode.ALB_OIDC || authMode == AuthMode.APPLICATION_OIDC) {
             // Check if using Cognito with MFA (compliant) or SSO (requires ssoInstanceArn)
             boolean usingCognitoWithMfa = Boolean.TRUE.equals(ctx.cfc.cognitoAutoProvision())
                                        && Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled());
@@ -425,6 +422,22 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
         );
 
+        // §164.312(e)(2)(i) - SSL/TLS must be enabled for encrypted ePHI transmission
+        if (!ctx.cfc.enableSsl()) {
+            rules.add(ComplianceRule.fail(
+                "HIPAA-164.312(e)(2)(i)-SSL",
+                "SSL/TLS must be enabled for encrypted transmission of ePHI (HIPAA §164.312(e)(2)(i))",
+                "ALBHttpsOnly",
+                "Set enableSsl=true for production HIPAA compliance."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "HIPAA-164.312(e)(2)(i)-SSL",
+                "SSL/TLS enabled for transmission security (HIPAA §164.312(e)(2)(i))",
+                "ALBHttpsOnly"
+            ));
+        }
+
         // §164.312(e)(2)(i) - Integrity Controls (Addressable - we enforce)
         if (ctx.cert.get().isEmpty()) {
             rules.add(ComplianceRule.fail(
@@ -458,7 +471,7 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         }
 
         // Network isolation
-        if ("public-no-nat".equals(ctx.cfc.networkMode())) {
+        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
             rules.add(ComplianceRule.fail(
                 "HIPAA-164.312(e)(1)-Network",
                 "Private network mode required for PHI systems (HIPAA §164.312(e)(1))",
@@ -512,17 +525,10 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
      * §164.316(b)(2)(i): Retain documentation for 6 years.
      */
     private boolean isRetentionSufficient(RetentionDays retention) {
-        // HIPAA requires 6 years (2190 days)
-        // CloudWatch RetentionDays enum doesn't have 6-year option
-        // TWO_YEARS (730 days) does NOT meet HIPAA requirement
-        // Must use combination of CloudWatch (1-2 years) + S3 archival (additional 4-5 years)
-
-        // For validation purposes, we accept TWO_YEARS or longer with a warning
-        // Organizations should implement additional archival to S3 for full 6-year retention
-        return retention == RetentionDays.TWO_YEARS ||
-               retention == RetentionDays.THREE_YEARS ||
-               retention == RetentionDays.FIVE_YEARS ||
-               retention == RetentionDays.SIX_YEARS ||
+        // HIPAA STRICTLY requires 6 years (2190 days) - §164.316(b)(2)(i)
+        // ONLY accept SIX_YEARS (2192 days) or longer
+        // TWO_YEARS (731 days), THREE_YEARS (1096 days), FIVE_YEARS (1827 days) do NOT meet HIPAA requirement
+        return retention == RetentionDays.SIX_YEARS ||
                retention == RetentionDays.SEVEN_YEARS ||
                retention == RetentionDays.EIGHT_YEARS ||
                retention == RetentionDays.NINE_YEARS ||
@@ -555,10 +561,10 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         report.append("\n");
 
         report.append("Technical Safeguards (§164.312):\n");
-        report.append("  ✓ Access Control (§164.312(a)(1)): ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Access Control (§164.312(a)(1)): ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Audit Controls (§164.312(b)): ").append(config.isCloudTrailEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Integrity Controls (§164.312(c)(1)): ").append(config.isCloudTrailEnabled() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Authentication (§164.312(d)): ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Authentication (§164.312(d)): ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Transmission Security (§164.312(e)(1)): ").append(ctx.cert.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Encryption at Rest (§164.312(a)(2)(iv)): ").append(config.isEbsEncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ Encryption in Transit (§164.312(e)(2)(ii)): ").append(config.isEfsEncryptionInTransitEnabled() ? "ENABLED" : "DISABLED").append("\n");

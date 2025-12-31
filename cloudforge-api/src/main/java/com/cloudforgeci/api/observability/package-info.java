@@ -79,7 +79,7 @@
  * <p>Development environments get basic monitoring to save costs, while production
  * gets comprehensive protection. All configurable without code changes.</p>
  *
- * @see SecurityProfile
- * @see SecurityProfileConfiguration
+ * @see com.cloudforge.core.enums.SecurityProfile
+ * @see com.cloudforge.core.annotation.SecurityProfileConfiguration
  */
 package com.cloudforgeci.api.observability;

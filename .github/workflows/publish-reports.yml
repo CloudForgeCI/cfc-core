@@ -26,6 +26,129 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Download existing GitHub Pages history
+        run: |
+          set -x  # Enable debug logging
+          echo "📥 Downloading existing GitHub Pages history folder..."
+          mkdir -p github-pages-reports/history
+
+          # Base URL for GitHub Pages
+          PAGES_BASE_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          PAGES_URL="${PAGES_BASE_URL}/history"
+          echo "🔗 Pages URL: ${PAGES_URL}"
+
+          # Get today's date to skip downloading it (we'll create it fresh)
+          TODAY=$(date +'%Y-%m-%d')
+          echo "📅 Today's date: ${TODAY}"
+
+          # Try to fetch the history index to see if it exists
+          if curl -f -s "${PAGES_URL}/index.html" > /dev/null 2>&1; then
+            echo "✅ Found existing history, downloading..."
+
+            # Download history index to get list of dates
+            curl -s "${PAGES_URL}/index.html" -o /tmp/history-index.html
+
+            # Extract date folders (format: YYYY-MM-DD) from the HTML
+            echo "📋 Extracting available historical dates..."
+            DATES=$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' /tmp/history-index.html | sort -u)
+            echo "Found dates: ${DATES}"
+
+            echo "${DATES}" | while read -r date; do
+              # Skip today's date - we'll create it fresh with new reports
+              if [ "$date" = "$TODAY" ]; then
+                echo "  ⏭️  Skipping ${date} (will be created fresh with new reports)"
+                continue
+              fi
+
+              echo "  📁 Downloading history for ${date}..."
+              mkdir -p "github-pages-reports/history/${date}"
+
+              # Try to download manifest file first (preferred method)
+              if curl -f -s "${PAGES_URL}/${date}/manifest.txt" -o /tmp/manifest-${date}.txt 2>/dev/null; then
+                echo "    📋 Found manifest.txt, downloading files from manifest..."
+                FILE_COUNT=0
+
+                while IFS= read -r filepath || [ -n "$filepath" ]; do
+                  # Skip empty lines
+                  [ -z "$filepath" ] && continue
+
+                  # Create directory structure and download file
+                  mkdir -p "github-pages-reports/history/${date}/$(dirname "$filepath")"
+                  if curl -f -s "${PAGES_URL}/${date}/${filepath}" -o "github-pages-reports/history/${date}/${filepath}" 2>/dev/null; then
+                    FILE_COUNT=$((FILE_COUNT + 1))
+                  fi
+                done < /tmp/manifest-${date}.txt
+
+                echo "    ✅ Downloaded ${FILE_COUNT} files from manifest"
+              else
+                echo "    ⚠️  No manifest.txt found, falling back to known subdirectories..."
+
+                # Fallback: Download each subdirectory index and key files
+                for subdir in coverage validation drift sbom deployment-metrics changeset-validation; do
+                  # Try to download the index file to check if subdir exists
+                  if curl -f -s "${PAGES_URL}/${date}/${subdir}/index.html" > /dev/null 2>&1; then
+                    echo "    ↓ ${subdir}/"
+                    mkdir -p "github-pages-reports/history/${date}/${subdir}"
+
+                    # Download index.html for this subdir
+                    curl -s "${PAGES_URL}/${date}/${subdir}/index.html" \
+                      -o "github-pages-reports/history/${date}/${subdir}/index.html" 2>/dev/null || true
+
+                    # Download known important files for each subdir type
+                    case "$subdir" in
+                      validation)
+                        for file in truth-table.json truth-table-report.html compliance-truth-table.json \
+                                    compliance-truth-table-report.html compliance-validation-dashboard.html \
+                                    compliance-validation-results.json comprehensive-synth-report.html; do
+                          curl -f -s "${PAGES_URL}/${date}/${subdir}/${file}" \
+                            -o "github-pages-reports/history/${date}/${subdir}/${file}" 2>/dev/null || true
+                        done
+                        # Download cfn-templates directory if exists
+                        mkdir -p "github-pages-reports/history/${date}/${subdir}/cfn-templates"
+                        ;;
+                      coverage)
+                        for module in cloudforge-api cloudforge-core; do
+                          mkdir -p "github-pages-reports/history/${date}/${subdir}/${module}"
+                          curl -f -s "${PAGES_URL}/${date}/${subdir}/${module}/index.html" \
+                            -o "github-pages-reports/history/${date}/${subdir}/${module}/index.html" 2>/dev/null || true
+                        done
+                        ;;
+                      sbom)
+                        for file in cfc-core-sbom.json cfc-core-sbom.xml; do
+                          curl -f -s "${PAGES_URL}/${date}/${subdir}/${file}" \
+                            -o "github-pages-reports/history/${date}/${subdir}/${file}" 2>/dev/null || true
+                        done
+                        mkdir -p "github-pages-reports/history/${date}/${subdir}/dependency-check"
+                        for file in dependency-check-report.html dependency-check-report.json dependency-check-report.xml; do
+                          curl -f -s "${PAGES_URL}/${date}/${subdir}/dependency-check/${file}" \
+                            -o "github-pages-reports/history/${date}/${subdir}/dependency-check/${file}" 2>/dev/null || true
+                        done
+                        ;;
+                    esac
+                  else
+                    echo "    ⊘ ${subdir}/ (not found)"
+                  fi
+                done
+              fi
+
+              # Download the date's index.html
+              curl -s "${PAGES_URL}/${date}/index.html" \
+                -o "github-pages-reports/history/${date}/index.html" 2>/dev/null || true
+
+              echo "  ✅ Completed download for ${date}"
+            done
+
+            # Download history index.html
+            curl -s "${PAGES_URL}/index.html" \
+              -o "github-pages-reports/history/index.html" 2>/dev/null || true
+
+            echo "✅ Downloaded existing history (excluding today's date)"
+            echo "📊 Final structure:"
+            find github-pages-reports/history -type d -name "20*" | sort
+          else
+            echo "ℹ️  No existing history found (this may be the first run)"
+          fi
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -43,6 +166,43 @@ jobs:
         run: |
           npm install -g aws-cdk
           cdk --version
+
+      - name: Cache cfn-guard binary
+        id: cache-cfn-guard
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/cfn-guard
+          key: cfn-guard-v3.1.1-${{ runner.os }}-sha256-106db0d9
+
+      - name: Install CloudFormation Guard (cfn-guard)
+        if: steps.cache-cfn-guard.outputs.cache-hit != 'true'
+        run: |
+          echo "Installing CloudFormation Guard for Layer 3 template validation..."
+          CFN_GUARD_VERSION="3.1.1"
+          CFN_GUARD_TARBALL="cfn-guard-v3-ubuntu-latest.tar.gz"
+          CFN_GUARD_SHA256="106db0d9fcbd11605349dd650145ac148a0c10e2c0b4d6f45898f222f3ae473b"
+
+          # Download cfn-guard
+          wget -q "https://github.com/aws-cloudformation/cloudformation-guard/releases/download/${CFN_GUARD_VERSION}/${CFN_GUARD_TARBALL}"
+
+          # Verify SHA256 checksum
+          echo "${CFN_GUARD_SHA256}  ${CFN_GUARD_TARBALL}" | sha256sum -c -
+          if [ $? -ne 0 ]; then
+            echo "❌ SHA256 checksum verification failed!"
+            exit 1
+          fi
+          echo "✅ SHA256 checksum verified"
+
+          # Extract and install
+          tar -xzf "${CFN_GUARD_TARBALL}"
+          sudo mv cfn-guard-v3-ubuntu-latest/cfn-guard /usr/local/bin/
+          cfn-guard --version
+          echo "✅ cfn-guard installed successfully"
+
+      - name: Verify cfn-guard installation
+        run: |
+          cfn-guard --version
+          echo "✅ cfn-guard ready"
 
       - name: Get current date for cache key
         id: date
@@ -95,49 +255,79 @@ jobs:
           mvn surefire-report:report -B
           echo "Surefire HTML reports generated"
 
+      - name: Generate aggregated JavaDoc
+        run: |
+          echo "Generating aggregated JavaDoc for all modules..."
+          mvn javadoc:aggregate -B
+          echo "JavaDoc generated at target/site/apidocs"
+
+      - name: Set up Node.js for Docusaurus
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: docs/web/package-lock.json
+
+      - name: Build Docusaurus documentation
+        run: |
+          echo "Installing Docusaurus dependencies..."
+          cd docs/web
+          npm ci
+          echo "Building Docusaurus site..."
+          npm run build
+          echo "Docusaurus build complete at docs/web/build"
+
       - name: Prepare CDK dependencies for validation
         run: |
           cd cfc-testing
-          if [ ! -d "target/classes" ]; then
-            echo "Building cfc-testing module..."
-            mvn clean install -DskipTests -B
-          fi
-          if [ ! -d "target/dependency" ]; then
-            mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B
-          fi
+          echo "Ensuring clean build of cfc-testing module for synthesis tests..."
+          echo "This ensures all latest changes from cloudforge-core are picked up"
+          mvn clean package -DskipTests -B
           chmod +x scripts/*.sh 2>/dev/null || true
           mkdir -p scripts/validation-results scripts/synth-results
 
       - name: Run CFC validation (full mode for GitHub Pages)
-        continue-on-error: true
         run: |
+          set -o pipefail
           cd cfc-testing
           echo "Running full validation to generate truth tables for GitHub Pages..."
-          bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log || true
+          bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log
 
-      - name: Generate compliance truth table report
-        continue-on-error: true
+      - name: Generate compliance truth table reports
         run: |
+          set -o pipefail
           cd cfc-testing/scripts
-          echo "Generating compliance truth table report..."
-          python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log || true
+          echo "Generating compliance truth table reports..."
+          echo "1️⃣ Running compliance tests and generating multi-layer validation dashboard..."
+          python3 compliance-report-generator.py 2>&1 | tee compliance-report.log
+          echo "2️⃣ Generating truth table and test matrix from test results..."
+          python3 truth-table-generator.py 2>&1 | tee truth-table-validation.log
+          echo "3️⃣ Generating comprehensive FrameworkRules unit test report..."
+          python3 compliance-truth-table-generator.py 2>&1 | tee compliance-truth-table.log
           echo "✅ Compliance truth table generation complete"
 
       - name: Run comprehensive synthesis tests
-        continue-on-error: true
         run: |
+          set -o pipefail
           cd cfc-testing
           echo "Running comprehensive synthesis tests..."
-          bash scripts/comprehensive-synth-test.sh 2>&1 | tee comprehensive-synth.log || true
+          bash scripts/comprehensive-synth-test.sh 2>&1 | tee comprehensive-synth.log
           echo "✅ Comprehensive synthesis tests complete"
 
       - name: Generate synthesis test HTML report
-        continue-on-error: true
         run: |
           cd cfc-testing/scripts
           echo "Generating synthesis test HTML report..."
-          bash generate-synth-report.sh || true
+          bash generate-synth-report.sh
           echo "✅ Synthesis report generation complete"
+
+      - name: Capture build snapshot
+        run: |
+          set -o pipefail
+          cd cfc-testing
+          echo "Capturing build snapshot for progression tracking..."
+          bash scripts/capture-build-snapshot.sh 2>&1 | tee scripts/validation-results/build-snapshot.log
+          echo "✅ Build snapshot captured"
 
       - name: Create reports directory structure
         run: |
@@ -199,6 +389,28 @@ jobs:
             echo "✅ Copied comprehensive synthesis log"
           fi
 
+      - name: Copy cdk-nag compliance reports
+        run: |
+          echo "Copying cdk-nag compliance reports..."
+          mkdir -p github-pages-reports/validation/cdk-nag
+
+          # Copy cdk-nag NagReport files (JSON and CSV)
+          if [ -d "cfc-testing/cdk.out" ]; then
+            find cfc-testing/cdk.out -name "*-NagReport.json" -exec cp {} github-pages-reports/validation/cdk-nag/ \; 2>/dev/null || true
+            find cfc-testing/cdk.out -name "*-NagReport.csv" -exec cp {} github-pages-reports/validation/cdk-nag/ \; 2>/dev/null || true
+
+            JSON_COUNT=$(find github-pages-reports/validation/cdk-nag -name "*.json" 2>/dev/null | wc -l)
+            CSV_COUNT=$(find github-pages-reports/validation/cdk-nag -name "*.csv" 2>/dev/null | wc -l)
+
+            if [ "$JSON_COUNT" -gt 0 ] || [ "$CSV_COUNT" -gt 0 ]; then
+              echo "✅ Copied cdk-nag reports: ${JSON_COUNT} JSON, ${CSV_COUNT} CSV"
+            else
+              echo "ℹ️  No cdk-nag reports found in cdk.out"
+            fi
+          else
+            echo "ℹ️  cdk.out directory not found"
+          fi
+
       - name: Copy drift reports
         run: |
           echo "Copying drift reports..."
@@ -214,6 +426,19 @@ jobs:
             echo "✅ Copied drift-report.txt"
           fi
 
+          # Copy build snapshots for drift tracking
+          mkdir -p github-pages-reports/drift/snapshots
+          if [ -d "cfc-testing/scripts/validation-results/snapshots" ]; then
+            cp -r cfc-testing/scripts/validation-results/snapshots/* github-pages-reports/drift/snapshots/ 2>/dev/null || true
+            echo "✅ Copied build snapshots"
+          fi
+
+          # Copy latest snapshot as current-snapshot.json for easy access
+          if [ -f "cfc-testing/scripts/validation-results/snapshots/latest-snapshot.json" ]; then
+            cp "$(readlink -f cfc-testing/scripts/validation-results/snapshots/latest-snapshot.json)" github-pages-reports/drift/current-snapshot.json 2>/dev/null || true
+            echo "✅ Copied current snapshot"
+          fi
+
       - name: Generate drift report index
         run: |
           cat > github-pages-reports/drift/index.html << 'EOF'
@@ -222,7 +447,7 @@ jobs:
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Drift Detection Reports</title>
+              <title>Drift Detection & Build Snapshots</title>
               <style>
                   * { margin: 0; padding: 0; box-sizing: border-box; }
                   body {
@@ -231,7 +456,7 @@ jobs:
                       min-height: 100vh;
                       padding: 20px;
                   }
-                  .container { max-width: 1200px; margin: 0 auto; }
+                  .container { max-width: 1400px; margin: 0 auto; }
                   .header {
                       text-align: center;
                       color: white;
@@ -243,7 +468,28 @@ jobs:
                       border-radius: 12px;
                       padding: 30px;
                       box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                      margin-bottom: 20px;
                   }
+                  .tabs {
+                      display: flex;
+                      gap: 10px;
+                      margin-bottom: 20px;
+                      border-bottom: 2px solid #e1e4e8;
+                      padding-bottom: 10px;
+                  }
+                  .tab {
+                      padding: 10px 20px;
+                      background: #f6f8fa;
+                      border: none;
+                      border-radius: 6px 6px 0 0;
+                      cursor: pointer;
+                      font-size: 1em;
+                      transition: all 0.2s;
+                  }
+                  .tab:hover { background: #e1e4e8; }
+                  .tab.active { background: #667eea; color: white; }
+                  .tab-content { display: none; }
+                  .tab-content.active { display: block; }
                   pre {
                       background: #f6f8fa;
                       padding: 20px;
@@ -260,21 +506,114 @@ jobs:
                       font-weight: 500;
                   }
                   .back-link:hover { text-decoration: underline; }
+                  .stats-grid {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                      gap: 20px;
+                      margin-bottom: 30px;
+                  }
+                  .stat-card {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 20px;
+                      border-radius: 10px;
+                      text-align: center;
+                  }
+                  .stat-card h3 { font-size: 2em; margin-bottom: 5px; }
+                  .stat-card p { opacity: 0.9; }
+                  .info-grid {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                      gap: 20px;
+                      margin-bottom: 30px;
+                  }
+                  .info-card {
+                      background: #f6f8fa;
+                      padding: 20px;
+                      border-radius: 8px;
+                      border-left: 4px solid #667eea;
+                  }
+                  .info-card h4 { margin-bottom: 10px; color: #24292e; }
+                  .info-card ul { list-style: none; }
+                  .info-card li { padding: 5px 0; color: #586069; }
+                  .info-card li strong { color: #24292e; }
+                  table {
+                      width: 100%;
+                      border-collapse: collapse;
+                      margin-top: 15px;
+                  }
+                  th, td {
+                      padding: 12px;
+                      text-align: left;
+                      border-bottom: 1px solid #e1e4e8;
+                  }
+                  th { background: #f6f8fa; font-weight: 600; }
+                  .pass { color: #28a745; }
+                  .fail { color: #dc3545; }
+                  .badge {
+                      display: inline-block;
+                      padding: 4px 8px;
+                      border-radius: 12px;
+                      font-size: 0.8em;
+                      font-weight: 500;
+                  }
+                  .badge-success { background: #28a745; color: white; }
+                  .badge-danger { background: #dc3545; color: white; }
+                  .badge-info { background: #17a2b8; color: white; }
+                  .snapshot-list { margin-top: 20px; }
+                  .snapshot-item {
+                      background: #f6f8fa;
+                      padding: 15px;
+                      margin-bottom: 10px;
+                      border-radius: 6px;
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                  }
+                  .snapshot-item a { color: #667eea; text-decoration: none; }
+                  .snapshot-item a:hover { text-decoration: underline; }
               </style>
           </head>
           <body>
               <div class="container">
                   <div class="header">
-                      <h1>🔍 Drift Detection Reports</h1>
-                      <p>Infrastructure Validation Results</p>
+                      <h1>🔍 Drift Detection & Build Snapshots</h1>
+                      <p>Infrastructure Validation & Progression Tracking</p>
                   </div>
                   <div class="content">
                       <a href="../index.html" class="back-link">← Back to Dashboard</a>
-                      <h2>Drift Report</h2>
-                      <pre id="report-content">Loading...</pre>
+
+                      <div class="tabs">
+                          <button class="tab active" onclick="showTab('snapshot')">📸 Build Snapshot</button>
+                          <button class="tab" onclick="showTab('drift')">📊 Drift Report</button>
+                          <button class="tab" onclick="showTab('history')">📜 Snapshot History</button>
+                      </div>
+
+                      <div id="snapshot-tab" class="tab-content active">
+                          <h2>Current Build Snapshot</h2>
+                          <div id="snapshot-summary">Loading snapshot data...</div>
+                      </div>
+
+                      <div id="drift-tab" class="tab-content">
+                          <h2>Drift Report</h2>
+                          <pre id="report-content">Loading...</pre>
+                      </div>
+
+                      <div id="history-tab" class="tab-content">
+                          <h2>Snapshot History</h2>
+                          <div id="snapshot-history" class="snapshot-list">Loading history...</div>
+                      </div>
                   </div>
               </div>
               <script>
+                  function showTab(tabName) {
+                      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                      document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
+                      document.getElementById(`${tabName}-tab`).classList.add('active');
+                  }
+
+                  // Load drift report
                   fetch('drift-report.txt')
                       .then(response => response.text())
                       .then(text => {
@@ -282,6 +621,144 @@ jobs:
                       })
                       .catch(err => {
                           document.getElementById('report-content').textContent = 'No drift report available';
+                      });
+
+                  // Load current snapshot
+                  fetch('current-snapshot.json')
+                      .then(response => response.json())
+                      .then(data => {
+                          const meta = data.snapshot_metadata || {};
+                          const testMatrix = data.test_matrix || {};
+                          const complexity = data.configuration_complexity || {};
+                          const byProfile = testMatrix.by_security_profile || {};
+                          const byRuntime = testMatrix.by_runtime || {};
+                          const byNetwork = testMatrix.by_network_mode || {};
+                          const byFramework = testMatrix.by_framework || {};
+
+                          let html = `
+                              <div class="stats-grid">
+                                  <div class="stat-card">
+                                      <h3>${testMatrix.total_tests || 0}</h3>
+                                      <p>Total Tests</p>
+                                  </div>
+                                  <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                                      <h3>${testMatrix.passed || 0}</h3>
+                                      <p>Passed</p>
+                                  </div>
+                                  <div class="stat-card" style="background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);">
+                                      <h3>${testMatrix.failed || 0}</h3>
+                                      <p>Failed</p>
+                                  </div>
+                                  <div class="stat-card" style="background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);">
+                                      <h3>${Object.keys(data.templates || {}).length}</h3>
+                                      <p>Templates</p>
+                                  </div>
+                              </div>
+
+                              <div class="info-grid">
+                                  <div class="info-card">
+                                      <h4>📋 Build Metadata</h4>
+                                      <ul>
+                                          <li><strong>Date:</strong> ${meta.build_date || 'N/A'} ${meta.build_time || ''}</li>
+                                          <li><strong>Version:</strong> ${meta.version || 'N/A'}</li>
+                                          <li><strong>Branch:</strong> ${meta.git_branch || 'N/A'}</li>
+                                          <li><strong>Commit:</strong> ${meta.git_short_commit || 'N/A'}</li>
+                                      </ul>
+                                  </div>
+                                  <div class="info-card">
+                                      <h4>🎯 By Security Profile</h4>
+                                      <ul>
+                                          ${Object.entries(byProfile).map(([profile, stats]) =>
+                                              `<li><strong>${profile}:</strong> ${stats.passed}/${stats.total} passed</li>`
+                                          ).join('')}
+                                      </ul>
+                                  </div>
+                                  <div class="info-card">
+                                      <h4>⚙️ By Runtime</h4>
+                                      <ul>
+                                          ${Object.entries(byRuntime).map(([runtime, stats]) =>
+                                              `<li><strong>${runtime}:</strong> ${stats.passed}/${stats.total} passed</li>`
+                                          ).join('')}
+                                      </ul>
+                                  </div>
+                                  <div class="info-card">
+                                      <h4>🔧 Configuration Complexity</h4>
+                                      <ul>
+                                          <li><strong>Minimal:</strong> ${complexity.minimal_configs || 0}</li>
+                                          <li><strong>With Domain:</strong> ${complexity.with_domain || 0}</li>
+                                          <li><strong>With SSL:</strong> ${complexity.with_ssl || 0}</li>
+                                          <li><strong>With WAF:</strong> ${complexity.with_waf || 0}</li>
+                                      </ul>
+                                  </div>
+                                  <div class="info-card">
+                                      <h4>📋 By Compliance Framework</h4>
+                                      <ul>
+                                          ${Object.entries(byFramework).map(([framework, stats]) =>
+                                              `<li><strong>${framework}:</strong> ${stats.passed}/${stats.total} passed</li>`
+                                          ).join('')}
+                                      </ul>
+                                  </div>
+                                  <div class="info-card">
+                                      <h4>🌐 By Network Mode</h4>
+                                      <ul>
+                                          ${Object.entries(byNetwork).map(([network, stats]) =>
+                                              `<li><strong>${network}:</strong> ${stats.passed}/${stats.total} passed</li>`
+                                          ).join('')}
+                                      </ul>
+                                  </div>
+                              </div>
+
+                              <h3>Templates</h3>
+                              <table>
+                                  <thead>
+                                      <tr><th>Template</th><th>Resources</th><th>Hash</th></tr>
+                                  </thead>
+                                  <tbody>
+                                      ${Object.entries(data.templates || {}).map(([name, info]) =>
+                                          `<tr>
+                                              <td>${name}</td>
+                                              <td>${info.resource_count || 0}</td>
+                                              <td><code>${(info.template_hash || '').substring(0, 12)}...</code></td>
+                                          </tr>`
+                                      ).join('')}
+                                  </tbody>
+                              </table>
+                          `;
+                          document.getElementById('snapshot-summary').innerHTML = html;
+                      })
+                      .catch(err => {
+                          document.getElementById('snapshot-summary').innerHTML = `
+                              <div class="info-card">
+                                  <h4>No Snapshot Data</h4>
+                                  <p>Build snapshot not available. Run capture-build-snapshot.sh to generate.</p>
+                              </div>
+                          `;
+                      });
+
+                  // Load snapshot history
+                  fetch('snapshots/')
+                      .then(response => response.text())
+                      .then(html => {
+                          const parser = new DOMParser();
+                          const doc = parser.parseFromString(html, 'text/html');
+                          const links = Array.from(doc.querySelectorAll('a'))
+                              .filter(a => a.href.includes('snapshot-') && a.href.endsWith('.json'))
+                              .map(a => a.textContent.trim());
+
+                          if (links.length > 0) {
+                              const historyHtml = links.reverse().map(file =>
+                                  `<div class="snapshot-item">
+                                      <span>${file}</span>
+                                      <a href="snapshots/${file}" download>Download</a>
+                                  </div>`
+                              ).join('');
+                              document.getElementById('snapshot-history').innerHTML = historyHtml;
+                          } else {
+                              document.getElementById('snapshot-history').innerHTML = '<p>No snapshot history available.</p>';
+                          }
+                      })
+                      .catch(err => {
+                          document.getElementById('snapshot-history').innerHTML = '<p>No snapshot history available.</p>';
                       });
               </script>
           </body>
@@ -409,6 +886,30 @@ jobs:
           copy_dependency_report "json"
           copy_dependency_report "xml"
 
+      - name: Copy Docusaurus documentation
+        run: |
+          echo "Copying Docusaurus documentation..."
+
+          if [ -d "docs/web/build" ]; then
+            mkdir -p github-pages-reports/documentation
+            cp -r docs/web/build/* github-pages-reports/documentation/
+            echo "✅ Copied Docusaurus documentation"
+          else
+            echo "⚠️  Docusaurus build not found at docs/web/build"
+          fi
+
+      - name: Copy JavaDoc
+        run: |
+          echo "Copying aggregated JavaDoc..."
+
+          if [ -d "target/site/apidocs" ]; then
+            mkdir -p github-pages-reports/javadoc
+            cp -r target/site/apidocs/* github-pages-reports/javadoc/
+            echo "✅ Copied aggregated JavaDoc"
+          else
+            echo "⚠️  JavaDoc not found at target/site/apidocs"
+          fi
+
       - name: Generate reports index page
         run: |
           cat > github-pages-reports/index.html << 'EOF'
@@ -449,6 +950,31 @@ jobs:
                   .header p {
                       font-size: 1.2em;
                       opacity: 0.9;
+                  }
+                  .version-selector {
+                      text-align: center;
+                      margin: 20px 0;
+                  }
+                  .version-dropdown {
+                      display: inline-block;
+                      background: rgba(255,255,255,0.2);
+                      border-radius: 25px;
+                      padding: 5px;
+                  }
+                  .version-dropdown select {
+                      background: white;
+                      border: none;
+                      padding: 10px 20px;
+                      font-size: 1em;
+                      border-radius: 20px;
+                      cursor: pointer;
+                      color: #667eea;
+                      font-weight: 600;
+                      min-width: 200px;
+                  }
+                  .version-dropdown select:focus {
+                      outline: none;
+                      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
                   }
                   .timestamp {
                       text-align: center;
@@ -547,6 +1073,15 @@ jobs:
                       <p>CloudForge CI - Reports Dashboard</p>
                   </div>
 
+                  <div class="version-selector">
+                      <div class="version-dropdown">
+                          <select id="report-version" onchange="navigateToVersion(this.value)">
+                              <option value="" selected>📅 Latest Reports</option>
+                              <option value="history/">📁 Browse History...</option>
+                          </select>
+                      </div>
+                  </div>
+
                   <div class="timestamp">
                       Last updated: <span id="timestamp"></span>
                   </div>
@@ -576,6 +1111,7 @@ jobs:
                               <li><a href="validation/validation-run.log">Validation Log</a></li>
                               <li><a href="validation/compliance-truth-table-report.html">Compliance Truth Table (HTML)</a> <span class="badge badge-success">Auditor</span></li>
                               <li><a href="validation/compliance-truth-table.json">Compliance Truth Table (JSON)</a></li>
+                              <li><a href="validation/compliance-validation-dashboard.html">Multi-Layer Compliance Dashboard</a> <span class="badge badge-info">4 Layers</span></li>
                               <li><a href="validation/comprehensive-synth-report.html">Comprehensive Synthesis Tests</a> <span class="badge badge-info">All Stacks</span></li>
                           </ul>
                       </div>
@@ -619,10 +1155,11 @@ jobs:
                       <div class="card">
                           <div class="card-icon">📚</div>
                           <h2>Documentation</h2>
-                          <p>Project documentation and resources</p>
+                          <p>User guides, API reference, and resources</p>
                           <ul>
+                              <li><a href="documentation/">Browse Documentation</a> <span class="badge badge-success">Docusaurus</span></li>
+                              <li><a href="javadoc/">Java API Reference (JavaDoc)</a> <span class="badge badge-info">API</span></li>
                               <li><a href="https://github.com/CloudForgeCI/cfc-core">GitHub Repository</a></li>
-                              <li><a href="https://github.com/CloudForgeCI/cfc-core/blob/develop/README.md">README</a></li>
                               <li><a href="https://github.com/CloudForgeCI/cfc-core/blob/develop/CONTRIBUTING.md">Contributing Guide</a></li>
                           </ul>
                       </div>
@@ -640,6 +1177,13 @@ jobs:
                   // Set current timestamp
                   const now = new Date();
                   document.getElementById('timestamp').textContent = now.toUTCString();
+
+                  // Navigate to selected version
+                  function navigateToVersion(path) {
+                      if (path) {
+                          window.location.href = path;
+                      }
+                  }
               </script>
           </body>
           </html>
@@ -672,7 +1216,7 @@ jobs:
       - name: List generated reports
         run: |
           echo "Generated reports structure:"
-          find github-pages-reports -type f | head -50
+          find github-pages-reports -type f 2>/dev/null | head -50 || true
 
       - name: Download metrics dashboards artifact
         id: download-metrics
@@ -850,6 +1394,166 @@ jobs:
 
             echo "✅ Created placeholder changeset validation dashboard"
           fi
+
+      - name: Create historical version
+        run: |
+          # Create date-based archive folder
+          REPORT_DATE=$(date +'%Y-%m-%d')
+          HISTORY_DIR="github-pages-reports/history/${REPORT_DATE}"
+
+          # Always create fresh archive for today (download step skips today's date)
+          echo "📦 Creating historical archive for ${REPORT_DATE}..."
+          mkdir -p "${HISTORY_DIR}"
+
+          # Copy current reports to history (excluding history folder itself)
+          for dir in coverage validation drift sbom deployment-metrics changeset-validation documentation javadoc; do
+            if [ -d "github-pages-reports/${dir}" ]; then
+              echo "  Archiving ${dir}..."
+              cp -r "github-pages-reports/${dir}" "${HISTORY_DIR}/" 2>/dev/null || true
+            fi
+          done
+
+          # Generate manifest.txt listing all files (for reliable future downloads)
+          echo "📋 Generating manifest.txt..."
+          cd "${HISTORY_DIR}"
+          find . -type f ! -name "manifest.txt" | sed 's|^\./||' | sort > manifest.txt
+          FILE_COUNT=$(wc -l < manifest.txt)
+          echo "  ✅ Manifest created with ${FILE_COUNT} files"
+          cd - > /dev/null
+
+          # Create archive index.html for this date
+          cat > "${HISTORY_DIR}/index.html" << EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>CFC Core Reports - ${REPORT_DATE}</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+                  .container { max-width: 1200px; margin: 0 auto; }
+                  .header { text-align: center; color: white; padding: 40px 20px; }
+                  .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+                  .content { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+                  .back-link { display: inline-block; margin-bottom: 20px; color: #667eea; text-decoration: none; font-weight: 500; }
+                  .back-link:hover { text-decoration: underline; }
+                  ul { list-style: none; margin: 20px 0; }
+                  li { padding: 12px 0; border-bottom: 1px solid #e1e4e8; }
+                  li:last-child { border-bottom: none; }
+                  a { color: #667eea; text-decoration: none; font-weight: 500; }
+                  a:hover { text-decoration: underline; }
+                  .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: 600; margin-left: 10px; background: #e8daef; color: #6c3483; }
+                  h3 { color: #2c3e50; margin-top: 30px; margin-bottom: 15px; font-size: 1.3em; border-bottom: 2px solid #3498db; padding-bottom: 8px; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>📁 Archived Reports</h1>
+                      <p>Date: ${REPORT_DATE}</p>
+                  </div>
+                  <div class="content">
+                      <a href="../../index.html" class="back-link">← Back to Latest Reports</a>
+                      <h2>Reports from ${REPORT_DATE}</h2>
+
+                      <h3>📊 Code Coverage</h3>
+                      <ul>
+                          <li><a href="coverage/cloudforge-api/index.html">CloudForge API Coverage</a></li>
+                          <li><a href="coverage/cloudforge-core/index.html">CloudForge Core Coverage</a></li>
+                      </ul>
+
+                      <h3>✅ Validation Reports</h3>
+                      <ul>
+                          <li><a href="validation/truth-table-report.html">Truth Table Report</a></li>
+                          <li><a href="validation/compliance-truth-table-report.html">Compliance Truth Table</a> <span class="badge">Auditor</span></li>
+                          <li><a href="validation/compliance-validation-dashboard.html">Multi-Layer Compliance Dashboard</a> <span class="badge">New</span></li>
+                      </ul>
+
+                      <h3>🔒 Security & SBOM</h3>
+                      <ul>
+                          <li><a href="sbom/dependency-check/dependency-check-report.html">Vulnerability Report</a></li>
+                      </ul>
+
+                      <h3>🔍 Drift Detection</h3>
+                      <ul>
+                          <li><a href="drift/index.html">Drift Reports</a></li>
+                      </ul>
+                  </div>
+              </div>
+          </body>
+          </html>
+          EOF
+
+          echo "✅ Created historical archive for ${REPORT_DATE}"
+
+      - name: Update history index
+        run: |
+          HISTORY_BASE="github-pages-reports/history"
+
+          # Create or update history index listing all archived dates
+          mkdir -p "${HISTORY_BASE}"
+
+          # Generate list of available archive dates
+          ARCHIVE_DATES=$(find "${HISTORY_BASE}" -mindepth 1 -maxdepth 1 -type d -name "20*" -exec basename {} \; | sort -r | head -30)
+
+          cat > "${HISTORY_BASE}/index.html" << 'HISTORYEOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>CFC Core - Report History</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+                  .container { max-width: 900px; margin: 0 auto; }
+                  .header { text-align: center; color: white; padding: 40px 20px; }
+                  .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+                  .content { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+                  .back-link { display: inline-block; margin-bottom: 20px; color: #667eea; text-decoration: none; font-weight: 500; }
+                  .back-link:hover { text-decoration: underline; }
+                  .date-list { list-style: none; margin: 20px 0; }
+                  .date-list li { padding: 15px 20px; border-bottom: 1px solid #e1e4e8; display: flex; justify-content: space-between; align-items: center; }
+                  .date-list li:hover { background: #f6f8fa; }
+                  .date-list li:last-child { border-bottom: none; }
+                  a { color: #667eea; text-decoration: none; font-weight: 500; }
+                  a:hover { text-decoration: underline; }
+                  .date-icon { font-size: 1.5em; margin-right: 15px; }
+                  .date-info { display: flex; align-items: center; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>📅 Report History</h1>
+                      <p>Browse historical compliance and coverage reports</p>
+                  </div>
+                  <div class="content">
+                      <a href="../index.html" class="back-link">← Back to Latest Reports</a>
+                      <h2>Archived Reports</h2>
+                      <ul class="date-list" id="archive-list">
+          HISTORYEOF
+
+          # Add each date as a list item
+          for date in ${ARCHIVE_DATES}; do
+            echo "                <li><div class=\"date-info\"><span class=\"date-icon\">📁</span><a href=\"${date}/index.html\">${date}</a></div></li>" >> "${HISTORY_BASE}/index.html"
+          done
+
+          # If no archives yet
+          if [ -z "${ARCHIVE_DATES}" ]; then
+            echo "                <li>No historical reports available yet.</li>" >> "${HISTORY_BASE}/index.html"
+          fi
+
+          cat >> "${HISTORY_BASE}/index.html" << 'HISTORYEOF'
+                      </ul>
+                  </div>
+              </div>
+          </body>
+          </html>
+          HISTORYEOF
+
+          echo "✅ Updated history index"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

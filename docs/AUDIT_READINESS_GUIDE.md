@@ -70,10 +70,10 @@ git log --since="2024-01-01" --until="2024-12-31" \
 Collect these documents for auditors:
 
 - ✅ [Auditor Compliance Mapping](AUDITOR_COMPLIANCE_MAPPING.md) - Control implementation details
-- ✅ [Compliance Posture](compliance/COMPLIANCE_POSTURE.md) - Current compliance status
-- ✅ [Deployment Context](../deployment-contexts/production-soc2.json) - Configuration
+- ✅ [Compliance Posture](COMPLIANCE_POSTURE.md) - Current compliance status
+- ✅ [Deployment Context](../examples/production-soc2.json) - Configuration
 - ✅ [CloudFormation Template](generated from `cdk synth`)
-- ✅ [CHANGELOG.md](../CHANGELOG.md) - Version history and compliance changes
+- ✅ [CHANGELOG.md](https://github.com/CloudForgeCI/cfc-core/blob/main/CHANGELOG.md) - Version history and compliance changes
 - ✅ [Security Rules](guides/SECURITY_RULES_README.md) - Security control details
 
 ---
@@ -705,7 +705,7 @@ EOF
 
 ```bash
 # Update compliance posture
-vim docs/compliance/COMPLIANCE_POSTURE.md
+vim docs/COMPLIANCE_POSTURE.md
 
 # Update CHANGELOG with audit-related changes
 vim CHANGELOG.md
@@ -763,7 +763,7 @@ echo "Next audit: $(date -d '+1 year' +%Y-%m-%d)" >> audit-schedule.txt
 ## Resources
 
 - [Auditor Compliance Mapping](AUDITOR_COMPLIANCE_MAPPING.md)
-- [Compliance Posture](compliance/COMPLIANCE_POSTURE.md)
+- [Compliance Posture](COMPLIANCE_POSTURE.md)
 - [Automated Compliance](compliance/AUTOMATED_COMPLIANCE.md)
 - [AWS Compliance Resources](https://aws.amazon.com/compliance/resources/)
 - [AWS Artifact](https://aws.amazon.com/artifact/) - Compliance reports and agreements

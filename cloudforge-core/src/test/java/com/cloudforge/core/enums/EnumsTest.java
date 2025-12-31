@@ -71,11 +71,12 @@ class EnumsTest {
         ComplianceMode[] modes = ComplianceMode.values();
 
         // ComplianceMode has ENFORCE and ADVISORY
-        assertEquals(2, modes.length);
+        assertEquals(3, modes.length);
 
-        // Verify both modes exist
+        // Verify all modes exist
         assertNotNull(ComplianceMode.valueOf("ENFORCE"));
         assertNotNull(ComplianceMode.valueOf("ADVISORY"));
+        assertNotNull(ComplianceMode.valueOf("DISABLED"));
     }
 
     @Test

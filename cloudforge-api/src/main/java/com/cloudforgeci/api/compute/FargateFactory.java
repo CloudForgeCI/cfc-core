@@ -1,13 +1,16 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.storage.ContainerFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
-import com.cloudforgeci.api.storage.ContainerFactory;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
@@ -16,6 +19,8 @@ import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.efs.AccessPoint;
 import software.amazon.awscdk.services.iam.Role;
 import software.constructs.Construct;
+import io.github.cdklabs.cdknag.NagSuppressions;
+import io.github.cdklabs.cdknag.NagPackSuppression;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -60,7 +65,7 @@ import java.util.logging.Logger;
  * @see DeploymentContext
  * @see SystemContext
  * @see ContainerFactory
- * @see DeploymentContext#networkMode()
+ * @see com.cloudforgeci.api.core.DeploymentContext#networkMode()
  */
 public class FargateFactory extends BaseFactory {
 
@@ -85,7 +90,7 @@ public class FargateFactory extends BaseFactory {
   private Integer cpuTargetUtilization;
 
   @DeploymentContext("networkMode")
-  private String networkMode;
+  private NetworkMode networkMode;
 
   @DeploymentContext("healthCheckGracePeriod")
   private Integer healthCheckGracePeriod;
@@ -118,7 +123,7 @@ public class FargateFactory extends BaseFactory {
   private AccessPoint ap;
 
   @DeploymentContext("authMode")
-  private String authMode;
+  private AuthMode authMode;
 
   @DeploymentContext("stackName")
   private String stackName;
@@ -180,11 +185,24 @@ public class FargateFactory extends BaseFactory {
   @Override
   public void create() {
     // Set scaling configuration in SystemContext slots so topology can wire auto-scaling
-    if (minInstanceCapacity != null) {
-      ctx.minInstanceCapacity.set(minInstanceCapacity);
+    // Priority: DeploymentContext > SecurityProfileConfiguration > default
+    Integer effectiveMinCapacity = minInstanceCapacity;
+    Integer effectiveMaxCapacity = maxInstanceCapacity;
+
+    if (effectiveMinCapacity == null && config != null) {
+      effectiveMinCapacity = config.getMinInstanceCount();
+      LOG.info("Min instance capacity inherited from security profile: " + effectiveMinCapacity);
     }
-    if (maxInstanceCapacity != null) {
-      ctx.maxInstanceCapacity.set(maxInstanceCapacity);
+    if (effectiveMaxCapacity == null && config != null) {
+      effectiveMaxCapacity = config.getMaxInstanceCount();
+      LOG.info("Max instance capacity inherited from security profile: " + effectiveMaxCapacity);
+    }
+
+    if (effectiveMinCapacity != null) {
+      ctx.minInstanceCapacity.set(effectiveMinCapacity);
+    }
+    if (effectiveMaxCapacity != null) {
+      ctx.maxInstanceCapacity.set(effectiveMaxCapacity);
     }
     if (cpuTargetUtilization != null) {
       ctx.cpuTargetUtilization.set(cpuTargetUtilization);
@@ -209,6 +227,15 @@ public class FargateFactory extends BaseFactory {
             .taskRole(fargateTaskRole)
             .build();
 
+    // Add CDK-nag suppressions for standard ECS patterns
+    NagSuppressions.addResourceSuppressions(taskDef, List.of(
+        NagPackSuppression.builder()
+            .id("AwsSolutions-ECS2")
+            .reason("Environment variables are used for non-sensitive container configuration. " +
+                    "Sensitive values like secrets use AWS Secrets Manager references.")
+            .build()
+    ), true);
+
     // Validate that EFS and Access Point are available (created by EfsFactory)
     if (efs == null) {
       throw new IllegalStateException("EFS not available - EfsFactory should have created it");
@@ -228,15 +255,31 @@ public class FargateFactory extends BaseFactory {
             .containerInsights(enableContainerInsights)
             .build();
 
-    // Apply removal policy - RETAIN for production, DESTROY for dev/staging
-    cluster.applyRemovalPolicy(
-            security == SecurityProfile.PRODUCTION ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY);
+ 
+    cluster.applyRemovalPolicy(RemovalPolicy.DESTROY);
+
+    // Check if egress should be restricted to VPC CIDR only (only for private subnets)
+    boolean restrictEgress = config != null && config.isRestrictSecurityGroupEgressEnabled()
+        && networkMode != NetworkMode.PUBLIC;
+
     SecurityGroup serviceSg = SecurityGroup.Builder.create(this, getNode().getId() + "SvcSg")
             .vpc(vpc)
-            .allowAllOutbound(true).build();
+            .description("Fargate Service Security Group")
+            .allowAllOutbound(!restrictEgress)
+            .build();
+
+    // If egress is restricted, add explicit egress rule for VPC CIDR only
+    if (restrictEgress) {
+      serviceSg.addEgressRule(
+          Peer.ipv4(vpc.getVpcCidrBlock()),
+          Port.allTraffic(),
+          "Allow egress to VPC CIDR only"
+      );
+    }
+
     ctx.fargateServiceSg.set(serviceSg);
     // Determine subnet type and public IP assignment based on network mode
-    boolean assignPublicIp = "public-no-nat".equals(networkMode);
+    boolean assignPublicIp = networkMode == NetworkMode.PUBLIC;
     SubnetType subnetType = assignPublicIp ? SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
 
     // Enable ECS Exec only if bastionCidr is configured (indicates remote access needed)
@@ -244,7 +287,7 @@ public class FargateFactory extends BaseFactory {
             .cluster(cluster)
             .securityGroups(List.of(serviceSg))
             .taskDefinition(taskDef)
-            .desiredCount(minInstanceCapacity != null ? minInstanceCapacity : 1)
+            .desiredCount(effectiveMinCapacity != null ? effectiveMinCapacity : 1)
             .assignPublicIp(assignPublicIp)
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
             .enableExecuteCommand(enableEcsExec)  // Enable ECS Exec for shell access when bastionCidr is set
@@ -320,10 +363,8 @@ public class FargateFactory extends BaseFactory {
    * Fargate-specific configuration in one place.</p>
    */
   private void configureSecurityGroupRules(SecurityGroup serviceSg) {
-    // Allow NFS traffic from Fargate service to EFS
-    if (efsSg != null) {
-      efsSg.addIngressRule(serviceSg, Port.tcp(2049), "NFS_from_Fargate_service", false);
-    }
+    // NFS traffic (Fargate -> EFS) is handled by security profile configurations
+    // (DevSecurityConfiguration, StagingSecurityConfiguration, ProductionSecurityConfiguration)
 
     // Allow HTTP traffic from ALB to Fargate service
     if (albSg != null) {

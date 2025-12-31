@@ -1,0 +1,4 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+FAIL_PCIDSS_HIPAA_GDPR_FARGATE_no-auth,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"PCI-DSS,HIPAA,GDPR",,,FAIL,jenkins,,eu-west-1,,,
+FAIL_PCIDSS_HIPAA_GDPR_FARGATE_public-network,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,"PCI-DSS,HIPAA,GDPR",,,FAIL,jenkins,,eu-west-1,,,
+FAIL_PCIDSS_HIPAA_GDPR_FARGATE_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"PCI-DSS,HIPAA,GDPR",30,,FAIL,jenkins,,eu-west-1,,,

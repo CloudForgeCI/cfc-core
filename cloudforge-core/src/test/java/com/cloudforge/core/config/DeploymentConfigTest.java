@@ -1,5 +1,7 @@
 package com.cloudforge.core.config;
 
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
@@ -56,7 +58,7 @@ class DeploymentConfigTest {
 
     @Test
     void testDefaultAuthMode() {
-        assertEquals("none", config.authMode);
+        assertEquals(AuthMode.NONE, config.authMode);
     }
 
     @Test
@@ -148,12 +150,22 @@ class DeploymentConfigTest {
 
     @Test
     void testDefaultWafEnabled() {
-        assertFalse(config.wafEnabled);
+        assertNull(config.wafEnabled);
     }
 
     @Test
     void testDefaultCloudfrontEnabled() {
-        assertFalse(config.cloudfrontEnabled);
+        assertNull(config.cloudfrontEnabled);
+    }
+
+    @Test
+    void testDefaultRestrictSecurityGroupEgress() {
+        assertFalse(config.restrictSecurityGroupEgress);
+    }
+
+    @Test
+    void testDefaultCloudWatchLogsKmsEncryptionEnabled() {
+        assertFalse(config.cloudWatchLogsKmsEncryptionEnabled);
     }
 
     // ========== Field Assignment Tests ==========
@@ -388,7 +400,7 @@ class DeploymentConfigTest {
         config.subdomain = "jenkins";
         config.enableSsl = true;
 
-        config.networkMode = "private-with-nat";
+        config.networkMode = NetworkMode.PRIVATE_WITH_NAT;
         config.wafEnabled = true;
 
         config.minInstanceCapacity = 2;
@@ -397,12 +409,16 @@ class DeploymentConfigTest {
         config.cpuTargetUtilization = 70;
         config.instanceType = "t3.large";
 
-        config.authMode = "application-oidc";
+        config.authMode = AuthMode.APPLICATION_OIDC;
         config.cognitoAutoProvision = true;
         config.cognitoDomainPrefix = "jenkins-prod";
         config.cognitoMfaEnabled = true;
 
         config.region = "us-west-2";
+
+        // Security hardening flags
+        config.restrictSecurityGroupEgress = true;
+        config.cloudWatchLogsKmsEncryptionEnabled = true;
 
         // Verify all values are set correctly
         assertEquals("myapp-production", config.stackName);
@@ -413,10 +429,12 @@ class DeploymentConfigTest {
         assertEquals(2, config.minInstanceCapacity);
         assertEquals(10, config.maxInstanceCapacity);
         assertTrue(config.enableAutoScaling);
-        assertEquals("application-oidc", config.authMode);
+        assertEquals(AuthMode.APPLICATION_OIDC, config.authMode);
         assertTrue(config.cognitoAutoProvision);
         assertTrue(config.cognitoMfaEnabled);
         assertEquals("us-west-2", config.region);
+        assertTrue(config.restrictSecurityGroupEgress);
+        assertTrue(config.cloudWatchLogsKmsEncryptionEnabled);
     }
 
     @Test
@@ -442,6 +460,36 @@ class DeploymentConfigTest {
         assertEquals(2048, config.cpu);
         assertEquals(4096, config.memory);
         assertEquals(120, config.healthCheckGracePeriod);
+    }
+
+    // ========== Security Hardening Tests ==========
+
+    @Test
+    void testSetRestrictSecurityGroupEgress() {
+        config.restrictSecurityGroupEgress = true;
+        assertTrue(config.restrictSecurityGroupEgress);
+    }
+
+    @Test
+    void testSetCloudWatchLogsKmsEncryptionEnabled() {
+        config.cloudWatchLogsKmsEncryptionEnabled = true;
+        assertTrue(config.cloudWatchLogsKmsEncryptionEnabled);
+    }
+
+    @Test
+    void testSecurityHardeningConfiguration() {
+        // Configure a security-hardened production deployment
+        config.securityProfile = SecurityProfile.PRODUCTION;
+        config.networkMode = NetworkMode.PRIVATE_WITH_NAT;
+        config.restrictSecurityGroupEgress = true;
+        config.cloudWatchLogsKmsEncryptionEnabled = true;
+        config.wafEnabled = true;
+
+        assertEquals(SecurityProfile.PRODUCTION, config.securityProfile);
+        assertEquals(NetworkMode.PRIVATE_WITH_NAT, config.networkMode);
+        assertTrue(config.restrictSecurityGroupEgress);
+        assertTrue(config.cloudWatchLogsKmsEncryptionEnabled);
+        assertTrue(config.wafEnabled);
     }
 
     @Test

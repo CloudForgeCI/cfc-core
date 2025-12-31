@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import software.amazon.awscdk.services.guardduty.CfnDetector;
 import software.constructs.Construct;
@@ -96,6 +97,9 @@ public class GuardDutyFactory extends BaseFactory {
     }
 
     private void enableGuardDuty() {
+        // Register AWS Config rule for GuardDuty compliance monitoring
+        ctx.requireConfigRule(AwsConfigRule.GUARDDUTY_ENABLED);
+
         if (Boolean.TRUE.equals(createGuardDutyDetector)) {
             CfnDetector.Builder.create(this, "GuardDutyDetector")
                     .enable(true)

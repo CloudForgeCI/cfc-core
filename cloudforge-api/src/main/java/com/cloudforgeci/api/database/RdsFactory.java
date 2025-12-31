@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.database;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection;
@@ -8,6 +9,8 @@ import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.IVpc;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
@@ -20,6 +23,8 @@ import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.rds.*;
 import software.amazon.awscdk.services.secretsmanager.*;
 import software.constructs.Construct;
+import io.github.cdklabs.cdknag.NagPackSuppression;
+import io.github.cdklabs.cdknag.NagSuppressions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +35,21 @@ import java.util.Map;
  *
  * <p>This factory creates production-ready RDS instances with security best practices
  * for PCI-DSS, HIPAA, SOC 2, and GDPR compliance.</p>
+ *
+ * <h2>Compliance Coverage</h2>
+ * <ul>
+ *   <li><b>SOC2-C1.1:</b> Encryption at rest (storageEncrypted)</li>
+ *   <li><b>SOC2-CC6.6:</b> Network isolation (privateSubnets, publiclyAccessible=false)</li>
+ *   <li><b>SOC2-A1.2-MultiAZ:</b> High availability (multiAz)</li>
+ *   <li><b>SOC2-A1.3:</b> Automated backups (backupRetention)</li>
+ *   <li><b>HIPAA §164.312(a)(2)(iv):</b> Encryption of ePHI at rest</li>
+ *   <li><b>HIPAA §164.312(a)(1):</b> Access control (no public access)</li>
+ *   <li><b>HIPAA §164.310(d)(2)(iii):</b> Data backup procedures</li>
+ *   <li><b>PCI-DSS Req 1.3:</b> Prohibit direct public access to cardholder data</li>
+ *   <li><b>PCI-DSS Req 3.4:</b> Render cardholder data unreadable (encryption)</li>
+ *   <li><b>PCI-DSS Req 8.3.1:</b> IAM authentication for database access</li>
+ *   <li><b>GDPR Art. 32:</b> Security of processing (encryption, access control)</li>
+ * </ul>
  *
  * <h2>Security Features</h2>
  * <ul>
@@ -134,14 +154,16 @@ public class RdsFactory {
             encryptionKey = Key.Builder.create(scope, instanceId + "EncryptionKey")
                 .description("RDS encryption key for " + stackName + "-" + instanceId)
                 .enableKeyRotation(true)
-                .removalPolicy(security == SecurityProfile.PRODUCTION ?
-                    RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                // Always destroy - if database is deleted, encrypted data is gone anyway
+                .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
         }
 
         // Create database credentials in Secrets Manager
+        // Always destroy - if the database is deleted, credentials are useless
+        // Note: No secretName specified - CloudFormation will auto-generate unique name
+        // This prevents "AlreadyExists" errors from retained secrets in previous deployments
         Secret databaseSecret = Secret.Builder.create(scope, instanceId + "Secret")
-            .secretName(stackName + "-" + instanceId + "-credentials")
             .description("Database credentials for " + stackName + "-" + instanceId)
             .generateSecretString(SecretStringGenerator.builder()
                 .secretStringTemplate("{\"username\":\"" + requirement.databaseName() + "admin\"}")
@@ -149,8 +171,7 @@ public class RdsFactory {
                 .excludePunctuation(true)
                 .passwordLength(32)
                 .build())
-            .removalPolicy(security == SecurityProfile.PRODUCTION ?
-                RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+            .removalPolicy(RemovalPolicy.DESTROY)
             .build();
 
         // TODO: Enable automatic credential rotation for production
@@ -179,6 +200,26 @@ public class RdsFactory {
             .removalPolicy(RemovalPolicy.DESTROY)
             .build();
 
+        // Create explicit security group for RDS
+        // When restrictSecurityGroupEgress is enabled, restrict egress to VPC CIDR only
+        boolean restrictEgress = ctx.securityProfileConfig.get()
+            .map(config -> config.isRestrictSecurityGroupEgressEnabled())
+            .orElse(false);
+        SecurityGroup dbSecurityGroup = SecurityGroup.Builder.create(scope, instanceId + "SecurityGroup")
+            .vpc(vpc)
+            .description("Security group for " + instanceId + " database")
+            .allowAllOutbound(!restrictEgress) // Restrict egress when flag is enabled
+            .build();
+
+        // If egress is restricted, add explicit egress rule for VPC CIDR only
+        if (restrictEgress) {
+            dbSecurityGroup.addEgressRule(
+                Peer.ipv4(vpc.getVpcCidrBlock()),
+                Port.allTraffic(),
+                "Allow egress to VPC CIDR only"
+            );
+        }
+
         // Determine backup retention based on DeploymentConfig override or security profile
         int backupRetention;
         if (backupRetentionDaysOverride != null) {
@@ -194,24 +235,31 @@ public class RdsFactory {
         // Parse instance type from instance class
         InstanceType instanceType = parseInstanceType(requirement.instanceClass());
 
+        // Build instance identifier with 63 character limit (RDS constraint)
+        String dbInstanceIdentifier = truncateDbIdentifier(stackName + "-" + instanceId, 63);
+
         // Create database instance builder
         DatabaseInstance.Builder instanceBuilder = DatabaseInstance.Builder.create(scope, instanceId)
-            .instanceIdentifier(stackName + "-" + instanceId)
+            .instanceIdentifier(dbInstanceIdentifier)
             .engine(engine)
             .instanceType(instanceType)
             .vpc(vpc)
             .subnetGroup(subnetGroup)
+            .securityGroups(List.of(dbSecurityGroup)) // Use explicit security group
             .databaseName(requirement.databaseName())
             .credentials(Credentials.fromSecret(databaseSecret))
             .parameterGroup(parameterGroup)
 
-            .removalPolicy(security == SecurityProfile.PRODUCTION ?
-                RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+            // Allow stack deletion to remove database
+            .removalPolicy(RemovalPolicy.DESTROY)
 
             // Security configurations
             .storageEncrypted(enableEncryption)
             .publiclyAccessible(false)
-            .deletionProtection(security == SecurityProfile.PRODUCTION)
+            // Enable deletion protection based on security profile configuration
+            .deletionProtection(ctx.securityProfileConfig.get()
+                .map(config -> config.isRdsDeletionProtectionEnabled())
+                .orElse(false))
             .autoMinorVersionUpgrade(security == SecurityProfile.PRODUCTION)
             .iamAuthentication(security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING)
 
@@ -221,7 +269,11 @@ public class RdsFactory {
             .preferredMaintenanceWindow("sun:04:00-sun:05:00")
             .copyTagsToSnapshot(true)
 
-            .multiAz(multiAzOverride != null ? multiAzOverride : (security == SecurityProfile.PRODUCTION))
+            // Enable Multi-AZ based on deployment context override, security profile configuration, or compliance requirements
+            .multiAz(multiAzOverride != null ? multiAzOverride :
+                ctx.securityProfileConfig.get()
+                    .map(config -> config.isRdsDatabaseMultiAzEnabled())
+                    .orElse(security == SecurityProfile.PRODUCTION))
 
             // Storage configuration
             .allocatedStorage(requirement.allocatedStorageGB())
@@ -247,16 +299,47 @@ public class RdsFactory {
 
         DatabaseInstance instance = instanceBuilder.build();
 
+        // Register AWS Config rules for RDS compliance monitoring
+        ctx.requireConfigRule(AwsConfigRule.RDS_STORAGE_ENCRYPTED);
+        ctx.requireConfigRule(AwsConfigRule.DB_INSTANCE_BACKUP_ENABLED);
+        ctx.requireConfigRule(AwsConfigRule.RDS_INSTANCE_PUBLIC_ACCESS_CHECK);
+        ctx.requireConfigRule(AwsConfigRule.RDS_INSTANCE_DELETION_PROTECTION_ENABLED);
+        ctx.requireConfigRule(AwsConfigRule.RDS_LOGGING_ENABLED);
+        if (multiAzOverride != null ? multiAzOverride : (security == SecurityProfile.PRODUCTION)) {
+            ctx.requireConfigRule(AwsConfigRule.RDS_MULTI_AZ);
+        }
+
+        // Add CDK-NAG suppressions for RDS compliance findings
+        NagSuppressions.addResourceSuppressions(
+            databaseSecret,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-SMG4")
+                    .reason("Secret rotation requires Lambda function setup - scheduled for future implementation. Credentials are generated with 32-char password and stored securely in Secrets Manager.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
+        NagSuppressions.addResourceSuppressions(
+            instance,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-RDS11")
+                    .reason("Default database ports (5432/3306) are used intentionally - security is enforced via VPC security groups restricting access to application containers only. Non-standard ports provide minimal security benefit (security through obscurity).")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-IAM4")
+                    .reason("RDS Enhanced Monitoring requires the AWS managed policy AmazonRDSEnhancedMonitoringRole - this is the AWS-recommended approach for RDS monitoring and cannot be replaced with a customer-managed policy.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
+
         // Store database instance and its security group in SystemContext
         ctx.rdsDatabase.set(instance);
         ctx.dbCredentials.set(databaseSecret);
-
-        // Get the security group from the database instance connections
-        // RDS automatically creates a security group - we need to store it for Fargate to add ingress rules
-        if (!instance.getConnections().getSecurityGroups().isEmpty()) {
-            SecurityGroup dbSg = (SecurityGroup) instance.getConnections().getSecurityGroups().get(0);
-            ctx.dbSecurityGroup.set(dbSg);
-        }
+        ctx.dbSecurityGroup.set(dbSecurityGroup); // Store our explicit security group for Fargate to add ingress rules
 
         // Return connection information for application
         // Determine port based on engine (CDK Token can't be parsed to int)
@@ -335,8 +418,16 @@ public class RdsFactory {
                     .version(mapPostgresVersion(version))
                     .build()
             );
-            case "mysql" -> DatabaseInstanceEngine.MYSQL;
-            case "mariadb" -> DatabaseInstanceEngine.MARIADB;
+            case "mysql" -> DatabaseInstanceEngine.mysql(
+                MySqlInstanceEngineProps.builder()
+                    .version(mapMySqlVersion(version))
+                    .build()
+            );
+            case "mariadb" -> DatabaseInstanceEngine.mariaDb(
+                MariaDbInstanceEngineProps.builder()
+                    .version(mapMariaDbVersion(version))
+                    .build()
+            );
             default -> throw new IllegalArgumentException(
                 "Unsupported database engine: " + engineName +
                 ". Supported engines: postgres, mysql, mariadb");
@@ -355,6 +446,35 @@ public class RdsFactory {
             case "15" -> PostgresEngineVersion.VER_15;
             case "16" -> PostgresEngineVersion.VER_16;
             default -> PostgresEngineVersion.of(version, version);
+        };
+    }
+
+    /**
+     * Map version string to MySQL engine version.
+     */
+    private static MysqlEngineVersion mapMySqlVersion(String version) {
+        if ("5.7".equals(version)) {
+            System.err.println("WARNING: MySQL 5.7 reached end-of-life in October 2023. Consider upgrading to MySQL 8.0 for continued security updates and support.");
+        }
+        return switch (version) {
+            case "5.7" -> MysqlEngineVersion.VER_5_7;
+            case "8.0" -> MysqlEngineVersion.VER_8_0;
+            case "8.0.32" -> MysqlEngineVersion.VER_8_0_32;
+            case "8.0.33" -> MysqlEngineVersion.VER_8_0_33;
+            case "8.0.34" -> MysqlEngineVersion.VER_8_0_34;
+            case "8.0.35" -> MysqlEngineVersion.VER_8_0_35;
+            default -> MysqlEngineVersion.of(version, version);
+        };
+    }
+
+    /**
+     * Map version string to MariaDB engine version.
+     */
+    private static MariaDbEngineVersion mapMariaDbVersion(String version) {
+        return switch (version) {
+            case "10.6" -> MariaDbEngineVersion.VER_10_6;
+            case "10.11" -> MariaDbEngineVersion.VER_10_11;
+            default -> MariaDbEngineVersion.of(version, version);
         };
     }
 
@@ -430,6 +550,7 @@ public class RdsFactory {
             .engine(instanceEngine)
             .description("Optimized parameter group for " + id)
             .parameters(parameters)
+            .removalPolicy(RemovalPolicy.DESTROY)
             .build();
     }
 
@@ -488,5 +609,40 @@ public class RdsFactory {
             case "mariadb" -> 3306;
             default -> 5432;
         };
+    }
+
+    /**
+     * Truncate DB instance identifier to meet RDS constraints.
+     *
+     * <p>RDS DBInstanceIdentifier must be:
+     * <ul>
+     *   <li>1-63 characters long</li>
+     *   <li>Contain only alphanumeric characters and hyphens</li>
+     *   <li>First character must be a letter</li>
+     *   <li>Cannot end with a hyphen</li>
+     *   <li>Cannot contain two consecutive hyphens</li>
+     * </ul>
+     *
+     * @param identifier The proposed identifier
+     * @param maxLength Maximum allowed length (63 for RDS)
+     * @return Truncated identifier that meets RDS constraints
+     */
+    private static String truncateDbIdentifier(String identifier, int maxLength) {
+        if (identifier == null || identifier.isEmpty()) {
+            return "db-instance";
+        }
+
+        // Already within limit
+        if (identifier.length() <= maxLength) {
+            return identifier;
+        }
+
+        // Truncate and ensure it doesn't end with a hyphen
+        String truncated = identifier.substring(0, maxLength);
+        while (truncated.endsWith("-") && truncated.length() > 1) {
+            truncated = truncated.substring(0, truncated.length() - 1);
+        }
+
+        return truncated;
     }
 }

@@ -248,58 +248,6 @@ jobs:
             echo "No Java/TypeScript files changed in this PR" > testing-strategy.txt
           fi
 
-      - name: List generated coverage reports
-        if: always()
-        run: |
-          echo "Searching for JaCoCo reports..."
-          find . -name "jacoco.exec" -o -path "*/site/jacoco/index.html" | while read file; do
-            echo "Found: $file"
-          done
-          echo ""
-          echo "Module coverage report locations:"
-          ls -la cloudforge-api/target/site/jacoco/ 2>/dev/null || echo "cloudforge-api: No report found"
-          ls -la cloudforge-core/target/site/jacoco/ 2>/dev/null || echo "cloudforge-core: No report found"
-          ls -la cfc-testing/target/site/jacoco/ 2>/dev/null || echo "cfc-testing: No report found"
-
-      - name: Upload code coverage reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: code-coverage-reports
-          path: |
-            cloudforge-api/target/site/jacoco/
-            cloudforge-core/target/site/jacoco/
-            cloudforge-api/target/jacoco.exec
-            cloudforge-core/target/jacoco.exec
-          retention-days: 30
-          if-no-files-found: warn
-
-      - name: Upload validation results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cfc-validation-results
-          path: |
-            cfc-testing/scripts/validation-results/**/*.json
-            cfc-testing/scripts/validation-results/**/*.html
-            cfc-testing/scripts/validation-results/**/*.txt
-            cfc-testing/scripts/validation-results/**/*.log
-            cfc-testing/testing-strategy.txt
-            cfc-testing/validation-run.log
-            cfc-testing/cdk.out/**/*.json
-          retention-days: 30
-          if-no-files-found: warn
-
-      - name: Upload drift reports
-        if: always() && steps.mode.outputs.mode != 'smoke'
-        uses: actions/upload-artifact@v4
-        with:
-          name: cfc-drift-reports
-          path: |
-            cfc-testing/scripts/validation-results/drift-reports/**/*
-          retention-days: 90
-          if-no-files-found: ignore
-
       - name: Generate validation summary
         if: always()
         run: |
@@ -312,7 +260,6 @@ jobs:
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Code Coverage Summary
           echo "### Code Coverage" >> $GITHUB_STEP_SUMMARY
           if [ -f ../cloudforge-api/target/site/jacoco/index.html ]; then
             API_COVERAGE=$(grep "Total" ../cloudforge-api/target/site/jacoco/index.html | grep -o '[0-9][0-9]*%' | head -1 | tr -d '%' || echo "N/A")

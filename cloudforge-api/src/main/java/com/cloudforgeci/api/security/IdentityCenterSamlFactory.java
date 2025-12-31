@@ -3,6 +3,7 @@ package com.cloudforgeci.api.security;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforgeci.api.util.CfnStringUtils;
@@ -61,7 +62,7 @@ public class IdentityCenterSamlFactory extends BaseFactory {
     private static final Logger LOG = Logger.getLogger(IdentityCenterSamlFactory.class.getName());
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("autoProvisionIdentityCenter")
     private Boolean autoProvisionIdentityCenter;
@@ -103,8 +104,8 @@ public class IdentityCenterSamlFactory extends BaseFactory {
 
     @Override
     public void create() {
-        // Only provision if authMode is application-oidc (SAML for app-level auth)
-        if (!"application-oidc".equals(authMode)) {
+        // Only provision if authMode is APPLICATION_OIDC (SAML for app-level auth)
+        if (authMode != AuthMode.APPLICATION_OIDC) {
             LOG.info("Application-level OIDC not enabled - skipping Identity Center SAML setup");
             return;
         }

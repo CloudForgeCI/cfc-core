@@ -1,14 +1,18 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.scaling.ScalingFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
-import com.cloudforgeci.api.scaling.ScalingFactory;
+import io.github.cdklabs.cdknag.NagPackSuppression;
+import io.github.cdklabs.cdknag.NagSuppressions;
 
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
 import software.amazon.awscdk.services.ec2.BlockDevice;
@@ -20,17 +24,24 @@ import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.InstanceType;
 import software.amazon.awscdk.services.ec2.LaunchTemplate;
 import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.UserData;
 
+import software.amazon.awscdk.services.autoscaling.NotificationConfiguration;
+import software.amazon.awscdk.services.autoscaling.ScalingEvents;
+import software.amazon.awscdk.services.iam.AnyPrincipal;
+import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.LogGroup;
-import software.amazon.awscdk.services.logs.RetentionDays;
+import software.amazon.awscdk.services.sns.Topic;
 
 import java.util.logging.Logger;
 import software.constructs.Construct;
@@ -74,7 +85,7 @@ import java.util.List;
  * @since 1.0.0
  * @see SystemContext
  * @see ScalingFactory
- * @see DeploymentContext#networkMode()
+ * @see com.cloudforgeci.api.core.DeploymentContext#networkMode()
  */
 public class Ec2Factory extends BaseFactory {
   private static final Logger LOG = Logger.getLogger(Ec2Factory.class.getName());
@@ -99,7 +110,7 @@ public class Ec2Factory extends BaseFactory {
   private Integer maxInstanceCapacity;
 
   @DeploymentContext("networkMode")
-  private String networkMode;
+  private NetworkMode networkMode;
 
   @DeploymentContext("retainStorage")
   private Boolean retainStorage;
@@ -199,7 +210,7 @@ public class Ec2Factory extends BaseFactory {
   private software.amazon.awscdk.services.efs.AccessPoint ap;
 
   @DeploymentContext("authMode")
-  private String authMode;
+  private AuthMode authMode;
 
   @DeploymentContext("fqdn")
   private String fqdn;
@@ -253,14 +264,44 @@ public class Ec2Factory extends BaseFactory {
       throw new IllegalStateException("ALB security group not available");
     }
 
+    // Check if egress should be restricted to VPC CIDR only (only for private subnets)
+    boolean restrictEgress = config.isRestrictSecurityGroupEgressEnabled()
+        && networkMode != NetworkMode.PUBLIC;
+
     SecurityGroup instanceSg = SecurityGroup.Builder.create(this, appId + "Ec2Sg")
             .vpc(vpc)
             .description(appId + " EC2 Instance Security Group")
-            .allowAllOutbound(true)
+            .allowAllOutbound(!restrictEgress)
             .build();
+
+    // If egress is restricted, add explicit egress rule for VPC CIDR only
+    // Instances need to communicate with EFS, RDS, and other VPC resources
+    if (restrictEgress) {
+      instanceSg.addEgressRule(
+          Peer.ipv4(vpc.getVpcCidrBlock()),
+          Port.allTraffic(),
+          "Allow egress to VPC CIDR only"
+      );
+    }
 
     // Add ingress rule from ALB security group
     instanceSg.addIngressRule(albSg, Port.tcp(appPort), "ALB_to_" + appId);
+
+    // Add EC23 suppression - EC2 instances may need public access for optional services
+    // The suppression covers optional ports like SSH, JNLP agents that require 0.0.0.0/0 access
+    NagSuppressions.addResourceSuppressions(
+        instanceSg,
+        List.of(
+            NagPackSuppression.builder()
+                .id("AwsSolutions-EC23")
+                .reason("EC2 security group requires open ingress for optional service ports " +
+                        "(SSH for debugging, JNLP for Jenkins agents, etc.). These ports are " +
+                        "explicitly enabled via deployment configuration and are necessary " +
+                        "for the application's operational requirements.")
+                .build()
+        ),
+        Boolean.TRUE
+    );
 
     // Add security group rules for optional inbound ports
     // These are NOT exposed by default - must be explicitly enabled via deployment config
@@ -313,7 +354,7 @@ public class Ec2Factory extends BaseFactory {
   private LogGroup createLogGroup() {
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
     return LogGroup.Builder.create(this, appId + "Ec2Logs")
-            .retention(RetentionDays.ONE_WEEK)
+            .retention(config.getLogRetentionDays())
             .build();
   }
 
@@ -351,7 +392,7 @@ public class Ec2Factory extends BaseFactory {
 
     // Add OIDC integration commands if application-oidc mode is enabled
     // This configures OIDC authentication (e.g., Jenkins OIDC plugin setup)
-    if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+    if (authMode == AuthMode.APPLICATION_OIDC && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
       LOG.info("Ec2Factory: Configuring OIDC integration for EC2 UserData...");
 
       if (applicationOidcConfig != null) {
@@ -415,7 +456,8 @@ public class Ec2Factory extends BaseFactory {
             .instanceType(parsedInstanceType)
             .securityGroup(instanceSg)
             .role(ec2Role)
-            .userData(userData);
+            .userData(userData)
+            .requireImdsv2(config.isImdsv2Required());  // HIPAA: IMDSv2 controlled by SecurityProfileConfiguration
 
     // Determine EBS retention policy based on retainStorage configuration
     // Root volume is always deleted (system disk), but data volume can be retained
@@ -428,14 +470,20 @@ public class Ec2Factory extends BaseFactory {
       LOG.info("EBS data volumes will be DESTROYED with instances (retainStorage = false)");
     }
 
-    // Determine encryption setting with priority: DeploymentConfig > SecurityProfile default
+    // Determine encryption setting with priority: DeploymentConfig > SecurityProfileConfiguration > SecurityProfile default
     // For production deployments, encryption defaults to true
     boolean encrypt;
     if (enableEncryption != null) {
       encrypt = enableEncryption;
+      LOG.info("EBS encryption setting from deployment context: " + encrypt);
+    } else if (config != null) {
+      // Use SecurityProfileConfiguration setting (inherited from BaseFactory)
+      encrypt = config.isEbsEncryptionEnabled();
+      LOG.info("EBS encryption inherited from security profile: " + encrypt);
     } else {
-      // Default: encrypt for PRODUCTION and STAGING, optional for DEV
+      // Fallback: encrypt for PRODUCTION and STAGING, optional for DEV
       encrypt = (security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING);
+      LOG.info("EBS encryption using SecurityProfile default: " + encrypt);
     }
 
     // Add block devices
@@ -531,7 +579,7 @@ public class Ec2Factory extends BaseFactory {
     int desiredCapacity = Math.max(minCapacity, Math.min(maxCapacity, minCapacity)); // Start with minimum
 
     // Determine subnet type based on network mode
-    SubnetType subnetType = "public-no-nat".equals(networkMode) ?
+    SubnetType subnetType = networkMode == NetworkMode.PUBLIC ?
             SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
 
     if (vpc == null) {
@@ -539,14 +587,51 @@ public class Ec2Factory extends BaseFactory {
     }
 
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
-    return AutoScalingGroup.Builder.create(this, appId + "Asg")
+
+    // Create SNS topic for ASG notifications (required for STAGING/PRODUCTION - AwsSolutions-AS3)
+    // Notifications provide visibility into instance lifecycle events for operational monitoring
+    Topic.Builder topicBuilder = Topic.Builder.create(this, appId + "AsgNotifications")
+            .displayName(stackName + " Auto Scaling Notifications");
+
+    // HIPAA/PCI-DSS requires KMS encryption for SNS topics - controlled by SecurityProfileConfiguration
+    if (config.isSnsKmsEncryptionEnabled()) {
+      Key asgNotificationsKey = Key.Builder.create(this, appId + "AsgNotificationsKey")
+              .description("KMS key for ASG notifications SNS topic")
+              .enableKeyRotation(true)
+              .build();
+      topicBuilder.masterKey(asgNotificationsKey);
+    }
+
+    Topic asgNotificationTopic = topicBuilder.build();
+
+    // AwsSolutions-SNS3: Require SSL/TLS for publishers
+    asgNotificationTopic.addToResourcePolicy(PolicyStatement.Builder.create()
+            .sid("EnforceSSL")
+            .effect(Effect.DENY)
+            .principals(List.of(new AnyPrincipal()))
+            .actions(List.of("sns:Publish"))
+            .resources(List.of(asgNotificationTopic.getTopicArn()))
+            .conditions(java.util.Map.of(
+                    "Bool", java.util.Map.of("aws:SecureTransport", "false")
+            ))
+            .build());
+
+    // Build ASG with notifications for all scaling events
+    AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, appId + "Asg")
             .vpc(vpc)
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
             .minCapacity(minCapacity)
             .desiredCapacity(desiredCapacity)
             .maxCapacity(maxCapacity)
             .launchTemplate(launchTemplate)
+            .notifications(List.of(NotificationConfiguration.builder()
+                    .topic(asgNotificationTopic)
+                    .scalingEvents(ScalingEvents.ALL)
+                    .build()))
             .build();
+
+    LOG.info("ASG notifications configured for all scaling events -> " + asgNotificationTopic.getTopicName());
+    return asg;
   }
 
 }

@@ -1,0 +1,3 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+FARGATE_PRODUCTION_AdvancedMonitoring_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,730,true,PASS,jenkins,,,,,
+FARGATE_PRODUCTION_AdvancedMonitoring_alb-oidc_private-with-nat_flow-logs,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,730,true,PASS,jenkins,,,,,

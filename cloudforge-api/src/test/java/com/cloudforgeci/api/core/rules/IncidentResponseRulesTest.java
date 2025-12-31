@@ -1079,4 +1079,211 @@ class IncidentResponseRulesTest {
                 "Expected validation to pass for comprehensive scenario: " + profile);
         }
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Incident Response - backup and recovery edge cases
+        "PRODUCTION,FARGATE,true,true,7,ENFORCE,false",      // Full backup + cross-region - PASS
+        "PRODUCTION,FARGATE,true,false,7,ENFORCE,false",     // SOC2 enforces cross-region - PASS
+        "PRODUCTION,FARGATE,false,true,7,ENFORCE,false",     // SOC2 enforces backup - PASS
+        "PRODUCTION,FARGATE,true,true,1,ENFORCE,false",      // 1 day retention - PASS (min)
+        "PRODUCTION,FARGATE,true,true,35,ENFORCE,false",     // 35 days retention - PASS (max)
+        "PRODUCTION,EC2,true,true,7,ENFORCE,false",          // EC2 full backup - PASS
+        "PRODUCTION,EC2,false,false,0,ENFORCE,false",        // SOC2 enforces backup - PASS
+
+        // STAGING - reduced requirements
+        "STAGING,FARGATE,true,false,3,ENFORCE,false",        // STAGING backup, no cross-region - PASS
+        "STAGING,FARGATE,false,false,0,ENFORCE,false",       // STAGING no backup - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,0,ADVISORY,false"    // PRODUCTION advisory no backup - PASS
+    })
+    void testIncidentResponseBackupEdgeCases(String profile, String runtime, boolean backupEnabled,
+                                              boolean crossRegion, int retentionDays,
+                                              String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestIRBackupEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("automatedBackupEnabled", String.valueOf(backupEnabled));
+        customContext.put("crossRegionBackupEnabled", String.valueOf(crossRegion));
+        customContext.put("backupRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "soc2");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("cloudTrailLogFileValidation", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestIRBackupEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new IncidentResponseRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected IR backup validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected IR backup validation to pass");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Incident Response - CloudTrail log validation edge cases
+        "PRODUCTION,FARGATE,true,ENFORCE,false",     // Log validation enabled - PASS
+        "PRODUCTION,FARGATE,false,ENFORCE,true",     // Log validation disabled - FAIL
+        "PRODUCTION,EC2,true,ENFORCE,false",         // EC2 with validation - PASS
+        "PRODUCTION,EC2,false,ENFORCE,true",         // EC2 without validation - FAIL
+
+        // STAGING
+        "STAGING,FARGATE,true,ENFORCE,false",        // STAGING with validation - PASS
+        "STAGING,FARGATE,false,ENFORCE,false",       // STAGING without validation - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,ADVISORY,false"    // PRODUCTION advisory - PASS
+    })
+    void testIncidentResponseCloudTrailValidationEdgeCases(String profile, String runtime,
+                                                            boolean logValidationEnabled,
+                                                            String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestIRCloudTrailEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("cloudTrailLogFileValidation", String.valueOf(logValidationEnabled));
+        customContext.put("complianceFrameworks", "soc2");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail) {
+            customContext.put("automatedBackupEnabled", "true");
+            customContext.put("crossRegionBackupEnabled", "true");
+            customContext.put("backupRetentionDays", "7");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestIRCloudTrailEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new IncidentResponseRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected IR CloudTrail validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected IR CloudTrail validation to pass");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Incident Response - SNS topic for incident alerts edge cases
+        "PRODUCTION,FARGATE,true,ENFORCE,false",     // SNS topic enabled - PASS
+        "PRODUCTION,FARGATE,false,ENFORCE,false",    // SNS topic disabled - PASS (optional)
+        "PRODUCTION,EC2,true,ENFORCE,false",         // EC2 with SNS - PASS
+        "PRODUCTION,EC2,false,ENFORCE,false",        // EC2 without SNS - PASS
+
+        // STAGING
+        "STAGING,FARGATE,true,ENFORCE,false",        // STAGING with SNS - PASS
+        "STAGING,FARGATE,false,ENFORCE,false",       // STAGING without SNS - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,true,ADVISORY,false"     // PRODUCTION advisory - PASS
+    })
+    void testIncidentResponseSnsAlertsEdgeCases(String profile, String runtime, boolean snsEnabled,
+                                                 String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestIRSnsEdge");
+        customContext.put("securityProfile", profile);
+        customContext.put("incidentResponseSnsEnabled", String.valueOf(snsEnabled));
+        customContext.put("complianceFrameworks", "soc2");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        customContext.put("automatedBackupEnabled", "true");
+        customContext.put("crossRegionBackupEnabled", "true");
+        customContext.put("backupRetentionDays", "7");
+        customContext.put("cloudTrailLogFileValidation", "true");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestIRSnsEdge", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new IncidentResponseRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected IR SNS validation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected IR SNS validation to pass");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Incident Response - multi-requirement violations
+        "PRODUCTION,FARGATE,false,false,ENFORCE,true",       // SOC2 enforces backup, but log validation fails - FAIL
+        "PRODUCTION,FARGATE,false,true,ENFORCE,false",       // SOC2 enforces backup + log validation passes - PASS
+        "PRODUCTION,FARGATE,true,false,ENFORCE,true",        // No log validation only - FAIL
+        "PRODUCTION,FARGATE,true,true,ENFORCE,false",        // All requirements - PASS
+        "PRODUCTION,EC2,false,false,ENFORCE,true",           // SOC2 enforces backup, but log validation fails - FAIL
+        "PRODUCTION,EC2,true,true,ENFORCE,false",            // EC2 all requirements - PASS
+
+        // STAGING
+        "STAGING,FARGATE,false,false,ENFORCE,false",         // STAGING minimal - PASS
+        "STAGING,FARGATE,true,true,ENFORCE,false",           // STAGING full - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,ADVISORY,false"      // PRODUCTION advisory - PASS
+    })
+    void testIncidentResponseMultiViolations(String profile, String runtime, boolean backupEnabled,
+                                              boolean logValidationEnabled, String complianceMode,
+                                              boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestIRMultiViolation");
+        customContext.put("securityProfile", profile);
+        customContext.put("automatedBackupEnabled", String.valueOf(backupEnabled));
+        customContext.put("cloudTrailLogFileValidation", String.valueOf(logValidationEnabled));
+        customContext.put("complianceFrameworks", "soc2");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        if (!shouldFail && backupEnabled) {
+            customContext.put("crossRegionBackupEnabled", "true");
+            customContext.put("backupRetentionDays", "7");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestIRMultiViolation", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        new IncidentResponseRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected IR multi-violation to fail");
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected IR multi-violation to pass");
+        }
+    }
 }

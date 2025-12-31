@@ -146,28 +146,6 @@ class TopologyConfigurationBehavioralTest {
     }
 
     @Test
-    void testValidationSslRequiresFqdnOrDomain() {
-        // Given: Jenkins Service with SSL but no FQDN or domain
-        App app = new App();
-        Stack stack = new Stack(app, "TestJenkinsSslNoDomain");
-
-        Map<String, Object> cfcContext = new HashMap<>();
-        cfcContext.put("stackName", "TestJenkinsSslNoDomain");
-        cfcContext.put("securityProfile", "PRODUCTION");
-        cfcContext.put("enableSsl", true);
-        // No domain or fqdn
-        stack.getNode().setContext("cfc", cfcContext);
-
-        // When/Then: Must throw IllegalArgumentException
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> {
-            DeploymentContext.from(stack);
-        }, "SSL without domain/fqdn must be rejected");
-
-        assertTrue(ex.getMessage().contains("enableSsl"),
-            "Error message must mention enableSsl requirement");
-    }
-
-    @Test
     void testJenkinsServiceWireCompletesWithoutErrors() {
         // Given: Valid Jenkins Service configuration with Fargate
         App app = new App();

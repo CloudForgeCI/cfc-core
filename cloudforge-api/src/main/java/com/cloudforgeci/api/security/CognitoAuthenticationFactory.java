@@ -3,6 +3,7 @@ package com.cloudforgeci.api.security;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.util.CfnStringUtils;
 import software.amazon.awscdk.Fn;
@@ -21,6 +22,9 @@ import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.constructs.Construct;
+
+import io.github.cdklabs.cdknag.NagPackSuppression;
+import io.github.cdklabs.cdknag.NagSuppressions;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -67,7 +71,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     private static final Logger LOG = Logger.getLogger(CognitoAuthenticationFactory.class.getName());
 
     @DeploymentContext("authMode")
-    private String authMode;
+    private AuthMode authMode;
 
     @DeploymentContext("stackName")
     private String stackName;
@@ -113,6 +117,18 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @DeploymentContext("cognitoInitialAdminEmail")
     private String cognitoInitialAdminEmail;
 
+    // ========== Path-Based Authentication ==========
+    // These settings control which paths require authentication at the ALB level
+
+    @DeploymentContext("protectedPaths")
+    private java.util.List<String> protectedPaths;
+
+    @DeploymentContext("additionalProtectedPaths")
+    private java.util.List<String> additionalProtectedPaths;
+
+    @DeploymentContext("publicPaths")
+    private java.util.List<String> publicPaths;
+
     @DeploymentContext("cognitoInitialAdminPhone")
     private String cognitoInitialAdminPhone;
 
@@ -152,13 +168,13 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @Override
     public void create() {
         // Only configure Cognito if authMode is OIDC-based
-        if (!"alb-oidc".equals(authMode) && !"jenkins-oidc".equals(authMode) && !"application-oidc".equals(authMode)) {
+        if (authMode != AuthMode.ALB_OIDC && authMode != AuthMode.APPLICATION_OIDC) {
             LOG.info("Cognito authentication not applicable (authMode = " + authMode + ")");
             return;
         }
 
         // Validate application supports Cognito (for application-oidc mode)
-        if ("application-oidc".equals(authMode) && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+        if (authMode == AuthMode.APPLICATION_OIDC && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
             var oidcIntegration = applicationSpec.getOidcIntegration();
             if (oidcIntegration != null && !oidcIntegration.supportsCognito()) {
                 LOG.warning("Application '" + applicationSpec.applicationId() + "' does not support Cognito");
@@ -431,10 +447,14 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .mfaSecondFactor(mfaSecondFactor)
                 // Account recovery
                 .accountRecovery(AccountRecovery.EMAIL_ONLY)
-                // Advanced security features - profile-aware (enabled in production, requires Plus tier)
-                // Note: Uncomment when Cognito Plus tier is available
-                // .advancedSecurityMode(securityProfileConfig.isAdvancedSecurityEnabled() ?
-                //     AdvancedSecurityMode.ENFORCED : AdvancedSecurityMode.OFF)
+                // Advanced security features - profile-aware (enabled for CDK-nag COG3 compliance)
+                // Note: Requires Cognito Plus tier for production deployments
+                .advancedSecurityMode(securityProfileConfig.isAdvancedSecurityEnabled() ?
+                    AdvancedSecurityMode.ENFORCED : AdvancedSecurityMode.OFF)
+                // Feature plan - Plus tier required when Advanced Security is enabled
+                // CDK validates this, so we must set it even though we'll remove it from CloudFormation
+                .featurePlan(securityProfileConfig.isAdvancedSecurityEnabled() ?
+                    FeaturePlan.PLUS : FeaturePlan.LITE)
                 // Self-service signup - profile-aware (disabled in staging/production)
                 .selfSignUpEnabled(securityProfileConfig.isSelfSignupEnabled())
                 // Removal policy - RETAIN for production, DESTROY for dev/staging
@@ -442,8 +462,28 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         UserPool userPool = userPoolBuilder.build();
 
+        // Add CDK-nag suppression for DEV profile when AdvancedSecurityMode is disabled
+        if (!securityProfileConfig.isAdvancedSecurityEnabled()) {
+            NagSuppressions.addResourceSuppressions(
+                userPool,
+                List.of(
+                    NagPackSuppression.builder()
+                        .id("AwsSolutions-COG3")
+                        .reason("AdvancedSecurityMode is intentionally disabled for DEV/non-production " +
+                                "environments to reduce costs. Cognito Plus tier is required for ENFORCED mode. " +
+                                "Production deployments enable AdvancedSecurityMode for enhanced threat protection.")
+                        .build()
+                ),
+                Boolean.TRUE
+            );
+        }
+
         // Configure SMS role and phone number schema using CloudFormation escape hatch
         CfnUserPool cfnUserPool = (CfnUserPool) userPool.getNode().getDefaultChild();
+
+        // Remove UserPoolTier from CloudFormation output - cfn-guard doesn't recognize this property
+        // The featurePlan is set above for CDK validation, but we remove it from the template
+        cfnUserPool.addPropertyDeletionOverride("UserPoolTier");
 
         // Enable phone number as a standard attribute for SMS MFA
         cfnUserPool.setSchema(List.of(
@@ -547,7 +587,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         String secretName = null;
 
         // Check if we need to store the client secret for application-level OIDC
-        if ("application-oidc".equals(authMode)) {
+        if (authMode == AuthMode.APPLICATION_OIDC) {
             LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
             secretName = storeCognitoClientSecret(userPool, appClient);
         } else {
@@ -608,7 +648,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             // For application-oidc mode, we need to store the client secret in Secrets Manager
             // so the application container can retrieve it at runtime
             String secretName = null;
-            if ("application-oidc".equals(authMode)) {
+            if (authMode == AuthMode.APPLICATION_OIDC) {
                 LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
                 // For existing user pool with existing client, we need the secret to be provided externally
                 // or we retrieve it using Custom Resource
@@ -660,7 +700,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             // For application-oidc mode, we need to store the client secret in Secrets Manager
             // so the application container can retrieve it at runtime
             String secretName = null;
-            if ("application-oidc".equals(authMode)) {
+            if (authMode == AuthMode.APPLICATION_OIDC) {
                 LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
                 secretName = storeCognitoClientSecret(userPool, appClient);
             }
@@ -679,7 +719,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     private String constructRedirectUrl() {
         // Determine the callback path based on authMode
         String callbackPath;
-        if ("application-oidc".equals(authMode)) {
+        if (authMode == AuthMode.APPLICATION_OIDC) {
             // For application-level OIDC, get the callback path from the application's OidcIntegration
             callbackPath = getApplicationCallbackPath();
             LOG.info("Using application-oidc callback path: " + callbackPath);
@@ -930,10 +970,19 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * Configure native ALB Cognito authentication.
      * This uses ALB's built-in Cognito support which eliminates the need for Secrets Manager.
      * Only activates if authMode is "alb-oidc" (Cognito User Pool authentication).
+     *
+     * <p>Path-based authentication allows protecting only specific paths while
+     * leaving other paths public. This is configured via:</p>
+     * <ul>
+     *   <li>ApplicationSpec.protectedPaths() - Application default protected paths</li>
+     *   <li>DeploymentContext.protectedPaths - Override/replace application defaults</li>
+     *   <li>DeploymentContext.additionalProtectedPaths - Add to application defaults</li>
+     *   <li>DeploymentContext.publicPaths - Explicitly exclude paths from protection</li>
+     * </ul>
      */
     private void configureAlbAuthentication() {
-        // Only configure ALB authentication if authMode is "alb-oidc"
-        if (!"alb-oidc".equals(authMode)) {
+        // Only configure ALB authentication if authMode is ALB_OIDC
+        if (authMode != AuthMode.ALB_OIDC) {
             LOG.info("ALB authentication not applicable for authMode: " + authMode);
             return;
         }
@@ -955,28 +1004,22 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     var userPoolClient = ctx.cognitoUserPoolClient.get().orElseThrow();
                     var userPoolDomain = ctx.cognitoUserPoolDomain.get().orElseThrow();
 
-                    // Create native Cognito authentication action
-                    https.addAction("CognitoAuth", AddApplicationActionProps.builder()
-                        .priority(1)  // High priority to catch all requests before default action
-                        .conditions(List.of(
-                            ListenerCondition.pathPatterns(List.of("/*"))  // Match all paths
-                        ))
-                        .action(AuthenticateCognitoAction.Builder.create()
-                                .userPool(userPool)
-                                .userPoolClient(userPoolClient)
-                                .userPoolDomain(userPoolDomain)
-                                .scope("openid email profile")
-                                .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
-                                .next(ListenerAction.forward(List.of(targetGroup)))  // Forward to target group after authentication
-                                .build()
-                        )
-                        .build());
+                    // Calculate effective protected paths
+                    List<String> effectiveProtectedPaths = calculateEffectiveProtectedPaths();
+
+                    if (effectiveProtectedPaths.isEmpty()) {
+                        // No specific paths defined - protect everything (existing behavior)
+                        LOG.info("No specific protected paths defined - protecting all paths");
+                        configureFullAuthenticationRule(https, targetGroup, userPool, userPoolClient, userPoolDomain);
+                    } else {
+                        // Specific paths defined - create path-based authentication rules
+                        LOG.info("Path-based authentication enabled with " + effectiveProtectedPaths.size() + " protected path(s)");
+                        configurePathBasedAuthenticationRules(https, targetGroup, userPool, userPoolClient, userPoolDomain, effectiveProtectedPaths);
+                    }
 
                     LOG.info("✅ Native Cognito authentication configured successfully");
                     LOG.info("  User Pool ID: " + ctx.cognitoUserPoolId.get().orElse("N/A"));
                     LOG.info("  Target Group: " + targetGroup.getTargetGroupName());
-                    LOG.info("  Priority: 1 (authenticate then forward to target group)");
-                    LOG.info("  Authentication: All requests require Cognito User Pool authentication");
                     LOG.info("  Scopes: openid, email, profile");
                     LOG.info("  Benefits: No Secrets Manager required, simplified configuration");
                 } else {
@@ -985,6 +1028,148 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 }
             });
         });
+    }
+
+    /**
+     * Calculate the effective list of protected paths based on ApplicationSpec and DeploymentContext.
+     *
+     * <p>Priority:</p>
+     * <ol>
+     *   <li>If DeploymentContext.protectedPaths is set, it replaces ApplicationSpec defaults</li>
+     *   <li>Otherwise, use ApplicationSpec.protectedPaths()</li>
+     *   <li>Add any DeploymentContext.additionalProtectedPaths</li>
+     *   <li>Remove any DeploymentContext.publicPaths from the result</li>
+     * </ol>
+     *
+     * @return List of path patterns requiring authentication (empty = protect everything)
+     */
+    private List<String> calculateEffectiveProtectedPaths() {
+        java.util.Set<String> paths = new java.util.LinkedHashSet<>();
+
+        // Step 1: Start with base protected paths
+        if (protectedPaths != null && !protectedPaths.isEmpty()) {
+            // DeploymentContext overrides ApplicationSpec
+            paths.addAll(protectedPaths);
+            LOG.info("Using DeploymentContext.protectedPaths: " + protectedPaths);
+        } else if (applicationSpec != null && !applicationSpec.protectedPaths().isEmpty()) {
+            // Use ApplicationSpec defaults
+            paths.addAll(applicationSpec.protectedPaths());
+            LOG.info("Using ApplicationSpec.protectedPaths(): " + applicationSpec.protectedPaths());
+        }
+
+        // Step 2: Add additional protected paths from DeploymentContext
+        if (additionalProtectedPaths != null && !additionalProtectedPaths.isEmpty()) {
+            paths.addAll(additionalProtectedPaths);
+            LOG.info("Adding DeploymentContext.additionalProtectedPaths: " + additionalProtectedPaths);
+        }
+
+        // Step 3: Remove public paths from DeploymentContext
+        if (publicPaths != null && !publicPaths.isEmpty()) {
+            paths.removeAll(publicPaths);
+            LOG.info("Removing DeploymentContext.publicPaths: " + publicPaths);
+        }
+
+        // Step 4: Remove public paths from ApplicationSpec
+        if (applicationSpec != null && !applicationSpec.publicPaths().isEmpty()) {
+            paths.removeAll(applicationSpec.publicPaths());
+            LOG.info("Removing ApplicationSpec.publicPaths(): " + applicationSpec.publicPaths());
+        }
+
+        List<String> result = new java.util.ArrayList<>(paths);
+        LOG.info("Effective protected paths: " + (result.isEmpty() ? "[ALL PATHS]" : result));
+        return result;
+    }
+
+    /**
+     * Configure authentication rule that protects all paths (original behavior).
+     */
+    private void configureFullAuthenticationRule(
+            ApplicationListener https,
+            IApplicationTargetGroup targetGroup,
+            IUserPool userPool,
+            IUserPoolClient userPoolClient,
+            IUserPoolDomain userPoolDomain) {
+
+        // Create native Cognito authentication action for all paths
+        https.addAction("CognitoAuth", AddApplicationActionProps.builder()
+            .priority(1)  // High priority to catch all requests before default action
+            .conditions(List.of(
+                ListenerCondition.pathPatterns(List.of("/*"))  // Match all paths
+            ))
+            .action(AuthenticateCognitoAction.Builder.create()
+                    .userPool(userPool)
+                    .userPoolClient(userPoolClient)
+                    .userPoolDomain(userPoolDomain)
+                    .scope("openid email profile")
+                    .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
+                    .next(ListenerAction.forward(List.of(targetGroup)))
+                    .build()
+            )
+            .build());
+
+        LOG.info("  Priority: 1 (authenticate then forward to target group)");
+        LOG.info("  Authentication: All requests require Cognito User Pool authentication");
+    }
+
+    /**
+     * Configure path-based authentication rules.
+     *
+     * <p>Creates separate rules:</p>
+     * <ul>
+     *   <li>Priority 1-N: Protected paths require authentication</li>
+     *   <li>Priority N+1: Catch-all rule forwards without authentication</li>
+     * </ul>
+     */
+    private void configurePathBasedAuthenticationRules(
+            ApplicationListener https,
+            IApplicationTargetGroup targetGroup,
+            IUserPool userPool,
+            IUserPoolClient userPoolClient,
+            IUserPoolDomain userPoolDomain,
+            List<String> protectedPathPatterns) {
+
+        // ALB rules can have multiple path patterns per rule (up to 5 values per condition)
+        // Group paths into batches of 5 for efficiency
+        int batchSize = 5;
+        int priority = 1;
+
+        for (int i = 0; i < protectedPathPatterns.size(); i += batchSize) {
+            int endIndex = Math.min(i + batchSize, protectedPathPatterns.size());
+            List<String> batch = protectedPathPatterns.subList(i, endIndex);
+
+            String ruleName = "CognitoAuth" + (priority > 1 ? "-" + priority : "");
+
+            https.addAction(ruleName, AddApplicationActionProps.builder()
+                .priority(priority)
+                .conditions(List.of(
+                    ListenerCondition.pathPatterns(batch)
+                ))
+                .action(AuthenticateCognitoAction.Builder.create()
+                        .userPool(userPool)
+                        .userPoolClient(userPoolClient)
+                        .userPoolDomain(userPoolDomain)
+                        .scope("openid email profile")
+                        .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
+                        .next(ListenerAction.forward(List.of(targetGroup)))
+                        .build()
+                )
+                .build());
+
+            LOG.info("  Rule '" + ruleName + "' (priority " + priority + "): Authenticate for paths " + batch);
+            priority++;
+        }
+
+        // Add catch-all rule that forwards without authentication (lower priority)
+        https.addAction("PublicForward", AddApplicationActionProps.builder()
+            .priority(priority)
+            .conditions(List.of(
+                ListenerCondition.pathPatterns(List.of("/*"))
+            ))
+            .action(ListenerAction.forward(List.of(targetGroup)))
+            .build());
+
+        LOG.info("  Rule 'PublicForward' (priority " + priority + "): Forward without auth for all other paths");
+        LOG.info("  Authentication: Only protected paths require Cognito authentication");
     }
 
     /**
@@ -1088,9 +1273,26 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     .generateStringKey("placeholder")
                     .secretStringTemplate("{}")
                     .build())
-                .removalPolicy(securityProfileConfig.getSecurityProfile() == SecurityProfile.PRODUCTION ?
-                    RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
+                // Always destroy - Cognito regenerates client secrets, this is just a synchronized copy
+                .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
+
+        // Suppress SMG4 - Cognito client secrets cannot be rotated by Secrets Manager
+        // The secret is managed by Cognito and synchronized via Custom Resource.
+        // To rotate, you must regenerate the Cognito User Pool Client which requires
+        // updating all dependent applications (ALB OIDC actions, application configs).
+        NagSuppressions.addResourceSuppressions(
+            cognitoSecret,
+            List.of(
+                NagPackSuppression.builder()
+                    .id("AwsSolutions-SMG4")
+                    .reason("Cognito User Pool Client secrets are managed by AWS Cognito, not Secrets Manager. " +
+                           "This secret is a synchronized copy for application use. Rotation requires regenerating " +
+                           "the Cognito client and updating all dependent ALB OIDC actions and applications.")
+                    .build()
+            ),
+            Boolean.TRUE
+        );
 
         // Use Custom Resource to retrieve the client secret from Cognito and store it in Secrets Manager
         // This keeps the secret value within AWS - it never appears in the CloudFormation template

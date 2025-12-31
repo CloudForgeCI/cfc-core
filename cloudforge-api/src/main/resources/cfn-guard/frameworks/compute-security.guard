@@ -1,0 +1,223 @@
+# Compute Security - Cross-Framework Security Control
+#
+# CloudFormation Guard rules for EC2, EKS, and compute resource validation
+# Applies across all compliance frameworks (HIPAA, PCI-DSS, SOC2, GDPR, ISO 27001, etc.)
+#
+# CloudForge Core - Multi-Layer Compliance Validation
+# Layer 3: Template-Level Policy Enforcement (cfn-guard)
+
+# ============================================================================
+# EC2 Instance Security
+# ============================================================================
+
+# EC2 termination protection
+# CloudForge Mapping: DELETION_PROTECTION control
+rule compute_security_ec2_termination_protection when
+    resourceType == 'AWS::EC2::Instance' {
+
+    Properties.DisableApiTermination exists
+    Properties.DisableApiTermination == true <<[Compute Security] EC2 instances should have API termination protection enabled>>
+}
+
+# EC2 EBS optimization
+# CloudForge Mapping: PERFORMANCE control
+rule compute_security_ec2_ebs_optimized when
+    resourceType == 'AWS::EC2::Instance' {
+
+    Properties.EbsOptimized exists
+    Properties.EbsOptimized == true <<[Compute Security] EC2 instances should have EBS optimization enabled>>
+}
+
+# EC2 detailed monitoring
+# CloudForge Mapping: MONITORING control
+rule compute_security_ec2_detailed_monitoring when
+    resourceType == 'AWS::EC2::Instance' {
+
+    Properties.Monitoring exists
+    Properties.Monitoring == true <<[Compute Security] EC2 instances should have detailed CloudWatch monitoring enabled>>
+}
+
+# EC2 IAM instance profile
+# CloudForge Mapping: ACCESS_CONTROL control
+rule compute_security_ec2_iam_profile when
+    resourceType == 'AWS::EC2::Instance' {
+
+    Properties.IamInstanceProfile exists <<[Compute Security] EC2 instances must have an IAM instance profile attached>>
+}
+
+# EC2 block device encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule compute_security_ec2_block_device_encryption when
+    resourceType == 'AWS::EC2::Instance' {
+
+    Properties.BlockDeviceMappings exists <<[Compute Security] EC2 instances must explicitly define block device mappings>>
+    Properties.BlockDeviceMappings[*] {
+        when Ebs exists {
+            Ebs.Encrypted == true <<[Compute Security] EC2 instance block devices must be encrypted>>
+        }
+    }
+}
+
+# EC2 instance metadata IMDSv2
+# CloudForge Mapping: INSTANCE_METADATA_SECURITY control
+rule compute_security_ec2_imdsv2 when
+    resourceType == 'AWS::EC2::Instance' {
+
+    Properties.MetadataOptions exists <<[Compute Security] EC2 instances must configure metadata options>>
+    Properties.MetadataOptions.HttpTokens exists <<[Compute Security] EC2 instances must specify HttpTokens setting>>
+    Properties.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 instances must require IMDSv2 (HttpTokens: required)>>
+}
+
+# ============================================================================
+# EC2 Launch Template Security
+# ============================================================================
+
+# Launch template IMDSv2
+# CloudForge Mapping: INSTANCE_METADATA_SECURITY control
+rule compute_security_launch_template_imdsv2 when
+    resourceType == 'AWS::EC2::LaunchTemplate' {
+
+    Properties.LaunchTemplateData exists <<[Compute Security] Launch templates must define LaunchTemplateData>>
+    Properties.LaunchTemplateData.MetadataOptions exists <<[Compute Security] Launch templates must configure metadata options>>
+    Properties.LaunchTemplateData.MetadataOptions.HttpTokens exists <<[Compute Security] Launch templates must specify HttpTokens>>
+    Properties.LaunchTemplateData.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 launch templates must require IMDSv2>>
+}
+
+# Launch template encryption
+# CloudForge Mapping: ENCRYPTION_AT_REST control
+rule compute_security_launch_template_encryption when
+    resourceType == 'AWS::EC2::LaunchTemplate' {
+
+    Properties.LaunchTemplateData exists <<[Compute Security] Launch templates must define LaunchTemplateData>>
+    Properties.LaunchTemplateData.BlockDeviceMappings exists <<[Compute Security] Launch templates must explicitly define block device mappings with encryption>>
+    Properties.LaunchTemplateData.BlockDeviceMappings[*] {
+        when Ebs exists {
+            Ebs.Encrypted == true <<[Compute Security] EC2 launch template block devices must be encrypted>>
+        }
+    }
+}
+
+# ============================================================================
+# VPC Subnet Security
+# ============================================================================
+
+# Subnet auto-assign public IP disabled
+# CloudForge Mapping: NETWORK_SECURITY control
+rule compute_security_subnet_no_auto_public_ip when
+    resourceType == 'AWS::EC2::Subnet' {
+
+    Properties.MapPublicIpOnLaunch not exists OR
+    Properties.MapPublicIpOnLaunch == false <<[Compute Security] Subnets should not auto-assign public IP addresses>>
+}
+
+# ============================================================================
+# EKS Cluster Security
+# ============================================================================
+
+# EKS private endpoint only
+# CloudForge Mapping: CONTAINER_SECURITY control
+rule compute_security_eks_private_only when
+    resourceType == 'AWS::EKS::Cluster' {
+
+    when Properties.ResourcesVpcConfig exists {
+        Properties.ResourcesVpcConfig.EndpointPublicAccess == false <<[EKS Security] EKS cluster endpoint should be private only>>
+        Properties.ResourcesVpcConfig.EndpointPrivateAccess == true <<[EKS Security] EKS cluster must enable private endpoint access>>
+    }
+}
+
+# EKS public access restricted to specific CIDRs
+# CloudForge Mapping: CONTAINER_SECURITY control
+rule compute_security_eks_public_access_restricted when
+    resourceType == 'AWS::EKS::Cluster' {
+
+    Properties.ResourcesVpcConfig exists <<[EKS Security] EKS clusters must configure VPC settings>>
+    Properties.ResourcesVpcConfig.EndpointPublicAccess exists <<[EKS Security] Must explicitly configure public access>>
+
+    when Properties.ResourcesVpcConfig.EndpointPublicAccess == true {
+        Properties.ResourcesVpcConfig.PublicAccessCidrs exists <<[EKS Security] EKS public access must specify allowed CIDRs>>
+        Properties.ResourcesVpcConfig.PublicAccessCidrs not empty <<[EKS Security] PublicAccessCidrs must not be empty>>
+        Properties.ResourcesVpcConfig.PublicAccessCidrs[*] {
+            this != '0.0.0.0/0' <<[EKS Security] EKS public access must not allow unrestricted CIDR (0.0.0.0/0)>>
+        }
+    }
+}
+
+# EKS secrets encryption
+# CloudForge Mapping: CONTAINER_SECURITY control
+rule compute_security_eks_secrets_encrypted when
+    resourceType == 'AWS::EKS::Cluster' {
+
+    Properties.EncryptionConfig exists <<[EKS Security] EKS clusters must encrypt Kubernetes secrets with KMS>>
+}
+
+# EKS control plane logging
+# CloudForge Mapping: CONTAINER_SECURITY control
+rule compute_security_eks_control_plane_logging when
+    resourceType == 'AWS::EKS::Cluster' {
+
+    Properties.Logging exists <<[EKS Security] EKS clusters should enable control plane logging>>
+    Properties.Logging.ClusterLogging exists <<[EKS Security] EKS clusters must configure ClusterLogging>>
+}
+
+# ============================================================================
+# EKS Node Group Security
+# ============================================================================
+
+# EKS node group launch template
+# CloudForge Mapping: CONTAINER_SECURITY control
+rule compute_security_eks_nodegroup_launch_template when
+    resourceType == 'AWS::EKS::Nodegroup' {
+
+    Properties.LaunchTemplate exists <<[EKS Security] EKS node groups should use launch templates for consistent configuration>>
+    Properties.LaunchTemplate.Id exists OR Properties.LaunchTemplate.Name exists <<[EKS Security] Launch template must specify Id or Name>>
+}
+
+# EKS node group remote access restrictions
+# CloudForge Mapping: CONTAINER_SECURITY control
+rule compute_security_eks_nodegroup_remote_access when
+    resourceType == 'AWS::EKS::Nodegroup' {
+
+    when Properties.RemoteAccess exists {
+        Properties.RemoteAccess.SourceSecurityGroups exists <<[EKS Security] EKS node group SSH access must be restricted via security groups>>
+        Properties.RemoteAccess.SourceSecurityGroups not empty <<[EKS Security] Must specify at least one source security group>>
+    }
+}
+
+# ============================================================================
+# Auto Scaling Group Security
+# ============================================================================
+
+# ASG launch template required
+# CloudForge Mapping: CONFIGURATION_MANAGEMENT control
+rule compute_security_asg_launch_template when
+    resourceType == 'AWS::AutoScaling::AutoScalingGroup' {
+
+    Properties.LaunchTemplate exists OR Properties.MixedInstancesPolicy exists <<[Compute Security] Auto Scaling Groups should use launch templates>>
+}
+
+# ASG health check configuration
+# CloudForge Mapping: HIGH_AVAILABILITY control
+rule compute_security_asg_health_check when
+    resourceType == 'AWS::AutoScaling::AutoScalingGroup' {
+
+    Properties.HealthCheckType exists <<[Compute Security] Auto Scaling Groups should have health check type configured>>
+    Properties.HealthCheckGracePeriod exists <<[Compute Security] Auto Scaling Groups should configure health check grace period>>
+}
+
+# ============================================================================
+# EBS Volume Security
+# ============================================================================
+
+# EBS volume delete on termination for attached volumes
+# CloudForge Mapping: RESOURCE_MANAGEMENT control
+rule compute_security_ebs_delete_on_termination when
+    resourceType == 'AWS::EC2::Instance' {
+
+    when Properties.BlockDeviceMappings exists {
+        Properties.BlockDeviceMappings[*] {
+            when Ebs exists {
+                Ebs.DeleteOnTermination == true <<[Compute Security] EBS volumes should have DeleteOnTermination enabled>>
+            }
+        }
+    }
+}

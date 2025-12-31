@@ -104,7 +104,7 @@ public class WafFactoryTest {
         DeploymentContext cfc = DeploymentContext.from(stack);
 
         // Verify WAF is disabled by default
-        assertFalse(cfc.wafEnabled(), "WAF should be disabled by default for backwards compatibility");
+        assertFalse(Boolean.TRUE.equals(cfc.wafEnabled()), "WAF should be disabled by default for backwards compatibility");
     }
 
     /**

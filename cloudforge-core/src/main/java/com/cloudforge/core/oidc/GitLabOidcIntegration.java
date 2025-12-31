@@ -46,61 +46,75 @@ public class GitLabOidcIntegration implements OidcIntegration {
 
     @Override
     public Map<String, String> getEnvironmentVariables(OidcConfiguration config) {
-        // GitLab uses gitlab.rb configuration file instead of environment variables
-        // Return empty map
-        return new HashMap<>();
+        // GitLab Docker containers use GITLAB_OMNIBUS_CONFIG environment variable
+        // This is the recommended way to configure GitLab in containers
+        Map<String, String> envVars = new HashMap<>();
+
+        // Build the configuration as a Ruby string that will be evaluated
+        StringBuilder gitlabConfig = new StringBuilder();
+
+        // Configure external URL if available (required for OAuth redirects, clone URLs, webhooks)
+        String externalUrl = config.getApplicationUrl();
+        boolean usesHttps = externalUrl != null && externalUrl.startsWith("https://");
+
+        if (externalUrl != null && !externalUrl.isEmpty()) {
+            gitlabConfig.append(String.format("external_url '%s'; ", externalUrl));
+        }
+
+        // Configure reverse proxy settings when behind ALB with HTTPS
+        // This prevents redirect loops by telling GitLab to trust proxy headers
+        if (usesHttps) {
+            gitlabConfig.append("nginx['listen_port'] = 80; ");
+            gitlabConfig.append("nginx['listen_https'] = false; ");
+            gitlabConfig.append("nginx['proxy_set_headers'] = { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' }; ");
+        }
+
+        gitlabConfig.append("gitlab_rails['omniauth_enabled'] = true; ");
+        gitlabConfig.append("gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']; ");
+        gitlabConfig.append("gitlab_rails['omniauth_block_auto_created_users'] = false; ");
+        gitlabConfig.append("gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']; ");
+
+        gitlabConfig.append("gitlab_rails['omniauth_providers'] = [");
+        gitlabConfig.append("{");
+        gitlabConfig.append("name: 'openid_connect', ");
+        gitlabConfig.append(String.format("label: '%s', ",
+            "cognito".equalsIgnoreCase(config.getProviderType()) ? "AWS Cognito" : "AWS IAM Identity Center"));
+        gitlabConfig.append("args: {");
+        gitlabConfig.append("name: 'openid_connect', ");
+        gitlabConfig.append("scope: ['openid', 'profile', 'email'], ");
+        gitlabConfig.append("response_type: 'code', ");
+        gitlabConfig.append(String.format("issuer: '%s', ", config.getIssuerUrl()));
+        gitlabConfig.append("discovery: true, ");
+        gitlabConfig.append("client_auth_method: 'query', ");
+        gitlabConfig.append(String.format("uid_field: '%s', ", config.getUsernameClaim()));
+        gitlabConfig.append("send_scope_to_token_endpoint: true, ");
+        gitlabConfig.append(String.format("pkce: %s, ", config.usePkce()));
+        gitlabConfig.append("client_options: {");
+        gitlabConfig.append(String.format("identifier: '%s', ", config.getClientId()));
+        gitlabConfig.append("secret: ENV['GITLAB_OIDC_CLIENT_SECRET'], ");
+        gitlabConfig.append(String.format("redirect_uri: '%s'", config.getRedirectUrl()));
+        gitlabConfig.append("}");
+        gitlabConfig.append("}");
+        gitlabConfig.append("}");
+        gitlabConfig.append("];");
+
+        envVars.put("GITLAB_OMNIBUS_CONFIG", gitlabConfig.toString());
+
+        return envVars;
     }
 
     @Override
     public String getConfigurationFile(OidcConfiguration config) {
-        StringBuilder gitlabConfig = new StringBuilder();
-        gitlabConfig.append("# GitLab OIDC Configuration\n");
-        gitlabConfig.append("# Added by CloudForge\n");
-        gitlabConfig.append("\n");
-
-        // Configure external URL if available (required for OAuth redirects, clone URLs, webhooks)
-        String externalUrl = config.getApplicationUrl();
-        if (externalUrl != null && !externalUrl.isEmpty()) {
-            gitlabConfig.append("# Configure GitLab external URL for reverse proxy\n");
-            gitlabConfig.append(String.format("external_url '%s'\n", externalUrl));
-            gitlabConfig.append("\n");
-        }
-
-        gitlabConfig.append("gitlab_rails['omniauth_enabled'] = true\n");
-        gitlabConfig.append("gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']\n");
-        gitlabConfig.append("gitlab_rails['omniauth_block_auto_created_users'] = false\n");
-        gitlabConfig.append("gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']\n");
-        gitlabConfig.append("\n");
-        gitlabConfig.append("gitlab_rails['omniauth_providers'] = [\n");
-        gitlabConfig.append("  {\n");
-        gitlabConfig.append("    name: 'openid_connect',\n");
-        gitlabConfig.append(String.format("    label: '%s',\n",
-            config.getProviderType().equals("cognito") ? "AWS Cognito" : "AWS IAM Identity Center"));
-        gitlabConfig.append("    args: {\n");
-        gitlabConfig.append("      name: 'openid_connect',\n");
-        gitlabConfig.append("      scope: ['openid', 'profile', 'email'],\n");
-        gitlabConfig.append("      response_type: 'code',\n");
-        gitlabConfig.append(String.format("      issuer: '%s',\n", config.getIssuerUrl()));
-        gitlabConfig.append("      discovery: true,\n");
-        gitlabConfig.append("      client_auth_method: 'query',\n");
-        gitlabConfig.append(String.format("      uid_field: '%s',\n", config.getUsernameClaim()));
-        gitlabConfig.append("      send_scope_to_token_endpoint: true,\n");
-        gitlabConfig.append(String.format("      pkce: %s,\n", config.usePkce()));
-        gitlabConfig.append("      client_options: {\n");
-        gitlabConfig.append(String.format("        identifier: '%s',\n", config.getClientId()));
-        gitlabConfig.append("        secret: '${GITLAB_OIDC_CLIENT_SECRET}',\n");
-        gitlabConfig.append(String.format("        redirect_uri: '%s'\n", config.getRedirectUrl()));
-        gitlabConfig.append("      }\n");
-        gitlabConfig.append("    }\n");
-        gitlabConfig.append("  }\n");
-        gitlabConfig.append("]\n");
-
-        return gitlabConfig.toString();
+        // GitLab Docker containers use GITLAB_OMNIBUS_CONFIG environment variable
+        // No config file needed - return null to skip file writing
+        return null;
     }
 
     @Override
     public String getConfigurationFilePath() {
-        return "/etc/gitlab/gitlab.rb";
+        // GitLab Docker containers use GITLAB_OMNIBUS_CONFIG environment variable
+        // No config file path needed
+        return null;
     }
 
     @Override
@@ -138,7 +152,7 @@ public class GitLabOidcIntegration implements OidcIntegration {
         commands.add("gitlab_rails['omniauth_providers'] = [");
         commands.add("  {");
         commands.add("    name: 'openid_connect',");
-        commands.add("    label: '" + (config.getProviderType().equals("cognito") ? "AWS Cognito" : "AWS IAM Identity Center") + "',");
+        commands.add("    label: '" + ("cognito".equalsIgnoreCase(config.getProviderType()) ? "AWS Cognito" : "AWS IAM Identity Center") + "',");
         commands.add("    args: {");
         commands.add("      name: 'openid_connect',");
         commands.add("      scope: ['openid', 'profile', 'email'],");
@@ -175,7 +189,10 @@ public class GitLabOidcIntegration implements OidcIntegration {
 
     @Override
     public String getContainerStartupCommand() {
-        return "/assets/wrapper";
+        // GitLab's official omnibus container uses /assets/init-container as the default CMD
+        // Per https://github.com/gitlabhq/omnibus-gitlab/blob/master/docker/Dockerfile
+        // The init-container script handles initialization, signals, runit, and GitLab reconfiguration
+        return "/assets/init-container";
     }
 
     @Override

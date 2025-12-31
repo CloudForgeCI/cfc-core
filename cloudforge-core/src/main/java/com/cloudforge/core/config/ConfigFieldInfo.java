@@ -13,6 +13,26 @@ import java.util.List;
  * <p>Encapsulates all information from {@link ConfigField} annotation plus
  * reflection metadata needed for prompting, validation, and value assignment.</p>
  *
+ * @param fieldName the Java field name
+ * @param displayName the user-friendly display name
+ * @param description the field description for user help
+ * @param category the configuration category for grouping
+ * @param visibleWhen the visibility condition expression
+ * @param dependsOn the field this depends on
+ * @param required whether the field is required
+ * @param example an example value for user guidance
+ * @param allowedValues array of allowed values (for constrained choices)
+ * @param min the minimum value for numeric fields
+ * @param max the maximum value for numeric fields
+ * @param pattern the regex pattern for string validation
+ * @param defaultFrom the ApplicationSpec method to get default value from
+ * @param sensitive whether this field contains sensitive data
+ * @param sourceConfig the field containing the source location for sensitive data
+ * @param tags the field tags for categorization and filtering
+ * @param validators the custom validator class names
+ * @param order the display order for sorting fields
+ * @param type the Java type of the field
+ * @param field the reflected Field object
  * @since 3.0.0
  */
 public record ConfigFieldInfo(

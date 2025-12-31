@@ -2,8 +2,6 @@ package com.cloudforgeci.api.core.rules;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -183,12 +181,13 @@ class ComplianceMatrixMethodsTest {
         // Given: A security control
         ComplianceMatrix.SecurityControl control = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST;
 
-        // When: Getting requirements for PCI-DSS
-        List<String> requirements = control.getRequirements("PCI-DSS");
+        // When: Getting requirement for PCI-DSS
+        ComplianceMatrix.FrameworkRequirement requirement = control.getRequirement("PCI-DSS");
 
-        // Then: Should return non-empty list
-        assertNotNull(requirements);
-        assertFalse(requirements.isEmpty());
+        // Then: Should return non-null requirement
+        assertNotNull(requirement);
+        assertNotNull(requirement.citation());
+        assertFalse(requirement.citation().isEmpty());
     }
 
     @Test
@@ -196,12 +195,12 @@ class ComplianceMatrixMethodsTest {
         // Given: A security control
         ComplianceMatrix.SecurityControl control = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST;
 
-        // When: Getting requirements for invalid framework
-        List<String> requirements = control.getRequirements("INVALID");
+        // When: Getting requirement for invalid framework
+        ComplianceMatrix.FrameworkRequirement requirement = control.getRequirement("INVALID");
 
-        // Then: Should return empty list
-        assertNotNull(requirements);
-        assertTrue(requirements.isEmpty());
+        // Then: Should return NOT_APPLICABLE requirement
+        assertNotNull(requirement);
+        assertEquals(ComplianceMatrix.RequirementLevel.NOT_APPLICABLE, requirement.level());
     }
 
     @Test
@@ -229,16 +228,16 @@ class ComplianceMatrixMethodsTest {
         // When: Checking all security controls
         for (ComplianceMatrix.SecurityControl control : ComplianceMatrix.SecurityControl.values()) {
             // Then: Each should have requirements for major frameworks
-            assertFalse(control.getRequirements("PCI-DSS").isEmpty(),
-                control.name() + " should have PCI-DSS requirements");
-            assertFalse(control.getRequirements("HIPAA").isEmpty(),
-                control.name() + " should have HIPAA requirements");
-            assertFalse(control.getRequirements("SOC2").isEmpty(),
-                control.name() + " should have SOC2 requirements");
-            assertFalse(control.getRequirements("GDPR").isEmpty(),
-                control.name() + " should have GDPR requirements");
-            assertFalse(control.getRequirements("NIST").isEmpty(),
-                control.name() + " should have NIST requirements");
+            assertNotNull(control.getRequirement("PCI-DSS"),
+                control.name() + " should have PCI-DSS requirement");
+            assertNotNull(control.getRequirement("HIPAA"),
+                control.name() + " should have HIPAA requirement");
+            assertNotNull(control.getRequirement("SOC2"),
+                control.name() + " should have SOC2 requirement");
+            assertNotNull(control.getRequirement("GDPR"),
+                control.name() + " should have GDPR requirement");
+            assertNotNull(control.getRequirement("NIST"),
+                control.name() + " should have NIST requirement");
         }
     }
 

@@ -2,10 +2,12 @@ package com.cloudforgeci.api.core.rules;
 
 
 import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
@@ -32,12 +34,14 @@ import java.util.logging.Logger;
 @ComplianceFramework(
     value = "PCI-DSS",
     priority = 20,
-    displayName = "PCI-DSS",
-    description = "Validates PCI-DSS requirements for cardholder data protection"
+    displayName = "PCI DSS v4.0.1",
+    description = "Validates PCI DSS v4.0.1 requirements for cardholder data protection"
 )
 public class PciDssRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(PciDssRules.class.getName());
 
+    // PCI DSS v4.0 Req 8.3.6: Minimum 12 character passwords (increased from 7 in v3.2.1)
+    private static final int MIN_PASSWORD_LENGTH = 12;
 
     /**
      * Check if log retention period meets PCI-DSS requirement (at least 1 year).
@@ -45,8 +49,10 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
      */
     private boolean isRetentionSufficient(RetentionDays retention) {
         // PCI-DSS requires at least 1 year (365 days)
-        // Acceptable values: ONE_YEAR, TWO_YEARS, FIVE_YEARS, etc.
+        // Acceptable values: ONE_YEAR (365), THIRTEEN_MONTHS (400), EIGHTEEN_MONTHS (545), and higher
         return retention == RetentionDays.ONE_YEAR ||
+               retention == RetentionDays.THIRTEEN_MONTHS ||
+               retention == RetentionDays.EIGHTEEN_MONTHS ||
                retention == RetentionDays.TWO_YEARS ||
                retention == RetentionDays.THREE_YEARS ||
                retention == RetentionDays.FIVE_YEARS ||
@@ -74,15 +80,10 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
 
         LOG.info("Installing PCI-DSS compliance validation rules");
 
-        // Determine compliance mode
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        // Get compliance mode (already resolved to enum with proper default)
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
-        LOG.info("  Compliance mode: " + complianceMode +
-                 (complianceModeStr == null ? " (default for " + ctx.security + ")" : " (explicit)"));
+        LOG.info("  Compliance mode: " + complianceMode);
 
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();
@@ -158,7 +159,7 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         }
 
         // Requirement 1.3: Prohibit direct public access
-        if ("public-no-nat".equals(ctx.cfc.networkMode())) {
+        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
             rules.add(ComplianceRule.fail(
                 "PCI-DSS-Req-1.3-Network",
                 "Private network mode required for cardholder data environment",
@@ -271,6 +272,20 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
             ));
         }
 
+        // Requirement 4.1: SSL/TLS must be enabled for encrypted transmission
+        if (!ctx.cfc.enableSsl()) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-4.1-SSL",
+                "SSL/TLS must be enabled for encrypted transmission of cardholder data",
+                "PCI-DSS Req 4.1: enableSsl must be true for production PCI-DSS compliance"
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-4.1-SSL",
+                "SSL/TLS enabled"
+            ));
+        }
+
         // Validate TLS certificate is configured
         if (ctx.cert.get().isEmpty()) {
             rules.add(ComplianceRule.fail(
@@ -300,19 +315,20 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         );
 
         // Requirement 6.6: WAF or application security review
+        // WAF is REQUIRED for PRODUCTION environments processing cardholder data
         if (!config.isWafEnabled()) {
             rules.add(ComplianceRule.fail(
                 "PCI-DSS-Req-6.6-WAF",
-                "Web Application Firewall (WAF) strongly recommended for production",
+                "Web Application Firewall (WAF) REQUIRED for PCI-DSS compliance in PRODUCTION",
                 "WafEnabled",
-                "PCI-DSS Req 6.6: Web Application Firewall (WAF) strongly recommended for production. " +
-                "Set wafEnabled = true in deployment context. " +
-                "Alternative: Document regular application security reviews per PCI-DSS 6.6."
+                "PCI-DSS Req 6.6: Protect all public-facing web applications from known attacks by " +
+                "installing a web application firewall. WAF is required for PRODUCTION environments " +
+                "processing cardholder data. Set wafEnabled = true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
                 "PCI-DSS-Req-6.6-WAF",
-                "WAF protection enabled",
+                "WAF protection enabled for PCI-DSS compliance",
                 "WafEnabled"
             ));
         }
@@ -321,11 +337,32 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * PCI-DSS Requirement 7 & 8: Restrict access and authenticate users.
-     * Validates access control configuration.
+     * PCI DSS Requirement 7 & 8: Restrict access and authenticate users.
+     * Validates access control and authentication configuration.
      */
     private List<ComplianceRule> validateAccessControl(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
+
+        var config = ctx.securityProfileConfig.get().orElseThrow(
+            () -> new IllegalStateException("SecurityProfileConfiguration not set")
+        );
+
+        // Req 8.3.6: Minimum 12 character passwords
+        int passwordLength = config.getMinimumPasswordLength();
+        if (passwordLength < MIN_PASSWORD_LENGTH) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-8.3.6-Password",
+                "Minimum password length must be " + MIN_PASSWORD_LENGTH + " characters (PCI DSS v4.0 Req 8.3.6)",
+                "IAMPasswordPolicyRule",
+                "Current: " + passwordLength + " characters. Update SecurityProfileConfiguration.getMinimumPasswordLength()."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-8.3.6-Password",
+                "Password length requirement met (" + passwordLength + " characters)",
+                "IAMPasswordPolicyRule"
+            ));
+        }
 
         // Requirement 7.1: Limit access by business need to know
         // IAM validation is handled by IAMRules, but we verify it's configured
@@ -345,8 +382,8 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         }
 
         // Requirement 8.2: Multi-factor authentication
-        String authMode = ctx.cfc.authMode();
-        if ("none".equals(authMode)) {
+        AuthMode authMode = ctx.cfc.authMode();
+        if (authMode == AuthMode.NONE) {
             rules.add(ComplianceRule.fail(
                 "PCI-DSS-Req-8.2-Auth",
                 "Authentication must be enabled for production environments",
@@ -362,7 +399,7 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         }
 
         // Requirement 8.3: Strong authentication with MFA
-        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
+        if (authMode == AuthMode.ALB_OIDC || authMode == AuthMode.APPLICATION_OIDC) {
             // Check if using Cognito with MFA (compliant) or SSO (requires ssoInstanceArn)
             boolean usingCognitoWithMfa = Boolean.TRUE.equals(ctx.cfc.cognitoAutoProvision())
                                        && Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled());
@@ -485,6 +522,26 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
                 "PCI-DSS-Req-11.4-GuardDuty",
                 "GuardDuty threat detection enabled",
                 "GuardDutyEnabled"
+            ));
+        }
+
+        // Requirement 10 & 11: Track and monitor all access to network resources
+        // VPC Flow Logs are required for network traffic monitoring and audit trail
+        if (!config.isFlowLogsEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-10.11-FlowLogs",
+                "VPC Flow Logs required for network monitoring (PCI-DSS Req 10 & 11)",
+                "FlowLogsEnabled",
+                "PCI-DSS Requirement 10 (logging and monitoring) and Requirement 11 (security testing) " +
+                "require tracking and monitoring all access to network resources and cardholder data. " +
+                "Enable VPC Flow Logs to capture network traffic for audit trail and anomaly detection. " +
+                "Set flowLogsEnabled = true in deployment context."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-10.11-FlowLogs",
+                "VPC Flow Logs enabled for network monitoring",
+                "FlowLogsEnabled"
             ));
         }
 
@@ -667,14 +724,14 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
 
         report.append("Infrastructure Controls:\n");
         report.append("  ✓ Network Segmentation (Req 1.2.1): ").append(ctx.vpc.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Private Network (Req 1.3): ").append("private-with-nat".equals(ctx.cfc.networkMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Private Network (Req 1.3): ").append(ctx.cfc.networkMode() == NetworkMode.PRIVATE_WITH_NAT ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ EBS Encryption (Req 3.4): ").append(config.isEbsEncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ EFS Encryption at Rest (Req 3.4): ").append(config.isEfsEncryptionAtRestEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ EFS Encryption in Transit (Req 4.1): ").append(config.isEfsEncryptionInTransitEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ S3 Encryption (Req 3.4): ").append(config.isS3EncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ TLS Certificate (Req 4.1): ").append(ctx.cert.get().isPresent() ? "CONFIGURED" : "MISSING").append("\n");
         report.append("  ✓ WAF Protection (Req 6.6): ").append(config.isWafEnabled() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ Authentication (Req 8.2): ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ Authentication (Req 8.2): ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CloudTrail (Req 10.2): ").append(config.isCloudTrailEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ VPC Flow Logs (Req 10.3): ").append(config.isFlowLogsEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ ALB Access Logs (Req 10.5): ").append(config.isAlbAccessLoggingEnabled() ? "ENABLED" : "DISABLED").append("\n");

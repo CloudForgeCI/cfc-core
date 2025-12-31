@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
@@ -43,16 +44,33 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
 
   @Override
   public List<Rule> rules(SystemContext c) {
-    return List.of(
-            require("vpc", x -> x.vpc),
-            require("alb", x -> x.alb),
-            require("http listener", x -> x.http),
-            require("fargate service", x -> x.fargateService),
-            require("fargate container", x -> x.container),
-            forbid("asg", x -> x.asg),
-            // Note: albTargetGroup is now allowed for OIDC authentication support
-            forbid("instanceSg", x -> x.instanceSg)          // EC2-specific
-    );
+    var rules = new java.util.ArrayList<Rule>();
+
+    // Always required
+    rules.add(require("vpc", x -> x.vpc));
+    rules.add(require("alb", x -> x.alb));
+    rules.add(require("fargate service", x -> x.fargateService));
+    rules.add(require("fargate container", x -> x.container));
+    rules.add(forbid("asg", x -> x.asg));
+    // Note: albTargetGroup is now allowed for OIDC authentication support
+    rules.add(forbid("instanceSg", x -> x.instanceSg));  // EC2-specific
+
+    // HTTP listener is NOT required when HTTPS_STRICT mode is enabled (PCI-DSS requirement 4.1)
+    // In HTTPS_STRICT mode, only HTTPS listener is created - no HTTP listener at all
+    boolean httpsStrict = c.securityProfileConfig.get()
+        .map(config -> config.isHttpsStrictEnabled())
+        .orElse(false);
+    boolean sslEnabled = Boolean.TRUE.equals(c.cfc.enableSsl());
+
+    if (!(httpsStrict && sslEnabled)) {
+      // Standard mode: HTTP listener is required
+      rules.add(require("http listener", x -> x.http));
+    } else {
+      // HTTPS_STRICT mode: HTTPS listener is required instead
+      rules.add(require("https listener", x -> x.https));
+    }
+
+    return rules;
   }
 
   @Override
@@ -286,6 +304,10 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       }
 
       c.https.set(https);
+
+      // Register AWS Config rules for HTTPS/TLS compliance
+      c.requireConfigRule(AwsConfigRule.ALB_HTTPS_ONLY);
+      c.requireConfigRule(AwsConfigRule.ELB_TLS_HTTPS_LISTENERS);
     });
 
     // 2c) Service behind HTTPS - wait for HTTPS listener, Fargate service, AND certificate to be ready

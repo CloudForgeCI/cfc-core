@@ -5,6 +5,7 @@ import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
@@ -35,6 +36,7 @@ class HipaaRulesTest {
         cfcContext.put("securityProfile", profile.name());
         cfcContext.put("auditManagerEnabled", "true");
         cfcContext.put("complianceFrameworks", "HIPAA");
+        cfcContext.put("enableFlowlogs", true);  // HIPAA requires VPC Flow Logs
         stack.getNode().setContext("cfc", cfcContext);
 
         return stack;
@@ -1199,7 +1201,7 @@ class HipaaRulesTest {
             boolean hasRequirement = securityMonitoring && guardDuty;
             if (hasRequirement) {
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
@@ -1286,7 +1288,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
@@ -1367,7 +1369,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
@@ -1436,7 +1438,7 @@ class HipaaRulesTest {
         customContext.put("securityProfile", profile);
         customContext.put("region", "us-east-1");  // Required for ALB logging
         customContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        customContext.put("enableFlowlogs", String.valueOf(flowLogs));
         customContext.put("albAccessLogging", String.valueOf(albLogging));
         customContext.put("complianceMode", complianceMode);
 
@@ -1549,7 +1551,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
@@ -1634,7 +1636,7 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
@@ -1667,7 +1669,8 @@ class HipaaRulesTest {
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Test will fail if THIS requirement is missing
             // (it may also fail for other missing requirements, but we're specifically testing this one)
-            if (!hasCert || !efsTransit || "public-no-nat".equals(networkMode)) {
+            NetworkMode mode = NetworkMode.fromString(networkMode);
+            if (!hasCert || !efsTransit || mode == NetworkMode.PUBLIC) {
                 shouldFail = true;
             }
         }
@@ -1688,15 +1691,16 @@ class HipaaRulesTest {
     @ParameterizedTest
     @CsvSource({
         "PRODUCTION,2555,ENFORCE,true,FARGATE",      // 7 years - PASS branch
-        "PRODUCTION,2190,ENFORCE,true,FARGATE",      // 6 years exactly - PASS branch
-        "PRODUCTION,1825,ENFORCE,true,FARGATE",      // 5 years - PASS branch
-        "PRODUCTION,1095,ENFORCE,true,FARGATE",      // 3 years - PASS branch
-        "PRODUCTION,730,ENFORCE,true,FARGATE",       // 2 years - PASS branch (minimum)
+        "PRODUCTION,2190,ENFORCE,true,FARGATE",      // 6 years exactly - PASS branch (minimum)
+        "PRODUCTION,1825,ENFORCE,false,FARGATE",     // 5 years - FAIL branch (insufficient)
+        "PRODUCTION,1095,ENFORCE,false,FARGATE",     // 3 years - FAIL branch (insufficient)
+        "PRODUCTION,730,ENFORCE,false,FARGATE",      // 2 years - FAIL branch (insufficient)
         "PRODUCTION,365,ENFORCE,false,FARGATE",      // 1 year - FAIL branch
         "PRODUCTION,180,ENFORCE,false,FARGATE",      // 180 days - FAIL branch
         "PRODUCTION,90,ENFORCE,false,FARGATE",       // 90 days - FAIL branch
         "PRODUCTION,365,ADVISORY,false,FARGATE",     // Advisory mode with 1 year
-        "STAGING,730,ENFORCE,true,FARGATE",          // Staging with 2 years
+        "STAGING,2190,ENFORCE,true,FARGATE",         // Staging with 6 years - PASS branch
+        "STAGING,730,ENFORCE,false,FARGATE",         // Staging with 2 years - FAIL branch (insufficient)
         "STAGING,365,ENFORCE,false,FARGATE"          // Staging with 1 year
     })
     void testHipaaRetentionRequirementsCombinations(String profile, int retentionDays,
@@ -1713,12 +1717,12 @@ class HipaaRulesTest {
         // This ensures focused tests don't fail on unrelated requirements
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Only add baseline if test expects to pass (has the specific requirement being tested)
-            boolean hasRequirement = retentionDays >= 730;
+            boolean hasRequirement = retentionDays >= 2190;
             if (hasRequirement) {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
-                customContext.putIfAbsent("flowLogsEnabled", "true");
+                customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
@@ -1754,7 +1758,7 @@ class HipaaRulesTest {
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Test will fail if THIS requirement is missing
             // (it may also fail for other missing requirements, but we're specifically testing this one)
-            if (retentionDays < 730) {
+            if (retentionDays < 2190) {
                 shouldFail = true;
             }
         }
@@ -1819,7 +1823,7 @@ class HipaaRulesTest {
     @CsvSource({
         // Full compliance scenarios
         "PRODUCTION,ENFORCE,alb-oidc,true,true,true,true,true,true,true,private-with-nat,2555,FARGATE",
-        "STAGING,ENFORCE,alb-oidc,true,true,true,true,true,false,true,private-with-nat,730,FARGATE",
+        "STAGING,ENFORCE,alb-oidc,true,true,true,true,true,false,true,private-with-nat,2190,FARGATE",
 
         // Partial compliance scenarios
         "PRODUCTION,ADVISORY,none,false,false,false,false,false,false,false,public-no-nat,90,FARGATE",
@@ -1831,7 +1835,7 @@ class HipaaRulesTest {
 
         // Authentication variations
         "PRODUCTION,ENFORCE,alb-oidc,false,true,true,true,true,true,true,private-with-nat,2190,FARGATE",
-        "PRODUCTION,ENFORCE,jenkins-oidc,false,false,true,true,true,true,true,private-with-nat,1095,FARGATE"
+        "PRODUCTION,ENFORCE,jenkins-oidc,false,false,true,true,true,true,true,private-with-nat,2190,FARGATE"
     })
     void testHipaaComprehensiveCombinations(String profile, String complianceMode, String authMode,
                                            boolean cognitoMfa, boolean secMonitoring, boolean guardDuty,
@@ -1845,12 +1849,13 @@ class HipaaRulesTest {
         customContext.put("securityMonitoringEnabled", String.valueOf(secMonitoring));
         customContext.put("guardDutyEnabled", String.valueOf(guardDuty));
         customContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        customContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        customContext.put("enableFlowlogs", String.valueOf(flowLogs));
         customContext.put("crossRegionBackupEnabled", String.valueOf(crossRegion));
         customContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
         customContext.put("networkMode", networkMode);
         customContext.put("logRetentionDays", String.valueOf(retention));
         customContext.put("automatedBackupEnabled", "true");
+        customContext.put("albAccessLogging", "true");  // HIPAA requires ALB access logging
 
         if (!authMode.equals("none")) {
             customContext.put("enableSsl", "true");
@@ -1872,6 +1877,7 @@ class HipaaRulesTest {
         new HipaaRules().install(builder.getSystemContext());
 
         // Comprehensive checks for all HIPAA requirements when ENFORCE + PRODUCTION/STAGING
+        NetworkMode mode = NetworkMode.fromString(networkMode);
         boolean shouldFail = "ENFORCE".equals(complianceMode) &&
                            (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING) &&
                            (authMode.equals("none") ||                           // No auth
@@ -1879,8 +1885,8 @@ class HipaaRulesTest {
                             (!secMonitoring || !guardDuty) ||                    // Missing monitoring
                             (!cloudTrail || !flowLogs) ||                        // Missing audit logs
                             !efsTransit ||                                       // No EFS transit encryption
-                            "public-no-nat".equals(networkMode) ||               // Public network
-                            retention < 730 ||                                   // Insufficient retention
+                            mode == NetworkMode.PUBLIC ||                        // Public network (includes legacy "public-no-nat")
+                            retention < 2190 ||                                  // Insufficient retention (6 years minimum)
                             (secProfile == SecurityProfile.PRODUCTION && !crossRegion)); // PROD needs cross-region backup
 
         if (shouldFail) {
@@ -2050,7 +2056,7 @@ class HipaaRulesTest {
         cfcContext.put("securityProfile", profile);
         cfcContext.put("complianceMode", complianceMode);
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLoggingEnabled", String.valueOf(albLogging));
         stack.getNode().setContext("cfc", cfcContext);
 
@@ -2112,8 +2118,8 @@ class HipaaRulesTest {
         cfcContext.put("cognitoMfaEnabled", String.valueOf(cognitoMfa));
         cfcContext.put("identityCenterSsoEnabled", String.valueOf(identityCenterSso));
 
-        // ALB OIDC requires SSL
-        if ("alb-oidc".equals(authMode)) {
+        // OIDC auth modes require SSL
+        if ("alb-oidc".equals(authMode) || "jenkins-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
             cfcContext.put("enableSsl", "true");
             cfcContext.put("fqdn", "hipaa.example.com");
         }
@@ -2351,7 +2357,7 @@ class HipaaRulesTest {
         cfcContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsEnc));
         cfcContext.put("s3EncryptionEnabled", String.valueOf(s3Enc));
         cfcContext.put("cloudTrailEnabled", String.valueOf(cloudTrail));
-        cfcContext.put("flowLogsEnabled", String.valueOf(flowLogs));
+        cfcContext.put("enableFlowlogs", String.valueOf(flowLogs));
         cfcContext.put("albAccessLoggingEnabled", String.valueOf(albLogging));
         cfcContext.put("authMode", authMode);
         cfcContext.put("automatedBackupEnabled", String.valueOf(automatedBackup));
@@ -2376,5 +2382,278 @@ class HipaaRulesTest {
                 RuntimeType.FARGATE, secProfile, iamProfile, cfc);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // HIPAA 164.312(b) - Audit controls, VPC Flow Logs required
+        "PRODUCTION,FARGATE,true,ENFORCE,false",    // Flow logs enabled - PASS
+        "PRODUCTION,FARGATE,false,ENFORCE,true",    // Flow logs disabled - FAIL
+        "PRODUCTION,EC2,true,ENFORCE,false",        // EC2 with flow logs - PASS
+        "PRODUCTION,EC2,false,ENFORCE,true",        // EC2 without flow logs - FAIL
+
+        // STAGING - flow logs recommended
+        "STAGING,FARGATE,true,ENFORCE,false",       // STAGING with flow logs - PASS
+        "STAGING,FARGATE,false,ENFORCE,false",      // STAGING without - PASS (not enforced)
+        "STAGING,EC2,false,ENFORCE,false",          // STAGING EC2 without - PASS
+
+        // DEV - flow logs optional
+        "DEV,FARGATE,false,ENFORCE,false",          // DEV without flow logs - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,ADVISORY,false"   // PRODUCTION advisory - PASS
+    })
+    void testHipaaFlowLogsEnforcement(String profile, String runtime, boolean flowLogsEnabled,
+                                       String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestHipaaFlowLogs");
+        customContext.put("securityProfile", profile);
+        customContext.put("enableFlowlogs", String.valueOf(flowLogsEnabled));
+        customContext.put("complianceFrameworks", "HIPAA");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("logRetentionDays", "2190");  // HIPAA requires 6 years
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "hipaa.example.com");
+            customContext.put("cognitoAutoProvision", "true");
+            customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestHipaaFlowLogs", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected HIPAA flow logs validation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected HIPAA flow logs validation to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // HIPAA 164.312(a)(2)(iv) - Encryption at rest and in transit
+        "PRODUCTION,FARGATE,true,true,true,true,ENFORCE,false",    // All encryption - PASS
+        "PRODUCTION,FARGATE,false,true,true,true,ENFORCE,true",    // No EBS encryption - FAIL
+        "PRODUCTION,FARGATE,true,false,true,true,ENFORCE,true",    // No EFS at-rest - FAIL
+        "PRODUCTION,FARGATE,true,true,false,true,ENFORCE,true",    // No EFS transit - FAIL
+        "PRODUCTION,FARGATE,true,true,true,false,ENFORCE,true",    // No S3 encryption - FAIL
+        "PRODUCTION,EC2,true,true,true,true,ENFORCE,false",        // EC2 all encryption - PASS
+        "PRODUCTION,EC2,false,false,false,false,ENFORCE,true",     // EC2 no encryption - FAIL
+
+        // STAGING - encryption recommended
+        "STAGING,FARGATE,true,true,true,true,ENFORCE,false",       // STAGING full encryption - PASS
+        "STAGING,FARGATE,false,false,false,false,ENFORCE,false",   // STAGING no encryption - PASS
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,false,false,ADVISORY,false" // PRODUCTION advisory - PASS
+    })
+    void testHipaaEncryptionCombinations(String profile, String runtime, boolean ebsEncryption,
+                                          boolean efsAtRest, boolean efsTransit, boolean s3Encryption,
+                                          String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestHipaaEncryption");
+        customContext.put("securityProfile", profile);
+        customContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
+        customContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsAtRest));
+        customContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
+        customContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        customContext.put("complianceFrameworks", "HIPAA");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("logRetentionDays", "2190");  // HIPAA requires 6 years
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "hipaa.example.com");
+            customContext.put("cognitoAutoProvision", "true");
+            customContext.put("cognitoMfaEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestHipaaEncryption", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected HIPAA encryption validation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected HIPAA encryption validation to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // HIPAA 164.316(b)(2)(i) - Audit log retention requirements (6 years minimum = 2190 days)
+        "PRODUCTION,FARGATE,2190,ENFORCE,false",    // 6 years retention - PASS
+        "PRODUCTION,FARGATE,2555,ENFORCE,false",    // 7 years retention - PASS
+        "PRODUCTION,FARGATE,365,ENFORCE,true",      // 1 year - FAIL (< 2190)
+        "PRODUCTION,FARGATE,90,ENFORCE,true",       // 90 days - FAIL (< 2190)
+        "PRODUCTION,FARGATE,180,ENFORCE,true",      // 180 days - FAIL
+        "PRODUCTION,EC2,2190,ENFORCE,false",        // EC2 6 years - PASS
+        "PRODUCTION,EC2,365,ENFORCE,true",          // EC2 1 year - FAIL (< 2190)
+
+        // STAGING - HIPAA requires 6 years for all profiles
+        "STAGING,FARGATE,2190,ENFORCE,false",       // STAGING 6 years - PASS
+        "STAGING,FARGATE,90,ENFORCE,true",          // STAGING 90 days - FAIL (< 2190)
+        "STAGING,EC2,2190,ENFORCE,false",           // STAGING EC2 6 years - PASS
+        "STAGING,EC2,30,ENFORCE,true",              // STAGING EC2 30 days - FAIL (< 2190)
+
+        // DEV - HIPAA validation not enforced for DEV (returns early)
+        "DEV,FARGATE,2190,ENFORCE,false",           // DEV 6 years - PASS (no validation)
+        "DEV,FARGATE,7,ENFORCE,false",              // DEV 7 days - PASS (no validation)
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,90,ADVISORY,false"      // PRODUCTION advisory - PASS
+    })
+    void testHipaaAuditLogRetention(String profile, String runtime, int retentionDays,
+                                      String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestHipaaLogRetention");
+        customContext.put("securityProfile", profile);
+        customContext.put("logRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "HIPAA");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("enableFlowlogs", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "hipaa.example.com");
+            customContext.put("cognitoAutoProvision", "true");
+            customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("ebsEncryptionEnabled", "true");
+            customContext.put("efsEncryptionAtRestEnabled", "true");
+            customContext.put("efsEncryptionInTransitEnabled", "true");
+            customContext.put("s3EncryptionEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestHipaaLogRetention", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected HIPAA log retention validation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected HIPAA log retention validation to pass: " + profile);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // HIPAA multi-requirement violations
+        "PRODUCTION,FARGATE,false,false,90,ENFORCE,true",       // No flow logs + encryption + retention - FAIL
+        "PRODUCTION,FARGATE,false,true,2190,ENFORCE,true",      // No flow logs only - FAIL
+        "PRODUCTION,FARGATE,true,false,2190,ENFORCE,true",      // No encryption only - FAIL
+        "PRODUCTION,FARGATE,true,true,90,ENFORCE,true",         // No retention only (< 2190 days) - FAIL
+        "PRODUCTION,EC2,false,false,90,ENFORCE,true",           // EC2 multi-violation - FAIL
+        "PRODUCTION,EC2,true,true,2190,ENFORCE,false",          // EC2 all requirements (6 years) - PASS
+
+        // STAGING - HIPAA requires 6-year retention even for STAGING
+        "STAGING,FARGATE,false,false,2190,ENFORCE,false",       // STAGING minimal (6yr retention) - PASS
+        "STAGING,FARGATE,true,true,2190,ENFORCE,false",         // STAGING full (6yr retention) - PASS
+        "STAGING,FARGATE,true,true,90,ENFORCE,true",            // STAGING with 90 days - FAIL (< 2190)
+
+        // ADVISORY mode
+        "PRODUCTION,FARGATE,false,false,90,ADVISORY,false"      // PRODUCTION advisory - PASS
+    })
+    void testHipaaMultiViolationScenarios(String profile, String runtime, boolean flowLogsEnabled,
+                                           boolean encryptionEnabled, int retentionDays,
+                                           String complianceMode, boolean shouldFail) {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestHipaaMultiViolation");
+        customContext.put("securityProfile", profile);
+        customContext.put("enableFlowlogs", String.valueOf(flowLogsEnabled));
+        customContext.put("ebsEncryptionEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("efsEncryptionAtRestEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("efsEncryptionInTransitEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("s3EncryptionEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("logRetentionDays", String.valueOf(retentionDays));
+        customContext.put("complianceFrameworks", "HIPAA");
+        customContext.put("complianceMode", complianceMode);
+        customContext.put("networkMode", "private-with-nat");
+        customContext.put("region", "us-east-1");
+
+        SecurityProfile secProfile = SecurityProfile.valueOf(profile);
+        RuntimeType runtimeType = RuntimeType.valueOf(runtime);
+
+        // Add baseline requirements for tests expected to pass
+        if (!shouldFail) {
+            customContext.put("cloudTrailEnabled", "true");
+            customContext.put("albAccessLogging", "true");
+            customContext.put("guardDutyEnabled", "true");
+            customContext.put("authMode", "alb-oidc");
+            customContext.put("enableSsl", "true");
+            customContext.put("fqdn", "hipaa.example.com");
+            customContext.put("cognitoAutoProvision", "true");
+            customContext.put("cognitoMfaEnabled", "true");
+        }
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestHipaaMultiViolation", secProfile, runtimeType, customContext);
+
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        SecurityRules.install(builder.getSystemContext());
+        new HipaaRules().install(builder.getSystemContext());
+
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+                "Expected HIPAA multi-violation to fail for: " + profile);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+                "Expected HIPAA multi-violation to pass: " + profile);
+        }
     }
 }

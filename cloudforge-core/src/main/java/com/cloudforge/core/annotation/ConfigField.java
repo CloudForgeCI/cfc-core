@@ -186,7 +186,7 @@ public @interface ConfigField {
      *
      * <p>For complex conditions, use logical operators (future enhancement):</p>
      * <ul>
-     *   <li>"supportsDatabase && provisionDatabase"</li>
+     *   <li>"supportsDatabase &amp;&amp; provisionDatabase"</li>
      *   <li>"securityProfile == PRODUCTION || complianceMode == PCI_DSS"</li>
      * </ul>
      *
@@ -341,7 +341,7 @@ public @interface ConfigField {
      *     ↓
      * ApplicationSpec (defaultFrom)
      *     ↓
-     * @ConfigField default (system)
+     * ConfigField default (system)
      * </pre>
      *
      * @return method name or expression, or empty for no ApplicationSpec default

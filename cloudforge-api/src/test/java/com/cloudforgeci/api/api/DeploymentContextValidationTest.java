@@ -16,14 +16,11 @@ public class DeploymentContextValidationTest {
     }
 
     @Test
-    void enablingSslRequiresFqdnOrDomain() throws Exception {
+    void enablingSslWithoutDomainSucceeds() throws Exception {
         Map<String,Object> m = new LinkedHashMap<>();
-        m.put("enableSsl", true);        // make the precondition explicit
-        // no fqdn, no domain -> should fail
-        InvocationTargetException ex = assertThrows(InvocationTargetException.class, () -> fromMap(m));
-        Throwable cause = ex.getTargetException();
-        assertInstanceOf(IllegalArgumentException.class, cause);
-        assertTrue(cause.getMessage().contains("enableSsl=true"));
+        m.put("enableSsl", true);        // SSL without domain is valid (uses Private CA)
+        // no fqdn, no domain -> should succeed (Private CA will be used for ALB DNS)
+        assertDoesNotThrow(() -> fromMap(m), "SSL without domain should succeed using Private CA");
     }
 
     @Test

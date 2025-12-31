@@ -1,0 +1,58 @@
+{
+  "description": "Production environment with HIPAA compliance for healthcare applications",
+  "stackName": "CloudForge-Prod-HIPAA",
+  "runtime": "ec2",
+  "topology": "jenkins-service",
+  "securityProfile": "production",
+  "region": "us-east-1",
+
+  "domain": "example.com",
+  "subdomain": "jenkins",
+  "enableSsl": true,
+  "createZone": false,
+  "_domain_note": "Domain is optional - remove domain/subdomain/createZone for Private CA (meets HIPAA 164.312(e) transmission security)",
+
+  "networkMode": "private-with-nat",
+  "wafEnabled": true,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "cloudforge-hipaa",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "complianceFrameworks": "HIPAA,SOC2",
+  "scopeConfigRulesToDeployment": false,
+  "enableS3VersioningRemediation": true,
+  "enableCloudTrailLoggingRemediation": true,
+  "complianceMode": "enforce",
+
+  "guardDutyEnabled": true,
+  "guardDutyAlertsConfigured": true,
+  "auditManagerEnabled": true,
+  "securityHubEnabled": true,
+  "inspectorEnabled": true,
+  "macieEnabled": true,
+
+  "logRetentionDays": 2190,
+  "albAccessLogging": true,
+  "enableFlowlogs": true,
+
+  "instanceType": "t3.large",
+  "minInstanceCapacity": 2,
+  "maxInstanceCapacity": 8,
+  "enableAutoScaling": true,
+  "cpuTargetUtilization": 50,
+
+  "healthCheckGracePeriod": 300,
+  "healthCheckInterval": 30,
+  "healthCheckTimeout": 5,
+  "healthyThreshold": 2,
+  "unhealthyThreshold": 2,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "retainStorage": true,
+  "certificateExpirationMonitoring": true
+}

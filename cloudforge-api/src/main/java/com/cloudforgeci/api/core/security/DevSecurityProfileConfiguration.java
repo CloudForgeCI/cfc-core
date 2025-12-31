@@ -1,10 +1,11 @@
 package com.cloudforgeci.api.core.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforge.core.enums.SecurityProfile;
-import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
-import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -58,8 +59,8 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     @Override
     public boolean isFlowLogsEnabled() {
         // Allow deployment context to override profile default
-        if (deploymentContext != null && deploymentContext.enableFlowlogs()) {
-            return true;
+        if (deploymentContext != null && deploymentContext.enableFlowlogs() != null) {
+            return Boolean.TRUE.equals(deploymentContext.enableFlowlogs());
         }
         return false; // Disabled by default in dev for cost savings
     }
@@ -72,47 +73,83 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     // Security Monitoring - Minimal for dev
     @Override
     public boolean isSecurityMonitoringEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.securityMonitoringEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.securityMonitoringEnabled());
+        }
         return false; // Disabled for dev
     }
 
     @Override
     public boolean isCloudTrailEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.cloudTrailEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.cloudTrailEnabled());
+        }
         return false; // Disabled for dev
     }
 
     @Override
     public boolean isGuardDutyEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.guardDutyEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.guardDutyEnabled());
+        }
         return false; // Disabled for dev
     }
 
     @Override
     public boolean isAwsConfigEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.awsConfigEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.awsConfigEnabled());
+        }
         return false; // Disabled for dev
     }
 
     @Override
     public boolean isAuditManagerEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.auditManagerEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.auditManagerEnabled());
+        }
         return false; // Disabled for dev to reduce costs
     }
 
     // Encryption Configuration - Basic encryption
     @Override
     public boolean isEbsEncryptionEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.enableEncryption() != null) {
+            return Boolean.TRUE.equals(deploymentContext.enableEncryption());
+        }
         return true; // Basic encryption enabled
     }
 
     @Override
     public boolean isEfsEncryptionInTransitEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.efsEncryptionInTransitEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.efsEncryptionInTransitEnabled());
+        }
         return true; // Basic encryption enabled
     }
 
     @Override
     public boolean isEfsEncryptionAtRestEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.enableEncryption() != null) {
+            return Boolean.TRUE.equals(deploymentContext.enableEncryption());
+        }
         return true; // Basic encryption enabled
     }
 
     @Override
     public boolean isS3EncryptionEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.enableEncryption() != null) {
+            return Boolean.TRUE.equals(deploymentContext.enableEncryption());
+        }
         return true; // Basic encryption enabled
     }
 
@@ -123,14 +160,23 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     }
 
     @Override
+    public boolean isRestrictSecurityGroupEgressEnabled() {
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.restrictSecurityGroupEgress() != null) {
+            return Boolean.TRUE.equals(deploymentContext.restrictSecurityGroupEgress());
+        }
+        return false; // Default: allow all outbound for dev simplicity
+    }
+
+    @Override
     public boolean isNatGatewayEnabled() {
         return false; // Use public subnets for dev
     }
 
     @Override
-    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, String networkMode) {
+    public int getNatGatewayCount(TopologyType topology, RuntimeType runtime, NetworkMode networkMode) {
         // DEV profile respects network mode for cost optimization
-        if ("private-with-nat".equals(networkMode)) {
+        if (networkMode == NetworkMode.PRIVATE_WITH_NAT) {
             return 1; // Single NAT gateway for cost optimization in dev
         }
         return 0; // No NAT gateways for public subnets in dev
@@ -139,17 +185,26 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     @Override
     public boolean isWafEnabled() {
         // Check deployment context first, then fall back to profile default
-        if (deploymentContext != null) {
-            return deploymentContext.wafEnabled();
+        if (deploymentContext != null && deploymentContext.wafEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.wafEnabled());
         }
         return false; // Not required for dev
     }
 
     @Override
+    public boolean isHttpsStrictEnabled() {
+        // Check deployment context first, then fall back to profile default
+        if (deploymentContext != null && deploymentContext.httpsStrictEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.httpsStrictEnabled());
+        }
+        return false; // Not required for dev (allow HTTP for easier testing)
+    }
+
+    @Override
     public boolean isCloudFrontEnabled() {
         // Check deployment context first, then fall back to profile default
-        if (deploymentContext != null) {
-            return deploymentContext.cloudfrontEnabled();
+        if (deploymentContext != null && deploymentContext.cloudfrontEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.cloudfrontEnabled());
         }
         return false; // Not required for dev
     }
@@ -157,6 +212,10 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     // Backup and Recovery - Minimal for dev
     @Override
     public boolean isAutomatedBackupEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.automatedBackupEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.automatedBackupEnabled());
+        }
         return false; // Manual backups for dev
     }
 
@@ -167,7 +226,23 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
 
     @Override
     public boolean isCrossRegionBackupEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.crossRegionBackupEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.crossRegionBackupEnabled());
+        }
         return false; // Not required for dev
+    }
+
+    @Override
+    public boolean isBackupVaultLockEnabled() {
+        // Vault lock not required in dev environments
+        return false;
+    }
+
+    @Override
+    public boolean isBackupVaultRetentionEnabled() {
+        // Dev environments don't retain backup vaults
+        return false;
     }
 
     // Compliance and Audit - Minimal for dev
@@ -178,6 +253,10 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
 
     @Override
     public boolean isAlbAccessLoggingEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.albAccessLogging() != null) {
+            return Boolean.TRUE.equals(deploymentContext.albAccessLogging());
+        }
         return false; // Not required for dev
     }
 
@@ -280,6 +359,49 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
         return false;
     }
 
+    @Override
+    public boolean isRdsDeletionProtectionRemediationEnabled() {
+        // Disabled for dev - deletion protection not needed in development
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDeletionProtectionEnabled() {
+        // Dev environments don't require deletion protection
+        // to allow easy cleanup and rapid iteration
+        return false;
+    }
+
+    @Override
+    public boolean isRdsDatabaseMultiAzEnabled() {
+        // Dev environments use single-AZ for cost savings
+        return false;
+    }
+
+    @Override
+    public boolean isSecurityHubRemediationEnabled() {
+        // Disabled for dev - not needed in development
+        return false;
+    }
+
+    @Override
+    public boolean isInspectorRemediationEnabled() {
+        // Disabled for dev - not needed in development
+        return false;
+    }
+
+    @Override
+    public boolean isMacieRemediationEnabled() {
+        // Disabled for dev - not needed in development
+        return false;
+    }
+
+    @Override
+    public boolean isEcrImageScanningRemediationEnabled() {
+        // Disabled for dev - not needed in development
+        return false;
+    }
+
     // ==================== Authentication Configuration ====================
 
     @Override
@@ -340,5 +462,127 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     public boolean isAdvancedSecurityEnabled() {
         // Not needed for development
         return false;
+    }
+
+    // ==================== Advanced Monitoring & Threat Detection ====================
+
+    @Override
+    public boolean isMacieEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.macieEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.macieEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isMacieAutomatedDiscoveryEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.macieAutomatedDiscoveryEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.macieAutomatedDiscoveryEnabled());
+        }
+        return false; // Not applicable
+    }
+
+    @Override
+    public boolean isSecurityHubEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.securityHubEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.securityHubEnabled());
+        }
+        return false; // Not needed for development
+    }
+
+    @Override
+    public boolean isInspectorEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.inspectorEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.inspectorEnabled());
+        }
+        return false; // Not needed for development
+    }
+
+    @Override
+    public boolean isAntiMalwareEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.antiMalwareEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.antiMalwareEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isFileIntegrityMonitoringEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.fileIntegrityMonitoringEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.fileIntegrityMonitoringEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isContainerRuntimeSecurityEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.containerRuntimeSecurityEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.containerRuntimeSecurityEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isContainerImageScanningEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.containerImageScanningEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.containerImageScanningEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    // ==================== Enhanced Compliance Controls ====================
+
+    @Override
+    public boolean isCloudWatchLogsKmsEncryptionEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.cloudWatchLogsKmsEncryptionEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.cloudWatchLogsKmsEncryptionEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isCloudTrailInsightsEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.cloudTrailInsightsEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.cloudTrailInsightsEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isRoute53QueryLoggingEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.route53QueryLoggingEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.route53QueryLoggingEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isS3ObjectLockEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.s3ObjectLockEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.s3ObjectLockEnabled());
+        }
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isSnsKmsEncryptionEnabled() {
+        return false; // Not required for development
+    }
+
+    @Override
+    public boolean isImdsv2Required() {
+        return false; // IMDSv1 allowed for development convenience
     }
 }

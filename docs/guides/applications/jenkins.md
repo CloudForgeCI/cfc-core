@@ -503,5 +503,5 @@ ssh ec2-user@instance 'tail -f /var/log/jenkins/jenkins.log'
 ## Related Documentation
 
 - [OIDC Integration](../../applications/OIDC.md)
-- [Compliance Guide](../compliance/README.md)
-- [Deployment Context Reference](../../../deployment-contexts/README.md)
+- [Compliance Guide](../../compliance/README.md)
+- [Deployment Context Reference](../../examples/README.md)

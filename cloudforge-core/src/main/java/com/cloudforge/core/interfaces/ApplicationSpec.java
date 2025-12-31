@@ -273,6 +273,75 @@ public interface ApplicationSpec {
         return getSupportedAuthModes().get(0);
     }
 
+    // ========== Path-Based Authentication ==========
+
+    /**
+     * Returns paths that require authentication when using ALB-level OIDC.
+     *
+     * <p>When this list is non-empty and authMode is "alb-oidc", the ALB will:
+     * <ul>
+     *   <li>Require OIDC authentication for requests matching these paths</li>
+     *   <li>Allow unauthenticated access to all other paths</li>
+     * </ul>
+     *
+     * <p>When this list is empty (default), ALL paths require authentication.</p>
+     *
+     * <p>Path patterns support ALB path-pattern syntax:</p>
+     * <ul>
+     *   <li>Exact: "/admin"</li>
+     *   <li>Prefix wildcard: "/admin/*"</li>
+     *   <li>Extension: "*.php"</li>
+     * </ul>
+     *
+     * <p>Example for phpBB (protect admin and installer):</p>
+     * <pre>{@code
+     * @Override
+     * public List<String> protectedPaths() {
+     *     return List.of("/adm/*", "/install/*");
+     * }
+     * }</pre>
+     *
+     * <p>Example for WordPress (protect wp-admin):</p>
+     * <pre>{@code
+     * @Override
+     * public List<String> protectedPaths() {
+     *     return List.of("/wp-admin/*", "/wp-login.php");
+     * }
+     * }</pre>
+     *
+     * <p>Users can override these defaults via DeploymentContext:</p>
+     * <ul>
+     *   <li>protectedPaths: Override/replace the application defaults</li>
+     *   <li>additionalProtectedPaths: Add to the application defaults</li>
+     *   <li>publicPaths: Explicitly mark paths as public (overrides protected)</li>
+     * </ul>
+     *
+     * @return list of path patterns requiring authentication (empty = protect everything)
+     * @see #publicPaths()
+     */
+    default List<String> protectedPaths() {
+        return List.of();  // Default: protect everything when auth is enabled
+    }
+
+    /**
+     * Returns paths that should always be public (no authentication required).
+     *
+     * <p>These paths are excluded from authentication even when they would
+     * otherwise be protected. Useful for health checks, public APIs, etc.</p>
+     *
+     * <p>Common use cases:</p>
+     * <ul>
+     *   <li>Health check endpoints: "/health", "/api/health"</li>
+     *   <li>Public API endpoints: "/api/public/*"</li>
+     *   <li>Static assets: "/static/*", "/assets/*"</li>
+     * </ul>
+     *
+     * @return list of path patterns that should be public (empty by default)
+     */
+    default List<String> publicPaths() {
+        return List.of();  // Default: no explicit public paths
+    }
+
     // ========== Optional Ports (Security-Conscious) ==========
 
     /**
@@ -291,6 +360,11 @@ public interface ApplicationSpec {
     record OptionalPort(int port, String protocol, String configKey, String service, boolean inbound) {
         /**
          * Convenience constructor for inbound TCP ports.
+         *
+         * @param port the port number
+         * @param configKey the deployment config key to enable this port
+         * @param service the service name using this port
+         * @return an OptionalPort configured for inbound TCP
          */
         public static OptionalPort inboundTcp(int port, String configKey, String service) {
             return new OptionalPort(port, "tcp", configKey, service, true);
@@ -298,6 +372,11 @@ public interface ApplicationSpec {
 
         /**
          * Convenience constructor for outbound TCP ports (no security group rule needed).
+         *
+         * @param port the port number
+         * @param configKey the deployment config key to enable this port
+         * @param service the service name using this port
+         * @return an OptionalPort configured for outbound TCP
          */
         public static OptionalPort outboundTcp(int port, String configKey, String service) {
             return new OptionalPort(port, "tcp", configKey, service, false);

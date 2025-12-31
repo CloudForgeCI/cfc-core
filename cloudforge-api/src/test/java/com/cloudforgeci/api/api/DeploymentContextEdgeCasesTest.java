@@ -176,16 +176,8 @@ class DeploymentContextEdgeCasesTest {
             assertTrue(cfc.wafEnabled(), "String 'true' should parse to boolean true");
         }
 
-        @Test
-        @DisplayName("boolean string '1' should parse to true")
-        void booleanString1ParsedToTrue() throws Exception {
-            Map<String, Object> config = new LinkedHashMap<>();
-            config.put("enableSsl", "1");
-            config.put("domain", "example.com");
-            DeploymentContext cfc = fromMap(config);
-
-            assertTrue(cfc.enableSsl(), "String '1' should parse to boolean true");
-        }
+        // Note: "1" and "0" are NOT supported as boolean values to avoid ambiguity
+        // with integer values. See DeploymentConfig.coerceBooleanIfNeeded()
 
         @Test
         @DisplayName("boolean string 'yes' should parse to true")
@@ -206,16 +198,6 @@ class DeploymentContextEdgeCasesTest {
             DeploymentContext cfc = fromMap(config);
 
             assertFalse(cfc.wafEnabled(), "String 'false' should parse to boolean false");
-        }
-
-        @Test
-        @DisplayName("boolean string '0' should parse to false")
-        void booleanString0ParsedToFalse() throws Exception {
-            Map<String, Object> config = new LinkedHashMap<>();
-            config.put("cloudfront", "0");
-            DeploymentContext cfc = fromMap(config);
-
-            assertFalse(cfc.cloudfrontEnabled(), "String '0' should parse to boolean false");
         }
 
         @Test

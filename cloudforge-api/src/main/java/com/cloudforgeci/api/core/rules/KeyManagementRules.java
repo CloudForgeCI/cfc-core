@@ -3,6 +3,7 @@ package com.cloudforgeci.api.core.rules;
 import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
@@ -116,55 +117,50 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
         var config = ctx.securityProfileConfig.get().orElse(null);
 
+        // Check if security profile enables encryption (which implies key management)
+        boolean encryptionEnabled = config != null &&
+            (config.isEbsEncryptionEnabled() ||
+             config.isEfsEncryptionAtRestEnabled() ||
+             config.isS3EncryptionEnabled());
+
+        // Check deployment context override
+        boolean kmsKeyRotationEnabled = getBooleanSetting(ctx, "kmsKeyRotationEnabled", encryptionEnabled);
+
+        // Use ComplianceMatrix to determine if KMS rotation is REQUIRED or ADVISORY
+        String complianceFrameworks = ctx.cfc.complianceFrameworks();
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
+
+        ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
+            ComplianceMatrix.SecurityControl.KMS_KEY_ROTATION,
+            complianceFrameworks,
+            kmsKeyRotationEnabled,
+            complianceMode
+        );
+
         if (ctx.security == SecurityProfile.PRODUCTION) {
-            // Check if security profile enables encryption (which implies key management)
-            boolean encryptionEnabled = config != null &&
-                (config.isEbsEncryptionEnabled() ||
-                 config.isEfsEncryptionAtRestEnabled() ||
-                 config.isS3EncryptionEnabled());
-
-            // Check deployment context override
-            boolean kmsKeyRotationEnabled = getBooleanSetting(ctx, "kmsKeyRotationEnabled", encryptionEnabled);
-
-            if (!kmsKeyRotationEnabled) {
+            if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "KMS-ROTATION",
-                    "KMS automatic key rotation must be enabled for production",
+                    "KMS automatic key rotation required for " + complianceFrameworks,
                     "KmsKeyRotationEnabled",
                     "Enable automatic key rotation for all customer-managed KMS keys. " +
-                    "PCI-DSS Req 3.6.4, HIPAA §164.312(a)(2)(iv), SOC2 CC6.1, GDPR Art.32(1)(a). " +
-                    "Note: PRODUCTION security profile enables encryption by default. " +
                     "Set kmsKeyRotationEnabled = true in deployment context if using custom KMS keys."
+                ));
+            } else if (result == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("KMS key rotation recommended but not required for " + complianceFrameworks);
+                rules.add(ComplianceRule.pass(
+                    "KMS-ROTATION",
+                    "KMS key rotation is advisory for " + complianceFrameworks + " (recommended but not required)"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
                     "KMS-ROTATION",
                     "KMS automatic key rotation enabled" +
-                    (config != null && encryptionEnabled ? " (via security profile)" : ""),
+                    (encryptionEnabled ? " (via security profile)" : ""),
                     "KmsKeyRotationEnabled"
                 ));
             }
-
-            // Customer-managed keys for production data (advisory recommendation)
-            boolean usesCustomerManagedKeys = getBooleanSetting(ctx, "useCustomerManagedKeys", encryptionEnabled);
-            if (!usesCustomerManagedKeys) {
-                rules.add(ComplianceRule.fail(
-                    "KMS-CUSTOMER-MANAGED",
-                    "Customer-managed KMS keys recommended for production data",
-                    "KmsCustomerManagedKeys",
-                    "Use customer-managed KMS keys instead of AWS-managed keys for better control. " +
-                    "Note: PRODUCTION security profile uses AWS-managed keys by default. " +
-                    "Set useCustomerManagedKeys = true in deployment context for custom keys."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "KMS-CUSTOMER-MANAGED",
-                    "Customer-managed KMS keys in use",
-                    "KmsCustomerManagedKeys"
-                ));
-            }
         } else {
-            // For non-production, just pass
             rules.add(ComplianceRule.pass(
                 "KMS-ROTATION",
                 "KMS key rotation not required for " + ctx.security + " environment"
@@ -199,28 +195,49 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
         var config = ctx.securityProfileConfig.get().orElse(null);
 
-        // Certificate expiration monitoring (PRODUCTION only)
-        // PRODUCTION profile implies certificate monitoring via security monitoring
+        // Certificate expiration monitoring
         boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
         boolean certExpirationMonitoringEnabled = getBooleanSetting(ctx, "certificateExpirationMonitoring", securityMonitoringEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !certExpirationMonitoringEnabled) {
-            rules.add(ComplianceRule.fail(
-                "CERT-EXPIRATION-MONITOR",
-                "Certificate expiration monitoring required for PRODUCTION",
-                "CertificateExpirationAlarm",
-                "Enable CloudWatch alarms to monitor certificate expiration (30 days before). " +
-                "Prevents service disruption from expired certificates. " +
-                "Note: PRODUCTION security profile enables security monitoring by default. " +
-                "Set certificateExpirationMonitoring = true in deployment context."
-            ));
+        // Use ComplianceMatrix to determine if certificate monitoring is REQUIRED or ADVISORY
+        String complianceFrameworks = ctx.cfc.complianceFrameworks();
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
+
+        ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
+            ComplianceMatrix.SecurityControl.CERTIFICATE_EXPIRATION_MONITORING,
+            complianceFrameworks,
+            certExpirationMonitoringEnabled,
+            complianceMode
+        );
+
+        if (ctx.security == SecurityProfile.PRODUCTION) {
+            if (result == ComplianceMatrix.ValidationResult.FAIL) {
+                rules.add(ComplianceRule.fail(
+                    "CERT-EXPIRATION-MONITOR",
+                    "Certificate expiration monitoring required for " + complianceFrameworks,
+                    "CertificateExpirationAlarm",
+                    "Enable CloudWatch alarms to monitor certificate expiration (30 days before). " +
+                    "Set certificateExpirationMonitoring = true in deployment context."
+                ));
+            } else if (result == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("Certificate expiration monitoring recommended but not required for " + complianceFrameworks);
+                rules.add(ComplianceRule.pass(
+                    "CERT-EXPIRATION-MONITOR",
+                    "Certificate expiration monitoring is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "CertificateExpirationAlarm"
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "CERT-EXPIRATION-MONITOR",
+                    "Certificate expiration monitoring enabled" +
+                    (securityMonitoringEnabled ? " (via security profile)" : ""),
+                    "CertificateExpirationAlarm"
+                ));
+            }
         } else {
             rules.add(ComplianceRule.pass(
                 "CERT-EXPIRATION-MONITOR",
-                ctx.security == SecurityProfile.PRODUCTION ?
-                    "Certificate expiration monitoring enabled" +
-                    (securityMonitoringEnabled ? " (via security profile)" : "") :
-                    "Certificate expiration monitoring not required for " + ctx.security,
+                "Certificate expiration monitoring not required for " + ctx.security,
                 "CertificateExpirationAlarm"
             ));
         }
@@ -260,20 +277,35 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
         var config = ctx.securityProfileConfig.get().orElse(null);
 
         // Secrets Manager usage for credentials
-        // PRODUCTION profile implies secure credential management (encryption enabled)
         boolean encryptionEnabled = config != null && config.isS3EncryptionEnabled();
         boolean usesSecretsManager = getBooleanSetting(ctx, "secretsManagerEnabled", encryptionEnabled);
 
+        // Use ComplianceMatrix to determine if Secrets Manager is REQUIRED or ADVISORY
+        String complianceFrameworks = ctx.cfc.complianceFrameworks();
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
+
+        ComplianceMatrix.ValidationResult smResult = ComplianceMatrix.validateControlMultiFramework(
+            ComplianceMatrix.SecurityControl.SECRETS_MANAGER,
+            complianceFrameworks,
+            usesSecretsManager,
+            complianceMode
+        );
+
         if (ctx.security == SecurityProfile.PRODUCTION) {
-            if (!usesSecretsManager) {
+            if (smResult == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "SECRETS-MANAGER",
-                    "AWS Secrets Manager required for production credentials",
+                    "AWS Secrets Manager required for " + complianceFrameworks + " credentials",
                     "SecretsManagerInUse",
                     "Store database credentials, API keys, and secrets in AWS Secrets Manager. " +
-                    "PCI-DSS Req 8.2.1, HIPAA §164.312(a)(1), SOC2 CC6.1. " +
-                    "Note: PRODUCTION security profile enables encryption by default. " +
                     "Set secretsManagerEnabled = true in deployment context."
+                ));
+            } else if (smResult == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("Secrets Manager recommended but not required for " + complianceFrameworks);
+                rules.add(ComplianceRule.pass(
+                    "SECRETS-MANAGER",
+                    "Secrets Manager is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "SecretsManagerInUse"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -284,25 +316,40 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
                 ));
             }
 
-            // Automatic secret rotation
-            boolean secretRotationEnabled = getBooleanSetting(ctx, "secretRotationEnabled", encryptionEnabled);
-            if (usesSecretsManager && !secretRotationEnabled) {
-                rules.add(ComplianceRule.fail(
-                    "SECRET-ROTATION",
-                    "Automatic secret rotation recommended",
-                    "SecretsManagerRotation",
-                    "Enable automatic rotation for secrets (90 days or less). " +
-                    "PCI-DSS Req 8.2.4, HIPAA §164.308(a)(5)(ii)(D). " +
-                    "Note: PRODUCTION security profile provides encryption foundation. " +
-                    "Set secretRotationEnabled = true in deployment context."
-                ));
-            } else if (usesSecretsManager) {
-                rules.add(ComplianceRule.pass(
-                    "SECRET-ROTATION",
-                    "Automatic secret rotation enabled" +
-                    (encryptionEnabled ? " (via security profile)" : ""),
-                    "SecretsManagerRotation"
-                ));
+            // Automatic secret rotation (only validate if Secrets Manager is in use)
+            if (usesSecretsManager) {
+                boolean secretRotationEnabled = getBooleanSetting(ctx, "secretRotationEnabled", encryptionEnabled);
+
+                ComplianceMatrix.ValidationResult rotationResult = ComplianceMatrix.validateControlMultiFramework(
+                    ComplianceMatrix.SecurityControl.SECRETS_ROTATION,
+                    complianceFrameworks,
+                    secretRotationEnabled,
+                    complianceMode
+                );
+
+                if (rotationResult == ComplianceMatrix.ValidationResult.FAIL) {
+                    rules.add(ComplianceRule.fail(
+                        "SECRET-ROTATION",
+                        "Automatic secret rotation required for " + complianceFrameworks,
+                        "SecretsManagerRotation",
+                        "Enable automatic rotation for secrets (90 days or less). " +
+                        "Set secretRotationEnabled = true in deployment context."
+                    ));
+                } else if (rotationResult == ComplianceMatrix.ValidationResult.WARN) {
+                    LOG.warning("Secret rotation recommended but not required for " + complianceFrameworks);
+                    rules.add(ComplianceRule.pass(
+                        "SECRET-ROTATION",
+                        "Secret rotation is advisory for " + complianceFrameworks + " (recommended but not required)",
+                        "SecretsManagerRotation"
+                    ));
+                } else {
+                    rules.add(ComplianceRule.pass(
+                        "SECRET-ROTATION",
+                        "Automatic secret rotation enabled" +
+                        (encryptionEnabled ? " (via security profile)" : ""),
+                        "SecretsManagerRotation"
+                    ));
+                }
             }
         } else {
             // For non-production, advisory only

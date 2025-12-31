@@ -2,10 +2,13 @@ package com.cloudforgeci.api.core.rules;
 
 
 import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
+import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
-import com.cloudforge.core.enums.ComplianceMode;
-import com.cloudforge.core.enums.SecurityProfile;
+import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,15 +63,10 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
 
         LOG.info("Installing SOC 2 Trust Services Criteria compliance validation for " + ctx.security);
 
-        // Determine compliance mode
-        String complianceModeStr = ctx.cfc.complianceMode();
-        ComplianceMode complianceMode = ComplianceMode.fromString(
-            complianceModeStr,
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
+        // Get compliance mode (already resolved to enum with proper default)
+        ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
-        LOG.info("  Compliance mode: " + complianceMode +
-                 (complianceModeStr == null ? " (default for " + ctx.security + ")" : " (explicit)"));
+        LOG.info("  Compliance mode: " + complianceMode);
 
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();
@@ -140,8 +138,8 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         }
 
         // CC6.2: Authentication required
-        String authMode = ctx.cfc.authMode();
-        if ("none".equals(authMode)) {
+        AuthMode authMode = ctx.cfc.authMode();
+        if (authMode == AuthMode.NONE) {
             rules.add(ComplianceRule.fail(
                 "SOC2-CC6.2-Auth",
                 "User authentication required for customer-facing systems",
@@ -198,15 +196,31 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             rules.add(ComplianceRule.pass("SOC2-CC6.6-SG", "Security groups configured"));
         }
 
-        // CC6.7: Encryption in transit
-        if (ctx.cert.get().isEmpty()) {
+        // CC6.7: SSL/TLS must be enabled for encrypted data transmission
+        if (!ctx.cfc.enableSsl()) {
             rules.add(ComplianceRule.fail(
-                "SOC2-CC6.7-TLS",
-                "TLS certificate required for encrypted data transmission",
-                "Configure HTTPS for all customer-facing endpoints."
+                "SOC2-CC6.7-SSL",
+                "SSL/TLS must be enabled for encrypted data transmission (CC6.7)",
+                "Set enableSsl=true for production SOC2 compliance."
             ));
         } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.7-TLS", "TLS certificate configured"));
+            rules.add(ComplianceRule.pass("SOC2-CC6.7-SSL", "SSL/TLS enabled for data transmission"));
+
+            // CC6.7: Encryption in transit - TLS certificate (only checked if SSL is enabled)
+            // Note: Private CA certificates (when no domain is specified) are automatically created
+            boolean hasUserCert = ctx.cert.get().isPresent();
+            boolean usePrivateCa = ctx.cfc.domain() == null && ctx.cfc.fqdn() == null;
+
+            if (!hasUserCert && !usePrivateCa) {
+                rules.add(ComplianceRule.fail(
+                    "SOC2-CC6.7-TLS",
+                    "TLS certificate required for encrypted data transmission",
+                    "Configure a domain with HTTPS certificate or use Private CA (SSL without domain)."
+                ));
+            } else {
+                String certType = usePrivateCa ? "Private CA certificate" : "TLS certificate";
+                rules.add(ComplianceRule.pass("SOC2-CC6.7-TLS", certType + " configured"));
+            }
         }
 
         if (!config.isEfsEncryptionInTransitEnabled()) {
@@ -245,25 +259,16 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
         );
 
-        // CC7.2: Security monitoring required
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC7.2-Monitoring",
-                "Security monitoring required for anomaly detection",
-                "Enable CloudWatch alarms for security events."
-            ));
-        } else {
+        // CC7.2: Security monitoring advisory (per ComplianceMatrix - recommended but not required)
+        if (config.isSecurityMonitoringEnabled()) {
             rules.add(ComplianceRule.pass("SOC2-CC7.2-Monitoring", "Security monitoring enabled"));
         }
+        // Note: When disabled, we don't fail - it's advisory for SOC2 per ComplianceMatrix
 
         // CC7.2: Threat detection
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC7.2-GuardDuty",
-                "Threat detection system required",
-                "Enable GuardDuty for continuous threat monitoring."
-            ));
-        } else {
+        // NOTE: GuardDuty validation is now handled by ThreatProtectionRules using ComplianceMatrix
+        // which marks it as ADVISORY for SOC2 (recommended but not required)
+        if (config.isGuardDutyEnabled()) {
             rules.add(ComplianceRule.pass("SOC2-CC7.2-GuardDuty", "GuardDuty threat detection enabled"));
         }
 
@@ -300,7 +305,51 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             rules.add(ComplianceRule.pass("SOC2-CC7.2-Config", "AWS Config compliance monitoring enabled"));
         }
 
+        // CC7.2: Log retention for audit trail
+        // SOC2 requires adequate log retention for security monitoring and incident investigation
+        // SOC2 standard: 365 days (ONE_YEAR) minimum for audit trails
+        var retentionDays = config.getLogRetentionDays();
+        if (!isRetentionSufficient(retentionDays)) {
+            String currentRetention = (retentionDays != null) ? retentionDays.toString() : "not set";
+            rules.add(ComplianceRule.fail(
+                "SOC2-CC7.2-LogRetention",
+                "Log retention must be at least 365 days for audit trails (SOC2 CC7.2)",
+                "CloudWatchLogGroupRetention",
+                "Log retention must be at least 365 days (ONE_YEAR). Current: " +
+                currentRetention + ". " +
+                "SOC2 CC7.2 requires adequate log retention for security monitoring and incident investigation."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "SOC2-CC7.2-LogRetention",
+                "Log retention meets 365-day requirement (SOC2 CC7.2)",
+                "CloudWatchLogGroupRetention"
+            ));
+        }
+
         return rules;
+    }
+
+    /**
+     * Check if log retention meets SOC2 requirement (365 days / 1 year minimum).
+     * CC7.2: System monitoring requires adequate log retention for audit trails.
+     * SOC2 requires minimum 1 year retention for security and audit logs.
+     */
+    private boolean isRetentionSufficient(RetentionDays retention) {
+        // SOC2 CC7.2 requires 1 year minimum retention for security monitoring and audit trails
+        // Reference: SOC2 CC7.2, AICPA Trust Services Criteria
+        return retention == RetentionDays.ONE_YEAR ||
+               retention == RetentionDays.THIRTEEN_MONTHS ||
+               retention == RetentionDays.EIGHTEEN_MONTHS ||
+               retention == RetentionDays.TWO_YEARS ||
+               retention == RetentionDays.THREE_YEARS ||
+               retention == RetentionDays.FIVE_YEARS ||
+               retention == RetentionDays.SIX_YEARS ||
+               retention == RetentionDays.SEVEN_YEARS ||
+               retention == RetentionDays.EIGHT_YEARS ||
+               retention == RetentionDays.NINE_YEARS ||
+               retention == RetentionDays.TEN_YEARS ||
+               retention == RetentionDays.INFINITE;
     }
 
     /**
@@ -455,7 +504,7 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         }
 
         // C1.2: Access restrictions for confidential data
-        if ("public-no-nat".equals(ctx.cfc.networkMode())) {
+        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
             rules.add(ComplianceRule.fail(
                 "SOC2-C1.2-Network",
                 "Private network mode required for confidential data",
@@ -484,9 +533,9 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
 
         report.append("Common Criteria - Security (CC):\n");
         report.append("  ✓ CC6.1 - Access Controls: ").append(ctx.iamProfile != null ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ CC6.2 - Authentication: ").append(!"none".equals(ctx.cfc.authMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ CC6.2 - Authentication: ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC6.6 - Network Segmentation: ").append(ctx.vpc.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ CC6.7 - Encryption in Transit: ").append(ctx.cert.get().isPresent() ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ CC6.7 - Encryption in Transit: ").append(ctx.cfc.enableSsl() && (ctx.cert.get().isPresent() || (ctx.cfc.domain() == null && ctx.cfc.fqdn() == null)) ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC7.2 - System Monitoring: ").append(config.isSecurityMonitoringEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ CC8.1 - Change Management: ").append(config.isCloudTrailEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("\n");
@@ -501,7 +550,7 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
 
         report.append("Confidentiality Criteria (C):\n");
         report.append("  ✓ C1.1 - Encryption at Rest: ").append(config.isEbsEncryptionEnabled() ? "ENABLED" : "DISABLED").append("\n");
-        report.append("  ✓ C1.2 - Access Restrictions: ").append(!"public-no-nat".equals(ctx.cfc.networkMode()) ? "ENABLED" : "DISABLED").append("\n");
+        report.append("  ✓ C1.2 - Access Restrictions: ").append(ctx.cfc.networkMode() != NetworkMode.PUBLIC ? "ENABLED" : "DISABLED").append("\n");
         report.append("\n");
 
         report.append("Note: SOC 2 audit requires independent CPA firm examination.\n");

@@ -31,7 +31,7 @@ AWS Cognito has a limitation: when MFA is set to **REQUIRED**, new users cannot 
 After deployment, the admin user must set up TOTP:
 
 1. **Login to Application**:
-   - Go to your application URL (e.g., `https://jesoc.dev.cloudforgeci.com`)
+   - Go to your application URL (e.g., `https://jenkins.example.com`)
    - Log in with the temporary password sent to admin email
    - Change password when prompted
 
@@ -243,9 +243,9 @@ For your specific deployment:
 #!/bin/bash
 # setup-mfa-compliance.sh
 
-USER_POOL_ID="us-east-1_1czTA3ttE"
-ADMIN_EMAIL="phillip@cloudforgeci.com"
-REGION="us-east-1"
+USER_POOL_ID="us-east-1_XXXXXXXXX"  # Replace with your User Pool ID
+ADMIN_EMAIL="admin@example.com"      # Replace with your admin email
+REGION="us-east-1"                   # Replace with your region
 
 echo "=== MFA Compliance Setup for SOC 2 / PCI-DSS / HIPAA / GDPR ==="
 

@@ -1,0 +1,58 @@
+configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMode,networkMode,complianceFramework,logRetentionDaysOverride,flowLogsEnabledOverride,expectedResult,applicationId,provisionDatabase,region,gdprDataTransferApproved,restrictSecurityGroupEgress,cloudWatchLogsKmsEncryptionEnabled
+# Log Retention Validation Tests - DEV Profile (minimal requirements, should pass with any retention)
+PASS_DEV_retention_7days,EC2,DEV,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,,7,false,PASS,jenkins,,,,,
+PASS_DEV_retention_30days,FARGATE,DEV,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,,30,false,PASS,jenkins,,,,,
+PASS_DEV_retention_90days,EC2,DEV,no-domain,ssl-disabled,no-subdomain,none,public-no-nat,,90,false,PASS,jenkins,,,,,
+PASS_DEV_retention_365days,FARGATE,DEV,no-domain,ssl-disabled,no-subdomain,none,public-no-nat,,365,false,PASS,jenkins,,,,,
+# Log Retention - SOC2 (requires 365 days)
+FAIL_SOC2_retention_7days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,7,true,FAIL,jenkins,,,,,
+FAIL_SOC2_retention_30days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,30,true,FAIL,jenkins,,,,,
+FAIL_SOC2_retention_90days,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,90,true,FAIL,jenkins,,,,,
+PASS_SOC2_retention_365days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,jenkins,,,,,
+PASS_SOC2_retention_730days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,730,true,PASS,jenkins,,,,,
+# Log Retention - HIPAA (requires 6 years = 2190 days per §164.316(b)(2)(i))
+FAIL_HIPAA_retention_7days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,7,true,FAIL,jenkins,,,,,
+FAIL_HIPAA_retention_30days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,30,true,FAIL,jenkins,,,,,
+FAIL_HIPAA_retention_90days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,90,true,FAIL,jenkins,,,,,
+FAIL_HIPAA_retention_365days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,365,true,FAIL,jenkins,,,,,
+FAIL_HIPAA_retention_1825days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,1825,true,FAIL,jenkins,,,,,
+PASS_HIPAA_retention_2190days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2190,true,PASS,jenkins,,,,,
+PASS_HIPAA_retention_2555days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2555,true,PASS,jenkins,,,,,
+# Log Retention - PCI-DSS (requires 365 days per Req 10.7)
+FAIL_PCI_retention_7days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,7,true,FAIL,jenkins,,,,,
+FAIL_PCI_retention_30days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,30,true,FAIL,jenkins,,,,,
+FAIL_PCI_retention_90days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,90,true,FAIL,jenkins,,,,,
+PASS_PCI_retention_365days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,365,true,PASS,jenkins,,,,,
+# Log Retention - GDPR (requires 90 days minimum for processing records)
+FAIL_GDPR_retention_7days_EU,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,7,true,FAIL,jenkins,,eu-west-1,,,
+FAIL_GDPR_retention_30days_EU,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,30,true,FAIL,jenkins,,eu-west-1,,,
+PASS_GDPR_retention_90days_EU,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,90,true,PASS,jenkins,,eu-west-1,,,
+PASS_GDPR_retention_365days_EU,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,365,true,PASS,jenkins,,eu-west-1,,,
+FAIL_GDPR_retention_7days_US_approved,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,7,true,FAIL,jenkins,,us-east-1,true,,
+PASS_GDPR_retention_90days_US_approved,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,GDPR,90,true,PASS,jenkins,,us-east-1,true,,
+# Log Retention - Multiple Frameworks (requires strictest - 2190 days for HIPAA)
+FAIL_multi_retention_7days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA,PCI-DSS,GDPR",7,true,FAIL,jenkins,,eu-west-1,,,
+FAIL_multi_retention_30days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA,PCI-DSS,GDPR",30,true,FAIL,jenkins,,eu-west-1,,,
+FAIL_multi_retention_90days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA,PCI-DSS,GDPR",90,true,FAIL,jenkins,,eu-west-1,,,
+FAIL_multi_retention_365days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA,PCI-DSS,GDPR",365,true,FAIL,jenkins,,eu-west-1,,,
+FAIL_multi_retention_730days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA,PCI-DSS,GDPR",730,true,FAIL,jenkins,,eu-west-1,,,
+PASS_multi_retention_2190days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA,PCI-DSS,GDPR",2190,true,PASS,jenkins,,eu-west-1,,,
+# Log Retention - SOC2 + GDPR combination
+FAIL_SOC2_GDPR_retention_90days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,GDPR",90,true,FAIL,jenkins,,eu-west-1,,,
+PASS_SOC2_GDPR_retention_365days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,GDPR",365,true,PASS,jenkins,,eu-west-1,,,
+# Log Retention - HIPAA + PCI-DSS combination (HIPAA is strictest at 2190 days)
+FAIL_HIPAA_PCI_retention_90days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"HIPAA,PCI-DSS",90,true,FAIL,jenkins,,,,,
+FAIL_HIPAA_PCI_retention_365days,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"HIPAA,PCI-DSS",365,true,FAIL,jenkins,,,,,
+PASS_HIPAA_PCI_retention_2190days,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"HIPAA,PCI-DSS",2190,true,PASS,jenkins,,,,,
+# Log Retention - STAGING profile tests
+FAIL_STAGING_SOC2_retention_30days,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,30,true,FAIL,jenkins,,,,,
+FAIL_STAGING_SOC2_retention_90days,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,90,true,FAIL,jenkins,,,,,
+PASS_STAGING_SOC2_retention_365days,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,365,true,PASS,jenkins,,,,,
+# Edge Case - Zero or very short retention (should always fail for compliance frameworks)
+FAIL_zero_retention_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,0,true,FAIL,jenkins,,,,,
+FAIL_1day_retention_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,1,true,FAIL,jenkins,,,,,
+FAIL_3days_retention_PCI,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,3,true,FAIL,jenkins,,,,,
+# Edge Case - Very long retention (should pass for all frameworks)
+PASS_5year_retention_SOC2,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,SOC2,1825,true,PASS,jenkins,,,,,
+PASS_7year_retention_HIPAA,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,HIPAA,2555,true,PASS,jenkins,,,,,
+PASS_10year_retention_multi,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA,PCI-DSS,GDPR",3650,true,PASS,jenkins,,eu-west-1,,,
