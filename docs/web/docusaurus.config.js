@@ -31,6 +31,13 @@ const config = {
     locales: ['en'],
   },
 
+  markdown: {
+    mermaid: true,
+  },
+
+  // Client modules for Mermaid configuration
+  clientModules: [require.resolve('./src/clientModules.js')],
+
   presets: [
     [
       'classic',
@@ -50,6 +57,8 @@ const config = {
       }),
     ],
   ],
+
+  themes: ['@docusaurus/theme-mermaid'],
 
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
@@ -141,6 +150,10 @@ const config = {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
         additionalLanguages: ['java', 'bash', 'json'],
+      },
+      mermaid: {
+        theme: { light: 'default', dark: 'dark' },
+        // Note: Flowchart configuration for straight lines is done in clientModules.js
       },
       algolia: {
         // The application ID provided by Algolia

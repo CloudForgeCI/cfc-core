@@ -26,6 +26,57 @@ PostgreSQL is an advanced open-source relational database known for reliability,
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete PostgreSQL deployment:
+
+```mermaid
+graph TD
+    Start[CDK Deploy Starts] --> Validate[Validate Deployment Context]
+    Validate --> CheckRuntime{Runtime?}
+    
+    CheckRuntime -->|fargate| CreateECS[Create ECS Cluster & Service]
+    CheckRuntime -->|ec2| CreateASG[Create Auto Scaling Group]
+    
+    CreateECS --> CreateALB[Create Application Load Balancer]
+    CreateASG --> CreateALB
+    
+    CreateALB --> ConfigureTarget[Configure Target Group]
+    ConfigureTarget --> CreateEFS[Create EFS for Persistent Storage]
+    
+    CreateEFS --> MountStorage[Mount Storage to Container/Instance]
+    MountStorage --> StartPostgres[Start PostgreSQL Container]
+    
+    StartPostgres --> InitDB[Initialize Database]
+    InitDB --> CreateUsers[Create Database Users]
+    CreateUsers --> HealthCheck{Health Check Passes?}
+    
+    HealthCheck -->|No| Wait[Wait & Retry]
+    Wait --> HealthCheck
+    HealthCheck -->|Yes| Ready[PostgreSQL Ready]
+    
+    Ready --> AcceptConnections[Accept Database Connections]
+    
+    Note1[Note: Use RDS for production workloads]
+    Note2[Note: Containerized PostgreSQL for dev/test]
+    Note3[Note: Configure connection string after deployment]
+```
+
+## Architecture Diagram
+
+The following diagram shows the PostgreSQL deployment architecture:
+
+```mermaid
+graph TB
+    Apps[Applications] --> ECS1[☁️ ECS Fargate / EC2<br/>PostgreSQL Container 1]
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+```
+
+---
+
 ## When to Use
 
 Use containerized PostgreSQL for:

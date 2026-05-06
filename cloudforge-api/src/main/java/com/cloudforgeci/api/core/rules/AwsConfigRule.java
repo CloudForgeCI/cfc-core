@@ -38,7 +38,7 @@ public enum AwsConfigRule {
         "Checks that GuardDuty is enabled in the account"),
 
     // ==================== Audit Logging ====================
-    CLOUDTRAIL_ENABLED("cloudtrail-enabled",
+    CLOUDTRAIL_ENABLED("cloud-trail-enabled",
         ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
         "Checks that CloudTrail is enabled"),
 
@@ -46,7 +46,7 @@ public enum AwsConfigRule {
         ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
         "Checks that CloudTrail log file validation is enabled"),
 
-    MULTI_REGION_CLOUDTRAIL("multi-region-cloudtrail-enabled",
+    MULTI_REGION_CLOUDTRAIL("multi-region-cloud-trail-enabled",
         ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
         "Checks that multi-region CloudTrail is enabled"),
 
@@ -115,7 +115,7 @@ public enum AwsConfigRule {
         "Checks that IAM password policy meets requirements"),
 
     // ==================== Network Segmentation ====================
-    EC2_INSTANCES_IN_VPC("ec2-instances-in-vpc",
+    EC2_INSTANCES_IN_VPC("instances-in-vpc",
         ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION,
         "Checks that EC2 instances are in a VPC"),
 
@@ -123,7 +123,7 @@ public enum AwsConfigRule {
         ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION,
         "Checks that default security group is closed"),
 
-    RESTRICTED_SSH("restricted-ssh",
+    RESTRICTED_SSH("incoming-ssh-disabled",
         ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION,
         "Checks that SSH is not open to 0.0.0.0/0"),
 

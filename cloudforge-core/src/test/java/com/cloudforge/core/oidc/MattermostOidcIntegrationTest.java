@@ -135,7 +135,7 @@ class MattermostOidcIntegrationTest {
     @ParameterizedTest
     @CsvSource({
         "cognito,Sign in with AWS Cognito",
-        "identity-center,Sign in with AWS IAM Identity Center",
+        "identity-center-saml,Sign in with AWS IAM Identity Center",
         ",Sign in with AWS Cognito"
     })
     void testButtonTextByProviderType(String providerType, String expectedText) {

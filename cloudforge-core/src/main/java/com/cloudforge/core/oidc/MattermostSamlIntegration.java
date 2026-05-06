@@ -397,7 +397,7 @@ public class MattermostSamlIntegration implements OidcIntegration {
         if ("cognito".equals(providerType) || "cognito-saml".equals(providerType)) {
             // Cognito SAML SSO endpoint (via Keycloak for cognito-saml)
             return config.getIssuerUrl() + "/saml2/idp/SSO";
-        } else if ("identity-center".equals(providerType)) {
+        } else if ("identity-center-saml".equals(providerType)) {
             // Identity Center SAML SSO URL
             // If authorizationEndpoint already contains SAML path (set by ApplicationOidcFactory),
             // use it directly. Otherwise, derive from OIDC endpoint.
@@ -421,7 +421,7 @@ public class MattermostSamlIntegration implements OidcIntegration {
         if ("cognito".equals(providerType) || "cognito-saml".equals(providerType)) {
             // Cognito provides SAML metadata at this URL (via Keycloak for cognito-saml)
             return config.getIssuerUrl() + "/saml2/idp/metadata";
-        } else if ("identity-center".equals(providerType)) {
+        } else if ("identity-center-saml".equals(providerType)) {
             // Identity Center SAML metadata URL
             // If tokenEndpoint already contains SAML path (set by ApplicationOidcFactory),
             // use it directly. Otherwise, derive from OIDC endpoint.

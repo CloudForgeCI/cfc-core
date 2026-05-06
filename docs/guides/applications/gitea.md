@@ -27,6 +27,77 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete Gitea deployment:
+
+```mermaid
+graph TD
+    Start[CDK Deploy Starts] --> Validate[Validate Deployment Context]
+    Validate --> CheckAuth{Auth Mode?}
+    
+    CheckAuth -->|alb-oidc| CreateCognito[Create Cognito User Pool]
+    CheckAuth -->|none| SkipAuth[Skip Authentication]
+    
+    CreateCognito --> CreateAppClient[Create Cognito App Client]
+    SkipAuth --> CheckSSH{Enable SSH?}
+    CreateAppClient --> CheckSSH
+    
+    CheckSSH -->|Yes| ConfigureSSH[Configure SSH Listener]
+    CheckSSH -->|No| CheckRuntime{Runtime?}
+    ConfigureSSH --> CheckRuntime
+    
+    CheckRuntime -->|fargate| CreateECS[Create ECS Cluster & Service]
+    CheckRuntime -->|ec2| CreateASG[Create Auto Scaling Group]
+    
+    CreateECS --> CreateALB[Create Application Load Balancer]
+    CreateASG --> CreateALB
+    
+    CreateALB --> ConfigureTarget[Configure Target Group]
+    CreateALB --> ConfigureAuth{ALB-OIDC?}
+    
+    ConfigureAuth -->|Yes| SetupALBAuth[Configure ALB OIDC Authentication]
+    ConfigureAuth -->|No| SkipALBAuth[Skip ALB Auth]
+    
+    SetupALBAuth --> CreateEFS[Create EFS for Persistent Storage]
+    SkipALBAuth --> CreateEFS
+    
+    CreateEFS --> MountStorage[Mount Storage to Container/Instance]
+    MountStorage --> StartGitea[Start Gitea Container]
+    
+    StartGitea --> InitDB[Initialize SQLite Database]
+    InitDB --> HealthCheck{Health Check Passes?}
+    
+    HealthCheck -->|No| Wait[Wait & Retry]
+    Wait --> HealthCheck
+    HealthCheck -->|Yes| Ready[Gitea Ready]
+    
+    Ready --> Access[Access Gitea UI]
+    
+    Note1[Note: Gitea uses embedded SQLite]
+    Note2[Note: ALB-OIDC recommended for UI access]
+    Note3[Note: SSH support on port 2222]
+```
+
+## Architecture Diagram
+
+The following diagram shows the Gitea deployment architecture:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> ALB[⚖️ Application Load Balancer]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Gitea Container 1]
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+```
+
+---
+
 ## Capabilities
 
 - Git repository hosting

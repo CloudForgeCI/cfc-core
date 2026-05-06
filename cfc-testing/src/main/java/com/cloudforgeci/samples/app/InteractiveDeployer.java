@@ -697,25 +697,26 @@ public class InteractiveDeployer {
     }
 
     /**
-     * Configure Cognito SAML authentication.
-     * Cognito User Pool acts as SAML 2.0 Identity Provider.
+     * Configure Cognito-SAML hybrid architecture.
+     * Cognito User Pool manages users/groups, Identity Center provides SAML.
      * Used for applications that need SAML for group sync (Mattermost, Metabase).
      *
-     * <p><b>Cognito SAML Endpoints:</b></p>
+     * <p><b>Identity Center SAML Endpoints:</b></p>
      * <ul>
-     *   <li>SSO URL: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/SSO</li>
-     *   <li>Metadata: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/metadata</li>
+     *   <li>SSO URL: https://portal.sso.{region}.amazonaws.com/saml/SSO/{instanceId}</li>
+     *   <li>Metadata: https://portal.sso.{region}.amazonaws.com/saml/metadata/{instanceId}</li>
      * </ul>
      */
     private static void configureCognitoSaml(DeploymentConfig config, List<String> supportedAuthModes, String recommendedAuthMode) {
-        System.out.println("\n📝 Cognito SAML Configuration:");
-        System.out.println("================================");
-        System.out.println("✅ Cognito User Pool will act as SAML 2.0 Identity Provider");
+        System.out.println("\n📝 Cognito-SAML Hybrid Architecture:");
+        System.out.println("=====================================");
+        System.out.println("✅ Hybrid Architecture: Cognito (users) + Identity Center (SAML)");
         System.out.println("");
-        System.out.println("Cognito SAML provides:");
-        System.out.println("  • Full API support - no manual console steps required");
-        System.out.println("  • Automatic SAML attribute mapping");
-        System.out.println("  • Group sync support for team/channel membership");
+        System.out.println("How it works:");
+        System.out.println("  • Cognito User Pool manages users and groups (fully automated API)");
+        System.out.println("  • IAM Identity Center acts as SAML 2.0 IdP (auto-provisioned)");
+        System.out.println("  • Trusted Token Issuer links Cognito → Identity Center");
+        System.out.println("  • Application receives SAML assertions with Cognito user data");
         System.out.println("");
 
         boolean autoProvision = promptYesNo("Auto-provision new Cognito User Pool", true);
@@ -754,20 +755,34 @@ public class InteractiveDeployer {
                 System.out.println("   📧 User will receive email with password reset instructions");
             }
 
-            System.out.println("\n✅ Cognito SAML IdP auto-provisioning configured");
+            // IAM Identity Center configuration
+            System.out.println("\n📋 IAM Identity Center Configuration:");
+            System.out.println("ℹ️  Find your SSO Instance ARN in:");
+            System.out.println("   AWS Console → IAM Identity Center → Settings → ARN");
+            config.ssoInstanceArn = promptRequired("SSO Instance ARN (arn:aws:sso:::instance/ssoins-...)", "");
+            config.autoProvisionIdentityCenter = true;
+
+            System.out.println("\n✅ Cognito-SAML hybrid architecture configured");
             System.out.println("ℹ️  SAML endpoints will be auto-generated after deployment:");
-            System.out.println("   • SSO URL: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/SSO");
-            System.out.println("   • Metadata: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/metadata");
+            System.out.println("   • SSO URL: https://portal.sso.{region}.amazonaws.com/saml/SSO/{instanceId}");
+            System.out.println("   • Metadata: https://portal.sso.{region}.amazonaws.com/saml/metadata/{instanceId}");
         } else {
             // Use existing User Pool
             config.cognitoUserPoolId = promptRequired("Cognito User Pool ID (e.g., us-east-1_abc123xyz)", "");
             config.cognitoAppClientId = promptOptional("App Client ID (leave empty to create new)", "");
             config.cognitoDomainPrefix = promptRequired("Cognito Domain Prefix", "");
 
-            System.out.println("\n✅ Existing Cognito SAML configuration captured");
+            // IAM Identity Center configuration
+            System.out.println("\n📋 IAM Identity Center Configuration:");
+            System.out.println("ℹ️  Find your SSO Instance ARN in:");
+            System.out.println("   AWS Console → IAM Identity Center → Settings → ARN");
+            config.ssoInstanceArn = promptRequired("SSO Instance ARN (arn:aws:sso:::instance/ssoins-...)", "");
+            config.autoProvisionIdentityCenter = promptYesNo("Auto-provision Identity Center SAML app", true);
+
+            System.out.println("\n✅ Existing Cognito + Identity Center SAML configuration captured");
             System.out.println("ℹ️  SAML endpoints (use these in your application):");
-            System.out.println("   • SSO URL: https://cognito-idp.{region}.amazonaws.com/" + config.cognitoUserPoolId + "/saml2/idp/SSO");
-            System.out.println("   • Metadata: https://cognito-idp.{region}.amazonaws.com/" + config.cognitoUserPoolId + "/saml2/idp/metadata");
+            System.out.println("   • SSO URL: https://portal.sso.{region}.amazonaws.com/saml/SSO/{instanceId}");
+            System.out.println("   • Metadata: https://portal.sso.{region}.amazonaws.com/saml/metadata/{instanceId}");
         }
 
         // For SAML apps, use application-oidc mode (auth happens at application level)

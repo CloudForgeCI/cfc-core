@@ -177,10 +177,10 @@ class MetabaseSamlIntegrationTest {
     }
 
     @Test
-    @DisplayName("Container startup command should return Metabase run script")
+    @DisplayName("Container startup command should return null to use default entrypoint")
     void testGetContainerStartupCommand() {
         String command = integration.getContainerStartupCommand();
-        assertEquals("/app/run_metabase.sh", command);
+        assertNull(command, "Should return null to use default Metabase container entrypoint");
     }
 
     @Test

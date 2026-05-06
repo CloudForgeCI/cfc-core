@@ -1,339 +1,372 @@
 # AWS IAM Identity Center Setup
 
-Quick guide for setting up IAM Identity Center (formerly AWS SSO) with OIDC authentication.
+## Overview
 
-## What You Need
+CloudForge automatically configures AWS IAM Identity Center (formerly AWS SSO) to provide **SAML 2.0 authentication** for SAML-supported applications.
 
-- AWS CLI with admin access
-- AWS Organizations enabled (Identity Center requirement)
-- jq for JSON parsing (`brew install jq`)
+### Two Integration Types
 
-## Quick Start
+CloudForge supports two distinct IAM Identity Center integration types for SAML applications:
 
-If you have the setup script:
+#### 1. `identity-center-saml`
+**Pure Identity Center SAML** - Users managed directly in Identity Center's identity store
+- Users stored in: Identity Center identity store
+- SAML provider: Identity Center
+- Best for: Pure SAML deployments without Cognito
+
+#### 2. `cognito-saml`
+**Cognito + Identity Center Hybrid** - Cognito manages users, Identity Center provides SAML
+- Users stored in: Cognito User Pool
+- SAML provider: Identity Center (using Cognito as trusted token issuer)
+- Best for: Applications requiring SAML but you want Cognito's user management features
+
+**IMPORTANT:** Both integration types provide SAML 2.0 credentials to SAML-supported applications (like Metabase Enterprise, GitLab Enterprise, etc.). The difference is where users are stored and managed:
+- `identity-center-saml` → Users in Identity Center
+- `cognito-saml` → Users in Cognito, SAML from Identity Center
+
+## Prerequisites
+
+### 1. Enable AWS Organizations
+
+Identity Center requires AWS Organizations:
 
 ```bash
-chmod +x scripts/setup-identity-center.sh
-
-./scripts/setup-identity-center.sh \
-  --group-name "Jenkins-Users" \
-  --app-name "Jenkins-ALB-OIDC" \
-  --jenkins-url "https://jenkins.example.com"
+# Check if Organizations is enabled
+aws organizations describe-organization
 ```
 
-This script:
-- Enables Identity Center if needed
-- Creates a user group
-- Registers the OIDC app
-- Generates and stores the client secret
-- Outputs your config values
+If not enabled, go to AWS Console → AWS Organizations → Create organization
 
-## Manual Setup
-
-Prefer to do it manually? Here's how:
-
-### 1. Enable Identity Center
-
-Run this in your management account (where Organizations is enabled):
+### 2. Enable IAM Identity Center
 
 ```bash
-aws sso-admin enable-aws-organizations-access
+# Check if Identity Center is enabled
 aws sso-admin list-instances
 ```
 
-You should see:
+If no instances exist:
+1. AWS Console → IAM Identity Center → Enable
+2. Choose identity source (default: Identity Center directory)
+3. Wait for setup to complete (~2 minutes)
+
+### 3. Get SSO Instance ARN
+
+```bash
+aws sso-admin list-instances --query 'Instances[0].InstanceArn' --output text
+```
+
+Save this ARN - you'll need it in your deployment configuration.
+
+**Example output:** `arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx`
+
+## Integration Type 1: identity-center-saml
+
+Pure Identity Center SAML - users managed directly in Identity Center's identity store.
+
+### Configuration
+
 ```json
 {
-  "Instances": [{
-    "InstanceArn": "arn:aws:sso:::instance/ssoins-xxxx",
-    "IdentityStoreId": "d-xxxx"
-  }]
+  "authMode": "application-oidc",
+  "oidcProvider": "identity-center-saml",
+  "autoProvisionIdentityCenter": true,
+  "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx",
+  "identityCenterInitialAdminEmail": "admin@example.com",
+  "identityCenterGroups": ["Administrators", "Analysts", "Viewers"]
 }
 ```
 
-Save both values - you'll need them.
+### How It Works
 
-### 2. Create a Group
+The `identity-center-saml` flow provides SAML credentials directly from Identity Center:
 
-```bash
-IDENTITY_STORE_ID="d-xxxx"  # from step 1
-
-GROUP_ID=$(aws identitystore create-group \
-  --identity-store-id $IDENTITY_STORE_ID \
-  --display-name "Jenkins-Users" \
-  --description "Jenkins OIDC access" \
-  --query 'GroupId' \
-  --output text)
-
-echo "Group ID: $GROUP_ID"
+```
+User Login
+    ↓
+Identity Center Identity Store (authentication, user/group management)
+    ↓
+Identity Center (provides SAML assertions)
+    ↓
+Application (receives SAML 2.0 credentials)
 ```
 
-Save this Group ID - it's your `ssoGroupId`.
+**Key Point:** Both users and SAML credentials come from Identity Center.
 
-### 3. Add Users
+### Deploy
 
-CLI:
 ```bash
-# List users
-aws identitystore list-users --identity-store-id $IDENTITY_STORE_ID
+cdk deploy
+```
 
-# Add to group
+CloudForge automatically:
+- Creates groups in Identity Center identity store
+- Creates initial admin user
+- Adds admin to Administrators group
+- Creates SAML application in Identity Center
+- Configures SAML attributes and mappings
+
+### Managing Users
+
+**AWS Console:**
+1. IAM Identity Center → Users → Add user
+2. Email: `user@example.com`
+3. First name, Last name
+4. Send email invitation
+
+**AWS CLI:**
+
+```bash
+# Get identity store ID
+IDENTITY_STORE_ID=$(aws sso-admin list-instances --query 'Instances[0].IdentityStoreId' --output text)
+
+# Create user
+aws identitystore create-user \
+  --identity-store-id $IDENTITY_STORE_ID \
+  --user-name "user@example.com" \
+  --display-name "User Name" \
+  --name '{"GivenName":"User","FamilyName":"Name"}' \
+  --emails '[{"Value":"user@example.com","Type":"work","Primary":true}]'
+```
+
+### Adding Users to Groups
+
+```bash
+# List groups
+aws identitystore list-groups --identity-store-id $IDENTITY_STORE_ID
+
+# Get user ID
+USER_ID=$(aws identitystore list-users \
+  --identity-store-id $IDENTITY_STORE_ID \
+  --filters AttributePath=UserName,AttributeValue=user@example.com \
+  --query 'Users[0].UserId' --output text)
+
+# Get group ID
+GROUP_ID=$(aws identitystore list-groups \
+  --identity-store-id $IDENTITY_STORE_ID \
+  --filters AttributePath=DisplayName,AttributeValue=Administrators \
+  --query 'Groups[0].GroupId' --output text)
+
+# Add user to group
 aws identitystore create-group-membership \
   --identity-store-id $IDENTITY_STORE_ID \
   --group-id $GROUP_ID \
-  --member-id UserId=xxxx
+  --member-id UserId=$USER_ID
 ```
 
-Or use the console:
-- IAM Identity Center → Groups → Jenkins-Users
-- Click "Add users"
-- Select users
+## Integration Type 2: cognito-saml
 
-### 4. Register OIDC App
+Cognito + Identity Center hybrid - Cognito manages users, Identity Center provides SAML credentials.
 
-**Heads up**: Identity Center's OIDC support is limited. You have two options:
+**When to use:**
+- Application requires SAML 2.0 authentication
+- You want Cognito's user management features (API, MFA, triggers, etc.)
+- You need automated user provisioning (Cognito API is more comprehensive)
 
-#### Option A: Use Cognito (Easier)
-
-Cognito has better OIDC support and is simpler to set up. See the Cognito section below.
-
-#### Option B: Identity Center (Advanced)
-
-> **⚠️ Note:** SAML integration with Identity Center is in active development and may have breaking changes.
-
-If you need Identity Center:
-
-**Via Console:**
-- IAM Identity Center → Applications → Add application
-- Choose "Add custom SAML 2.0 application"
-- Note: True OIDC app type might not be available
-
-**Get endpoints:**
-```bash
-REGION="us-east-1"
-INSTANCE_ID="ssoins-xxxx"
-
-# Your endpoints will be:
-echo "Issuer: https://portal.sso.$REGION.amazonaws.com/saml/assertion/$INSTANCE_ID"
-echo "Auth: https://portal.sso.$REGION.amazonaws.com/saml/assertion/$INSTANCE_ID/authorize"
-echo "Token: https://portal.sso.$REGION.amazonaws.com/saml/assertion/$INSTANCE_ID/token"
-echo "UserInfo: https://portal.sso.$REGION.amazonaws.com/saml/assertion/$INSTANCE_ID/userinfo"
-```
-
-**Generate and store secret:**
-```bash
-CLIENT_SECRET=$(openssl rand -base64 32)
-
-aws secretsmanager create-secret \
-  --name jenkins/oidc/client-secret \
-  --description "OIDC client secret for Jenkins" \
-  --secret-string "$CLIENT_SECRET" \
-  --region us-east-1
-```
-
-### 5. Configure Callback URLs
-
-Set these in your OIDC app:
-
-```
-Callback: https://jenkins.example.com/oauth2/idpresponse
-Sign-out: https://jenkins.example.com/
-```
-
-### 6. Assign Group to App
-
-Via console (CLI support is limited):
-1. Your OIDC app → Assign users and groups
-2. Select Groups → Jenkins-Users
-3. Click Assign
-
-### 7. Collect Config Values
-
-Grab everything you need:
-
-```bash
-# Instance ARN
-aws sso-admin list-instances --query 'Instances[0].InstanceArn' --output text
-
-# Group ID (if you lost it)
-aws identitystore list-groups \
-  --identity-store-id $IDENTITY_STORE_ID \
-  --filters "AttributePath=DisplayName,AttributeValue=Jenkins-Users" \
-  --query 'Groups[0].GroupId' \
-  --output text
-
-# Account ID
-aws sts get-caller-identity --query 'Account' --output text
-```
-
-## Alternative: Cognito (Recommended)
-
-Cognito is easier and has better OIDC support:
-
-### 1. Create User Pool
-
-```bash
-USER_POOL_ID=$(aws cognito-idp create-user-pool \
-  --pool-name jenkins-users \
-  --policies "PasswordPolicy={MinimumLength=8,RequireUppercase=true,RequireLowercase=true,RequireNumbers=true,RequireSymbols=true}" \
-  --auto-verified-attributes email \
-  --username-attributes email \
-  --query 'UserPool.Id' \
-  --output text)
-
-# Create domain
-USER_POOL_DOMAIN="jenkins-auth-$(date +%s)"
-aws cognito-idp create-user-pool-domain \
-  --domain $USER_POOL_DOMAIN \
-  --user-pool-id $USER_POOL_ID
-
-echo "Pool ID: $USER_POOL_ID"
-echo "Domain: $USER_POOL_DOMAIN.auth.us-east-1.amazoncognito.com"
-```
-
-### 2. Create App Client
-
-```bash
-APP_CLIENT=$(aws cognito-idp create-user-pool-client \
-  --user-pool-id $USER_POOL_ID \
-  --client-name jenkins-alb \
-  --generate-secret \
-  --allowed-o-auth-flows code \
-  --allowed-o-auth-scopes openid email profile \
-  --callback-urls "https://jenkins.example.com/oauth2/idpresponse" \
-  --supported-identity-providers COGNITO \
-  --allowed-o-auth-flows-user-pool-client)
-
-CLIENT_ID=$(echo $APP_CLIENT | jq -r '.UserPoolClient.ClientId')
-CLIENT_SECRET=$(echo $APP_CLIENT | jq -r '.UserPoolClient.ClientSecret')
-
-echo "Client ID: $CLIENT_ID"
-echo "Client Secret: $CLIENT_SECRET"
-```
-
-### 3. Store Secret
-
-```bash
-aws secretsmanager create-secret \
-  --name jenkins/oidc/client-secret \
-  --description "Cognito client secret for Jenkins" \
-  --secret-string "$CLIENT_SECRET"
-```
-
-### 4. Get Endpoints
-
-```bash
-REGION="us-east-1"
-
-echo "Issuer: https://cognito-idp.$REGION.amazonaws.com/$USER_POOL_ID"
-echo "Auth: https://$USER_POOL_DOMAIN.auth.$REGION.amazoncognito.com/oauth2/authorize"
-echo "Token: https://$USER_POOL_DOMAIN.auth.$REGION.amazoncognito.com/oauth2/token"
-echo "UserInfo: https://$USER_POOL_DOMAIN.auth.$REGION.amazoncognito.com/oauth2/userInfo"
-```
-
-### 5. Create Users
-
-```bash
-aws cognito-idp admin-create-user \
-  --user-pool-id $USER_POOL_ID \
-  --username user@example.com \
-  --user-attributes Name=email,Value=user@example.com Name=email_verified,Value=true \
-  --temporary-password 'TempPass123!' \
-  --message-action SUPPRESS
-
-echo "User created (will need to change password on first login)"
-```
-
-## CloudForge Configuration
-
-After setup, use these values in your deployment:
-
-### Identity Center
+### Configuration
 
 ```json
 {
-  "authMode": "alb-oidc",
-  "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxx",
-  "ssoGroupId": "90d67f97-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "ssoTargetAccountId": "123456789012",
-  "enableSsl": true,
-  "domain": "example.com",
-  "fqdn": "jenkins.example.com"
+  "authMode": "application-oidc",
+  "oidcProvider": "cognito-saml",
+  "autoProvisionIdentityCenter": true,
+  "cognitoAutoProvision": true,
+  "cognitoCreateGroups": true,
+  "cognitoGroups": ["Administrators", "Analysts", "Viewers"],
+  "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx",
+  "cognitoDomainPrefix": "myapp-auth",
+  "cognitoInitialAdminEmail": "admin@example.com"
 }
 ```
 
-### Cognito
+### How It Works
 
-For Cognito, you'll need to modify `OidcAuthenticationFactory` to accept custom endpoints, or use Cognito-specific configuration (see Cognito docs).
+The `cognito-saml` flow provides SAML credentials from Identity Center, with users stored in Cognito:
+
+```
+User Login
+    ↓
+Cognito User Pool (authentication, MFA, user/group management)
+    ↓
+Identity Center (acts as trusted token issuer, provides SAML assertions)
+    ↓
+Application (receives SAML 2.0 credentials with user attributes from Cognito)
+```
+
+**Key Point:** Identity Center issues the SAML credentials, but user data comes from Cognito.
+
+### Deploy
+
+```bash
+cdk deploy
+```
+
+CloudForge automatically:
+- Creates Cognito User Pool with groups
+- Creates SAML application in Identity Center
+- Configures Trusted Token Issuer (Cognito → Identity Center)
+- Maps Cognito groups to SAML attributes
+
+### Managing Users
+
+See [Cognito MFA Setup](COGNITO_MFA_COMPLIANCE_SETUP.md) - users are managed in Cognito User Pool.
+
+## Complete Configuration Examples
+
+### Metabase with identity-center-saml
+
+```json
+{
+  "stackName": "metabase-prod",
+  "region": "us-east-1",
+  "securityProfile": "production",
+  "authMode": "application-oidc",
+  "oidcProvider": "identity-center-saml",
+  "enableSsl": true,
+  "domain": "example.com",
+  "subdomain": "metabase",
+
+  "autoProvisionIdentityCenter": true,
+  "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx",
+  "identityCenterInitialAdminEmail": "admin@example.com",
+  "identityCenterGroups": ["Administrators", "Analysts", "Viewers"]
+}
+```
+
+### Metabase with cognito-saml
+
+```json
+{
+  "stackName": "metabase-prod",
+  "region": "us-east-1",
+  "securityProfile": "production",
+  "authMode": "application-oidc",
+  "oidcProvider": "cognito-saml",
+  "enableSsl": true,
+  "domain": "example.com",
+  "subdomain": "metabase",
+
+  "autoProvisionIdentityCenter": true,
+  "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "metabase-auth",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoInitialAdminEmail": "admin@example.com",
+  "cognitoCreateGroups": true,
+  "cognitoGroups": ["Administrators", "Analysts", "Viewers"]
+}
+```
+
+## Verification
+
+### Check SAML Application
+
+```bash
+# List applications
+aws sso-admin list-applications \
+  --instance-arn arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx
+```
+
+### Check Users and Groups
+
+```bash
+# Get identity store ID
+IDENTITY_STORE_ID=$(aws sso-admin list-instances --query 'Instances[0].IdentityStoreId' --output text)
+
+# List users
+aws identitystore list-users --identity-store-id $IDENTITY_STORE_ID
+
+# List groups
+aws identitystore list-groups --identity-store-id $IDENTITY_STORE_ID
+
+# List group memberships
+aws identitystore list-group-memberships \
+  --identity-store-id $IDENTITY_STORE_ID \
+  --group-id <group-id>
+```
 
 ## Troubleshooting
 
-### "AWS SSO is not enabled"
+### "Organizations is not enabled"
 
-Must run in management account or delegated admin:
+**Cause:** Identity Center requires AWS Organizations
+
+**Solution:**
+1. AWS Console → AWS Organizations
+2. Create organization
+3. Wait for setup to complete
+4. Re-enable Identity Center
+
+### "SSO instance not found"
+
+**Cause:** Identity Center not enabled
+
+**Solution:**
+1. AWS Console → IAM Identity Center
+2. Click "Enable"
+3. Choose identity source
+4. Wait for setup (~2 minutes)
+
+### "Cannot create SAML application"
+
+**Cause:** Incorrect SSO instance ARN
+
+**Solution:**
+Verify ARN format:
 ```bash
-aws organizations describe-organization
-aws sso-admin enable-aws-organizations-access
+aws sso-admin list-instances
+```
+Should return: `arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx`
+
+### "User already exists"
+
+**Cause:** User email already in Identity Center
+
+**Solution:**
+Use existing user or delete from Identity Center console first
+
+## Security Best Practices
+
+### Enable MFA
+
+1. IAM Identity Center → Settings → Authentication
+2. Multi-factor authentication → Configure
+3. Require MFA for all users
+
+### Session Duration
+
+1. IAM Identity Center → Settings → Authentication
+2. Session duration → Set to 1-8 hours
+3. Production: Use 1-2 hours maximum
+
+### Access Logging
+
+CloudForge automatically enables CloudWatch logging for authentication events. Review logs:
+
+```bash
+aws logs tail /aws/sso/applications/<app-id> --follow
 ```
 
-### "IdentityStore is not accessible"
+## Comparison: identity-center-saml vs cognito-saml
 
-Identity Center isn't fully initialized. Wait a few minutes and try again.
+| Feature | `identity-center-saml` | `cognito-saml` |
+|---------|------------------------|----------------|
+| **User Storage** | Identity Center identity store | Cognito User Pool |
+| **Group Management** | Identity Center groups | Cognito groups |
+| **MFA** | Identity Center MFA settings | Cognito MFA (TOTP, SMS) |
+| **SAML Provider** | Identity Center | Identity Center (Cognito as token issuer) |
+| **User Management API** | Identity Store API | Cognito API (more comprehensive) |
+| **Complexity** | Simpler (single system) | More components (Cognito + Identity Center) |
+| **Best For** | Pure SAML deployments | SAML apps needing Cognito features |
 
-### "Secret not found"
+## References
 
-Check if it exists:
-```bash
-aws secretsmanager describe-secret --secret-id jenkins/oidc/client-secret
+- **IAM Identity Center**: https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html
+- **Identity Store API**: https://docs.aws.amazon.com/singlesignon/latest/IdentityStoreAPIReference/welcome.html
+- **Trusted Token Issuers**: https://docs.aws.amazon.com/singlesignon/latest/userguide/trustedidentitypropagation.html
 
-# Create if missing
-aws secretsmanager create-secret \
-  --name jenkins/oidc/client-secret \
-  --secret-string "your-client-secret"
-```
+## See Also
 
-## Security Tips
-
-**Rotate secrets regularly:**
-```bash
-aws secretsmanager rotate-secret \
-  --secret-id jenkins/oidc/client-secret \
-  --rotation-lambda-arn arn:aws:lambda:region:account:function:rotation \
-  --rotation-rules AutomaticallyAfterDays=30
-```
-
-**Limit group membership** - Only add users who need access
-
-**Enable MFA** - Configure in Identity Center console per-user
-
-**Monitor access** - Turn on ALB access logs:
-```bash
-aws elbv2 modify-load-balancer-attributes \
-  --load-balancer-arn <your-alb-arn> \
-  --attributes Key=access_logs.s3.enabled,Value=true \
-               Key=access_logs.s3.bucket,Value=my-logs
-```
-
-## Verify It Works
-
-Test endpoints:
-```bash
-# Check OIDC config
-curl -v "https://portal.sso.us-east-1.amazonaws.com/saml/assertion/ssoins-xxxx/.well-known/openid-configuration"
-
-# Check secret
-aws secretsmanager get-secret-value --secret-id jenkins/oidc/client-secret --query 'SecretString' --output text
-```
-
-## Next Steps
-
-1. Deploy CloudForge with OIDC config
-2. Test by accessing Jenkins URL
-3. Check CloudWatch logs for auth events
-4. Set up alerts for failed logins
-
-## Docs
-
-- [Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/what-is.html)
-- [Cognito User Pools](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-identity-pools.html)
-- [ALB OIDC](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html)
+- [Cognito MFA Setup](COGNITO_MFA_COMPLIANCE_SETUP.md) - For hybrid approach
+- [OIDC Integration Guide](../applications/OIDC.md) - Application-level OIDC
+- [Metabase Setup](../guides/applications/metabase.md) - SAML configuration example

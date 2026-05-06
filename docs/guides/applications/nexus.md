@@ -26,6 +26,77 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete Nexus deployment:
+
+```mermaid
+graph TD
+    Start[CDK Deploy Starts] --> Validate[Validate Deployment Context]
+    Validate --> CheckAuth{Auth Mode?}
+    
+    CheckAuth -->|alb-oidc| CreateCognito[Create Cognito User Pool]
+    CheckAuth -->|none| SkipAuth[Skip Authentication]
+    
+    CreateCognito --> CreateAppClient[Create Cognito App Client]
+    SkipAuth --> CheckDocker{Enable Docker Registry?}
+    CreateAppClient --> CheckDocker
+    
+    CheckDocker -->|Yes| ConfigureDocker[Configure Docker Registry Ports]
+    CheckDocker -->|No| CheckRuntime{Runtime?}
+    ConfigureDocker --> CheckRuntime
+    
+    CheckRuntime -->|fargate| CreateECS[Create ECS Cluster & Service]
+    CheckRuntime -->|ec2| CreateASG[Create Auto Scaling Group]
+    
+    CreateECS --> CreateALB[Create Application Load Balancer]
+    CreateASG --> CreateALB
+    
+    CreateALB --> ConfigureTarget[Configure Target Group]
+    CreateALB --> ConfigureAuth{ALB-OIDC?}
+    
+    ConfigureAuth -->|Yes| SetupALBAuth[Configure ALB OIDC Authentication]
+    ConfigureAuth -->|No| SkipALBAuth[Skip ALB Auth]
+    
+    SetupALBAuth --> CreateEFS[Create EFS for Persistent Storage]
+    SkipALBAuth --> CreateEFS
+    
+    CreateEFS --> MountStorage[Mount Storage to Container/Instance]
+    MountStorage --> StartNexus[Start Nexus Container]
+    
+    StartNexus --> InitDB[Initialize OrientDB Database]
+    InitDB --> HealthCheck{Health Check Passes?}
+    
+    HealthCheck -->|No| Wait[Wait & Retry]
+    Wait --> HealthCheck
+    HealthCheck -->|Yes| Ready[Nexus Ready]
+    
+    Ready --> Access[Access Nexus UI]
+    
+    Note1[Note: Nexus uses embedded OrientDB]
+    Note2[Note: ALB-OIDC recommended for UI access]
+    Note3[Note: Docker registry on ports 5000-5002]
+```
+
+## Architecture Diagram
+
+The following diagram shows the Nexus deployment architecture:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> ALB[⚖️ Application Load Balancer]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Nexus Container 1]
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+```
+
+---
+
 ## Capabilities
 
 - Universal repository manager

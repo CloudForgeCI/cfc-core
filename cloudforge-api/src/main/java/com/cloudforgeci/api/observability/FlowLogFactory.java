@@ -58,6 +58,31 @@ public class FlowLogFactory extends BaseFactory {
                     .enableKeyRotation(true)
                     .removalPolicy(config.getLogRemovalPolicy())
                     .build();
+
+            // Grant CloudWatch Logs service permission to use the key
+            String accountId = software.amazon.awscdk.Stack.of(this).getAccount();
+            String region = software.amazon.awscdk.Stack.of(this).getRegion();
+            flowLogsKmsKey.addToResourcePolicy(software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                    .sid("Enable CloudWatch Logs encryption for VPC Flow Logs")
+                    .effect(software.amazon.awscdk.services.iam.Effect.ALLOW)
+                    .principals(java.util.List.of(new software.amazon.awscdk.services.iam.ServicePrincipal("logs.amazonaws.com")))
+                    .actions(java.util.List.of(
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*",
+                        "kms:CreateGrant",
+                        "kms:DescribeKey"
+                    ))
+                    .resources(java.util.List.of("*"))
+                    .conditions(java.util.Map.of(
+                        "ArnLike", java.util.Map.of(
+                            "kms:EncryptionContext:aws:logs:arn",
+                            "arn:aws:logs:" + region + ":" + accountId + ":*"
+                        )
+                    ))
+                    .build());
+
             logGroupBuilder.encryptionKey(flowLogsKmsKey);
             LOG.info("VPC Flow Logs KMS encryption enabled");
 

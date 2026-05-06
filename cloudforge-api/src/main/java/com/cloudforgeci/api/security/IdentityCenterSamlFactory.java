@@ -4,6 +4,9 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforgeci.api.util.CfnStringUtils;
@@ -13,8 +16,14 @@ import software.amazon.awscdk.customresources.AwsCustomResource;
 import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
 import software.amazon.awscdk.customresources.AwsSdkCall;
 import software.amazon.awscdk.customresources.PhysicalResourceId;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.PolicyDocument;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.constructs.Construct;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -23,23 +32,50 @@ import java.util.logging.Logger;
  * IAM Identity Center SAML Factory for automated SAML 2.0 application provisioning.
  *
  * <p>This factory creates a SAML 2.0 application in AWS IAM Identity Center (formerly AWS SSO)
- * and configures it for use with applications like Mattermost that support SAML authentication.</p>
+ * and configures it for use with applications like Metabase Enterprise that support SAML authentication.</p>
  *
- * <p><b>Quick Start:</b></p>
+ * <p><b>Hybrid Architecture - Cognito + Identity Center:</b></p>
+ * <p>This factory supports a hybrid architecture where Cognito manages users/groups
+ * and Identity Center provides SAML assertions to applications:</p>
+ * <pre>
+ * User → Cognito (authentication, user/group management)
+ *      → Identity Center (trusted token issuer, SAML provider)
+ *      → Application (SAML consumer)
+ * </pre>
+ *
+ * <p><b>Benefits of Hybrid Architecture:</b></p>
+ * <ul>
+ *   <li>Fully automated - Cognito API supports complete user/group management</li>
+ *   <li>No manual console steps for user provisioning</li>
+ *   <li>Users and groups managed exclusively in Cognito</li>
+ *   <li>Identity Center acts as SAML provider only (no Identity Store users)</li>
+ *   <li>Works with applications requiring SAML (like Metabase Enterprise)</li>
+ * </ul>
+ *
+ * <p><b>Quick Start (Hybrid Mode with Cognito):</b></p>
  * <pre>
  * {
  *   "authMode": "application-oidc",
+ *   "oidcProvider": "cognito-saml",
  *   "autoProvisionIdentityCenter": true,
+ *   "cognitoAutoProvision": true,
+ *   "cognitoCreateGroups": true,
+ *   "cognitoGroups": ["Administrators", "Analysts", "Viewers"],
  *   "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx"
  * }
  * </pre>
  *
+ * <p><b>IMPORTANT:</b> Set <code>cognitoAutoProvision=true</code>,
+ * <code>cognitoCreateGroups=true</code>, and specify <code>cognitoGroups</code>
+ * to enable group synchronization from Cognito to SAML.</p>
+ *
  * <p><b>What Gets Created:</b></p>
  * <ul>
+ *   <li>Cognito User Pool (via CognitoAuthenticationFactory, if cognitoAutoProvision=true)</li>
  *   <li>SAML 2.0 application in IAM Identity Center</li>
- *   <li>Attribute mappings (email, firstName, lastName, groups)</li>
- *   <li>IdP certificate stored in Secrets Manager</li>
- *   <li>SAML metadata URL for automatic configuration</li>
+ *   <li>Trusted Token Issuer configuration (Cognito → Identity Center)</li>
+ *   <li>IdP metadata URL and certificate in Secrets Manager</li>
+ *   <li>CloudFormation outputs with SAML configuration</li>
  * </ul>
  *
  * <p><b>Prerequisites:</b></p>
@@ -51,11 +87,14 @@ import java.util.logging.Logger;
  *
  * <p><b>Post-Deployment:</b></p>
  * <ol>
- *   <li>Assign users/groups to the application in IAM Identity Center console</li>
- *   <li>Users can then sign in using "Sign in with AWS IAM Identity Center"</li>
+ *   <li>Users are managed in Cognito User Pool (fully automated)</li>
+ *   <li>Identity Center trusts Cognito tokens via trusted token issuer</li>
+ *   <li>Identity Center issues SAML assertions to the application</li>
+ *   <li>Application receives SAML with user attributes from Cognito</li>
  * </ol>
  *
  * @see <a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/samlapps.html">IAM Identity Center SAML Apps</a>
+ * @see <a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/trustedidentitypropagation.html">Trusted Token Issuers</a>
  */
 public class IdentityCenterSamlFactory extends BaseFactory {
 
@@ -76,6 +115,9 @@ public class IdentityCenterSamlFactory extends BaseFactory {
     @DeploymentContext("region")
     private String region;
 
+    @DeploymentContext("securityProfile")
+    private SecurityProfile securityProfile;
+
     @DeploymentContext("fqdn")
     private String fqdn;
 
@@ -89,6 +131,9 @@ public class IdentityCenterSamlFactory extends BaseFactory {
     private Boolean enableSsl;
 
     // Reuse cognitoInitialAdminEmail for Identity Center - they're mutually exclusive
+    @DeploymentContext("cognitoAutoProvision")
+    private Boolean cognitoAutoProvision;
+
     @DeploymentContext("cognitoInitialAdminEmail")
     private String initialAdminEmail;
 
@@ -97,6 +142,12 @@ public class IdentityCenterSamlFactory extends BaseFactory {
 
     @SystemContext("alb")
     private software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer alb;
+
+    @SystemContext("cognitoUserPool")
+    private software.amazon.awscdk.services.cognito.UserPool cognitoUserPool;
+
+    @SystemContext("cognitoUserPoolId")
+    private String cognitoUserPoolId;
 
     public IdentityCenterSamlFactory(Construct scope, String id) {
         super(scope, id);
@@ -167,7 +218,17 @@ public class IdentityCenterSamlFactory extends BaseFactory {
     private void createSamlApplication() {
         String appName = stackName + "-" + applicationSpec.applicationId();
         String siteUrl = constructSiteUrl();
-        String acsUrl = siteUrl + "/login/sso/saml";
+
+        // Get application-specific SAML ACS path from OidcIntegration
+        String acsPath = "/login/sso/saml";  // Default for Mattermost
+        if (applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+            var oidcIntegration = applicationSpec.getOidcIntegration();
+            if (oidcIntegration != null && oidcIntegration.getSamlAcsPath() != null) {
+                acsPath = oidcIntegration.getSamlAcsPath();
+                LOG.info("Using application-specific SAML ACS path: " + acsPath);
+            }
+        }
+        String acsUrl = siteUrl + acsPath;
 
         LOG.info("Creating SAML application: " + appName);
         LOG.info("  Site URL: " + siteUrl);
@@ -223,11 +284,18 @@ public class IdentityCenterSamlFactory extends BaseFactory {
                             "sso:DeleteApplication",
                             "sso:DescribeApplication",
                             "sso:PutApplicationGrant",
-                            "sso:PutApplicationAuthenticationMethod",
                             "sso:PutApplicationAccessScope",
                             "sso:PutApplicationAssignmentConfiguration",
                             "sso:GetApplicationGrant",
-                            "sso:ListApplicationGrants"
+                            "sso:ListApplicationGrants",
+                            // Add CreateApplicationAssignment here so it's included when SSOAdmin Lambda provider is created
+                            "sso:CreateApplicationAssignment",
+                            "sso:ListApplicationAssignments",
+                            // Add TrustedTokenIssuer permissions here to avoid Lambda provider caching issues
+                            "sso:CreateTrustedTokenIssuer",
+                            "sso:DeleteTrustedTokenIssuer",
+                            "sso:DescribeTrustedTokenIssuer",
+                            "sso:UpdateTrustedTokenIssuer"
                         ))
                         .resources(List.of("*"))
                         .build()
@@ -237,55 +305,288 @@ public class IdentityCenterSamlFactory extends BaseFactory {
         // Get the application ARN from the response
         String applicationArn = samlApp.getResponseField("ApplicationArn");
 
+        // Configure application assignment - allow all users without explicit assignment
+        configureApplicationAssignment(applicationArn);
+
+        // Create IAM role for trusted identity propagation (uses IAMProfileMapper)
+        String roleArn = createApplicationIAMRole(applicationArn);
+        LOG.info("IAM role created for application: " + roleArn);
+
         // Configure SAML authentication method
         configureSamlAuthentication(applicationArn, siteUrl, acsUrl);
 
         // Store IdP metadata URL and certificate in Secrets Manager
         storeIdpConfiguration(instanceId, applicationArn);
 
+        // Wait for Cognito User Pool to be created, then configure as trusted token issuer
+        if (cognitoAutoProvision != null && cognitoAutoProvision) {
+            ctx.cognitoUserPoolId.onSet(userPoolId -> {
+                LOG.info("Configuring Cognito User Pool as trusted token issuer for Identity Center");
+                configureCognitoAsExternalIdP(applicationArn, userPoolId);
+            });
+        } else {
+            LOG.warning("Cognito auto-provisioning not enabled - Identity Center application created but no IdP configured");
+            LOG.warning("Configure an external IdP manually in the Identity Center console");
+        }
+
         // Export the SAML configuration to SystemContext
         exportSamlConfiguration(siteUrl, acsUrl, instanceId);
 
         // Output useful information
-        createOutputs(appName, siteUrl, acsUrl, instanceId);
+        createOutputs(appName, siteUrl, acsUrl, instanceId, roleArn);
 
         LOG.info("IAM Identity Center SAML application created successfully");
     }
 
     /**
-     * Configure SAML authentication method for the application.
+     * Configure application assignment to allow all Identity Center users without explicit assignment.
      *
-     * <p>Note: The SSO Admin API for custom SAML applications has limited support
-     * for programmatic configuration. The CreateApplication call creates the app,
-     * but detailed SAML settings (ACS URL, attribute mappings) must be configured
-     * via the IAM Identity Center console.</p>
+     * <p>This sets AssignmentRequired=false, which enables the "Do not require assignments" option
+     * in the Identity Center console. When disabled, all authenticated Identity Center users
+     * can access the application without needing explicit user/group assignments.</p>
      *
-     * <p>The application is created with status ENABLED and visible in the portal.
-     * Post-deployment steps:</p>
+     * @param applicationArn the Identity Center application ARN
+     */
+    private void configureApplicationAssignment(String applicationArn) {
+        LOG.info("Configuring application assignment: AssignmentRequired=false (allow all users)");
+
+        AwsSdkCall putAssignmentConfigCall = AwsSdkCall.builder()
+                .service("SSOAdmin")
+                .action("putApplicationAssignmentConfiguration")
+                .parameters(Map.of(
+                    "ApplicationArn", applicationArn,
+                    "AssignmentRequired", false
+                ))
+                .physicalResourceId(PhysicalResourceId.of("AppAssignmentConfig-" + stackName))
+                .region(region)
+                .build();
+
+        // Note: No need for onDelete - assignment config is deleted when application is deleted
+        AwsCustomResource.Builder.create(this, "ApplicationAssignmentConfig")
+                .onCreate(putAssignmentConfigCall)
+                .onUpdate(putAssignmentConfigCall)
+                .policy(AwsCustomResourcePolicy.fromStatements(List.of(
+                    software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                        .actions(List.of("sso:PutApplicationAssignmentConfiguration"))
+                        .resources(List.of("*"))
+                        .build()
+                )))
+                .build();
+
+        LOG.info("Application assignment configured: All Identity Center users can access without explicit assignment");
+    }
+
+    /**
+     * Configure application grant with audience claim for Cognito JWT token validation.
+     *
+     * <p>This configures the JWT Bearer grant type for the application, associating it with
+     * the Cognito trusted token issuer and specifying the expected audience claim (App Client ID).</p>
+     *
+     * <p>This enables Identity Center to:</p>
+     * <ul>
+     *   <li>Accept JWT tokens from Cognito (via trusted token issuer)</li>
+     *   <li>Validate the audience claim matches the Cognito App Client ID</li>
+     *   <li>Exchange validated JWT tokens for SAML assertions</li>
+     * </ul>
+     *
+     * @param applicationArn the Identity Center application ARN
+     * @param trustedTokenIssuerArn the trusted token issuer ARN (Cognito)
+     * @param audienceClaim the expected audience claim value (Cognito App Client ID)
+     */
+    private void configureApplicationGrant(String applicationArn, String trustedTokenIssuerArn, String audienceClaim) {
+        LOG.info("Configuring application grant for JWT bearer token exchange");
+        LOG.info("  Application ARN: " + applicationArn);
+        LOG.info("  Trusted Token Issuer ARN: " + trustedTokenIssuerArn);
+        LOG.info("  Audience Claim (Cognito App Client ID): " + audienceClaim);
+
+        // Configure JWT Bearer grant with authorized token issuer and audience
+        // This tells Identity Center to accept JWT tokens from Cognito with the specified audience
+        AwsSdkCall putGrantCall = AwsSdkCall.builder()
+                .service("SSOAdmin")
+                .action("putApplicationGrant")
+                .parameters(Map.of(
+                    "ApplicationArn", applicationArn,
+                    "GrantType", "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                    "Grant", Map.of(
+                        "JwtBearer", Map.of(
+                            "AuthorizedTokenIssuers", List.of(
+                                Map.of(
+                                    "TrustedTokenIssuerArn", trustedTokenIssuerArn,
+                                    "AuthorizedAudiences", List.of(audienceClaim)
+                                )
+                            )
+                        )
+                    )
+                ))
+                .physicalResourceId(PhysicalResourceId.of("AppGrant-" + stackName))
+                .region(region)
+                .build();
+
+        // Note: No need for onDelete - grant is deleted when application is deleted
+        AwsCustomResource.Builder.create(this, "ApplicationGrant")
+                .onCreate(putGrantCall)
+                .onUpdate(putGrantCall)
+                .policy(AwsCustomResourcePolicy.fromStatements(List.of(
+                    software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                        .actions(List.of("sso:PutApplicationGrant"))
+                        .resources(List.of("*"))
+                        .build()
+                )))
+                .build();
+
+        LOG.info("Application grant configured successfully");
+        LOG.info("Identity Center will now accept JWT tokens from Cognito with audience: " + audienceClaim);
+    }
+
+    /**
+     * Create an IAM role for the Identity Center application with permissions based on security profile.
+     *
+     * <p>This role enables <b>trusted identity propagation</b> - allowing the application to access
+     * AWS services like S3, Athena, Redshift, etc. on behalf of authenticated users.</p>
+     *
+     * <p>The IAM permissions are determined using {@link IAMProfileMapper} based on the security profile:</p>
+     * <ul>
+     *   <li><b>PRODUCTION</b> → MINIMAL IAM profile (least privilege)</li>
+     *   <li><b>STAGING</b> → STANDARD IAM profile (balanced permissions)</li>
+     *   <li><b>DEV</b> → EXTENDED IAM profile (broader permissions)</li>
+     * </ul>
+     *
+     * <p><b>Example Use Cases:</b></p>
+     * <ul>
+     *   <li>Metabase querying data from AWS Athena</li>
+     *   <li>Metabase reading S3 buckets for data analysis</li>
+     *   <li>Application accessing Redshift databases</li>
+     * </ul>
+     *
+     * <p><b>Note:</b> For SAML SSO-only applications (no AWS resource access), this role is optional.</p>
+     *
+     * @param applicationArn the Identity Center application ARN
+     * @return the IAM role ARN for trusted identity propagation
+     */
+    private String createApplicationIAMRole(String applicationArn) {
+        LOG.info("Creating IAM role for Identity Center application with trusted identity propagation");
+
+        // Determine IAM profile based on security profile using IAMProfileMapper
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
+        LOG.info("  Security Profile: " + securityProfile);
+        LOG.info("  IAM Profile (via IAMProfileMapper): " + iamProfile);
+
+        String roleName = stackName + "-metabase-app-role";
+
+        // Build permissions based on IAM profile
+        List<PolicyStatement> permissions = new ArrayList<>();
+
+        // Base permissions for all profiles
+        permissions.add(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .actions(List.of(
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                ))
+                .resources(List.of("arn:aws:s3:::*"))
+                .build());
+
+        // Add additional permissions based on IAM profile
+        switch (iamProfile) {
+            case EXTENDED:
+                // Extended permissions for development - includes write access
+                permissions.add(PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(List.of(
+                            "s3:PutObject",
+                            "s3:DeleteObject",
+                            "athena:*",
+                            "glue:GetDatabase",
+                            "glue:GetTable",
+                            "glue:GetPartitions"
+                        ))
+                        .resources(List.of("*"))
+                        .build());
+                break;
+            case STANDARD:
+                // Standard permissions for staging - read-only data access
+                permissions.add(PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(List.of(
+                            "athena:GetQueryExecution",
+                            "athena:GetQueryResults",
+                            "athena:StartQueryExecution",
+                            "glue:GetDatabase",
+                            "glue:GetTable"
+                        ))
+                        .resources(List.of("*"))
+                        .build());
+                break;
+            case MINIMAL:
+            default:
+                // Minimal permissions for production - very restrictive
+                LOG.info("  Using MINIMAL IAM profile - only basic S3 read access");
+                break;
+        }
+
+        PolicyDocument permissionsPolicy = PolicyDocument.Builder.create()
+                .statements(permissions)
+                .build();
+
+        // Create IAM role
+        Role appRole = Role.Builder.create(this, "ApplicationRole")
+                .roleName(roleName)
+                .description("IAM role for " + applicationSpec.applicationId() + " with trusted identity propagation (IAM Profile: " + iamProfile + ")")
+                .assumedBy(new ServicePrincipal("sso.amazonaws.com"))
+                .inlinePolicies(Map.of("ApplicationPermissions", permissionsPolicy))
+                .build();
+
+        String roleArn = appRole.getRoleArn();
+        LOG.info("IAM role created: " + roleArn);
+        LOG.info("  Role Name: " + roleName);
+        LOG.info("  IAM Profile: " + iamProfile);
+        LOG.info("  Permissions: " + permissions.size() + " policy statements");
+
+        return roleArn;
+    }
+
+    /**
+     * Log SAML configuration details for manual setup.
+     *
+     * <p><b>CRITICAL AWS API LIMITATION:</b> The AWS SSO Admin API does NOT support
+     * programmatic configuration of custom SAML applications. The API only supports
+     * OAuth/OIDC grant types, not SAML grant types.</p>
+     *
+     * <p>ALL SAML-specific configuration must be done manually in the Identity Center console:</p>
      * <ol>
      *   <li>Go to IAM Identity Center > Applications</li>
      *   <li>Select the created application</li>
-     *   <li>Configure SAML settings (ACS URL, Entity ID, Attributes)</li>
+     *   <li>Configure SAML settings:
+     *     <ul>
+     *       <li>Application ACS URL: {acsUrl}</li>
+     *       <li>Application SAML audience/Entity ID: {siteUrl}</li>
+     *     </ul>
+     *   </li>
+     *   <li>Configure attribute mappings (email, firstName, lastName, etc.)</li>
      *   <li>Assign users/groups</li>
      * </ol>
+     *
+     * <p><b>Why this limitation exists:</b></p>
+     * <ul>
+     *   <li>PutApplicationGrant only accepts OAuth grant types: jwt-bearer, token-exchange, authorization_code, refresh_token</li>
+     *   <li>PutApplicationGrant does NOT accept SAML grant type: urn:ietf:params:oauth:grant-type:saml2-bearer</li>
+     *   <li>PutApplicationAuthenticationMethod only accepts "IAM" as AuthenticationMethodType, not "SAML"</li>
+     *   <li>AWS SSO Admin API is designed for OAuth/OIDC applications, not SAML applications</li>
+     * </ul>
      */
     private void configureSamlAuthentication(String applicationArn, String siteUrl, String acsUrl) {
-        // Note: For custom SAML applications, the grant types and authentication methods
-        // are pre-configured by AWS when using ApplicationProviderArn = "arn:aws:sso::aws:applicationProvider/custom"
-        //
-        // The SSO Admin API doesn't support SAML-specific grant types like "saml2-bearer"
-        // and the PutApplicationAuthenticationMethod only accepts "IAM" which is for
-        // IAM Identity Center managed applications, not custom SAML apps.
-        //
-        // Instead, SAML configuration is done through:
-        // 1. The portal settings in CreateApplication (SignInOptions, Visibility)
-        // 2. Manual configuration in the IAM Identity Center console
-        //
-        // We skip the grant and auth method calls to avoid API errors.
+        LOG.warning("AWS SSO Admin API LIMITATION: SAML configuration cannot be automated");
+        LOG.warning("The AWS API only supports OAuth/OIDC grant types, NOT SAML grant types");
+        LOG.warning("All SAML settings must be configured manually in the Identity Center console");
+        LOG.info("SAML configuration values (use these in the console):");
+        LOG.info("  Application ACS URL: " + acsUrl);
+        LOG.info("  Application SAML audience (Entity ID): " + siteUrl);
+        LOG.info("  Application ARN: " + applicationArn);
 
-        LOG.info("SAML application created. ACS URL for manual configuration: " + acsUrl);
-        LOG.info("Entity ID (Audience) for manual configuration: " + siteUrl);
-        LOG.info("Post-deployment: Configure SAML settings in IAM Identity Center console");
+        // IMPORTANT: Do NOT attempt to use PutApplicationGrant or PutApplicationAuthenticationMethod
+        // These APIs do not support SAML applications - they only support OAuth/OIDC applications
+        // The CreateApplication call creates the SAML app shell, but all SAML-specific configuration
+        // (ACS URL, Entity ID, attribute mappings) MUST be done manually via the console
     }
 
     /**
@@ -298,15 +599,23 @@ public class IdentityCenterSamlFactory extends BaseFactory {
     private void storeIdpConfiguration(String instanceId, String applicationArn) {
         String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
 
-        // Construct IdP metadata URL
-        // Format: https://portal.sso.{region}.amazonaws.com/saml/metadata/{instanceId}
+        // Extract application instance ID from ARN using CloudFormation intrinsic functions
+        // ARN format: arn:aws:sso:region:account-id:application/ssoins-instance-id/apl-application-id
+        // Split by "/" and get the last element (index 2 of the split result)
+        String applicationInstanceId = software.amazon.awscdk.Fn.select(2,
+            software.amazon.awscdk.Fn.split("/", applicationArn));
+
+        // Construct IdP metadata URL (uses SSO instance ID)
+        // Format: https://portal.sso.{region}.amazonaws.com/saml/metadata/{ssoInstanceId}
         String metadataUrl = "https://portal.sso." + region + ".amazonaws.com/saml/metadata/" + instanceId;
 
-        // Construct IdP SSO URL
-        String ssoUrl = "https://portal.sso." + region + ".amazonaws.com/saml/assertion/" + instanceId;
+        // Construct IdP SSO URL for SP-initiated SAML (uses APPLICATION instance ID)
+        // Format: https://portal.sso.{region}.amazonaws.com/saml/assertion/{applicationInstanceId}
+        String ssoUrl = "https://portal.sso." + region + ".amazonaws.com/saml/assertion/" + applicationInstanceId;
 
         LOG.info("IdP Metadata URL: " + metadataUrl);
-        LOG.info("IdP SSO URL: " + ssoUrl);
+        LOG.info("IdP SSO URL (SP-initiated): " + ssoUrl);
+        LOG.info("Application Instance ID: (extracted from ARN at deploy time)");
 
         String secretName = stackName + "/" + appId + "/saml/idp-config";
         String secretValue = String.format(
@@ -382,33 +691,32 @@ public class IdentityCenterSamlFactory extends BaseFactory {
         // Note: Just store the secret name - the full ARN isn't known until the secret is created
         ctx.samlConfigSecretArn.set(secretName);
 
-        // Also store the metadata URL directly for MattermostSamlIntegration
+        // Store SAML configuration in SystemContext for ApplicationOidcFactory to use
         ctx.samlIdpMetadataUrl.set(metadataUrl);
-        ctx.samlIdpSsoUrl.set(ssoUrl);
+        ctx.samlIdpSsoUrl.set(ssoUrl);  // SP-initiated SAML URL with application instance ID
     }
 
     /**
      * Export SAML configuration to SystemContext for application use.
      */
     private void exportSamlConfiguration(String siteUrl, String acsUrl, String instanceId) {
-        // Construct IdP endpoints
-        String metadataUrl = "https://portal.sso." + region + ".amazonaws.com/saml/metadata/" + instanceId;
-        String ssoUrl = "https://portal.sso." + region + ".amazonaws.com/saml/assertion/" + instanceId;
-
-        // Store in SystemContext for MattermostSamlIntegration to use
+        // Store site URL and ACS URL in SystemContext
+        // Note: samlIdpSsoUrl is already set by storeIdpConfiguration() with the correct
+        // SP-initiated SAML URL using the application instance ID
         ctx.samlSiteUrl.set(siteUrl);
         ctx.samlAcsUrl.set(acsUrl);
-        ctx.samlIdpMetadataUrl.set(metadataUrl);
-        ctx.samlIdpSsoUrl.set(ssoUrl);
         ctx.samlIdpEntityId.set("urn:amazon:webservices");
 
         LOG.info("SAML configuration exported to SystemContext");
+        LOG.info("  Site URL: " + siteUrl);
+        LOG.info("  ACS URL: " + acsUrl);
+        LOG.info("  Entity ID: urn:amazon:webservices");
     }
 
     /**
      * Create CloudFormation outputs for easy reference.
      */
-    private void createOutputs(String appName, String siteUrl, String acsUrl, String instanceId) {
+    private void createOutputs(String appName, String siteUrl, String acsUrl, String instanceId, String roleArn) {
         String metadataUrl = "https://portal.sso." + region + ".amazonaws.com/saml/metadata/" + instanceId;
 
         CfnOutput.Builder.create(this, "SamlApplicationName")
@@ -438,31 +746,57 @@ public class IdentityCenterSamlFactory extends BaseFactory {
                 .value(consoleUrl)
                 .build();
 
-        // CRITICAL: AWS SSO Admin API does NOT support SAML attribute mapping programmatically
-        // Users MUST manually configure these in the IAM Identity Center console
-        // The "Assign users" popup does NOT configure attributes - must use "Edit attribute mappings"
+        // CRITICAL: AWS SSO Admin API LIMITATION - ALL SAML config must be done manually
+        // The API only supports OAuth/OIDC applications, NOT SAML applications
+        String postDeploymentSteps = initialAdminEmail != null && !initialAdminEmail.isEmpty()
+                ? "MANUAL CONFIGURATION REQUIRED: 1) Open console URL below, 2) Select '" + appName + "', 3) Actions > Edit configuration, 4) Set ACS URL (see output), 5) Set Entity ID (see output), 6) Add attribute mappings"
+                : "MANUAL CONFIGURATION REQUIRED: 1) Open console URL below, 2) Select '" + appName + "', 3) Actions > Edit configuration, 4) Set ACS URL (see output), 5) Set Entity ID (see output), 6) Add attribute mappings, 7) Assign users/groups";
+
         CfnOutput.Builder.create(this, "SamlPostDeployment")
-                .description("REQUIRED manual steps - AWS API limitation")
-                .value("1) Open console URL, 2) Select '" + appName + "', 3) Actions > Edit attribute mappings (NOT Assign users), 4) Add mappings below, 5) Then assign users")
+                .description("AWS API LIMITATION: SAML apps require manual configuration")
+                .value(postDeploymentSteps)
                 .build();
 
         // Output required attribute mappings for the SAML application
-        // These MUST be configured in IAM Identity Center for Mattermost to work
         // AWS API does not support programmatic SAML attribute mapping - console only
         CfnOutput.Builder.create(this, "SamlAttrMappings")
                 .description("REQUIRED attribute mappings - add ALL of these in Edit attribute mappings")
                 .value("email=${user:email}, firstName=${user:givenName}, lastName=${user:familyName}, preferred_username=${user:preferredUsername}")
                 .build();
 
-        // Output initial admin email if provided (reused from cognitoInitialAdminEmail)
+        // Explain the AWS API limitation
+        CfnOutput.Builder.create(this, "SamlApiLimitation")
+                .description("Why manual configuration is required")
+                .value("AWS SSO Admin API only supports OAuth/OIDC grant types (jwt-bearer, token-exchange, authorization_code, refresh_token). SAML grant type (saml2-bearer) is NOT supported. All SAML configuration must be done via console.")
+                .build();
+
+        // Output initial admin email and confirmation
         if (initialAdminEmail != null && !initialAdminEmail.isEmpty()) {
             CfnOutput.Builder.create(this, "SamlInitialAdminEmail")
-                    .description("Initial admin email - assign this user in Identity Center")
-                    .value(initialAdminEmail)
+                    .description("Initial admin user (auto-created and assigned)")
+                    .value(initialAdminEmail + " - check email for password setup link")
+                    .build();
+
+            CfnOutput.Builder.create(this, "SamlUserCreationStatus")
+                    .description("User provisioning status")
+                    .value("AUTOMATED - User '" + initialAdminEmail + "' created and assigned automatically")
                     .build();
 
             LOG.info("Initial admin email for Identity Center assignment: " + initialAdminEmail);
         }
+
+        // Output IAM role ARN for trusted identity propagation
+        CfnOutput.Builder.create(this, "ApplicationRoleArn")
+                .description("IAM role ARN for trusted identity propagation (uses IAMProfileMapper)")
+                .value(roleArn)
+                .build();
+
+        // Get IAM profile for documentation
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(securityProfile);
+        CfnOutput.Builder.create(this, "ApplicationRoleIAMProfile")
+                .description("IAM profile applied to application role (based on security profile)")
+                .value(iamProfile.toString() + " (Security Profile: " + securityProfile + ")")
+                .build();
     }
 
     /**
@@ -494,5 +828,153 @@ public class IdentityCenterSamlFactory extends BaseFactory {
         // Fallback - should not happen in production
         LOG.warning("No domain or ALB configured - using placeholder URL");
         return "https://" + applicationSpec.applicationId() + ".example.com";
+    }
+
+    /**
+     * Configure Cognito User Pool as the external IdP (trusted token issuer) for Identity Center.
+     *
+     * <p>This enables the hybrid architecture where:</p>
+     * <ul>
+     *   <li>Users authenticate with Cognito (user/group management)</li>
+     *   <li>Cognito issues OIDC JWT tokens</li>
+     *   <li>Identity Center trusts Cognito tokens via trusted token issuer</li>
+     *   <li>Identity Center issues SAML assertions to applications</li>
+     *   <li>Applications receive SAML with user attributes from Cognito</li>
+     * </ul>
+     *
+     * <p><b>Benefits of this approach:</b></p>
+     * <ul>
+     *   <li>Fully automated - Cognito API supports complete configuration</li>
+     *   <li>User/group management stays in Cognito only</li>
+     *   <li>Identity Center provides SAML to applications</li>
+     *   <li>No manual console steps for user provisioning</li>
+     * </ul>
+     *
+     * @param applicationArn Identity Center application ARN (not used currently, for future application-specific config)
+     * @param userPoolId Cognito User Pool ID
+     */
+    private void configureCognitoAsExternalIdP(String applicationArn, String userPoolId) {
+        LOG.info("Configuring Cognito as trusted token issuer for Identity Center");
+        LOG.info("  Application ARN: " + applicationArn);
+        LOG.info("  Cognito User Pool ID: " + userPoolId);
+
+        // Construct Cognito OIDC issuer URL
+        // Format: https://cognito-idp.{region}.amazonaws.com/{userPoolId}
+        String issuerUrl = String.format("https://cognito-idp.%s.amazonaws.com/%s", region, userPoolId);
+        String trustedTokenIssuerName = stackName + "-cognito-idp";
+
+        LOG.info("  Issuer URL: " + issuerUrl);
+        LOG.info("  Trusted Token Issuer Name: " + trustedTokenIssuerName);
+
+        // Create trusted token issuer in Identity Center
+        // This tells Identity Center to trust OIDC JWT tokens from Cognito
+        AwsSdkCall createTrustedTokenIssuerCall = AwsSdkCall.builder()
+                .service("SSOAdmin")
+                .action("createTrustedTokenIssuer")
+                .parameters(Map.of(
+                    "Name", trustedTokenIssuerName,
+                    "InstanceArn", ssoInstanceArn,
+                    "TrustedTokenIssuerType", "OIDC_JWT",
+                    "TrustedTokenIssuerConfiguration", Map.of(
+                        "OidcJwtConfiguration", Map.of(
+                            "IssuerUrl", issuerUrl,
+                            // Map Cognito email claim to Identity Center userId
+                            "ClaimAttributePath", "email",
+                            "IdentityStoreAttributePath", "emails.value",
+                            // Retrieve JWKS from Cognito's well-known endpoint
+                            "JwksRetrievalOption", "OPEN_ID_DISCOVERY"
+                        )
+                    )
+                ))
+                .physicalResourceId(PhysicalResourceId.fromResponse("TrustedTokenIssuerArn"))
+                .region(region)
+                .build();
+
+        // Delete trusted token issuer on stack deletion
+        AwsSdkCall deleteTrustedTokenIssuerCall = AwsSdkCall.builder()
+                .service("SSOAdmin")
+                .action("deleteTrustedTokenIssuer")
+                .parameters(Map.of(
+                    "TrustedTokenIssuerArn", new software.amazon.awscdk.customresources.PhysicalResourceIdReference()
+                ))
+                .region(region)
+                .ignoreErrorCodesMatching("ResourceNotFoundException")
+                .build();
+
+        // Create Custom Resource for trusted token issuer
+        AwsCustomResource trustedTokenIssuer = AwsCustomResource.Builder.create(this, "CognitoTrustedTokenIssuer")
+                .onCreate(createTrustedTokenIssuerCall)
+                .onDelete(deleteTrustedTokenIssuerCall)
+                .policy(AwsCustomResourcePolicy.fromStatements(List.of(
+                    software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                        .actions(List.of(
+                            "sso:CreateTrustedTokenIssuer",
+                            "sso:DeleteTrustedTokenIssuer",
+                            "sso:DescribeTrustedTokenIssuer",
+                            "sso:UpdateTrustedTokenIssuer"
+                        ))
+                        .resources(List.of("*"))
+                        .build()
+                )))
+                .build();
+
+        String trustedTokenIssuerArn = trustedTokenIssuer.getResponseField("TrustedTokenIssuerArn");
+
+        LOG.info("Cognito configured as trusted token issuer for Identity Center");
+        LOG.info("  Trusted Token Issuer ARN: " + trustedTokenIssuerArn);
+
+        // Configure application grant with audience claim for Cognito token validation
+        // Wait for Cognito Client ID to be available, then configure the grant
+        ctx.cognitoClientId.onSet(clientId -> {
+            LOG.info("Configuring application grant with Aud claim: " + clientId);
+            configureApplicationGrant(applicationArn, trustedTokenIssuerArn, clientId);
+        });
+
+        // Create CloudFormation output for trusted token issuer ARN
+        CfnOutput.Builder.create(this, "TrustedTokenIssuerArn")
+                .description("Cognito Trusted Token Issuer ARN for Identity Center")
+                .value(trustedTokenIssuerArn)
+                .build();
+
+        CfnOutput.Builder.create(this, "CognitoIdpIntegration")
+                .description("Cognito integration status")
+                .value("FULLY AUTOMATED - Cognito acts as IdP for Identity Center, users managed in Cognito only")
+                .build();
+
+        // Document group claim mapping requirements
+        LOG.info("Hybrid architecture configured: Cognito (users/groups) -> Identity Center (SAML) -> Application");
+        LOG.info("IMPORTANT: For group synchronization to work:");
+        LOG.info("  1. Set cognitoAutoProvision=true to create Cognito User Pool");
+        LOG.info("  2. Set cognitoCreateGroups=true to create groups in Cognito");
+        LOG.info("  3. Cognito includes groups in 'cognito:groups' claim");
+        LOG.info("  4. Configure SAML attribute mapping in Identity Center console:");
+        LOG.info("     - Attribute: groups");
+        LOG.info("     - Maps to: ${path:cognito:groups}");
+
+        // Create CloudFormation output with group mapping instructions
+        CfnOutput.Builder.create(this, "CognitoGroupMapping")
+                .description("Group attribute mapping - configure in Identity Center console")
+                .value("Add attribute mapping: groups -> ${path:cognito:groups} (requires cognitoCreateGroups=true)")
+                .build();
+
+        CfnOutput.Builder.create(this, "CognitoGroupsClaim")
+                .description("Cognito groups claim name")
+                .value("cognito:groups - automatically included in Cognito JWT when user is in groups")
+                .build();
+
+        CfnOutput.Builder.create(this, "ApplicationAssignmentConfig")
+                .description("Application assignment configuration status")
+                .value("AUTOMATED - AssignmentRequired=false (all Identity Center users can access)")
+                .build();
+
+        CfnOutput.Builder.create(this, "ApplicationGrantConfig")
+                .description("Application grant configuration status")
+                .value("AUTOMATED - JWT Bearer grant configured with Cognito as trusted token issuer")
+                .build();
+
+        CfnOutput.Builder.create(this, "AudienceClaimConfig")
+                .description("Audience claim validation")
+                .value("AUTOMATED - Aud claim set to Cognito App Client ID for token validation")
+                .build();
     }
 }

@@ -74,6 +74,16 @@ public class GitLabOidcIntegration implements OidcIntegration {
         gitlabConfig.append("gitlab_rails['omniauth_block_auto_created_users'] = false; ");
         gitlabConfig.append("gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']; ");
 
+        // Configure after_sign_out_path to redirect to Cognito logout
+        // This performs RP-initiated logout (logs out of both GitLab AND Cognito)
+        if (config.getLogoutEndpoint() != null && externalUrl != null) {
+            String cognitoLogoutUrl = String.format("%s?client_id=%s&logout_uri=%s",
+                config.getLogoutEndpoint(),
+                config.getClientId(),
+                externalUrl);
+            gitlabConfig.append(String.format("gitlab_rails['after_sign_out_path'] = '%s'; ", cognitoLogoutUrl));
+        }
+
         gitlabConfig.append("gitlab_rails['omniauth_providers'] = [");
         gitlabConfig.append("{");
         gitlabConfig.append("name: 'openid_connect', ");
@@ -92,7 +102,18 @@ public class GitLabOidcIntegration implements OidcIntegration {
         gitlabConfig.append("client_options: {");
         gitlabConfig.append(String.format("identifier: '%s', ", config.getClientId()));
         gitlabConfig.append("secret: ENV['GITLAB_OIDC_CLIENT_SECRET'], ");
-        gitlabConfig.append(String.format("redirect_uri: '%s'", config.getRedirectUrl()));
+        gitlabConfig.append(String.format("redirect_uri: '%s', ", config.getRedirectUrl()));
+
+        // Configure logout endpoint for RP-initiated logout (logs out of both GitLab AND Cognito)
+        // When user clicks "Sign out", GitLab will redirect to this URL to end the IdP session
+        if (config.getLogoutEndpoint() != null && externalUrl != null) {
+            String logoutUrl = String.format("%s?client_id=%s&logout_uri=%s",
+                config.getLogoutEndpoint(),
+                config.getClientId(),
+                externalUrl);
+            gitlabConfig.append(String.format("end_session_endpoint: '%s'", logoutUrl));
+        }
+
         gitlabConfig.append("}");
         gitlabConfig.append("}");
         gitlabConfig.append("}");
@@ -149,6 +170,17 @@ public class GitLabOidcIntegration implements OidcIntegration {
         commands.add("gitlab_rails['omniauth_block_auto_created_users'] = false");
         commands.add("gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']");
         commands.add("");
+
+        // Configure after_sign_out_path to redirect to Cognito logout
+        if (config.getLogoutEndpoint() != null && externalUrl != null) {
+            String cognitoLogoutUrl = String.format("%s?client_id=%s&logout_uri=%s",
+                config.getLogoutEndpoint(),
+                config.getClientId(),
+                externalUrl);
+            commands.add("# Configure after-sign-out redirect to Cognito logout");
+            commands.add("gitlab_rails['after_sign_out_path'] = '" + cognitoLogoutUrl + "'");
+            commands.add("");
+        }
         commands.add("gitlab_rails['omniauth_providers'] = [");
         commands.add("  {");
         commands.add("    name: 'openid_connect',");
@@ -166,7 +198,18 @@ public class GitLabOidcIntegration implements OidcIntegration {
         commands.add("      client_options: {");
         commands.add("        identifier: '" + config.getClientId() + "',");
         commands.add("        secret: '${GITLAB_OIDC_CLIENT_SECRET}',");
-        commands.add("        redirect_uri: '" + config.getRedirectUrl() + "'");
+        commands.add("        redirect_uri: '" + config.getRedirectUrl() + "',");
+
+        // Configure logout endpoint for RP-initiated logout (logs out of both GitLab AND Cognito)
+        // After logout, Cognito redirects back to GitLab's homepage
+        if (config.getLogoutEndpoint() != null && externalUrl != null) {
+            String logoutUrl = String.format("%s?client_id=%s&logout_uri=%s",
+                config.getLogoutEndpoint(),
+                config.getClientId(),
+                externalUrl);  // Redirect to GitLab homepage after logout
+            commands.add("        end_session_endpoint: '" + logoutUrl + "'");
+        }
+
         commands.add("      }");
         commands.add("    }");
         commands.add("  }");
@@ -193,6 +236,14 @@ public class GitLabOidcIntegration implements OidcIntegration {
         // Per https://github.com/gitlabhq/omnibus-gitlab/blob/master/docker/Dockerfile
         // The init-container script handles initialization, signals, runit, and GitLab reconfiguration
         return "/assets/init-container";
+    }
+
+    @Override
+    public String getOidcCallbackPath() {
+        // GitLab OmniAuth callback path for OpenID Connect
+        // Format: /users/auth/{provider_name}/callback
+        // Provider name is 'openid_connect' as configured in omniauth_providers
+        return "/users/auth/openid_connect/callback";
     }
 
     @Override
@@ -223,6 +274,11 @@ public class GitLabOidcIntegration implements OidcIntegration {
                 2. Click "Sign in with %s" on the login page
                 3. You will be redirected to the OIDC provider
                 4. After authentication, a GitLab account will be created automatically
+
+                Logout Behavior:
+                - Clicking "Sign out" in GitLab will log you out of both GitLab AND Cognito
+                - After logout, you'll be redirected back to the GitLab homepage (clean state)
+                - This is configured automatically via gitlab_rails['after_sign_out_path']
 
                 User Management:
                 - Users are auto-created on first OIDC login

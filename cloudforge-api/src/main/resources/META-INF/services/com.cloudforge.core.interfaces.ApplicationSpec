@@ -14,6 +14,7 @@ com.cloudforgeci.api.application.monitoring.GrafanaApplicationSpec
 com.cloudforgeci.api.application.monitoring.PrometheusApplicationSpec
 
 # Analytics
+com.cloudforgeci.api.application.analytics.MetabaseOssApplicationSpec
 com.cloudforgeci.api.application.analytics.MetabaseApplicationSpec
 com.cloudforgeci.api.application.analytics.SupersetApplicationSpec
 

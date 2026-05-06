@@ -78,6 +78,47 @@ Adding a new deployment type requires:
 3. Implement `collectConfiguration()` and `deploy()` methods
 4. Use SystemContext orchestration methods for deployment
 
+## Deployment Sequence
+
+The Interactive Deployer follows this sequence when deploying applications:
+
+```mermaid
+sequenceDiagram
+    participant EndUser as End User
+    participant Deployer as Interactive Deployer
+    participant SystemContext as SystemContext
+    participant AppFactory as ApplicationFactory
+    participant ComplianceFactory as ComplianceFactory
+    participant CDK as CDK
+    participant AWS as AWS Resources
+    
+    EndUser->>Deployer: Run cdk deploy
+    Deployer->>SystemContext: createJenkinsDeployment()
+    SystemContext->>SystemContext: createInfrastructureFactories()
+    SystemContext->>AWS: createVpcFactory()<br/>🏗️ Amazon VPC
+    SystemContext->>AWS: createAlbFactory()<br/>⚖️ Application Load Balancer
+    SystemContext->>AWS: createEfsFactory()<br/>💾 Amazon EFS
+    SystemContext->>SystemContext: createJenkinsSpecificFactories()
+    SystemContext->>AppFactory: ApplicationFactory.create()
+    AppFactory->>AppFactory: FlowLogFactory.create()<br/>📊 VPC Flow Logs
+    AppFactory->>AppFactory: DomainFactory.create()<br/>🌐 Route 53 (if domain)
+    AppFactory->>SystemContext: createInfrastructureFactories()<br/>VPC, ALB, EFS, Logging
+    AppFactory->>SystemContext: createSecurityFactories()<br/>Cognito, Identity Center, OIDC
+    AppFactory->>AWS: Create RDS if required<br/>🗄️ Amazon RDS
+    AppFactory->>AWS: Create compute resources<br/>🖥️ EC2 / ☁️ ECS Fargate
+    AppFactory->>AWS: Create backup & alarms<br/>💿 AWS Backup, 📈 CloudWatch
+    SystemContext->>SecurityProfile: SecurityProfileFactory.configureObservability()
+    SecurityProfile->>ComplianceFactory: ComplianceFactory.create()
+    ComplianceFactory->>AWS: Create Config rules<br/>✅ AWS Config
+    ComplianceFactory->>AWS: Create remediation<br/>🔧 AWS Systems Manager
+    ComplianceFactory->>AWS: Create Audit Manager<br/>📋 Evidence Collection
+    SystemContext->>CDK: Synthesize template
+    CDK-->>SystemContext: CloudFormation template
+    SystemContext-->>Deployer: Template ready
+    Deployer->>AWS: Deploy stack
+    AWS-->>EndUser: Deployment complete
+```
+
 ## Configuration Options
 
 ### Basic Configuration

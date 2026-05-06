@@ -321,18 +321,50 @@ public class RdsFactory {
             Boolean.TRUE
         );
 
+        // Build NAG suppressions list
+        List<NagPackSuppression> nagSuppressions = new ArrayList<>();
+
+        // Always suppress RDS11 (default ports) and IAM4 (managed policy)
+        nagSuppressions.add(NagPackSuppression.builder()
+            .id("AwsSolutions-RDS11")
+            .reason("Default database ports (5432/3306) are used intentionally - security is enforced via VPC security groups restricting access to application containers only. Non-standard ports provide minimal security benefit (security through obscurity).")
+            .build());
+
+        nagSuppressions.add(NagPackSuppression.builder()
+            .id("AwsSolutions-IAM4")
+            .reason("RDS Enhanced Monitoring requires the AWS managed policy AmazonRDSEnhancedMonitoringRole - this is the AWS-recommended approach for RDS monitoring and cannot be replaced with a customer-managed policy.")
+            .build());
+
+        // Conditionally suppress Multi-AZ and Deletion Protection for non-production environments
+        // when compliance mode is ADVISORY (not ENFORCE)
+        boolean isNonProductionAdvisory = (security == SecurityProfile.DEV || security == SecurityProfile.STAGING)
+            && ctx.cfc.complianceMode() == com.cloudforge.core.enums.ComplianceMode.ADVISORY;
+
+        if (isNonProductionAdvisory) {
+            // Suppress Multi-AZ requirement for staging/dev when in ADVISORY compliance mode
+            if (multiAzOverride == null || !multiAzOverride) {
+                nagSuppressions.add(NagPackSuppression.builder()
+                    .id("AwsSolutions-RDS3")
+                    .reason("Multi-AZ disabled for " + security + " environment with ADVISORY compliance mode. Production deployments should use ENFORCE mode or set databaseMultiAz=true.")
+                    .build());
+            }
+
+            // Suppress Deletion Protection requirement for staging/dev when in ADVISORY compliance mode
+            boolean deletionProtectionEnabled = ctx.securityProfileConfig.get()
+                .map(config -> config.isRdsDeletionProtectionEnabled())
+                .orElse(false);
+
+            if (!deletionProtectionEnabled) {
+                nagSuppressions.add(NagPackSuppression.builder()
+                    .id("AwsSolutions-RDS10")
+                    .reason("Deletion protection disabled for " + security + " environment with ADVISORY compliance mode to allow easy cleanup and recreation. Production deployments should use ENFORCE mode or enable deletion protection.")
+                    .build());
+            }
+        }
+
         NagSuppressions.addResourceSuppressions(
             instance,
-            List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-RDS11")
-                    .reason("Default database ports (5432/3306) are used intentionally - security is enforced via VPC security groups restricting access to application containers only. Non-standard ports provide minimal security benefit (security through obscurity).")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM4")
-                    .reason("RDS Enhanced Monitoring requires the AWS managed policy AmazonRDSEnhancedMonitoringRole - this is the AWS-recommended approach for RDS monitoring and cannot be replaced with a customer-managed policy.")
-                    .build()
-            ),
+            nagSuppressions,
             Boolean.TRUE
         );
 

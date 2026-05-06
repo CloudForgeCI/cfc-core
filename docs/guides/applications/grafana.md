@@ -26,6 +26,120 @@ Grafana is an open-source platform for monitoring and observability that allows 
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete Grafana deployment:
+
+```mermaid
+%%{init: {'theme':'architecture-beta'}}%%
+graph TD
+    Start[🚀 CDK Deploy Starts] --> Validate[Validate Deployment Context]
+    Validate --> CheckAuth{Auth Mode?}
+    
+    CheckAuth -->|application-oidc| CreateCognito[🔐 Create Cognito User Pool]
+    CheckAuth -->|alb-oidc| CreateCognito
+    CheckAuth -->|none| SkipAuth[Skip Authentication]
+    
+    CreateCognito --> CreateAppClient[🔐 Create Cognito App Client]
+    SkipAuth --> CheckDB{Database Required?}
+    CreateAppClient --> CheckDB
+    
+    CheckDB -->|Yes| CreateRDS[🗄️ Create RDS Database Instance]
+    CheckDB -->|No| UseSQLite[💾 Use SQLite Embedded Database]
+    CreateRDS --> WaitDB[Wait for Database Ready]
+    WaitDB --> CheckRuntime{Runtime?}
+    UseSQLite --> CheckRuntime
+    
+    CheckRuntime -->|fargate| CreateECS[☁️ Create ECS Cluster & Service]
+    CheckRuntime -->|ec2| CreateASG[☁️ Create Auto Scaling Group]
+    
+    CreateECS --> CreateALB[⚖️ Create Application Load Balancer]
+    CreateASG --> CreateALB
+    
+    CreateALB --> ConfigureTarget[Configure Target Group]
+    ConfigureTarget --> CreateEFS[💾 Create EFS for Persistent Storage]
+    
+    CreateEFS --> MountStorage[Mount Storage to Container/Instance]
+    MountStorage --> StartGrafana[📊 Start Grafana Container]
+    
+    StartGrafana --> HealthCheck{Health Check Passes?}
+    HealthCheck -->|No| Wait[Wait & Retry]
+    Wait --> HealthCheck
+    HealthCheck -->|Yes| ConfigureOIDC{application-oidc?}
+    
+    ConfigureOIDC -->|Yes| SetupGenericOAuth[🔐 Configure Generic OAuth]
+    ConfigureOIDC -->|No| Ready[📊 Grafana Ready]
+    SetupGenericOAuth --> Ready
+    
+    Ready --> Access[🌐 Access Grafana UI]
+    
+    Note1[Note: SQLite for single instance only]
+    Note2[Note: PostgreSQL recommended for production]
+```
+
+## Authentication Flow
+
+When using `application-oidc` authentication mode, the following sequence diagram shows how users authenticate:
+
+```mermaid
+%%{init: {'theme':'architecture-beta'}}%%
+sequenceDiagram
+    autonumber
+    participant User as 👤 User
+    participant ALB as ⚖️ ALB
+    participant Grafana as 📊 Grafana
+    participant Cognito as 🔐 Cognito
+    
+    Note over User,Cognito: 1. Initial Request
+    User->>ALB: Navigate to Grafana
+    ALB->>Grafana: Forward request
+    Grafana->>User: Redirect to Cognito
+    
+    Note over User,Cognito: 2. Authentication
+    User->>Cognito: Enter credentials
+    Cognito->>User: Request MFA
+    User->>Cognito: Provide MFA code
+    Cognito->>User: Return authorization code
+    
+    Note over User,Grafana: 3. Token Exchange
+    User->>Grafana: Callback with code
+    Grafana->>Cognito: Exchange code for tokens
+    Cognito->>Grafana: Return ID token + access token
+    
+    Note over User,Grafana: 4. User Creation
+    Grafana->>Grafana: Extract user info
+    Grafana->>Grafana: Create/update account
+    Grafana->>User: Redirect to dashboard
+    
+    Note over User,Grafana: User authenticated
+```
+
+## Architecture Diagram
+
+The following diagram shows the Grafana deployment architecture:
+
+```mermaid
+%%{init: {'theme':'architecture-beta'}}%%
+graph TB
+    Internet[🌐 Internet] --> ALB[⚖️ Application Load Balancer]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Grafana Container 1]
+    ALB --> ECS2[☁️ ECS Fargate / EC2<br/>Grafana Container 2]
+    
+    ECS1 --> RDS[(🗄️ Amazon RDS PostgreSQL)]
+    ECS2 --> RDS
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    ECS2 --> EFS
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+    ECS2 --> CloudWatch
+```
+
+---
+
 ## Capabilities
 
 - Multi-source metrics visualization

@@ -2,7 +2,13 @@
 
 Metabase is an open-source business intelligence and analytics platform that enables non-technical users to ask questions about their data and visualize the answers.
 
-**Status**: Verified
+**Status**: ✅ Verified
+
+**Variants**:
+- `metabase-enterprise`: Metabase Enterprise Edition (requires license for SAML/advanced features)
+- `metabase-oss`: Metabase Open Source Edition
+
+**Note**: Both variants work with ALB-OIDC. Enterprise variant required for application-level SAML integration.
 
 ---
 
@@ -23,6 +29,97 @@ Metabase is an open-source business intelligence and analytics platform that ena
 | **Supports EC2** | Yes |
 | **OIDC Support** | Via SAML (Verified) |
 | **Database Required** | Optional (recommended for production) |
+
+---
+
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete Metabase deployment:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> IGW[🌉 Internet Gateway]
+    
+    IGW --> ALB[⚖️ Application Load Balancer]
+    IGW --> NAT[🌉 NAT Gateway]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Metabase Container 1]
+    ALB --> ECS2[☁️ ECS Fargate / EC2<br/>Metabase Container 2]
+    
+    NAT --> ECS1
+    NAT --> ECS2
+    
+    ECS1 --> RDS[(🗄️ Amazon RDS PostgreSQL)]
+    ECS2 --> RDS
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    ECS2 --> EFS
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+    ECS2 --> CloudWatch
+```
+
+## Authentication Flow
+
+When using `alb-oidc` authentication mode (recommended), the following sequence diagram shows how users authenticate:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant ALB
+    participant Cognito
+    participant Metabase
+    
+    Note over User,ALB: 1. Initial Request
+    User->>ALB: Navigate to Metabase
+    ALB->>ALB: Check session cookie
+    ALB->>User: No session, redirect to Cognito
+    
+    Note over User,Cognito: 2. Authentication
+    User->>Cognito: Enter credentials
+    Cognito->>User: Request MFA
+    User->>Cognito: Provide MFA code
+    Cognito->>User: Return authorization code
+    
+    Note over User,ALB: 3. Token Exchange
+    User->>ALB: Callback with code
+    ALB->>Cognito: Exchange code for tokens
+    Cognito->>ALB: Return ID token + access token
+    
+    Note over ALB,Metabase: 4. Session Creation
+    ALB->>ALB: Validate token
+    ALB->>ALB: Create session cookie
+    ALB->>Metabase: Forward with headers
+    Metabase->>User: Return dashboard
+    
+    Note over User,Metabase: User authenticated via ALB session
+```
+
+## Architecture Diagram
+
+The following diagram shows the Metabase deployment architecture:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> ALB[⚖️ Application Load Balancer]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Metabase Container 1]
+    ALB --> ECS2[☁️ ECS Fargate / EC2<br/>Metabase Container 2]
+    
+    ECS1 --> RDS[(🗄️ Amazon RDS PostgreSQL)]
+    ECS2 --> RDS
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    ECS2 --> EFS
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+    ECS2 --> CloudWatch
+```
 
 ---
 
@@ -79,8 +176,9 @@ Separate databases containing your business data that Metabase queries. Configur
 
 | Mode | Status | Description |
 |------|--------|-------------|
-| `alb-oidc` | **Verified** | ALB-level authentication |
-| `application-oidc` | Via SAML | Requires Enterprise license for native SAML |
+| `alb-oidc` | ✅ **Verified** | ALB-level authentication (Recommended) |
+| `application-oidc` (SAML via Cognito) | ⚠️ **Working** (Not Fully Tested) | Cognito SAML → Metabase Enterprise |
+| `application-oidc` (SAML via Identity Center) | ⚠️ **Working** (Not Fully Tested) | Cognito + Identity Center → Metabase Enterprise |
 | `none` | Available | Local accounts only |
 
 ### Authentication Notes
@@ -89,6 +187,43 @@ Separate databases containing your business data that Metabase queries. Configur
 
 1. **ALB-OIDC (Recommended):** Use ALB-level authentication, which works without Metabase Enterprise license
 2. **SAML (Enterprise):** Requires Metabase Pro/Enterprise license and uses SAML 2.0
+
+### SAML Integration (Metabase Enterprise)
+
+Application-level SAML now works via two approaches:
+
+**Option 1: Cognito SAML** (`oidcProvider: "cognito-saml"`)
+- ✅ Fully automated via API
+- ✅ No manual console steps
+- ✅ Cognito acts as SAML IdP
+- ⚠️ Not fully tested in production
+
+**Required config:**
+```json
+{
+  "authMode": "application-oidc",
+  "oidcProvider": "cognito-saml",
+  "cognitoAutoProvision": true,
+  "autoProvisionIdentityCenter": false
+}
+```
+
+**Option 2: Identity Center SAML** (`oidcProvider: "cognito-saml"` + Identity Center)
+- ✅ Enterprise SSO portal
+- ⚠️ Requires 1 manual step (attribute mappings in console)
+- ✅ Hybrid: Cognito manages users, Identity Center issues SAML
+- ⚠️ Not fully tested in production
+
+**Required config:**
+```json
+{
+  "authMode": "application-oidc",
+  "oidcProvider": "cognito-saml",
+  "cognitoAutoProvision": true,
+  "autoProvisionIdentityCenter": true,
+  "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx"
+}
+```
 
 For most deployments, **ALB-OIDC** provides the best balance of security and simplicity without requiring a license.
 

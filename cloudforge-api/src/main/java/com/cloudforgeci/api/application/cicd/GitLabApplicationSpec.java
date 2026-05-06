@@ -190,20 +190,42 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
             String externalUrl = (sslEnabled ? "https://" : "http://") + fqdn;
             omnibusConfig.append(String.format("external_url '%s'; ", externalUrl));
         }
+        // NOTE: When no custom domain, external_url is not set - GitLab will auto-detect from Host header
+        // This is acceptable for testing/dev, but production should always use a custom domain
 
         // NGINX reverse proxy configuration
         omnibusConfig.append("nginx['listen_port'] = 80; ");
         omnibusConfig.append("nginx['listen_https'] = false; ");
         omnibusConfig.append("gitlab_rails['gitlab_shell_ssh_port'] = 22; ");
 
-        // Trust X-Forwarded-* headers from ALB for proper IP logging
-        // Without this, GitLab shows internal container IPs in audit logs
+        // Disable Let's Encrypt when using ALB DNS (ALB handles SSL termination)
+        // Only enable Let's Encrypt when using a custom domain
+        if (fqdn == null || fqdn.isBlank()) {
+            // No custom domain - using ALB DNS name
+            // Let's Encrypt won't issue certs for *.elb.amazonaws.com domains
+            omnibusConfig.append("letsencrypt['enable'] = false; ");
+        } else {
+            // Custom domain - Let's Encrypt can be used if desired
+            // Note: ALB still handles SSL termination, so this is typically not needed
+            // Users should set letsencrypt['enable'] = false manually for ALB-terminated SSL
+            omnibusConfig.append("letsencrypt['enable'] = false; ");
+        }
+
+        // Trust X-Forwarded-* headers from ALB for proper IP logging and HTTPS detection
+        // This is CRITICAL for preventing redirect loops when ALB terminates SSL
         omnibusConfig.append("nginx['real_ip_header'] = 'X-Forwarded-For'; ");
         omnibusConfig.append("nginx['real_ip_recursive'] = 'on'; ");
+
         // Trust all private IP ranges (ALB uses VPC internal IPs)
         omnibusConfig.append("nginx['real_ip_trusted_addresses'] = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']; ");
-        // Detect HTTPS from ALB via X-Forwarded-Proto
-        omnibusConfig.append("nginx['proxy_set_headers'] = { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' }; ");
+
+        // Configure GitLab Rails to trust proxies (critical for HTTPS detection behind ALB)
+        // This tells GitLab to trust the X-Forwarded-Proto header from the ALB
+        omnibusConfig.append("gitlab_rails['trusted_proxies'] = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']; ");
+
+        // Disable HTTPS redirect in GitLab when behind ALB (ALB handles SSL termination)
+        // This prevents redirect loops by letting ALB handle HTTP→HTTPS redirects
+        omnibusConfig.append("nginx['redirect_http_to_https'] = false; ");
 
         // Redis configuration - enable embedded Redis for caching and background jobs
         omnibusConfig.append("redis['enable'] = true; ");

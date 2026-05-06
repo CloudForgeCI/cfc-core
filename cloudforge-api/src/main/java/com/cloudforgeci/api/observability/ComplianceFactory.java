@@ -157,6 +157,9 @@ public class ComplianceFactory extends BaseFactory {
     private CfnCondition hipaaRdsCondition;
     private CfnCondition gdprRdsCondition;
 
+    // Config infrastructure (recorder + starter) - used for adding dependencies to rules
+    private ConfigInfrastructure configInfrastructure;
+
     // CloudTrail and bucket for S3 data event configuration
     private Trail trail;
     private Bucket trailBucket;
@@ -212,6 +215,8 @@ public class ComplianceFactory extends BaseFactory {
             LOG.info("Creating Config Recorder and Delivery Channel (account-level singletons)");
             LOG.info("  IMPORTANT: Only ONE stack per region should have createConfigInfrastructure = true");
             configInfra = createConfigInfrastructure();
+            // Store for later use in deployCollectedConfigRules()
+            this.configInfrastructure = configInfra;
         } else {
             if (configInfraExists) {
                 LOG.info("Config infrastructure already exists in region (auto-detected)");
@@ -295,7 +300,7 @@ public class ComplianceFactory extends BaseFactory {
         for (AwsConfigRule rule : collectedRules) {
             if (rule.isRequired(frameworks, mode)) {
                 // Deploy the Config rule
-                CfnConfigRule.Builder.create(this, "Collected" + rule.name())
+                CfnConfigRule cfnRule = CfnConfigRule.Builder.create(this, "Collected" + rule.name())
                     .configRuleName(rule.getRuleName())
                     .description(rule.getDescription() + " (collected from factory)")
                     .source(CfnConfigRule.SourceProperty.builder()
@@ -303,6 +308,16 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier(rule.getRuleName().toUpperCase().replace("-", "_"))
                         .build())
                     .build();
+
+                // Add dependencies if Config infrastructure was created in this stack
+                if (configInfrastructure != null) {
+                    cfnRule.addOverride("DeletionPolicy", "Delete");
+                    cfnRule.getNode().addDependency(configInfrastructure.recorder);
+                    if (configInfrastructure.starterResource != null) {
+                        cfnRule.getNode().addDependency(configInfrastructure.starterResource);
+                    }
+                }
+
                 deployedCount++;
                 LOG.fine("  Deployed: " + rule.getRuleName() + " (" + rule.getSecurityControl() + ")");
             } else {
@@ -333,7 +348,7 @@ public class ComplianceFactory extends BaseFactory {
         int deployedCount = 0;
         for (AwsConfigRule rule : authRules) {
             if (rule.isRequired(frameworks, mode)) {
-                CfnConfigRule.Builder.create(this, "Auth" + rule.name())
+                CfnConfigRule cfnRule = CfnConfigRule.Builder.create(this, "Auth" + rule.name())
                     .configRuleName(rule.getRuleName())
                     .description(rule.getDescription())
                     .source(CfnConfigRule.SourceProperty.builder()
@@ -341,6 +356,16 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier(rule.getRuleName().toUpperCase().replace("-", "_"))
                         .build())
                     .build();
+
+                // Add dependencies if Config infrastructure was created in this stack
+                if (configInfrastructure != null) {
+                    cfnRule.addOverride("DeletionPolicy", "Delete");
+                    cfnRule.getNode().addDependency(configInfrastructure.recorder);
+                    if (configInfrastructure.starterResource != null) {
+                        cfnRule.getNode().addDependency(configInfrastructure.starterResource);
+                    }
+                }
+
                 deployedCount++;
             }
         }
@@ -466,10 +491,33 @@ public class ComplianceFactory extends BaseFactory {
         LogGroup cloudTrailLogGroup = null;
         if (useKms) {
             cloudTrailLogsKmsKey = Key.Builder.create(this, "CloudTrailLogsKmsKey")
-                    .description("KMS key for CloudTrail CloudWatch Logs (HIPAA/PCI-DSS compliance)")
+                    .description("KMS key for CloudTrail CloudWatch Logs (HIPAA/PCI-DSS/SOC2 compliance)")
                     .enableKeyRotation(true)
                     .removalPolicy(RemovalPolicy.DESTROY)
                     .build();
+
+            // Grant CloudWatch Logs service permission to use the key
+            String accountId = software.amazon.awscdk.Stack.of(this).getAccount();
+            cloudTrailLogsKmsKey.addToResourcePolicy(PolicyStatement.Builder.create()
+                    .sid("Enable CloudWatch Logs encryption")
+                    .effect(Effect.ALLOW)
+                    .principals(List.of(new ServicePrincipal("logs.amazonaws.com")))
+                    .actions(List.of(
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*",
+                        "kms:CreateGrant",
+                        "kms:DescribeKey"
+                    ))
+                    .resources(List.of("*"))
+                    .conditions(Map.of(
+                        "ArnLike", Map.of(
+                            "kms:EncryptionContext:aws:logs:arn",
+                            "arn:aws:logs:" + this.region + ":" + accountId + ":*"
+                        )
+                    ))
+                    .build());
 
             cloudTrailLogGroup = LogGroup.Builder.create(this, "CloudTrailLogGroup")
                     .logGroupName("/aws/cloudtrail/" + this.trailName)
@@ -941,7 +989,7 @@ public class ComplianceFactory extends BaseFactory {
 
         // Automatically start the Config Recorder for SOC2 and other compliance frameworks
         // This ensures compliance recording begins immediately upon deployment
-        AwsCustomResource starterResource = startConfigRecorder(recorder, recorderName);
+        AwsCustomResource starterResource = startConfigRecorder(recorder, deliveryChannel, recorderName);
 
         return new ConfigInfrastructure(recorder, starterResource);
     }
@@ -962,10 +1010,11 @@ public class ComplianceFactory extends BaseFactory {
      * This is idempotent - if already started, the call succeeds with no changes.
      *
      * @param recorder The CfnConfigurationRecorder to start
+     * @param deliveryChannel The CfnDeliveryChannel (required before starting recorder)
      * @param recorderName The name of the recorder (e.g., "cloudforge-config-recorder")
      * @return The AwsCustomResource that starts the recorder (for Config Rule dependencies)
      */
-    private AwsCustomResource startConfigRecorder(CfnConfigurationRecorder recorder, String recorderName) {
+    private AwsCustomResource startConfigRecorder(CfnConfigurationRecorder recorder, CfnDeliveryChannel deliveryChannel, String recorderName) {
         LOG.info("Auto-starting Config Recorder for compliance frameworks");
         LOG.info("  Recorder: " + recorderName);
         LOG.info("  Reason: SOC2/HIPAA/PCI-DSS/GDPR require continuous compliance monitoring");
@@ -1024,11 +1073,13 @@ public class ComplianceFactory extends BaseFactory {
                 ))
                 .build();
 
-        // Chain: Recorder → Starter → Verifier → Config Rules
+        // Chain: Recorder + DeliveryChannel → Starter → Verifier → Config Rules
         verifyRecorderResource.getNode().addDependency(startRecorderResource);
 
-        // Ensure recorder is created before we try to start it
+        // Ensure recorder AND delivery channel are created before we try to start it
+        // AWS Config Recorder cannot start without a delivery channel
         startRecorderResource.getNode().addDependency(recorder);
+        startRecorderResource.getNode().addDependency(deliveryChannel);
 
         LOG.info("Config Recorder auto-start configured successfully");
         LOG.info("  Recorder will start automatically during deployment");
@@ -2227,10 +2278,12 @@ public class ComplianceFactory extends BaseFactory {
         guardDutyEnabledCentralized.getNode().addDependency(recorder);
 
         // Automatic remediation: enables GuardDuty if not already enabled (PRODUCTION only by default)
-        if (Boolean.TRUE.equals(enableGuardDutyRemediation) ||
-            (enableGuardDutyRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
-            createGuardDutyRemediation(guardDutyEnabledCentralized);
-        }
+        // DISABLED: Remediation cannot reference conditional Config rules
+        // TODO: Re-enable remediation with proper condition support
+        // if (Boolean.TRUE.equals(enableGuardDutyRemediation) ||
+        //     (enableGuardDutyRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
+        //     createGuardDutyRemediation(guardDutyEnabledCentralized);
+        // }
 
         LOG.info("Created 8 PCI-DSS Config rules with conditional deployment");
     }
@@ -2303,6 +2356,10 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         // CC7.2: Vulnerability Scanning
+        // NOTE: AWS Config does not provide a managed rule for INSPECTOR_ENABLED
+        // Inspector enablement must be verified manually or through custom Lambda rules
+        // Disabled until custom rule is implemented
+        /*
         CfnConfigRule inspectorEnabled = CfnConfigRule.Builder.create(this, "Soc2InspectorEnabled")
                 .configRuleName(this.stackName + "-soc2-inspector-enabled")
                 .description("SOC 2 CC7.2: Continuous vulnerability scanning")
@@ -2320,8 +2377,13 @@ public class ComplianceFactory extends BaseFactory {
             (enableInspectorRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
             createInspectorRemediation(inspectorEnabled);
         }
+        */
 
         // CC7.2: Sensitive Data Protection
+        // NOTE: AWS Config does not provide a managed rule for MACIE_ENABLED
+        // Macie enablement must be verified manually or through custom Lambda rules
+        // Disabled until custom rule is implemented
+        /*
         CfnConfigRule macieEnabled = CfnConfigRule.Builder.create(this, "Soc2MacieEnabled")
                 .configRuleName(this.stackName + "-soc2-macie-enabled")
                 .description("SOC 2 CC7.2: Sensitive data discovery and protection")
@@ -2339,6 +2401,7 @@ public class ComplianceFactory extends BaseFactory {
             (enableMacieRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
             createMacieRemediation(macieEnabled);
         }
+        */
 
         // CC8.1: Change Management
         CfnConfigRule cloudtrailS3DataEventsEnabled = CfnConfigRule.Builder.create(this, "Soc2CloudTrailS3DataEvents")

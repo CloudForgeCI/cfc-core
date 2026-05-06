@@ -82,6 +82,14 @@ const sidebars = {
             'setup/COGNITO_MFA_COMPLIANCE_SETUP',
           ],
         },
+        {
+          type: 'category',
+          label: 'Architecture',
+          items: [
+            'guides/DEPLOYMENT_ARCHITECTURE',
+            'guides/NETWORK_ARCHITECTURE',
+          ],
+        },
       ],
     },
     {
@@ -107,6 +115,7 @@ const sidebars = {
             'compliance/AWS_CONFIG_MULTI_STACK',
             'compliance/S3_VERSIONING_REMEDIATION',
             'compliance/CONTROLS_IMPLEMENTATION',
+            'compliance/VALIDATION_ARCHITECTURE',
           ],
         },
         {
@@ -147,6 +156,13 @@ const sidebars = {
           label: 'Databases',
           items: [
             'databases/DATABASE-DEPLOYMENT-GUIDE',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Backup & Recovery',
+          items: [
+            'guides/BACKUP_ARCHITECTURE',
           ],
         },
       ],

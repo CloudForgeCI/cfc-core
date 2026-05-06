@@ -144,6 +144,15 @@ public class ApplicationFactory extends BaseFactory {
             // Set the ApplicationSpec for this deployment (must be done before createInfrastructureFactories)
             ctx.applicationSpec.set(applicationSpec);
 
+            // Auto-enable database provisioning for applications with conditional database requirements
+            if (applicationSpec instanceof com.cloudforge.core.interfaces.DatabaseSpec dbSpec) {
+                if (dbSpec.requiresDatabaseForCapacity(maxInstanceCapacity) && !Boolean.TRUE.equals(provisionDatabase)) {
+                    LOG.info("⚠️  " + applicationSpec.applicationId() + " with " + maxInstanceCapacity +
+                        " instances requires RDS database - auto-enabling database provisioning");
+                    provisionDatabase = true;
+                }
+            }
+
             // Set DNS configuration early for SSL certificate creation
             ctx.domain.set(domain);
             ctx.subdomain.set(subdomain);

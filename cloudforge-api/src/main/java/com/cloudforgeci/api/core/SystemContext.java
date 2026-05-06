@@ -487,6 +487,12 @@ public final class SystemContext extends Construct {
     IdentityCenterSamlFactory identityCenterSamlFactory = new IdentityCenterSamlFactory(scope, idPrefix + "IdentityCenterSaml");
     identityCenterSamlFactory.create();
 
+    // Create Identity Center User factory (auto-provisions users/groups if autoProvisionIdentityCenter = true)
+    // This creates users and groups in IAM Identity Center programmatically via Identity Store API
+    com.cloudforgeci.api.security.IdentityCenterUserFactory identityCenterUserFactory =
+        new com.cloudforgeci.api.security.IdentityCenterUserFactory(scope, idPrefix + "IdentityCenterUser");
+    identityCenterUserFactory.create();
+
     // Create OIDC authentication factory (configures ALB OIDC if authMode = alb-oidc)
     // This checks for Cognito endpoints first, then IAM Identity Center, then manual config
     OidcAuthenticationFactory oidcFactory = new OidcAuthenticationFactory(scope, idPrefix + "OidcAuth");

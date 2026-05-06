@@ -181,6 +181,7 @@ public class ContainerFactory extends BaseFactory {
                     LOG.info("  ✅ Database password mapped to GITLAB_DATABASE_PASSWORD");
                     break;
                 case "metabase":
+                case "metabase-enterprise":
                     ecsSecrets.put("MB_DB_PASS",
                                   software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
                     LOG.info("  ✅ Database password mapped to MB_DB_PASS");

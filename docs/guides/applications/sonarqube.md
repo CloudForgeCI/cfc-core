@@ -28,6 +28,73 @@ SonarQube is an open-source platform for continuous code quality and security in
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete SonarQube deployment:
+
+```mermaid
+graph TD
+    Start[CDK Deploy Starts] --> Validate[Validate Deployment Context]
+    Validate --> CheckAuth{Auth Mode?}
+    
+    CheckAuth -->|alb-oidc| CreateCognito[Create Cognito User Pool]
+    CheckAuth -->|none| SkipAuth[Skip Authentication]
+    
+    CreateCognito --> CreateAppClient[Create Cognito App Client]
+    SkipAuth --> CheckRuntime{Runtime?}
+    CreateAppClient --> CheckRuntime
+    
+    CheckRuntime -->|fargate| CreateECS[Create ECS Cluster & Service]
+    CheckRuntime -->|ec2| CreateASG[Create Auto Scaling Group]
+    
+    CreateECS --> CreateALB[Create Application Load Balancer]
+    CreateASG --> CreateALB
+    
+    CreateALB --> ConfigureTarget[Configure Target Group]
+    CreateALB --> ConfigureAuth{ALB-OIDC?}
+    
+    ConfigureAuth -->|Yes| SetupALBAuth[Configure ALB OIDC Authentication]
+    ConfigureAuth -->|No| SkipALBAuth[Skip ALB Auth]
+    
+    SetupALBAuth --> CreateEFS[Create EFS for Persistent Storage]
+    SkipALBAuth --> CreateEFS
+    
+    CreateEFS --> MountStorage[Mount Storage to Container/Instance]
+    MountStorage --> StartSonarQube[Start SonarQube Container]
+    
+    StartSonarQube --> InitDB[Initialize H2 Database]
+    InitDB --> HealthCheck{Health Check Passes?}
+    
+    HealthCheck -->|No| Wait[Wait & Retry]
+    Wait --> HealthCheck
+    HealthCheck -->|Yes| Ready[SonarQube Ready]
+    
+    Ready --> Access[Access SonarQube UI]
+    
+    Note1[Note: Community Edition uses embedded H2]
+    Note2[Note: ALB-OIDC recommended for UI access]
+    Note3[Note: Enterprise features require license]
+```
+
+## Architecture Diagram
+
+The following diagram shows the SonarQube deployment architecture:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> ALB[⚖️ Application Load Balancer]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>SonarQube Container 1]
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+```
+
+---
+
 ## Editions
 
 **Important**: Unlike Mattermost and Metabase, SonarQube editions are separate products:

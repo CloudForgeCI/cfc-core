@@ -144,8 +144,64 @@ For enterprise SSO with AWS IAM Identity Center.
 | Application | `alb-oidc` | `application-oidc` | OIDC Plugin | Status |
 |-------------|-----------|-------------------|-------------|--------|
 | **Jenkins** | ✅ Tested | ✅ Tested | `oic-auth` | Production Ready |
-| **GitLab** | ✅ Tested | ⏳ Planned | Built-in OmniAuth | ALB-OIDC Ready |
+| **GitLab** | ✅ Tested | ❌ Not Working | Built-in OmniAuth | ALB-OIDC Ready |
 | **Grafana** | ✅ Tested | ⏳ Planned | Built-in generic_oauth | ALB-OIDC Ready |
+| **Mattermost Enterprise** | ✅ Tested | ⚠️ Partial (logout issue) | Native OIDC | ALB-OIDC Ready |
+| **Mattermost Team** | ✅ Tested | ⚠️ Partial (no logout) | GitLab OAuth | ALB-OIDC Ready |
+| **Superset** | ✅ Tested | ❌ Not Implemented | superset_config.py | ALB-OIDC Ready |
+
+### Application Callback URLs
+
+CloudForge automatically configures the correct callback URLs for each application when using `application-oidc` mode.
+
+#### OIDC Callback URLs
+
+| Application | Callback URL | Method | Source |
+|-------------|--------------|--------|--------|
+| **Jenkins** | `/securityRealm/finishLogin` | OIDC | `JenkinsOidcIntegration.getOidcCallbackPath()` |
+| **GitLab** | `/users/auth/openid_connect/callback` | OIDC | `GitLabOidcIntegration.getOidcCallbackPath()` |
+| **Mattermost Enterprise** | `/signup/openid/complete` | OIDC | `MattermostOidcIntegration.getOidcCallbackPath()` |
+| **Mattermost Team** | `/signup/gitlab/complete` | OIDC (GitLab OAuth) | `MattermostGitLabOidcIntegration.getOidcCallbackPath()` |
+| **Grafana** | `/login/generic_oauth` | OIDC | `GrafanaOidcIntegration.getOidcCallbackPath()` |
+
+#### SAML Callback URLs (ACS URLs)
+
+| Application | ACS URL | Method | Source |
+|-------------|---------|--------|--------|
+| **Metabase Enterprise** | `/auth/sso` | SAML 2.0 | `MetabaseSamlIntegration.getSamlAcsPath()` |
+| **Mattermost Enterprise** | `/login/sso/saml` | SAML 2.0 | `MattermostSamlIntegration.getSamlAcsPath()` |
+| **GitLab Enterprise** | `/users/auth/saml/callback` | SAML 2.0 | `GitLabSamlIntegration.getSamlAcsPath()` |
+
+#### ALB-OIDC Callback URL
+
+For ALB-level OIDC (`authMode: "alb-oidc"`), all applications use:
+- **Callback URL:** `/oauth2/idpresponse` (handled by AWS ALB, not the application)
+
+**How It Works:**
+1. `CognitoAuthenticationFactory` checks `authMode`
+2. If `application-oidc`: Calls `ApplicationSpec.getOidcIntegration().getOidcCallbackPath()`
+3. If `alb-oidc`: Uses standard ALB callback path `/oauth2/idpresponse`
+4. Constructs full callback URL: `https://your-domain.com` + callback path
+5. Registers callback URL with OIDC provider (Cognito, Identity Center, etc.)
+
+### Known Issues
+
+| Application | Issue | Details | Status |
+|-------------|-------|---------|--------|
+| **GitLab** | `application-oidc` callback URL issues | ✅ FIXED - Callback URL now properly retrieved from ApplicationSpec | ✅ Fixed |
+| **Mattermost Enterprise** | `application-oidc` logout callback | ✅ FIXED - Callback URL now properly retrieved from ApplicationSpec | ✅ Fixed |
+| **Mattermost Team** | `application-oidc` no single logout | GitLab OAuth provider does not support single logout (Team Edition limitation) | ⚠️ Limitation |
+| **Metabase Enterprise** | SAML integration requires specific config | `applicationOidcConfig` NULL when missing `autoProvisionIdentityCenter: true` and `ssoInstanceArn` | ⚠️ Configuration Issue |
+| **Metabase OSS** | OIDC not supported | Open-source edition does not support native OIDC; use ALB-level OIDC instead | ⚠️ Limitation |
+| **Superset** | `application-oidc` not implemented | CloudForge does not auto-configure superset_config.py for OIDC | ⚠️ Not Implemented |
+
+**Workarounds:**
+- **GitLab**: FIXED - Callback URL now retrieved from ApplicationSpec instead of hardcoded Jenkins default
+- **Mattermost Enterprise**: FIXED - Callback URL now retrieved from ApplicationSpec; logout callback should work correctly
+- **Mattermost Team**: FIXED - Callback URL now retrieved from ApplicationSpec; single logout not supported in Team Edition (GitLab OAuth limitation)
+- **Metabase Enterprise**: For SAML, set `authMode: "application-oidc"`, `autoProvisionIdentityCenter: true`, and `ssoInstanceArn`; or use `alb-oidc` as simpler alternative
+- **Metabase OSS**: Use `alb-oidc` mode (only option for OSS edition)
+- **Superset**: Use `alb-oidc` mode (application-level OIDC not implemented)
 
 ### Untested Applications
 
@@ -160,7 +216,6 @@ The following applications have OIDC support but have not been fully tested with
 | **Mattermost Team** | `application-oidc` | GitLab OAuth (MM_GITLABSETTINGS_*) |
 | **Mattermost Enterprise** | `application-oidc` | Native OIDC (MM_OPENIDSETTINGS_*) |
 | **Superset** | `application-oidc` | superset_config.py |
-| **Metabase** | `application-oidc` | Environment variables |
 
 > **Mattermost Note:** Team Edition uses GitLab OAuth provider (no single logout). Enterprise Edition uses native OpenID Connect with discovery endpoint and single logout support.
 

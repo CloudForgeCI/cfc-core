@@ -58,6 +58,31 @@ public interface DatabaseSpec {
     DatabaseRequirement databaseRequirement();
 
     /**
+     * Checks if database provisioning is required based on deployment configuration.
+     *
+     * <p>Applications can override this to make database requirements conditional on deployment
+     * parameters. For example, applications using embedded databases cannot support multiple
+     * instances due to file locking.</p>
+     *
+     * <p><b>Default behavior:</b> Returns true if database is REQUIRED, false otherwise.</p>
+     *
+     * <p><b>Override for conditional requirements:</b></p>
+     * <pre>{@code
+     * @Override
+     * public boolean requiresDatabaseForCapacity(Integer maxInstanceCapacity) {
+     *     return maxInstanceCapacity != null && maxInstanceCapacity > 1;
+     * }
+     * }</pre>
+     *
+     * @param maxInstanceCapacity Maximum number of instances from deployment config
+     * @return true if database must be provisioned for given capacity
+     */
+    default boolean requiresDatabaseForCapacity(Integer maxInstanceCapacity) {
+        var req = databaseRequirement();
+        return req != null && req.type() == DatabaseRequirement.RequirementType.REQUIRED;
+    }
+
+    /**
      * Database initialization SQL scripts to run after creation.
      *
      * @return list of SQL scripts, or empty list

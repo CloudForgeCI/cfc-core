@@ -4,22 +4,35 @@ import com.cloudforge.core.annotation.ApplicationPlugin;
 
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
-import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection;
-import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.Ec2Context;
-import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforge.core.interfaces.UserDataBuilder;
-import com.cloudforge.core.oidc.MetabaseSamlIntegration;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Metabase Business Intelligence ApplicationSpec implementation.
+ * Metabase Open Source Edition ApplicationSpec implementation.
  *
- * <p>Metabase is an open-source business intelligence tool for interactive dashboards
- * and data visualization.</p>
+ * <p>This spec is for the OSS (open-source) edition of Metabase, which runs the same
+ * Enterprise Docker image but without a license token, automatically falling back to
+ * OSS features only.</p>
+ *
+ * <p><b>Key Differences from Enterprise:</b></p>
+ * <ul>
+ *   <li><b>No SAML Support:</b> OSS edition does not support SAML authentication</li>
+ *   <li><b>No Application-Level OIDC:</b> Use ALB-level OIDC instead (authMode: "alb-oidc")</li>
+ *   <li><b>Authentication Options:</b> Built-in username/password, Google SSO, LDAP</li>
+ *   <li><b>No Advanced Permissions:</b> Basic user groups only</li>
+ *   <li><b>No Audit Logging:</b> Enterprise feature</li>
+ * </ul>
+ *
+ * <p><b>Recommended Authentication Setup:</b></p>
+ * <pre>
+ * {
+ *   "authMode": "alb-oidc",      // ALB handles OIDC
+ *   "cognitoAutoProvision": true  // Creates Cognito User Pool
+ * }
+ * </pre>
  *
  * <p><b>Database Configuration:</b></p>
  * <ul>
@@ -30,56 +43,32 @@ import java.util.Map;
  * <p><b>IMPORTANT:</b> H2 database cannot support multiple instances due to file locking.
  * For high availability, configure {@code maxInstanceCapacity=1} or use external RDS database.</p>
  *
- * <p><b>RDS Configuration (Production):</b></p>
- * Set environment variables:
- * <ul>
- *   <li>MB_DB_TYPE=postgres</li>
- *   <li>MB_DB_HOST=your-rds-endpoint.rds.amazonaws.com</li>
- *   <li>MB_DB_PORT=5432</li>
- *   <li>MB_DB_DBNAME=metabase</li>
- *   <li>MB_DB_USER=metabase_user</li>
- *   <li>MB_DB_PASS=from-secrets-manager</li>
- * </ul>
- *
- * <p><b>Use Cases:</b></p>
- * <ul>
- *   <li>SOC2: Audit log analytics and security metrics</li>
- *   <li>GDPR: Data subject access request reporting</li>
- *   <li>PCI-DSS: Transaction monitoring dashboards</li>
- *   <li>Fintech: Fraud detection, revenue metrics, compliance reporting</li>
- * </ul>
- *
  * @see <a href="https://www.metabase.com/docs/latest/">Metabase Documentation</a>
+ * @see <a href="https://www.metabase.com/start/oss/">Metabase Open Source Edition</a>
  */
 @ApplicationPlugin(
-    value = "metabase-enterprise",
+    value = "metabase",
     category = "analytics",
-    displayName = "Metabase (Enterprise)",
-    description = "Business intelligence and analytics platform with SAML support (Enterprise Edition)",
+    displayName = "Metabase (Open Source)",
+    description = "Business intelligence and analytics platform (Open Source Edition - no SAML support)",
     defaultCpu = 1024,
     defaultMemory = 2048,
     defaultInstanceType = "t3.small",
     supportsFargate = true,
     supportsEc2 = true,
-    supportsOidc = true,
+    supportsOidc = false,  // OSS does not support application-level OIDC/SAML
     supportsDatabase = true,
     requiresDatabase = false
 )
 
-public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
+public class MetabaseOssApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
-    private static final String APPLICATION_ID = "metabase-enterprise";
-    // Use Enterprise image - defaults to OSS features without license token
-    // License token unlocks Pro/Enterprise features (SAML, advanced permissions, audit logging)
-    private static final String DEFAULT_IMAGE = "metabase/metabase-enterprise:latest";
+    private static final String APPLICATION_ID = "metabase";
+    // Use OSS image - pure open-source edition without Enterprise features
+    // For Enterprise features (SAML, advanced permissions), use MetabaseApplicationSpec instead
+    private static final String DEFAULT_IMAGE = "metabase/metabase:latest";
     private static final int APPLICATION_PORT = 3000;
 
-    /**
-     * The Secrets Manager secret name for Metabase Pro/Enterprise license token.
-     * Store the license token in this secret to unlock SAML, advanced permissions, audit logging, etc.
-     * The secret can be updated in AWS Console without redeploying the stack.
-     */
-    public static final String LICENSE_SECRET_SUFFIX = "/metabase/license-token";
     private static final String CONTAINER_DATA_PATH = "/metabase-data";
     private static final String EFS_DATA_PATH = "/metabase";
     private static final String VOLUME_NAME = "metabaseData";
@@ -128,9 +117,9 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
     }
 
     @Override
-    public DatabaseRequirement databaseRequirement() {
+    public DatabaseSpec.DatabaseRequirement databaseRequirement() {
         // Metabase can use H2 (embedded) OR PostgreSQL/MySQL (RDS)
-        return DatabaseRequirement.optional("postgres", "15")
+        return DatabaseSpec.DatabaseRequirement.optional("postgres", "15")
             .withInstanceClass("db.t3.small")
             .withStorage(20)
             .withDatabaseName("metabase");
@@ -156,7 +145,7 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
      * Otherwise, falls back to H2 embedded database (single instance only).</p>
      */
     public java.util.Map<String, String> containerEnvironmentVariables(
-            String fqdn, boolean sslEnabled, String authMode, DatabaseConnection dbConn) {
+            String fqdn, boolean sslEnabled, String authMode, DatabaseSpec.DatabaseConnection dbConn) {
         java.util.Map<String, String> environment = new HashMap<>();
 
         // MB_SITE_URL is CRITICAL for Metabase to work properly behind a reverse proxy
@@ -266,7 +255,7 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
         // Run Metabase container
         builder.addCommands(
-            "# Run Metabase container",
+            "# Run Metabase container (OSS Edition)",
             "docker run -d \\",
             "  --name metabase \\",
             "  -p 3000:3000 \\",
@@ -285,7 +274,7 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "",
             "cat >> /var/log/userdata.log <<'INSTRUCTIONS'",
             "================================================================================",
-            "METABASE POST-DEPLOYMENT SETUP",
+            "METABASE OPEN SOURCE EDITION - POST-DEPLOYMENT SETUP",
             "================================================================================",
             "",
             "1. Complete initial setup:",
@@ -297,15 +286,15 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "   - Add PostgreSQL, MySQL, or other data sources",
             "   - Use read-only credentials for security",
             "",
-            "3. Configure SAML/OIDC (Enterprise Edition):",
-            "   - Admin > Settings > Authentication",
-            "   - Or use JWT for embedding",
+            "3. Authentication Options (OSS Edition):",
+            "   - Built-in username/password (default)",
+            "   - Google Sign-In (configure in Admin > Settings > Authentication)",
+            "   - LDAP (configure in Admin > Settings > Authentication)",
+            "   - OR use ALB-level OIDC (authMode: alb-oidc) for Cognito/IAM Identity Center",
             "",
-            "4. Security hardening:",
-            "   - Enable SSL/TLS",
-            "   - Configure session timeout",
-            "   - Set up row-level permissions",
-            "   - Enable audit logging (Enterprise)",
+            "4. NOTE: SAML and advanced SSO are Enterprise features only",
+            "   - To upgrade to Enterprise, add a license token",
+            "   - Or use ALB-level OIDC (authMode: alb-oidc) for SSO without Enterprise",
             "",
             "5. For production, use PostgreSQL instead of H2:",
             "   docker run -d \\",
@@ -324,58 +313,18 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     @Override
     public boolean supportsOidcIntegration() {
-        return true;
-    }
-
-    @Override
-    public OidcIntegration getOidcIntegration() {
-        // Metabase does NOT support native OIDC - uses SAML instead
-        // SAML is only available in Metabase Pro/Enterprise editions
-        // Open-source version supports JWT for embedding only
-        return new MetabaseSamlIntegration();
-    }
-
-    /**
-     * Get the Secrets Manager secret name for the Metabase license token.
-     *
-     * <p>The license token enables Pro/Enterprise features:</p>
-     * <ul>
-     *   <li>SAML/SSO authentication</li>
-     *   <li>Advanced permissions and sandboxing</li>
-     *   <li>Audit logging</li>
-     *   <li>Row-level permissions</li>
-     *   <li>Interactive embedding</li>
-     * </ul>
-     *
-     * <p><b>To add a license:</b></p>
-     * <ol>
-     *   <li>Go to AWS Secrets Manager in the AWS Console</li>
-     *   <li>Find the secret: {stackName}/metabase/license-token</li>
-     *   <li>Update the secret value with your Metabase license token</li>
-     *   <li>Restart the ECS task or wait for next deployment</li>
-     * </ol>
-     *
-     * @param stackName the CloudFormation stack name
-     * @return the full secret name for the license token
-     */
-    public String getLicenseSecretName(String stackName) {
-        return stackName + LICENSE_SECRET_SUFFIX;
-    }
-
-    /**
-     * Get the environment variable name for the Metabase license token.
-     * @return MB_PREMIUM_EMBEDDING_TOKEN
-     */
-    public String getLicenseEnvVarName() {
-        return "MB_PREMIUM_EMBEDDING_TOKEN";
+        // OSS edition does not support application-level OIDC/SAML
+        // Users should use ALB-level OIDC (authMode: "alb-oidc") instead
+        return false;
     }
 
     @Override
     public String toString() {
-        return "MetabaseApplicationSpec{" +
+        return "MetabaseOssApplicationSpec{" +
                 "applicationId='" + APPLICATION_ID + '\'' +
                 ", defaultImage='" + DEFAULT_IMAGE + '\'' +
                 ", applicationPort=" + APPLICATION_PORT +
+                ", supportsOidc=false (OSS - use alb-oidc instead)" +
                 '}';
     }
 }

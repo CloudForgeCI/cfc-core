@@ -17,7 +17,7 @@ The IAM Rules system follows the same pattern as the existing RuntimeRules, Topo
 ## Components
 
 ### 1. IAMProfile Enum
-Located at: `com.cloudforgeci.api.interfaces.IAMProfile`
+Located at: `com.cloudforge.core.enums.IAMProfile`
 
 ```java
 public enum IAMProfile {
@@ -59,7 +59,7 @@ Extends the base `IConfiguration` interface and provides the `kind()` method to 
   - Administrative permissions for troubleshooting
 
 ### 4. IAMProfileMapper
-Located at: `com.cloudforgeci.api.core.iam.IAMProfileMapper`
+Located at: `com.cloudforge.core.iam.IAMProfileMapper`
 
 Automatically maps security profiles to appropriate IAM profiles:
 
@@ -211,6 +211,70 @@ The IAM system is tightly integrated with the Security Rules system:
 2. **Validation**: Prevents dangerous combinations like PRODUCTION + EXTENDED IAM
 3. **Consistency**: Ensures IAM permissions align with security requirements
 4. **Compliance**: Designed to meet SOC/HIPAA/PCI-DSS requirements
+
+## IAM Profile Mapping Flow
+
+```mermaid
+sequenceDiagram
+    participant SecurityProfile as SecurityProfile
+    participant Check as Profile Type?
+    participant ProfileMapping as IAM Profile Mapping
+    participant ProductionGroup as PRODUCTION Profile
+    participant StagingGroup as STAGING Profile
+    participant DevGroup as DEV Profile
+    participant Mapper1 as 🔐 IAMProfileMapper<br/>AWS IAM
+    participant Mapper2 as 🔐 IAMProfileMapper<br/>AWS IAM
+    participant Mapper3 as 🔐 IAMProfileMapper<br/>AWS IAM
+    participant Minimal as MINIMAL Profile<br/>Least Privilege
+    participant Standard as STANDARD Profile<br/>Balanced
+    participant Extended as EXTENDED Profile<br/>Broader Access
+    participant ProfileMerge as Profile Selection
+    participant Matrix as Permission Matrix Application
+    participant RuntimeGroup as Runtime Selection
+    participant Runtime as Runtime Type?
+    participant RuntimeMerge as Runtime Selected
+    participant Topology as Topology Type?
+    participant Permissions as 🔐 IAM Permissions Granted
+    participant PermissionGroup as Permission Types
+    
+    SecurityProfile->>Check: Determine profile type
+    Check->>ProfileMapping: IAM profile mapping
+    ProfileMapping->>ProductionGroup: PRODUCTION profile
+    ProfileMapping->>StagingGroup: STAGING profile
+    ProfileMapping->>DevGroup: DEV profile
+    ProductionGroup->>Mapper1: Map to IAM profile
+    StagingGroup->>Mapper2: Map to IAM profile
+    DevGroup->>Mapper3: Map to IAM profile
+    Mapper1->>Minimal: MINIMAL profile
+    Mapper2->>Standard: STANDARD profile
+    Mapper3->>Extended: EXTENDED profile
+    Minimal->>ProfileMerge: Profile selected
+    Standard->>ProfileMerge: Profile selected
+    Extended->>ProfileMerge: Profile selected
+    ProfileMerge->>Matrix: Apply permission matrix
+    Matrix->>RuntimeGroup: Runtime selection
+    RuntimeGroup->>Runtime: Check runtime type
+    alt EC2 Runtime
+        Runtime->>RuntimeMerge: EC2 selected
+    else Fargate Runtime
+        Runtime->>RuntimeMerge: Fargate selected
+    end
+    RuntimeMerge->>Topology: Check topology type
+    Topology->>Permissions: Grant IAM permissions
+    Permissions->>PermissionGroup: Permission types
+    PermissionGroup --> StoragePerms[Storage Services]
+    
+    ManagementPerms --> SSM[🔧 AWS Systems Manager<br/>SSM Access]
+    ManagementPerms --> CloudWatch[📊 Amazon CloudWatch<br/>Logs & Metrics]
+    
+    StoragePerms --> EFS[💾 Amazon EFS<br/>Mount Access]
+    StoragePerms --> S3[📦 Amazon S3<br/>Read Artifacts]
+```
+
+**Mapping Rules**:
+- **PRODUCTION** → **MINIMAL**: Strictest permissions for compliance
+- **STAGING** → **STANDARD**: Balanced permissions for testing
+- **DEV** → **EXTENDED**: Broader permissions for development
 
 ## Best Practices
 

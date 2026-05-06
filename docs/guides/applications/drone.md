@@ -26,6 +26,59 @@ Drone is a container-native, continuous delivery platform that uses a simple YAM
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete Drone deployment:
+
+```mermaid
+graph TD
+    Start[CDK Deploy Starts] --> Validate[Validate Deployment Context]
+    Validate --> CheckRuntime{Runtime?}
+    
+    CheckRuntime -->|fargate| CreateECS[Create ECS Cluster & Service]
+    CheckRuntime -->|ec2| CreateASG[Create Auto Scaling Group]
+    
+    CreateECS --> CreateALB[Create Application Load Balancer]
+    CreateASG --> CreateALB
+    
+    CreateALB --> ConfigureTarget[Configure Target Group]
+    ConfigureTarget --> CreateEFS[Create EFS for Persistent Storage]
+    
+    CreateEFS --> MountStorage[Mount Storage to Container/Instance]
+    MountStorage --> StartDrone[Start Drone Container]
+    
+    StartDrone --> InitDB[Initialize SQLite Database]
+    InitDB --> HealthCheck{Health Check Passes?}
+    
+    HealthCheck -->|No| Wait[Wait & Retry]
+    Wait --> HealthCheck
+    HealthCheck -->|Yes| Ready[Drone Ready]
+    
+    Ready --> ConfigureOAuth[Configure Source Control OAuth]
+    ConfigureOAuth --> Access[Access Drone UI]
+    
+    Note1[Note: Drone uses source control OAuth]
+    Note2[Note: Configure GitHub/GitLab OAuth after deployment]
+    Note3[Note: Uses embedded SQLite database]
+```
+
+## Architecture Diagram
+
+The following diagram shows the Drone deployment architecture:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> ALB[⚖️ Application Load Balancer]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Drone Container 1]
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+```
+
+---
+
 ## Capabilities
 
 - Pipeline as code (.drone.yml)

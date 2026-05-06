@@ -243,13 +243,13 @@ public class ApplicationOidcFactory extends BaseFactory {
         LOG.info("Application: " + applicationSpec.applicationId());
         LOG.info("OIDC Integration Method: " + oidcIntegration.getIntegrationMethod());
 
-        // Determine OIDC configuration source
+        // Build OIDC configuration
         OidcConfiguration oidcConfig = buildOidcConfiguration();
         if (oidcConfig == null) {
             LOG.warning("No OIDC configuration provided");
             LOG.warning("Please configure one of:");
             LOG.warning("  1. Cognito (cognitoAutoProvision = true)");
-            LOG.warning("  2. IAM Identity Center (provide oidcIssuer, oidcAuthorizationEndpoint, etc.)");
+            LOG.warning("  2. IAM Identity Center (autoProvisionIdentityCenter = true)");
             LOG.warning("  3. External OIDC provider (provide oidcIssuer, oidcAuthorizationEndpoint, etc.)");
             return;
         }
@@ -281,24 +281,46 @@ public class ApplicationOidcFactory extends BaseFactory {
     }
 
     /**
-     * Build OidcConfiguration from deployment context.
-     * Priority: Cognito > Identity Center SAML > Manual OIDC endpoints
+     * Build OidcConfiguration from deployment context based on oidcProvider.
+     *
+     * <p>oidcProvider values:</p>
+     * <ul>
+     *   <li>"cognito" - Cognito User Pool OIDC only</li>
+     *   <li>"cognito-saml" - Hybrid: Cognito (users/groups) + Identity Center (SAML)</li>
+     *   <li>"identity-center-saml" - Pure Identity Center SAML (future)</li>
+     * </ul>
      */
     private OidcConfiguration buildOidcConfiguration() {
-        // Option 1: Cognito (auto-provisioned or existing)
-        // For SAML apps (like Mattermost), buildCognitoConfiguration() returns SAML endpoints
-        // For OIDC apps, it returns OAuth2 endpoints - same User Pool, different endpoints
-        if (Boolean.TRUE.equals(cognitoAutoProvision) || cognitoUserPoolId != null) {
-            return buildCognitoConfiguration();
-        }
-
-        // Option 2: IAM Identity Center SAML (auto-provisioned)
-        if (Boolean.TRUE.equals(autoProvisionIdentityCenter) && ssoInstanceArn != null) {
+        // Route based on oidcProvider value
+        if ("cognito-saml".equals(oidcProvider)) {
+            // Hybrid Architecture: Cognito manages users/groups, Identity Center provides SAML
+            LOG.info("oidcProvider=cognito-saml → Hybrid architecture (Cognito + Identity Center)");
             return buildIdentityCenterSamlConfiguration();
         }
 
-        // Option 3: Manual OIDC endpoints (External IdP)
+        if ("identity-center-saml".equals(oidcProvider)) {
+            // Pure Identity Center SAML (future implementation)
+            LOG.info("oidcProvider=identity-center-saml → Pure Identity Center SAML");
+            return buildIdentityCenterSamlConfiguration();
+        }
+
+        // Detect cognito-saml hybrid architecture even when oidcProvider is not set
+        // This happens when both cognitoAutoProvision and autoProvisionIdentityCenter are true with ssoInstanceArn
+        if (Boolean.TRUE.equals(cognitoAutoProvision) && Boolean.TRUE.equals(autoProvisionIdentityCenter) && ssoInstanceArn != null) {
+            LOG.info("Detected hybrid architecture: cognitoAutoProvision + autoProvisionIdentityCenter + ssoInstanceArn");
+            LOG.info("→ Using Identity Center SAML with Cognito user management");
+            return buildIdentityCenterSamlConfiguration();
+        }
+
+        if ("cognito".equals(oidcProvider) || Boolean.TRUE.equals(cognitoAutoProvision) || cognitoUserPoolId != null) {
+            // Cognito User Pool OIDC
+            LOG.info("oidcProvider=cognito → Cognito User Pool OIDC");
+            return buildCognitoConfiguration();
+        }
+
+        // Manual OIDC endpoints (External IdP)
         if (oidcIssuer != null && !oidcIssuer.isEmpty()) {
+            LOG.info("Manual OIDC configuration → External IdP");
             return buildManualOidcConfiguration();
         }
 
@@ -332,10 +354,10 @@ public class ApplicationOidcFactory extends BaseFactory {
         String effectiveRegion = (region != null && !region.isEmpty()) ? region : "us-east-1";
 
         // Check if application requires SAML authentication
-        // IMPORTANT: Only use SAML if oidcProvider is "cognito-saml" or "identity-center"
+        // IMPORTANT: Only use SAML if oidcProvider is "cognito-saml" or "identity-center-saml"
         // Even if the app's integration returns "SAML" as auth type, we should use OIDC for "cognito" provider
         boolean appRequiresSaml = "cognito-saml".equals(oidcProvider) ||
-            "identity-center".equals(oidcProvider);
+            "identity-center-saml".equals(oidcProvider);
 
         // Cognito base URL for IdP endpoints
         String cognitoIdpBase = "https://cognito-idp." + effectiveRegion + ".amazonaws.com/" + effectiveUserPoolId;
@@ -401,6 +423,17 @@ public class ApplicationOidcFactory extends BaseFactory {
             LOG.info("Group Mapping: Groups disabled - all authenticated users get full access");
         }
 
+        // Build redirect URL from application URL + callback path
+        String redirectUrl = null;
+        if (applicationUrl != null && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+            OidcIntegration integration = applicationSpec.getOidcIntegration();
+            if (integration != null) {
+                String callbackPath = integration.getOidcCallbackPath();
+                redirectUrl = applicationUrl + callbackPath;
+                LOG.info("Redirect URL: " + redirectUrl);
+            }
+        }
+
         return new SimplifiedOidcConfiguration(
             providerType,
             issuer,
@@ -414,6 +447,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             "cognito:groups",
             appRequiresSaml ? "" : "openid profile email",  // Scopes not used for SAML
             applicationUrl,
+            redirectUrl,  // Add redirect URL
             groupsEnabled,
             adminGroup,
             developerGroup,
@@ -451,7 +485,9 @@ public class ApplicationOidcFactory extends BaseFactory {
             String instanceId = ssoInstanceArn.substring(ssoInstanceArn.lastIndexOf("/") + 1);
             String effectiveRegion = (region != null && !region.isEmpty()) ? region : "us-east-1";
 
-            samlSsoUrl = "https://portal.sso." + effectiveRegion + ".amazonaws.com/saml/assertion/" + instanceId;
+            // Use /saml/SSO for the SSO endpoint (not /saml/assertion)
+            // This is what applications like Metabase expect for SAML authentication
+            samlSsoUrl = "https://portal.sso." + effectiveRegion + ".amazonaws.com/saml/SSO/" + instanceId;
             samlMetadataUrl = "https://portal.sso." + effectiveRegion + ".amazonaws.com/saml/metadata/" + instanceId;
 
             LOG.info("Constructed Identity Center SAML URLs from SSO Instance ARN");
@@ -481,21 +517,33 @@ public class ApplicationOidcFactory extends BaseFactory {
         LOG.info("  Admin Group: " + adminGroup);
         LOG.info("  User Group: " + developerGroup);
 
+        // Build redirect URL for SAML (ACS URL)
+        String redirectUrl = null;
+        if (applicationUrl != null && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+            OidcIntegration integration = applicationSpec.getOidcIntegration();
+            if (integration != null) {
+                String callbackPath = integration.getOidcCallbackPath();
+                redirectUrl = applicationUrl + callbackPath;
+                LOG.info("SAML ACS URL: " + redirectUrl);
+            }
+        }
+
         // Return configuration that MattermostSamlIntegration can use
         // Note: tokenEndpoint and userInfoEndpoint are not used for SAML
         return new SimplifiedOidcConfiguration(
-            "identity-center",  // Provider type - used by MattermostSamlIntegration to select correct URLs
+            "identity-center-saml",  // Provider type - used by MattermostSamlIntegration to select correct URLs
             samlEntityId,       // Issuer URL (IdP Entity ID)
             samlSsoUrl,         // Authorization endpoint (SAML SSO URL)
             samlMetadataUrl,    // Token endpoint (repurposed for metadata URL)
             samlMetadataUrl,    // UserInfo endpoint (repurposed for metadata URL)
             null,               // Logout endpoint
-            "identity-center",  // Client ID (not used for SAML, but required by interface)
-            samlConfigSecretArn != null ? samlConfigSecretArn : buildClientSecretArn("identity-center"),
+            "identity-center-saml",  // Client ID (not used for SAML, but required by interface)
+            null,               // Client secret ARN - SAML doesn't use OAuth client secrets
             "preferred_username", // Username claim/attribute
             "groups",           // Groups claim/attribute
             "",                 // Scopes (not used for SAML)
             applicationUrl,
+            redirectUrl,        // SAML ACS URL
             true,               // Groups enabled
             adminGroup,
             developerGroup,
@@ -548,6 +596,17 @@ public class ApplicationOidcFactory extends BaseFactory {
         LOG.info("  Developer Group: " + developerGroup);
         LOG.info("  Viewer Group: " + viewerGroup);
 
+        // Build redirect URL from application URL + callback path
+        String redirectUrl = null;
+        if (applicationUrl != null && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
+            OidcIntegration integration = applicationSpec.getOidcIntegration();
+            if (integration != null) {
+                String callbackPath = integration.getOidcCallbackPath();
+                redirectUrl = applicationUrl + callbackPath;
+                LOG.info("Redirect URL: " + redirectUrl);
+            }
+        }
+
         // For external providers, logout endpoint is typically null (not standardized)
         String logoutEndpoint = null;
 
@@ -564,6 +623,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             "groups",  // Standard OIDC claim for groups
             "openid profile email",
             applicationUrl,
+            redirectUrl,  // Add redirect URL
             groupsEnabled,
             adminGroup,
             developerGroup,
@@ -672,7 +732,7 @@ public class ApplicationOidcFactory extends BaseFactory {
         }
 
         // Don't create secret for Identity Center SAML - SAML doesn't use client secrets
-        if ("identity-center".equals(config.getProviderType())) {
+        if ("identity-center-saml".equals(config.getProviderType())) {
             LOG.info("Identity Center SAML does not require client secret - skipping");
             return;
         }
@@ -766,6 +826,7 @@ public class ApplicationOidcFactory extends BaseFactory {
         private final String groupsClaim;
         private final String scopes;
         private final String applicationUrl;
+        private final String redirectUrl;
         private final boolean groupsEnabled;
         private final String adminGroupName;
         private final String developerGroupName;
@@ -776,7 +837,7 @@ public class ApplicationOidcFactory extends BaseFactory {
                                           String userInfoEndpoint, String logoutEndpoint,
                                           String clientId, String clientSecretArn, String usernameClaim,
                                           String groupsClaim, String scopes, String applicationUrl,
-                                          boolean groupsEnabled, String adminGroupName,
+                                          String redirectUrl, boolean groupsEnabled, String adminGroupName,
                                           String developerGroupName, String viewerGroupName) {
             this.providerType = providerType;
             this.issuerUrl = issuerUrl;
@@ -790,6 +851,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             this.groupsClaim = groupsClaim;
             this.scopes = scopes;
             this.applicationUrl = applicationUrl;
+            this.redirectUrl = redirectUrl;
             this.groupsEnabled = groupsEnabled;
             this.adminGroupName = adminGroupName;
             this.developerGroupName = developerGroupName;
@@ -828,10 +890,8 @@ public class ApplicationOidcFactory extends BaseFactory {
 
         @Override
         public String getRedirectUrl() {
-            // Application-specific redirect URL - will be constructed by application's OIDC integration
-            // Each application has different callback paths (e.g., /securityRealm/finishLogin for Jenkins)
-            // Runtime factories should use the application's OidcIntegration to get the correct path
-            return null;
+            // Redirect URL built from applicationUrl + application's callback path
+            return redirectUrl;
         }
 
         @Override

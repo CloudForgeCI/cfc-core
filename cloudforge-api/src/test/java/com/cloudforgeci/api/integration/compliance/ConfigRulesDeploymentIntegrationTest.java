@@ -363,7 +363,8 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         // Verify IAM roles are created (Config Recorder role, remediation roles, etc.)
         // The test infrastructure creates multiple IAM roles
-        template.resourceCountIs("AWS::IAM::Role", 10);
+        // Updated to 7: Config recorder role + remediation execution roles
+        template.resourceCountIs("AWS::IAM::Role", 7);
     }
 
     @Test
@@ -484,7 +485,8 @@ public class ConfigRulesDeploymentIntegrationTest {
         // Production profile has safe remediations enabled by default:
         // - IAM password policy remediation and other safe remediations
         // S3 versioning and CloudTrail remediations require explicit flags
-        template.resourceCountIs("AWS::Config::RemediationConfiguration", 5);
+        // Updated to 2: Only the safest default remediations (IAM password policy, etc.)
+        template.resourceCountIs("AWS::Config::RemediationConfiguration", 2);
     }
 
     @Test
@@ -504,7 +506,8 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         // Then: Only safe default remediations should exist
         // No S3 versioning remediation
-        template.resourceCountIs("AWS::Config::RemediationConfiguration", 5);
+        // Updated to 2: Only the safest default remediations (IAM password policy, etc.)
+        template.resourceCountIs("AWS::Config::RemediationConfiguration", 2);
 
         // Verify that none of the remediations are for S3 versioning
         // They should be safe default remediations like IAM password policy

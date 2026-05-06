@@ -324,4 +324,23 @@ public interface OidcIntegration {
     default String getSamlCertificateEnvVar() {
         return null;
     }
+
+    /**
+     * Returns the SAML Assertion Consumer Service (ACS) URL path for this application.
+     *
+     * <p>The ACS URL is where the SAML Identity Provider redirects users after successful authentication.
+     * This is the path component only (without the domain), which will be appended to the application's base URL.</p>
+     *
+     * <p>Examples:</p>
+     * <ul>
+     *   <li>Mattermost: /login/sso/saml</li>
+     *   <li>Metabase: /auth/sso</li>
+     *   <li>GitLab: /users/auth/saml/callback</li>
+     * </ul>
+     *
+     * @return SAML ACS URL path, or null if SAML is not supported
+     */
+    default String getSamlAcsPath() {
+        return null;
+    }
 }

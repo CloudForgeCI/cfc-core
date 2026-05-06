@@ -312,6 +312,14 @@ public class FargateFactory extends BaseFactory {
         service.getNode().addDependency(secretResource);
     });
 
+    // Add dependency on RDS database instance if it exists
+    // This ensures the database is fully available BEFORE the Fargate service starts
+    // Critical for applications like GitLab that fail if database isn't ready during initialization
+    ctx.rdsDatabase.get().ifPresent(dbInstance -> {
+        service.getNode().addDependency(dbInstance);
+        LOG.info("Added dependency: Fargate service will wait for RDS database to be available");
+    });
+
     // Set task definition in context first (needed by ContainerFactory)
     // Note: EFS permissions are handled by IAMRules based on security profile
     ctx.fargateTaskDef.set(taskDef);

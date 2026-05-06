@@ -16,14 +16,14 @@ import java.util.Map;
  * This integration uses SAML 2.0 which is available in Metabase Pro and Enterprise editions.
  * For open-source Metabase, use JWT-based authentication for embedding.</p>
  *
- * <p><strong>AWS Cognito as SAML IdP:</strong></p>
+ * <p><strong>IMPORTANT: Cognito User Pools NOT Supported</strong></p>
  * <ul>
- *   <li>Cognito User Pools can act as a SAML 2.0 Identity Provider</li>
- *   <li>Configure Cognito to issue SAML assertions to Metabase</li>
- *   <li>Metabase receives SAML assertions at /auth/sso endpoint</li>
+ *   <li>Cognito User Pools CANNOT act as a SAML Identity Provider</li>
+ *   <li>They can only consume SAML (Service Provider role), not provide it</li>
+ *   <li>For Cognito auth with Metabase, use ALB-level OIDC with the OSS version instead</li>
  * </ul>
  *
- * <p><strong>IAM Identity Center as SAML IdP:</strong></p>
+ * <p><strong>IAM Identity Center as SAML IdP (Recommended):</strong></p>
  * <ul>
  *   <li>Identity Center natively supports SAML 2.0</li>
  *   <li>Create a custom SAML application for Metabase</li>
@@ -71,6 +71,11 @@ public class MetabaseSamlIntegration implements OidcIntegration {
         // For Identity Center: Use the SAML metadata URL
         String samlIdpUri = getSamlIdpUri(config);
         env.put("MB_SAML_IDENTITY_PROVIDER_URI", samlIdpUri);
+
+        // SAML Identity Provider Issuer (Entity ID)
+        // This is a unique identifier for the IdP, required by Metabase
+        String samlIssuer = getSamlIssuer(config);
+        env.put("MB_SAML_IDENTITY_PROVIDER_ISSUER", samlIssuer);
 
         // SAML attribute mappings
         // Standard SAML attributes that Cognito/Identity Center provide
@@ -133,6 +138,10 @@ public class MetabaseSamlIntegration implements OidcIntegration {
         String samlIdpUri = getSamlIdpUri(config);
         commands.add("export MB_SAML_IDENTITY_PROVIDER_URI=\"" + samlIdpUri + "\"");
 
+        // SAML Identity Provider Issuer (Entity ID)
+        String samlIssuer = getSamlIssuer(config);
+        commands.add("export MB_SAML_IDENTITY_PROVIDER_ISSUER=\"" + samlIssuer + "\"");
+
         // SAML attribute mappings
         commands.add("export MB_SAML_ATTRIBUTE_EMAIL=\"email\"");
         commands.add("export MB_SAML_ATTRIBUTE_FIRSTNAME=\"firstName\"");
@@ -176,13 +185,17 @@ public class MetabaseSamlIntegration implements OidcIntegration {
 
     @Override
     public String getContainerStartupCommand() {
-        return "/app/run_metabase.sh";
+        // Metabase container uses default Java-based entrypoint
+        // No custom startup script needed - SAML configuration via environment variables only
+        return null;
     }
 
     @Override
     public boolean supportsCognito() {
-        // Cognito requires manual SAML setup in Cognito console
-        return true;
+        // Cognito User Pools CANNOT act as a SAML Identity Provider
+        // They can only consume SAML (act as Service Provider), not provide it
+        // For Metabase SAML, use IAM Identity Center or ALB-level OIDC instead
+        return false;
     }
 
     @Override
@@ -238,30 +251,61 @@ public class MetabaseSamlIntegration implements OidcIntegration {
     /**
      * Gets the SAML Identity Provider URI based on the OIDC configuration.
      *
-     * <p>For Cognito: Uses the Cognito SAML IdP endpoint
-     * For Identity Center: Uses the Identity Center SAML SSO URL</p>
+     * <p>For Cognito: Uses the Cognito SAML SSO endpoint
+     * For Identity Center: Uses the Identity Center SAML SSO/assertion endpoint</p>
+     *
+     * <p><b>IMPORTANT:</b> MB_SAML_IDENTITY_PROVIDER_URI expects the SSO login URL,
+     * NOT the metadata URL. Metabase will use this URL to initiate SAML authentication.</p>
      */
     private String getSamlIdpUri(OidcConfiguration config) {
+        if (config == null) {
+            return null;
+        }
+
         String providerType = config.getProviderType();
+
         if ("cognito".equals(providerType)) {
-            // Cognito SAML IdP endpoint
-            // Format: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idpresponse
-            // But for Metabase, we need the SSO URL from Cognito's SAML metadata
+            // Cognito SAML SSO endpoint (pure Cognito, NOT cognito-saml hybrid)
+            // Format: https://cognito-idp.{region}.amazonaws.com/{userPoolId}/saml2/idp/SSO
             return config.getIssuerUrl() + "/saml2/idp/SSO";
-        } else if ("identity-center".equals(providerType)) {
-            // Identity Center: authorizationEndpoint may already contain the SAML SSO URL
-            // (set by ApplicationOidcFactory.buildIdentityCenterSamlConfiguration)
-            // Or it may be an OIDC endpoint (from IdentityCenterOidcConfiguration in tests)
-            String authEndpoint = config.getAuthorizationEndpoint();
-            if (authEndpoint != null && authEndpoint.contains("/saml/")) {
-                // Already a SAML URL
-                return authEndpoint;
+        } else if ("cognito-saml".equals(providerType) || "identity-center-saml".equals(providerType)) {
+            // Identity Center: Use SSO URL from authorizationEndpoint
+            // SP-initiated: https://portal.sso.{region}.amazonaws.com/saml/assertion/{applicationId}
+            // IdP-initiated: https://portal.sso.{region}.amazonaws.com/saml/SSO/{ssoInstanceId}
+            // OR: https://{tenant}.awsapps.com/start/saml/SSO
+            String ssoUrl = config.getAuthorizationEndpoint();
+
+            if (ssoUrl != null && (ssoUrl.contains("/saml/SSO") || ssoUrl.contains("/saml/assertion/"))) {
+                // Already has the correct SAML endpoint (either SP-initiated or IdP-initiated)
+                return ssoUrl;
             }
-            // Derive SAML URL from OIDC endpoint
-            return authEndpoint.replace("/oauth2/authorize", "/saml/SSO");
+
+            // Derive SAML SSO endpoint from OIDC authorization endpoint
+            // Convert /oauth2/authorize or /start/oauth2/authorize to /saml/SSO
+            if (ssoUrl != null) {
+                if (ssoUrl.contains("/start/oauth2/authorize")) {
+                    // Identity Center OIDC endpoint: https://{tenant}.awsapps.com/start/oauth2/authorize
+                    // Convert to SAML: https://{tenant}.awsapps.com/start/saml/SSO
+                    return ssoUrl.replace("/start/oauth2/authorize", "/start/saml/SSO");
+                } else if (ssoUrl.contains("/oauth2/authorize")) {
+                    // Generic OIDC endpoint
+                    return ssoUrl.replace("/oauth2/authorize", "/saml/SSO");
+                }
+            }
+
+            // Fallback: Try to derive from metadata URL if that's what we have
+            String tokenEndpoint = config.getTokenEndpoint();
+            if (tokenEndpoint != null && tokenEndpoint.contains("/saml/metadata/")) {
+                // Convert metadata URL to SSO URL
+                return tokenEndpoint.replace("/saml/metadata/", "/saml/SSO/");
+            }
+
+            // Last resort: Return whatever we have
+            return ssoUrl != null ? ssoUrl : tokenEndpoint;
         } else {
-            // External OIDC provider - try to derive SAML URL
-            return config.getAuthorizationEndpoint().replace("/oauth2/authorize", "/saml/SSO");
+            // External OIDC provider - try to derive SAML SSO URL
+            String authEndpoint = config.getAuthorizationEndpoint();
+            return authEndpoint != null ? authEndpoint.replace("/oauth2/authorize", "/saml/SSO") : null;
         }
     }
 
@@ -272,7 +316,7 @@ public class MetabaseSamlIntegration implements OidcIntegration {
         String providerType = config.getProviderType();
         if ("cognito".equals(providerType)) {
             return config.getIssuerUrl() + "/saml2/logout";
-        } else if ("identity-center".equals(providerType)) {
+        } else if ("cognito-saml".equals(providerType) || "identity-center-saml".equals(providerType)) {
             // Identity Center doesn't have a standard SAML logout endpoint via API
             // Return null to skip SLO configuration
             return null;
@@ -285,12 +329,57 @@ public class MetabaseSamlIntegration implements OidcIntegration {
      * Gets the SAML group attribute name based on provider type.
      */
     private String getGroupAttribute(OidcConfiguration config) {
-        if (config.getProviderType().equals("cognito")) {
-            // Cognito uses custom attributes for groups in SAML
+        String providerType = config.getProviderType();
+        if ("cognito".equals(providerType)) {
+            // Pure Cognito uses custom attributes for groups in SAML
             return "custom:groups";
         } else {
-            // Identity Center uses standard groups attribute
+            // cognito-saml hybrid and identity-center-saml use standard groups attribute
+            // (groups are managed in Identity Center, not Cognito custom attributes)
             return "groups";
+        }
+    }
+
+    /**
+     * Gets the SAML Identity Provider Issuer (Entity ID).
+     *
+     * <p>The Entity ID is a unique identifier for the SAML Identity Provider.
+     * For AWS Identity Center, this is typically the issuer URL from the SAML metadata.</p>
+     *
+     * <p><b>IMPORTANT:</b> MB_SAML_IDENTITY_PROVIDER_ISSUER is required by Metabase
+     * to identify and validate SAML assertions from the IdP.</p>
+     */
+    private String getSamlIssuer(OidcConfiguration config) {
+        String providerType = config.getProviderType();
+        if ("cognito".equals(providerType)) {
+            // Pure Cognito SAML Issuer is the User Pool's issuer URL
+            // Format: https://cognito-idp.{region}.amazonaws.com/{userPoolId}
+            return config.getIssuerUrl();
+        } else if ("cognito-saml".equals(providerType) || "identity-center-saml".equals(providerType)) {
+            // Identity Center Entity ID is typically the issuer from SAML metadata
+            // Standard AWS Entity ID format: urn:amazon:webservices
+            // Or it may be the metadata URL itself
+
+            // First, try to use the issuerUrl if available (most reliable)
+            String issuerUrl = config.getIssuerUrl();
+            if (issuerUrl != null && !issuerUrl.isEmpty()) {
+                return issuerUrl;
+            }
+
+            // Fallback: Try to derive from metadata URL (tokenEndpoint)
+            String tokenEndpoint = config.getTokenEndpoint();
+            if (tokenEndpoint != null && tokenEndpoint.contains("/saml/metadata/")) {
+                // Identity Center metadata URLs contain the instance ID
+                // We can use the metadata URL itself as the Entity ID
+                return tokenEndpoint;
+            }
+
+            // Last resort: Use standard AWS Entity ID
+            return "urn:amazon:webservices";
+        } else {
+            // External OIDC/SAML provider - use issuer URL
+            String issuerUrl = config.getIssuerUrl();
+            return issuerUrl != null ? issuerUrl : "urn:external:saml:idp";
         }
     }
 
@@ -309,5 +398,10 @@ public class MetabaseSamlIntegration implements OidcIntegration {
     @Override
     public String getSamlCertificateEnvVar() {
         return "MB_SAML_IDENTITY_PROVIDER_CERTIFICATE";
+    }
+
+    @Override
+    public String getSamlAcsPath() {
+        return "/auth/sso";
     }
 }

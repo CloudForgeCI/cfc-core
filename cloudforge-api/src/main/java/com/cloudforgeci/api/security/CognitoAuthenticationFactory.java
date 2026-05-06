@@ -177,12 +177,20 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         if (authMode == AuthMode.APPLICATION_OIDC && applicationSpec != null && applicationSpec.supportsOidcIntegration()) {
             var oidcIntegration = applicationSpec.getOidcIntegration();
             if (oidcIntegration != null && !oidcIntegration.supportsCognito()) {
-                LOG.warning("Application '" + applicationSpec.applicationId() + "' does not support Cognito");
-                LOG.warning("  Auth type: " + oidcIntegration.getAuthenticationType());
-                LOG.warning("  Supports Cognito: false");
-                LOG.warning("  Supports Identity Center SAML: " + oidcIntegration.supportsIdentityCenterSaml());
-                LOG.warning("Skipping Cognito setup - use Identity Center SAML instead");
-                return;
+                // Check if application uses SAML - in this case, Cognito is needed for user management
+                // even though the application doesn't talk to Cognito directly (hybrid architecture)
+                if ("SAML".equals(oidcIntegration.getAuthenticationType())) {
+                    LOG.info("Application uses SAML authentication - Cognito User Pool will be created for user management");
+                    LOG.info("  Cognito will be configured as SAML IdP by CognitoSamlFactory or trusted by Identity Center");
+                    // Continue with Cognito creation
+                } else {
+                    LOG.warning("Application '" + applicationSpec.applicationId() + "' does not support Cognito");
+                    LOG.warning("  Auth type: " + oidcIntegration.getAuthenticationType());
+                    LOG.warning("  Supports Cognito: false");
+                    LOG.warning("  Supports Identity Center SAML: " + oidcIntegration.supportsIdentityCenterSaml());
+                    LOG.warning("Skipping Cognito setup - use Identity Center SAML instead");
+                    return;
+                }
             }
         }
 
@@ -736,24 +744,39 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
     /**
      * Get the application-specific callback path from the OidcIntegration.
-     * Returns default Jenkins path if not available.
+     * Throws an error if ApplicationSpec is not available for application-oidc mode.
      */
     private String getApplicationCallbackPath() {
         // Try to get from SystemContext.applicationSpec if available
         if (ctx != null && ctx.applicationSpec != null && ctx.applicationSpec.get().isPresent()) {
             var appSpec = ctx.applicationSpec.get().orElse(null);
-            if (appSpec != null && appSpec.supportsOidcIntegration()) {
-                var integration = appSpec.getOidcIntegration();
-                if (integration != null) {
-                    String callbackPath = integration.getOidcCallbackPath();
-                    LOG.info("Retrieved callback path from ApplicationSpec: " + callbackPath);
-                    return callbackPath;
+            if (appSpec != null) {
+                if (appSpec.supportsOidcIntegration()) {
+                    var integration = appSpec.getOidcIntegration();
+                    if (integration != null) {
+                        String callbackPath = integration.getOidcCallbackPath();
+                        LOG.info("Retrieved callback path from ApplicationSpec: " + callbackPath + " for application: " + appSpec.applicationId());
+                        return callbackPath;
+                    } else {
+                        String error = "ApplicationSpec " + appSpec.applicationId() + " supports OIDC but getOidcIntegration() returned null";
+                        LOG.severe(error);
+                        throw new IllegalStateException(error);
+                    }
+                } else {
+                    String error = "ApplicationSpec " + appSpec.applicationId() + " does not support OIDC integration. " +
+                        "Either implement supportsOidcIntegration() and getOidcIntegration(), or use authMode = alb-oidc instead.";
+                    LOG.severe(error);
+                    throw new IllegalStateException(error);
                 }
             }
         }
-        // Fallback to Jenkins default
-        LOG.warning("Could not retrieve callback path from ApplicationSpec, using Jenkins default");
-        return "/securityRealm/finishLogin";
+
+        // ERROR: ApplicationSpec not available for application-oidc mode
+        String error = "Cannot determine callback URL for application-oidc mode: ApplicationSpec not available in SystemContext. " +
+            "This should not happen - ApplicationSpec should be set before CognitoAuthenticationFactory runs. " +
+            "Check that ApplicationFactory.create() properly sets ctx.applicationSpec.";
+        LOG.severe(error);
+        throw new IllegalStateException(error);
     }
 
     /**

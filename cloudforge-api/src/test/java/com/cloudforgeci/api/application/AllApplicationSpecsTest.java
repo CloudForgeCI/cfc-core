@@ -166,7 +166,7 @@ class AllApplicationSpecsTest {
     @Test
     void testMetabaseApplicationId() {
         MetabaseApplicationSpec metabase = new MetabaseApplicationSpec();
-        assertEquals("metabase", metabase.applicationId());
+        assertEquals("metabase-enterprise", metabase.applicationId());
         assertEquals(3000, metabase.applicationPort());
     }
 

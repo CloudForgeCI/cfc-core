@@ -72,7 +72,7 @@ public class MattermostGitLabOidcIntegration implements OidcIntegration {
         // Login button customization
         String buttonText = "Sign in with AWS Cognito";
         if (config.getProviderType() != null) {
-            if (config.getProviderType().equals("identity-center")) {
+            if ("identity-center-saml".equals(config.getProviderType())) {
                 buttonText = "Sign in with AWS IAM Identity Center";
             }
         }

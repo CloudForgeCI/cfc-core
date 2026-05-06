@@ -1,4 +1,5 @@
 # Cross-framework validators (always load)
+com.cloudforgeci.api.core.rules.ConfigurationValidationRules
 com.cloudforgeci.api.core.rules.KeyManagementRules
 com.cloudforgeci.api.core.rules.DatabaseSecurityRules
 com.cloudforgeci.api.core.rules.AdvancedMonitoringRules

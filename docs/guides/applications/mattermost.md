@@ -73,6 +73,231 @@ CloudForge supports two Mattermost editions:
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete Mattermost deployment:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> IGW[🌉 Internet Gateway]
+    
+    IGW --> ALB[⚖️ Application Load Balancer]
+    IGW --> NAT[🌉 NAT Gateway]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Mattermost Container 1]
+    ALB --> ECS2[☁️ ECS Fargate / EC2<br/>Mattermost Container 2]
+    
+    NAT --> ECS1
+    NAT --> ECS2
+    
+    ECS1 --> RDS[(🗄️ Amazon RDS PostgreSQL)]
+    ECS2 --> RDS
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    ECS2 --> EFS
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+    ECS2 --> CloudWatch
+```
+
+## Authentication Flow
+
+When using `application-oidc` authentication mode, the authentication flow differs by edition:
+
+### Enterprise Edition (Native OIDC)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant ALB
+    participant Mattermost
+    participant Cognito
+    
+    Note over User,Cognito: 1. Initial Request
+    User->>ALB: Navigate to Mattermost
+    ALB->>Mattermost: Forward request
+    Mattermost->>User: Redirect to Cognito
+    
+    Note over User,Cognito: 2. Authentication
+    User->>Cognito: Enter credentials
+    Cognito->>User: Request MFA
+    User->>Cognito: Provide MFA code
+    Cognito->>User: Return authorization code
+    
+    Note over User,Mattermost: 3. Token Exchange
+    User->>Mattermost: Callback with code
+    Mattermost->>Cognito: Exchange code for tokens
+    Cognito->>Mattermost: Return ID token + access token
+    
+    Note over Mattermost: 4. User Creation
+    Mattermost->>Mattermost: Extract user info
+    Mattermost->>Mattermost: Create/update account
+    Mattermost->>User: Redirect to channels
+    
+    Note over User,Mattermost: User authenticated
+    
+    Note over User,Cognito: 5. Logout
+    User->>Mattermost: Sign Out
+    Mattermost->>Cognito: RP-initiated logout
+    Cognito->>User: Logout confirmation
+    Mattermost->>User: Redirect to login
+    
+    Note over Mattermost,Cognito: Single logout complete
+```
+
+### Team Edition (GitLab OAuth)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant ALB
+    participant Mattermost
+    participant GitLab
+    participant Cognito
+    
+    Note over User,GitLab: 1. Initial Request
+    User->>ALB: Navigate to Mattermost
+    ALB->>Mattermost: Forward request
+    Mattermost->>User: Redirect to GitLab OAuth
+    
+    Note over User,GitLab: 2. GitLab Authentication
+    User->>GitLab: Authenticate with GitLab
+    GitLab->>Cognito: Validate via Cognito
+    Cognito->>GitLab: Return user info
+    GitLab->>User: Return authorization code
+    
+    Note over User,Mattermost: 3. Token Exchange
+    User->>Mattermost: Callback with code
+    Mattermost->>GitLab: Exchange code for tokens
+    GitLab->>Mattermost: Return access token
+    
+    Note over Mattermost: 4. User Creation
+    Mattermost->>Mattermost: Extract user info
+    Mattermost->>Mattermost: Create/update account
+    Mattermost->>User: Redirect to channels
+    
+    Note over User,Mattermost: User authenticated (no single logout)
+```
+
+## Architecture Diagram
+
+The following diagram shows the Mattermost deployment architecture:
+
+```mermaid
+graph TB
+    subgraph "Internet"
+        User[User Browser]
+        Mobile[Mobile App]
+    end
+    
+    subgraph "AWS Cloud"
+        subgraph "Route 53"
+            DNS[DNS Record]
+        end
+        
+        subgraph "Certificate Manager"
+            Cert[SSL Certificate]
+        end
+        
+        subgraph "Cognito"
+            UserPool[User Pool]
+            AppClient[App Client]
+        end
+        
+        subgraph "Application Load Balancer"
+            ALB[ALB with Listener]
+            TargetGroup[Target Group]
+        end
+        
+        subgraph "ECS Cluster (Fargate)"
+            Service[ECS Service]
+            Task1[Mattermost Container 1]
+            Task2[Mattermost Container 2]
+        end
+        
+        subgraph "EC2 Auto Scaling (EC2 Runtime)"
+            ASG[Auto Scaling Group]
+            Instance1[EC2 Instance 1]
+            Instance2[EC2 Instance 2]
+        end
+        
+        subgraph "Database"
+            RDS[(PostgreSQL Database)]
+            DBInstance[db.t3.small]
+        end
+        
+        subgraph "Storage"
+            EFS[Elastic File System]
+            Data["Mattermost Data Path<br/>/mattermost-data"]
+            Files[File Storage]
+        end
+        
+        subgraph "CloudWatch"
+            Logs[Application Logs]
+            Metrics[CloudWatch Metrics]
+        end
+        
+        subgraph "Security"
+            SG[Security Groups]
+            WAF[WAF Rules]
+        end
+    end
+    
+    User -->|HTTPS| DNS
+    Mobile -->|HTTPS| DNS
+    DNS --> ALB
+    Cert --> ALB
+    ALB --> TargetGroup
+    
+    TargetGroup --> Service
+    TargetGroup --> ASG
+    
+    Service --> Task1
+    Service --> Task2
+    ASG --> Instance1
+    ASG --> Instance2
+    
+    Task1 --> EFS
+    Task2 --> EFS
+    Instance1 --> EFS
+    Instance2 --> EFS
+    
+    Task1 --> RDS
+    Task2 --> RDS
+    Instance1 --> RDS
+    Instance2 --> RDS
+    
+    Task1 --> Logs
+    Task2 --> Logs
+    Instance1 --> Logs
+    Instance2 --> Logs
+    
+    Task1 --> Metrics
+    Task2 --> Metrics
+    
+    UserPool --> AppClient
+    AppClient --> ALB
+    
+    SG --> ALB
+    SG --> Service
+    SG --> ASG
+    SG --> RDS
+    WAF --> ALB
+    
+    style User fill:#e1f5ff
+    style Mobile fill:#e1f5ff
+    style Cognito fill:#fff4e1
+    style RDS fill:#e8f5e9
+    style EFS fill:#e8f5e9
+    style CloudWatch fill:#f3e5f5
+```
+
+---
+
 ## Capabilities
 
 - Real-time team messaging
@@ -154,8 +379,8 @@ When deploying Mattermost, CloudForge automatically provisions RDS PostgreSQL.
 
 | Mode | Team Edition | Enterprise Edition | Description |
 |------|--------------|-------------------|-------------|
-| `application-oidc` | ✅ GitLab OAuth | ✅ Native OIDC | Application handles OIDC directly |
-| `alb-oidc` | ✅ | ✅ | ALB-level authentication |
+| `application-oidc` | ⚠️ Partial (no logout) | ⚠️ Partial (logout issue) | Application handles OIDC directly |
+| `alb-oidc` | ✅ Verified | ✅ Verified | ALB-level authentication (Recommended) |
 | `none` | ✅ | ✅ | No SSO (local accounts only) |
 
 ### OIDC Integration Details
@@ -184,16 +409,22 @@ Enterprise Edition uses **native OpenID Connect** (`MM_OPENIDSETTINGS_*`) with f
 
 **Features:**
 - Auto-create users on first login
-- ✅ **Single logout support** via `end_session_endpoint`
 - Discovery endpoint for automatic configuration
 - Customizable login button text and color
 - Standard OpenID Connect 1.0 compliance
 
 **Callback Path:** `/signup/openid/complete`
 
+**⚠️ KNOWN ISSUE: Logout callback URL issue:**
+- **Root Cause:** Logout flow fails to return to correct callback URL after logging out of OIDC provider
+- **Symptoms:** User successfully logs out of Mattermost but redirect after provider logout fails
+- **Status:** Login works correctly; logout issue under investigation
+- **Workaround:** Use `alb-oidc` mode for full logout support, or accept manual browser navigation after logout
+
 **Limitations:**
 - Requires Mattermost Enterprise or Professional license for full features
 - No automatic group synchronization (manual team membership)
+- Single logout flow has known callback redirect issue (see above)
 
 **Note:** SAML support exists but OIDC is the verified and recommended approach.
 

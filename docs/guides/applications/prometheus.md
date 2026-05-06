@@ -26,6 +26,78 @@ Prometheus is an open-source systems monitoring and alerting toolkit designed fo
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete Prometheus deployment:
+
+```mermaid
+graph TD
+    Start[CDK Deploy Starts] --> Validate[Validate Deployment Context]
+    Validate --> CheckAuth{Auth Mode?}
+    
+    CheckAuth -->|alb-oidc| CreateCognito[Create Cognito User Pool]
+    CheckAuth -->|none| SkipAuth[Skip Authentication]
+    
+    CreateCognito --> CreateAppClient[Create Cognito App Client]
+    SkipAuth --> CheckRuntime{Runtime?}
+    CreateAppClient --> CheckRuntime
+    
+    CheckRuntime -->|fargate| CreateECS[Create ECS Cluster & Service]
+    CheckRuntime -->|ec2| CreateASG[Create Auto Scaling Group]
+    
+    CreateECS --> CreateALB[Create Application Load Balancer]
+    CreateASG --> CreateALB
+    
+    CreateALB --> ConfigureTarget[Configure Target Group]
+    CreateALB --> ConfigureAuth{ALB-OIDC?}
+    
+    ConfigureAuth -->|Yes| SetupALBAuth[Configure ALB OIDC Authentication]
+    ConfigureAuth -->|No| SkipALBAuth[Skip ALB Auth]
+    
+    SetupALBAuth --> CreateEFS[Create EFS for Persistent Storage]
+    SkipALBAuth --> CreateEFS
+    
+    CreateEFS --> MountStorage[Mount Storage to Container/Instance]
+    MountStorage --> StartPrometheus[Start Prometheus Container]
+    
+    StartPrometheus --> LoadConfig[Load Prometheus Configuration]
+    LoadConfig --> HealthCheck{Health Check Passes?}
+    
+    HealthCheck -->|No| Wait[Wait & Retry]
+    Wait --> HealthCheck
+    HealthCheck -->|Yes| Ready[Prometheus Ready]
+    
+    Ready --> ScrapeTargets[Start Scraping Targets]
+    ScrapeTargets --> StoreMetrics[Store Metrics in TSDB]
+    
+    Ready --> Access[Access Prometheus UI]
+    
+    Note1[Note: Prometheus uses embedded TSDB]
+    Note2[Note: ALB-OIDC recommended for UI access]
+    Note3[Note: Configure scrape targets after deployment]
+```
+
+## Architecture Diagram
+
+The following diagram shows the Prometheus deployment architecture:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> ALB[⚖️ Application Load Balancer]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Prometheus Container 1]
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+    
+    Targets[Scrape Targets] --> ECS1
+```
+
+---
+
 ## Capabilities
 
 - Multi-dimensional time series data model

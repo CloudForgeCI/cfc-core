@@ -22,6 +22,48 @@ This guide explains how to deploy applications with RDS databases in CloudForge,
 
 CloudForge 3.0 introduces automatic database provisioning for applications that require persistent storage. Applications declare their database requirements through the `DatabaseSpec` interface, and CloudForge automatically provisions RDS instances with compliance-enforced configurations.
 
+## Database Provisioning Flow
+
+```mermaid
+sequenceDiagram
+    participant AppSpec as 📋 ApplicationSpec
+    participant Check as Database Required?
+    participant RdsFactory as 🗄️ RdsFactory.create
+    participant SQLite as 💾 Embedded Database
+    participant RdsDB as 🗄️ Amazon RDS PostgreSQL
+    participant Config as Configuration
+    participant MultiAZ as 🔄 Multi-AZ
+    participant Encryption as 🔒 Encryption
+    participant Backups as 💿 Backups
+    participant Protection as 🔒 Protection
+    participant SecretsMgr as 🔐 Secrets Manager
+    participant Credentials as Credentials
+    participant MasterPass as 🔑 Password
+    participant ConnString as 📝 Connection String
+    participant EnvVars as 🌍 Environment Variables
+    participant App as 🚀 Application Instance
+    
+    AppSpec->>Check: Check database requirement
+    alt Database Required
+        Check->>RdsFactory: Create RDS database
+        RdsFactory->>RdsDB: Provision PostgreSQL
+        RdsDB->>Config: Configure database
+        Config->>MultiAZ: Enable Multi-AZ
+        Config->>Encryption: Enable encryption
+        Config->>Backups: Configure backups
+        Config->>Protection: Enable deletion protection
+        RdsFactory->>SecretsMgr: Store credentials
+        SecretsMgr->>Credentials: Generate credentials
+        Credentials->>MasterPass: Master password
+        Credentials->>ConnString: Connection string
+        Credentials->>EnvVars: Environment variables
+        EnvVars->>App: Provide connection details
+    else No Database Required
+        Check->>SQLite: Use embedded database
+        SQLite->>App: Local storage
+    end
+```
+
 ### Key Features
 
 - ✅ **Automatic RDS provisioning** - CloudForge creates and configures RDS instances

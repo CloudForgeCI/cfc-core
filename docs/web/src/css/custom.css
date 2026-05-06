@@ -53,3 +53,40 @@ table {
 .admonition {
   margin-bottom: 1em;
 }
+
+/* Mermaid Visio-style straight lines (sequenceDiagram-style) */
+.mermaid svg .edge-thickness-normal {
+  stroke-width: 2px;
+}
+
+.mermaid svg .flowchart-link {
+  stroke-width: 2px;
+  /* Force straight lines */
+  stroke-linecap: round;
+}
+
+/* Ensure connectors are straight (not curved) - like sequence diagrams */
+.mermaid svg path {
+  /* Remove any curve interpolation - use straight lines with 90-degree turns */
+  vector-effect: non-scaling-stroke;
+  /* Force straight line segments */
+  stroke-linejoin: miter;
+}
+
+/* Make lines travel together when parallel */
+.mermaid svg .edgePath {
+  stroke-width: 2px;
+}
+
+/* Force straight lines in flowcharts (sequenceDiagram-style routing) */
+.mermaid svg .flowchart-link path {
+  /* Ensure straight line segments */
+  d: path('M 0,0 L 0,0');
+}
+
+/* Right-angle routing for flowcharts */
+.mermaid svg g.edgePaths path {
+  /* Use straight segments only */
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}

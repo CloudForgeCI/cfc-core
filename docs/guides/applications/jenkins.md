@@ -26,6 +26,176 @@ Jenkins is an open-source automation server that enables developers to build, te
 
 ---
 
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete Jenkins deployment:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> IGW[🌉 Internet Gateway]
+    
+    IGW --> ALB[⚖️ Application Load Balancer]
+    IGW --> NAT[🌉 NAT Gateway]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>Jenkins Container 1]
+    ALB --> ECS2[☁️ ECS Fargate / EC2<br/>Jenkins Container 2]
+    
+    NAT --> ECS1
+    NAT --> ECS2
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    ECS2 --> EFS
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+    ECS2 --> CloudWatch
+```
+
+## Authentication Flow
+
+When using `application-oidc` authentication mode, the following sequence diagram shows how users authenticate:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant ALB
+    participant Jenkins
+    participant Cognito
+    participant Plugin
+    
+    Note over User,Cognito: 1. Initial Request
+    User->>ALB: Navigate to Jenkins
+    ALB->>Jenkins: Forward request
+    Jenkins->>Plugin: Check auth status
+    Plugin->>User: Redirect to Cognito
+    
+    Note over User,Cognito: 2. Authentication
+    User->>Cognito: Enter credentials
+    Cognito->>User: Request MFA
+    User->>Cognito: Provide MFA code
+    Cognito->>User: Return authorization code
+    
+    Note over User,Jenkins: 3. Token Exchange
+    User->>Jenkins: Callback with code
+    Jenkins->>Plugin: Process callback
+    Plugin->>Cognito: Exchange code for tokens
+    Cognito->>Plugin: Return ID token + access token
+    
+    Note over Plugin,Jenkins: 4. User & Role Setup
+    Plugin->>Plugin: Extract user info
+    Plugin->>Plugin: Check cognito:groups
+    Plugin->>Jenkins: Create/update user
+    Plugin->>Jenkins: Assign roles by group
+    Jenkins->>User: Redirect to dashboard
+    
+    Note over User,Jenkins: User authenticated with role-based access
+```
+
+## Component Architecture
+
+The following diagram shows the detailed component relationships:
+
+```mermaid
+graph TB
+    subgraph "Internet"
+        User[User Browser]
+        Agent[Build Agents]
+    end
+    
+    subgraph "AWS Cloud"
+        subgraph "Route 53"
+            DNS[DNS Record]
+        end
+        
+        subgraph "Certificate Manager"
+            Cert[SSL Certificate]
+        end
+        
+        subgraph "Cognito"
+            UserPool[User Pool]
+            AppClient[App Client]
+        end
+        
+        subgraph "Application Load Balancer"
+            ALB[ALB with Listener]
+            TargetGroup[Target Group]
+            JNLPListener[JNLP Listener Port 50000]
+        end
+        
+        subgraph "ECS Cluster (Fargate)"
+            Service[ECS Service]
+            Task1[Jenkins Container 1]
+            Task2[Jenkins Container 2]
+        end
+        
+        subgraph "EC2 Auto Scaling (EC2 Runtime)"
+            ASG[Auto Scaling Group]
+            Instance1[EC2 Instance 1]
+            Instance2[EC2 Instance 2]
+        end
+        
+        subgraph "Storage"
+            EFS[Elastic File System]
+            Data["Jenkins Data Path<br/>/var/jenkins_home"]
+        end
+        
+        subgraph "CloudWatch"
+            Logs[Application Logs]
+            Metrics[CloudWatch Metrics]
+        end
+        
+        subgraph "Security"
+            SG[Security Groups]
+            WAF[WAF Rules]
+        end
+    end
+    
+    User -->|HTTPS| DNS
+    Agent -->|JNLP| JNLPListener
+    DNS --> ALB
+    Cert --> ALB
+    ALB --> TargetGroup
+    
+    TargetGroup --> Service
+    TargetGroup --> ASG
+    
+    Service --> Task1
+    Service --> Task2
+    ASG --> Instance1
+    ASG --> Instance2
+    
+    Task1 --> EFS
+    Task2 --> EFS
+    Instance1 --> EFS
+    Instance2 --> EFS
+    
+    Task1 --> Logs
+    Task2 --> Logs
+    Instance1 --> Logs
+    Instance2 --> Logs
+    
+    Task1 --> Metrics
+    Task2 --> Metrics
+    
+    UserPool --> AppClient
+    AppClient --> ALB
+    
+    SG --> ALB
+    SG --> Service
+    SG --> ASG
+    WAF --> ALB
+    
+    style User fill:#e1f5ff
+    style Agent fill:#e1f5ff
+    style Cognito fill:#fff4e1
+    style EFS fill:#e8f5e9
+    style CloudWatch fill:#f3e5f5
+```
+
+---
+
 ## Capabilities
 
 - Pipeline-as-code with Jenkinsfile

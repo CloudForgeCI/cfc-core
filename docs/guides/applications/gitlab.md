@@ -2,7 +2,7 @@
 
 GitLab is a complete DevOps platform that provides source code management, CI/CD pipelines, container registry, and security scanning in a single application.
 
-**Status**: Available (Not Yet Tested)
+**Status**: ✅ Available (Tested - OIDC Working)
 
 ---
 
@@ -24,6 +24,196 @@ GitLab is a complete DevOps platform that provides source code management, CI/CD
 | **Supports EC2** | Yes |
 | **OIDC Support** | Yes (via OmniAuth) |
 | **Database Required** | Yes (PostgreSQL) |
+
+---
+
+## Deployment Architecture
+
+The following AWS architecture diagram shows the complete GitLab deployment:
+
+```mermaid
+graph TB
+    Internet[🌐 Internet] --> IGW[🌉 Internet Gateway]
+    
+    IGW --> ALB[⚖️ Application Load Balancer]
+    IGW --> NAT[🌉 NAT Gateway]
+    
+    ALB --> ECS1[☁️ ECS Fargate / EC2<br/>GitLab Container 1]
+    ALB --> ECS2[☁️ ECS Fargate / EC2<br/>GitLab Container 2]
+    
+    NAT --> ECS1
+    NAT --> ECS2
+    
+    ECS1 --> RDS[(🗄️ Amazon RDS PostgreSQL)]
+    ECS2 --> RDS
+    
+    ECS1 --> EFS[(💾 Amazon EFS)]
+    ECS2 --> EFS
+    
+    ALB --> Cognito[🔐 AWS Cognito]
+    
+    ECS1 --> CloudWatch[📊 CloudWatch Logs]
+    ECS2 --> CloudWatch
+```
+
+## Authentication Flow
+
+When using `application-oidc` authentication mode, the following sequence diagram shows how users authenticate:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant ALB
+    participant GitLab
+    participant Cognito
+    participant OmniAuth
+    
+    Note over User,Cognito: 1. Initial Request
+    User->>ALB: Navigate to GitLab
+    ALB->>GitLab: Forward request
+    GitLab->>OmniAuth: Check auth status
+    OmniAuth->>User: Redirect to Cognito
+    
+    Note over User,Cognito: 2. Authentication
+    User->>Cognito: Enter credentials
+    Cognito->>User: Request MFA
+    User->>Cognito: Provide MFA code
+    Cognito->>User: Return authorization code
+    
+    Note over User,GitLab: 3. Token Exchange
+    User->>GitLab: Callback with code
+    GitLab->>OmniAuth: Process callback
+    OmniAuth->>Cognito: Exchange code for tokens
+    Cognito->>OmniAuth: Return ID token + access token
+    
+    Note over OmniAuth,GitLab: 4. User Creation
+    OmniAuth->>OmniAuth: Extract user info
+    OmniAuth->>GitLab: Create/update account
+    GitLab->>User: Redirect to dashboard
+    
+    Note over User,GitLab: User authenticated
+    
+    Note over User,Cognito: 5. Logout
+    User->>GitLab: Sign Out
+    GitLab->>OmniAuth: Initiate logout
+    OmniAuth->>Cognito: RP-initiated logout
+    Cognito->>User: Logout confirmation
+    OmniAuth->>User: Redirect to homepage
+```
+
+## Component Architecture
+
+The following diagram shows the detailed component relationships:
+
+```mermaid
+graph TB
+    subgraph "Internet"
+        User[User Browser]
+        GitClient[Git Client SSH/HTTPS]
+    end
+    
+    subgraph "AWS Cloud"
+        subgraph "Route 53"
+            DNS[DNS Record]
+        end
+        
+        subgraph "Certificate Manager"
+            Cert[SSL Certificate]
+        end
+        
+        subgraph "Cognito"
+            UserPool[User Pool]
+            AppClient[App Client]
+        end
+        
+        subgraph "Application Load Balancer"
+            ALB[ALB with Listener]
+            TargetGroup[Target Group]
+            SSHListener[SSH Listener Port 22]
+        end
+        
+        subgraph "ECS Cluster (Fargate)"
+            Service[ECS Service]
+            Task1[GitLab Container 1]
+            Task2[GitLab Container 2]
+        end
+        
+        subgraph "EC2 Auto Scaling (EC2 Runtime)"
+            ASG[Auto Scaling Group]
+            Instance1[EC2 Instance 1]
+            Instance2[EC2 Instance 2]
+        end
+        
+        subgraph "Database"
+            RDS[(PostgreSQL Database)]
+            DBInstance[db.t3.medium]
+        end
+        
+        subgraph "Storage"
+            EFS[Elastic File System]
+            Data["GitLab Data Path<br/>/var/opt/gitlab"]
+        end
+        
+        subgraph "CloudWatch"
+            Logs[Application Logs]
+            Metrics[CloudWatch Metrics]
+        end
+        
+        subgraph "Security"
+            SG[Security Groups]
+            WAF[WAF Rules]
+        end
+    end
+    
+    User -->|HTTPS| DNS
+    GitClient -->|SSH| SSHListener
+    DNS --> ALB
+    Cert --> ALB
+    ALB --> TargetGroup
+    
+    TargetGroup --> Service
+    TargetGroup --> ASG
+    
+    Service --> Task1
+    Service --> Task2
+    ASG --> Instance1
+    ASG --> Instance2
+    
+    Task1 --> EFS
+    Task2 --> EFS
+    Instance1 --> EFS
+    Instance2 --> EFS
+    
+    Task1 --> RDS
+    Task2 --> RDS
+    Instance1 --> RDS
+    Instance2 --> RDS
+    
+    Task1 --> Logs
+    Task2 --> Logs
+    Instance1 --> Logs
+    Instance2 --> Logs
+    
+    Task1 --> Metrics
+    Task2 --> Metrics
+    
+    UserPool --> AppClient
+    AppClient --> ALB
+    
+    SG --> ALB
+    SG --> Service
+    SG --> ASG
+    SG --> RDS
+    WAF --> ALB
+    
+    style User fill:#e1f5ff
+    style GitClient fill:#e1f5ff
+    style Cognito fill:#fff4e1
+    style RDS fill:#e8f5e9
+    style EFS fill:#e8f5e9
+    style CloudWatch fill:#f3e5f5
+```
 
 ---
 
@@ -88,22 +278,30 @@ GitLab **requires** a PostgreSQL database.
 
 | Mode | Status | Description |
 |------|--------|-------------|
-| `application-oidc` | Available | Native OIDC via OmniAuth OpenID Connect |
-| `alb-oidc` | Available | ALB-level authentication |
+| `application-oidc` | ✅ Working | Application-level OIDC with Cognito (Recommended) |
+| `alb-oidc` | ✅ Verified | ALB-level authentication |
 | `none` | Available | Local accounts only |
 
 ### OIDC Integration Details
 
 GitLab uses **OmniAuth OpenID Connect** configured via `gitlab.rb`.
 
+**✅ Application-OIDC Integration is fully working:**
+- **Sign-in:** Auto-create users on first login via Cognito OIDC
+- **Logout:** RP-initiated logout logs users out of **both** GitLab **and** Cognito
+- **Redirect:** After logout, users are redirected to GitLab homepage (clean state)
+- **Configuration:** Fully automated via `GITLAB_OMNIBUS_CONFIG` environment variable
+
 **Features:**
 - Auto-create users on first login
 - Group synchronization (GitLab Premium/Ultimate)
-- Admin role assignment
+- Admin role assignment via Rails console
 - PKCE support
 - Block external OAuth sign-ins option
+- Automatic logout from Cognito when user clicks "Sign out"
 
 **Callback Path:** `/users/auth/openid_connect/callback`
+**Logout Behavior:** Configured via `gitlab_rails['after_sign_out_path']` to redirect to Cognito logout endpoint
 
 ---
 
