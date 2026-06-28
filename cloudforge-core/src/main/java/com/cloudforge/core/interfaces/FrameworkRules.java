@@ -2,6 +2,9 @@ package com.cloudforge.core.interfaces;
 
 import com.cloudforge.core.annotation.ComplianceFramework;
 
+import java.util.Collections;
+import java.util.Map;
+
 /**
  * Interface for pluggable compliance framework validators.
  *
@@ -32,6 +35,15 @@ import com.cloudforge.core.annotation.ComplianceFramework;
  *                 .flatMap(Optional::stream)
  *                 .toList();
  *         });
+ *     }
+ *
+ *     @Override
+ *     public Map<String, Object> getRequiredConfiguration() {
+ *         return Map.of(
+ *             "logRetentionDays", 2190,  // 6 years
+ *             "guardDutyEnabled", true,
+ *             "macieEnabled", true
+ *         );
  *     }
  * }
  * }</pre>
@@ -121,5 +133,52 @@ public interface FrameworkRules<T> {
             return false;
         }
         return annotation.alwaysLoad();
+    }
+
+    /**
+     * Get the minimum required deployment configuration for this compliance framework.
+     *
+     * <p>This method returns the framework's baseline security requirements as
+     * DeploymentContext overrides. These values are applied as defaults when the
+     * framework is enabled, but can be overridden by explicit user configuration.</p>
+     *
+     * <p><b>Precedence order:</b></p>
+     * <ol>
+     *   <li>User-provided explicit configuration (cdk.json)</li>
+     *   <li>Framework-required configuration (this method)</li>
+     *   <li>Security profile defaults</li>
+     * </ol>
+     *
+     * <p><b>Example implementation:</b></p>
+     * <pre>{@code
+     * @Override
+     * public Map<String, Object> getRequiredConfiguration() {
+     *     return Map.of(
+     *         "logRetentionDays", 2190,      // HIPAA: 6 years minimum
+     *         "guardDutyEnabled", true,       // HIPAA: threat detection required
+     *         "macieEnabled", true,           // HIPAA: PHI discovery required
+     *         "securityHubEnabled", true,     // HIPAA: centralized monitoring
+     *         "inspectorEnabled", true        // HIPAA: vulnerability scanning
+     *     );
+     * }
+     * }</pre>
+     *
+     * <p><b>Supported configuration keys:</b></p>
+     * <ul>
+     *   <li>{@code logRetentionDays} - CloudWatch log retention (Integer)</li>
+     *   <li>{@code guardDutyEnabled} - AWS GuardDuty threat detection (Boolean)</li>
+     *   <li>{@code macieEnabled} - Amazon Macie PII/PHI discovery (Boolean)</li>
+     *   <li>{@code securityHubEnabled} - AWS Security Hub (Boolean)</li>
+     *   <li>{@code inspectorEnabled} - Amazon Inspector vulnerability scanning (Boolean)</li>
+     *   <li>{@code cloudTrailEnabled} - AWS CloudTrail audit logging (Boolean)</li>
+     *   <li>{@code wafEnabled} - AWS WAF protection (Boolean)</li>
+     *   <li>{@code albAccessLogging} - ALB access logs to S3 (Boolean)</li>
+     * </ul>
+     *
+     * @return map of configuration keys to required values, empty map if no requirements
+     * @since 3.1.0
+     */
+    default Map<String, Object> getRequiredConfiguration() {
+        return Collections.emptyMap();
     }
 }

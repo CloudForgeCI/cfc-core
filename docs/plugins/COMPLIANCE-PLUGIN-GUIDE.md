@@ -241,13 +241,13 @@ com.example.compliance.Nist80053Rules
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-core</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.0</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-api</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
@@ -477,7 +477,7 @@ See [Iso27001Rules.java](../core/rules/Iso27001Rules.java) for a complete workin
 
 ---
 
-## Migration Guide: v3.0.0 → v3.0.0 → future versions
+## Migration Guide: v2.x → v3.0.0 → v3.1.0+
 
 ### v3.0.0 (Static Methods Only)
 ```java

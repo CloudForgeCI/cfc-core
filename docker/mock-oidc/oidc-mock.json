@@ -1,0 +1,181 @@
+{
+  "uuid": "cfc-oidc-mock",
+  "name": "CloudForge Mock OIDC Provider",
+  "hostname": "",
+  "port": 3000,
+  "https": false,
+  "cors": true,
+  "latency": 0,
+  "proxyMode": false,
+  "proxyHost": "",
+  "proxyRemovePrefix": false,
+  "tlsOptions": {
+    "enabled": false,
+    "type": "CERT",
+    "pfxPath": "",
+    "certPath": "",
+    "keyPath": "",
+    "caPath": "",
+    "passphrase": ""
+  },
+  "headers": [
+    { "key": "Content-Type", "value": "application/json" }
+  ],
+  "routes": [
+    {
+      "uuid": "oidc-config",
+      "type": "http",
+      "documentation": "OIDC Well-Known Configuration (simulates Cognito discovery endpoint)",
+      "method": "get",
+      "endpoint": ".well-known/openid-configuration",
+      "enabled": true,
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0,
+      "responses": [
+        {
+          "uuid": "oidc-config-response",
+          "label": "OIDC Discovery",
+          "statusCode": 200,
+          "headers": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"issuer\": \"http://localhost:3001\",\n  \"authorization_endpoint\": \"http://localhost:3001/oauth/authorize\",\n  \"token_endpoint\": \"http://localhost:3001/oauth/token\",\n  \"userinfo_endpoint\": \"http://localhost:3001/oauth/userinfo\",\n  \"jwks_uri\": \"http://localhost:3001/.well-known/jwks.json\",\n  \"response_types_supported\": [\"code\"],\n  \"subject_types_supported\": [\"public\"],\n  \"id_token_signing_alg_values_supported\": [\"RS256\"],\n  \"scopes_supported\": [\"openid\", \"email\", \"profile\"],\n  \"token_endpoint_auth_methods_supported\": [\"client_secret_basic\", \"client_secret_post\"],\n  \"claims_supported\": [\"sub\", \"iss\", \"aud\", \"exp\", \"iat\", \"email\", \"email_verified\", \"name\", \"cognito:groups\"]\n}",
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ]
+    },
+    {
+      "uuid": "oauth-authorize",
+      "type": "http",
+      "documentation": "Authorization endpoint — redirects with code (simulates Cognito authorize)",
+      "method": "get",
+      "endpoint": "oauth/authorize",
+      "enabled": true,
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0,
+      "responses": [
+        {
+          "uuid": "oauth-authorize-response",
+          "label": "Redirect with code",
+          "statusCode": 302,
+          "headers": [
+            { "key": "Location", "value": "{{queryParam 'redirect_uri'}}?code=mock-auth-code-12345&state={{queryParam 'state'}}" },
+            { "key": "Content-Type", "value": "text/plain" }
+          ],
+          "body": "",
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ]
+    },
+    {
+      "uuid": "oauth-token",
+      "type": "http",
+      "documentation": "Token endpoint — returns mock JWT tokens (simulates Cognito token exchange)",
+      "method": "post",
+      "endpoint": "oauth/token",
+      "enabled": true,
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0,
+      "responses": [
+        {
+          "uuid": "oauth-token-response",
+          "label": "Token response",
+          "statusCode": 200,
+          "headers": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"access_token\": \"cfc_access_token_dev_12345\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600,\n  \"refresh_token\": \"cfc_refresh_token_dev\",\n  \"id_token\": \"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDEiLCJzdWIiOiJjZmNfZGV2X3VzZXIiLCJhdWQiOiJjZmNfY2xpZW50IiwiaWF0IjoxNjE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksIm5hbWUiOiJDbG91ZEZvcmdlIERldmVsb3BlciIsImVtYWlsIjoiZGV2QGNsb3VkZm9yZ2VjaS5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiY29nbml0bzpncm91cHMiOlsiZGV2ZWxvcGVycyIsImFkbWlucyJdfQ.mock-signature\"\n}",
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ]
+    },
+    {
+      "uuid": "oauth-userinfo",
+      "type": "http",
+      "documentation": "UserInfo endpoint — returns mock user claims",
+      "method": "get",
+      "endpoint": "oauth/userinfo",
+      "enabled": true,
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0,
+      "responses": [
+        {
+          "uuid": "oauth-userinfo-response",
+          "label": "User claims",
+          "statusCode": 200,
+          "headers": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"sub\": \"cfc_dev_user\",\n  \"name\": \"CloudForge Developer\",\n  \"given_name\": \"CloudForge\",\n  \"family_name\": \"Developer\",\n  \"email\": \"dev@cloudforgeci.com\",\n  \"email_verified\": true,\n  \"cognito:groups\": [\"developers\", \"admins\"],\n  \"cognito:username\": \"dev-user\"\n}",
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ]
+    },
+    {
+      "uuid": "health",
+      "type": "http",
+      "documentation": "Health Check",
+      "method": "get",
+      "endpoint": "health",
+      "enabled": true,
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0,
+      "responses": [
+        {
+          "uuid": "health-response",
+          "label": "Healthy",
+          "statusCode": 200,
+          "headers": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\"status\": \"ok\", \"service\": \"CloudForge Mock OIDC\"}",
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ]
+    }
+  ],
+  "rootChildren": [
+    { "type": "route", "uuid": "oidc-config" },
+    { "type": "route", "uuid": "oauth-authorize" },
+    { "type": "route", "uuid": "oauth-token" },
+    { "type": "route", "uuid": "oauth-userinfo" },
+    { "type": "route", "uuid": "health" }
+  ],
+  "folders": [],
+  "lastMigration": 33
+}

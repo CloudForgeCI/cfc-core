@@ -241,7 +241,8 @@ cdk deploy --require-approval never
 | Parameter | Type | Values | Description |
 |-----------|------|--------|-------------|
 | `runtime` | string | FARGATE, EC2 | Container runtime. Default: FARGATE |
-| `topology` | string | APPLICATION_SERVICE, S3_WEBSITE | Deployment topology. Default: APPLICATION_SERVICE |
+| `topology` | string | APPLICATION_SERVICE, CMS_SERVICE, S3_WEBSITE | Deployment topology. Default: APPLICATION_SERVICE. Use `CMS_SERVICE` for PHP/CMS platforms (WordPress, Magento, Drupal, etc.) — auto-wires S3 media, Redis, and CloudFront. |
+| `application` | string | `wordpress`, `magento`, `drupal`, … | **Required with `CMS_SERVICE`.** Identifies the CMS plugin to deploy. See [CMS Deployment Guide](../applications/CMS.md) for all 19 platform IDs. |
 | `securityProfile` | string | DEV, STAGING, PRODUCTION | Security configuration level |
 
 ### Database Parameters (RDS)

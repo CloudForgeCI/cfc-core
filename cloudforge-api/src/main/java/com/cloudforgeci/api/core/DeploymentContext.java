@@ -8,6 +8,8 @@ import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.interfaces.CmsSpec;
+import com.cloudforgeci.api.compute.CmsLoader;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
@@ -18,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Typed configuration interface for CDK deployment context.
@@ -52,7 +55,7 @@ import java.util.Map;
  * <ul>
  *   <li>tier: "public" | "enterprise" (default: public)</li>
  *   <li>runtime: "ec2" | "fargate" (default: fargate)</li>
- *   <li>topology: "jenkins-single-node" | "jenkins-service" | "s3-website"</li>
+ *   <li>topology: "jenkins-service" | "s3-website" | "application-service" | "cms-service"</li>
  *   <li>env: "dev" | "stage" | "prod" (default: dev)</li>
  *   <li>securityProfile: "dev" | "staging" | "production" (default: dev)</li>
  *   <li>region: AWS region (default: us-east-1)</li>
@@ -73,7 +76,7 @@ import java.util.Map;
  *   <li>wafEnabled: Enable AWS WAF (default: false)</li>
  *   <li>albAccessLogging: Enable ALB access logs to S3 (default: false)</li>
  *   <li>cloudfront: Enable CloudFront distribution (default: false)</li>
- *   <li>bastionCidr: CIDR for SSH bastion access (default: 10.0.1.0/24)</li>
+ *   <li>bastionCidr: Retained for backwards compatibility; no longer gates ECS Exec or SSH. Instance access uses SSM Session Manager; Fargate access uses ECS Exec.</li>
  * </ul>
  *
  * <p><b>Authentication:</b></p>
@@ -389,6 +392,45 @@ public final class DeploymentContext {
     @Deprecated public String runtimeRaw() { return runtimeRaw; }
     @Deprecated public String topologyRaw() { return topologyRaw; }
 
+    // --------- CMS application resolution ---------
+
+    /**
+     * Returns the application identifier from the deployment context.
+     *
+     * <p>Maps to the {@code "application"} key in cdk.json / CLI context.
+     * Used with {@link #cmsSpec()} to resolve the full {@link CmsSpec}.</p>
+     *
+     * <p>Example cdk.json usage:</p>
+     * <pre>{@code
+     * "cfc": {
+     *   "topology": "cms-service",
+     *   "application": "wordpress",
+     *   "runtime": "fargate"
+     * }
+     * }</pre>
+     *
+     * @return the application ID (e.g., "wordpress", "magento") or {@code null} if not set
+     */
+    public String applicationId() {
+        return str("application", null);
+    }
+
+    /**
+     * Resolves the {@link CmsSpec} for the configured application via {@link CmsLoader}.
+     *
+     * <p>Returns {@link Optional#empty()} when no {@code "application"} key is set,
+     * or when the ID does not match any registered CMS plugin.</p>
+     *
+     * @return the resolved CmsSpec, or empty if not a CMS deployment
+     */
+    public Optional<CmsSpec> cmsSpec() {
+        String id = applicationId();
+        if (id == null || id.isBlank()) {
+            return Optional.empty();
+        }
+        return CmsLoader.findById(id);
+    }
+
     // --------- Helpers / derived behavior ---------
 
     /** True if the service should run in private subnets without public IPs. */
@@ -502,7 +544,7 @@ public final class DeploymentContext {
             case "application-service", "application_service", "app-service", "application" -> TopologyType.APPLICATION_SERVICE;
             // CloudForge 3.0.0: No default fallback - explicit topology required
             default -> throw new IllegalArgumentException(
-                "Unknown topology '" + val + "'. Valid values: jenkins-service, s3-website, application-service. " +
+                "Unknown topology '" + val + "'. Valid values: jenkins-service, s3-website, application-service, cms-service. " +
                 "Note: JENKINS_SINGLE_NODE was removed in 3.0.0 - use jenkins-service instead."
             );
         };

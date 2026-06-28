@@ -217,8 +217,11 @@ public class FargateFactory extends BaseFactory {
       throw new IllegalStateException("Fargate task role not found - IAM configuration should have created it");
     }
 
-    // Check if ECS Exec should be enabled based on bastionCidr configuration
-    boolean enableEcsExec = bastionCidr != null && !bastionCidr.isBlank();
+    // ECS Exec enables shell access to running Fargate tasks via SSM Session Manager.
+    // No open ports or SSH keys required — access is IAM-controlled and CloudTrail-logged.
+    // The required ssmmessages:* permissions are already included in all IAM configurations.
+    // Enable unconditionally; restrict access via IAM policies rather than at the CDK level.
+    boolean enableEcsExec = true;
 
     FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task")
             .cpu(cpu)
@@ -290,7 +293,7 @@ public class FargateFactory extends BaseFactory {
             .desiredCount(effectiveMinCapacity != null ? effectiveMinCapacity : 1)
             .assignPublicIp(assignPublicIp)
             .vpcSubnets(SubnetSelection.builder().subnetType(subnetType).build())
-            .enableExecuteCommand(enableEcsExec)  // Enable ECS Exec for shell access when bastionCidr is set
+            .enableExecuteCommand(enableEcsExec)  // SSM-based shell access; no port 22 needed
             .enableEcsManagedTags(true)  // Helps CloudFormation track and clean up ENIs on stack deletion
             .circuitBreaker(DeploymentCircuitBreaker.builder()
                     .enable(true)

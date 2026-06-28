@@ -4,7 +4,7 @@ This directory contains documentation for the CloudForge plugin system, enabling
 
 ## Plugin System Overview
 
-- **[Plugin Ecosystem](PLUGIN-ECOSYSTEM.md)** - Overview of 14 built-in applications and the plugin architecture
+- **[Plugin Ecosystem](PLUGIN-ECOSYSTEM.md)** - Overview of 33 built-in applications and the plugin architecture
 - **[Plugin System Guide](PLUGIN-SYSTEM.md)** - Core architecture and development patterns
 
 ## Plugin Development Guides
@@ -17,7 +17,7 @@ This directory contains documentation for the CloudForge plugin system, enabling
 
 ## Built-in Plugins
 
-CloudForge includes 14 pre-built application plugins across 8 categories:
+CloudForge includes 33 pre-built application plugins across 14 categories:
 
 - **CI/CD**: Jenkins, GitLab, Drone
 - **Version Control**: Gitea
@@ -27,6 +27,13 @@ CloudForge includes 14 pre-built application plugins across 8 categories:
 - **Artifact Registry**: Nexus, Harbor
 - **Collaboration**: Mattermost
 - **Analytics**: Metabase, Superset
+- **CMS**: WordPress, WooCommerce, Drupal, Joomla, TYPO3, Concrete CMS, October CMS
+- **E-commerce**: Magento 2, PrestaShop, OpenCart, Sylius, Bagisto
+- **Forum**: phpBB, Flarum, MyBB
+- **CRM**: SuiteCRM
+- **Wiki**: MediaWiki
+- **LMS**: Moodle
+- **Social**: UNA / Dolphin
 
 See the [Application Catalog](../applications/README.md) for detailed documentation on each application.
 

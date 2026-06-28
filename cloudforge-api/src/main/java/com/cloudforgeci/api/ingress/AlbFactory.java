@@ -414,6 +414,8 @@ public class AlbFactory extends BaseFactory {
 
         // Store bucket ARN in SSM at deployment time using Custom Resource (stack-scoped)
         String ssmParameterName = "/cloudforge/shared/" + region + "/stack/" + this.stackName + "/alb-logs/bucket-arn";
+        // Scope the IAM policy to the exact parameter rather than resources: ["*"]
+        String ssmParameterArn = "arn:aws:ssm:" + region + ":" + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
 
         AwsSdkCall putParameterCall = AwsSdkCall.builder()
                 .service("SSM")
@@ -434,7 +436,7 @@ public class AlbFactory extends BaseFactory {
                 .onUpdate(putParameterCall)
                 .policy(AwsCustomResourcePolicy.fromSdkCalls(
                         software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
+                                .resources(List.of(ssmParameterArn))
                                 .build()
                 ))
                 .build();
@@ -452,10 +454,6 @@ public class AlbFactory extends BaseFactory {
                     .id("PCI.DSS.321-LambdaInsideVPC")
                     .reason("CDK custom resource Lambdas only make AWS API calls (SSM) " +
                            "and do not require VPC access.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM5")
-                    .reason("SSM parameter operations require wildcard resource patterns.")
                     .build()
             ),
             Boolean.TRUE

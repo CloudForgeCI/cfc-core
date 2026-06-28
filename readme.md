@@ -1,4 +1,4 @@
-# CloudForge 3.0.0 — Compliance-Ready AWS Infrastructure Framework
+# CloudForge 3.1.0 — Compliance-Ready AWS Infrastructure Framework
 
 **Open-source infrastructure-as-code framework for deploying secure, auditable application workloads on AWS**
 
@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 
-Deploy secure, compliance-ready application infrastructure on AWS in minutes. **10+ applications across 8 categories**: CI/CD (Jenkins, GitLab, Drone), Version Control (Gitea), Monitoring (Grafana, Prometheus), Databases (PostgreSQL, Redis), Secrets Management (Vault), Artifact Registry (Nexus, Harbor), Collaboration (Mattermost), and Analytics (Metabase, Superset). Built-in OIDC authentication (AWS Cognito, IAM Identity Center) and automated compliance validation for SOC2, HIPAA, PCI-DSS, GDPR, and ISO 27001.
+Deploy secure, compliance-ready application infrastructure on AWS in minutes. **33 applications across 14 categories**: CI/CD (Jenkins, GitLab, Drone), Version Control (Gitea), Monitoring (Grafana, Prometheus), Databases (PostgreSQL, Redis), Secrets Management (Vault), Artifact Registry (Nexus, Harbor), Collaboration (Mattermost), Analytics (Metabase, Superset) — and **19 CMS/e-commerce platforms** (WordPress, WooCommerce, Magento, Drupal, Joomla, PrestaShop, Moodle, MediaWiki, phpBB, and more). Built-in OIDC authentication (AWS Cognito, IAM Identity Center) and automated compliance validation for SOC2, HIPAA, PCI-DSS, GDPR, and ISO 27001.
 
 **📈 [Live Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** — Coverage, validation, compliance truth tables & drift detection
 
@@ -22,7 +22,7 @@ Deploy secure, compliance-ready application infrastructure on AWS in minutes. **
 - **[Interactive Deployer](docs/guides/INTERACTIVE_DEPLOYER.md)** - User-friendly CLI deployment tool
 
 ### 🔌 Plugin System
-- **[Plugin Ecosystem Overview](docs/plugins/PLUGIN-ECOSYSTEM.md)** - 14 built-in applications + custom plugins
+- **[Plugin Ecosystem Overview](docs/plugins/PLUGIN-ECOSYSTEM.md)** - 33 built-in applications + custom plugins
 - **[Plugin System Guide](docs/plugins/PLUGIN-SYSTEM.md)** - Architecture and development
 - **[Application Plugin Guide](docs/plugins/APPLICATION-PLUGIN-GUIDE.md)** - Build custom application plugins
 - **[Compliance Plugin Guide](docs/plugins/COMPLIANCE-PLUGIN-GUIDE.md)** - Build compliance framework plugins
@@ -81,7 +81,7 @@ Includes example configurations for all scenarios: OIDC/Cognito auth, SOC2/HIPAA
 
 ```xml
 <properties>
-  <cloudforge.version>2.0.6</cloudforge.version>
+  <cloudforge.version>3.1.0</cloudforge.version>
 </properties>
 
 <dependencies>
@@ -100,8 +100,8 @@ Check [Maven Central](https://central.sonatype.com/artifact/com.cloudforgeci/clo
 ```bash
 git clone https://github.com/CloudForgeCI/cfc-core.git
 cd cfc-core
-./mvnw -T1C -DskipTests install  # Fast build (skip tests)
-./mvnw clean verify               # Full build with tests
+mvn -T1C -DskipTests -Djacoco.skip=true install  # Fast build (skip tests)
+mvn clean verify                                   # Full build with tests
 ```
 
 ---
@@ -115,7 +115,7 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `runtime` | string | `"fargate"` | **Compute platform:** `"ec2"` or `"fargate"` |
-| `topology` | string | `"jenkins-service"` | **Architecture:** `"jenkins-service"` (HA), `"jenkins-single-node"`, or `"s3-website"` |
+| `topology` | string | `"jenkins-service"` | **Architecture:** `"jenkins-service"` (HA), `"application-service"` (any app), `"cms-service"` (PHP/CMS — auto-wires S3, Redis, CDN), or `"s3-website"` |
 | `securityProfile` | string | `"dev"` | **Security level:** `"dev"`, `"staging"`, or `"production"` |
 | `region` | string | `"us-east-1"` | AWS region to deploy to |
 | `stackName` | string | auto | CloudFormation stack name |
@@ -307,7 +307,7 @@ EC2 with auto-scaling, SSL, Cognito MFA, and custom domain.
 
 ## 🔌 Application-Specific Configurations
 
-CloudForge supports 14 applications. Set `applicationId` to deploy any application.
+CloudForge supports 33 applications. For CMS platforms (WordPress, Magento, Drupal, and 16 more), set `application` with topology `cms-service`; for all other apps set `applicationId` with topology `application-service`.
 
 ### GitLab (CI/CD + Version Control)
 
@@ -758,13 +758,13 @@ We welcome contributions! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for guideli
 
 ```bash
 # Fast build (skip tests)
-./mvnw -T1C -DskipTests install
+mvn -T1C -DskipTests -Djacoco.skip=true install
 
 # Full build
-./mvnw clean verify
+mvn clean verify
 
 # Single module
-./mvnw -pl cloudforge-api -am package
+mvn -pl cloudforge-api -am package
 ```
 
 ---

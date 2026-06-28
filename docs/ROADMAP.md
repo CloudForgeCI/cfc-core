@@ -49,37 +49,43 @@ This document tracks completed features and planned enhancements for the CloudFo
 - ✅ **Automated Backups** - Configurable retention periods
 - ✅ **Performance Insights** - Database performance monitoring
 
----
+### Q2 2026 - CMS & Platform Expansion
 
-## In Progress 🚧
+#### CMS / E-commerce Platform Support (19 Platforms)
+- ✅ **`cms-service` Topology** — New topology that auto-wires S3, Redis, CDN, DNS from `CmsSpec` capabilities
+- ✅ **`CmsPlugin` Annotation** — Rich metadata (PHP version, OIDC method, resource defaults, feature flags)
+- ✅ **`CmsSpec` Interface** — PHP runtime, media storage, CDN path routing, object cache, scheduled tasks
+- ✅ **ServiceLoader Registration** — All 19 CMS specs discoverable via `CmsLoader`
+- ✅ **Polymorphic env var injection** — `redisEnvVars()` / `databaseEnvVars()` replace hardcoded switch blocks
+- ✅ **CDN path routing** — `cdnMediaPaths()` / `cdnStaticPaths()` / `cdnAdminPaths()` drive CloudFront behaviors
+- ✅ **WordPress** — OIDC, S3 media, Redis, multisite, WP-CLI, system cron
+- ✅ **WooCommerce** — Extends WordPress; PCI-DSS ready
+- ✅ **Magento 2** — 3-database Redis, S3 media, Elasticsearch, enterprise-scale
+- ✅ **Drupal** — Native OIDC module, S3FS, Drush, PostgreSQL support
+- ✅ **Joomla** — Redis, S3 media, ALB OIDC
+- ✅ **PrestaShop** — S3 media, Redis, e-commerce
+- ✅ **OpenCart, Sylius, Bagisto** — Lightweight e-commerce platforms
+- ✅ **phpBB, Flarum, MyBB** — Forum platforms
+- ✅ **SuiteCRM** — Open-source CRM
+- ✅ **MediaWiki** — Wiki platform (Wikipedia engine)
+- ✅ **Moodle** — LMS; FERPA-relevant
+- ✅ **UNA / Dolphin** — Social networking platform
+- ✅ **TYPO3, Concrete CMS, October CMS** — Enterprise and developer CMS
+- ✅ **`DeploymentContext.applicationId()` / `cmsSpec()`** — Resolves CmsSpec from `"application"` cdk.json key
+- ✅ **`TopologyRules` CMS_SERVICE arm** — Auto-sets `applicationSpec` slot from resolved `CmsSpec`
 
-### Q1 2026 - Advanced Compliance & Enterprise Features
-
-#### FedRAMP Compliance
-- 🚧 **FedRAMP Moderate** - In progress (80% complete)
-  - ✅ Controls mapping documented
-  - ✅ Initial implementation
-  - ⏳ Testing and validation
-  - ⏳ ATO documentation package
-
-#### CMS Integration
-- 🚧 **WordPress Support** - Beta implementation
-  - ✅ Core deployment
-  - ✅ S3 media storage integration
-  - ✅ Redis object cache
-  - ⏳ OIDC authentication
-  - ⏳ Production hardening
-
-- 🚧 **Drupal Support** - Alpha implementation
-  - ✅ Core deployment
-  - ⏳ S3FS module integration
-  - ⏳ Redis cache integration
+#### Local Docker Development Environment
+- ✅ **26-container `docker-compose.yml`** — Full local dev stack mirroring the Fargate runtime across 8 service groups
+- ✅ **Docker lifecycle scripts** — `docker-start.sh`, `docker-stop.sh`, `docker-app.sh`, `docker-services.sh`, `docker-status.sh`, `docker-logs.sh`, `docker-clean.sh` with group-based startup
+- ✅ **CMS containers verified** — WordPress, WooCommerce, Drupal, Joomla, UNA, Magento 2, OpenCart all healthy locally
+- ✅ **Infrastructure containers verified** — Jenkins, GitLab, Drone, Gitea, Prometheus, Grafana, Metabase, Superset, Nexus, Vault, Mattermost, HAProxy, OpenSearch, Mock-OIDC, PostgreSQL, MySQL, MariaDB, Redis all healthy locally
+- ✅ **DOCKER_QUICK_START.md / DOCKER_LOCAL_DEV_README.md** — Added to `docs/guides/`
 
 ---
 
 ## Planned Enhancements 📋
 
-### Q2 2026 - Service Expansion
+### Q3 2026 - Service Expansion
 
 #### Additional AWS Services
 
@@ -204,6 +210,16 @@ This document tracks completed features and planned enhancements for the CloudFo
 ### Q4 2026 - Enterprise & Advanced Compliance
 
 #### Advanced Compliance Frameworks
+
+##### FedRAMP Moderate
+- **Priority:** High
+- **Estimated Effort:** 4-6 weeks
+- **Status:** Controls mapping complete (`docs/compliance/FEDRAMP_CONTROLS_MAPPING.md`); implementation not started
+- **Features:**
+  - Core security controls implementation
+  - Continuous monitoring integration
+  - ATO documentation package
+  - Testing and validation
 
 ##### FedRAMP High
 - **Priority:** High
@@ -384,4 +400,4 @@ For feature requests or to discuss roadmap priorities, please:
 
 ---
 
-**Last Updated:** December 30, 2025
+**Last Updated:** June 2026

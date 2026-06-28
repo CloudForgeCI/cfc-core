@@ -13,9 +13,9 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * <h2>JSON Serialization</h2>
  * Supports multiple input formats (case-insensitive):
  * <ul>
- *   <li>SCREAMING_SNAKE_CASE: "APPLICATION_SERVICE", "JENKINS_SERVICE", "S3_WEBSITE"</li>
- *   <li>kebab-case: "application-service", "jenkins-service", "s3-website"</li>
- *   <li>Aliases: "service" → JENKINS_SERVICE, "s3" → S3_WEBSITE, "application" → APPLICATION_SERVICE</li>
+ *   <li>SCREAMING_SNAKE_CASE: "APPLICATION_SERVICE", "JENKINS_SERVICE", "S3_WEBSITE", "CMS_SERVICE"</li>
+ *   <li>kebab-case: "application-service", "jenkins-service", "s3-website", "cms-service"</li>
+ *   <li>Aliases: "service" → JENKINS_SERVICE, "s3" → S3_WEBSITE, "application" → APPLICATION_SERVICE, "cms" → CMS_SERVICE</li>
  * </ul>
  */
 public enum TopologyType {
@@ -24,7 +24,10 @@ public enum TopologyType {
     S3_WEBSITE("s3-website"),
 
     // CloudForge 3.0.0: Universal application topology
-    APPLICATION_SERVICE("application-service");  // Generic service topology for any ApplicationSpec
+    APPLICATION_SERVICE("application-service"),  // Generic service topology for any ApplicationSpec
+
+    // CloudForge 3.1.0: CMS-specific topology (auto-wires S3 media, Redis, CDN, RDS from CmsSpec)
+    CMS_SERVICE("cms-service");
 
     private final String jsonValue;
 
@@ -68,13 +71,15 @@ public enum TopologyType {
             case "jenkins-service", "service" -> JENKINS_SERVICE;
             case "s3-website", "s3" -> S3_WEBSITE;
             case "application-service", "app-service", "application" -> APPLICATION_SERVICE;
+            case "cms-service", "cms" -> CMS_SERVICE;
             default -> {
                 // Try matching by enum name (SCREAMING_SNAKE_CASE)
                 try {
                     yield TopologyType.valueOf(value.trim().toUpperCase().replace('-', '_'));
                 } catch (IllegalArgumentException e) {
                     throw new IllegalArgumentException(
-                        "Unknown topology '" + value + "'. Valid values: jenkins-service, s3-website, application-service. " +
+                        "Unknown topology '" + value + "'. Valid values: jenkins-service, s3-website, " +
+                        "application-service, cms-service. " +
                         "Note: JENKINS_SINGLE_NODE was removed in 3.0.0 - use jenkins-service instead."
                     );
                 }

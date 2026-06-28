@@ -66,6 +66,9 @@ venv.bak/
 *.backup
 *.orig
 
+# Local working notes (not for commit)
+*.local.md
+
 # OWASP Dependency-Check reports
 dependency-check-report.html
 dependency-check-report.json

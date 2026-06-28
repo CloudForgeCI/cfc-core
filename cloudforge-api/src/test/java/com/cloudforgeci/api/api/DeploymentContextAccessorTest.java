@@ -725,4 +725,61 @@ class DeploymentContextAccessorTest {
             assertEquals(TopologyType.JENKINS_SERVICE, ctx.getTopology());
         }
     }
+
+    @Nested
+    @DisplayName("CMS Accessor Tests")
+    class CmsAccessorTests {
+
+        @Test
+        @DisplayName("applicationId() returns configured application value")
+        void applicationIdReturnsConfiguredValue() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("application", "wordpress");
+            DeploymentContext ctx = createContext(config);
+            assertEquals("wordpress", ctx.applicationId());
+        }
+
+        @Test
+        @DisplayName("applicationId() returns null when not configured")
+        void applicationIdReturnsNullWhenAbsent() {
+            DeploymentContext ctx = createContext(new LinkedHashMap<>());
+            assertNull(ctx.applicationId());
+        }
+
+        @Test
+        @DisplayName("cmsSpec() resolves wordpress to WordPressApplicationSpec")
+        void cmsSpecResolvesWordPress() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("application", "wordpress");
+            DeploymentContext ctx = createContext(config);
+            assertTrue(ctx.cmsSpec().isPresent(), "cmsSpec() must resolve 'wordpress'");
+            assertEquals("wordpress", ctx.cmsSpec().get().applicationId());
+        }
+
+        @Test
+        @DisplayName("cmsSpec() resolves magento to MagentoApplicationSpec")
+        void cmsSpecResolvesMagento() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("application", "magento");
+            DeploymentContext ctx = createContext(config);
+            assertTrue(ctx.cmsSpec().isPresent());
+            assertEquals("magento", ctx.cmsSpec().get().applicationId());
+        }
+
+        @Test
+        @DisplayName("cmsSpec() returns empty when application not set")
+        void cmsSpecEmptyWhenNoApplication() {
+            DeploymentContext ctx = createContext(new LinkedHashMap<>());
+            assertFalse(ctx.cmsSpec().isPresent());
+        }
+
+        @Test
+        @DisplayName("cmsSpec() returns empty for unknown application id")
+        void cmsSpecEmptyForUnknownId() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("application", "not-a-real-cms");
+            DeploymentContext ctx = createContext(config);
+            assertFalse(ctx.cmsSpec().isPresent());
+        }
+    }
 }

@@ -1,0 +1,17 @@
+database:
+  type: postgresql
+  ssl_mode: disable
+  host: postgres-main
+  port: 5432
+  username: cfc_admin
+  password: cfc_password_dev
+  dbname: harbor
+database:
+  max_open_conns: 900
+http:
+  addr: :8080
+  tls:
+    enabled: false
+log:
+  level: info
+  format: json

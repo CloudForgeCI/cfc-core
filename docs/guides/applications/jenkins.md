@@ -482,8 +482,9 @@ Recommended plugins for production:
 # Fargate
 aws logs tail /aws/ecs/jenkins --follow
 
-# EC2
-ssh ec2-user@instance 'tail -f /var/log/jenkins/jenkins.log'
+# EC2 (via SSM Session Manager — no port 22 or SSH key needed)
+aws ssm start-session --target <instance-id>
+# then: tail -f /var/log/jenkins/jenkins.log
 ```
 
 ### OIDC login fails

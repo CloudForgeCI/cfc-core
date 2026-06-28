@@ -56,7 +56,7 @@ Comprehensive guides for each application with deployment-context examples:
 
 | Document | Description |
 |----------|-------------|
-| **[Application Catalog](applications/README.md)** | Complete catalog of 14 built-in applications |
+| **[Application Catalog](applications/README.md)** | Complete catalog of 33 built-in applications |
 | **[Application Compliance](applications/COMPLIANCE.md)** | Compliance requirements for each application |
 | **[OIDC Integration](applications/OIDC.md)** | Application-level OIDC authentication (Grafana, GitLab, Jenkins) |
 
@@ -220,5 +220,5 @@ Found a documentation error or want to improve something?
 
 ---
 
-**Last Updated:** 2025-12-07
-**Documentation Version:** 3.0.0
+**Last Updated:** June 2026
+**Documentation Version:** 3.1.0

@@ -335,7 +335,57 @@ class TopologyRulesTest {
         SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
-        // Wiring should be deferred via ctx.once() - this tests the pattern works
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
+    }
+
+    @Test
+    void testCmsServiceTopologyWithFargateDev() {
+        App app = new App();
+        Stack stack = createTestStack(app, "TestCmsTopoFargateDev", SecurityProfile.DEV);
+        stack.getNode().setContext("cfc", buildCmsContext("TestCmsTopoFargateDev", SecurityProfile.DEV, "wordpress"));
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.CMS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.DEV, iamProfile, cfc);
+
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
+    }
+
+    @Test
+    void testCmsServiceTopologyWithEc2Staging() {
+        App app = new App();
+        Stack stack = createTestStack(app, "TestCmsTopoEc2Staging", SecurityProfile.STAGING);
+        stack.getNode().setContext("cfc", buildCmsContext("TestCmsTopoEc2Staging", SecurityProfile.STAGING, "drupal"));
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.CMS_SERVICE, RuntimeType.EC2,
+                SecurityProfile.STAGING, iamProfile, cfc);
+
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
+    }
+
+    @Test
+    void testCmsServiceTopologyWithFargateProduction() {
+        App app = new App();
+        Stack stack = createTestStack(app, "TestCmsTopoProd", SecurityProfile.PRODUCTION);
+        stack.getNode().setContext("cfc", buildCmsContext("TestCmsTopoProd", SecurityProfile.PRODUCTION, "magento"));
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.CMS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        assertDoesNotThrow(() -> new TopologyRules().install(ctx));
+    }
+
+    private Map<String, Object> buildCmsContext(String stackName, SecurityProfile profile, String application) {
+        Map<String, Object> ctx = new HashMap<>();
+        ctx.put("stackName", stackName);
+        ctx.put("securityProfile", profile.name());
+        ctx.put("domain", "example.com");
+        ctx.put("application", application);
+        return ctx;
     }
 }

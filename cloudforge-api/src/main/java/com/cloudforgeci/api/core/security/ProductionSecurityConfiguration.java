@@ -1,6 +1,5 @@
 package com.cloudforgeci.api.core.security;
 
-import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.SystemContext;
@@ -74,13 +73,9 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // Instance security group - only for EC2 runtime
         if (c.runtime == RuntimeType.EC2) {
             whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
-                // SSH only from specific bastion host or VPN CIDR (configurable via bastionCidr)
-                instanceSg.addIngressRule(
-                    Peer.ipv4(c.cfc.bastionCidr()),
-                    Port.tcp(22),
-                    "SSH_from_bastion/VPN_(PRODUCTION)",
-                    false
-                );
+                // SSH access is provided via AWS Systems Manager Session Manager (no port 22 needed).
+                // All IAM configurations already include AmazonSSMManagedInstanceCore.
+                // Connect with: aws ssm start-session --target <instance-id>
 
                 // Application port only from ALB security group
                 if (c.albSg.get().isPresent()) {
@@ -345,17 +340,8 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             }
         });
 
-        // Authentication Configuration - centralized auth handling
-        whenBoth(c.authMode, c.alb, (authMode, alb) -> {
-            if (AuthMode.ALB_OIDC == AuthMode.fromString(authMode)) {
-                // Configure ALB OIDC authentication
-                // OIDC configuration would go here
-                LOG.info("ALB OIDC authentication configured");
-            }
-        });
-
-        // Note: Additional security configurations can be added here
-        // For now, focusing on security group restrictions for production hardening
+        // Note: OIDC/auth factory wiring is handled by SystemContext.createSecurityFactories(),
+        // not here. ProductionSecurityConfiguration owns network/SG restrictions only.
     }
 
     private static <A,B> void whenBoth(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b,
@@ -365,20 +351,6 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             if (ao.isPresent() && bo.isPresent()) fn.accept(ao.get(), bo.get());
         };
         a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run()); tryRun.run();
-    }
-
-    private static <A,B,C,D> void whenAll(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b,
-                                         com.cloudforgeci.api.core.Slot<C> c, com.cloudforgeci.api.core.Slot<D> d,
-                                         Function4<A,B,C,D,Void> fn) {
-        Runnable tryRun = () -> {
-            var ao = a.get(); var bo = b.get(); var co = c.get(); var do_ = d.get();
-            if (ao.isPresent() && bo.isPresent() && co.isPresent() && do_.isPresent()) {
-                fn.apply(ao.get(), bo.get(), co.get(), do_.get());
-            }
-        };
-        a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run());
-        c.onSet(z -> tryRun.run()); d.onSet(w -> tryRun.run());
-        tryRun.run();
     }
 
     /**
@@ -416,19 +388,4 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         }
     }
 
-    /**
-     * Check if we're in a test environment.
-     */
-    private boolean isTestEnvironment() {
-        // Check if we're running in a test environment
-        String testEnv = System.getProperty("test.environment");
-        return "true".equalsIgnoreCase(testEnv) ||
-               System.getProperty("java.class.path").contains("junit") ||
-               System.getProperty("java.class.path").contains("test");
-    }
-
-    @FunctionalInterface
-    private interface Function4<A, B, C, D, R> {
-        R apply(A a, B b, C c, D d);
-    }
 }

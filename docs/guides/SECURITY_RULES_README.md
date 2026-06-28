@@ -1,183 +1,140 @@
-# Security Rules System
+# Security Profiles
 
-This document describes the new Security Rules system that has been integrated into the CloudForge Community (CFC) core API. The system provides configurable security profiles that can be applied to Jenkins deployments on both EC2 and Fargate runtimes.
+Every CloudForge deployment has a **security profile** — a curated set of defaults that controls network access, encryption, authentication enforcement, observability, and compliance checks. You pick one in `deployment-context.json` and CloudForge wires everything automatically.
 
-## Overview
-
-The Security Rules system follows the same pattern as the existing RuntimeRules and TopologyRules, providing a consistent and extensible approach to security configuration. It integrates seamlessly with the SystemContext and RuleKit infrastructure.
-
-## Components
-
-### 1. SecurityProfile Enum
-Located at: `com.cloudforgeci.api.interfaces.SecurityProfile`
-
-```java
-public enum SecurityProfile { 
-    DEV, 
-    STAGING, 
-    PRODUCTION 
+```json
+{
+  "securityProfile": "production"
 }
 ```
 
-### 2. SecurityConfiguration Interface
-Located at: `com.cloudforgeci.api.interfaces.SecurityConfiguration`
+Three profiles are available: `dev`, `staging`, and `production`.
 
-Extends the base `IConfiguration` interface and provides the `kind()` method to return the security profile type.
+---
 
-### 3. Security Configuration Implementations
+## What each profile gives you
 
-#### DevSecurityConfiguration
-- **Location**: `com.cloudforgeci.api.core.security.DevSecurityConfiguration`
-- **Purpose**: Development environment with minimal security restrictions
-- **Features**:
-  - SSH access from anywhere (0.0.0.0/0)
-  - Jenkins port accessible from anywhere
-  - HTTP/HTTPS accessible from anywhere
-  - NFS access from Jenkins instances
+### `dev` — Evaluate freely
 
-#### StagingSecurityConfiguration
-- **Location**: `com.cloudforgeci.api.core.security.StagingSecurityConfiguration`
-- **Purpose**: Testing environment with moderate security restrictions
-- **Features**:
-  - SSH access restricted to VPC CIDR
-  - Jenkins port only accessible from ALB security group
-  - HTTP/HTTPS accessible from anywhere (needed for external testing)
-  - NFS access restricted to Jenkins instances
+The lowest-friction option. Designed for local evaluation, internal tooling, and feature branches where you want things running quickly without compliance overhead.
 
-#### ProductionSecurityConfiguration
-- **Location**: `com.cloudforgeci.api.core.security.ProductionSecurityConfiguration`
-- **Purpose**: Production environment with hardened security for compliance
-- **Features**:
-  - SSH access restricted to bastion/VPN CIDR (10.0.1.0/24)
-  - Jenkins port only accessible from ALB security group
-  - HTTPS only (HTTP redirects to HTTPS)
-  - NFS access restricted to Jenkins instances
-  - **ALB access logging** enabled with S3 bucket (6-year retention, lifecycle management)
-  - **WAF protection** enabled
-  - **Cognito OIDC authentication** auto-provisioned (when domain + SSL configured)
-  - **Compliance validation** for PCI-DSS, HIPAA, SOC 2, GDPR
+- Application accessible from anywhere over HTTP or HTTPS
+- No authentication required (set `authMode` to enable it)
+- No WAF, no CloudTrail, no GuardDuty
+- Instance and container access via AWS SSM Session Manager — no port 22 open
+- ECS Exec enabled on all Fargate tasks
+- Estimated cost floor: ~$35/month
 
-### 4. SecurityRules Class
-Located at: `com.cloudforgeci.api.core.rules.SecurityRules`
+> **Do not use `dev` for anything with real user data or internet-facing traffic.**
 
-Manages the installation and wiring of security configurations based on the selected security profile.
+---
 
-### 5. SystemContext Integration
+### `staging` — Test before you ship
 
-The SystemContext has been updated to include:
-- `SecurityProfile security` field
-- `Slot<CfnWebACL> wafWebAcl` slot for future WAF integration
-- Updated `start()` method to accept SecurityProfile parameter
-- Updated `debugPath()` method to include security information
+A middle ground — strict enough to catch configuration problems before production, relaxed enough to allow external testing without a full domain and certificate setup.
 
-## Usage Examples
+- Application accessible from anywhere over HTTP or HTTPS
+- Authentication optional — configure `authMode` to test your auth flow end-to-end
+- WAF optional (`wafEnabled: true` to enable)
+- Instance and container access via SSM Session Manager — no port 22 open
+- ComplianceFactory runs (CloudTrail, AWS Config) when enabled
 
-### Basic Usage (Default DEV Security)
-```java
-// Uses SecurityProfile.DEV by default
-JenkinsFactory.createEc2(scope, "MyJenkins", cfc);
-JenkinsFactory.createFargate(scope, "MyJenkins", cfc);
-```
+---
 
-### Explicit Security Profile Selection
-```java
-// Development environment
-JenkinsFactory.createEc2(scope, "DevJenkins", cfc, SecurityProfile.DEV);
+### `production` — Hardened by default
 
-// Staging environment
-JenkinsFactory.createEc2(scope, "StagingJenkins", cfc, SecurityProfile.STAGING);
+The most opinionated profile. Designed to be compliant out of the box with PCI-DSS, HIPAA, SOC 2, and GDPR when paired with the appropriate compliance framework.
 
-// Production environment
-JenkinsFactory.createEc2(scope, "ProdJenkins", cfc, SecurityProfile.PRODUCTION);
-```
+- HTTP redirects to HTTPS — plain HTTP is never forwarded to the application
+- WAF enabled automatically
+- ALB access logs written to S3 (6-year retention, Glacier lifecycle)
+- CloudTrail, AWS Config, and GuardDuty enabled
+- EBS, EFS, and S3 encryption enforced
+- Automated backups enabled
+- Multi-AZ enforced
+- Instance and container access via SSM Session Manager — no port 22 open
+- If `authMode` is `none` and a compliance framework is active, the build fails with a remediation message
 
-### Complete Example
-```java
-public class MyJenkinsDeployment {
-    public static void deploy(Construct scope, String id, DeploymentContext cfc) {
-        // Development deployment
-        JenkinsFactory.createEc2(scope, id + "Dev", cfc, SecurityProfile.DEV);
-        
-        // Staging deployment
-        JenkinsFactory.createFargate(scope, id + "Staging", cfc, SecurityProfile.STAGING);
-        
-        // Production deployment
-        JenkinsFactory.createEc2(scope, id + "Production", cfc, SecurityProfile.PRODUCTION);
-    }
+---
+
+## Comparison
+
+| | `dev` | `staging` | `production` |
+|--|-------|-----------|--------------|
+| HTTP access | Allowed | Allowed | Redirects to HTTPS |
+| HTTPS access | Allowed | Allowed | Allowed |
+| Authentication | Optional | Optional | Required by compliance frameworks |
+| WAF | Off | Optional | On |
+| ALB access logs | Off | Off | On (6-year S3 retention) |
+| CloudTrail | Off | Optional | On |
+| GuardDuty | Off | Optional | On |
+| EC2 instance access | SSM Session Manager | SSM Session Manager | SSM Session Manager |
+| Fargate shell access | ECS Exec (SSM) | ECS Exec (SSM) | ECS Exec (SSM) |
+| Deletion protection | Off | Off | On |
+| Estimated cost floor | ~$35/mo | ~$80/mo | ~$200/mo |
+
+---
+
+## Overriding individual settings
+
+The profile sets the defaults. You can override individual fields in `deployment-context.json` without changing the profile. For example, enabling WAF in staging:
+
+```json
+{
+  "securityProfile": "staging",
+  "wafEnabled": true
 }
 ```
 
-## Security Profiles Comparison
+Or disabling HTTP in dev to test an HTTPS flow:
 
-| Feature | DEV | STAGING | PRODUCTION |
-|---------|-----|---------|------------|
-| SSH Access | Anywhere (0.0.0.0/0) | VPC CIDR | Bastion/VPN CIDR (10.0.1.0/24) |
-| Jenkins Port | Anywhere | ALB Security Group | ALB Security Group |
-| HTTP Access | Anywhere | Anywhere | Redirects to HTTPS |
-| HTTPS Access | Anywhere | Anywhere | Anywhere |
-| NFS Access | Jenkins Instances | Jenkins Instances | Jenkins Instances |
-| WAF Protection | None | None | Placeholder for future |
-
-## Integration Points
-
-The Security Rules system integrates with the following components:
-
-1. **ALB (Application Load Balancer)**: Security group rules for HTTP/HTTPS access
-2. **Domain/Subdomain**: DNS configuration for external access
-3. **ACM Certificate**: SSL/TLS certificate management
-4. **EFS**: Network File System security group rules
-5. **VPC**: Virtual Private Cloud configuration
-6. **Multi-AZ**: Multi-Availability Zone deployment
-7. **Auto Scaling Group**: EC2 instance scaling
-8. **Jenkins**: Application-specific security configurations
-9. **S3**: Object storage security (future enhancement)
-10. **Lambda**: Serverless function security (future enhancement)
-11. **ECR**: Container registry security (future enhancement)
-12. **EKS**: Kubernetes cluster security (future enhancement)
-13. **CloudWatch**: Monitoring and logging security
-14. **WAF**: Web Application Firewall - ✅ Fully implemented (required for PCI-DSS)
-15. **Backup**: Data backup security (future enhancement)
-16. **CloudFront**: CDN security (future enhancement)
-
-## Future Enhancements
-
-### Recently Completed ✅
-
-1. ~~**WAF Integration**~~ - ✅ **COMPLETED**: Full AWS WAF v2 implementation, required for PCI-DSS compliance
-2. ~~**Compliance Frameworks**~~ - ✅ **COMPLETED**: SOC2, HIPAA, PCI-DSS, GDPR fully implemented with multi-framework support
-3. ~~**IAM Integration**~~ - ✅ **COMPLETED**: Fine-grained IAM policies based on security profiles (see [IAM_RULES.md](IAM_RULES.md))
-4. ~~**Security Monitoring**~~ - ✅ **COMPLETED**: CloudWatch alarms, GuardDuty integration, certificate expiration monitoring
-
-### Planned Enhancements
-
-1. **Additional Security Profiles**: Industry-specific security profiles (Financial Services, Healthcare, Government)
-2. **Advanced Encryption**: Customer-managed KMS keys for all encryption at rest
-3. **S3 Security Rules**: Comprehensive S3 bucket security configurations
-4. **Lambda Security Rules**: Serverless function security and VPC integration
-5. **ECR Security Rules**: Container registry security scanning and access control
-6. **EKS Security Rules**: Kubernetes cluster security and pod security policies
-7. **CloudFront Security**: CDN security configurations and origin access identity
-
-## Testing
-
-The system includes comprehensive validation rules that ensure:
-- Required security groups are present
-- Security group rules are properly configured
-- Network access is appropriately restricted based on the security profile
-- Integration with existing runtime and topology configurations
-
-## Migration Guide
-
-Existing deployments using the old `SystemContext.start()` method will need to be updated to include the SecurityProfile parameter:
-
-**Before:**
-```java
-SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, cfc);
+```json
+{
+  "securityProfile": "dev",
+  "enableSsl": true,
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true
+}
 ```
 
-**After:**
-```java
-SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, cfc);
+The profile provides the floor; your config can raise it.
+
+---
+
+## Compliance frameworks
+
+Compliance frameworks are independent of security profiles — they're a validation layer that runs after the profile and your overrides are applied. If the combined configuration doesn't satisfy the standard's requirements, the build fails with specific remediation steps.
+
+```json
+{
+  "securityProfile": "production",
+  "complianceFrameworks": "PCI-DSS,SOC2"
+}
 ```
 
-The JenkinsFactory methods have been updated to maintain backward compatibility while providing the new security functionality.
+Available frameworks: `PCI-DSS`, `HIPAA`, `SOC2`, `GDPR`.
+
+Each framework checks things like authentication being enabled, encryption at rest, log retention periods, network isolation, and access control. See [compliance/](../compliance/) for per-framework details.
+
+---
+
+## Accessing instances and containers
+
+No profile opens port 22. All shell access goes through AWS Systems Manager.
+
+**EC2 instances** (e.g. Jenkins):
+```bash
+aws ssm start-session --target <instance-id>
+```
+
+**Fargate tasks** (ECS Exec):
+```bash
+aws ecs execute-command \
+  --cluster <cluster-name> \
+  --task <task-id> \
+  --container <container-name> \
+  --interactive \
+  --command "/bin/sh"
+```
+
+Both require the caller's IAM identity to have `ssm:StartSession` or `ecs:ExecuteCommand` respectively. Sessions are CloudTrail-logged automatically.

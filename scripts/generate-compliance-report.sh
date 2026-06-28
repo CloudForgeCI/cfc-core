@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Generate compliance status report for a CloudForge deployment
 
 set -euo pipefail

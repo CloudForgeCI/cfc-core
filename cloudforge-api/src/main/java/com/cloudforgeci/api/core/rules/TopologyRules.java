@@ -2,6 +2,7 @@ package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.core.topology.ApplicationServiceTopologyConfiguration;
+import com.cloudforgeci.api.core.topology.CmsServiceTopologyConfiguration;
 import com.cloudforgeci.api.core.topology.JenkinsServiceTopologyConfiguration;
 import com.cloudforgeci.api.core.topology.S3WebsiteTopologyConfiguration;
 import com.cloudforgeci.api.application.JenkinsApplicationSpec;
@@ -23,6 +24,7 @@ public final class TopologyRules {
       case JENKINS_SERVICE     -> new JenkinsServiceTopologyConfiguration();
       case S3_WEBSITE          -> new S3WebsiteTopologyConfiguration();
       case APPLICATION_SERVICE -> new ApplicationServiceTopologyConfiguration();
+      case CMS_SERVICE         -> new CmsServiceTopologyConfiguration();
     };
     LOG.fine("Topology configuration created: " + p.getClass().getSimpleName());
 
@@ -30,6 +32,12 @@ public final class TopologyRules {
     if (ctx.topology == com.cloudforge.core.enums.TopologyType.JENKINS_SERVICE) {
       ApplicationSpec appSpec = new JenkinsApplicationSpec();
       ctx.applicationSpec.set(appSpec);
+    }
+
+    // For CMS_SERVICE topology, resolve the CmsSpec from the deployment context and set it
+    // as the applicationSpec so other factories (FargateFactory, etc.) can read it.
+    if (ctx.topology == com.cloudforge.core.enums.TopologyType.CMS_SERVICE) {
+      ctx.cfc.cmsSpec().ifPresent(ctx.applicationSpec::set);
     }
 
     // For APPLICATION_SERVICE topology, applicationSpec must be provided by caller

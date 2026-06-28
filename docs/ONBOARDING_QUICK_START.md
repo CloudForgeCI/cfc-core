@@ -404,13 +404,26 @@ For applications that support both RDS and embedded databases (Metabase, Grafana
 }
 ```
 
-### Add Bastion Host Access
+### Access Running Instances
 
-```json
-{
-  "bastionCidr": "203.0.113.0/24"  // Your office IP range
-}
+CloudForge does not open port 22. All instance and container access goes through AWS Systems Manager — no SSH keys, no open ports, and every session is CloudTrail-logged.
+
+**EC2 instances** (e.g. Jenkins):
+```bash
+aws ssm start-session --target <instance-id>
 ```
+
+**Fargate tasks** (ECS Exec, enabled on all tasks):
+```bash
+aws ecs execute-command \
+  --cluster <cluster-name> \
+  --task <task-id> \
+  --container <container-name> \
+  --interactive \
+  --command "/bin/sh"
+```
+
+Both require the caller's IAM identity to have `ssm:StartSession` or `ecs:ExecuteCommand` permission respectively. The `bastionCidr` deployment context field is retained for backwards compatibility but no longer gates access.
 
 ---
 

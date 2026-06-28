@@ -71,13 +71,9 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
 
         // Allow broader access for development
         whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
-            // Allow SSH from anywhere for development convenience
-            instanceSg.addIngressRule(
-                Peer.anyIpv4(),
-                Port.tcp(22),
-                "SSH_from_anywhere_(DEV)",
-                false
-            );
+            // SSH access is provided via AWS Systems Manager Session Manager (no port 22 needed).
+            // All IAM configurations already include AmazonSSMManagedInstanceCore.
+            // Connect with: aws ssm start-session --target <instance-id>
 
             // Allow application port from anywhere for development
             int appPort = c.applicationSpec.get().map(spec -> spec.applicationPort()).orElse(8080);
@@ -239,14 +235,4 @@ public final class DevSecurityConfiguration implements SecurityConfiguration {
         a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run()); tryRun.run();
     }
 
-    private boolean isTestEnvironment() {
-        // Check for test environment indicators
-        return System.getProperty("java.class.path").contains("test") ||
-               System.getProperty("maven.test.skip") != null ||
-               System.getProperty("surefire.test.class.path") != null ||
-               // Check for JUnit test context in stack trace
-               java.util.Arrays.stream(Thread.currentThread().getStackTrace())
-                   .anyMatch(element -> element.getClassName().contains("junit") ||
-                                       element.getClassName().contains("test"));
-    }
 }

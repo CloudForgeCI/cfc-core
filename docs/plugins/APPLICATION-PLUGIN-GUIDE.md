@@ -29,7 +29,7 @@ CloudForge provides a powerful plugin system for custom applications, enabling d
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-core</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.0</version>
             <scope>provided</scope>
         </dependency>
 
@@ -37,7 +37,7 @@ CloudForge provides a powerful plugin system for custom applications, enabling d
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-api</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.0</version>
             <scope>provided</scope>
         </dependency>
 

@@ -224,7 +224,7 @@ mvn archetype:generate \
 <dependency>
     <groupId>com.cloudforgeci</groupId>
     <artifactId>cloudforge-core</artifactId>
-    <version>3.0.0</version>
+    <version>3.1.0</version>
     <scope>provided</scope>
 </dependency>
 ```

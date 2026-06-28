@@ -1,0 +1,764 @@
+services:
+  # ============================================================================
+  # INFRASTRUCTURE SERVICES
+  # (Simulates: AWS Cognito → mock-oidc, RDS → postgres/mysql, ElastiCache → redis)
+  # ============================================================================
+
+  # Mock OIDC Provider (simulates AWS Cognito)
+  mock-oidc:
+    image: mockoon/cli:latest
+    container_name: cfc-mock-oidc
+    command: ["--data", "/mockoon/oidc-mock.json", "--disable-log-to-file"]
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./docker/mock-oidc/oidc-mock.json:/mockoon/oidc-mock.json:ro
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Shared PostgreSQL — simulates RDS PostgreSQL
+  postgres-main:
+    image: postgres:15-alpine
+    container_name: cfc-postgres-main
+    environment:
+      - POSTGRES_USER=cfc_admin
+      - POSTGRES_PASSWORD=cfc_password_dev
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_main_data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cfc_admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Shared Redis — simulates ElastiCache Redis
+  redis-main:
+    image: redis:7-alpine
+    container_name: cfc-redis-main
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_main_data:/data
+    networks:
+      - cfc-network
+    command: redis-server --appendonly yes --requirepass cfc_redis_dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "cfc_redis_dev", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MySQL — for WordPress, Joomla, PrestaShop, etc.
+  mysql:
+    image: mysql:8.0
+    container_name: cfc-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=cfc_mysql_root
+      - MYSQL_USER=cfc_dev
+      - MYSQL_PASSWORD=cfc_mysql_dev
+      - MYSQL_DATABASE=cfc_apps
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "cfc_dev", "-pcfc_mysql_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MariaDB — for apps that prefer MariaDB
+  mariadb:
+    image: mariadb:10.11
+    container_name: cfc-mariadb
+    environment:
+      - MARIADB_ROOT_PASSWORD=cfc_mariadb_root
+      - MARIADB_USER=cfc_dev
+      - MARIADB_PASSWORD=cfc_mariadb_dev
+      - MARIADB_DATABASE=cfc_apps
+    ports:
+      - "3307:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # CI/CD APPLICATIONS
+  # ============================================================================
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: cfc-jenkins
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    environment:
+      - JENKINS_OPTS=--prefix=/jenkins
+      - JAVA_OPTS=-Xmx512m
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/jenkins/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: cfc-gitlab
+    ports:
+      - "8081:8081"
+      - "8444:443"
+      - "2222:22"
+    environment:
+      - GITLAB_OMNIBUS_CONFIG=external_url 'http://localhost:8081'; gitlab_rails['gitlab_shell_ssh_port'] = 2222
+      - GITLAB_ROOT_PASSWORD=R7!xM2@kP9#nQ4
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/-/readiness"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    shm_size: 256m
+
+  drone:
+    image: drone/drone:latest
+    container_name: cfc-drone
+    ports:
+      - "8082:80"
+    environment:
+      - DRONE_SERVER_HOST=localhost:8082
+      - DRONE_SERVER_PROTO=http
+      - DRONE_RPC_SECRET=cfc_drone_secret
+      - DRONE_USER_CREATE=username:admin,admin:true
+      - DRONE_DATABASE_DRIVER=postgres
+      - DRONE_DATABASE_DATASOURCE=postgres://cfc_admin:cfc_password_dev@postgres-main:5432/drone?sslmode=disable
+      - DRONE_GITEA_SERVER=http://gitea:3000
+      - DRONE_GITEA_CLIENT_ID=drone-client-id-placeholder
+      - DRONE_GITEA_CLIENT_SECRET=drone-client-secret-placeholder
+    volumes:
+      - drone_data:/data
+    networks:
+      - cfc-network
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/healthz | grep -q OK"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # VERSION CONTROL
+  # ============================================================================
+
+  gitea:
+    image: gitea/gitea:latest
+    container_name: cfc-gitea
+    ports:
+      - "8083:3000"
+      - "2223:22"
+    environment:
+      - ROOT_URL=http://localhost:8083
+      - SSH_DOMAIN=localhost
+      - SSH_PORT=2223
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=postgres-main:5432
+      - GITEA__database__NAME=gitea
+      - GITEA__database__USER=cfc_admin
+      - GITEA__database__PASSWD=cfc_password_dev
+      - GITEA__server__APP_NAME=Gitea-Dev
+    volumes:
+      - gitea_data:/data
+    networks:
+      - cfc-network
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # MONITORING & OBSERVABILITY
+  # (Simulates: CloudWatch → Prometheus/Grafana)
+  # ============================================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cfc-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cfc-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=cfc_grafana_dev
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning/:/etc/grafana/provisioning/:ro
+    networks:
+      - cfc-network
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # ANALYTICS
+  # ============================================================================
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: cfc-metabase
+    ports:
+      - "3002:3000"
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_HOST=postgres-main
+      - MB_DB_PORT=5432
+      - MB_DB_USER=cfc_admin
+      - MB_DB_PASS=cfc_password_dev
+      - MB_DB_DBNAME=metabase
+      - JAVA_TIMEZONE=UTC
+    volumes:
+      - metabase_data:/metabase-data
+    networks:
+      - cfc-network
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  superset:
+    image: apache/superset:latest
+    container_name: cfc-superset
+    ports:
+      - "8088:8088"
+    environment:
+      - SUPERSET_SECRET_KEY=cfc_superset_secret_dev
+      - DATABASE_URL=postgresql://cfc_admin:cfc_password_dev@postgres-main:5432/superset
+    volumes:
+      - superset_data:/var/lib/superset
+    networks:
+      - cfc-network
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ============================================================================
+  # DATABASES (standalone — mirrors what CloudForge provisions on RDS)
+  # ============================================================================
+
+  postgresql-app:
+    image: postgres:15-alpine
+    container_name: cfc-postgresql-app
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=apppass
+      - POSTGRES_DB=appdb
+    volumes:
+      - postgres_app_data:/var/lib/postgresql/data
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-app:
+    image: redis:7-alpine
+    container_name: cfc-redis-app
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_app_data:/data
+    networks:
+      - cfc-network
+    command: redis-server --requirepass apppass
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "apppass", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # ARTIFACT REGISTRY
+  # ============================================================================
+
+  nexus:
+    image: sonatype/nexus3:latest
+    container_name: cfc-nexus
+    ports:
+      - "8084:8081"
+    environment:
+      - INSTALL4J_ADD_VM_PARAMS=-Xms512m -Xmx1g -XX:MaxDirectMemorySize=512m
+    volumes:
+      - nexus_data:/nexus-data
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/service/rest/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # NOTE: Harbor requires the official offline installer (10+ containers + shared config).
+  # It cannot be deployed as a single image. To run Harbor locally:
+  #   curl -L https://github.com/goharbor/harbor/releases/latest/download/harbor-offline-installer.tgz | tar xz
+  #   cd harbor && cp harbor.yml.tmpl harbor.yml && ./install.sh
+
+  # ============================================================================
+  # SECRETS MANAGEMENT (simulates AWS Secrets Manager / Parameter Store)
+  # ============================================================================
+
+  vault:
+    image: hashicorp/vault:latest
+    container_name: cfc-vault
+    ports:
+      - "8200:8200"
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=cfc_vault_dev_token
+      - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+      - VAULT_ADDR=http://127.0.0.1:8200
+    volumes:
+      - vault_data:/vault/data
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - cfc-network
+    command: server -dev
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # COLLABORATION
+  # ============================================================================
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:latest
+    platform: linux/amd64
+    container_name: cfc-mattermost
+    ports:
+      - "8065:8065"
+    environment:
+      - MM_SQLSETTINGS_DATASOURCE=postgres://cfc_admin:cfc_password_dev@postgres-main:5432/mattermost?sslmode=disable
+      - MM_SQLSETTINGS_DRIVERNAME=postgres
+      - MM_FILESETTINGS_DRIVERNAME=local
+      - MM_FILESETTINGS_DIRECTORY=/mattermost/data
+      - MM_SERVICESETTINGS_SITEURL=http://localhost:8065
+    volumes:
+      - mattermost_data:/mattermost/data
+    networks:
+      - cfc-network
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["NONE"]
+
+  # ============================================================================
+  # CMS & E-COMMERCE (cms-service topology)
+  # All share the same MySQL instance, each gets its own database
+  # ============================================================================
+
+  wordpress:
+    image: wordpress:php8.2-apache
+    container_name: cfc-wordpress
+    ports:
+      - "8087:80"
+    environment:
+      - WORDPRESS_DB_HOST=mysql:3306
+      - WORDPRESS_DB_USER=cfc_dev
+      - WORDPRESS_DB_PASSWORD=cfc_mysql_dev
+      - WORDPRESS_DB_NAME=wordpress
+      - WORDPRESS_TABLE_PREFIX=wp_
+      - REDIS_HOST=redis-main
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=cfc_redis_dev
+    volumes:
+      - wordpress_data:/var/www/html
+    networks:
+      - cfc-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/wp-login.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  woocommerce:
+    build:
+      context: ./docker/woocommerce
+      dockerfile: Dockerfile
+    container_name: cfc-woocommerce
+    ports:
+      - "8089:80"
+    environment:
+      - WORDPRESS_DB_HOST=mysql:3306
+      - WORDPRESS_DB_USER=cfc_dev
+      - WORDPRESS_DB_PASSWORD=cfc_mysql_dev
+      - WORDPRESS_DB_NAME=woocommerce
+      - WORDPRESS_TABLE_PREFIX=wc_
+      - REDIS_HOST=redis-main
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=cfc_redis_dev
+    volumes:
+      - woocommerce_data:/var/www/html
+    networks:
+      - cfc-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/wp-login.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  drupal:
+    image: drupal:10-php8.2-apache
+    container_name: cfc-drupal
+    ports:
+      - "8090:80"
+    environment:
+      - DRUPAL_DATABASE_HOST=postgres-main
+      - DRUPAL_DATABASE_PORT=5432
+      - DRUPAL_DATABASE_USER=cfc_admin
+      - DRUPAL_DATABASE_PASSWORD=cfc_password_dev
+      - DRUPAL_DATABASE_NAME=drupal
+      - DRUPAL_DATABASE_DRIVER=pgsql
+    volumes:
+      - drupal_data:/var/www/html
+    networks:
+      - cfc-network
+    depends_on:
+      postgres-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  joomla:
+    image: joomla:5-php8.2-apache
+    container_name: cfc-joomla
+    ports:
+      - "8091:80"
+    environment:
+      - JOOMLA_DB_HOST=mysql:3306
+      - JOOMLA_DB_USER=cfc_dev
+      - JOOMLA_DB_PASSWORD=cfc_mysql_dev
+      - JOOMLA_DB_NAME=joomla
+    volumes:
+      - joomla_data:/var/www/html
+    networks:
+      - cfc-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # CMS — Social Network
+  # dolphin-una: UNA (formerly Dolphin) social network platform
+  # ============================================================================
+
+  dolphin-una:
+    build:
+      context: ./docker/una
+      dockerfile: Dockerfile
+    container_name: cfc-dolphin-una
+    ports:
+      - "8092:80"
+    environment:
+      - UNA_DB_HOST=mysql
+      - UNA_DB_PORT=3306
+      - UNA_DB_NAME=una
+      - UNA_DB_USER=cfc_dev
+      - UNA_DB_PASSWORD=cfc_mysql_dev
+      - REDIS_HOST=redis-main
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=cfc_redis_dev
+      - BX_REDIS_HOST=redis-main
+      - BX_REDIS_PORT=6379
+      - BX_REDIS_DATABASE=0
+    volumes:
+      - una_data:/var/www/html/storage
+    networks:
+      - cfc-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================================
+  # SEARCH — OpenSearch (required by Magento 2.4+)
+  # ============================================================================
+
+  opensearch:
+    image: opensearchproject/opensearch:2
+    container_name: cfc-opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ============================================================================
+  # CMS — E-commerce
+  # magento: Magento 2 / Adobe Commerce Open Source
+  # ============================================================================
+
+  magento:
+    build:
+      context: ./docker/magento
+    container_name: cfc-magento
+    ports:
+      - "8093:80"
+    environment:
+      - MAGENTO_DATABASE_HOST=mysql
+      - MAGENTO_DATABASE_PORT=3306
+      - MAGENTO_DATABASE_NAME=magento
+      - MAGENTO_DATABASE_USER=cfc_dev
+      - MAGENTO_DATABASE_PASSWORD=cfc_mysql_dev
+      - MAGENTO_OPENSEARCH_HOST=opensearch
+      - MAGENTO_OPENSEARCH_PORT=9200
+      - MAGENTO_REDIS_HOST=redis-main
+      - MAGENTO_REDIS_PORT=6379
+      - MAGENTO_REDIS_PASSWORD=cfc_redis_dev
+      - MAGENTO_ADMIN_USER=cfc_admin
+      - MAGENTO_ADMIN_PASSWORD=cfc_Magento_dev1!
+      - MAGENTO_ADMIN_EMAIL=admin@cloudforgeci.com
+      - MAGENTO_BASE_URL=http://localhost:8093/
+    volumes:
+      - magento_data:/var/www/html/var
+      - magento_etc:/var/www/html/app/etc
+    networks:
+      - cfc-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      redis-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/health_check.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+
+  # ============================================================================
+  # opencart: OpenCart e-commerce
+  # ============================================================================
+
+  opencart:
+    build:
+      context: ./docker/opencart
+    container_name: cfc-opencart
+    ports:
+      - "8094:80"
+    environment:
+      - OC_DB_HOST=mysql
+      - OC_DB_PORT=3306
+      - OC_DB_NAME=opencart
+      - OC_DB_USER=cfc_dev
+      - OC_DB_PASS=cfc_mysql_dev
+      - OC_STORE_URL=http://localhost:8094/
+      - OC_ADMIN_USER=cfc_admin
+      - OC_ADMIN_PASS=cfc_opencart_dev
+      - OC_ADMIN_EMAIL=admin@cloudforgeci.com
+    volumes:
+      - opencart_data:/var/www/html/system/storage
+    networks:
+      - cfc-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # ============================================================================
+  # REVERSE PROXY — simulates AWS ALB
+  # Routes all services by path/hostname, like ALB listener rules
+  # ============================================================================
+
+  haproxy:
+    image: haproxy:latest
+    container_name: cfc-haproxy
+    ports:
+      - "80:80"
+      - "8404:8404"
+    volumes:
+      - ./docker/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - cfc-network
+    depends_on:
+      - jenkins
+      - grafana
+    healthcheck:
+      test: ["CMD-SHELL", "socat /dev/null TCP:localhost:8404"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  cfc-network:
+    driver: bridge
+
+volumes:
+  # Infrastructure
+  postgres_main_data:
+  redis_main_data:
+  mysql_data:
+  mariadb_data:
+
+  # CI/CD
+  jenkins_home:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+  drone_data:
+  gitea_data:
+
+  # Monitoring & Analytics
+  prometheus_data:
+  grafana_data:
+  metabase_data:
+  superset_data:
+
+  # Databases (standalone)
+  postgres_app_data:
+  redis_app_data:
+
+  # Services
+  nexus_data:
+  vault_data:
+
+  # Collaboration
+  mattermost_data:
+
+  # Search
+  opensearch_data:
+
+  # CMS
+  wordpress_data:
+  woocommerce_data:
+  drupal_data:
+  joomla_data:
+  una_data:
+  magento_data:
+  magento_etc:
+  opencart_data:

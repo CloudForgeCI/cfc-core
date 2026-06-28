@@ -2,3 +2,4 @@
 
 # Internal Security Policies
 com.cloudforgeci.samples.plugins.compliance.CustomSecurityPolicyRules
+com.cloudforgeci.samples.plugins.compliance.OpenSourceSecurityPolicyRules
