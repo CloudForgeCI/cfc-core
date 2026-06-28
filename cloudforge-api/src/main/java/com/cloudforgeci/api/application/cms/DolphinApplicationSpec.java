@@ -5,7 +5,9 @@ import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.PhpRuntimeConfig;
+import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforge.core.interfaces.UserDataBuilder;
+import com.cloudforge.core.oidc.DolphinOidcIntegration;
 import com.cloudforgeci.api.core.PhpUserDataBuilder;
 
 import java.util.HashMap;
@@ -418,7 +420,11 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== OIDC Support ==========
-    // UNA/Dolphin does not have mature native OIDC plugins - use ALB OIDC only
+
+    @Override
+    public OidcIntegration getOidcIntegration() {
+        return new DolphinOidcIntegration();
+    }
 
     @Override
     public List<String> getSupportedAuthModes() {

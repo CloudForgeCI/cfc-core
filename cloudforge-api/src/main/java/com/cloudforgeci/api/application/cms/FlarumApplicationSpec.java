@@ -5,7 +5,9 @@ import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.PhpRuntimeConfig;
+import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforge.core.interfaces.UserDataBuilder;
+import com.cloudforge.core.oidc.FlarumOidcIntegration;
 import com.cloudforgeci.api.core.PhpUserDataBuilder;
 
 import java.util.HashMap;
@@ -368,7 +370,11 @@ public class FlarumApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== OIDC Support ==========
-    // Flarum does not have mature native OIDC plugins - use ALB OIDC only
+
+    @Override
+    public OidcIntegration getOidcIntegration() {
+        return new FlarumOidcIntegration();
+    }
 
     @Override
     public List<String> getSupportedAuthModes() {

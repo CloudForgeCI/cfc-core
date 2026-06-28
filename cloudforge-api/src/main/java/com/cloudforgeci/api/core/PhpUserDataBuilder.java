@@ -328,10 +328,10 @@ public final class PhpUserDataBuilder {
      * @param spec the CMS specification
      */
     public static void installCloudWatchAgent(UserDataBuilder builder, String logGroupName, CmsSpec spec) {
-        List<String> logPaths = spec.ec2LogPaths();
-        logPaths.add("/var/log/php-fpm/error.log");
-        logPaths.add("/var/log/nginx/error.log");
-        logPaths.add("/var/log/nginx/access.log");
+        List<String> logPaths = new java.util.ArrayList<>(spec.ec2LogPaths());
+        if (!logPaths.contains("/var/log/php-fpm/error.log"))  logPaths.add("/var/log/php-fpm/error.log");
+        if (!logPaths.contains("/var/log/nginx/error.log"))    logPaths.add("/var/log/nginx/error.log");
+        if (!logPaths.contains("/var/log/nginx/access.log"))   logPaths.add("/var/log/nginx/access.log");
 
         builder.installCloudWatchAgent(logGroupName, logPaths);
     }

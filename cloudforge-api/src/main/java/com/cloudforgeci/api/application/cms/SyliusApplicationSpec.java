@@ -5,7 +5,9 @@ import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.PhpRuntimeConfig;
+import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforge.core.interfaces.UserDataBuilder;
+import com.cloudforge.core.oidc.SyliusOidcIntegration;
 import com.cloudforgeci.api.core.PhpUserDataBuilder;
 
 import java.util.HashMap;
@@ -377,7 +379,11 @@ public class SyliusApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== OIDC Support ==========
-    // Sylius does not have mature native OIDC plugins - use ALB OIDC only
+
+    @Override
+    public OidcIntegration getOidcIntegration() {
+        return new SyliusOidcIntegration();
+    }
 
     @Override
     public List<String> getSupportedAuthModes() {
