@@ -174,8 +174,7 @@ class PhpContainerFactoryTest {
     @Test
     void createDatabaseEnvironmentContainsHost() {
         Map<String, String> env = PhpContainerFactory.createDatabaseEnvironment(
-            new WordPressApplicationSpec(), "db.example.com", 3306, "wpdb", "wpuser",
-            "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-pass");
+            new WordPressApplicationSpec(), "db.example.com", 3306, "wpdb", "wpuser");
         assertNotNull(env);
         assertTrue(env.values().stream().anyMatch(v -> v.contains("db.example.com")));
     }
@@ -183,8 +182,7 @@ class PhpContainerFactoryTest {
     @Test
     void createDatabaseEnvironmentContainsDbName() {
         Map<String, String> env = PhpContainerFactory.createDatabaseEnvironment(
-            new WordPressApplicationSpec(), "db.example.com", 3306, "wpdb", "wpuser",
-            "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-pass");
+            new WordPressApplicationSpec(), "db.example.com", 3306, "wpdb", "wpuser");
         assertTrue(env.values().stream().anyMatch(v -> v.contains("wpdb")));
     }
 
@@ -192,8 +190,7 @@ class PhpContainerFactoryTest {
     @MethodSource("allSpecs")
     void createDatabaseEnvironmentIsNonEmptyForAllSpecs(CmsSpec spec) {
         Map<String, String> env = PhpContainerFactory.createDatabaseEnvironment(
-            spec, "db.example.com", 3306, "testdb", "testuser",
-            "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-pass");
+            spec, "db.example.com", 3306, "testdb", "testuser");
         assertNotNull(env);
         assertFalse(env.isEmpty());
     }
