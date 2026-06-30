@@ -50,33 +50,33 @@ class CmsOidcIntegrationsTest {
 
     static Stream<Object[]> allIntegrations() {
         return Stream.of(
-            new Object[]{ new WordPressOidcIntegration(),  "WordPress",   "/var/www/html" },
-            new Object[]{ new DrupalOidcIntegration(),     "Drupal",      "/var/www/html" },
-            new Object[]{ new JoomlaOidcIntegration(),     "Joomla",      "/var/www/html" },
-            new Object[]{ new MagentoOidcIntegration(),    "Magento",     "/var/www/html" },
-            new Object[]{ new MoodleOidcIntegration(),     "Moodle",      "/var/www/html" },
-            new Object[]{ new PrestaShopOidcIntegration(), "PrestaShop",  "/var/www/html" }
+            new Object[]{ new WordPressOidcIntegration(),  "WordPress"   },
+            new Object[]{ new DrupalOidcIntegration(),     "Drupal"      },
+            new Object[]{ new JoomlaOidcIntegration(),     "Joomla"      },
+            new Object[]{ new MagentoOidcIntegration(),    "Magento"     },
+            new Object[]{ new MoodleOidcIntegration(),     "Moodle"      },
+            new Object[]{ new PrestaShopOidcIntegration(), "PrestaShop"  }
         );
     }
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void isSupported(Object integration, String name, String installPath) {
+    void isSupported(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
         assertTrue(oidc.isSupported(), name + " OIDC integration must report isSupported()=true");
     }
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void integrationMethodIsNonEmpty(Object integration, String name, String installPath) {
+    void integrationMethodIsNonEmpty(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
-        assertNotNull(oidc.getIntegrationMethod());
-        assertFalse(oidc.getIntegrationMethod().isEmpty());
+        assertNotNull(oidc.getIntegrationMethod(), name + " integration method must not be null");
+        assertFalse(oidc.getIntegrationMethod().isEmpty(), name + " integration method must not be empty");
     }
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void configurationFilePathIsAbsolute(Object integration, String name, String installPath) {
+    void configurationFilePathIsAbsolute(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
         String path = oidc.getConfigurationFilePath();
         assertNotNull(path);
@@ -85,7 +85,7 @@ class CmsOidcIntegrationsTest {
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void environmentVariablesContainClientId(Object integration, String name, String installPath) {
+    void environmentVariablesContainClientId(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
         Map<String, String> env = oidc.getEnvironmentVariables(cognitoConfig);
         assertNotNull(env);
@@ -96,7 +96,7 @@ class CmsOidcIntegrationsTest {
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void environmentVariablesContainEndpoints(Object integration, String name, String installPath) {
+    void environmentVariablesContainEndpoints(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
         Map<String, String> env = oidc.getEnvironmentVariables(cognitoConfig);
         String allValues = String.join(" ", env.values());
@@ -106,7 +106,7 @@ class CmsOidcIntegrationsTest {
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void configurationFileReferencesClientIdEnvVar(Object integration, String name, String installPath) {
+    void configurationFileReferencesClientIdEnvVar(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
         String configFile = oidc.getConfigurationFile(cognitoConfig);
         assertNotNull(configFile, name + " must return a configuration file");
@@ -118,7 +118,7 @@ class CmsOidcIntegrationsTest {
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void userDataCommandsAreNonEmpty(Object integration, String name, String installPath) {
+    void userDataCommandsAreNonEmpty(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
         List<String> commands = oidc.getUserDataCommands(cognitoConfig, ec2Context);
         assertNotNull(commands);
@@ -127,7 +127,7 @@ class CmsOidcIntegrationsTest {
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void userDataCommandsContainInstallSteps(Object integration, String name, String installPath) {
+    void userDataCommandsContainInstallSteps(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
         List<String> commands = oidc.getUserDataCommands(cognitoConfig, ec2Context);
         String joined = String.join("\n", commands);
@@ -137,7 +137,7 @@ class CmsOidcIntegrationsTest {
 
     @ParameterizedTest
     @MethodSource("allIntegrations")
-    void postDeploymentInstructionsAreNonEmpty(Object integration, String name, String installPath) {
+    void postDeploymentInstructionsAreNonEmpty(Object integration, String name) {
         var oidc = (com.cloudforge.core.interfaces.OidcIntegration) integration;
         String instructions = oidc.getPostDeploymentInstructions();
         assertNotNull(instructions);

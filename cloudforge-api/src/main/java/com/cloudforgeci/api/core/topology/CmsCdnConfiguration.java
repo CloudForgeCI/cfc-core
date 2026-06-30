@@ -15,8 +15,9 @@ import software.amazon.awscdk.services.cloudfront.OriginProtocolPolicy;
 import software.amazon.awscdk.services.cloudfront.OriginRequestPolicy;
 import software.amazon.awscdk.services.cloudfront.PriceClass;
 import software.amazon.awscdk.services.cloudfront.ViewerProtocolPolicy;
+import software.amazon.awscdk.services.cloudfront.IOrigin;
 import software.amazon.awscdk.services.cloudfront.origins.HttpOrigin;
-import software.amazon.awscdk.services.cloudfront.origins.S3Origin;
+import software.amazon.awscdk.services.cloudfront.origins.S3BucketOrigin;
 import software.amazon.awscdk.services.route53.ARecord;
 import software.amazon.awscdk.services.route53.AaaaRecord;
 import software.amazon.awscdk.services.route53.RecordTarget;
@@ -72,7 +73,7 @@ public final class CmsCdnConfiguration {
             String albDnsName) {
 
         // S3 origin for media files
-        S3Origin mediaOrigin = new S3Origin(mediaBucket);
+        IOrigin mediaOrigin = S3BucketOrigin.withOriginAccessControl(mediaBucket);
 
         // ALB origin for dynamic content
         HttpOrigin albOrigin = HttpOrigin.Builder.create(albDnsName)
@@ -130,7 +131,7 @@ public final class CmsCdnConfiguration {
             CmsSpec spec,
             Bucket mediaBucket) {
 
-        S3Origin mediaOrigin = new S3Origin(mediaBucket);
+        IOrigin mediaOrigin = S3BucketOrigin.withOriginAccessControl(mediaBucket);
         CachePolicy mediaCachePolicy = createMediaCachePolicy(ctx);
 
         List<String> domainNames = resolveMediaDomainNames(ctx);
@@ -218,7 +219,7 @@ public final class CmsCdnConfiguration {
      */
     private static Map<String, BehaviorOptions> createCmsBehaviors(
             CmsSpec spec,
-            S3Origin mediaOrigin,
+            IOrigin mediaOrigin,
             HttpOrigin albOrigin,
             CachePolicy staticPolicy,
             CachePolicy mediaPolicy) {

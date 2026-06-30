@@ -46,7 +46,7 @@ public final class PhpUserDataBuilder {
      * @param config the PHP runtime configuration
      */
     public static void installPhp(UserDataBuilder builder, PhpRuntimeConfig config) {
-        String phpPkg = "php" + config.version().replace(".", "");
+        String phpPkg = "php" + config.version();
 
         // Build extension package list
         String extensions = config.extensions().stream()

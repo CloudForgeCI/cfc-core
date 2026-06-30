@@ -70,6 +70,9 @@ public final class PhpContainerFactory {
         // Timezone
         env.put("TZ", "UTC");
 
+        // Application identity for logging/tracing
+        env.put("CMS_APPLICATION_ID", spec.applicationId());
+
         return env;
     }
 
@@ -377,10 +380,9 @@ public final class PhpContainerFactory {
             String dbHost,
             int dbPort,
             String dbName,
-            String dbUser,
-            String dbPasswordSecretArn) {
-        // Delegate to the spec — no hardcoded CMS IDs needed here.
-        // Each CmsSpec implementation declares its own DB env var names via databaseEnvVars().
+            String dbUser) {
+        // Delegate to the spec — each CmsSpec declares its own DB env var names via databaseEnvVars().
+        // Passwords are injected by ECS task definition secrets, not passed here as plaintext.
         return spec.databaseEnvVars(dbHost, dbPort, dbName, dbUser);
     }
 

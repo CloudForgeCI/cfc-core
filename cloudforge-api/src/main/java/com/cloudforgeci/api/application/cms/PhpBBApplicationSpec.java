@@ -330,7 +330,8 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'Apache installed' >> /var/log/userdata.log"
         );
 
-        String[] userParts = containerUser().split(":");
+        String cu = containerUser();
+        String[] userParts = (cu != null) ? cu.split(":") : new String[]{"0", "0"};
         if (context.hasEfs()) {
             builder.mountEfs(
                 context.efsId().orElseThrow(),
@@ -476,7 +477,8 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
             "  setTimeout(fill, 1000);\n" +
             "})();\n" +
             "JSEOF\n" +
-            // Create index.html landing page that sets sessionStorage and redirects
+            // Create index.html landing page that prefills non-secret fields and redirects.
+            // Password is intentionally excluded — never expose RDS secrets to the browser.
             "  cat > /var/www/html/install/index.html << EOF\n" +
             "<!DOCTYPE html>\n" +
             "<html><head><title>phpBB Installation</title>\n" +
@@ -485,8 +487,7 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
             "  dbhost: '$PHPBB_DB_HOST',\n" +
             "  dbport: '$PHPBB_DB_PORT',\n" +
             "  dbname: '$PHPBB_DB_NAME',\n" +
-            "  dbuser: '$PHPBB_DB_USER',\n" +
-            "  dbpasswd: '$PHPBB_DB_PASSWORD'\n" +
+            "  dbuser: '$PHPBB_DB_USER'\n" +
             "}));\n" +
             "window.location.href = '/install/app.php';\n" +
             "</script>\n" +

@@ -264,10 +264,11 @@ public final class CmsObjectCacheConfiguration {
     private static String generateClusterId(SystemContext ctx, CmsSpec spec) {
         String env = ctx.cfc.env() != null ? ctx.cfc.env() : "dev";
         // ElastiCache cluster IDs must be lowercase, max 40 chars, alphanumeric + hyphens
-        return String.format("%s-%s-cache",
+        String sanitized = String.format("%s-%s-cache",
             spec.applicationId().toLowerCase(),
             env.toLowerCase()
-        ).replaceAll("[^a-z0-9-]", "").substring(0, Math.min(40, spec.applicationId().length() + env.length() + 7));
+        ).replaceAll("[^a-z0-9-]", "");
+        return sanitized.substring(0, Math.min(40, sanitized.length()));
     }
 
     /**
@@ -334,6 +335,7 @@ public final class CmsObjectCacheConfiguration {
         Map<String, String> env = new HashMap<>();
         env.put("MEMCACHED_HOST", endpoint);
         env.put("MEMCACHED_PORT", String.valueOf(port));
+        env.put("MEMCACHED_PREFIX", spec.applicationId().toLowerCase() + "_");
         return env;
     }
 }

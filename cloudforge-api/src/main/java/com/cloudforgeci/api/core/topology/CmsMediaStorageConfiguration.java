@@ -55,7 +55,7 @@ public final class CmsMediaStorageConfiguration {
         // This prevents "AlreadyExists" errors when buckets are retained from previous deployments
         BucketEncryption encryption = determineEncryption(ctx);
 
-        return Bucket.Builder.create(ctx, "CmsMediaBucket")
+        return Bucket.Builder.create(ctx, spec.applicationId().toLowerCase() + "-media")
             // NO bucketName specified - CloudFormation auto-generates unique name
             .encryption(encryption)
             .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
@@ -86,7 +86,7 @@ public final class CmsMediaStorageConfiguration {
         // This prevents "AlreadyExists" errors when buckets are retained from previous deployments
         BucketEncryption encryption = determineEncryption(ctx);
 
-        var builder = Bucket.Builder.create(ctx, "CmsMediaBucket")
+        var builder = Bucket.Builder.create(ctx, spec.applicationId().toLowerCase() + "-media")
             // NO bucketName specified - CloudFormation auto-generates unique name
             .encryption(encryption)
             .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)

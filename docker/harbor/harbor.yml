@@ -6,7 +6,6 @@ database:
   username: cfc_admin
   password: cfc_password_dev
   dbname: harbor
-database:
   max_open_conns: 900
 http:
   addr: :8080

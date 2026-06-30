@@ -4,7 +4,7 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev libjpeg-dev libwebp-dev libfreetype6-dev \
     libzip-dev libxml2-dev libcurl4-openssl-dev \
-    libmagickwand-dev libonig-dev libintl-perl \
+    libmagickwand-dev libonig-dev libicu-dev \
     unzip curl git ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
