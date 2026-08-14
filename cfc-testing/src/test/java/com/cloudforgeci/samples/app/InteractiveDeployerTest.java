@@ -15,23 +15,15 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for InteractiveDeployer utility methods.
+ * Unit tests for Interactive Deployer configuration propagation.
  *
- * Tests focus on:
- * 1. Context building and field mapping
- * 2. Application metadata and selection
- * 3. OIDC configuration
- * 4. Truth table logic validation
+ * <p>Context serialization is owned by {@link DeploymentConfig#toContextMap()} in
+ * cloudforge-core; these tests validate the contract the deployer relies on.</p>
  */
 class InteractiveDeployerTest {
 
-    /**
-     * Helper method to access buildCfcContext via reflection since it's private.
-     */
-    private Map<String, Object> buildCfcContext(DeploymentConfig config) throws Exception {
-        var method = InteractiveDeployer.class.getDeclaredMethod("buildCfcContext", DeploymentConfig.class);
-        method.setAccessible(true);
-        return (Map<String, Object>) method.invoke(null, config);
+    private Map<String, Object> buildCfcContext(DeploymentConfig config) {
+        return config.toContextMap();
     }
 
     /**
@@ -51,7 +43,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_BasicFields() throws Exception {
+    void testBuildCfcContext_BasicFields() {
         // Given
         DeploymentConfig config = new DeploymentConfig();
         config.stackName = "test-stack";
@@ -74,7 +66,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_DomainConfiguration() throws Exception {
+    void testBuildCfcContext_DomainConfiguration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.domain = "example.com";
@@ -91,7 +83,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_EmptyDomainConfiguration() throws Exception {
+    void testBuildCfcContext_EmptyDomainConfiguration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.domain = "";
@@ -108,7 +100,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_ResourceConfiguration() throws Exception {
+    void testBuildCfcContext_ResourceConfiguration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.cpu = 2048;
@@ -129,7 +121,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_EC2Configuration() throws Exception {
+    void testBuildCfcContext_EC2Configuration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.runtime = RuntimeType.EC2;
@@ -144,7 +136,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_ComplianceConfiguration() throws Exception {
+    void testBuildCfcContext_ComplianceConfiguration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.enableMonitoring = true;
@@ -174,7 +166,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_NetworkConfiguration() throws Exception {
+    void testBuildCfcContext_NetworkConfiguration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.networkMode = NetworkMode.PRIVATE_WITH_NAT;
@@ -191,7 +183,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_OidcConfiguration_Cognito() throws Exception {
+    void testBuildCfcContext_OidcConfiguration_Cognito() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.oidcProvider = "cognito";
@@ -220,7 +212,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_OidcConfiguration_IdentityCenter() throws Exception {
+    void testBuildCfcContext_OidcConfiguration_IdentityCenter() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.oidcProvider = "identity-center";
@@ -245,7 +237,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_OidcConfiguration_None() throws Exception {
+    void testBuildCfcContext_OidcConfiguration_None() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.oidcProvider = "none";
@@ -258,7 +250,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_HealthCheckConfiguration() throws Exception {
+    void testBuildCfcContext_HealthCheckConfiguration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.healthCheckGracePeriod = 600;
@@ -279,7 +271,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_RegionConfiguration() throws Exception {
+    void testBuildCfcContext_RegionConfiguration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.region = "us-west-2";
@@ -294,7 +286,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_ScalingConfiguration() throws Exception {
+    void testBuildCfcContext_ScalingConfiguration() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.minInstanceCapacity = 1;
@@ -383,7 +375,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_ApplicationMetadata() throws Exception {
+    void testBuildCfcContext_ApplicationMetadata() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.applicationId = "gitlab";
@@ -398,7 +390,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_EnvironmentRename() throws Exception {
+    void testBuildCfcContext_EnvironmentRename() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.environment = "staging";
@@ -412,7 +404,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_NullValues() throws Exception {
+    void testBuildCfcContext_NullValues() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.cognitoUserPoolName = null;
@@ -429,7 +421,7 @@ class InteractiveDeployerTest {
     }
 
     @Test
-    void testBuildCfcContext_ConfigInfrastructure() throws Exception {
+    void testBuildCfcContext_ConfigInfrastructure() {
         // Given
         DeploymentConfig config = createMinimalConfig();
         config.awsConfigEnabled = true;

@@ -3460,7 +3460,7 @@ public class ComplianceFactory extends BaseFactory {
                 .resources(List.of("*"))
                 .build());
 
-        LOG.info("Created shared Audit Manager role and bucket with comprehensive permissions");
+        LOG.info("Created shared Audit Manager role and bucket with evidence storage and service read permissions");
 
         // Suppress CDK-nag warnings for IAM wildcards - all are justified
         NagSuppressions.addResourceSuppressions(

@@ -1,0 +1,1 @@
+{"stackName":"jtest-recovered-2","applicationId":"jenkins","applicationName":"Jenkins","environment":"prod","runtime":"FARGATE","authMode":"application-oidc"}

@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * GitLab ApplicationSpec implementation.
  *
- * <p>GitLab is a complete DevOps platform with Git repository, CI/CD, and collaboration features.</p>
+ * <p>GitLab provides Git repository management, CI/CD, and collaboration features.</p>
  *
  * <p><strong>Key Features:</strong></p>
  * <ul>
@@ -49,7 +49,7 @@ import java.util.Map;
     value = "gitlab",
     category = "cicd",
     displayName = "GitLab",
-    description = "Complete DevOps platform with Git, CI/CD, and security",
+    description = "Git repository, CI/CD, collaboration, and security tooling",
     defaultCpu = 2048,
     defaultMemory = 4096,
     defaultInstanceType = "t3.medium",

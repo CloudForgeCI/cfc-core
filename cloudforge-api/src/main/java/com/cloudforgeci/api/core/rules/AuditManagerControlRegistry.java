@@ -121,7 +121,7 @@ public final class AuditManagerControlRegistry {
         // Audit Logging
         register(new AuditManagerControl(
             "AUDIT_LOGGING",
-            "Comprehensive audit logging (CloudTrail, Flow Logs, ALB logs)",
+            "Audit logging with CloudTrail, VPC Flow Logs, and ALB access logs",
             List.of("CloudTrailEnabledRule", "CloudTrailLogFileValidationRule", "VpcFlowLogsEnabled", "AlbAccessLogsEnabled"),
             List.of(
                 new AuditManagerControl.FrameworkControl("PCI-DSS", "Req10.1", "Implement audit trails"),

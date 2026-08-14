@@ -35,6 +35,11 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     }
 
     @Override
+    public DeploymentContext getDeploymentContext() {
+        return deploymentContext;
+    }
+
+    @Override
     public SecurityProfile getSecurityProfile() {
         return SecurityProfile.DEV;
     }

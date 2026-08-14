@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: CloudForge sample BOM template
+    url: https://github.com/CloudForgeCI/cfc-core/blob/main/docs/architecture/cloudforge-sample-bom.template.md
+    about: Standalone deployment project setup

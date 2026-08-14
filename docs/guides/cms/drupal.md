@@ -1,6 +1,6 @@
 # Drupal Application Guide
 
-Drupal is an enterprise-grade CMS used extensively in government, higher education, and large organizations. It is known for its content architecture flexibility, multilingual support, and strong security track record.
+Drupal is a CMS used in government, higher education, and large organizations. It supports structured content models, multilingual sites, and configurable access controls.
 
 **Status**: Available
 
@@ -116,7 +116,7 @@ The Drupal login page (`/user/login`) remains accessible for local admin access 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "cms-service",
-  "application": "drupal",
+  "applicationId": "drupal",
 
   "networkMode": "public-no-nat",
   "region": "us-east-1",
@@ -148,7 +148,7 @@ The Drupal login page (`/user/login`) remains accessible for local admin access 
   "runtime": "fargate",
   "securityProfile": "staging",
   "topology": "cms-service",
-  "application": "drupal",
+  "applicationId": "drupal",
 
   "domain": "staging.example.com",
   "subdomain": "cms",
@@ -188,7 +188,7 @@ Drupal is commonly used in US federal and state government contexts. This config
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "drupal",
+  "applicationId": "drupal",
 
   "domain": "example.gov",
   "subdomain": "www",

@@ -1,0 +1,209 @@
+name: Publish to Maven Central
+
+# Publishes the OSS deployment library: cfc-core's own root/BOM pom, cloudforge-core,
+# cloudforge-api, and cloudforge-localstack.
+#
+# cloudforge-localstack was missing from this scope for a while after cloudforge-manager was
+# split into its own repo — cloudforge-manager depends on it directly, so its own CI couldn't
+# resolve dependencies at all until this was added (a real live failure, not theoretical: a
+# fresh GitHub Actions runner has no local .m2 cache the way a dev machine does, so anything not
+# actually published to Central is simply unresolvable there).
+#
+# Does NOT publish cloudforge-manager-deployment — despite currently living in this working tree
+# (gitignored, not tracked by cfc-core's own git history), it's a standalone-repo module with its
+# own independent versioning and its own self-contained publish-maven-central.yml (see
+# cloudforge-manager-deployment/.github/workflows/) — bundling its release into cfc-core's own
+# cadence would defeat "independent versioning" the moment the two version numbers drift, and
+# that workflow won't even exist in this repo once the split's git push happens. Its <parent> on
+# cfc-core's own pom (resolved from Central, not a local checkout — see its pom.xml) is exactly
+# what lets it publish independently while still inheriting this release profile.
+#
+# Deliberately does NOT publish cloudforge-manager itself either (the Spring Boot app carrying all
+# the LicenseSeat/Checkpoint A/B licensing logic) — its distribution strategy (Docker Hub vs.
+# Central vs. something else) is a separate, still-open decision; nothing here forecloses adding
+# it later, in its own eventual repo's own workflow, same shape as cloudforge-manager-deployment.
+#
+# Required repo secrets (none of these can be set by CI itself — add them under Settings →
+# Secrets and variables → Actions before the publish job will do anything but skip):
+#   GPG_PRIVATE_KEY          ASCII-armored private key, base64-encoded:
+#                               gpg --armor --export-secret-keys <KEYID> | base64 -w0
+#   GPG_PASSPHRASE            The key's passphrase.
+#   CENTRAL_PORTAL_USERNAME   Central Portal "Generate User Token" username half — NOT your
+#                             account login. https://central.sonatype.com/account
+#   CENTRAL_PORTAL_PASSWORD   Same token's password half.
+#
+# Safety gate: only actually builds/signs/publishes when the root pom's <version> isn't already
+# tagged (v<version>) in this repo — every other push to develop is a fast no-op. This is on top
+# of (not instead of) central-publishing-maven-plugin's own <ignorePublishedComponents>true</...>,
+# which makes a genuine duplicate-version publish attempt a safe no-op rather than a failure —
+# belt-and-suspenders, since the tag check avoids even attempting the (slow, GPG-signing-heavy)
+# build for a version that hasn't changed, and the plugin setting covers the case where the tag
+# push itself failed on a previous run but the artifacts already landed on Central.
+
+on:
+  push:
+    branches: [ develop ]
+    paths:
+      - 'pom.xml'
+      - 'cloudforge-core/**'
+      - 'cloudforge-api/**'
+      - 'cloudforge-localstack/**'
+      - '.github/workflows/publish-maven-central.yml'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish even if this version is already tagged (re-run after a partial failure)'
+        required: false
+        default: 'false'
+        type: choice
+        options: [ 'false', 'true' ]
+
+permissions:
+  contents: write # to push the release tag on success
+
+jobs:
+  check-version:
+    name: Check if this version needs publishing
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_publish: ${{ steps.decide.outputs.should_publish }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need full tag history
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Read project version
+        id: version
+        run: |
+          VERSION=$(mvn -q -pl . help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Root pom version: $VERSION"
+
+      - name: Decide whether to publish
+        id: decide
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          FORCE="${{ github.event.inputs.force }}"
+
+          if [[ "$VERSION" == *-SNAPSHOT ]]; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Version $VERSION is a SNAPSHOT — this workflow only publishes real releases. Bump <version> in the poms to a release version to publish."
+            exit 0
+          fi
+
+          if [ "$FORCE" = "true" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::force=true — publishing v$VERSION regardless of existing tag."
+            exit 0
+          fi
+
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$VERSION is already tagged — nothing changed to publish. Bump <version> in the poms first."
+          else
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "v$VERSION is not yet tagged — will publish."
+          fi
+
+  publish:
+    name: Build, sign, and publish
+    runs-on: ubuntu-latest
+    needs: check-version
+    if: needs.check-version.outputs.should_publish == 'true'
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-release-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-release-
+            ${{ runner.os }}-maven-
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::error::GPG_PRIVATE_KEY secret is not set — cannot sign release artifacts. See this workflow file's header comment for what to add."
+            exit 1
+          fi
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+          echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+
+      - name: Configure Maven settings.xml (Central Portal credentials)
+        env:
+          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+        run: |
+          if [ -z "$CENTRAL_PORTAL_USERNAME" ] || [ -z "$CENTRAL_PORTAL_PASSWORD" ]; then
+            echo "::error::CENTRAL_PORTAL_USERNAME/CENTRAL_PORTAL_PASSWORD secrets are not set."
+            exit 1
+          fi
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << EOF
+          <settings>
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${CENTRAL_PORTAL_USERNAME}</username>
+                <password>${CENTRAL_PORTAL_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+      - name: Build, test, sign, and publish cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api + cloudforge-localstack..."
+          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack -am clean deploy
+
+      - name: Clean up credentials
+        if: always()
+        run: |
+          rm -f ~/.m2/settings.xml
+          rm -rf "${GNUPGHOME:-$RUNNER_TEMP/gnupg}"
+
+      - name: Tag the published release
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Publish v$VERSION to Maven Central (cfc-core, cloudforge-core, cloudforge-api, cloudforge-localstack)"
+          git push origin "v$VERSION"
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## Maven Central Publish" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.check-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api, cloudforge-localstack" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Central Portal validates and auto-publishes asynchronously — check https://central.sonatype.com/publishing/deployments for final status; artifacts typically become searchable on Central within 15-30 minutes of a successful upload." >> $GITHUB_STEP_SUMMARY

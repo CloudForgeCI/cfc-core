@@ -153,11 +153,14 @@ public class ConfigurationIntrospector {
     private static int getCategoryOrder(String category) {
         return switch (category) {
             case "basic" -> 1;
-            case "network" -> 2;
-            case "security" -> 3;
-            case "database" -> 4;
-            case "resources" -> 5;
-            case "monitoring" -> 6;
+            // Domain settings are a distinct UI group, but must remain beside
+            // network configuration rather than falling into the unknown tail.
+            case "domain" -> 2;
+            case "network" -> 3;
+            case "security" -> 4;
+            case "database" -> 5;
+            case "resources" -> 6;
+            case "monitoring" -> 7;
             default -> 1000;  // Unknown categories go last
         };
     }

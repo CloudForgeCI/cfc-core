@@ -17,11 +17,11 @@ const sidebars = {
     {
       type: 'doc',
       id: 'README',
-      label: '📖 Documentation Home',
+      label: 'Documentation Home',
     },
     {
       type: 'category',
-      label: '🚀 Quick Start',
+      label: 'Quick Start',
       items: [
         'ONBOARDING_QUICK_START',
         'compliance/QUICK_START_GUIDE',
@@ -30,7 +30,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '🔌 Applications & Plugins',
+      label: 'Applications & Plugins',
       collapsed: false,
       items: [
         'applications/README',
@@ -56,6 +56,7 @@ const sidebars = {
             'guides/applications/redis',
             'guides/applications/superset',
             'guides/applications/vault',
+            'guides/applications/cloudforge-manager',
           ],
         },
         {
@@ -72,7 +73,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '⚙️ Setup & Configuration',
+      label: 'Setup & Configuration',
       items: [
         {
           type: 'category',
@@ -86,7 +87,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '🔐 Compliance & Security',
+      label: 'Compliance & Security',
       collapsed: false,
       items: [
         'compliance/MULTI_FRAMEWORK_COMPLIANCE',
@@ -106,7 +107,6 @@ const sidebars = {
           items: [
             'compliance/AWS_CONFIG_MULTI_STACK',
             'compliance/S3_VERSIONING_REMEDIATION',
-            'compliance/CONTROLS_IMPLEMENTATION',
           ],
         },
         {
@@ -121,7 +121,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '📚 Advanced Topics',
+      label: 'Advanced Topics',
       items: [
         {
           type: 'category',
@@ -131,6 +131,19 @@ const sidebars = {
             'AUDIT_READINESS_GUIDE',
             'AUDITOR_COMPLIANCE_MAPPING',
             'CLOUDTRAIL_AUTO_REMEDIATION',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'MiniStack (Local AWS)',
+          items: [
+            'ministack/README',
+            'ministack/SETUP',
+            'ministack/DEPLOYMENT',
+            'ministack/JENKINS',
+            'ministack/VERIFICATION',
+            'ministack/ADVANCED',
+            'ministack/TROUBLESHOOTING',
           ],
         },
         {
@@ -153,7 +166,7 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: '📑 Reference',
+      label: 'Reference',
       items: [
         'COMPLIANCE_POSTURE',
         'COMPLIANCE_SEVERITY_LEVELS',

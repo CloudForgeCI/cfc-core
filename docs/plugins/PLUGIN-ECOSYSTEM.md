@@ -1,19 +1,19 @@
 # CloudForge Plugin Ecosystem
 
-## 🌟 Overview
+## Overview
 
 CloudForge provides two extensible plugin systems that enable organizations to:
 
-1. **Application Plugins** - Deploy any application on AWS with built-in compliance
+1. **Application Plugins** - Describe application deployment requirements for supported AWS runtimes
 2. **Compliance Framework Plugins** - Add custom compliance validators for industry standards
 
 Both systems use **Java ServiceLoader** for automatic plugin discovery and loading.
 
 ---
 
-## 📦 Built-in Applications (33 Applications)
+## Included Applications (33 Applications)
 
-CloudForge ships with 33 production-ready applications out-of-the-box across two plugin types: general `ApplicationSpec` plugins and the specialized `CmsSpec` plugins for PHP-based platforms.
+CloudForge includes 33 application specifications across two plugin types: general `ApplicationSpec` plugins and specialized `CmsSpec` plugins for PHP-based platforms. Validate each specification against your workload before production use.
 
 ### CI/CD (3)
 - **Jenkins** - Automation server with OIDC support
@@ -49,10 +49,10 @@ CloudForge ships with 33 production-ready applications out-of-the-box across two
 
 ### CMS / E-commerce (19 Platforms — `cms-service` topology)
 
-CMS plugins use the `@CmsPlugin` annotation and `CmsSpec` interface, which extends `ApplicationSpec` with PHP runtime, media storage, CDN, object cache, and cron capabilities. Deploy any of these by setting `topology: "cms-service"` and `application: "<id>"`.
+CMS plugins use the `@CmsPlugin` annotation and `CmsSpec` interface, which extends `ApplicationSpec` with PHP runtime, media storage, CDN, object cache, and cron capabilities. Deploy any of these by setting `topology: "cms-service"` and `applicationId: "<id>"`.
 
 #### Content Management (7)
-- **WordPress** (`wordpress`) — World's most popular CMS; OIDC, S3 media, Redis, multisite
+- **WordPress** (`wordpress`) — OIDC, S3 media, Redis, and multisite configuration
 - **WooCommerce** (`woocommerce`) — WordPress-based e-commerce; inherits WordPress capabilities
 - **Drupal** (`drupal`) — Enterprise CMS with native OIDC module; S3FS, Redis
 - **Joomla** (`joomla`) — Flexible CMS; Redis, S3 media
@@ -61,7 +61,7 @@ CMS plugins use the `@CmsPlugin` annotation and `CmsSpec` interface, which exten
 - **October CMS** (`october-cms`) — Laravel-based CMS
 
 #### E-commerce (5)
-- **Magento 2 / Adobe Commerce** (`magento`) — Enterprise e-commerce; 3-database Redis, S3 media, PCI-DSS ready
+- **Magento 2 / Adobe Commerce** (`magento`) — 3-database Redis, S3 media, and PCI DSS-related infrastructure configuration
 - **PrestaShop** (`prestashop`) — Open-source online store; S3 media, Redis
 - **OpenCart** (`opencart`) — Lightweight e-commerce
 - **Sylius** (`sylius`) — Symfony-based e-commerce framework
@@ -79,7 +79,7 @@ CMS plugins use the `@CmsPlugin` annotation and `CmsSpec` interface, which exten
 - **MediaWiki** (`mediawiki`) — Powers Wikipedia
 
 #### LMS (1)
-- **Moodle** (`moodle`) — Most popular open-source LMS; FERPA-relevant
+- **Moodle** (`moodle`) — Learning management system; FERPA-related requirements remain workload-specific
 
 #### Social Networking (1)
 - **UNA / Dolphin** (`dolphin-una`) — Social platform framework; ALB OIDC
@@ -101,7 +101,7 @@ CMS plugins use the `@CmsPlugin` annotation and `CmsSpec` interface, which exten
 
 ---
 
-## 🔒 Built-in Compliance Frameworks (12 Frameworks)
+## Included Compliance Frameworks (12 Frameworks)
 
 ### Always-Load Cross-Framework Validators (5)
 
@@ -129,15 +129,15 @@ These run when explicitly enabled via `complianceFrameworks`:
 | **SOC 2** | 40 | Service organization controls |
 | **ISO 27001** | 50 | Information security management |
 
-**All frameworks provide:**
-- ✅ Automated infrastructure validation
-- ✅ Runtime-specific controls (Docker/ECS vs EC2)
-- ✅ Security profile enforcement (PRODUCTION vs STAGING)
-- ✅ Compliance reporting integration
+**Framework plugins can provide:**
+- Infrastructure validation
+- Runtime-specific checks (Docker/ECS versus EC2)
+- Security-profile checks (PRODUCTION versus STAGING)
+- Findings for compliance reports
 
 ---
 
-## 🚀 Creating Custom Plugins
+## Creating Custom Plugins
 
 ### Application Plugin Example
 
@@ -216,15 +216,15 @@ public class Nist80053Rules implements FrameworkRules<SystemContext> {
 
 ---
 
-## 📚 Documentation
+## Documentation
 
-- **Plugin System Overview:** [cloudforge-core/PLUGIN-SYSTEM.md](cloudforge-core/PLUGIN-SYSTEM.md)
-- **Application Plugin Guide:** [cloudforge-core/APPLICATION-PLUGIN-GUIDE.md](cloudforge-core/APPLICATION-PLUGIN-GUIDE.md)
-- **Compliance Plugin Guide:** [cloudforge-core/COMPLIANCE-PLUGIN-GUIDE.md](cloudforge-core/COMPLIANCE-PLUGIN-GUIDE.md)
+- **Plugin System Overview:** [PLUGIN-SYSTEM.md](PLUGIN-SYSTEM.md)
+- **Application Plugin Guide:** [APPLICATION-PLUGIN-GUIDE.md](APPLICATION-PLUGIN-GUIDE.md)
+- **Compliance Plugin Guide:** [COMPLIANCE-PLUGIN-GUIDE.md](COMPLIANCE-PLUGIN-GUIDE.md)
 
 ---
 
-## 🎯 Use Cases
+## Use Cases
 
 ### For Enterprises
 - **Standardize deployments** across all teams
@@ -234,8 +234,8 @@ public class Nist80053Rules implements FrameworkRules<SystemContext> {
 
 ### For ISVs
 - **Package your application** as a CloudForge plugin
-- **Leverage battle-tested** infrastructure patterns
-- **Provide turnkey** AWS deployment for customers
+- **Reuse** infrastructure patterns
+- **Provide** an AWS deployment configuration for customers
 - **Support multiple** deployment modes (container/VM)
 
 ### For Compliance Teams
@@ -246,7 +246,7 @@ public class Nist80053Rules implements FrameworkRules<SystemContext> {
 
 ---
 
-## 🔧 Plugin Discovery
+## Plugin Discovery
 
 CloudForge discovers plugins automatically using Java ServiceLoader:
 
@@ -267,7 +267,7 @@ your-application.jar
 
 ---
 
-## 📊 Plugin Ecosystem Stats
+## Included Plugin Counts
 
 | Category | Built-in | Priorities | Always-Load |
 |----------|----------|------------|-------------|
@@ -301,11 +301,11 @@ your-application.jar
 
 ---
 
-## 🌐 Community Plugins
+## Community Plugins
 
 ### cloudforge-sample
 
-**[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample)** is the official reference plugin repository. It demonstrates both plugin types working together in a real project:
+**[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample)** is a reference plugin repository demonstrating both plugin types:
 
 | Plugin | Type | ID | Notes |
 |--------|------|----|-------|
@@ -317,7 +317,7 @@ Use cloudforge-sample as the starting point for building your own CMS plugin. Se
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome community contributions!
 
@@ -327,20 +327,18 @@ We welcome community contributions!
 
 ---
 
-## 🌐 Plugin Registry (Coming Soon)
+## Planned Plugin Registry
 
-We're building a central plugin registry where developers can:
+The roadmap includes a central plugin registry where developers could:
 
 - ✅ Publish application and compliance plugins
 - ✅ Browse community-contributed plugins
 - ✅ Review and rate plugins
 - ✅ Track plugin versions and compatibility
 
-**Stay tuned!** 🎉
-
 ---
 
-## ✨ Quick Start
+## Quick Start
 
 ### Deploy a Built-in Application
 
@@ -378,8 +376,8 @@ cdk deploy
 
 ---
 
-**Ready to extend CloudForge?** 🚀
+## Next Steps
 
-- 📦 [Build an Application Plugin →](cloudforge-core/APPLICATION-PLUGIN-GUIDE.md)
-- 🔒 [Build a Compliance Plugin →](cloudforge-core/COMPLIANCE-PLUGIN-GUIDE.md)
-- 📖 [Read the Plugin System Overview →](cloudforge-core/PLUGIN-SYSTEM.md)
+- [Build an application plugin](APPLICATION-PLUGIN-GUIDE.md)
+- [Build a compliance plugin](COMPLIANCE-PLUGIN-GUIDE.md)
+- [Read the plugin system overview](PLUGIN-SYSTEM.md)

@@ -99,8 +99,17 @@ public class ApplicationFactory extends BaseFactory {
     @com.cloudforge.core.annotation.DeploymentContext("databaseMultiAz")
     private Boolean databaseMultiAz;
 
+    @com.cloudforge.core.annotation.DeploymentContext("databaseReadReplicaCount")
+    private Integer databaseReadReplicaCount;
+
     @com.cloudforge.core.annotation.DeploymentContext("enableEncryption")
     private Boolean enableEncryption;
+
+    @com.cloudforge.core.annotation.DeploymentContext("provisionManagerRedisSessions")
+    private Boolean provisionManagerRedisSessions;
+
+    @com.cloudforge.core.annotation.DeploymentContext("provisionManagerAccountCipherKey")
+    private Boolean provisionManagerAccountCipherKey;
 
     @com.cloudforge.core.annotation.DeploymentContext("enableAutoScaling")
     private Boolean enableAutoScaling;
@@ -240,7 +249,8 @@ public class ApplicationFactory extends BaseFactory {
                             applicationSpec.applicationId() + "-db",
                             databaseBackupRetentionDays,  // DeploymentConfig override
                             databaseMultiAz,              // DeploymentConfig override
-                            enableEncryption              // DeploymentConfig override
+                            enableEncryption,             // DeploymentConfig override
+                            resolveReadReplicaCount(dbSpec)
                         );
 
                         // Store database connection in SystemContext for use by ContainerFactory
@@ -258,6 +268,65 @@ public class ApplicationFactory extends BaseFactory {
                 }
             }
 
+            // Provision an ElastiCache Redis cluster to back CloudForge Manager's own
+            // SessionStore (see ManagerRuntimeConfiguration.Sessions / SessionStoreConfiguration
+            // in cloudforge-manager). Deliberately scoped to applicationId == cloudforge-manager
+            // rather than a new marker interface — this is the one non-CMS caller of
+            // CmsObjectCacheConfiguration today, and gating it here (rather than adding a
+            // generic "any ApplicationSpec can request Redis" mechanism) avoids expanding scope
+            // beyond what was asked. MUST run AFTER createInfrastructureFactories() so VPC exists.
+            if ("cloudforge-manager".equals(applicationSpec.applicationId())
+                    && Boolean.TRUE.equals(provisionManagerRedisSessions)) {
+                try {
+                    LOG.info("Provisioning ElastiCache Redis session store for cloudforge-manager");
+                    software.amazon.awscdk.services.elasticache.CfnCacheCluster redisCluster =
+                        com.cloudforgeci.api.core.topology.CmsObjectCacheConfiguration.createRedisCluster(
+                            ctx, applicationSpec);
+                    ctx.redisSessionStoreEndpoint.set(redisCluster.getAttrRedisEndpointAddress());
+                    ctx.redisSessionStorePort.set(6379);
+                    LOG.info("Successfully provisioned Manager Redis session store: "
+                        + redisCluster.getAttrRedisEndpointAddress());
+                } catch (IllegalStateException e) {
+                    // VPC not yet available — same tolerance CmsServiceTopologyConfiguration
+                    // applies to CMS object-cache provisioning; log and skip rather than fail
+                    // the whole synth, since single-instance Manager works fine without this.
+                    LOG.warning("Skipping Manager Redis session store — VPC not yet available: "
+                        + e.getMessage());
+                }
+            }
+
+            // Provision the AES cipher key CloudForge Manager uses to encrypt cross-account
+            // connection secrets (external IDs) at rest — see SecretCipher/AesGcmSecretCipher in
+            // cloudforge-manager. Delivered as an ECS Secret bound to this Secrets Manager entry
+            // (ContainerFactory), mirroring CFC_MANAGER_DATABASE_PASSWORD's delivery. No VPC
+            // dependency, unlike Redis above, so this can run regardless of network readiness.
+            // Defaults to true (see DeploymentConfig.provisionManagerAccountCipherKey javadoc) —
+            // without it Manager silently falls back to PlaintextSecretCipher.
+            if ("cloudforge-manager".equals(applicationSpec.applicationId())
+                    && !Boolean.FALSE.equals(provisionManagerAccountCipherKey)) {
+                LOG.info("Provisioning account connection cipher key for cloudforge-manager");
+                // 32 alphanumeric characters is valid, padding-free Base64 (32 % 4 == 0) that
+                // decodes to exactly 24 raw bytes — an accepted AES-192 key length for
+                // AesGcmSecretCipher (16/24/32). excludePunctuation keeps the generated string to
+                // the alphanumeric subset of the Base64 alphabet, so it is always decodable as-is.
+                software.amazon.awscdk.services.secretsmanager.Secret accountCipherKeySecret =
+                    software.amazon.awscdk.services.secretsmanager.Secret.Builder.create(
+                            this, "AccountCipherKeySecret")
+                        .description("AES cipher key for "
+                            + software.amazon.awscdk.Stack.of(this).getStackName()
+                            + " cross-account connection secrets (CFC_MANAGER_ACCOUNT_SECRET_KEY)")
+                        .generateSecretString(
+                            software.amazon.awscdk.services.secretsmanager.SecretStringGenerator.builder()
+                                .passwordLength(32)
+                                .excludePunctuation(true)
+                                .build())
+                        .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
+                        .build();
+                ctx.accountCipherKeySecretArn.set(accountCipherKeySecret.getSecretArn());
+                LOG.info("Successfully provisioned Manager account cipher key secret: "
+                    + accountCipherKeySecret.getSecretName());
+            }
+
             // NOTE: WAF is created by security profile configurations (ProductionSecurityConfiguration, StagingSecurityConfiguration)
             // to ensure proper integration with security profile settings and avoid duplicates
 
@@ -272,14 +341,12 @@ public class ApplicationFactory extends BaseFactory {
                     throw e;
                 }
             } else if (runtime == RuntimeType.EC2) {
-                // Create EC2 compute resources
-                if (maxInstanceCapacity != null && maxInstanceCapacity > 1) {
+                try {
                     Ec2Factory ec2 = new Ec2Factory(this, id + "Ec2");
                     ec2.create();
-                } else {
-                    // Single instance deployment
-                    // TODO: Implement createSingleEc2Instance for universal applications
-                    LOG.warning("Single instance EC2 deployment not yet implemented for universal applications");
+                } catch (Exception e) {
+                    LOG.log(Level.SEVERE, "*** CRITICAL: Exception in Ec2Factory ***", e);
+                    throw e;
                 }
             }
 
@@ -314,6 +381,13 @@ public class ApplicationFactory extends BaseFactory {
                    applicationSpec.applicationId() + " ***", e);
             throw e;
         }
+    }
+
+    private int resolveReadReplicaCount(DatabaseSpec dbSpec) {
+        if (databaseReadReplicaCount != null) {
+            return Math.max(0, databaseReadReplicaCount);
+        }
+        return dbSpec.requiresReadReplicas() ? Math.max(0, dbSpec.readReplicaCount()) : 0;
     }
 
     /**

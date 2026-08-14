@@ -17,9 +17,9 @@ import java.util.Map;
 /**
  * Moodle LMS ApplicationSpec implementation.
  *
- * <p>Moodle is the world's most popular open-source learning management
- * system (LMS). It's widely used in education, government, and enterprise
- * training contexts. HIPAA/FERPA compliance is possible with proper configuration.</p>
+ * <p>Moodle is an open-source learning management system (LMS) used for
+ * education and training. Compliance requirements depend on deployment and
+ * operational configuration.</p>
  *
  * <h2>Key Features:</h2>
  * <ul>
@@ -37,7 +37,7 @@ import java.util.Map;
     value = "moodle",
     category = "lms",
     displayName = "Moodle",
-    description = "World's most popular open-source LMS",
+    description = "Open-source learning management system",
     phpVersion = "8.2",
     defaultCpu = 2048,
     defaultMemory = 4096,

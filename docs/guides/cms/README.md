@@ -68,7 +68,7 @@ Authentication is handled at the ALB level via Cognito (`authMode: "alb-oidc"`).
 
 ## Minimal Deployment Example
 
-All CMS apps follow the same pattern — only `application` changes:
+All CMS apps follow the same pattern — only `applicationId` changes:
 
 ```json
 {
@@ -76,7 +76,7 @@ All CMS apps follow the same pattern — only `application` changes:
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "cms-service",
-  "application": "wordpress",
+  "applicationId": "wordpress",
 
   "domain": "example.com",
   "subdomain": "blog",
@@ -88,7 +88,7 @@ All CMS apps follow the same pattern — only `application` changes:
 }
 ```
 
-Switch to a different CMS by changing `"application": "drupal"`, `"application": "magento"`, etc.
+Switch to a different CMS by changing `"applicationId": "drupal"`, `"applicationId": "magento"`, etc.
 
 ---
 

@@ -17,16 +17,15 @@ import java.util.Map;
 /**
  * Concrete CMS ApplicationSpec implementation.
  *
- * <p>Concrete CMS (formerly concrete5) is a mid-market CMS focused on
- * user-friendliness and compliance. It has good accessibility features
- * and is suitable for corporate and government sites.</p>
+ * <p>Concrete CMS (formerly concrete5) provides in-context editing,
+ * accessibility features, and add-on support.</p>
  *
  * <h2>Key Features:</h2>
  * <ul>
  *   <li>PHP 7.3-8.x support (v9)</li>
  *   <li>MySQL/MariaDB database</li>
  *   <li>In-context editing</li>
- *   <li>Good accessibility compliance</li>
+ *   <li>Accessibility features</li>
  *   <li>Marketplace for add-ons</li>
  * </ul>
  *
@@ -37,7 +36,7 @@ import java.util.Map;
     value = "concrete-cms",
     category = "cms",
     displayName = "Concrete CMS",
-    description = "User-friendly CMS with good compliance features",
+    description = "CMS with in-context editing and accessibility features",
     phpVersion = "8.2",
     defaultCpu = 1024,
     defaultMemory = 2048,

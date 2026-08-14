@@ -9,15 +9,18 @@
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
+        <cloudforge.version>3.2.0</cloudforge.version>
+        <testcontainers.version>1.21.0</testcontainers.version>
+        <aws.sdk.version>2.25.0</aws.sdk.version>
     </properties>
 
-    <!-- Import CloudForge BOM for centralized version management -->
+    <!-- Import CloudForge BOM — see docs/architecture/cloudforge-sample-bom.template.md -->
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>com.cloudforgeci</groupId>
                 <artifactId>cfc-core</artifactId>
-                <version>3.2.0</version>
+                <version>${cloudforge.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -37,6 +40,28 @@
     <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-api</artifactId>
+    </dependency>
+
+    <!-- MiniStack local deployment (adapter, deployer, pipeline) -->
+    <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-ministack</artifactId>
+    </dependency>
+
+    <!-- LocalStack local deployment (adapter, deployer, pipeline) -->
+    <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-localstack</artifactId>
+    </dependency>
+
+    <!-- Application-owned Manager deploy contract, discovered with ServiceLoader. No longer
+         covered by the cfc-core BOM import above — split into its own repo/versioning
+         (CloudForgeCI/cloudforge-manager-deployment), so its version is pinned explicitly here
+         instead. -->
+    <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-manager-deployment</artifactId>
+        <version>${cloudforge.version}</version>
     </dependency>
 
     <!-- AWS CDK - explicit dependency for IDE support -->
@@ -79,6 +104,74 @@
         <groupId>com.fasterxml.jackson.dataformat</groupId>
         <artifactId>jackson-dataformat-yaml</artifactId>
     </dependency>
+
+    <!-- ============================================ -->
+    <!-- Testcontainers for the independent MiniStack emulator -->
+    <!-- ============================================ -->
+    <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
+    </dependency>
+
+    <!-- ============================================ -->
+    <!-- AWS SDK v2 for programmatic testing          -->
+    <!-- ============================================ -->
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>cloudformation</artifactId>
+        <version>${aws.sdk.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>ec2</artifactId>
+        <version>${aws.sdk.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>iam</artifactId>
+        <version>${aws.sdk.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>cognitoidentityprovider</artifactId>
+        <version>${aws.sdk.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>rds</artifactId>
+        <version>${aws.sdk.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>ecs</artifactId>
+        <version>${aws.sdk.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>elasticloadbalancingv2</artifactId>
+        <version>${aws.sdk.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>route53</artifactId>
+        <version>${aws.sdk.version}</version>
+        <scope>test</scope>
+    </dependency>
 </dependencies>
 
     <build>
@@ -87,7 +180,6 @@
                 <artifactId>maven-clean-plugin</artifactId>
                 <version>3.4.1</version>
                 <configuration>
-                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
                     <filesets>
                         <fileset>
                             <directory>${project.basedir}/cdk.out</directory>
@@ -135,6 +227,51 @@
                     </execution>
                 </executions>
             </plugin>
+
         </plugins>
     </build>
+
+    <!-- ============================================ -->
+    <!-- MiniStack-related synth/parity tests         -->
+    <!-- Live MiniStack integration (@Tag ministack)  -->
+    <!-- lives in cloudforge-ministack (-P ministack). -->
+    <!-- ============================================ -->
+    <profiles>
+        <profile>
+            <id>ministack</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups>ministack</groups>
+                            <systemPropertyVariables>
+                                <java.util.logging.config.file>${project.basedir}/logging.properties</java.util.logging.config.file>
+                                <MINISTACK>true</MINISTACK>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>localstack</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups>localstack</groups>
+                            <systemPropertyVariables>
+                                <java.util.logging.config.file>${project.basedir}/logging.properties</java.util.logging.config.file>
+                                <LOCALSTACK>true</LOCALSTACK>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

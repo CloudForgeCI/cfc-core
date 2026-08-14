@@ -54,7 +54,7 @@ import static com.cloudforgeci.api.core.rules.RuleKit.whenBoth;
  *   "context": {
  *     "cfc": {
  *       "topology": "cms-service",
- *       "application": "wordpress",
+ *       "applicationId": "wordpress",
  *       "runtime": "fargate",
  *       "env": "prod",
  *       "domain": "example.com",
@@ -98,7 +98,7 @@ public final class CmsServiceTopologyConfiguration implements TopologyConfigurat
             String appId = ctx.cfc.applicationId();
             if (appId == null || appId.isBlank()) {
                 return List.of(
-                    "CMS_SERVICE requires an 'application' key in cdk.json (e.g., \"application\": \"wordpress\"). " +
+                    "CMS_SERVICE requires applicationId in the deployment context (e.g., \"applicationId\": \"wordpress\"). " +
                     "Available CMS IDs: wordpress, woocommerce, magento, drupal, joomla, prestashop, " +
                     "opencart, sylius, bagisto, phpbb, flarum, mybb, mediawiki, moodle, dolphin-una, " +
                     "concrete-cms, october-cms, typo3, suitecrm"

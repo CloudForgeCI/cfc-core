@@ -89,6 +89,9 @@ You can combine groups and individual service names:
 - **MySQL** (port 3306) - Additional relational DB
 - **MariaDB** (port 3307) - MySQL-compatible DB
 - **Mock OIDC** (port 3001) - Authentication testing
+- **MiniStack** (port 4566) - Open-source AWS emulator for CloudFormation/ECS/ALB testing (`ministack` compose profile)
+
+MiniStack is separate from the application containers above. It emulates AWS services for deploying synthesized CloudFormation from `cfc-testing`. See **[MiniStack Local Deployment](../ministack/README.md)** for setup, deployment, verification, and incremental updates.
 
 ### Service Categories
 

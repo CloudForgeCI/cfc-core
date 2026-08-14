@@ -38,6 +38,7 @@ class AllApplicationSpecsTest {
             new DroneApplicationSpec(),
             new GitLabApplicationSpec(),
             new MattermostApplicationSpec(),
+            new MattermostTeamApplicationSpec(),
             new PostgreSQLApplicationSpec(),
             new RedisApplicationSpec(),
             new GrafanaApplicationSpec(),

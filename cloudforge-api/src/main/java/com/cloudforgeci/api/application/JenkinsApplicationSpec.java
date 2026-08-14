@@ -22,7 +22,7 @@ import java.util.List;
  *   <li>EC2 UserData installation and configuration</li>
  * </ul>
  *
- * <p>This spec is used by the universal application framework to deploy Jenkins
+ * <p>This spec is used by the application framework to deploy Jenkins
  * using either Fargate or EC2 runtime with appropriate infrastructure (EFS or EBS).</p>
  *
  * <p>CloudForge 3.0.0: Extracted from hardcoded Jenkins implementation</p>
@@ -61,6 +61,23 @@ public class JenkinsApplicationSpec implements ApplicationSpec {
         "/var/log/userdata.log",
         "/var/log/messages"
     );
+
+    @Override
+    public List<String> getSupportedAuthModes(String deploymentTarget) {
+        String target = deploymentTarget == null ? "" : deploymentTarget.trim().toLowerCase();
+        return switch (target) {
+            case "localstack" -> List.of("application-oidc", "alb-oidc", "none");
+            default -> getSupportedAuthModes();
+        };
+    }
+
+    @Override
+    public String getRecommendedAuthMode(String deploymentTarget) {
+        if ("localstack".equalsIgnoreCase(deploymentTarget)) {
+            return "application-oidc";
+        }
+        return getRecommendedAuthMode();
+    }
 
     // ========== Application Identity ==========
 

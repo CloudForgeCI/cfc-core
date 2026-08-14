@@ -244,7 +244,7 @@ public class ApplicationOidcFactory extends BaseFactory {
         LOG.info("OIDC Integration Method: " + oidcIntegration.getIntegrationMethod());
 
         // Determine OIDC configuration source
-        OidcConfiguration oidcConfig = buildOidcConfiguration();
+        OidcConfiguration oidcConfig = buildOidcConfiguration(oidcIntegration);
         if (oidcConfig == null) {
             LOG.warning("No OIDC configuration provided");
             LOG.warning("Please configure one of:");
@@ -284,22 +284,22 @@ public class ApplicationOidcFactory extends BaseFactory {
      * Build OidcConfiguration from deployment context.
      * Priority: Cognito > Identity Center SAML > Manual OIDC endpoints
      */
-    private OidcConfiguration buildOidcConfiguration() {
+    private OidcConfiguration buildOidcConfiguration(OidcIntegration oidcIntegration) {
         // Option 1: Cognito (auto-provisioned or existing)
         // For SAML apps (like Mattermost), buildCognitoConfiguration() returns SAML endpoints
         // For OIDC apps, it returns OAuth2 endpoints - same User Pool, different endpoints
         if (Boolean.TRUE.equals(cognitoAutoProvision) || cognitoUserPoolId != null) {
-            return buildCognitoConfiguration();
+            return buildCognitoConfiguration(oidcIntegration);
         }
 
         // Option 2: IAM Identity Center SAML (auto-provisioned)
         if (Boolean.TRUE.equals(autoProvisionIdentityCenter) && ssoInstanceArn != null) {
-            return buildIdentityCenterSamlConfiguration();
+            return buildIdentityCenterSamlConfiguration(oidcIntegration);
         }
 
         // Option 3: Manual OIDC endpoints (External IdP)
         if (oidcIssuer != null && !oidcIssuer.isEmpty()) {
-            return buildManualOidcConfiguration();
+            return buildManualOidcConfiguration(oidcIntegration);
         }
 
         return null;
@@ -313,7 +313,7 @@ public class ApplicationOidcFactory extends BaseFactory {
      *
      * <p>Prioritizes SystemContext values (exported by CognitoAuthenticationFactory) over DeploymentContext.</p>
      */
-    private OidcConfiguration buildCognitoConfiguration() {
+    private OidcConfiguration buildCognitoConfiguration(OidcIntegration oidcIntegration) {
         // Priority 1: SystemContext values (exported by CognitoAuthenticationFactory.create())
         // Priority 2: DeploymentContext values (manually configured)
         String effectiveUserPoolId = ctx.cognitoUserPoolId.get().orElse(cognitoUserPoolId);
@@ -414,6 +414,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             "cognito:groups",
             appRequiresSaml ? "" : "openid profile email",  // Scopes not used for SAML
             applicationUrl,
+            buildRedirectUrl(applicationUrl, oidcIntegration),
             groupsEnabled,
             adminGroup,
             developerGroup,
@@ -437,7 +438,7 @@ public class ApplicationOidcFactory extends BaseFactory {
      *   <li>userInfoEndpoint -> Not used (attributes come in SAML assertion)</li>
      * </ul>
      */
-    private OidcConfiguration buildIdentityCenterSamlConfiguration() {
+    private OidcConfiguration buildIdentityCenterSamlConfiguration(OidcIntegration oidcIntegration) {
         // Read SAML configuration from SystemContext (set by IdentityCenterSamlFactory)
         String samlSsoUrl = ctx.samlIdpSsoUrl.get().orElse(null);
         String samlMetadataUrl = ctx.samlIdpMetadataUrl.get().orElse(null);
@@ -496,6 +497,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             "groups",           // Groups claim/attribute
             "",                 // Scopes (not used for SAML)
             applicationUrl,
+            buildRedirectUrl(applicationUrl, oidcIntegration),
             true,               // Groups enabled
             adminGroup,
             developerGroup,
@@ -506,7 +508,7 @@ public class ApplicationOidcFactory extends BaseFactory {
     /**
      * Build OIDC configuration from manual endpoints.
      */
-    private OidcConfiguration buildManualOidcConfiguration() {
+    private OidcConfiguration buildManualOidcConfiguration(OidcIntegration oidcIntegration) {
         if (oidcAuthorizationEndpoint == null || oidcTokenEndpoint == null ||
             oidcUserInfoEndpoint == null || oidcClientId == null) {
             LOG.warning("Manual OIDC configuration incomplete");
@@ -530,14 +532,18 @@ public class ApplicationOidcFactory extends BaseFactory {
             LOG.info("Application URL: " + applicationUrl);
         }
 
-        // For external OIDC providers, use standard default group names
-        // These can be overridden by providing cognitoAdminGroupName and cognitoUserGroupName
+        // For external OIDC providers, use application-aware group defaults.
+        // These can be overridden by providing cognitoAdminGroupName and cognitoUserGroupName.
+        boolean cloudForgeManager = applicationSpec != null
+            && "cloudforge-manager".equals(applicationSpec.applicationId());
+        String defaultAdminGroup = cloudForgeManager ? "ManagerAdmins" : "Admins";
+        String defaultDeveloperGroup = cloudForgeManager ? "ManagerUsers" : "Developers";
         String adminGroup = (cognitoAdminGroupName != null && !cognitoAdminGroupName.isEmpty())
                 ? cognitoAdminGroupName
-                : "Admins";
+                : defaultAdminGroup;
         String developerGroup = (cognitoUserGroupName != null && !cognitoUserGroupName.isEmpty())
                 ? cognitoUserGroupName
-                : "Developers";
+                : defaultDeveloperGroup;
         String viewerGroup = "Viewers";  // Standard viewer group
 
         // For manual OIDC configuration, assume groups are enabled (no way to know from context)
@@ -564,6 +570,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             "groups",  // Standard OIDC claim for groups
             "openid profile email",
             applicationUrl,
+            buildRedirectUrl(applicationUrl, oidcIntegration),
             groupsEnabled,
             adminGroup,
             developerGroup,
@@ -751,6 +758,22 @@ public class ApplicationOidcFactory extends BaseFactory {
     }
 
     /**
+     * Builds the provider callback URL from the deployed application URL and the
+     * application integration's documented callback path.
+     */
+    private static String buildRedirectUrl(String applicationUrl, OidcIntegration oidcIntegration) {
+        if (applicationUrl == null || applicationUrl.isBlank() || oidcIntegration == null) {
+            return null;
+        }
+        String callbackPath = oidcIntegration.getOidcCallbackPath();
+        if (callbackPath == null || callbackPath.isBlank()) {
+            return applicationUrl;
+        }
+        return applicationUrl.replaceAll("/+$", "")
+            + (callbackPath.startsWith("/") ? callbackPath : "/" + callbackPath);
+    }
+
+    /**
      * Simplified OIDC configuration implementation.
      */
     private static class SimplifiedOidcConfiguration implements OidcConfiguration {
@@ -766,6 +789,7 @@ public class ApplicationOidcFactory extends BaseFactory {
         private final String groupsClaim;
         private final String scopes;
         private final String applicationUrl;
+        private final String redirectUrl;
         private final boolean groupsEnabled;
         private final String adminGroupName;
         private final String developerGroupName;
@@ -775,7 +799,7 @@ public class ApplicationOidcFactory extends BaseFactory {
                                           String authorizationEndpoint, String tokenEndpoint,
                                           String userInfoEndpoint, String logoutEndpoint,
                                           String clientId, String clientSecretArn, String usernameClaim,
-                                          String groupsClaim, String scopes, String applicationUrl,
+                                          String groupsClaim, String scopes, String applicationUrl, String redirectUrl,
                                           boolean groupsEnabled, String adminGroupName,
                                           String developerGroupName, String viewerGroupName) {
             this.providerType = providerType;
@@ -790,6 +814,7 @@ public class ApplicationOidcFactory extends BaseFactory {
             this.groupsClaim = groupsClaim;
             this.scopes = scopes;
             this.applicationUrl = applicationUrl;
+            this.redirectUrl = redirectUrl;
             this.groupsEnabled = groupsEnabled;
             this.adminGroupName = adminGroupName;
             this.developerGroupName = developerGroupName;
@@ -828,10 +853,7 @@ public class ApplicationOidcFactory extends BaseFactory {
 
         @Override
         public String getRedirectUrl() {
-            // Application-specific redirect URL - will be constructed by application's OIDC integration
-            // Each application has different callback paths (e.g., /securityRealm/finishLogin for Jenkins)
-            // Runtime factories should use the application's OidcIntegration to get the correct path
-            return null;
+            return redirectUrl;
         }
 
         @Override

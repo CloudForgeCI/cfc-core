@@ -20,8 +20,8 @@ import java.util.logging.Logger;
  * - FedRamp Moderate/High
  *
  * This matrix helps organizations understand which infrastructure controls satisfy
- * requirements across multiple frameworks, reducing audit burden and demonstrating
- * comprehensive security coverage.
+ * requirements across multiple frameworks and identify the controls mapped to each
+ * framework.
  *
  * <p>Each control maps to framework requirements with enforcement levels:
  * <ul>
@@ -150,7 +150,7 @@ public final class ComplianceMatrix {
         ),
 
         AUDIT_LOGGING(
-            "Comprehensive audit logging (CloudTrail, Flow Logs, ALB logs)",
+            "Audit logging with CloudTrail, VPC Flow Logs, and ALB access logs",
             Map.of(
                 "PCI-DSS", FrameworkRequirement.required("Req 10.2 - Automated audit trails"),
                 "HIPAA", FrameworkRequirement.required("§164.312(b) - Audit Controls"),
@@ -618,8 +618,8 @@ public final class ComplianceMatrix {
     }
 
     /**
-     * Generate a comprehensive compliance matrix report showing all controls
-     * and their mappings across frameworks.
+     * Generate a compliance matrix report showing every defined control and its
+     * mappings across frameworks.
      */
     public static String generateMatrixReport() {
         StringBuilder report = new StringBuilder();
@@ -931,12 +931,14 @@ public final class ComplianceMatrix {
      *
      * <p>Enforcement logic:
      * <ul>
-     *   <li>ENFORCE mode + control is REQUIRED in any framework → enforce (return true)</li>
-     *   <li>ENFORCE mode + control is only ADVISORY → don't enforce (return false)</li>
-     *   <li>ADVISORY mode → never enforce (return false, but may warn)</li>
-     *   <li>DISABLED mode → never enforce (return false)</li>
-     *   <li>No frameworks selected → never enforce (return false)</li>
+     *   <li>DISABLED mode → never require (return false)</li>
+     *   <li>ENFORCE or ADVISORY mode + control is REQUIRED in any framework → require (return true)</li>
+     *   <li>ENFORCE or ADVISORY mode + control is only ADVISORY → don't require (return false)</li>
+     *   <li>No frameworks selected → never require (return false)</li>
      * </ul>
+     *
+     * <p>ADVISORY vs ENFORCE affects validation blocking and warnings, not whether
+     * framework-required controls are provisioned in infrastructure.</p>
      *
      * @param frameworksStr Comma-separated list of frameworks (e.g., "PCI-DSS,HIPAA,SOC2")
      * @param mode Compliance mode (ENFORCE, ADVISORY, or DISABLED)
@@ -948,32 +950,31 @@ public final class ComplianceMatrix {
         ComplianceMode mode,
         SecurityControl control
     ) {
-        // DISABLED mode: never enforce
         if (mode == ComplianceMode.DISABLED) {
             return false;
         }
 
-        // ADVISORY mode: never enforce (just warn)
-        if (mode == ComplianceMode.ADVISORY) {
+        return isRequiredByAnyFramework(frameworksStr, control);
+    }
+
+    /**
+     * Returns true when any selected framework marks the control as REQUIRED.
+     */
+    static boolean isRequiredByAnyFramework(String frameworksStr, SecurityControl control) {
+        if (frameworksStr == null || frameworksStr.isEmpty()) {
             return false;
         }
 
-        // ENFORCE mode: check if any selected framework REQUIRES this control
-        if (mode == ComplianceMode.ENFORCE) {
-            if (frameworksStr == null || frameworksStr.isEmpty()) {
-                return false; // No frameworks selected
+        for (String framework : frameworksStr.split("[,\\s+]+")) {
+            // Normalize: uppercase + replace underscores with hyphens (PCI_DSS → PCI-DSS)
+            // This handles both enum.name() (PCI_DSS) and enum.getMatrixKey() (PCI-DSS) inputs
+            String normalized = framework.trim().toUpperCase().replace("_", "-");
+            if (normalized.isEmpty()) {
+                continue;
             }
-
-            // Support comma, space, and + as delimiters (consistent with ComplianceFrameworkType)
-            for (String framework : frameworksStr.split("[,\\s+]+")) {
-                // Normalize: uppercase + replace underscores with hyphens (PCI_DSS → PCI-DSS)
-                // This handles both enum.name() (PCI_DSS) and enum.getMatrixKey() (PCI-DSS) inputs
-                String normalized = framework.trim().toUpperCase().replace("_", "-");
-                if (normalized.isEmpty()) continue;
-                if (control.isRequired(normalized)) {
-                    LOG.fine("Control " + control.name() + " REQUIRED by framework: " + normalized);
-                    return true; // At least one framework requires it
-                }
+            if (control.isRequired(normalized)) {
+                LOG.fine("Control " + control.name() + " REQUIRED by framework: " + normalized);
+                return true;
             }
         }
 

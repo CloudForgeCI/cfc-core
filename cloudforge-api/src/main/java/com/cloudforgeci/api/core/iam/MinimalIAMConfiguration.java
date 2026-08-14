@@ -155,6 +155,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                     .managedPolicies(List.of(ssmPolicy, cloudwatchPolicy))
                     .build();
 
+            ManagerOperatorIamSupport.attachOperatorBaselinePolicies(c, ec2Role);
+            ManagerOperatorIamSupport.attachDeployCapabilities(c, ec2Role);
             c.ec2InstanceRole.set(ec2Role);
 
         } else {
@@ -197,6 +199,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                     ))
                     .build());
 
+            ManagerOperatorIamSupport.attachOperatorBaselinePolicies(c, ec2Role);
+            ManagerOperatorIamSupport.attachDeployCapabilities(c, ec2Role);
             c.ec2InstanceRole.set(ec2Role);
         }
     }
@@ -285,6 +289,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                             "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*"
                     ))
                     .build());
+
+            ManagerOperatorIamSupport.addOperatorBaselineToStatements(c, taskStatements);
 
             ManagedPolicy taskPolicy = taskPolicyBuilder.statements(taskStatements).build();
 
@@ -377,6 +383,9 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                             "arn:aws:logs:" + c.cfc.region() + ":" + accountId + ":log-group:" + appLogPattern + ":*"
                     ))
                     .build());
+
+            ManagerOperatorIamSupport.attachOperatorBaselinePolicies(c, taskRole);
+            ManagerOperatorIamSupport.attachDeployCapabilities(c, taskRole);
 
             // Store roles in SystemContext
             c.fargateExecutionRole.set(executionRole);

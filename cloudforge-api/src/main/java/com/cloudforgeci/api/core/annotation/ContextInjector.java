@@ -3,8 +3,6 @@ package com.cloudforgeci.api.core.annotation;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.annotation.SecurityProfileConfiguration;
-import com.cloudforge.core.enums.TopologyType;
-import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import software.constructs.Construct;

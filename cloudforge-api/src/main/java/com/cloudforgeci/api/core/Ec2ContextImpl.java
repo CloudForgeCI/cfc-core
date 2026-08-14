@@ -14,15 +14,28 @@ public class Ec2ContextImpl implements Ec2Context {
     private final boolean hasEfs;
     private final String efsId;
     private final String accessPointId;
+    private final String authMode;
+    private final String fqdn;
+    private final boolean sslEnabled;
 
     public Ec2ContextImpl(String stackName, String runtimeType, String securityProfile,
                           boolean hasEfs, String efsId, String accessPointId) {
+        this(stackName, runtimeType, securityProfile, hasEfs, efsId, accessPointId,
+            "none", null, false);
+    }
+
+    public Ec2ContextImpl(String stackName, String runtimeType, String securityProfile,
+                          boolean hasEfs, String efsId, String accessPointId,
+                          String authMode, String fqdn, boolean sslEnabled) {
         this.stackName = stackName;
         this.runtimeType = runtimeType;
         this.securityProfile = securityProfile;
         this.hasEfs = hasEfs;
         this.efsId = efsId;
         this.accessPointId = accessPointId;
+        this.authMode = authMode == null || authMode.isBlank() ? "none" : authMode;
+        this.fqdn = fqdn;
+        this.sslEnabled = sslEnabled;
     }
 
     @Override
@@ -53,5 +66,20 @@ public class Ec2ContextImpl implements Ec2Context {
     @Override
     public Optional<String> accessPointId() {
         return Optional.ofNullable(accessPointId);
+    }
+
+    @Override
+    public String authMode() {
+        return authMode;
+    }
+
+    @Override
+    public String fqdn() {
+        return fqdn;
+    }
+
+    @Override
+    public boolean sslEnabled() {
+        return sslEnabled;
     }
 }

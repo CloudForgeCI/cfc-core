@@ -14,7 +14,10 @@ import com.cloudforge.core.interfaces.OidcIntegration;
 import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
+import software.amazon.awscdk.services.autoscaling.ElbHealthCheckOptions;
+import software.amazon.awscdk.services.autoscaling.HealthCheck;
 import software.amazon.awscdk.services.ec2.BlockDevice;
 import software.amazon.awscdk.services.ec2.BlockDeviceVolume;
 import software.amazon.awscdk.services.ec2.EbsDeviceOptions;
@@ -120,6 +123,9 @@ public class Ec2Factory extends BaseFactory {
 
   @DeploymentContext("enableEncryption")
   private Boolean enableEncryption;
+
+  @DeploymentContext("healthCheckGracePeriod")
+  private Integer healthCheckGracePeriod;
 
   // ========== Optional Port Configuration ==========
   // These flags control which optional ports are exposed in security groups
@@ -379,7 +385,10 @@ public class Ec2Factory extends BaseFactory {
         security.name().toLowerCase(),
         hasEfs,
         efsId,
-        accessPointId
+        accessPointId,
+        authMode == null ? "none" : authMode.getValue(),
+        fqdn,
+        Boolean.TRUE.equals(enableSsl)
     );
 
     // Create UserDataBuilder and delegate to ApplicationSpec
@@ -591,7 +600,7 @@ public class Ec2Factory extends BaseFactory {
     // Create SNS topic for ASG notifications (required for STAGING/PRODUCTION - AwsSolutions-AS3)
     // Notifications provide visibility into instance lifecycle events for operational monitoring
     Topic.Builder topicBuilder = Topic.Builder.create(this, appId + "AsgNotifications")
-            .displayName(stackName + " Auto Scaling Notifications");
+            .displayName(truncateSnsDisplayName(appId + " auto scaling notifications"));
 
     // HIPAA/PCI-DSS requires KMS encryption for SNS topics - controlled by SecurityProfileConfiguration
     if (config.isSnsKmsEncryptionEnabled()) {
@@ -616,6 +625,9 @@ public class Ec2Factory extends BaseFactory {
             ))
             .build());
 
+    int defaultGracePeriod = applicationSpec != null ? applicationSpec.defaultHealthCheckGracePeriod() : 300;
+    int gracePeriodSeconds = healthCheckGracePeriod != null ? healthCheckGracePeriod : defaultGracePeriod;
+
     // Build ASG with notifications for all scaling events
     AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, appId + "Asg")
             .vpc(vpc)
@@ -624,6 +636,9 @@ public class Ec2Factory extends BaseFactory {
             .desiredCapacity(desiredCapacity)
             .maxCapacity(maxCapacity)
             .launchTemplate(launchTemplate)
+            .healthCheck(HealthCheck.elb(ElbHealthCheckOptions.builder()
+                    .grace(Duration.seconds(gracePeriodSeconds))
+                    .build()))
             .notifications(List.of(NotificationConfiguration.builder()
                     .topic(asgNotificationTopic)
                     .scalingEvents(ScalingEvents.ALL)
@@ -632,6 +647,15 @@ public class Ec2Factory extends BaseFactory {
 
     LOG.info("ASG notifications configured for all scaling events -> " + asgNotificationTopic.getTopicName());
     return asg;
+  }
+
+  /** SNS display names are limited to 100 characters. */
+  static String truncateSnsDisplayName(String value) {
+    if (value == null || value.isBlank()) {
+      return "CloudForge ASG notifications";
+    }
+    String trimmed = value.trim();
+    return trimmed.length() <= 100 ? trimmed : trimmed.substring(0, 100);
   }
 
 }

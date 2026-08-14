@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-We're currently supporting 2.0.x with security patches. If you're on anything older, time to upgrade.
+Security patches are provided for the current 3.2.x release series.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 2.0.x   | :white_check_mark: |
-| < 2.0   | :x:                |
+| 3.2.x   | :white_check_mark: |
+| < 3.2   | :x:                |
 
 ## Found a Security Issue?
 

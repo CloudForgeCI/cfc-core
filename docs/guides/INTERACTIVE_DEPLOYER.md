@@ -56,27 +56,38 @@ mvn exec:java -Dexec.mainClass="com.cloudforgeci.samples.app.InteractiveDeployer
 
 ## Architecture
 
-### Modular Design
+The Interactive Deployer is a **sample CLI entrypoint** (`cfc-testing` / cloudforge-sample). It collects configuration and prints results; deploy orchestration lives in the libraries.
 
-The Interactive Deployer uses a **Strategy Pattern** with the **SystemContext Orchestration Layer** to provide a modular, expandable architecture:
+```text
+InteractiveDeployer     → prompts, menu, println
+LocalDeploymentShell    → sample helper (copy into your app)
+CloudForgeDeployment    → cloudforge-api central deploy API
+cloudforge-ministack / cloudforge-localstack → target mechanics
+cloudforge-core         → shared contracts
+```
 
-#### Strategy Pattern
-- Each deployment type implements the `DeploymentStrategy` interface
-- Strategies handle their own configuration collection and deployment logic
-- New deployment types can be added by implementing the interface and registering in `DEPLOYMENT_STRATEGIES`
+### Local deploy (options 6 / 7 / 8)
 
-#### SystemContext Orchestration Layer
-- Uses `SystemContext.createJenkinsDeployment()` for Jenkins deployments
-- Uses `SystemContext.createS3CloudFrontDeployment()` for S3 website deployments
-- Handles infrastructure creation, dependency management, and context injection
-- Ensures consistent resource creation across all deployment types
+After CDK synth, local targets use:
 
-#### Extensibility
-Adding a new deployment type requires:
-1. Implement `DeploymentStrategy` interface
-2. Add strategy to `DEPLOYMENT_STRATEGIES` map
-3. Implement `collectConfiguration()` and `deploy()` methods
-4. Use SystemContext orchestration methods for deployment
+```java
+DeploymentResult result = LocalDeploymentShell.deploy(
+    config,
+    DeploymentTarget.LOCALSTACK,
+    cloudAssembly,
+    DeployOptions.defaults());
+DeploymentResultPrinter.printOutcome(result, "LocalStack", config.applicationId);
+```
+
+### AWS deploy (options 2 / 3)
+
+Still invokes `cdk deploy` subprocess from the entrypoint. AWS routing into `CloudForgeDeployment` is a future phase.
+
+### Extensibility
+
+- **Applications:** implement `ApplicationSpec` + `META-INF/services` (see `CraftCmsApplicationSpec` in cfc-testing)
+- **Compliance:** plugin guides under `docs/plugins/`
+- **Custom entrypoint:** BOM-import `cfc-core`, depend on `cloudforge-api` + optional target JARs, call `CloudForgeDeployment` — do not copy orchestration from InteractiveDeployer
 
 ## Configuration Options
 
@@ -347,6 +358,47 @@ You can also modify the generated CDK context manually or create custom deployme
 ### Integration with CI/CD
 
 The interactive deployer can be integrated into CI/CD pipelines by providing configuration via environment variables or configuration files.
+
+## MiniStack Local Deployment
+
+Build and start commands from the repository root: **[Local Emulator Quick Start](LOCAL_EMULATOR_QUICK_START.md)**.
+
+The Interactive Deployer always offers MiniStack as menu options **8** / **9** (no mode flag). Point clients at the emulator with `AWS_ENDPOINT_URL` (same key as the AWS CLI):
+
+```bash
+# Start MiniStack or LocalStack (from cfc-testing, after mvn install)
+java -cp "target/classes:target/dependency/*" \
+  com.cloudforgeci.samples.app.InteractiveDeployer --platform
+
+cd cfc-testing
+export AWS_ENDPOINT_URL=http://localhost:4566   # default if unset
+java -cp "target/classes:target/dependency/*" \
+  com.cloudforgeci.samples.app.InteractiveDeployer
+# Choose 6 — Deploy to MiniStack
+```
+
+| Option | Description |
+|--------|-------------|
+| **2** | Deploy to AWS |
+| **4** | Dry-run: MiniStack adapted template + report; AWS changeset hint |
+| **6** | Deploy to MiniStack — adapt canonical template, create/update stack, start auth runtime if needed |
+| **7** | Full pipeline — cfn-guard validation, deploy, stack verification |
+
+Options **6** and **8** run deploy preflight before CloudFormation. MiniStack preflight blocks RDS-backed apps and unsupported CFN types (`MINISTACK_PREFLIGHT=enforce` by default). LocalStack preflight probes tier/capabilities (`LOCALSTACK_PREFLIGHT=enforce`; set `CFC_LOCALSTACK_SKIP_PREFLIGHT=true` to skip).
+
+**Application compatibility:** [Local Emulator Application Catalog](LOCAL_EMULATOR_APP_CATALOG.md) — full MiniStack (13) and LocalStack (37+) lists with ports and sample contexts.
+
+Stack name in MiniStack is `<stackName>-ministack`.
+
+**Documentation**
+
+- [MiniStack overview](../ministack/README.md) — architecture and quick start
+- [Setup](../ministack/SETUP.md) — prerequisites, build, start MiniStack
+- [Deployment](../ministack/DEPLOYMENT.md) — deploy options and Jenkins walkthrough
+- [Verification](../ministack/VERIFICATION.md) — confirm what deployed locally
+- [Advanced](../ministack/ADVANCED.md) — auth proxy, incremental updates, env vars
+- [Troubleshooting](../ministack/TROUBLESHOOTING.md) — common failures
+- [Extended Testing](EXTENDED-TESTING.md) — synthesis and validation scripts
 
 ## Contributing
 

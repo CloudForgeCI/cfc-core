@@ -3,12 +3,14 @@ package com.cloudforge.core.config;
 import com.cloudforge.core.enums.ComplianceFrameworkType;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -33,14 +35,25 @@ public class ComplianceFrameworkListConverter {
     private ComplianceFrameworkListConverter() {}
 
     /**
-     * Deserializes a comma-separated string to {@code List<ComplianceFrameworkType>}.
+     * Deserializes a comma-separated string or JSON array to
+     * {@code List<ComplianceFrameworkType>}.
      */
     public static class Deserializer extends JsonDeserializer<List<ComplianceFrameworkType>> {
         @Override
         public List<ComplianceFrameworkType> deserialize(JsonParser p, DeserializationContext ctxt)
                 throws IOException {
-            String value = p.getValueAsString();
-            return ComplianceFrameworkType.parseCommaSeparated(value);
+            if (p.currentToken() == JsonToken.START_ARRAY) {
+                List<ComplianceFrameworkType> frameworks = new ArrayList<>();
+                while (p.nextToken() != JsonToken.END_ARRAY) {
+                    String value = p.getValueAsString();
+                    if (value != null && !value.isBlank()) {
+                        frameworks.addAll(ComplianceFrameworkType.parseCommaSeparated(value));
+                    }
+                }
+                return frameworks;
+            }
+
+            return ComplianceFrameworkType.parseCommaSeparated(p.getValueAsString());
         }
     }
 

@@ -17,8 +17,8 @@ import java.util.Map;
 /**
  * TYPO3 CMS ApplicationSpec implementation.
  *
- * <p>TYPO3 is an enterprise-grade CMS very popular in Germany/Europe.
- * It's known for its robust architecture, security, and enterprise features.</p>
+ * <p>TYPO3 is a CMS with multisite, role-based access, and long-term-support
+ * release options.</p>
  *
  * <h2>Key Features:</h2>
  * <ul>
@@ -36,7 +36,7 @@ import java.util.Map;
     value = "typo3",
     category = "cms",
     displayName = "TYPO3",
-    description = "Enterprise CMS popular in Germany and Europe",
+    description = "CMS with multisite and long-term-support options",
     phpVersion = "8.2",
     defaultCpu = 2048,
     defaultMemory = 4096,

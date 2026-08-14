@@ -1,21 +1,21 @@
 package com.cloudforgeci.samples.app;
 
+import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforgeci.api.core.DeploymentContext;
-import com.cloudforgeci.api.application.JenkinsApplicationSpec;
+import com.cloudforgeci.api.compute.ApplicationLoader;
 import com.cloudforgeci.samples.launchers.ApplicationFargateStack;
 import com.cloudforgeci.samples.launchers.ApplicationEc2Stack;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.iam.IAMProfileMapper;
-import io.github.cdklabs.cdknag.AwsSolutionsChecks;
+import com.cloudforge.core.interfaces.ApplicationSpec;
 import software.amazon.awscdk.App;
-import software.amazon.awscdk.Aspects;
 import software.amazon.awscdk.Environment;
-import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
-import software.constructs.Construct;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
@@ -29,6 +29,11 @@ import java.util.Map;
 public class CloudForgeCommunitySample {
 
   public static void main(final String[] args) {
+    if (System.getenv("CFC_DEPLOYING") == null && shouldRunInteractiveDeployer()) {
+      InteractiveDeployer.main(args);
+      return;
+    }
+
     App app = new App();
 
     // Check if we have a pre-configured cfc context (from cdk.json)
@@ -36,14 +41,33 @@ public class CloudForgeCommunitySample {
     Object cfcObj = app.getNode().tryGetContext("cfc");
 
     if (cfcObj == null) {
+      Path contextFile = Path.of("deployment-context.json");
+      if (Files.exists(contextFile)) {
+        try {
+          DeploymentConfig config = DeploymentConfig.fromFile(contextFile.toString());
+          app.getNode().setContext("cfc", config.toContextMap());
+          cfcObj = app.getNode().tryGetContext("cfc");
+        } catch (java.io.IOException e) {
+          throw new IllegalStateException("Failed to load deployment-context.json", e);
+        }
+      }
+    }
+
+    if (cfcObj == null) {
       // Build cfc context from individual --context cfc.* parameters
       Map<String, Object> cfcContext = new java.util.HashMap<>();
 
       // Read all cfc.* parameters and build the context map
       String[] contextKeys = {
-        "runtime", "topology", "securityProfile", "stackName", "region",
+        "applicationId", "runtime", "topology", "securityProfile", "stackName", "region",
         "domain", "subdomain", "enableSsl", "env", "tier",
-        "networkMode", "wafEnabled", "cloudfrontEnabled", "authMode",
+        "networkMode", "wafEnabled", "cloudfrontEnabled", "authMode", "oidcProvider",
+        "cognitoAutoProvision", "cognitoUserPoolName", "cognitoDomainPrefix",
+        "cognitoMfaEnabled", "cognitoMfaMethod", "cognitoCreateGroups",
+        "cognitoAdminGroupName", "cognitoUserGroupName", "cognitoInitialAdminEmail",
+        "cognitoUserPoolId", "cognitoAppClientId", "oidcIssuer",
+        "oidcAuthorizationEndpoint", "oidcTokenEndpoint", "oidcUserInfoEndpoint",
+        "oidcClientId", "oidcClientSecretName",
         "cpu", "memory", "instanceType", "minInstanceCapacity", "maxInstanceCapacity",
         "cpuTargetUtilization", "enableMonitoring", "enableEncryption",
         "logRetentionDays", "healthCheckGracePeriod", "healthCheckInterval",
@@ -101,14 +125,17 @@ public class CloudForgeCommunitySample {
       stackName = (cfc.runtime() == RuntimeType.EC2) ? "JenkinsEc2" : "JenkinsFargate";
     }
 
-    // Create JenkinsApplicationSpec
-    JenkinsApplicationSpec jenkinsSpec = new JenkinsApplicationSpec();
+    String applicationId = cfc.applicationId() == null ? "jenkins" : cfc.applicationId();
+    ApplicationSpec applicationSpec = ApplicationLoader.findById(applicationId)
+        .orElseThrow(() -> new IllegalArgumentException(
+            "Unknown applicationId '" + applicationId + "'. Available: " +
+                ApplicationLoader.discover().keySet()));
 
     // Create stacks based on runtime type using universal ApplicationFactory
     if (cfc.runtime() == RuntimeType.EC2) {
-      new ApplicationEc2Stack(app, stackName, props, security, iamProfile, jenkinsSpec);
+      new ApplicationEc2Stack(app, stackName, props, security, iamProfile, applicationSpec);
     } else if (cfc.runtime() == RuntimeType.FARGATE) {
-      new ApplicationFargateStack(app, stackName, props, security, iamProfile, jenkinsSpec);
+      new ApplicationFargateStack(app, stackName, props, security, iamProfile, applicationSpec);
     } else {
       throw new IllegalArgumentException("Unsupported runtime type: " + cfc.runtime());
     }
@@ -117,6 +144,17 @@ public class CloudForgeCommunitySample {
     //Aspects.of(app).add(new AwsSolutionsChecks());
 
     app.synth();
+  }
+
+  private static boolean shouldRunInteractiveDeployer() {
+    // MiniStack is always a menu option inside InteractiveDeployer; no MINISTACK env gate.
+    // Enter the deployer from cdk synth/deploy only when INTERACTIVE=true (or --interactive).
+    return isTruthy(System.getenv("INTERACTIVE")) || isTruthy(System.getProperty("INTERACTIVE"));
+  }
+
+  private static boolean isTruthy(String value) {
+    return value != null
+        && ("true".equalsIgnoreCase(value) || "1".equals(value) || "yes".equalsIgnoreCase(value));
   }
 
 }

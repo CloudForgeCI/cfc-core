@@ -3,6 +3,7 @@ package com.cloudforgeci.api.core.rules;
 import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import java.util.ArrayList;
@@ -83,6 +84,11 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
                 LOG.warning("Incident Response validation found " + failedRules.size() + " recommendations");
                 failedRules.forEach(rule ->
                     LOG.warning("  - " + rule.description() + ": " + rule.errorMessage().orElse("")));
+
+                // ADVISORY mode: log recommendations but do not block deployment
+                if (ctx.cfc != null && ctx.cfc.complianceMode() == ComplianceMode.ADVISORY) {
+                    return List.of();
+                }
 
                 // For DEV and STAGING, these are advisory only (warnings but not blocking)
                 if (ctx.security == SecurityProfile.DEV || ctx.security == SecurityProfile.STAGING) {

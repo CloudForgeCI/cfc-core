@@ -26,6 +26,7 @@ import java.util.List;
  * @param max the maximum value for numeric fields
  * @param pattern the regex pattern for string validation
  * @param defaultFrom the ApplicationSpec method to get default value from
+ * @param propertyKey optional application.properties key for defaults
  * @param sensitive whether this field contains sensitive data
  * @param sourceConfig the field containing the source location for sensitive data
  * @param tags the field tags for categorization and filtering
@@ -49,6 +50,7 @@ public record ConfigFieldInfo(
     double max,
     String pattern,
     String defaultFrom,
+    String propertyKey,
     boolean sensitive,
     String sourceConfig,
     FieldTag[] tags,
@@ -83,6 +85,7 @@ public record ConfigFieldInfo(
             annotation.max(),
             annotation.pattern(),
             annotation.defaultFrom(),
+            annotation.propertyKey(),
             annotation.sensitive(),
             annotation.sourceConfig(),
             annotation.tags(),

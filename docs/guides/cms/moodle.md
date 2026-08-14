@@ -1,6 +1,6 @@
 # Moodle Application Guide
 
-Moodle is the world's most widely deployed Learning Management System (LMS). It is used by universities, schools, and corporate training teams to deliver courses, assessments, and certifications.
+Moodle is an open-source Learning Management System (LMS) used by universities, schools, and corporate training teams to deliver courses, assessments, and certifications.
 
 **Status**: Available
 
@@ -120,7 +120,7 @@ For universities using existing identity providers (Active Directory, Google Wor
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "cms-service",
-  "application": "moodle",
+  "applicationId": "moodle",
 
   "networkMode": "public-no-nat",
   "region": "us-east-1",
@@ -152,7 +152,7 @@ For universities using existing identity providers (Active Directory, Google Wor
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "moodle",
+  "applicationId": "moodle",
 
   "domain": "example.edu",
   "subdomain": "learn",
@@ -205,7 +205,7 @@ Moodle is frequently used for HIPAA compliance training and healthcare employee 
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "moodle",
+  "applicationId": "moodle",
 
   "domain": "example.com",
   "subdomain": "training",

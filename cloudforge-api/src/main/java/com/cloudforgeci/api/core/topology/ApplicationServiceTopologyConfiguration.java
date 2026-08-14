@@ -81,7 +81,7 @@ public final class ApplicationServiceTopologyConfiguration implements TopologyCo
   @Override
   public void wire(SystemContext c) {
 
-    // Auto-scaling configuration for both Fargate and EC2 services (only when maxInstanceCapacity > 1)
+    // Auto-scaling policies apply only when maxInstanceCapacity > 1
     Integer maxCap = c.maxInstanceCapacity.get().orElse(null);
     Integer minCap = c.minInstanceCapacity.get().orElse(null);
     boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1;
@@ -90,12 +90,9 @@ public final class ApplicationServiceTopologyConfiguration implements TopologyCo
     LOG.fine("fargateService present: " + c.fargateService.get().isPresent());
     LOG.fine("alb present: " + c.alb.get().isPresent());
     if (scale) {
-      // Fargate autoscaling - use service.autoScaleTaskCount() directly
-      // Check if callback has already been registered to prevent multiple registrations
       if (!c.fargateAutoscalingCallbackRegistered.get().isPresent()) {
         LOG.fine("Registering Fargate auto-scaling callback with whenBoth");
         whenBoth(c.fargateService, c.alb, (service, alb) -> {
-          // Check if Fargate autoscaling has already been configured (inside callback to prevent multiple executions)
           if (c.fargateAutoscalingConfigured.get().isPresent()) {
             LOG.info("Fargate auto-scaling already configured, skipping");
             return;
@@ -105,8 +102,10 @@ public final class ApplicationServiceTopologyConfiguration implements TopologyCo
           Integer max = c.maxInstanceCapacity.get().orElse(1);
           Integer cpuTarget = c.cpuTargetUtilization.get().orElse(60);
           LOG.info("Configuring Fargate auto-scaling: min=" + min + ", max=" + max + ", cpuTarget=" + cpuTarget);
-          ScalableTaskCount scalable = service.autoScaleTaskCount(EnableScalingProps.builder().minCapacity(min).maxCapacity(max).build());
-          scalable.scaleOnCpuUtilization("CpuScaleSvc", CpuUtilizationScalingProps.builder().targetUtilizationPercent(cpuTarget)
+          ScalableTaskCount scalable = service.autoScaleTaskCount(
+              EnableScalingProps.builder().minCapacity(min).maxCapacity(max).build());
+          scalable.scaleOnCpuUtilization("CpuScaleSvc", CpuUtilizationScalingProps.builder()
+                  .targetUtilizationPercent(cpuTarget)
                   .scaleInCooldown(Duration.minutes(2)).scaleOutCooldown(Duration.minutes(2)).build());
           c.fargateAutoscalingConfigured.set(true);
           LOG.info("Fargate auto-scaling configured successfully");
@@ -115,59 +114,48 @@ public final class ApplicationServiceTopologyConfiguration implements TopologyCo
       } else {
         LOG.info("Fargate auto-scaling callback already registered");
       }
+    }
 
-      // EC2 autoscaling - add AutoScalingGroup to target group
-      // Check if callback has already been registered to prevent multiple registrations
-      if (!c.ec2AutoscalingCallbackRegistered.get().isPresent()) {
-        whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
-          // Check if AutoScalingGroup has already been added to target group (inside callback to prevent multiple executions)
-          if (c.asgAddedToTargetGroup.get().isPresent()) {
-            return;
-          }
-
-          tg.addTarget(asg);
-          c.asgAddedToTargetGroup.set(true);
-        });
-        c.ec2AutoscalingCallbackRegistered.set(true);
-      } else {
-      }
+    // EC2: register ASG with the ALB target group for both single- and multi-instance stacks
+    if (!c.ec2AutoscalingCallbackRegistered.get().isPresent()) {
+      whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
+        if (c.asgAddedToTargetGroup.get().isPresent()) {
+          return;
+        }
+        tg.addTarget(asg);
+        c.asgAddedToTargetGroup.set(true);
+      });
+      c.ec2AutoscalingCallbackRegistered.set(true);
     }
 
     // DNS A/AAAA records for ALB (for both SSL and non-SSL deployments)
-    // Check if DNS records callback has already been registered to prevent multiple registrations
     if (c.dnsRecordsCallbackRegistered.get().isPresent()) {
       return;
     }
 
     whenBoth(c.zone, c.alb, (zone, alb) -> {
-      // Check if DNS records have already been created (inside callback to prevent multiple executions)
       if (c.dnsRecordsCreated.get().isPresent()) {
         return;
       }
 
-      // Use subdomain for DNS record name, or use the domain directly if no subdomain
       String record = c.subdomain.get().orElse(null);
       if (record == null || record.isBlank()) {
-        // When no subdomain is specified, use the domain name itself
         record = c.domain.get().orElse(null);
         if (record == null || record.isBlank()) {
-          return; // No domain or subdomain specified, cannot create DNS records
+          return;
         }
       }
 
       var target = RecordTarget.fromAlias(new LoadBalancerTarget(alb));
-      // Include stack name in construct ID to ensure uniqueness across different deployments
       String constructIdPrefix = "ServiceAlbAlias_" + c.stackName + "_" + c.topology + "_" + c.runtime;
       new ARecord(c, constructIdPrefix + "A", ARecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
       new AaaaRecord(c, constructIdPrefix + "AAAA", AaaaRecordProps.builder()
               .zone(zone).recordName(record).target(target).build());
 
-      // Set the DNS records created flag to prevent duplicate execution
       c.dnsRecordsCreated.set(true);
     });
 
-    // Mark that the DNS records callback has been registered
     c.dnsRecordsCallbackRegistered.set(true);
   }
 }

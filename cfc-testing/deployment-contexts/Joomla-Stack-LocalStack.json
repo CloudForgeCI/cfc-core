@@ -1,0 +1,21 @@
+{
+  "stackName": "Joomla-Stack",
+  "applicationId": "joomla",
+  "applicationName": "Joomla",
+  "description": "Standard Joomla CMS deployment for LocalStack",
+  "environment": "development",
+  "runtime": "FARGATE",
+  "securityProfile": "DEV",
+  "topology": "CMS_SERVICE",
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+  "authMode": "none",
+  "provisionDatabase": true,
+  "databaseEngine": "mysql",
+  "databaseVersion": "8.0",
+  "databaseName": "joomla",
+  "cpu": 512,
+  "memory": 1024,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1
+}

@@ -1,8 +1,8 @@
 # CloudForge Plugin System
 
-CloudForge provides two powerful plugin systems for extending functionality:
+CloudForge supports two plugin types for extending application deployment and compliance validation:
 
-## 🚀 Plugin Types
+## Plugin Types
 
 | Plugin Type | Purpose | Interface | Examples |
 |-------------|---------|-----------|----------|
@@ -11,16 +11,16 @@ CloudForge provides two powerful plugin systems for extending functionality:
 
 ---
 
-## 📦 Application Plugins
+## Application Plugins
 
 **Purpose:** Deploy any application on AWS using CloudForge infrastructure patterns.
 
 **Key Features:**
-- ✅ Automatic support for Docker/ECS (Fargate) and EC2 deployments
-- ✅ Built-in VPC, ALB, EFS, and monitoring configuration
-- ✅ OIDC integration for SSO
-- ✅ Health check configuration
-- ✅ CloudWatch logging
+- Docker/ECS (Fargate) and EC2 deployment hooks
+- VPC, ALB, EFS, and monitoring configuration
+- Optional OIDC integration
+- Health check configuration
+- CloudWatch logging
 
 **Quick Example:**
 
@@ -54,7 +54,7 @@ META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec
 
 ---
 
-## 🔒 Compliance Framework Plugins
+## Compliance Framework Plugins
 
 **Purpose:** Add custom compliance validation for industry standards or internal policies.
 
@@ -96,7 +96,7 @@ META-INF/services/com.cloudforge.core.interfaces.FrameworkRules
 
 ---
 
-## 🏗️ Plugin Architecture
+## Plugin Architecture
 
 Both plugin systems use Java's **ServiceLoader** pattern for automatic discovery:
 
@@ -122,7 +122,7 @@ your-plugin.jar
 
 ---
 
-## 🎯 Priority System (Compliance Only)
+## Priority System (Compliance Only)
 
 Compliance frameworks use priorities to control execution order:
 
@@ -136,9 +136,9 @@ Compliance frameworks use priorities to control execution order:
 
 ---
 
-## 📚 Built-in Plugins
+## Built-in Plugins
 
-### Applications (Out of the Box)
+### Included Applications
 
 #### CI/CD
 | Application | Status | Docker/ECS | EC2 | OIDC |
@@ -186,7 +186,7 @@ Compliance frameworks use priorities to control execution order:
 |-------------|--------|------------|-----|------|
 | **Mattermost** | ✅ Built-in | ✅ | ✅ | ❌ |
 
-### Compliance Frameworks (Out of the Box)
+### Included Compliance Frameworks
 
 | Framework | Priority | Always-Load | Status |
 |-----------|----------|-------------|--------|
@@ -207,7 +207,7 @@ Compliance frameworks use priorities to control execution order:
 
 ---
 
-## 🔧 Development Workflow
+## Development Workflow
 
 ### 1. Create Plugin Project
 
@@ -253,15 +253,15 @@ mvn test
 
 ---
 
-## 📖 Documentation
+## Documentation
 
 - **Application Plugins:** [APPLICATION-PLUGIN-GUIDE.md](APPLICATION-PLUGIN-GUIDE.md)
 - **Compliance Plugins:** [COMPLIANCE-PLUGIN-GUIDE.md](COMPLIANCE-PLUGIN-GUIDE.md)
-- **Core API:** [cloudforge-core/src/main/java/com/cloudforge/core/interfaces/](src/main/java/com/cloudforge/core/interfaces/)
+- **Core API:** [`cloudforge-core` interfaces](../../cloudforge-core/src/main/java/com/cloudforge/core/interfaces/)
 
 ---
 
-## 🤝 Community
+## Community
 
 - **Report Issues:** https://github.com/cloudforgeci/cfc-core/issues
 - **Contribute:** https://github.com/cloudforgeci/cfc-core/pulls
@@ -269,30 +269,29 @@ mvn test
 
 ---
 
-## ✨ Why Use Plugins?
+## Plugin Uses
 
 ### For Application Developers
-- ✅ Deploy any app without writing infrastructure code
-- ✅ Automatic high-availability, monitoring, backups
-- ✅ Support both container and VM deployments
-- ✅ OIDC SSO integration built-in
+- Reuse application infrastructure configuration
+- Configure monitoring and backups through the host project
+- Support container and VM deployment implementations
+- Integrate OIDC where the application supports it
 
 ### For Compliance Teams
-- ✅ Codify internal security policies
-- ✅ Automated validation at deployment time
-- ✅ Prevent non-compliant infrastructure from deploying
-- ✅ Generate compliance reports automatically
+- Codify internal infrastructure policies
+- Run validation at deployment time
+- Reject configurations that fail plugin validation
+- Add findings to compliance reports
 
 ### For Organizations
-- ✅ Standardize application deployment
-- ✅ Enforce compliance across all projects
-- ✅ Distribute best practices as reusable plugins
-- ✅ Reduce duplicated infrastructure code
+- Standardize application deployment configuration
+- Share validation rules across projects
+- Distribute organization-specific patterns as plugins
+- Reduce duplicated infrastructure code
 
 ---
 
-**Ready to build your first plugin?** 🚀
+## Next Steps
 
-Choose your adventure:
-- 📦 [Build an Application Plugin →](APPLICATION-PLUGIN-GUIDE.md)
-- 🔒 [Build a Compliance Plugin →](COMPLIANCE-PLUGIN-GUIDE.md)
+- [Build an application plugin](APPLICATION-PLUGIN-GUIDE.md)
+- [Build a compliance plugin](COMPLIANCE-PLUGIN-GUIDE.md)

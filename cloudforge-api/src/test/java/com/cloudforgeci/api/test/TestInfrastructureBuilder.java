@@ -339,6 +339,11 @@ public class TestInfrastructureBuilder {
         return this;
     }
 
+    public TestInfrastructureBuilder withApplicationId(String applicationId) {
+        updateContext("applicationId", applicationId);
+        return this;
+    }
+
     public TestInfrastructureBuilder withCognitoAutoProvision(boolean enabled) {
         updateContext("cognitoAutoProvision", enabled);
         return this;
@@ -351,6 +356,11 @@ public class TestInfrastructureBuilder {
 
     public TestInfrastructureBuilder withCognitoDomainPrefix(String prefix) {
         updateContext("cognitoDomainPrefix", prefix);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withManagerDirectDeployEnabled(boolean enabled) {
+        updateContext("managerDirectDeployEnabled", enabled);
         return this;
     }
 

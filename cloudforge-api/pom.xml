@@ -4,11 +4,11 @@
   <parent>
     <groupId>com.cloudforgeci</groupId>
     <artifactId>cfc-core</artifactId>
-    <version>3.2.0</version>
+    <version>3.2.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>cloudforge-api</artifactId>
-  <version>3.2.0</version>
+  <version>3.2.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>CloudForge API</name>
 
@@ -21,6 +21,9 @@
   <properties>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
+    <!-- Matches the version cloudforge-localstack/cloudforge-ministack/cloudforge-manager each
+         pin independently — no central AWS SDK BOM entry exists in the root pom yet. -->
+    <aws.sdk.version>2.25.0</aws.sdk.version>
   </properties>
 
   <dependencies>
@@ -42,6 +45,42 @@
     <dependency>
       <groupId>io.github.cdklabs</groupId>
       <artifactId>cdknag</artifactId>
+    </dependency>
+    <!-- AWS SDK v2 clients for CloudForgeDeployment's direct-to-AWS path (AwsDirectDeployer) —
+         real CloudFormation/S3 calls, distinct from the CDK synthesis-time deps above. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>cloudformation</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    <!-- Resolves the real (or LocalStack's fixed test) account id once per AwsDirectDeployer, to
+         substitute CDK's ${AWS::AccountId} pseudo-parameter token in asset-manifest bucket names —
+         see LocalStackCdkAssetPublisher's class javadoc for the bug this closes. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sts</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    <!-- AWS Service Catalog client for the deploy:catalog path (ServiceCatalogDeployer) —
+         provisioning against pre-published products, the SC_PROVISION capability's actions. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>servicecatalog</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    <!-- Local emulator pipelines (api orchestrates; mechanics stay in target modules) -->
+    <dependency>
+      <groupId>com.cloudforgeci</groupId>
+      <artifactId>cloudforge-ministack</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.cloudforgeci</groupId>
+      <artifactId>cloudforge-localstack</artifactId>
     </dependency>
     <!-- JUnit 5 for testing (version and scope from parent BOM) -->
     <dependency>
@@ -72,12 +111,16 @@
       <artifactId>jackson-dataformat-yaml</artifactId>
       <scope>test</scope>
     </dependency>
+
   </dependencies>
 
   <build>
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
       </plugin>
     </plugins>
   </build>

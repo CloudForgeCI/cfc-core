@@ -54,6 +54,11 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     @Override
+    public DeploymentContext getDeploymentContext() {
+        return deploymentContext;
+    }
+
+    @Override
     public SecurityProfile getSecurityProfile() {
         return SecurityProfile.STAGING;
     }
@@ -133,7 +138,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public FlowLogTrafficType getFlowLogTrafficType() {
-        return FlowLogTrafficType.ALL; // All traffic for comprehensive monitoring
+        return FlowLogTrafficType.ALL; // Record accepted and rejected traffic
     }
 
     // Security Monitoring - Moderate for staging

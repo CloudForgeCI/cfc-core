@@ -5,6 +5,7 @@ import com.cloudforgeci.api.storage.ContainerFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
@@ -94,6 +95,21 @@ public class FargateFactory extends BaseFactory {
 
   @DeploymentContext("healthCheckGracePeriod")
   private Integer healthCheckGracePeriod;
+
+  @DeploymentContext("complianceFrameworks")
+  private String complianceFrameworks;
+
+  @DeploymentContext("complianceMode")
+  private ComplianceMode complianceMode;
+
+  @DeploymentContext("awsConfigEnabled")
+  private Boolean awsConfigEnabled;
+
+  @DeploymentContext("auditManagerEnabled")
+  private Boolean auditManagerEnabled;
+
+  @DeploymentContext("guardDutyEnabled")
+  private Boolean guardDutyEnabled;
 
   @com.cloudforge.core.annotation.SystemContext("fargateExecutionRole")
   private Role fargateExecutionRole;
@@ -447,11 +463,54 @@ public class FargateFactory extends BaseFactory {
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "application";
     String outputId = appId.substring(0, 1).toUpperCase() + appId.substring(1) + "Url";
     String description = appId.substring(0, 1).toUpperCase() + appId.substring(1) + " URL (ALB DNS)";
+    String url = "http://" + ctx.alb.get().get().getLoadBalancerDnsName();
 
     CfnOutput.Builder.create(this, outputId)
             .description(description)
-            .value("http://" + ctx.alb.get().get().getLoadBalancerDnsName())
+            .value(url)
             .build();
+
+    // Stable, app-agnostic alias: CloudFormationInventory.preferredUrl (and every other
+    // CFN-output consumer) looks for the literal OutputKey "ApplicationUrl", not the per-app
+    // "{AppId}Url" key above — without this, AWS deployments never resolve an "Open" link
+    // or health-check URL, only LocalStack/MiniStack (which emit their own fixed-name
+    // outputs from a different code path). Created directly on the Stack (not `this`,
+    // the nested FargateFactory construct) so CDK's logical-id synthesis doesn't need an
+    // 8-char disambiguation hash — a construct one level deep needs it to stay globally
+    // unique, but that hash would defeat the whole point of a stable, predictable key.
+    CfnOutput.Builder.create(software.amazon.awscdk.Stack.of(this), "ApplicationUrl")
+            .description("Application URL (ALB DNS)")
+            .value(url)
+            .build();
+
+    createDeploymentMetadataOutputs();
+  }
+
+  /**
+   * Publish non-secret deployment posture with the stack. This is the
+   * control-plane source of truth for Manager inventory and compliance views;
+   * it deliberately avoids depending on a local deployment-context file.
+   */
+  private void createDeploymentMetadataOutputs() {
+    output("CloudForgeSecurityProfile", "CloudForge security profile",
+        ctx.security == null ? "unknown" : ctx.security.name());
+    output("CloudForgeComplianceFrameworks", "CloudForge compliance frameworks",
+        complianceFrameworks == null || complianceFrameworks.isBlank() ? "" : complianceFrameworks);
+    output("CloudForgeComplianceMode", "CloudForge compliance mode",
+        complianceMode == null ? "ADVISORY" : complianceMode.name());
+    output("CloudForgeAwsConfigEnabled", "CloudForge AWS Config enabled",
+        String.valueOf(Boolean.TRUE.equals(awsConfigEnabled)));
+    output("CloudForgeAuditManagerEnabled", "CloudForge Audit Manager enabled",
+        String.valueOf(Boolean.TRUE.equals(auditManagerEnabled)));
+    output("CloudForgeGuardDutyEnabled", "CloudForge GuardDuty enabled",
+        String.valueOf(Boolean.TRUE.equals(guardDutyEnabled)));
+  }
+
+  private void output(String id, String description, String value) {
+    CfnOutput.Builder.create(this, id)
+        .description(description)
+        .value(value)
+        .build();
   }
 
 }

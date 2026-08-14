@@ -108,7 +108,7 @@ For a **public storefront** (no login required to browse and buy), use `authMode
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "cms-service",
-  "application": "woocommerce",
+  "applicationId": "woocommerce",
 
   "networkMode": "public-no-nat",
   "region": "us-east-1",
@@ -139,7 +139,7 @@ For a **public storefront** (no login required to browse and buy), use `authMode
   "runtime": "fargate",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "woocommerce",
+  "applicationId": "woocommerce",
 
   "domain": "example.com",
   "subdomain": "shop",
@@ -193,7 +193,7 @@ WooCommerce handles payment tokens but relies on third-party gateways (Stripe, P
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "woocommerce",
+  "applicationId": "woocommerce",
 
   "domain": "example.com",
   "subdomain": "shop",

@@ -380,12 +380,12 @@ class TopologyRulesTest {
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
 
-    private Map<String, Object> buildCmsContext(String stackName, SecurityProfile profile, String application) {
+    private Map<String, Object> buildCmsContext(String stackName, SecurityProfile profile, String applicationId) {
         Map<String, Object> ctx = new HashMap<>();
         ctx.put("stackName", stackName);
         ctx.put("securityProfile", profile.name());
         ctx.put("domain", "example.com");
-        ctx.put("application", application);
+        ctx.put("applicationId", applicationId);
         return ctx;
     }
 }

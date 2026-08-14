@@ -1,14 +1,91 @@
-# CloudForge Community Testing Platform
+# CloudForge Community Testing Platform (cloudforge-sample)
 
-This directory contains the CloudForge Community testing framework and utilities, including the Interactive Deployer for testing purposes.
+This directory is the **reference entrypoint** for CloudForge — the same layout as
+[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample): libraries in the
+parent repo, **only the deploy shell and examples here**.
+
+## Role in the monorepo
+
+| This module | Library modules (reactor) |
+|-------------|-------------------------|
+| `InteractiveDeployer`, `CloudForgeCommunitySample` | `cloudforge-api` — deploy everything, CMS, factories |
+| Thin CDK launchers (`ApplicationFargateStack`, …) | `cloudforge-core` — contracts, config, `local.*` interfaces |
+| Example plugins (`samples/plugins/cms/…`) | `cloudforge-ministack` — MiniStack-only logic |
+| Benchmark/validation scripts | `cloudforge-localstack` — LocalStack-only logic |
+| `deployment-context.json` examples | `cloudforge-manager` — operations panel (deploy as an app) |
+
+**Architecture:** [Sample BOM template](../docs/architecture/cloudforge-sample-bom.template.md)
+
+**Rule:** Do not add MiniStack, LocalStack, Manager, or CMS **business logic** here.
+Call `CloudForgeDeployment` via `LocalDeploymentShell` (or directly from `cloudforge-api`).
+
+Sample helpers (copy into external projects):
+
+- `LocalDeploymentShell` — thin wrapper after CDK synth
+- `DeploymentResultPrinter` — optional console output
+
+## BOM consumption
+
+`cfc-testing` imports the root BOM:
+
+```xml
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>com.cloudforgeci</groupId>
+      <artifactId>cfc-core</artifactId>
+      <version>3.2.0</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+```
+
+Add only the modules you need (`cloudforge-api` required; ministack/localstack optional).
 
 ## Purpose
 
-`cfc-testing` is designed to **test** the CloudForge Community libraries (`cloudforge-api` and `cloudforge-core`) to ensure they work correctly. It includes the Interactive Deployer for testing deployment functionality.
+Validate that CloudForge libraries work end-to-end. The Interactive Deployer is a **sample CLI** —
+not the canonical deploy engine. External Java apps should mirror this module: BOM + api + thin entrypoint.
 
-## Interactive Deployer (Testing)
+## MiniStack Local Deployment
 
-The Interactive Deployer is available here for testing purposes. It's a command-line tool that guides you through configuring and deploying CloudForge Community infrastructure using the SystemContext orchestration layer.
+Deploy synthesized CloudFormation to [MiniStack](https://github.com/ministackorg/ministack) (open-source AWS emulator) without an AWS account.
+
+**From repository root:** [Local Emulator Quick Start](../docs/guides/LOCAL_EMULATOR_QUICK_START.md) · [MiniStack docs](../docs/ministack/README.md)
+
+```bash
+# Build (root)
+mvn clean install -DskipTests
+mvn -f cfc-testing package -Dmaven.test.skip=true
+
+# Start MiniStack or LocalStack (choose the target and action in the platform menu)
+java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer --platform
+
+# Deploy (cfc-testing)
+cd cfc-testing
+export AWS_ENDPOINT_URL=http://localhost:4566
+java -cp "target/classes:target/dependency/*" \
+  com.cloudforgeci.samples.app.InteractiveDeployer
+# Choose option 6 — Deploy to MiniStack
+```
+
+## LocalStack Local Deployment
+
+**From repository root:** [Local Emulator Quick Start](../docs/guides/LOCAL_EMULATOR_QUICK_START.md) · [LocalStack docs](../docs/localstack/README.md)
+
+```bash
+export LOCALSTACK_AUTH_TOKEN=...
+java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer --platform
+cd cfc-testing && java -cp "target/classes:target/dependency/*" \
+  com.cloudforgeci.samples.app.InteractiveDeployer
+# Choose option 8 — Deploy to LocalStack
+```
+
+## Interactive Deployer (sample CLI)
+
+Command-line tool for configuring and deploying CloudForge infrastructure. Target state: menu + prompts only, delegating to `CloudForgeDeployment` in `cloudforge-api`.
 
 ### Quick Start
 
@@ -34,9 +111,10 @@ cdk synth
 ### Prerequisites
 
 1. **AWS CDK CLI**: `npm install -g aws-cdk`
-2. **AWS Credentials**: `aws configure`
+2. **AWS Credentials**: `aws configure` (AWS deploy only; not required for MiniStack)
 3. **Java 21+**: Required for compilation
 4. **Maven**: For building the project
+5. **Docker**: Required for MiniStack local deployment
 
 ### Testing
 
@@ -57,21 +135,22 @@ java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.Inter
 java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer
 ```
 
-## Sample Applications
+#### With deployment context file
+```bash
+java -cp "target/classes:target/dependency/*" \
+  com.cloudforgeci.samples.app.InteractiveDeployer \
+  --context deployment-contexts/Jenkins-Stack-LocalStack.json
+```
 
-For production sample applications that demonstrate how to use CloudForge Community, see the **`cloudforge-sample`** repository at https://github.com/CloudForgeCI/cloudforge-sample.
+#### Custom plugins
 
-## Testing Framework
+See `src/main/java/com/cloudforgeci/samples/plugins/cms/CraftCmsApplicationSpec.java` — copy this pattern in your own repo with `META-INF/services` registration.
 
-This directory contains:
-- **Unit Tests**: Comprehensive test suite (26 tests) for `InteractiveDeployer` utility methods
-- Test utilities for validating CloudForge Community functionality
-- Integration tests for the core libraries
-- Performance benchmarks
-- Validation tools
-- Interactive Deployer for testing deployment functionality
+---
 
-### Unit Tests
+For full Interactive Deployer documentation, see [docs/guides/INTERACTIVE_DEPLOYER.md](../docs/guides/INTERACTIVE_DEPLOYER.md).
+
+## Unit Tests
 
 ```bash
 # Run unit tests
@@ -83,100 +162,39 @@ mvn test -Dtest=DeploymentContextPropagationTest
 ```
 
 **Test Coverage:**
-- ✅ Field propagation from `DeploymentConfig` → `deployment-context.json` → `DeploymentContext`
-- ✅ JSON parsing and serialization
-- ✅ Enum type conversions (RuntimeType, TopologyType, SecurityProfile)
-- ✅ Validation rules (authMode requirements, topology constraints)
-- ✅ Type compatibility (String/Integer for logRetentionDays)
-- ✅ Default value behavior
+- Field propagation from `DeploymentConfig` → `deployment-context.json` → `DeploymentContext`
+- JSON parsing and serialization
+- Enum type conversions (RuntimeType, TopologyType, SecurityProfile)
+- Validation rules (authMode requirements, topology constraints)
 
-**Jackson Integration:**
-- Uses Jackson ObjectMapper for automatic field serialization (no manual mapping)
-- Reduces `buildCfcContext()` from 130 lines to 30 lines (77% code reduction)
-- Eliminates dead code risk - automatically includes all DeploymentConfig fields
-- Jackson dependency only in cfc-testing (no impact on cloudforge-api/core)
-
-## Architecture
-
-The testing framework validates:
-- `cloudforge-api`: Core interfaces and orchestration layer
-- `cloudforge-core`: Business logic and factory implementations
+**Note:** Prefer adding behavior tests in the **owning library module** (see architecture plan). Keep `cfc-testing` tests focused on entrypoint wiring and context propagation.
 
 ## Comprehensive Testing & Validation
 
-CloudForge includes a suite of comprehensive testing and validation tools:
-
-### Synthesis Testing
 ```bash
-# Test synthesis across all security profiles (DEV, STAGING, PRODUCTION)
-# Tests EC2 and Fargate runtimes with proper security configurations
+# Test synthesis across all security profiles
 scripts/comprehensive-synth-test.sh
-```
 
-Tests all combinations of:
-- **Runtimes**: EC2, Fargate
-- **Security Profiles**: DEV (minimal), STAGING (medium), PRODUCTION (full)
-- **Features per profile**:
-  - PRODUCTION: WAF, ALB access logging, Cognito OIDC, all compliance frameworks
-  - STAGING: ALB access logging, Cognito OIDC, SOC2 compliance
-  - DEV: Minimal security for fast iteration
-
-### Resource Validation
-```bash
 # Validate synthesized templates against expected resource truth table
 scripts/comprehensive-resource-validator.sh
-```
 
-Creates a truth table of expected resources and validates:
-- VPC, security groups, load balancers
-- Authentication resources (Cognito User Pool, OIDC)
-- Compliance resources (S3 buckets for ALB logs, WAF, CloudTrail)
-- Runtime-specific resources (ECS, EC2, Auto Scaling)
-
-### Drift Detection
-```bash
-# Create baseline from current validation results
+# Drift detection
 scripts/drift-detector.sh baseline
-
-# Detect configuration drift after code changes
 scripts/drift-detector.sh detect
 
-# Generate drift history report
-scripts/drift-detector.sh history
-```
-
-Tracks configuration changes over time:
-- Resource count changes
-- Missing/added resources
-- Status changes (PASS → FAIL)
-- New/removed configurations
-
-### Performance Benchmarks
-```bash
-# Run synthesis performance benchmarks
+# Performance benchmarks
 scripts/quick-synth-benchmark.sh
 scripts/performance-synth-benchmark.sh
 scripts/run-all-benchmarks.sh
 ```
 
-## Files
+See `scripts/` for the full validation suite (`master-validation-system.sh`, `enhanced-synth-test.sh`, etc.).
 
-### Source Files
-- `src/main/java/com/cloudforgeci/samples/app/InteractiveDeployer.java` - Interactive Deployer for testing
-- `src/main/java/com/cloudforgeci/samples/app/CloudForgeCommunitySample.java` - Sample CDK application for testing
-- `src/main/java/com/cloudforgeci/samples/launchers/` - Test launchers for different deployment types
+## Key Files
 
-### Testing Scripts
-- `scripts/deploy-interactive.sh` - Run the Interactive Deployer
-- `scripts/comprehensive-synth-test.sh` - Test synthesis across all security profiles
-- `scripts/comprehensive-resource-validator.sh` - Validate resources against truth table
-- `scripts/drift-detector.sh` - Detect configuration drift over time
-- `scripts/detailed-analysis.sh` - Detailed resource analysis
-- `scripts/enhanced-synth-test.sh` - Enhanced synthesis testing with OIDC and compliance
-- `scripts/deployment-dry-run-tracker.sh` - Deployment dry-run testing with AWS credentials
-- `scripts/master-validation-system.sh` - Master validation orchestrator
-
-### Configuration
-- `cdk.json` - CDK configuration for testing
-- `logging.properties` - Logging configuration for tests
-- `deployment-context.json` - Generated deployment context
+- `src/main/java/com/cloudforgeci/samples/app/InteractiveDeployer.java` — sample CLI (target: thin shell)
+- `src/main/java/com/cloudforgeci/samples/app/CloudForgeCommunitySample.java` — CDK app entry
+- `src/main/java/com/cloudforgeci/samples/launchers/` — thin stacks calling `ApplicationFactory`
+- `src/main/java/com/cloudforgeci/samples/plugins/` — example custom plugins for external projects
+- `deployment-context.json` / `deployment-contexts/` — example contexts
+- `cdk.json` — CDK configuration

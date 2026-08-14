@@ -1,0 +1,19 @@
+{
+  "stackName": "CloudForgeManager-EC2",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "description": "LocalStack Wave 2 Phase C — Manager EC2/Auto Scaling smoke",
+  "environment": "development",
+  "runtime": "EC2",
+  "securityProfile": "DEV",
+  "topology": "APPLICATION_SERVICE",
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+  "authMode": "none",
+  "instanceType": "t3.micro",
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
+  "wafEnabled": false,
+  "enableMonitoring": false,
+  "logRetentionDays": 7
+}

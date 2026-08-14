@@ -12,19 +12,17 @@ import java.util.Map;
  * and e-commerce platforms including WordPress, Magento, Joomla, PrestaShop,
  * and Drupal.</p>
  *
- * <p>CloudForge 3.1.0: CMS/E-commerce Platform Support</p>
- *
  * <p>Example implementations:</p>
  * <ul>
- *   <li>WordPressApplicationSpec: World's most popular CMS</li>
+ *   <li>WordPressApplicationSpec: PHP-based CMS and blogging platform</li>
  *   <li>WooCommerceApplicationSpec: WordPress-based e-commerce</li>
- *   <li>MagentoApplicationSpec: Enterprise e-commerce platform</li>
- *   <li>JoomlaApplicationSpec: Flexible CMS for websites</li>
+ *   <li>MagentoApplicationSpec: Adobe Commerce-compatible e-commerce platform</li>
+ *   <li>JoomlaApplicationSpec: General-purpose CMS for websites</li>
  *   <li>PrestaShopApplicationSpec: Open-source e-commerce</li>
- *   <li>DrupalApplicationSpec: Enterprise CMS with native OIDC</li>
+ *   <li>DrupalApplicationSpec: CMS with OIDC support</li>
  * </ul>
  *
- * <h2>Key Features:</h2>
+ * <h2>Configuration</h2>
  * <ul>
  *   <li>PHP runtime configuration (version, extensions, OPcache, PHP-FPM)</li>
  *   <li>S3 media storage offloading</li>
@@ -671,6 +669,18 @@ public interface CmsSpec extends ApplicationSpec {
             return true;
         }
         return annotation.supportsEc2();
+    }
+
+    /**
+     * CMS apps declare database requirement on {@link CmsPlugin#requiresDatabase()}.
+     */
+    @Override
+    default boolean requiresDatabase() {
+        CmsPlugin annotation = getClass().getAnnotation(CmsPlugin.class);
+        if (annotation == null) {
+            return false;
+        }
+        return annotation.requiresDatabase();
     }
 
     /**

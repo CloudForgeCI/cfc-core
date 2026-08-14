@@ -349,6 +349,21 @@ public @interface ConfigField {
     String defaultFrom() default "";
 
     /**
+     * Optional key in {@code application.properties} / {@code application-local.properties}
+     * (and matching env / JVM system properties) used to supply a default when the field
+     * is unset in deployment-context.json.
+     *
+     * <p>Example: {@code propertyKey = "cfc.manager.url"} reads {@code cfc.manager.url}
+     * from properties or {@code CFC_MANAGER_URL} from the environment.</p>
+     *
+     * <p>Empty (default) means no properties-file binding — existing behavior unchanged.</p>
+     *
+     * @return dotted property key, or empty for none
+     * @since 3.3.0
+     */
+    String propertyKey() default "";
+
+    /**
      * Configuration for sensitive field source strategy.
      *
      * <p>References another field containing the source location (e.g., Secrets Manager ARN).</p>

@@ -1,9 +1,11 @@
 package com.cloudforgeci.api.interfaces;
 
+import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
+import com.cloudforgeci.api.core.DeploymentContext;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.ec2.FlowLogTrafficType;
 import software.amazon.awscdk.RemovalPolicy;
@@ -11,8 +13,48 @@ import software.amazon.awscdk.RemovalPolicy;
 /**
  * Configuration interface for security profile settings.
  * Defines security best practices and compliance requirements for each environment.
+ *
+ * <p><b>Adding a new profile-aware field:</b></p>
+ * <ol>
+ *   <li>Add the field to {@code DeploymentConfig.java}</li>
+ *   <li>Add a default method here using {@link #boolOverride(String, boolean)}
+ *       for the common override pattern</li>
+ *   <li>Override the default method in each profile implementation if the default differs</li>
+ * </ol>
+ *
+ * <p>The common override pattern (check deployment context, then fall back to profile default)
+ * is encapsulated in the default methods below, reducing boilerplate.</p>
  */
 public interface SecurityProfileConfiguration {
+
+    /**
+     * Returns the deployment context for override resolution, or null if not set.
+     * Implementations should return the DeploymentContext passed to their constructor.
+     */
+    DeploymentContext getDeploymentContext();
+
+    /**
+     * Helper for the common boolean override pattern: if the deployment context
+     * has a non-null value for the given config field, use it; otherwise return
+     * the provided profile default.
+     *
+     * @param configFieldName the field name on DeploymentConfig to check
+     * @param profileDefault the default value for this security profile
+     * @return the resolved boolean value
+     */
+    default boolean boolOverride(String configFieldName, boolean profileDefault) {
+        DeploymentContext ctx = getDeploymentContext();
+        if (ctx != null && ctx.config != null) {
+            try {
+                var field = DeploymentConfig.class.getField(configFieldName);
+                Object val = field.get(ctx.config);
+                if (val instanceof Boolean b) {
+                    return b;
+                }
+            } catch (Exception ignored) {}
+        }
+        return profileDefault;
+    }
 
     /**
      * Get the security profile this configuration applies to.

@@ -1,6 +1,6 @@
 # WordPress Application Guide
 
-WordPress is the world's most widely used CMS, powering over 40% of the web. It supports blogs, marketing sites, portfolios, and light e-commerce via WooCommerce.
+WordPress is an open-source CMS for blogs, marketing sites, portfolios, and e-commerce through plugins such as WooCommerce.
 
 **Status**: Verified
 
@@ -115,7 +115,7 @@ CloudForge automatically injects:
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "cms-service",
-  "application": "wordpress",
+  "applicationId": "wordpress",
 
   "networkMode": "public-no-nat",
   "region": "us-east-1",
@@ -146,7 +146,7 @@ CloudForge automatically injects:
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "cms-service",
-  "application": "wordpress",
+  "applicationId": "wordpress",
 
   "domain": "dev.example.com",
   "subdomain": "blog",
@@ -183,7 +183,7 @@ CloudForge automatically injects:
   "runtime": "fargate",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "wordpress",
+  "applicationId": "wordpress",
 
   "domain": "example.com",
   "subdomain": "www",
@@ -234,7 +234,7 @@ CloudForge automatically injects:
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "wordpress",
+  "applicationId": "wordpress",
 
   "domain": "example.com",
   "subdomain": "www",

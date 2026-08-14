@@ -125,7 +125,7 @@ Magento requires more resources even in development. A reduced setup for testing
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "cms-service",
-  "application": "magento",
+  "applicationId": "magento",
 
   "networkMode": "public-no-nat",
   "region": "us-east-1",
@@ -160,7 +160,7 @@ EC2 is strongly recommended for Magento production due to the consistent resourc
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "magento",
+  "applicationId": "magento",
 
   "domain": "example.com",
   "subdomain": "store",
@@ -212,7 +212,7 @@ EC2 is strongly recommended for Magento production due to the consistent resourc
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "magento",
+  "applicationId": "magento",
 
   "domain": "example.com",
   "subdomain": "store",

@@ -98,22 +98,20 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
         c.fargateAutoscalingCallbackRegistered.set(true);
       } else {
       }
+    }
 
-      // EC2 autoscaling - add AutoScalingGroup to target group
-      // Check if callback has already been registered to prevent multiple registrations
-      if (!c.ec2AutoscalingCallbackRegistered.get().isPresent()) {
-        whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
-          // Check if AutoScalingGroup has already been added to target group (inside callback to prevent multiple executions)
-          if (c.asgAddedToTargetGroup.get().isPresent()) {
-            return;
-          }
+    // EC2: register ASG with the ALB target group for both single- and multi-instance stacks
+    if (!c.ec2AutoscalingCallbackRegistered.get().isPresent()) {
+      whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
+        if (c.asgAddedToTargetGroup.get().isPresent()) {
+          return;
+        }
 
-          tg.addTarget(asg);
-          c.asgAddedToTargetGroup.set(true);
-        });
-        c.ec2AutoscalingCallbackRegistered.set(true);
-      } else {
-      }
+        tg.addTarget(asg);
+        c.asgAddedToTargetGroup.set(true);
+      });
+      c.ec2AutoscalingCallbackRegistered.set(true);
+    } else {
     }
 
     // DNS A/AAAA records for ALB (for both SSL and non-SSL deployments)

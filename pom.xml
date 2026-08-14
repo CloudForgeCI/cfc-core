@@ -3,11 +3,20 @@
 
   <groupId>com.cloudforgeci</groupId>
   <artifactId>cfc-core</artifactId>
-  <version>3.2.0</version>
+  <version>3.2.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>CloudForge Core BOM</name>
-  <description>Bill of Materials (BOM) for CloudForge infrastructure deployment libraries</description>
+  <description>
+    Bill of Materials (BOM) for CloudForge — import as type pom / scope import.
+    Modules: cloudforge-core, cloudforge-api, cloudforge-ministack, cloudforge-localstack.
+    Sample entrypoint: cfc-testing (not in BOM). cloudforge-manager-deployment and
+    cloudforge-manager are no longer part of this BOM/reactor — split into their own private repos
+    (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager), each with a
+    standalone pom.xml and independent versioning.
+    See docs/architecture/cloudforge-sample-bom.template.md and
+    docs/architecture/module-boundaries-and-refactor.plan.md.
+  </description>
   <url>https://github.com/CloudForgeCI/cfc-core</url>
 
   <licenses>
@@ -65,15 +74,42 @@
 
   <dependencyManagement>
     <dependencies>
-      <!-- CloudForge Modules -->
+      <!--
+        CloudForge Modules (BOM) — docs/architecture/module-boundaries-and-refactor.plan.md
+
+        cloudforge-core       Shared contracts, DeploymentConfig, com.cloudforge.core.local
+        cloudforge-api        CloudForgeDeployment, ApplicationSpecs, CMS, CDK factories
+        cloudforge-ministack  MiniStack adapter/deployer/pipeline (depends: core)
+        cloudforge-localstack LocalStack adapter/deployer/pipeline (depends: core)
+
+        cloudforge-manager-deployment and cloudforge-manager are NOT managed here anymore — split
+        into their own private repos (CloudForgeCI/cloudforge-manager-deployment,
+        CloudForgeCI/cloudforge-manager) with independent versioning; a consumer that needs them
+        declares an explicit <version> for those coordinates directly.
+
+        Consumer sample: docs/architecture/cloudforge-sample-bom.template.md
+        Not in BOM: cfc-testing (monorepo entrypoint / cloudforge-sample reference)
+      -->
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-core</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <!-- Central deploy-everything API + CDK synthesis -->
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <!-- Local emulator targets (optional consumer dependencies) -->
+      <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-ministack</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-localstack</artifactId>
         <version>${project.version}</version>
       </dependency>
 
@@ -164,10 +200,35 @@
   </scm>
 
   <modules>
+    <!-- Reactor order: core → target adapters → api. -->
     <module>cloudforge-core</module>
+    <module>cloudforge-ministack</module>
+    <module>cloudforge-localstack</module>
     <module>cloudforge-api</module>
-    <!-- cfc-testing is intentionally excluded - it's an independent consumer module -->
-    <!-- cfc-testing depends on cloudforge-core but is not part of the reactor build -->
+    <!-- cloudforge-manager-deployment / cloudforge-manager: split into their own private repos
+         (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager) — no longer
+         reactor modules here (not listed as <module> above, so not part of this reactor's build
+         order or default `mvn install`/`deploy` — each still builds via its own standalone
+         invocation, see either module's pom.xml). The directories stay in this working tree
+         (gitignored, not tracked by cfc-core's own history) for local development.
+
+         cloudforge-manager-deployment DOES declare cfc-core (this pom) as its Maven <parent> —
+         resolved from the repository via an explicit empty <relativePath/>, never from this
+         local checkout, so it keeps building correctly once split into its own repo as long as
+         cfc-core:pom is resolvable from Central (or already `mvn install`ed locally, which any
+         CI build of it does first regardless). This is deliberately NOT the same as ordinary
+         reactor-membership parent inheritance — it's how that module inherits cfc-core's whole
+         release/GPG/Central-publishing profile for free instead of hand-duplicating it, since
+         cloudforge-manager-deployment has zero licensing-sensitive code and does publish to
+         Maven Central (see .github/workflows/publish-maven-central.yml). cloudforge-manager
+         itself stays a genuinely standalone pom, no parent — it holds all the LicenseSeat/
+         Checkpoint A/B logic and is deliberately NOT published to Central (distribution
+         strategy still undecided; revisit separately, see the license-gate design discussion).
+
+         Consumers (cfc-testing included) resolve cloudforge-manager-deployment as a normal
+         external Maven dependency, same as any other CloudForge artifact.
+    -->
+    <!-- cfc-testing: independent consumer / cloudforge-sample entrypoint (BOM import, not in reactor) -->
   </modules>
 
   <profiles>
@@ -365,6 +426,14 @@
           <configuration>
             <source>${maven.compiler.source}</source>
             <target>${maven.compiler.target}</target>
+            <!-- Required for Spring MVC to resolve @PathVariable/@RequestParam by their Java
+                 parameter name when no explicit name is given on the annotation — without it,
+                 every such binding fails at runtime with "Name for argument of type [...] not
+                 specified, and parameter name information not available via reflection" the
+                 instant real HTTP hits it, even though it compiles and unit tests (which call
+                 controller methods directly, bypassing Spring's argument resolution) never
+                 notice. Found via an actual deployed Manager instance, not a test. -->
+            <parameters>true</parameters>
           </configuration>
         </plugin>
         <!-- Maven Source Plugin -->

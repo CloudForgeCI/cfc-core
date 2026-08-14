@@ -503,7 +503,7 @@ CloudForge 3.1.0 adds 19 PHP-based CMS platforms under the `cms-service` topolog
 {
   "cfc": {
     "topology":    "cms-service",
-    "application": "wordpress",
+    "applicationId": "wordpress",
     "runtime":     "fargate",
     "domain":      "example.com",
     "enableSsl":   true

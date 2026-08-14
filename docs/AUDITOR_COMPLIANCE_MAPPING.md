@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document provides a comprehensive mapping of CloudForge CI's automated controls to compliance framework requirements. It is designed for:
+This document maps CloudForge CI's automated controls to compliance framework requirements. It is designed for:
 - **External Auditors** conducting SOC2, HIPAA, PCI-DSS, or GDPR assessments
 - **Internal Audit Teams** validating control implementation
 - **Compliance Officers** documenting control effectiveness
@@ -46,9 +46,9 @@ CloudForge CI is an Infrastructure-as-Code (IaC) solution that automatically dep
 
 **Testing Status:**
 - ✅ **SOC2 (16 rules)**: Fully tested, all rules return COMPLIANT status
-- ⚠️ **HIPAA (17 rules)**: Implemented but not fully tested
-- ⚠️ **PCI-DSS (17 rules)**: Implemented but not fully tested
-- ⚠️ **GDPR (17 rules)**: Implemented but not fully tested
+- ⚠️ **HIPAA (17 rules)**: Not Tested
+- ⚠️ **PCI-DSS (17 rules)**: No Tested
+- ⚠️ **GDPR (17 rules)**: Not Tested
 
 ---
 

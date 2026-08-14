@@ -18,14 +18,30 @@ class Util {
         return new ObjectMapper();
     }
 
-    public static DeploymentContext extractDeploymentContext(Object cfc) {
+    /**
+     * Creates a DeploymentContext from the 'cfc' context object.
+     *
+     * <p>This is the entry point for context creation and framework config merging.
+     * (Renamed from {@code extractDeploymentContext} for clarity.)</p>
+     *
+     * @param cfc the raw context object (Map, JSON string, or POJO)
+     * @return a fully constructed DeploymentContext with merged framework config
+     */
+    public static DeploymentContext createDeploymentContext(Object cfc) {
         Map<String, Object> map = convertToContext(cfc);
 
         // Merge framework-required configuration before constructing DeploymentContext
         map = mergeFrameworkConfiguration(map);
 
-        DeploymentContext result = new DeploymentContext(map);
-        return result;
+        return new DeploymentContext(map);
+    }
+
+    /**
+     * @deprecated Use {@link #createDeploymentContext(Object)} instead.
+     */
+    @Deprecated
+    public static DeploymentContext extractDeploymentContext(Object cfc) {
+        return createDeploymentContext(cfc);
     }
 
     /**

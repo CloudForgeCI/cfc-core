@@ -1,19 +1,19 @@
-# CloudForge CI - Compliance Posture & Test Coverage
+# CloudForge CI Compliance Posture and Test Coverage
 
 ## Executive Summary
 
 CloudForge CI provides automated **infrastructure-level** compliance controls through AWS Config rules. The system implements technical safeguards that support SOC2, HIPAA, PCI-DSS, and GDPR frameworks, but **does not provide complete compliance certification**.
 
-**What This System Provides**: Infrastructure foundation (~30-40% of total compliance requirements)
+**What This System Provides**: Infrastructure controls and validation for the behavior described below
 **What You Still Need**: Organizational policies, procedures, training, and third-party audit for certification
 
 **Current Status (Updated December 2025):**
-- ✅ **SOC2**: Fully implemented and tested - **Multi-layer validation with 4 layers** (JUnit + cdk-nag + cfn-guard + AWS Config)
-- ✅ **HIPAA**: Fully implemented and tested - **263 parameterized test cases** covering all compliance combinations
-- ✅ **PCI-DSS**: Fully implemented and tested - **WAF REQUIRED** for production deployments
-- ✅ **GDPR**: Fully implemented and tested - **Complete cfn-guard rule coverage**
-- ✅ **Multi-Framework**: Simultaneous compliance with multiple frameworks - **607 test cases** in compliance-test-matrix.csv
-- ✅ **GuardDuty**: Integration implemented and tested with automated threat detection
+- **SOC 2**: Validation includes JUnit, cdk-nag, cfn-guard, and AWS Config checks
+- **HIPAA**: Parameterized tests exercise framework-related infrastructure configuration
+- **PCI DSS**: Production configuration requires WAF when this framework is selected
+- **GDPR**: cfn-guard rules cover the infrastructure controls represented by this project
+- **Multi-framework**: The test matrix exercises combinations of supported framework selections
+- **GuardDuty**: Integration is available; limitations are documented in [GuardDuty Status](#guardduty-status)
 
 **Validation Layer Summary:**
 | Layer | Description | Coverage | Status |
@@ -38,20 +38,20 @@ CloudForge CI provides automated **infrastructure-level** compliance controls th
 - ✅ **PCI-DSS Rules**: All 12 requirements mapped (WAF REQUIRED for Req 6.6)
 - ✅ **GDPR Rules**: Articles 25, 30, 32 implemented
 
-**🎉 Q4 2025 Major Achievements:**
-- ✅ Completed **70+ critical cfn-guard validation gaps** preventing security control bypass
-- ✅ Expanded test coverage from **281 → 607 test cases**
-- ✅ Implemented **ConfigurationValidationRules** (alwaysLoad framework) preventing misconfigurations
-- ✅ Strengthened **PCI-DSS WAF requirement** from "strongly recommended" to "REQUIRED"
-- ✅ Added **4-layer validation** system catching issues at synthesis, validation, template, and runtime
-- ✅ Created **multi-layer compliance dashboard** with historical tracking and drift detection
-- ✅ Validated **multi-framework simultaneous compliance** (SOC2+HIPAA+PCI-DSS+GDPR)
+**Validation changes recorded in Q4 2025:**
+- Added cfn-guard checks for previously uncovered configurations
+- Expanded the test matrix from 281 to 607 cases
+- Added `ConfigurationValidationRules` as an always-load framework
+- Required WAF for PCI DSS production configurations
+- Added validation at unit-test, cdk-nag, template, and AWS Config layers
+- Added report history and drift comparison to the compliance dashboard
+- Added tests for simultaneous SOC 2, HIPAA, PCI DSS, and GDPR selection
 
 **⚠️ IMPORTANT**:
-- **What "COMPLIANT" means**: Our 4-layer validation system ensures infrastructure meets framework requirements
+- **What "COMPLIANT" means**: A configured validator reported that the evaluated resource satisfied that validator
 - **What it does NOT mean**: We are NOT SOC2/HIPAA/PCI-DSS/GDPR **certified**
 - **Why**: Compliance certification requires organizational controls + third-party audit
-- **What we provide**: Infrastructure foundation (~30-40% of total requirements) with comprehensive automated validation
+- **What we provide**: Infrastructure controls and automated checks within the coverage documented here
 
 **📚 Related Documentation:**
 - **[Security Best Practices](guides/SECURITY_RULES_README.md)** - Security rules, service enablement by profile, IAM policies
@@ -60,7 +60,7 @@ CloudForge CI provides automated **infrastructure-level** compliance controls th
 
 ---
 
-## 🚨 Critical Path: Blockers for Regulated Workloads
+## Blockers for Regulated Workloads
 
 **Before deploying regulated workloads (PHI, PCI, PII), you MUST address these gaps:**
 
@@ -80,7 +80,7 @@ CloudForge CI provides automated **infrastructure-level** compliance controls th
 
 ---
 
-## ⚠️ CRITICAL: Infrastructure vs. Organizational Compliance
+## Infrastructure vs. Organizational Compliance
 
 ### What CloudForge CI Provides: Infrastructure-Level Technical Controls
 
@@ -96,7 +96,7 @@ CloudForge CI automates **technical infrastructure controls** that form the foun
 - Data retention and lifecycle management
 - Infrastructure as Code (IaC) compliance
 
-**This is ~30-40% of total compliance requirements** - the infrastructure foundation that must be in place.
+Coverage varies by framework, workload, and audit scope. The controls listed here represent only the infrastructure portion of a compliance program.
 
 ---
 
@@ -337,7 +337,7 @@ Compliance frameworks require **organizational policies, procedures, and human p
     ┌───────────────────────────────┴───────────────────────────────┐
     │              Infrastructure Controls                          │
     │         (AWS Config, IAM, Encryption, Logging)                │
-    │      ✅ THIS IS WHAT CLOUDFORGE CI AUTOMATES                  │
+        │          Controls configured by CloudForge CI                │
     │              Cost: $45-$135/month                             │
     └───────────────────────────────────────────────────────────────┘
 ```
@@ -431,7 +431,7 @@ We provide:
 - ✅ AWS Config rules for continuous monitoring
 - ✅ Automated remediation where possible
 - ✅ Audit log collection and retention
-- ✅ Cost-effective compliance foundation
+- Infrastructure evidence sources for supported controls
 
 We do NOT provide:
 - ❌ Legal advice or compliance consulting
@@ -448,15 +448,15 @@ We do NOT provide:
 - ❌ Security awareness training
 
 **Recommendation**:
-Engage a compliance consulting firm, legal counsel, or managed security service provider (MSSP) to address organizational requirements. CloudForge CI provides the infrastructure foundation that will satisfy ~30-40% of audit requirements and significantly reduce your compliance costs and operational burden.
+Engage qualified compliance and legal professionals as appropriate for your scope. The amount of audit coverage supplied by these infrastructure controls depends on the framework, workload, implementation, and auditor.
 
 ---
 
-## Tested and Verified: SOC2 Infrastructure Controls
+## SOC 2 Infrastructure-Control Validation
 
 ### AWS Config Rules Coverage (16 Rules for SOC2 Only)
 
-All SOC2-related AWS Config rules have been synthesized, deployed, and return **COMPLIANT** status. This validates that our **infrastructure controls** are properly configured, but does NOT constitute SOC2 certification:
+The recorded test deployment reported **COMPLIANT** for the listed AWS Config rules. This result applies to those resources and evaluations; it does not constitute SOC 2 certification:
 
 **Breakdown:**
 - **9 Base Rules**: Always deployed (encryption, IAM, S3, CloudTrail, VPC Flow Logs)
@@ -960,17 +960,16 @@ aws cloudtrail lookup-events \
 
 ---
 
-## Conclusion
+## Summary
 
-**What's Working (December 2025 Update):**
-- ✅ All 4 frameworks (SOC2, HIPAA, PCI-DSS, GDPR) fully implemented and tested
-- ✅ 4-layer validation system (JUnit + cdk-nag + cfn-guard + AWS Config)
-- ✅ 607 test cases in compliance-test-matrix.csv with 263 parameterized scenarios
-- ✅ Multi-framework simultaneous compliance validated
-- ✅ WAF REQUIRED enforcement for PCI-DSS production deployments
-- ✅ ConfigurationValidationRules (alwaysLoad) prevents misconfigurations
-- ✅ GuardDuty integration with automated threat detection
-- ✅ cfn-guard validation for all frameworks eliminating 70+ critical security gaps
+**Recorded validation coverage (December 2025):**
+- Infrastructure checks for SOC 2, HIPAA, PCI DSS, and GDPR
+- JUnit, cdk-nag, cfn-guard, and AWS Config validation layers
+- 607 entries in `compliance-test-matrix.csv`, including 263 parameterized cases
+- Tests for simultaneous framework selection
+- Required WAF configuration for PCI DSS production deployments
+- Always-load configuration validation rules
+- GuardDuty configuration checks, subject to the limitations above
 
 **Continuous Improvement:**
 - 📊 Historical compliance tracking with 30-day report archive
@@ -978,13 +977,13 @@ aws cloudtrail lookup-events \
 - 📊 Multi-layer compliance dashboard with visualization
 - 📋 Evidence collection for auditor review (see [AUDITOR_EVIDENCE_UPDATES.md](compliance/AUDITOR_EVIDENCE_UPDATES.md))
 
-**Recommendation for Production:**
-- ✅ **All frameworks production-ready** - comprehensively tested with 1,467+ validation scenarios
-- ✅ **Multi-framework support** - deploy SOC2+HIPAA+PCI-DSS+GDPR simultaneously
-- ✅ **Automated compliance validation** - catches issues before deployment
-- 📋 **Document organizational procedures** for complete audit readiness (infrastructure provides 30-40% of requirements)
+**Before production use:**
+- Review the applicable test evidence and known gaps for each selected framework
+- Test simultaneous framework selections against the target workload
+- Confirm deployed AWS Config evaluations and remediation behavior
+- Document and assess organizational, application, and third-party controls separately
 
 ---
 
 **Last Updated**: 2025-12-30
-**Testing Status**: All Frameworks (SOC2, HIPAA, PCI-DSS, GDPR) Fully Implemented and Tested
+**Testing Scope**: Infrastructure controls and validation scenarios documented above

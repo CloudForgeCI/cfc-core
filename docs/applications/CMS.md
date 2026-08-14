@@ -2,7 +2,7 @@
 
 CloudForge 3.1.0 introduces first-class support for PHP-based content management systems, e-commerce platforms, forums, wikis, LMS, and social networking applications — **19 built-in platforms** plus a public plugin example ([cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample)) — all deployable with a single topology type: `cms-service`.
 
-**Local development:** 7 of the 19 built-in platforms have Docker containers in `docker-compose.yml` and have been verified running locally (see [APPLICATION_STATUS.local.md](../../APPLICATION_STATUS.local.md)). Since Fargate is also a Docker runtime, local verification directly validates the container behavior for AWS deployments — CloudForge handles all environment-specific wiring (RDS endpoint, ElastiCache, EFS) via the `ApplicationSpec`.
+**Local development:** 7 of the 19 built-in platforms have Docker containers in `docker-compose.yml` and have been verified running locally. Since Fargate is also a Docker runtime, local verification directly validates the container behavior for AWS deployments — CloudForge handles all environment-specific wiring (RDS endpoint, ElastiCache, EFS) via the `ApplicationSpec`.
 
 ---
 
@@ -12,7 +12,7 @@ CloudForge 3.1.0 introduces first-class support for PHP-based content management
 {
   "cfc": {
     "topology":    "cms-service",
-    "application": "wordpress",
+    "applicationId": "wordpress",
     "runtime":     "fargate",
     "env":         "prod",
     "domain":      "example.com",
@@ -150,7 +150,7 @@ Each CMS declares three path groups; `CmsCdnConfiguration` maps them to CloudFro
 {
   "cfc": {
     "topology":    "cms-service",
-    "application": "wordpress",
+    "applicationId": "wordpress",
     "runtime":     "fargate",
     "domain":      "myblog.com",
     "enableSsl":   true,
@@ -170,7 +170,7 @@ Each CMS declares three path groups; `CmsCdnConfiguration` maps them to CloudFro
 {
   "cfc": {
     "topology":      "cms-service",
-    "application":   "magento",
+    "applicationId": "magento",
     "runtime":       "fargate",
     "cpu":           4096,
     "memory":        8192,
@@ -211,7 +211,7 @@ Each CMS declares three path groups; `CmsCdnConfiguration` maps them to CloudFro
 {
   "cfc": {
     "topology":    "cms-service",
-    "application": "craft-cms",
+    "applicationId": "craft-cms",
     "runtime":     "fargate",
     "domain":      "example.com",
     "subdomain":   "site",
@@ -338,7 +338,7 @@ com.example.MyCmsApplicationSpec
 
 Deploy with:
 ```json
-{ "cfc": { "topology": "cms-service", "application": "my-cms" } }
+{ "cfc": { "topology": "cms-service", "applicationId": "my-cms" } }
 ```
 
 ---
@@ -409,7 +409,7 @@ Seven platforms have verified Docker containers in `docker-compose.yml`. Start t
 | Magento 2 | http://localhost:8093 | ✅ Verified |
 | OpenCart | http://localhost:8094 | ✅ Verified |
 
-Local containers connect to shared MySQL (port 3306), PostgreSQL (port 5432), and Redis (port 6379) also in `docker-compose.yml`. These mirror the RDS/ElastiCache resources CloudForge provisions on AWS. For full status see [APPLICATION_STATUS.local.md](../../APPLICATION_STATUS.local.md).
+Local containers connect to shared MySQL (port 3306), PostgreSQL (port 5432), and Redis (port 6379) also in `docker-compose.yml`. These mirror the RDS/ElastiCache resources CloudForge provisions on AWS.
 
 > Craft CMS (`craft-cms`) deploys to AWS via the cloudforge-sample plugin but has no local Docker container — test it by deploying to a dev Fargate environment.
 

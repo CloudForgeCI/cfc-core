@@ -17,9 +17,8 @@ import java.util.Map;
 /**
  * phpBB Forum ApplicationSpec implementation.
  *
- * <p>phpBB is the world's most popular open-source forum software with
- * a massive install base. It's known for stability, security, and
- * extensive customization options.</p>
+ * <p>phpBB is open-source forum software with extension, language, and
+ * theme support.</p>
  *
  * <h2>Key Features:</h2>
  * <ul>
@@ -37,7 +36,7 @@ import java.util.Map;
     value = "phpbb",
     category = "forum",
     displayName = "phpBB",
-    description = "World's most popular open-source forum software",
+    description = "Open-source forum software with extension support",
     phpVersion = "8.2",
     defaultCpu = 1024,
     defaultMemory = 2048,
@@ -451,37 +450,27 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
             "  chmod -R 777 /var/www/html/cache /var/www/html/files /var/www/html/store /var/www/html/images/avatars/upload && " +
             "  echo 'phpBB installed successfully'; " +
             "fi && " +
-            // Create autofill script that stores DB config in sessionStorage
-            // and landing page that redirects to installer with values ready
-            "if [ -n \"$PHPBB_DB_HOST\" ] && [ -d /var/www/html/install ]; then " +
-            // Create JS file that fills form fields from sessionStorage
-            "  cat > /var/www/html/install/autofill.js << 'JSEOF'\n" +
-            "(function() {\n" +
-            "  var config = sessionStorage.getItem('phpbb_db_config');\n" +
-            "  if (!config) return;\n" +
-            "  config = JSON.parse(config);\n" +
-            "  function fill() {\n" +
-            "    var filled = false;\n" +
-            "    for (var name in config) {\n" +
-            "      var el = document.querySelector('input[name=\"' + name + '\"]');\n" +
-            "      if (el && !el.value) { el.value = config[name]; filled = true; }\n" +
-            "    }\n" +
-            "    var dbms = document.querySelector('select[name=\"dbms\"]');\n" +
-            "    if (dbms && dbms.value !== 'mysqli') { dbms.value = 'mysqli'; filled = true; }\n" +
-            "    return filled;\n" +
-            "  }\n" +
-            "  if (document.readyState === 'loading') {\n" +
-            "    document.addEventListener('DOMContentLoaded', fill);\n" +
-            "  } else { fill(); }\n" +
-            "  setTimeout(fill, 500);\n" +
-            "  setTimeout(fill, 1000);\n" +
-            "})();\n" +
-            "JSEOF\n" +
-            // Create index.html landing page that prefills non-secret fields and redirects.
+            // Autofill the installer's DB-connection form fields from env vars.
+            //
+            // Two earlier approaches here didn't actually work, both confirmed live:
+            // (1) A separate install/index.html landing page that set sessionStorage then
+            //     redirected to install/app.php — never reached, because phpBB's own root
+            //     index.php redirects straight to install/app.php when unconfigured, skipping
+            //     any custom landing page entirely.
+            // (2) Injecting the autofill <script> tag into
+            //     install/phpbb/style/installer_main.html — that path doesn't exist in phpBB
+            //     3.3.x's installer (a Symfony/Twig app since 3.2). The real page shell —
+            //     confirmed by grepping the installed tree for the one file with a `</head>` —
+            //     is adm/style/installer_header.html.
+            //
+            // Fix: set sessionStorage AND fill the current page's form in one script injected
+            // straight into that header template, so it runs on every installer page load
+            // regardless of entry URL — no separate landing page/redirect hop to skip.
             // Password is intentionally excluded — never expose RDS secrets to the browser.
-            "  cat > /var/www/html/install/index.html << EOF\n" +
-            "<!DOCTYPE html>\n" +
-            "<html><head><title>phpBB Installation</title>\n" +
+            "if [ -n \"$PHPBB_DB_HOST\" ]; then " +
+            "  TEMPLATE=/var/www/html/adm/style/installer_header.html && " +
+            "  if [ -f \"$TEMPLATE\" ] && ! grep -q 'phpbb_db_config' \"$TEMPLATE\"; then " +
+            "    cat > /tmp/autofill-snippet.html << EOF\n" +
             "<script>\n" +
             "sessionStorage.setItem('phpbb_db_config', JSON.stringify({\n" +
             "  dbhost: '$PHPBB_DB_HOST',\n" +
@@ -489,14 +478,25 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
             "  dbname: '$PHPBB_DB_NAME',\n" +
             "  dbuser: '$PHPBB_DB_USER'\n" +
             "}));\n" +
-            "window.location.href = '/install/app.php';\n" +
+            "(function() {\n" +
+            "  var config = JSON.parse(sessionStorage.getItem('phpbb_db_config'));\n" +
+            "  function fill() {\n" +
+            "    for (var name in config) {\n" +
+            "      var el = document.querySelector('input[name=\"' + name + '\"]');\n" +
+            "      if (el && !el.value) { el.value = config[name]; }\n" +
+            "    }\n" +
+            "    var dbms = document.querySelector('select[name=\"dbms\"]');\n" +
+            "    if (dbms) { dbms.value = 'mysqli'; }\n" +
+            "  }\n" +
+            "  if (document.readyState === 'loading') {\n" +
+            "    document.addEventListener('DOMContentLoaded', fill);\n" +
+            "  } else { fill(); }\n" +
+            "  setTimeout(fill, 500);\n" +
+            "  setTimeout(fill, 1000);\n" +
+            "})();\n" +
             "</script>\n" +
-            "</head><body>Redirecting to installer...</body></html>\n" +
             "EOF\n" +
-            // Inject script tag into installer's main template
-            "  TEMPLATE=/var/www/html/install/phpbb/style/installer_main.html && " +
-            "  if [ -f \"$TEMPLATE\" ]; then " +
-            "    sed -i 's|</head>|<script src=\"/install/autofill.js\"></script></head>|' \"$TEMPLATE\"; " +
+            "    sed -i '/<\\/head>/r /tmp/autofill-snippet.html' \"$TEMPLATE\"; " +
             "  fi && " +
             "  echo 'Autofill configured'; " +
             "fi && " +

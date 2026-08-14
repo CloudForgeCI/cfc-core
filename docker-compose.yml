@@ -2,6 +2,9 @@ services:
   # ============================================================================
   # INFRASTRUCTURE SERVICES
   # (Simulates: AWS Cognito → mock-oidc, RDS → postgres/mysql, ElastiCache → redis)
+  #
+  # MiniStack and LocalStack emulators are not defined here. Start them from the
+  # Interactive Deployer platform lifecycle menu (`--platform`).
   # ============================================================================
 
   # Mock OIDC Provider (simulates AWS Cognito)
@@ -125,6 +128,45 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  # CloudForge Manager — Operations Panel (Spring Boot; UI baked in Dockerfile)
+  cloudforge-manager:
+    build:
+      context: .
+      dockerfile: docker/cloudforge-manager/Dockerfile
+    image: cloudforgeci/cloudforge-manager:latest
+    container_name: cfc-cloudforge-manager
+    ports:
+      - "1958:1958"
+    environment:
+      - CFC_MANAGER_PORT=1958
+      - CFC_MANAGER_BIND=0.0.0.0
+      - CFC_MANAGER_TARGET=localstack
+      - LOCALSTACK_ENDPOINT=http://host.docker.internal:4566
+      - AWS_ENDPOINT_URL=http://host.docker.internal:4566
+      # Real bug this fixed — see LocalStackTemplateAdapter.managerVolumeRoot()'s javadoc: without
+      # this, deploy:create/deploy:catalog run from inside this already-containerized process
+      # resolve EFS-backed volume bind-mounts (Jenkins, GitLab, Manager itself) against this
+      # container's own WORKDIR (/app) instead of a real host path, so persistent data silently
+      # resets on every redeploy. ${PWD} is docker compose's own invocation directory — this
+      # service is always started from the repo root, so it resolves the same real path any
+      # host-run process (the interactive deployer, a CLI) would.
+      - LOCALSTACK_VOLUME_ROOT=${PWD}/.localstack-volumes
+    volumes:
+      - cloudforge_manager_data:/var/lib/cloudforge-manager
+      # deploy:create/deploy:catalog against localstack/ministack shell out to `docker` for
+      # target-owned emulator containers (e.g. LocalStackPostgresCompanion) — see
+      # LocalStackTemplateAdapter.grantDockerSocketAccess for the equivalent when Manager runs as
+      # an ECS-emulated task instead of this standalone compose service.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cfc-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:1958/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   gitlab:
     image: gitlab/gitlab-ce:latest
@@ -749,6 +791,9 @@ volumes:
 
   # Collaboration
   mattermost_data:
+
+  # Operations
+  cloudforge_manager_data:
 
   # Search
   opensearch_data:

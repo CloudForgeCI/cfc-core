@@ -158,27 +158,20 @@ public static boolean isControlRequired(
     ComplianceMode mode,
     SecurityControl control
 ) {
-    // DISABLED mode: never enforce
+    // DISABLED mode: never require
     if (mode == ComplianceMode.DISABLED) {
         return false;
     }
 
-    // ADVISORY mode: never enforce (just warn)
-    if (mode == ComplianceMode.ADVISORY) {
+    // ENFORCE and ADVISORY: require controls marked REQUIRED by selected frameworks
+    if (frameworksStr == null || frameworksStr.isEmpty()) {
         return false;
     }
 
-    // ENFORCE mode: check if any selected framework REQUIRES this control
-    if (mode == ComplianceMode.ENFORCE) {
-        if (frameworksStr == null || frameworksStr.isEmpty()) {
-            return false; // No frameworks selected
-        }
-
-        for (String framework : frameworksStr.split(",")) {
-            String normalized = framework.trim();
-            if (control.isRequired(normalized)) {
-                return true; // At least one framework requires it
-            }
+    for (String framework : frameworksStr.split(",")) {
+        String normalized = framework.trim();
+        if (control.isRequired(normalized)) {
+            return true;
         }
     }
 

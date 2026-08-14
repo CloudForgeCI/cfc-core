@@ -16,8 +16,8 @@ import software.amazon.awscdk.services.logs.RetentionDays;
 import java.util.logging.Logger;
 
 /**
- * Production security profile configuration with comprehensive security measures.
- * Implements enterprise-grade security for SOC/HIPAA/PCI-DSS compliance.
+ * Production security profile configuration for logging, monitoring, encryption,
+ * backups, and audit controls used by SOC 2, HIPAA, and PCI-DSS configurations.
  */
 public class ProductionSecurityProfileConfiguration implements SecurityProfileConfiguration {
 
@@ -38,6 +38,11 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
      */
     public ProductionSecurityProfileConfiguration() {
         this(null);
+    }
+
+    @Override
+    public DeploymentContext getDeploymentContext() {
+        return deploymentContext;
     }
 
     @Override
@@ -86,7 +91,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         return RemovalPolicy.RETAIN; // Always retain logs in production
     }
 
-    // Flow Log Configuration - Comprehensive monitoring
+    // Flow Log Configuration - accepted and rejected traffic
     @Override
     public boolean isFlowLogsEnabled() {
         // Check if compliance matrix REQUIRES this control (cannot be overridden)
@@ -119,10 +124,10 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
 
     @Override
     public FlowLogTrafficType getFlowLogTrafficType() {
-        return FlowLogTrafficType.ALL; // All traffic for comprehensive monitoring
+        return FlowLogTrafficType.ALL; // Record accepted and rejected traffic
     }
 
-    // Security Monitoring - Comprehensive for production
+    // Security Monitoring - CloudTrail, GuardDuty, and AWS Config defaults
     @Override
     public boolean isSecurityMonitoringEnabled() {
         // Check if compliance matrix requires this control
@@ -487,7 +492,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         return false;
     }
 
-    // Backup and Recovery - Comprehensive for production
+    // Backup and Recovery - automated and cross-region defaults
     @Override
     public boolean isAutomatedBackupEnabled() {
         // Check if compliance matrix REQUIRES this control (cannot be overridden)
@@ -582,7 +587,7 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
         return false;
     }
 
-    // Compliance and Audit - Comprehensive for production
+    // Compliance and Audit - billing and ALB access log defaults
     @Override
     public boolean isDetailedBillingEnabled() {
         return true; // Always enabled for production cost management
@@ -1148,7 +1153,6 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
 
     @Override
     public boolean isSnsKmsEncryptionEnabled() {
-        // Check if compliance matrix requires this control
         if (deploymentContext != null) {
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
@@ -1162,7 +1166,6 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
                 return true;
             }
         }
-        // PRODUCTION default: true when HIPAA or PCI-DSS compliance is required
         return false;
     }
 

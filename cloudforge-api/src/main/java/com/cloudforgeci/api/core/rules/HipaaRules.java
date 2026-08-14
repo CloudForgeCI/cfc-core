@@ -287,7 +287,7 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
                 "HIPAA-164.312(b)-CloudTrail",
                 "CloudTrail audit logging required (HIPAA §164.312(b))",
                 "CloudTrailEnabledRule",
-                "Enable CloudTrail for comprehensive audit trail of all API activity."
+                "Enable CloudTrail to record configured API activity."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -317,7 +317,7 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
                 "HIPAA-164.312(b)-ALB",
                 "ALB access logging required (HIPAA §164.312(b))",
                 "AlbAccessLogsEnabled",
-                "Enable ALB access logs for comprehensive request tracking."
+                "Enable ALB access logs to record incoming requests."
             ));
         } else {
             rules.add(ComplianceRule.pass(

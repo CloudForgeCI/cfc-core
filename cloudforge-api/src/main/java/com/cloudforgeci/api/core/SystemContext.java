@@ -146,6 +146,17 @@ public final class SystemContext extends Construct {
   // Store the actual parameter object to avoid lookup issues
   public final Slot<software.amazon.awscdk.services.ssm.StringParameter> dbDatasourceParameter = new Slot<>();
 
+  // Redis session store (ElastiCache) — currently only populated for cloudforge-manager,
+  // see ApplicationFactory's provisionManagerRedisSessions handling and ContainerFactory's
+  // binding of these into CFC_MANAGER_SESSION_MODE/CFC_MANAGER_REDIS_HOST/CFC_MANAGER_REDIS_PORT.
+  public final Slot<String> redisSessionStoreEndpoint = new Slot<>();
+  public final Slot<Integer> redisSessionStorePort = new Slot<>();
+
+  // Account connection cipher key (Secrets Manager) — currently only populated for
+  // cloudforge-manager, see ApplicationFactory's provisionManagerAccountCipherKey handling and
+  // ContainerFactory's binding of this into CFC_MANAGER_ACCOUNT_SECRET_KEY.
+  public final Slot<String> accountCipherKeySecretArn = new Slot<>();
+
   // INTERNAL USE ONLY: Cognito client secret Custom Resource (for CDK dependency tracking)
   // This is used internally to ensure ECS tasks don't start before the secret is created in Secrets Manager.
   // Do not use this field directly - it is managed automatically by CognitoAuthenticationFactory.
@@ -400,7 +411,9 @@ public final class SystemContext extends Construct {
     EfsFactory efsFactory = createEfsFactory(scope, idPrefix);
     LoggingCwFactory loggingFactory = createLoggingFactory(scope, idPrefix);
 
-    // Create GuardDuty threat detection (account-level service)
+    // Create GuardDuty threat detection (account-level service).
+    // Deployment targets must not alter canonical AWS synthesis; local emulator
+    // compatibility is handled after synthesis by the cfc-testing adapter.
     createGuardDutyFactory(scope, idPrefix);
 
     // Note: Security factories (Certificate, OIDC, Identity Center) are created
@@ -708,25 +721,15 @@ public final class SystemContext extends Construct {
     // Instance security group is already created by createInfrastructureFactories()
     // No need to create it again here
 
-    // Create EC2 factory (Auto Scaling Group) if maxInstanceCapacity is provided
-    Ec2Factory ec2 = null;
-    if (cfc.maxInstanceCapacity() != null) {
-      ec2 = new Ec2Factory(scope, id + "Ec2");
-      ec2.create();
-    }
-
-    // Create single EC2 instance if no Auto Scaling Group
-    // Note: Ec2InstanceFactory will be created later
-    Object singleInstance = null;
-    if (cfc.maxInstanceCapacity() == null) {
-      // TODO: Create Ec2InstanceFactory for single instances
-    }
+    // Create EC2 factory (Auto Scaling Group — min=max=1 for single-instance deployments)
+    Ec2Factory ec2 = new Ec2Factory(scope, id + "Ec2");
+    ec2.create();
 
     // Create alarms
     AlarmFactory alarms = new AlarmFactory(scope, id + "Alarms", null);
     alarms.create();
 
-    return new JenkinsSpecificFactories(null, null, alarms, ec2, singleInstance);
+    return new JenkinsSpecificFactories(null, null, alarms, ec2, null);
   }
 
   /**

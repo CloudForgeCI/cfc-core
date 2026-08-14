@@ -17,9 +17,8 @@ import java.util.Map;
 /**
  * WordPress CMS ApplicationSpec implementation.
  *
- * <p>WordPress is the world's most popular CMS, powering over 40% of websites.
- * This specification supports both standard WordPress and can be extended for
- * WooCommerce e-commerce deployments.</p>
+ * <p>WordPress is an open-source CMS for websites and blogs. This specification
+ * can be extended for WooCommerce e-commerce deployments.</p>
  *
  * <h2>Features:</h2>
  * <ul>
@@ -47,7 +46,7 @@ import java.util.Map;
     value = "wordpress",
     category = "cms",
     displayName = "WordPress",
-    description = "World's most popular CMS for websites and blogs",
+    description = "Open-source CMS for websites and blogs",
     phpVersion = "8.2",
     defaultCpu = 1024,
     defaultMemory = 2048,
@@ -60,14 +59,22 @@ import java.util.Map;
     supportsObjectCache = true,
     supportsMultisite = true,
     websiteUrl = "https://wordpress.org",
-    defaultImage = "wordpress:php8.2-fpm-alpine"
+    defaultImage = "wordpress:php8.2-apache"
 )
 public class WordPressApplicationSpec implements CmsSpec, DatabaseSpec {
 
     // ========== Constants ==========
 
     protected static final String APPLICATION_ID = "wordpress";
-    protected static final String DEFAULT_IMAGE = "wordpress:php8.2-fpm-alpine";
+    // The fpm-alpine variant only speaks FastCGI on 9000 — nothing listens on
+    // APPLICATION_PORT (80) at all, so applicationSpec-driven single-container Fargate/MiniStack/
+    // LocalStack deploys were never actually reachable (confirmed live: CloudFormation reported
+    // CREATE_COMPLETE, but the container had nothing bound to port 80). The apache variant bakes
+    // in the same WordPress core files and listens on 80 directly — a pure drop-in swap, not an
+    // architecture change. (The EC2 runtime path is unaffected either way — see webServer()/the
+    // userData installCommands() below, which already correctly install and run nginx+php-fpm
+    // together on the instance regardless of this constant.)
+    protected static final String DEFAULT_IMAGE = "wordpress:php8.2-apache";
     protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";
     protected static final String EFS_DATA_PATH = "/wordpress";

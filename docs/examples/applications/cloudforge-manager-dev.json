@@ -1,0 +1,22 @@
+{
+  "stackName": "CloudForgeManager-Dev",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "description": "Operations Panel — Fargate, no database",
+  "environment": "development",
+
+  "runtime": "fargate",
+  "securityProfile": "dev",
+  "topology": "application-service",
+
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+
+  "authMode": "none",
+
+  "cpu": 512,
+  "memory": 1024,
+
+  "enableMonitoring": true,
+  "logRetentionDays": "7"
+}

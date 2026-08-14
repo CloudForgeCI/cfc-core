@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Performance Synthesis Benchmark System
-# Tests the new Interactive Deployer with various configurations to measure synthesis performance
+# Synthesis Performance Benchmark
+# Measures Interactive Deployer synthesis time across several configurations
 
 set -e
 
@@ -21,7 +21,7 @@ SUMMARY_FILE="$BENCHMARK_DIR/synth_summary_$TIMESTAMP.txt"
 # Create benchmark directory
 mkdir -p "$BENCHMARK_DIR"
 
-echo -e "${BLUE}🚀 Performance Synthesis Benchmark System${NC}"
+echo -e "${BLUE}Synthesis Performance Benchmark${NC}"
 echo -e "${BLUE}===========================================${NC}"
 echo ""
 
@@ -32,7 +32,7 @@ run_benchmark() {
     local deployment_option="$3"
     local description="$4"
     
-    echo -e "${YELLOW}📊 Running benchmark: $test_name${NC}"
+    echo -e "${YELLOW}Running benchmark: $test_name${NC}"
     echo -e "${YELLOW}Description: $description${NC}"
     echo -e "${YELLOW}Stack: $stack_name, Option: $deployment_option${NC}"
     
@@ -50,14 +50,14 @@ run_benchmark() {
     
     # Check if synthesis was successful
     if grep -q "CDK Stack synthesized successfully" "$BENCHMARK_DIR/${test_name}_output.log"; then
-        echo -e "${GREEN}✅ $test_name completed successfully${NC}"
-        echo -e "${GREEN}⏱️  Duration: ${duration}s${NC}"
+        echo -e "${GREEN}$test_name completed${NC}"
+        echo -e "${GREEN}Duration: ${duration}s${NC}"
         
         # Record results
         echo "$test_name,$stack_name,$deployment_option,$duration,SUCCESS" >> "$RESULTS_FILE"
     else
-        echo -e "${RED}❌ $test_name failed${NC}"
-        echo -e "${RED}⏱️  Duration: ${duration}s${NC}"
+        echo -e "${RED}ERROR: $test_name failed${NC}"
+        echo -e "${RED}Duration: ${duration}s${NC}"
         
         # Record results
         echo "$test_name,$stack_name,$deployment_option,$duration,FAILED" >> "$RESULTS_FILE"
@@ -68,7 +68,7 @@ run_benchmark() {
 
 # Function to run comprehensive benchmarks
 run_comprehensive_benchmarks() {
-    echo -e "${BLUE}🔬 Running Comprehensive Synthesis Benchmarks${NC}"
+    echo -e "${BLUE}Running Synthesis Benchmarks${NC}"
     echo -e "${BLUE}===============================================${NC}"
     echo ""
     
@@ -108,7 +108,7 @@ run_comprehensive_benchmarks() {
 
 # Function to run deployment benchmarks (actual AWS deployment)
 run_deployment_benchmarks() {
-    echo -e "${BLUE}🚀 Running Deployment Benchmarks${NC}"
+    echo -e "${BLUE}Running Deployment Benchmarks${NC}"
     echo -e "${BLUE}===================================${NC}"
     echo ""
     
@@ -121,12 +121,12 @@ run_deployment_benchmarks() {
 
 # Function to run stress tests
 run_stress_tests() {
-    echo -e "${BLUE}💪 Running Stress Tests${NC}"
+    echo -e "${BLUE}Running Stress Tests${NC}"
     echo -e "${BLUE}=======================${NC}"
     echo ""
     
     # Test 13: Multiple Rapid Syntheses
-    echo -e "${YELLOW}📊 Running rapid synthesis stress test${NC}"
+    echo -e "${YELLOW}Running rapid synthesis stress test${NC}"
     local stress_start=$(date +%s.%N)
     
     for i in {1..5}; do
@@ -135,13 +135,13 @@ run_stress_tests() {
     
     local stress_end=$(date +%s.%N)
     local stress_duration=$(echo "$stress_end - $stress_start" | bc)
-    echo -e "${GREEN}💪 Stress test completed in ${stress_duration}s${NC}"
+    echo -e "${GREEN}Stress test completed in ${stress_duration}s${NC}"
     echo ""
 }
 
 # Function to generate performance summary
 generate_summary() {
-    echo -e "${BLUE}📈 Generating Performance Summary${NC}"
+    echo -e "${BLUE}Generating Performance Summary${NC}"
     echo -e "${BLUE}===================================${NC}"
     echo ""
     
@@ -181,14 +181,14 @@ generate_summary() {
     cat "$RESULTS_FILE" >> "$SUMMARY_FILE"
     
     # Display summary
-    echo -e "${GREEN}📊 Benchmark Summary:${NC}"
+    echo -e "${GREEN}Benchmark Summary:${NC}"
     echo -e "${GREEN}Total Tests: $total_tests${NC}"
     echo -e "${GREEN}Successful: $successful_tests${NC}"
     echo -e "${GREEN}Failed: $failed_tests${NC}"
     echo -e "${GREEN}Success Rate: $(echo "scale=2; $successful_tests * 100 / $total_tests" | bc)%${NC}"
     echo -e "${GREEN}Average Duration: ${avg_duration}s${NC}"
     echo ""
-    echo -e "${GREEN}📁 Results saved to:${NC}"
+    echo -e "${GREEN}Results saved to:${NC}"
     echo -e "${GREEN}  - $RESULTS_FILE${NC}"
     echo -e "${GREEN}  - $SUMMARY_FILE${NC}"
     echo ""
@@ -196,7 +196,7 @@ generate_summary() {
 
 # Function to clean up test resources
 cleanup() {
-    echo -e "${YELLOW}🧹 Cleaning up test resources...${NC}"
+    echo -e "${YELLOW}Cleaning up test resources...${NC}"
     
     # Remove deployment context files
     rm -f deployment-context.json
@@ -204,18 +204,18 @@ cleanup() {
     # Remove CDK output (optional - comment out if you want to keep it)
     # rm -rf cdk.out
     
-    echo -e "${GREEN}✅ Cleanup completed${NC}"
+    echo -e "${GREEN}Cleanup completed${NC}"
 }
 
 # Main execution
 main() {
-    echo -e "${BLUE}🎯 Starting Performance Synthesis Benchmark${NC}"
+    echo -e "${BLUE}Starting Synthesis Performance Benchmark${NC}"
     echo -e "${BLUE}============================================${NC}"
     echo ""
     
     # Check if Java and dependencies are available
     if [ ! -f "target/classes/com/cloudforgeci/samples/app/InteractiveDeployer.class" ]; then
-        echo -e "${RED}❌ InteractiveDeployer not compiled. Running mvn compile...${NC}"
+        echo -e "${YELLOW}InteractiveDeployer not compiled; running mvn compile.${NC}"
         mvn compile -q
     fi
     
@@ -223,7 +223,7 @@ main() {
     run_comprehensive_benchmarks
     
     # Ask user if they want to run deployment benchmarks (actual AWS deployment)
-    echo -e "${YELLOW}🤔 Do you want to run deployment benchmarks (actual AWS deployment)?${NC}"
+    echo -e "${YELLOW}Run deployment benchmarks against AWS?${NC}"
     echo -e "${YELLOW}   This will create actual AWS resources and may incur costs.${NC}"
     read -p "Continue with deployment benchmarks? (y/N): " -n 1 -r
     echo ""
@@ -231,7 +231,7 @@ main() {
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         run_deployment_benchmarks
     else
-        echo -e "${BLUE}⏭️  Skipping deployment benchmarks${NC}"
+        echo -e "${BLUE}Skipping deployment benchmarks.${NC}"
     fi
     
     # Run stress tests
@@ -243,7 +243,7 @@ main() {
     # Cleanup
     cleanup
     
-    echo -e "${GREEN}🎉 Performance Synthesis Benchmark completed!${NC}"
+    echo -e "${GREEN}Synthesis performance benchmark completed.${NC}"
     echo -e "${GREEN}=============================================${NC}"
 }
 

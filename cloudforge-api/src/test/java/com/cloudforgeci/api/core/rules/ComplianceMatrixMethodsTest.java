@@ -61,7 +61,7 @@ class ComplianceMatrixMethodsTest {
         // Then: Should contain control descriptions
         assertTrue(report.contains("Encryption of data at rest"));
         assertTrue(report.contains("Role-based access control"));
-        assertTrue(report.contains("Comprehensive audit logging"));
+        assertTrue(report.contains("Audit logging with CloudTrail"));
     }
 
     @Test
@@ -360,5 +360,25 @@ class ComplianceMatrixMethodsTest {
 
         // Then: Should use bullet points for list items
         assertTrue(checklist.contains("•"));
+    }
+
+    @Test
+    void testIsControlRequiredHonorsRequiredFrameworksInAdvisoryMode() {
+        assertTrue(ComplianceMatrix.isControlRequired(
+            "HIPAA",
+            com.cloudforge.core.enums.ComplianceMode.ADVISORY,
+            ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION));
+        assertTrue(ComplianceMatrix.isControlRequired(
+            "PCI-DSS",
+            com.cloudforge.core.enums.ComplianceMode.ADVISORY,
+            ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION));
+    }
+
+    @Test
+    void testIsControlRequiredDisabledModeSkipsRequirements() {
+        assertFalse(ComplianceMatrix.isControlRequired(
+            "HIPAA",
+            com.cloudforge.core.enums.ComplianceMode.DISABLED,
+            ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION));
     }
 }

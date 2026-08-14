@@ -89,6 +89,11 @@ class GitLabOidcIntegrationTest {
     }
 
     @Test
+    void testGetOidcCallbackPath() {
+        assertEquals("/users/auth/openid_connect/callback", integration.getOidcCallbackPath());
+    }
+
+    @Test
     void testGetConfigurationFileWithCognito() {
         // GitLab uses environment variables for container configuration
         String config = integration.getConfigurationFile(cognitoConfig);

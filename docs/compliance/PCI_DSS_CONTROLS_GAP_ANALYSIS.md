@@ -1590,7 +1590,6 @@ Tasks:
 ### Internal Documentation
 
 - [Auditor Compliance Mapping](../AUDITOR_COMPLIANCE_MAPPING.md)
-- [Controls Implementation Guide](CONTROLS_IMPLEMENTATION.md)
 - [Automated Compliance](AUTOMATED_COMPLIANCE.md)
 - [Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md)
 

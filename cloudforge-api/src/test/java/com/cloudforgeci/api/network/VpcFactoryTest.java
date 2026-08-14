@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 public class VpcFactoryTest {
 
   @Test
@@ -151,4 +153,5 @@ public class VpcFactoryTest {
     Template t = Template.fromStack(builder.getStack());
     t.resourceCountIs("AWS::EC2::SubnetRouteTableAssociation", 4);
   }
+
 }

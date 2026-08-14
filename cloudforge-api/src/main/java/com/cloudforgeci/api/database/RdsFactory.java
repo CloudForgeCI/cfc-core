@@ -110,7 +110,7 @@ public class RdsFactory {
             DatabaseRequirement requirement,
             IVpc vpc,
             String instanceId) {
-        return createDatabase(ctx, requirement, vpc, instanceId, null, null, null);
+        return createDatabase(ctx, requirement, vpc, instanceId, null, null, null, 0);
     }
 
     /**
@@ -133,6 +133,19 @@ public class RdsFactory {
             Integer backupRetentionDaysOverride,
             Boolean multiAzOverride,
             Boolean enableEncryptionOverride) {
+        return createDatabase(ctx, requirement, vpc, instanceId, backupRetentionDaysOverride,
+            multiAzOverride, enableEncryptionOverride, 0);
+    }
+
+    public static DatabaseConnection createDatabase(
+            SystemContext ctx,
+            DatabaseRequirement requirement,
+            IVpc vpc,
+            String instanceId,
+            Integer backupRetentionDaysOverride,
+            Boolean multiAzOverride,
+            Boolean enableEncryptionOverride,
+            int readReplicaCount) {
 
         Construct scope = ctx;
         String stackName = ctx.stackName;
@@ -298,6 +311,17 @@ public class RdsFactory {
         }
 
         DatabaseInstance instance = instanceBuilder.build();
+        List<String> readReplicaEndpoints = new ArrayList<>();
+        for (int replicaIndex = 1; replicaIndex <= Math.max(0, readReplicaCount); replicaIndex++) {
+            CfnDBInstance replica = CfnDBInstance.Builder.create(scope, instanceId + "ReadReplica" + replicaIndex)
+                .sourceDbInstanceIdentifier(instance.getInstanceIdentifier())
+                .dbInstanceClass(requirement.instanceClass())
+                .engine(requirement.engine())
+                .dbInstanceIdentifier(truncateDbIdentifier(dbInstanceIdentifier + "-replica-" + replicaIndex, 63))
+                .publiclyAccessible(false)
+                .build();
+            readReplicaEndpoints.add(replica.getAttrEndpointAddress());
+        }
 
         // Register AWS Config rules for RDS compliance monitoring
         ctx.requireConfigRule(AwsConfigRule.RDS_STORAGE_ENCRYPTED);
@@ -404,7 +428,7 @@ public class RdsFactory {
             databaseSecret.getSecretArn(),
             requirement.engine(),
             requirement.version(),
-            new ArrayList<>()  // No read replicas initially (can be added later)
+            readReplicaEndpoints
         );
     }
 

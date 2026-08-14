@@ -372,7 +372,6 @@ public final class PhpContainerFactory {
      * @param dbPort database port
      * @param dbName database name
      * @param dbUser database username
-     * @param dbPasswordSecretArn Secrets Manager ARN for password
      * @return map of database environment variables
      */
     public static Map<String, String> createDatabaseEnvironment(

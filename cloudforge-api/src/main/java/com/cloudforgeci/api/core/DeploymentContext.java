@@ -174,7 +174,10 @@ import java.util.Optional;
 public final class DeploymentContext {
 
     // Backing configuration loaded via Jackson (type-safe)
-    private final DeploymentConfig config;
+    // Public so new fields on DeploymentConfig are accessible without adding forwarding getters.
+    // Existing forwarding getters are retained for backward compatibility but new code should
+    // access fields directly: ctx.cfc.config.myField
+    public final DeploymentConfig config;
 
     // Raw map snapshot (frozen) - kept for backward compatibility
     private final Map<String, Object> raw;
@@ -235,15 +238,26 @@ public final class DeploymentContext {
 
     /** Build from the 'cfc' context object on the App. */
     public static DeploymentContext from(App app) {
-        return Util.extractDeploymentContext(app.getNode().tryGetContext("cfc"));
+        return Util.createDeploymentContext(app.getNode().tryGetContext("cfc"));
     }
 
     /** Build from the 'cfc' context object on any Construct scope. */
     public static DeploymentContext from(Construct scope) {
-        return Util.extractDeploymentContext(scope.getNode().tryGetContext("cfc"));
+        return Util.createDeploymentContext(scope.getNode().tryGetContext("cfc"));
     }
 
-    // --------- Public getters (delegate to config) ---------
+    /**
+     * Returns the backing {@link DeploymentConfig}.
+     *
+     * <p>New code should access config fields directly via {@code ctx.cfc.config.myField}
+     * or {@code ctx.cfc.getConfig().myField} rather than adding forwarding getters
+     * to this class. The existing getters below are retained for backward compatibility.</p>
+     *
+     * @return the backing DeploymentConfig instance
+     */
+    public DeploymentConfig getConfig() { return config; }
+
+    // --------- Forwarding getters (legacy — use config field directly for new fields) ---------
 
     public String tier() { return tier; }
     public String env() { return env; }
@@ -317,11 +331,28 @@ public final class DeploymentContext {
     public Boolean awsConfigEnabled() { return config.awsConfigEnabled; }
     public Boolean createConfigInfrastructure() { return config.createConfigInfrastructure; }
     public Boolean auditManagerEnabled() { return config.auditManagerEnabled; }
+    public Boolean managerDirectDeployEnabled() { return config.managerDirectDeployEnabled; }
     public String complianceFrameworks() { return complianceFrameworks; }
     public ComplianceMode complianceMode() { return complianceMode; }
     public Integer logRetentionDays() { return config.logRetentionDays != null ? Integer.parseInt(config.logRetentionDays) : null; }
     public String instanceType() { return config.instanceType; }
     public Boolean provisionDatabase() { return config.provisionDatabase; }
+    public String databaseEngine() { return config.databaseEngine; }
+    public String databaseVersion() { return config.databaseVersion; }
+    public Integer databaseReadReplicaCount() { return config.databaseReadReplicaCount; }
+    // NOTE: databaseInstanceClass/databaseAllocatedStorageGB/databaseName/
+    // databaseBackupRetentionDays/databaseMultiAz/enableAutoScaling are deliberately NOT exposed
+    // here even though ApplicationFactory declares @DeploymentContext fields for them — adding
+    // getters (tried during the account-cipher-key work below) made RdsFactory/compliance rules
+    // read DeploymentConfig's class-level defaults (e.g. databaseMultiAz=false,
+    // databaseBackupRetentionDays=7) instead of falling through to their existing
+    // SecurityProfileConfiguration-driven defaults, which regressed 14+ compliance truth-table
+    // tests (HIPAA/PCI-DSS/SOC2/GDPR × EC2/Fargate expecting profile-driven MultiAZ/retention).
+    // Those six fields were already silently inert before this file existed; fixing them for
+    // real needs the profile-fallback logic updated in lockstep, not just a getter added here —
+    // tracked as a separate follow-up, out of scope for provisionManagerAccountCipherKey.
+    public Boolean provisionManagerRedisSessions() { return config.provisionManagerRedisSessions; }
+    public Boolean provisionManagerAccountCipherKey() { return config.provisionManagerAccountCipherKey; }
     public Boolean enableS3VersioningRemediation() { return config.enableS3VersioningRemediation; }
     public Boolean enableCloudTrailBucketAccessRemediation() { return config.enableCloudTrailBucketAccessRemediation; }
     public Boolean enableRdsDeletionProtectionRemediation() { return config.enableRdsDeletionProtectionRemediation; }
@@ -392,19 +423,19 @@ public final class DeploymentContext {
     @Deprecated public String runtimeRaw() { return runtimeRaw; }
     @Deprecated public String topologyRaw() { return topologyRaw; }
 
-    // --------- CMS application resolution ---------
+    // --------- Application resolution ---------
 
     /**
-     * Returns the application identifier from the deployment context.
+     * Returns the canonical application identifier from the deployment context.
      *
-     * <p>Maps to the {@code "application"} key in cdk.json / CLI context.
-     * Used with {@link #cmsSpec()} to resolve the full {@link CmsSpec}.</p>
+     * <p>All topologies select their application through
+     * {@link DeploymentConfig#applicationId}.</p>
      *
      * <p>Example cdk.json usage:</p>
      * <pre>{@code
      * "cfc": {
      *   "topology": "cms-service",
-     *   "application": "wordpress",
+     *   "applicationId": "wordpress",
      *   "runtime": "fargate"
      * }
      * }</pre>
@@ -412,13 +443,16 @@ public final class DeploymentContext {
      * @return the application ID (e.g., "wordpress", "magento") or {@code null} if not set
      */
     public String applicationId() {
-        return str("application", null);
+        if (config.applicationId != null && !config.applicationId.isBlank()) {
+            return config.applicationId.trim();
+        }
+        return null;
     }
 
     /**
      * Resolves the {@link CmsSpec} for the configured application via {@link CmsLoader}.
      *
-     * <p>Returns {@link Optional#empty()} when no {@code "application"} key is set,
+     * <p>Returns {@link Optional#empty()} when no {@code applicationId} is set,
      * or when the ID does not match any registered CMS plugin.</p>
      *
      * @return the resolved CmsSpec, or empty if not a CMS deployment

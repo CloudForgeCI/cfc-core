@@ -187,6 +187,8 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                 Boolean.TRUE
             );
 
+            ManagerOperatorIamSupport.attachOperatorBaselinePolicies(c, ec2Role);
+            ManagerOperatorIamSupport.attachDeployCapabilities(c, ec2Role);
             c.ec2InstanceRole.set(ec2Role);
 
         } else {
@@ -268,6 +270,8 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                     ))
                     .build());
 
+            ManagerOperatorIamSupport.attachOperatorBaselinePolicies(c, ec2Role);
+            ManagerOperatorIamSupport.attachDeployCapabilities(c, ec2Role);
             c.ec2InstanceRole.set(ec2Role);
         }
     }
@@ -379,6 +383,8 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "arn:aws:s3:::" + backupBucketPattern + "/*"
                     ))
                     .build());
+
+            ManagerOperatorIamSupport.addOperatorBaselineToStatements(c, taskStatements);
 
             ManagedPolicy taskPolicy = ManagedPolicy.Builder.create(c, "StandardTaskPolicy")
                     .description("Standard ECS task permissions for application runtime")
@@ -500,6 +506,9 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                         "arn:aws:s3:::" + backupBucketPattern + "/*"
                     ))
                     .build());
+
+            ManagerOperatorIamSupport.attachOperatorBaselinePolicies(c, taskRole);
+            ManagerOperatorIamSupport.attachDeployCapabilities(c, taskRole);
 
             c.fargateExecutionRole.set(executionRole);
             c.fargateTaskRole.set(taskRole);

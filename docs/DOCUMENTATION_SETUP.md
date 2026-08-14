@@ -1,79 +1,86 @@
-# Documentation Setup Complete ✅
+# Documentation Maintenance Guide
 
-## What Was Configured
+The CloudForge CI project publishes a Docusaurus documentation site and an aggregated
+JavaDoc API reference alongside its test and validation reports. This guide describes
+how to maintain and verify that documentation.
 
-Your CloudForge CI project now has **automated documentation generation** with Docusaurus and JavaDoc, deployed automatically to GitHub Pages alongside your existing reports.
+## Published Structure
 
-## Structure
+The GitHub Pages site uses this layout:
 
 ```
-https://you.github.io/cfc-core/
-├── index.html               # Reports Dashboard (existing)
-├── documentation/           # Docusaurus site (NEW - user guides)
-├── javadoc/                # JavaDoc API reference (NEW - Java APIs)
-├── coverage/               # Code coverage reports
-├── validation/             # Validation reports
-├── sbom/                   # Security reports
-└── history/               # Historical versions
+https://cloudforgeci.github.io/cfc-core/
+├── index.html               # Reports dashboard
+├── documentation/           # Docusaurus user documentation
+├── javadoc/                 # JavaDoc API reference
+├── coverage/                # Code coverage reports
+├── validation/              # Validation reports
+├── sbom/                    # Security reports
+└── history/                 # Historical versions
 ```
 
-## What Gets Built Automatically
+The publishing workflow builds:
 
-Every push to the `develop` branch triggers:
+1. **Docusaurus documentation**
+   - Source: Markdown files in `docs/`
+   - Configuration: `docs/web/`
+   - Output: the documentation site
+2. **JavaDoc API reference**
+   - Source: Java documentation comments
+   - Command: `mvn javadoc:aggregate`
+   - Output: aggregated API documentation for `cloudforge-api` and `cloudforge-core`
+3. **GitHub Pages content**
+   - Publishes the documentation and JavaDoc with the existing reports
+   - Retains historical versions according to the workflow configuration
 
-1. **Docusaurus Documentation**
-   - Source: All Markdown files in `docs/` folder
-   - Built from: `docs/web/` configuration
-   - Output: Beautiful searchable documentation site
+Review `.github/workflows/publish-reports.yml` before changing build triggers, retention, or publication paths.
 
-2. **JavaDoc API Reference**
-   - Source: Java source code comments
-   - Built with: `mvn javadoc:aggregate`
-   - Output: Aggregated API docs for cloudforge-api and cloudforge-core
+## Maintain the Docusaurus Site
 
-3. **GitHub Pages Deployment**
-   - Both are deployed together with existing reports
-   - Historical versions maintained (last 30 days)
-   - Automatic CI/CD via GitHub Actions
+The main files are:
 
-## Customization Needed
+- `docs/web/package.json` - Node.js dependencies and scripts
+- `docs/web/docusaurus.config.js` - Site and navigation configuration
+- `docs/web/sidebars.js` - Sidebar structure
+- `docs/web/src/css/custom.css` - Site styling
+- `docs/web/static/img/` - Logo and favicon
+- `docs/web/.gitignore` - Generated-file exclusions
+- `docs/web/README.md` - Docusaurus-specific setup notes
 
-### 1. Replace Placeholder Logo
+When adding or moving a document:
 
-```bash
-# Replace with your brand logo (SVG recommended)
-docs/web/static/img/logo.svg
-docs/web/static/img/favicon.ico
-```
+1. Add or move the Markdown source under `docs/`.
+2. Update its entry in `docs/web/sidebars.js`.
+3. Check links from `docs/README.md` and other index pages.
+4. Run the local Docusaurus build.
 
-### 2. Update Repository URLs (if needed)
+### Update Site Metadata
 
-Edit `docs/web/docusaurus.config.js`:
-- Line 14: `url` - Your GitHub Pages URL
-- Line 20: `organizationName` - Your GitHub org
-- Line 21: `projectName` - Your repo name
+Edit `docs/web/docusaurus.config.js` when the publication location changes:
 
-### 3. Configure Search (Optional)
+- `url` - GitHub Pages URL
+- `organizationName` - GitHub organization
+- `projectName` - Repository name
 
-The config includes Algolia search (currently using placeholders):
+Keep `docs/web/static/img/logo.svg` and `docs/web/static/img/favicon.ico` aligned with the current project identity.
+
+### Configure Search
+
+If Algolia DocSearch is enabled, set the values in `docs/web/docusaurus.config.js`:
 
 ```javascript
-// In docusaurus.config.js, lines 143-155
 algolia: {
-  appId: 'YOUR_APP_ID',          // Get from Algolia DocSearch
-  apiKey: 'YOUR_SEARCH_API_KEY', // Public API key
+  appId: 'YOUR_APP_ID',
+  apiKey: 'YOUR_SEARCH_API_KEY',
   indexName: 'cfc-core',
 }
 ```
 
-To enable search:
-1. Apply for [Algolia DocSearch](https://docsearch.algolia.com/) (free for open source)
-2. Replace the placeholder values
-3. Or remove the algolia section to use basic search
+Apply through [Algolia DocSearch](https://docsearch.algolia.com/), replace the placeholder values, or remove the Algolia configuration when hosted search is not in use.
 
-## Local Development
+## Verify Changes Locally
 
-### Test Docusaurus Locally
+### Run Docusaurus
 
 ```bash
 cd docs/web
@@ -81,9 +88,9 @@ npm install
 npm start
 ```
 
-Opens at `http://localhost:3000` with hot reload.
+The development server defaults to `http://localhost:3000` and reloads when source files change.
 
-### Build Locally
+### Build Docusaurus
 
 ```bash
 cd docs/web
@@ -91,71 +98,44 @@ npm run build
 npm run serve
 ```
 
-### Generate JavaDoc Locally
+Use the production build to detect broken links, invalid sidebar entries, and configuration errors before publication.
+
+### Generate JavaDoc
+
+From the repository root:
 
 ```bash
 mvn javadoc:aggregate
 # Output: target/site/apidocs/
 ```
 
-## Files Created
+Review JavaDoc warnings and add or correct source comments where appropriate. The Maven configuration currently uses `<failOnError>false</failOnError>`, so warnings may not fail the build.
 
-### Docusaurus Configuration
-- `docs/web/package.json` - Node.js dependencies
-- `docs/web/docusaurus.config.js` - Main configuration
-- `docs/web/sidebars.js` - Navigation structure
-- `docs/web/src/css/custom.css` - Custom styling
-- `docs/web/static/img/` - Logo and favicon
-- `docs/web/.gitignore` - Ignore build artifacts
-- `docs/web/README.md` - Setup documentation
+## Publishing Checks
 
-### GitHub Workflow Updates
-- `.github/workflows/publish-reports.yml`:
-  - Added Node.js setup
-  - Added Docusaurus build step
-  - Added JavaDoc generation
-  - Updated dashboard links
-  - Added to historical archive
+Before merging documentation changes:
 
-## Next Steps
+1. Build the Docusaurus site.
+2. Generate JavaDoc when Java API comments or signatures changed.
+3. Confirm that sidebar paths match files under `docs/`.
+4. Check links to the documentation site, JavaDoc, repository, and contributing guide.
+5. Review `.github/workflows/publish-reports.yml` if publication behavior changed.
 
-1. **Replace the logo** in `docs/web/static/img/logo.svg`
-2. **Test the build** by pushing to `develop` branch
-3. **Check GitHub Pages** after workflow completes
-4. **Optional**: Configure Algolia search for better search experience
-5. **Optional**: Customize colors in `docs/web/src/css/custom.css`
-
-## Navigation Structure
-
-The sidebar navigation (`docs/web/sidebars.js`) is organized to match your existing docs:
-
-- 📖 Documentation Home
-- 🚀 Quick Start
-- 🔌 Applications & Plugins
-- ⚙️ Setup & Configuration
-- 🔐 Compliance & Security
-- 📚 Advanced Topics
-- 📑 Reference
-
-All your existing Markdown files are automatically included!
-
-## Dashboard Links
-
-The reports dashboard now includes:
+The reports dashboard should link to:
 
 ```
-📚 Documentation
-  - Browse Documentation → Docusaurus site
-  - Java API Reference (JavaDoc) → API docs
-  - GitHub Repository → External link
-  - Contributing Guide → External link
+Documentation
+  - Docusaurus site
+  - Java API reference
+  - GitHub repository
+  - Contributing guide
 ```
 
 ## Troubleshooting
 
-### Build fails on "npm ci"
+### `npm ci` reports a missing lockfile
 
-First push will fail because `package-lock.json` doesn't exist yet. Solution:
+Generate and commit the lockfile:
 
 ```bash
 cd docs/web
@@ -165,21 +145,17 @@ git commit -m "Add package-lock.json for Docusaurus"
 git push
 ```
 
-### Broken markdown links
+### Markdown links are broken
 
-Check `docs/web/sidebars.js` - file paths should match actual markdown files in `docs/` folder.
+Check that paths in `docs/web/sidebars.js` match the corresponding Markdown files under `docs/`, then run `npm run build`.
 
-### JavaDoc warnings
+### JavaDoc emits warnings
 
-JavaDoc warnings won't fail the build (`<failOnError>false</failOnError>` in pom.xml). Add JavaDoc comments to reduce warnings.
+Run `mvn javadoc:aggregate`, review the reported source locations, and update the relevant JavaDoc comments. Because warnings may not fail the build, inspect the command output explicitly.
 
-## Support
 
-- **Docusaurus**: https://docusaurus.io/docs
-- **JavaDoc**: https://docs.oracle.com/en/java/javase/21/docs/specs/javadoc/doc-comment-spec.html
-- **Issues**: https://github.com/CloudForgeCI/cfc-core/issues
+## References
 
----
-
-**Generated**: $(date)
-**Version**: 1.0.0
+- [Docusaurus documentation](https://docusaurus.io/docs)
+- [JavaDoc documentation comment specification](https://docs.oracle.com/en/java/javase/21/docs/specs/javadoc/doc-comment-spec.html)
+- [CloudForge issues](https://github.com/CloudForgeCI/cfc-core/issues)

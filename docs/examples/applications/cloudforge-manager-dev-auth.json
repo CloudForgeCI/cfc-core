@@ -1,0 +1,31 @@
+{
+  "stackName": "CloudForgeManager-Dev-Auth",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "description": "Operations Panel with Cognito application-oidc (DeploymentConfig Cognito fields)",
+  "environment": "development",
+
+  "runtime": "fargate",
+  "securityProfile": "dev",
+  "topology": "application-service",
+
+  "domain": "dev.example.com",
+  "subdomain": "manager",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "application-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "cfc-manager-dev-CHANGEME",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "ManagerAdmins",
+  "cognitoUserGroupName": "ManagerUsers",
+
+  "cpu": 512,
+  "memory": 1024,
+
+  "enableMonitoring": true,
+  "logRetentionDays": "30"
+}

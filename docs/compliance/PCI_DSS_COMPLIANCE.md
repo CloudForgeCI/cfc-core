@@ -24,7 +24,7 @@
 
 ## Automated PCI-DSS Validation
 
-CloudForge CI includes comprehensive **PCI-DSS validation rules** that automatically enforce compliance requirements for production environments processing cardholder data.
+CloudForge CI includes **PCI-DSS validation rules** that evaluate the listed infrastructure controls for production environments processing cardholder data.
 
 The system automatically validates **12 PCI-DSS requirements** during deployment:
 

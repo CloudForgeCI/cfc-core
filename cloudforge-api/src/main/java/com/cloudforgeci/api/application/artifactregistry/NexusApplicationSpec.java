@@ -12,12 +12,12 @@ import java.util.List;
 /**
  * Sonatype Nexus Repository Manager ApplicationSpec implementation.
  *
- * <p>Nexus is a universal artifact repository supporting Maven, npm, Docker,
- * PyPI, RubyGems, and more.</p>
+ * <p>Nexus is an artifact repository manager supporting Maven, npm, Docker,
+ * PyPI, RubyGems, and other repository formats.</p>
  *
  * <p><strong>Key Features:</strong></p>
  * <ul>
- *   <li>Universal artifact repository (Maven, npm, Docker, PyPI)</li>
+ *   <li>Repositories for Maven, npm, Docker, and PyPI</li>
  *   <li>Proxy remote repositories</li>
  *   <li>Role-based access control</li>
  *   <li>Vulnerability scanning</li>
@@ -53,7 +53,7 @@ import java.util.List;
     value = "nexus",
     category = "artifactregistry",
     displayName = "Nexus",
-    description = "Universal artifact repository manager",
+    description = "Artifact repository manager for multiple package formats",
     defaultCpu = 2048,
     defaultMemory = 4096,
     defaultInstanceType = "t3.medium",

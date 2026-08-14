@@ -1,12 +1,12 @@
 # Compliance Validation Quick Start Guide
 
-**CloudForge CI/CD Platform - Enable Compliance in 5 Minutes**
+Configure compliance validation for a CloudForge deployment.
 
 ---
 
 ## Overview
 
-This guide shows you how to enable compliance validation for your CloudForge deployment in just a few steps.
+This guide shows how to select compliance mappings, configure validation behavior, and inspect validation output. These checks evaluate configured technical controls; they do not certify the deployed environment.
 
 ---
 
@@ -55,7 +55,7 @@ Framework(s) [1]: 1
 cdk deploy --require-approval never
 ```
 
-**That's it!** Compliance validation is now active.
+After deployment, compliance validation runs with the selected frameworks and mode.
 
 ---
 
@@ -114,14 +114,14 @@ cdk deploy --require-approval never
 
 ## Compliance Framework Selection Guide
 
-### Option 1: All Standard Frameworks (Recommended for Audit Readiness)
+### Option 1: All Supported Frameworks
 
 ```json
 "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR"
 ```
 
 **Coverage**: 70% overall (170+ validation rules)
-**Use Case**: Comprehensive compliance for enterprise customers
+**Use Case**: Validate controls mapped across all listed frameworks
 **Cost**: ~$150-300/month (Security Hub + Inspector + Macie + GuardDuty)
 
 ---
@@ -190,7 +190,7 @@ cdk deploy --require-approval never
 
 ## Compliance Mode Selection
 
-### ENFORCE Mode (Production Recommended)
+### ENFORCE Mode
 
 ```json
 "complianceMode": "enforce"
@@ -198,12 +198,12 @@ cdk deploy --require-approval never
 
 **Behavior**:
 - ❌ **Blocks** CDK synthesis if validation fails
-- 🛑 **Prevents** non-compliant deployments
-- ✅ **Recommended** for PRODUCTION environments
+- 🛑 **Prevents** synthesis when configured validation rules fail
+- Intended for production environments where failed validation should block synthesis
 
 **When to use**:
 - Production deployments
-- Audit-ready environments
+- Environments subject to formal control review
 - Regulatory compliance required
 
 ---
@@ -217,7 +217,7 @@ cdk deploy --require-approval never
 **Behavior**:
 - ⚠️ **Logs** warnings for validation failures
 - ✅ **Allows** deployment to proceed
-- 🔧 **Recommended** for DEV/STAGING environments
+- Intended for development and staging environments
 
 **When to use**:
 - Development and testing
@@ -242,7 +242,7 @@ cdk deploy --require-approval never
 |-----------|------|--------|-------------|
 | `runtime` | string | FARGATE, EC2 | Container runtime. Default: FARGATE |
 | `topology` | string | APPLICATION_SERVICE, CMS_SERVICE, S3_WEBSITE | Deployment topology. Default: APPLICATION_SERVICE. Use `CMS_SERVICE` for PHP/CMS platforms (WordPress, Magento, Drupal, etc.) — auto-wires S3 media, Redis, and CloudFront. |
-| `application` | string | `wordpress`, `magento`, `drupal`, … | **Required with `CMS_SERVICE`.** Identifies the CMS plugin to deploy. See [CMS Deployment Guide](../applications/CMS.md) for all 19 platform IDs. |
+| `applicationId` | string | `wordpress`, `magento`, `drupal`, … | **Required with `CMS_SERVICE`.** Identifies the CMS plugin to deploy. See [CMS Deployment Guide](../applications/CMS.md) for all 19 platform IDs. |
 | `securityProfile` | string | DEV, STAGING, PRODUCTION | Security configuration level |
 
 ### Database Parameters (RDS)
@@ -309,7 +309,7 @@ cdk deploy --require-approval never
 
 ---
 
-### Recommended Configuration (Production)
+### Production Configuration
 
 ```json
 {
@@ -352,7 +352,7 @@ cdk deploy --require-approval never
 
 ---
 
-### Complete Configuration (Maximum Compliance)
+### Expanded Configuration
 
 ```json
 {
@@ -510,9 +510,9 @@ Organizational rules (BAA, training, procedures) will show as advisory warnings 
 
 ---
 
-### Scenario 3: I need to pass a SOC 2 audit ASAP
+### Scenario 3: I need to evaluate SOC 2-mapped controls
 
-**Solution**: Enable SOC 2 validation in ENFORCE mode
+**Approach**: Enable SOC 2 validation in ENFORCE mode
 
 ```json
 {
@@ -526,7 +526,7 @@ Organizational rules (BAA, training, procedures) will show as advisory warnings 
 }
 ```
 
-SOC 2 has 94% coverage (highest of all frameworks).
+The current mapping reports 94% rule coverage for SOC 2. This validation result is not an audit opinion or certification.
 
 ---
 
@@ -545,7 +545,7 @@ This runs `cdk synth` for multiple configurations and reports validation results
 
 ## Cost Estimation
 
-### Compliance Validation (Always Free)
+### Synthesis-Time Validation
 
 - **CDK Synthesis-time validation**: $0
 - **170+ validation rules**: $0
@@ -613,7 +613,7 @@ Both must be set for validation to run.
 
 ---
 
-## Next Steps
+## Operational Follow-up
 
 1. **Enable compliance**: Choose a method above and configure your deployment
 2. **Review validation output**: Check for any warnings or errors
@@ -625,4 +625,3 @@ Both must be set for validation to run.
 
 **Document Version**: 1.0
 **Last Updated**: 2025-11-12
-**Status**: Production Ready

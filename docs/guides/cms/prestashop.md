@@ -109,7 +109,7 @@ For storefronts with public browsing, set `publicPaths` to allow unauthenticated
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "cms-service",
-  "application": "prestashop",
+  "applicationId": "prestashop",
 
   "networkMode": "public-no-nat",
   "region": "us-east-1",
@@ -141,7 +141,7 @@ For storefronts with public browsing, set `publicPaths` to allow unauthenticated
   "runtime": "fargate",
   "securityProfile": "production",
   "topology": "cms-service",
-  "application": "prestashop",
+  "applicationId": "prestashop",
 
   "domain": "example.com",
   "subdomain": "shop",

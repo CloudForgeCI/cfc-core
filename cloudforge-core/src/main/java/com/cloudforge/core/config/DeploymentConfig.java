@@ -26,9 +26,14 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Universal deployment configuration for CloudForge applications.
@@ -96,6 +101,22 @@ public class DeploymentConfig {
 
     // ========== Domain Configuration ==========
 
+    /**
+     * Subdomain prefix (e.g., "ci", "gitlab") — ordered ahead of {@link #domain}: you pick what
+     * this app is called (the subdomain) before which domain it hangs off of, and the combined
+     * result (subdomain + "." + domain) is what actually gets requested, not the other way
+     * around.
+     */
+    @ConfigField(
+        displayName = "Subdomain",
+        description = "Subdomain prefix (e.g., 'ci' for ci.example.com)",
+        category = "domain",
+        pattern = "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+        example = "ci",
+        order = 10
+    )
+    public String subdomain;
+
     /** Primary domain (e.g., "example.com") */
     @ConfigField(
         displayName = "Domain",
@@ -103,29 +124,26 @@ public class DeploymentConfig {
         category = "domain",
         pattern = "^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$",
         example = "example.com",
-        order = 10
+        order = 20
     )
     public String domain;
 
-    /** Subdomain prefix (e.g., "ci", "gitlab") */
+    /**
+     * Fully qualified domain name — always {@code subdomain + "." + domain} once both are set;
+     * this field only matters when you need to override that computed result directly (e.g. a
+     * domain structure the subdomain+domain pair can't express). {@code @JsonIgnore}d
+     * deliberately: it's a derived/override value, not sent as its own JSON key — the previous
+     * description ("overrides domain+subdomain") had the relationship backwards, reading as if
+     * *this* field were the primary input and domain/subdomain were the fallback, when it's the
+     * other way around.
+     */
     @ConfigField(
-        displayName = "Subdomain",
-        description = "Subdomain prefix (e.g., 'ci' for ci.example.com)",
+        displayName = "FQDN (advanced override)",
+        description = "Computed as Subdomain + \".\" + Domain — only set this directly to override that computed value",
         category = "domain",
-        pattern = "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
-        example = "ci",
-        order = 20
+        order = 30
     )
-    public String subdomain;
-
-    /** Fully qualified domain name (computed from domain+subdomain if not provided) */
-    @ConfigField(
-        displayName = "FQDN",
-        description = "Fully qualified domain name (overrides domain+subdomain)",
-        category = "domain",
-        order = 25
-    )
-    @JsonIgnore  // Computed field, not serialized
+    @JsonIgnore  // Computed/override field, not serialized under its own key
     public String fqdn;
 
     /** Enable SSL certificate via ACM */
@@ -150,12 +168,18 @@ public class DeploymentConfig {
     )
     public RuntimeType runtime;
 
-    /** Topology type (APPLICATION_SERVICE, etc.) */
+    /** Topology type — genuinely selectable, not just an auto-derived display value, so a future
+     *  topology (or an app implementing more than one applicable interface) isn't locked out of
+     *  being chosen explicitly. No {@code allowedValues} override here on purpose: leaving it
+     *  unset lets the schema builder enumerate every {@link TopologyType} constant automatically
+     *  (real bug this replaced — a hardcoded single-value override silently hid CMS_SERVICE,
+     *  JENKINS_SERVICE, and S3_WEBSITE from the wizard entirely, so a CmsSpec app's actual
+     *  topology could never be selected even though {@link DeploymentContextPreparer} already
+     *  defaults to it correctly). */
     @ConfigField(
         displayName = "Topology",
         description = "Deployment topology pattern",
         category = "basic",
-        allowedValues = {"APPLICATION_SERVICE"},
         order = 40
     )
     public TopologyType topology;
@@ -176,9 +200,9 @@ public class DeploymentConfig {
     /** Network mode for VPC topology */
     @ConfigField(
         displayName = "Network Mode",
-        description = "VPC network topology: private-with-nat (recommended), public, or isolated",
+        description = "VPC topology. Private with NAT is recommended for production; public is suitable for development; isolated requires VPC endpoints.",
         category = "network",
-        allowedValues = "none,public,private-with-nat",
+        allowedValues = {"public", "private-with-nat", "isolated"},
         example = "private-with-nat",
         order = 10
     )
@@ -800,6 +824,19 @@ public class DeploymentConfig {
     /**
      * Database engine (e.g., postgres, mysql, mariadb).
      * Default comes from ApplicationSpec.databaseRequirement().engine()
+     *
+     * <p><b>Deliberately no static default here (nor on the other {@code database*} fields below
+     * with a {@code defaultFrom}):</b> {@link com.cloudforge.core.config.DeploymentContextPreparer}
+     * only applies a field's {@code defaultFrom}-resolved ApplicationSpec value when the field is
+     * currently null/blank — a non-null Java initializer (this used to be {@code = "postgres"})
+     * permanently looks "already set" and blocks that resolution forever. That silently forced
+     * every app onto engine=postgres/version=15/instanceClass=db.t3.small/storage=20GB/name=appdb
+     * unless a caller explicitly overrode every one of these fields together — for a MySQL-only
+     * app like WordPress, a form that filled in {@code databaseEngine=mysql} but left {@code
+     * databaseVersion} untouched produced an impossible "mysql15" RDS parameter group family and
+     * failed CloudFormation with {@code CREATE_FAILED}. {@code cloudforge-api}'s {@code
+     * ApplicationFactory} merges these fields against {@code ApplicationSpec.databaseRequirement()}
+     * with the same null-check pattern, now consistently reachable too.</p>
      */
     @ConfigField(
         displayName = "Database Engine",
@@ -812,7 +849,7 @@ public class DeploymentConfig {
         example = "postgres",
         order = 20
     )
-    public String databaseEngine = "postgres";
+    public String databaseEngine;
 
     /**
      * Database engine version.
@@ -828,7 +865,7 @@ public class DeploymentConfig {
         defaultFrom = "databaseRequirement().version",
         order = 30
     )
-    public String databaseVersion = "15";
+    public String databaseVersion;
 
     /**
      * RDS instance class (e.g., db.t3.small, db.m5.large).
@@ -851,7 +888,7 @@ public class DeploymentConfig {
         tags = {FieldTag.DESTRUCTIVE, FieldTag.BILLING_IMPACT},
         order = 40
     )
-    public String databaseInstanceClass = "db.t3.small";
+    public String databaseInstanceClass;
 
     /**
      * Allocated storage in GB.
@@ -870,7 +907,7 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 50
     )
-    public Integer databaseAllocatedStorageGB = 20;
+    public Integer databaseAllocatedStorageGB;
 
     /**
      * Enable Multi-AZ deployment for high availability.
@@ -888,6 +925,25 @@ public class DeploymentConfig {
     public Boolean databaseMultiAz = false;
 
     /**
+     * Optional number of RDS read replicas. When unset, an application may provide
+     * its own default (CloudForge Manager defaults to one); zero explicitly disables
+     * replicas for applications that support them.
+     */
+    @ConfigField(
+        displayName = "Database Read Replicas",
+        description = "Number of read-only RDS replicas to deploy (0 disables replicas)",
+        category = "database",
+        visibleWhen = "provisionDatabase",
+        dependsOn = "provisionDatabase",
+        min = 0,
+        max = 5,
+        example = "1",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 65
+    )
+    public Integer databaseReadReplicaCount = null;
+
+    /**
      * Database name.
      * IMMUTABLE: Cannot be changed after creation.
      */
@@ -903,7 +959,7 @@ public class DeploymentConfig {
         tags = {FieldTag.IMMUTABLE},
         order = 70
     )
-    public String databaseName = "appdb";
+    public String databaseName;
 
     /**
      * Backup retention period in days.
@@ -921,6 +977,59 @@ public class DeploymentConfig {
         order = 80
     )
     public Integer databaseBackupRetentionDays = 7;
+
+    // ========== Redis Session Store (CloudForge Manager) ==========
+
+    /**
+     * Provision an ElastiCache Redis cluster and bind CloudForge Manager's own container to it
+     * as a shared session store (CFC_MANAGER_SESSION_MODE=redis), so every Manager instance
+     * behind the same ALB recognizes sessions any of the others created — the missing piece for
+     * running Manager itself horizontally scaled. Only {@code ApplicationFactory} acts on this,
+     * and only when {@code applicationId == cloudforge-manager}; {@code visibleWhen} below keeps
+     * it out of every other application's deploy form for the same reason. Requires RDS
+     * (embedded H2 isn't safe to share across instances) — see {@code
+     * ManagerDeploymentPreset.rdsWithRedisSessions(...)} in cloudforge-manager-deployment, the
+     * typed pairing this mirrors. Single-instance Manager (the common case) needs nothing beyond
+     * the in-memory default and should leave this false.
+     */
+    @ConfigField(
+        displayName = "Redis Session Store",
+        description = "Provision ElastiCache Redis and share sessions across every CloudForge "
+            + "Manager instance — required for running Manager itself horizontally scaled behind an ALB",
+        category = "database",
+        visibleWhen = "applicationId == cloudforge-manager && provisionDatabase",
+        dependsOn = "provisionDatabase",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 90
+    )
+    public Boolean provisionManagerRedisSessions = false;
+
+    /**
+     * Provision a dedicated AWS Secrets Manager entry holding the AES cipher key CloudForge
+     * Manager uses to encrypt cross-account connection secrets (external IDs) at rest — see
+     * {@code SecretCipher}/{@code AesGcmSecretCipher} in cloudforge-manager. Injected into
+     * Manager's own ECS task as {@code CFC_MANAGER_ACCOUNT_SECRET_KEY} via {@code
+     * ecs.Secret.fromSecretsManager(...)}, mirroring how {@code CFC_MANAGER_DATABASE_PASSWORD}
+     * is already delivered — never a literal value in the task definition. Only {@code
+     * ApplicationFactory} acts on this, and only when {@code applicationId ==
+     * cloudforge-manager}. Defaults to {@code true} (unlike {@code
+     * provisionManagerRedisSessions}) because without it Manager silently falls back to {@code
+     * PlaintextSecretCipher} — leaving it on is the secure-by-default choice for any real AWS
+     * deployment of Manager, not an opt-in scaling feature like Redis. Independent of {@code
+     * provisionDatabase}: even an embedded-H2 Manager deployment benefits from encrypting the
+     * secrets it holds.
+     */
+    @ConfigField(
+        displayName = "Account Connection Cipher Key",
+        description = "Provision a Secrets Manager entry for the AES key CloudForge Manager uses "
+            + "to encrypt cross-account connection secrets — leave enabled unless you are "
+            + "supplying CFC_MANAGER_ACCOUNT_SECRET_KEY through another mechanism",
+        category = "database",
+        visibleWhen = "applicationId == cloudforge-manager",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 91
+    )
+    public Boolean provisionManagerAccountCipherKey = true;
 
     /** Enable RDS deletion protection remediation */
     @ConfigField(
@@ -957,6 +1066,12 @@ public class DeploymentConfig {
         displayName = "Compliance Frameworks",
         description = "Compliance frameworks to enable (soc2, pci-dss, hipaa, gdpr)",
         category = "security",
+        // Was free-text-only (no allowedValues) — the Manager UI's builder rendered this as a
+        // bare "comma, separated, values" text box for an array field with real, fixed,
+        // machine-checkable options, exactly the kind of field a typo silently corrupts. Adding
+        // allowedValues lets the UI render checkboxes instead and auto-fill the exact expected
+        // token, matching ComplianceFrameworkType's own JSON values.
+        allowedValues = {"soc2", "pci-dss", "hipaa", "gdpr"},
         example = "soc2,pci-dss",
         order = 300
     )
@@ -1337,6 +1452,25 @@ public class DeploymentConfig {
     public String region = "us-east-1";
 
     /**
+     * Target AWS account id to pin CDK's {@code Environment.account} to at synth time.
+     *
+     * <p>Deliberately <b>not</b> a {@code @ConfigField} — {@link
+     * com.cloudforge.core.config.ConfigurationIntrospector} and {@link
+     * com.cloudforge.core.config.DeploymentContextPreparer} both skip unannotated fields, so this
+     * never appears in the generated deployment-context form/schema and never gets a default
+     * resolved for it. It exists purely for callers that already know the target account
+     * programmatically (cross-account deploy: CloudForge Manager resolves this from an assumed
+     * IAM role before synthesis — see {@code cloudforge-manager}'s account-connection feature,
+     * which owns every concept of "which account" beyond this bare pass-through field).</p>
+     *
+     * <p>When {@code null} (the default — every existing caller), behavior is completely
+     * unchanged from before this field existed: {@code cloudforge-api}'s {@code
+     * CloudForgeSynthesizer} falls back to its prior {@code CDK_DEFAULT_ACCOUNT}-env-var-or-omit
+     * resolution, producing the same account-agnostic template it always has.</p>
+     */
+    public String account;
+
+    /**
      * GDPR data transfer approval flag for non-EU deployments.
      */
     @ConfigField(
@@ -1348,12 +1482,17 @@ public class DeploymentConfig {
     )
     public Boolean gdprDataTransferApproved = false;
 
-    /** Availability zones for deployment */
+    /**
+     * Availability zone suffixes for deployment (region-relative — "a" means whichever zone the
+     * deploy's own region calls "a", not a specific full zone name, since the same suffix set is
+     * valid regardless of which region gets picked elsewhere in the form).
+     */
     @ConfigField(
         displayName = "Availability Zones",
-        description = "Specific availability zones for deployment (leave empty for automatic selection)",
+        description = "Availability zone suffixes to deploy across (leave empty for automatic selection)",
         category = "network",
-        example = "us-east-1a,us-east-1b",
+        allowedValues = {"a", "b", "c", "d"},
+        example = "a,b",
         order = 5
     )
     public String[] availabilityZones;
@@ -1539,6 +1678,77 @@ public class DeploymentConfig {
         return complianceFrameworks != null && !complianceFrameworks.isEmpty();
     }
 
+    // ========== CloudForge Manager (deploy history client) ==========
+
+    /**
+     * Base URL of a running CloudForge Manager (e.g. http://127.0.0.1:1958).
+     * Optional — when unset/unreachable, deploy history POSTs are skipped.
+     */
+    @ConfigField(
+        displayName = "Manager URL",
+        description = "Shared CloudForge Manager base URL for deploy-history posts after option 2/8",
+        category = "operations",
+        required = false,
+        example = "http://127.0.0.1:1958",
+        propertyKey = "cfc.manager.url",
+        order = 9000
+    )
+    public String managerUrl;
+
+    /**
+     * Default inventory target for Manager clients (ministack | aws).
+     */
+    @ConfigField(
+        displayName = "Manager Target",
+        description = "Deployment target recorded in history entries (ministack or aws)",
+        category = "operations",
+        required = false,
+        allowedValues = {"ministack", "aws"},
+        example = "ministack",
+        propertyKey = "cfc.manager.target",
+        order = 9010
+    )
+    public String managerTarget;
+
+    /**
+     * Bearer token for POST /api/v1/history. Prefer CFC_MANAGER_HISTORY_TOKEN env — do not commit.
+     */
+    @ConfigField(
+        displayName = "Manager History Token",
+        description = "Bearer token for append-only deploy history API (prefer env CFC_MANAGER_HISTORY_TOKEN)",
+        category = "operations",
+        required = false,
+        sensitive = true,
+        propertyKey = "cfc.manager.history-token",
+        order = 9020
+    )
+    public String managerHistoryToken;
+
+    /**
+     * Opt-in: grants CloudForge Manager's own task/instance role the direct-deploy IAM
+     * capabilities ({@code CFN_DEPLOY}/{@code SC_PROVISION} — see
+     * {@code ManagerAwsCapabilityCatalog}), condition-scoped to CloudForge-tagged resources.
+     * Only has any effect when this deployment's {@code applicationId} is
+     * {@code cloudforge-manager}; a no-op for every other application. Defaults to false — Manager
+     * deploying AWS infrastructure on a caller's behalf (via {@code deploy:create}/
+     * {@code deploy:catalog}) is a materially broader permission grant than Manager's normal
+     * inventory/operator role, so it must be explicitly requested per deployment, not inherited
+     * automatically from IAM profile.
+     */
+    @ConfigField(
+        displayName = "Manager Direct Deploy",
+        description = "Grant CloudForge Manager's task role permission to create/update AWS "
+            + "infrastructure directly (CFN CreateStack/UpdateStack + Service Catalog "
+            + "ProvisionProduct), scoped to CloudForge-tagged resources. Only applies when "
+            + "applicationId is cloudforge-manager.",
+        category = "operations",
+        required = false,
+        tags = {FieldTag.REQUIRES_APPROVAL, FieldTag.EXPERIMENTAL},
+        propertyKey = "cfc.manager.direct-deploy-enabled",
+        order = 9030
+    )
+    public Boolean managerDirectDeployEnabled = false;
+
     /**
      * Convert this DeploymentConfig to a Map for CDK context.
      *
@@ -1551,9 +1761,9 @@ public class DeploymentConfig {
      * @return Map suitable for CDK App context
      */
     @SuppressWarnings("unchecked")
-    public java.util.Map<String, Object> toContextMap() {
+    public Map<String, Object> toContextMap() {
         ObjectMapper mapper = createMapper();
-        java.util.Map<String, Object> context = mapper.convertValue(this, java.util.Map.class);
+        Map<String, Object> context = mapper.convertValue(this, Map.class);
 
         // CDK uses "env" not "environment"
         if (context.containsKey("environment")) {
@@ -1561,5 +1771,42 @@ public class DeploymentConfig {
         }
 
         return context;
+    }
+
+    /**
+     * Context map safe for durable deploy history.
+     *
+     * <p>Same shape as {@link #toContextMap()}, but omits fields annotated with
+     * {@code @ConfigField(sensitive = true)} (and their {@link JsonAlias} names).
+     * New non-sensitive {@code @ConfigField}s appear automatically.</p>
+     *
+     * @return redacted map suitable for Manager history {@code detail.deploymentContext}
+     */
+    public Map<String, Object> toHistoryContextMap() {
+        Map<String, Object> context = new LinkedHashMap<>(toContextMap());
+        for (String key : sensitiveContextKeys()) {
+            context.remove(key);
+        }
+        return context;
+    }
+
+    private static Set<String> sensitiveContextKeys() {
+        Set<String> keys = new HashSet<>();
+        for (Field field : DeploymentConfig.class.getDeclaredFields()) {
+            ConfigField annotation = field.getAnnotation(ConfigField.class);
+            if (annotation == null || !annotation.sensitive()) {
+                continue;
+            }
+            keys.add(field.getName());
+            JsonAlias alias = field.getAnnotation(JsonAlias.class);
+            if (alias != null) {
+                keys.addAll(List.of(alias.value()));
+            }
+            // toContextMap renames environment → env
+            if ("environment".equals(field.getName())) {
+                keys.add("env");
+            }
+        }
+        return keys;
     }
 }

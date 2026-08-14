@@ -17,9 +17,8 @@ import java.util.Map;
 /**
  * Drupal CMS ApplicationSpec implementation.
  *
- * <p>Drupal is an enterprise-grade CMS known for its flexibility,
- * security, and strong content architecture. It's widely used in
- * government, education, and enterprise contexts.</p>
+ * <p>Drupal is an open-source CMS with configurable content types,
+ * permissions, and extension modules.</p>
  *
  * <h2>Key Features:</h2>
  * <ul>
@@ -42,7 +41,7 @@ import java.util.Map;
     value = "drupal",
     category = "cms",
     displayName = "Drupal",
-    description = "Enterprise CMS for complex content architectures",
+    description = "Open-source CMS for configurable content architectures",
     phpVersion = "8.2",
     defaultCpu = 1024,
     defaultMemory = 2048,

@@ -17,9 +17,8 @@ import java.util.Map;
 /**
  * Magento 2 E-commerce ApplicationSpec implementation.
  *
- * <p>Magento is an enterprise-grade e-commerce platform owned by Adobe.
- * It's designed for high-volume, complex e-commerce operations with
- * advanced features for B2B and B2C commerce.</p>
+ * <p>Magento is an e-commerce platform owned by Adobe with B2B and B2C
+ * catalog, order, and storefront features.</p>
  *
  * <h2>Key Features:</h2>
  * <ul>
@@ -42,7 +41,7 @@ import java.util.Map;
     value = "magento",
     category = "ecommerce",
     displayName = "Magento 2 / Adobe Commerce",
-    description = "Enterprise e-commerce platform for complex online stores",
+    description = "E-commerce platform for B2B and B2C online stores",
     phpVersion = "8.2",
     defaultCpu = 4096,
     defaultMemory = 8192,

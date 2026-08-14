@@ -28,7 +28,7 @@ class CmsServiceTopologyConfigurationTest {
         ctx.put("stackName", stackName);
         ctx.put("securityProfile", profile.name());
         ctx.put("domain", "example.com");
-        ctx.put("application", "wordpress");
+        ctx.put("applicationId", "wordpress");
         if (extra != null) ctx.putAll(extra);
         stack.getNode().setContext("cfc", ctx);
         return stack;
@@ -130,7 +130,7 @@ class CmsServiceTopologyConfigurationTest {
     void wireWithDrupalApplication() {
         App app = new App();
         Map<String, Object> extra = new HashMap<>();
-        extra.put("application", "drupal");
+        extra.put("applicationId", "drupal");
         SystemContext ctx = makeContext(app, "CmsWireDrupal", SecurityProfile.DEV,
             RuntimeType.FARGATE, extra);
         ctx.applicationSpec.set(new DrupalApplicationSpec());
@@ -141,7 +141,7 @@ class CmsServiceTopologyConfigurationTest {
     void wireWithMagentoApplication() {
         App app = new App();
         Map<String, Object> extra = new HashMap<>();
-        extra.put("application", "magento");
+        extra.put("applicationId", "magento");
         SystemContext ctx = makeContext(app, "CmsWireMagento", SecurityProfile.PRODUCTION,
             RuntimeType.FARGATE, extra);
         ctx.applicationSpec.set(new MagentoApplicationSpec());

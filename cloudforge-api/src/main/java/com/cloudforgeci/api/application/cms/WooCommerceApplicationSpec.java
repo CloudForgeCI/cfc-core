@@ -11,9 +11,8 @@ import java.util.Map;
 /**
  * WooCommerce E-commerce ApplicationSpec implementation.
  *
- * <p>WooCommerce is the world's most popular e-commerce platform, built on WordPress.
- * It powers over 28% of all online stores globally. This specification extends
- * WordPress with e-commerce specific requirements.</p>
+ * <p>WooCommerce is an e-commerce plugin for WordPress. This specification extends
+ * the WordPress configuration with e-commerce-specific requirements.</p>
  *
  * <h2>Key Differences from WordPress:</h2>
  * <ul>
@@ -52,7 +51,7 @@ import java.util.Map;
     supportsObjectCache = true,
     supportsMultisite = false,
     websiteUrl = "https://woocommerce.com",
-    defaultImage = "wordpress:php8.2-fpm-alpine"
+    defaultImage = "wordpress:php8.2-apache"
 )
 public class WooCommerceApplicationSpec extends WordPressApplicationSpec {
 

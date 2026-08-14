@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.topology;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.enums.SecurityProfile;
 
@@ -44,13 +45,18 @@ public final class CmsObjectCacheConfiguration {
     }
 
     /**
-     * Create ElastiCache Redis cluster for CMS object caching.
+     * Create ElastiCache Redis cluster for object caching (or, for non-CMS callers such as
+     * {@code CloudForgeManagerApplicationSpec}, a Redis-backed session store).
+     *
+     * <p>Only {@link ApplicationSpec#applicationId()}/{@link ApplicationSpec#displayName()} are
+     * used, so any {@link ApplicationSpec} works here — {@link CmsSpec} extends it and remains a
+     * valid argument unchanged.</p>
      *
      * @param ctx the SystemContext
-     * @param spec the CMS specification
+     * @param spec the application specification
      * @return Redis cache cluster
      */
-    public static CfnCacheCluster createRedisCluster(SystemContext ctx, CmsSpec spec) {
+    public static CfnCacheCluster createRedisCluster(SystemContext ctx, ApplicationSpec spec) {
         String clusterId = generateClusterId(ctx, spec);
         String nodeType = determineNodeType(ctx);
 
@@ -91,13 +97,13 @@ public final class CmsObjectCacheConfiguration {
      * </ul>
      *
      * @param ctx the SystemContext
-     * @param spec the CMS specification
+     * @param spec the application specification
      * @param numReplicas number of read replicas (1-5)
      * @return Redis replication group
      */
     public static CfnReplicationGroup createRedisReplicationGroup(
             SystemContext ctx,
-            CmsSpec spec,
+            ApplicationSpec spec,
             int numReplicas) {
 
         String replicationGroupId = generateClusterId(ctx, spec) + "-rg";
@@ -139,10 +145,10 @@ public final class CmsObjectCacheConfiguration {
      * Create ElastiCache Memcached cluster.
      *
      * @param ctx the SystemContext
-     * @param spec the CMS specification
+     * @param spec the application specification
      * @return Memcached cache cluster
      */
-    public static CfnCacheCluster createMemcachedCluster(SystemContext ctx, CmsSpec spec) {
+    public static CfnCacheCluster createMemcachedCluster(SystemContext ctx, ApplicationSpec spec) {
         String clusterId = generateClusterId(ctx, spec) + "-mc";
         String nodeType = determineNodeType(ctx);
 
@@ -170,10 +176,10 @@ public final class CmsObjectCacheConfiguration {
      * Create subnet group for ElastiCache.
      *
      * @param ctx the SystemContext
-     * @param spec the CMS specification
+     * @param spec the application specification
      * @return ElastiCache subnet group
      */
-    private static CfnSubnetGroup createSubnetGroup(SystemContext ctx, CmsSpec spec) {
+    private static CfnSubnetGroup createSubnetGroup(SystemContext ctx, ApplicationSpec spec) {
         IVpc vpc = ctx.vpc.get().orElseThrow(
             () -> new IllegalStateException("VPC must exist before creating cache subnet group"));
 
@@ -193,10 +199,10 @@ public final class CmsObjectCacheConfiguration {
      * Create security group for cache cluster.
      *
      * @param ctx the SystemContext
-     * @param spec the CMS specification
+     * @param spec the application specification
      * @return security group for cache access
      */
-    private static SecurityGroup createCacheSecurityGroup(SystemContext ctx, CmsSpec spec) {
+    private static SecurityGroup createCacheSecurityGroup(SystemContext ctx, ApplicationSpec spec) {
         IVpc vpc = ctx.vpc.get().orElseThrow(
             () -> new IllegalStateException("VPC must exist before creating cache security group"));
 
@@ -228,10 +234,10 @@ public final class CmsObjectCacheConfiguration {
      * Create Redis parameter group with optimized settings.
      *
      * @param ctx the SystemContext
-     * @param spec the CMS specification
+     * @param spec the application specification
      * @return Redis parameter group
      */
-    private static CfnParameterGroup createRedisParameterGroup(SystemContext ctx, CmsSpec spec) {
+    private static CfnParameterGroup createRedisParameterGroup(SystemContext ctx, ApplicationSpec spec) {
         Map<String, String> parameters = new HashMap<>();
 
         // Memory management
@@ -258,10 +264,10 @@ public final class CmsObjectCacheConfiguration {
      * Generate cluster ID from context and spec.
      *
      * @param ctx the SystemContext
-     * @param spec the CMS specification
+     * @param spec the application specification
      * @return cluster ID
      */
-    private static String generateClusterId(SystemContext ctx, CmsSpec spec) {
+    private static String generateClusterId(SystemContext ctx, ApplicationSpec spec) {
         String env = ctx.cfc.env() != null ? ctx.cfc.env() : "dev";
         // ElastiCache cluster IDs must be lowercase, max 40 chars, alphanumeric + hyphens
         String sanitized = String.format("%s-%s-cache",

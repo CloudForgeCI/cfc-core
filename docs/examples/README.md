@@ -2,6 +2,15 @@
 
 This directory contains pre-configured deployment context templates for common use cases. These templates simplify onboarding by providing validated configurations for different environments and compliance requirements.
 
+## CloudForge sample project
+
+For a **standalone Maven project** (cloudforge-sample), use:
+
+- [CloudForge Sample BOM template](../architecture/cloudforge-sample-bom.template.md)
+- Starter POM: [cloudforge-sample/pom.xml](cloudforge-sample/pom.xml)
+
+The in-repo reference entrypoint is **`cfc-testing/`** at the repository root.
+
 ## Quick Start
 
 Choose a template based on your requirements and customize it for your environment:
@@ -21,7 +30,7 @@ cdk deploy
 
 ### Quick Start (No Domain Required)
 
-These templates use **AWS Private CA** to enable HTTPS without requiring a custom domain. Perfect for rapid deployment, testing, and internal applications.
+These templates use **AWS Private CA** to enable HTTPS without requiring a custom domain. They are intended for short setup cycles, testing, and internal applications.
 
 #### **dev-oidc-quick.json** - Fastest OIDC Setup
 - **Use Case**: Quick development with authentication, no domain setup required
@@ -185,7 +194,7 @@ These templates use **AWS Private CA** to enable HTTPS without requiring a custo
 - **Runtime**: EC2 with Auto Scaling (3-10 instances)
 - **Network**: Private with NAT, custom domain
 - **Authentication**: Cognito with MFA (TOTP)
-- **Compliance**: PCI-DSS + HIPAA + SOC 2 (comprehensive)
+- **Compliance**: PCI-DSS + HIPAA + SOC 2
 - **Security**: All controls enabled
 - **Log Retention**: 730 days (minimum PCI-DSS requirement)
 - **Cost**: Highest (~$600-900/month)

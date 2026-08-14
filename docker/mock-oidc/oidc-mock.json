@@ -99,7 +99,7 @@
           "headers": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"access_token\": \"cfc_access_token_dev_12345\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600,\n  \"refresh_token\": \"cfc_refresh_token_dev\",\n  \"id_token\": \"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDEiLCJzdWIiOiJjZmNfZGV2X3VzZXIiLCJhdWQiOiJjZmNfY2xpZW50IiwiaWF0IjoxNjE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksIm5hbWUiOiJDbG91ZEZvcmdlIERldmVsb3BlciIsImVtYWlsIjoiZGV2QGNsb3VkZm9yZ2VjaS5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiY29nbml0bzpncm91cHMiOlsiZGV2ZWxvcGVycyIsImFkbWlucyJdfQ.mock-signature\"\n}",
+          "body": "{\n  \"access_token\": \"cfc_access_token_dev_12345\",\n  \"token_type\": \"Bearer\",\n  \"expires_in\": 3600,\n  \"refresh_token\": \"cfc_refresh_token_dev\",\n  \"id_token\": \"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjMwMDEiLCJzdWIiOiJjZmNfZGV2X3VzZXIiLCJhdWQiOiJjZmMtY2xpZW50IiwiaWF0IjoxNjE2MjM5MDIyLCJleHAiOjk5OTk5OTk5OTksIm5hbWUiOiJDbG91ZEZvcmdlIERldmVsb3BlciIsImVtYWlsIjoiZGV2QGNsb3VkZm9yZ2VjaS5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiY29nbml0bzp1c2VybmFtZSI6ImRldi11c2VyIiwiY29nbml0bzpncm91cHMiOlsiTWFuYWdlckFkbWlucyIsIk1hbmFnZXJVc2VycyJdfQ.mock-signature\"\n}",
           "rules": [],
           "rulesOperator": "OR",
           "disableTemplating": false,
@@ -128,7 +128,7 @@
           "headers": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"sub\": \"cfc_dev_user\",\n  \"name\": \"CloudForge Developer\",\n  \"given_name\": \"CloudForge\",\n  \"family_name\": \"Developer\",\n  \"email\": \"dev@cloudforgeci.com\",\n  \"email_verified\": true,\n  \"cognito:groups\": [\"developers\", \"admins\"],\n  \"cognito:username\": \"dev-user\"\n}",
+          "body": "{\n  \"sub\": \"cfc_dev_user\",\n  \"name\": \"CloudForge Developer\",\n  \"given_name\": \"CloudForge\",\n  \"family_name\": \"Developer\",\n  \"email\": \"dev@cloudforgeci.com\",\n  \"email_verified\": true,\n  \"cognito:groups\": [\"ManagerAdmins\", \"ManagerUsers\"],\n  \"cognito:username\": \"dev-user\"\n}",
           "rules": [],
           "rulesOperator": "OR",
           "disableTemplating": false,

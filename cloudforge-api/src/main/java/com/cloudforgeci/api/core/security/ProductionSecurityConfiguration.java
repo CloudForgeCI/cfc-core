@@ -18,7 +18,7 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
 
 /**
  * Production security configuration with hardened security settings.
- * Implements comprehensive security measures for SOC/HIPAA compliance.
+ * Configures infrastructure controls used by SOC 2 and HIPAA deployments.
  * Integrates with SecurityProfileConfiguration for observability settings.
  */
 public final class ProductionSecurityConfiguration implements SecurityConfiguration {
@@ -68,7 +68,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
         // Debug: Check what slots are available
 
-        // Production security settings - maximum restrictions
+        // Production security settings - restricted network access
 
         // Instance security group - only for EC2 runtime
         if (c.runtime == RuntimeType.EC2) {
@@ -216,12 +216,12 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("PRODUCTION profile configured with log retention: " + profileConfig.getLogRetentionDays());
         }
 
-        // Configure flow logs (comprehensive for production)
+        // Configure flow logs for accepted and rejected traffic
         if (profileConfig.isFlowLogsEnabled()) {
             LOG.info("Flow logs enabled for PRODUCTION profile with traffic type: " + profileConfig.getFlowLogTrafficType());
         }
 
-        // Configure security monitoring (comprehensive for production)
+        // Configure CloudTrail, GuardDuty, and AWS Config monitoring
         if (profileConfig.isSecurityMonitoringEnabled()) {
             LOG.info("Security monitoring enabled for PRODUCTION profile");
 
@@ -255,7 +255,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("S3 encryption enabled for PRODUCTION profile (mandatory)");
         }
 
-        // Configure backup (comprehensive for production)
+        // Configure automated and cross-region backups
         if (profileConfig.isAutomatedBackupEnabled()) {
             LOG.info("Automated backup enabled for PRODUCTION profile with retention: " + profileConfig.getBackupRetentionDays() + " days");
         }
@@ -264,12 +264,12 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("Cross-region backup enabled for PRODUCTION profile (disaster recovery)");
         }
 
-        // Configure auto-scaling (comprehensive for production)
+        // Configure the production instance capacity range
         if (profileConfig.isAutoScalingEnabled()) {
             LOG.info("Auto-scaling enabled for PRODUCTION profile: " + profileConfig.getMinInstanceCount() + "-" + profileConfig.getMaxInstanceCount() + " instances");
         }
 
-        // Configure network security (maximum for production)
+        // Configure VPC endpoints, NAT, WAF, and CloudFront
         if (profileConfig.isVpcEndpointsEnabled()) {
             LOG.info("VPC endpoints enabled for PRODUCTION profile (network security)");
         }
@@ -286,7 +286,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("CloudFront enabled for PRODUCTION profile (DDoS protection)");
         }
 
-        // Configure compliance and audit (comprehensive for production)
+        // Configure detailed billing and ALB access logs
         if (profileConfig.isDetailedBillingEnabled()) {
             LOG.info("Detailed billing enabled for PRODUCTION profile (cost management)");
         }
@@ -295,7 +295,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("ALB access logging enabled for PRODUCTION profile with retention: " + profileConfig.getAlbAccessLogRetentionDays());
         }
 
-        // Configure reliability (maximum for production)
+        // Configure Multi-AZ deployment
         if (profileConfig.isMultiAzEnforced()) {
             LOG.info("Multi-AZ deployment enforced for PRODUCTION profile (high availability)");
         }

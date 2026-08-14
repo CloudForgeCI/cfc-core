@@ -10,13 +10,13 @@ import java.lang.annotation.*;
  * support for content management systems, e-commerce platforms, and social networking
  * applications without modifying core code.</p>
  *
- * <h2>Usage Example:</h2>
+ * <h2>Usage example</h2>
  * <pre>{@code
  * @CmsPlugin(
  *     value = "wordpress",
  *     category = "cms",
  *     displayName = "WordPress",
- *     description = "World's most popular CMS for websites and blogs",
+ *     description = "PHP-based CMS and blogging platform",
  *     phpVersion = "8.2",
  *     defaultCpu = 1024,
  *     defaultMemory = 2048,
@@ -33,7 +33,7 @@ import java.lang.annotation.*;
  * }
  * }</pre>
  *
- * <h2>CMS Categories:</h2>
+ * <h2>CMS categories</h2>
  * <ul>
  *   <li><strong>cms:</strong> Content Management Systems (WordPress, Joomla, Drupal, Concrete5, TYPO3)</li>
  *   <li><strong>ecommerce:</strong> E-commerce Platforms (WooCommerce, Magento, PrestaShop, OpenCart, Shopware)</li>
@@ -57,7 +57,7 @@ public @interface CmsPlugin {
      * <p>This value is used in deployment-context.json to specify which CMS to deploy:</p>
      * <pre>{@code
      * {
-     *   "application": "wordpress",
+     *   "applicationId": "wordpress",
      *   "runtimeType": "FARGATE"
      * }
      * }</pre>
@@ -102,8 +102,8 @@ public @interface CmsPlugin {
      *
      * <p>Examples:</p>
      * <ul>
-     *   <li>"World's most popular CMS for websites and blogs"</li>
-     *   <li>"Enterprise e-commerce platform by Adobe"</li>
+ *   <li>"PHP-based CMS and blogging platform"</li>
+ *   <li>"Adobe Commerce-compatible e-commerce platform"</li>
      *   <li>"Social networking and community platform"</li>
      * </ul>
      *

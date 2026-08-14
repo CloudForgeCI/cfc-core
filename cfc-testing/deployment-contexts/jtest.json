@@ -1,0 +1,12 @@
+{
+  "stackName": "jtest",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
+  "environment": "prod",
+  "runtime": "FARGATE",
+  "authMode": "application-oidc",
+  "domain": "cloudforge.localhost",
+  "subdomain": "jenkins",
+  "fqdn": "jenkins.cloudforge.localhost",
+  "enableSsl": false
+}

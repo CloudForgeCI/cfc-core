@@ -1,0 +1,1 @@
+{"stackName":"Jenkins-AutoScaling","applicationId":"jenkins","applicationName":"Jenkins","environment":"dev","runtime":"FARGATE","authMode":"none","topology":"APPLICATION_SERVICE","securityProfile":"DEV","complianceMode":null,"complianceFrameworks":[],"region":"us-east-1","domain":null,"fqdn":null}
