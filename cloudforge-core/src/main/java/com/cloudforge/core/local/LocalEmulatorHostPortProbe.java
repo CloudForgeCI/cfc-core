@@ -45,8 +45,22 @@ public final class LocalEmulatorHostPortProbe {
             throws IOException {
         Map<Integer, LocalHostPortOccupant> byPort = new LinkedHashMap<>();
         merge(byPort, probeDocker(target));
-        merge(byPort, probeCloudFormation(endpoint, target));
+        merge(byPort, probeCloudFormationBestEffort(endpoint, target));
         return List.copyOf(byPort.values());
+    }
+
+    private static List<LocalHostPortOccupant> probeCloudFormationBestEffort(
+            URI endpoint, DeploymentTarget target) {
+        try {
+            return probeCloudFormation(endpoint, target);
+        } catch (IOException e) {
+            // Same best-effort reasoning as probeDocker()'s missing-binary case above: no local
+            // CloudFormation emulator reachable at `endpoint` (connection refused, timed out, or
+            // an error response) just means there's nothing there to report port occupancy for —
+            // e.g. a CI runner or a fresh dev machine with no MiniStack/LocalStack emulator
+            // started yet — not a reason to hard-fail an otherwise-valid preflight check.
+            return List.of();
+        }
     }
 
     static List<LocalHostPortOccupant> probeDocker(DeploymentTarget target) throws IOException {

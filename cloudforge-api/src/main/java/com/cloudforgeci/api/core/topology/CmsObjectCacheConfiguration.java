@@ -106,7 +106,7 @@ public final class CmsObjectCacheConfiguration {
             ApplicationSpec spec,
             int numReplicas) {
 
-        String replicationGroupId = generateClusterId(ctx, spec) + "-rg";
+        String replicationGroupId = generateClusterId(ctx, spec, "-rg");
         String nodeType = determineNodeType(ctx);
         boolean isProduction = ctx.cfc.securityProfile() == SecurityProfile.PRODUCTION;
 
@@ -149,7 +149,7 @@ public final class CmsObjectCacheConfiguration {
      * @return Memcached cache cluster
      */
     public static CfnCacheCluster createMemcachedCluster(SystemContext ctx, ApplicationSpec spec) {
-        String clusterId = generateClusterId(ctx, spec) + "-mc";
+        String clusterId = generateClusterId(ctx, spec, "-mc");
         String nodeType = determineNodeType(ctx);
 
         // Create subnet group
@@ -268,13 +268,36 @@ public final class CmsObjectCacheConfiguration {
      * @return cluster ID
      */
     private static String generateClusterId(SystemContext ctx, ApplicationSpec spec) {
+        return generateClusterId(ctx, spec, "");
+    }
+
+    /**
+     * Generate a cluster/replication-group ID, with {@code suffix} (e.g. {@code "-rg"},
+     * {@code "-mc"}) folded in before truncation — callers that append a suffix AFTER this
+     * method already truncated to 40 chars can overflow ElastiCache's 40-char ID limit.
+     *
+     * @param ctx the SystemContext
+     * @param spec the application specification
+     * @param suffix resource-type suffix to include inside the 40-char budget, or "" for none
+     * @return cluster ID: lowercase, &lt;=40 chars, starts with a letter, no trailing/repeated hyphens
+     */
+    private static String generateClusterId(SystemContext ctx, ApplicationSpec spec, String suffix) {
         String env = ctx.cfc.env() != null ? ctx.cfc.env() : "dev";
-        // ElastiCache cluster IDs must be lowercase, max 40 chars, alphanumeric + hyphens
-        String sanitized = String.format("%s-%s-cache",
+        // ElastiCache cluster/replication-group IDs: lowercase, <=40 chars, alphanumeric +
+        // hyphens, must start with a letter, no trailing or consecutive hyphens.
+        String sanitized = String.format("%s-%s-cache%s",
             spec.applicationId().toLowerCase(),
-            env.toLowerCase()
-        ).replaceAll("[^a-z0-9-]", "");
-        return sanitized.substring(0, Math.min(40, sanitized.length()));
+            env.toLowerCase(),
+            suffix
+        ).replaceAll("[^a-z0-9-]", "").replaceAll("-{2,}", "-");
+        if (!sanitized.isEmpty() && Character.isDigit(sanitized.charAt(0))) {
+            sanitized = "a" + sanitized;
+        }
+        sanitized = sanitized.substring(0, Math.min(40, sanitized.length()));
+        while (sanitized.endsWith("-")) {
+            sanitized = sanitized.substring(0, sanitized.length() - 1);
+        }
+        return sanitized;
     }
 
     /**
