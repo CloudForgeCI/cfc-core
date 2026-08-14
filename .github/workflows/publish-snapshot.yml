@@ -107,6 +107,11 @@ jobs:
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
+          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
+          # without it, the agent still tries (and fails, headless) to launch a real pinentry
+          # program ("gpg: signing failed: No pinentry").
+          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
           echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
           # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
@@ -199,6 +204,11 @@ jobs:
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
+          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
+          # without it, the agent still tries (and fails, headless) to launch a real pinentry
+          # program ("gpg: signing failed: No pinentry").
+          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
           echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
           # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
