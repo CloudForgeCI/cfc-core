@@ -192,7 +192,7 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api + cloudforge-localstack..."
-          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack -am clean deploy
+          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()

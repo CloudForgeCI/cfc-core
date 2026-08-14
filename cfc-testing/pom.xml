@@ -9,10 +9,22 @@
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
-        <cloudforge.version>3.2.0</cloudforge.version>
+        <cloudforge.version>3.2.0-SNAPSHOT</cloudforge.version>
         <testcontainers.version>1.21.0</testcontainers.version>
         <aws.sdk.version>2.25.0</aws.sdk.version>
     </properties>
+
+    <!-- Maven doesn't check the Central Portal's snapshots URL by default — needed to resolve
+         the cfc-core BOM below while it's on a -SNAPSHOT version. Real releases (non-SNAPSHOT)
+         never touch this repository at all. -->
+    <repositories>
+        <repository>
+            <id>central-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
 
     <!-- Import CloudForge BOM — see docs/architecture/cloudforge-sample-bom.template.md -->
     <dependencyManagement>
@@ -52,16 +64,6 @@
     <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-localstack</artifactId>
-    </dependency>
-
-    <!-- Application-owned Manager deploy contract, discovered with ServiceLoader. No longer
-         covered by the cfc-core BOM import above — split into its own repo/versioning
-         (CloudForgeCI/cloudforge-manager-deployment), so its version is pinned explicitly here
-         instead. -->
-    <dependency>
-        <groupId>com.cloudforgeci</groupId>
-        <artifactId>cloudforge-manager-deployment</artifactId>
-        <version>${cloudforge.version}</version>
     </dependency>
 
     <!-- AWS CDK - explicit dependency for IDE support -->

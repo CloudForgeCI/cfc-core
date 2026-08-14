@@ -25,7 +25,6 @@ import com.cloudforge.core.deploy.ApplicationDeploymentPresets;
 import com.cloudforge.core.local.PlatformRuntimeAction;
 import com.cloudforge.core.local.PlatformRuntimeProvider;
 import com.cloudforge.core.local.PlatformRuntimeProviders;
-import com.cloudforgeci.manager.deployment.ManagerDeploymentPreset;
 
 // Auto-discovery via ApplicationLoader - no need to import all ApplicationSpecs manually
 import com.cloudforge.core.interfaces.ApplicationSpec;
@@ -360,43 +359,11 @@ public class InteractiveDeployer {
             }
         }
 
-        // CloudForge Manager's database is OPTIONAL (embedded H2 by default via
-        // ManagerDeploymentPreset's ServiceLoader registration), so the generic REQUIRED-only
-        // auto-enable above never asks about it — surface the choice explicitly instead of
-        // leaving RDS reachable only by hand-editing deployment-context.json.
-        if ("cloudforge-manager".equals(config.applicationId)) {
-            System.out.println("\n💾 CloudForge Manager Database:");
-            System.out.println("================================");
-            boolean useRds = promptYesNo(
-                "Use RDS instead of the embedded H2 store?", false);
-            if (useRds) {
-                String engine = promptChoice("Database engine",
-                    new String[]{"postgres", "mysql", "mariadb"}, "postgres");
-                String version = promptOptional("Database version", "15");
-                String instanceClass = promptOptional("Database instance class", "db.t3.micro");
-                int replicas = promptIntWithValidation("Read replica count", 0, 0, 5);
-                // Redis-backed sessions only make sense alongside RDS — a horizontally-scaled
-                // Manager still needs shared durable persistence (embedded H2 isn't safe to
-                // share across instances), so this is only offered once RDS is already chosen.
-                boolean redisSessions = promptYesNo(
-                    "Also provision ElastiCache Redis for shared sessions (multi-instance Manager)?",
-                    false);
-                if (redisSessions) {
-                    ManagerDeploymentPreset.rdsWithRedisSessions(engine, version, instanceClass, replicas)
-                        .applyTo(config);
-                    System.out.println("✅ CloudForge Manager will provision RDS (" + engine + " " + version + ")"
-                        + (replicas > 0 ? " with " + replicas + " read replica(s)" : "")
-                        + " and ElastiCache Redis for shared sessions");
-                } else {
-                    ManagerDeploymentPreset.rds(engine, version, instanceClass, replicas).applyTo(config);
-                    System.out.println("✅ CloudForge Manager will provision RDS (" + engine + " " + version + ")"
-                        + (replicas > 0 ? " with " + replicas + " read replica(s)" : ""));
-                }
-            } else {
-                ManagerDeploymentPreset.embeddedH2().applyTo(config);
-                System.out.println("ℹ️  CloudForge Manager will use the embedded H2 store.");
-            }
-        }
+        // cloudforge-manager itself (its ManagerDeploymentPreset RDS/H2 database presets) lives in
+        // cloudforge-manager-deployment, its own repo, not a dependency of cfc-testing — see
+        // maybePrintManagerHint() below for the one cloudforge-manager-specific affordance this
+        // sample still carries (a generic post-deploy URL hint keyed off applicationId, no
+        // cloudforge-manager-deployment dependency needed for that).
 
         // ========== SECURITY PROFILE (determines many defaults) ==========
         System.out.println("\n🔒 Security Profile Selection:");
