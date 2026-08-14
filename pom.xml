@@ -63,7 +63,10 @@
     <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
     <maven.source.plugin.version>3.3.0</maven.source.plugin.version>
     <maven.javadoc.plugin.version>3.7.0</maven.javadoc.plugin.version>
-    <maven.gpg.plugin.version>3.2.4</maven.gpg.plugin.version>
+    <!-- 3.2.x regressed gpg-agent IPC handling ("Too much data for IPC layer" on every sign,
+         reproduced in CI regardless of GNUPGHOME/GPG_HOMEDIR config) — pinned to the last known-
+         good version before that regression. -->
+    <maven.gpg.plugin.version>3.1.0</maven.gpg.plugin.version>
     <maven.deploy.plugin.version>3.1.1</maven.deploy.plugin.version>
     <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
     <cyclonedx.plugin.version>2.8.2</cyclonedx.plugin.version>
@@ -225,8 +228,11 @@
          Checkpoint A/B logic and is deliberately NOT published to Central (distribution
          strategy still undecided; revisit separately, see the license-gate design discussion).
 
-         Consumers (cfc-testing included) resolve cloudforge-manager-deployment as a normal
-         external Maven dependency, same as any other CloudForge artifact.
+         cfc-testing (this repo's own validation/sample consumer) deliberately does NOT depend on
+         it — cfc-core's own CI only unit-tests cloudforge-api, cloudforge-core,
+         cloudforge-localstack, and cloudforge-ministack; a real cloudforge-manager consumer
+         resolves cloudforge-manager-deployment as a normal external Maven dependency itself
+         (see cloudforge-manager's own pom.xml).
     -->
     <!-- cfc-testing: independent consumer / cloudforge-sample entrypoint (BOM import, not in reactor) -->
   </modules>
@@ -270,7 +276,10 @@
             <plugin>
               <groupId>org.apache.maven.plugins</groupId>
               <artifactId>maven-gpg-plugin</artifactId>
-              <version>3.2.4</version>
+              <!-- 3.2.x regressed gpg-agent IPC handling ("Too much data for IPC layer" on every
+                   sign, reproduced in CI regardless of GNUPGHOME/GPG_HOMEDIR config) — pinned to
+                   the last known-good version before that regression. -->
+              <version>3.1.0</version>
               <executions>
                 <execution>
                   <id>sign-artifacts</id>
