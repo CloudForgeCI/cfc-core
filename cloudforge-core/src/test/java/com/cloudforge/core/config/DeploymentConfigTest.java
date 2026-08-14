@@ -8,7 +8,9 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -136,9 +138,28 @@ class DeploymentConfigTest {
     }
 
     @Test
-    void deserializesSavedDeploymentContextFile() throws Exception {
-        DeploymentConfig loaded = DeploymentConfig.fromFile(
-            Path.of("..", "cfc-testing", "deployment-context.json"));
+    void deserializesSavedDeploymentContextFile(@TempDir Path tempDir) throws Exception {
+        // Mirrors cfc-testing/deployment-context.json's shape — that file is gitignored (a local
+        // interactive-deployer artifact), so this writes its own fixture rather than depending on
+        // a path outside the module that won't exist on a clean checkout.
+        Path fixture = tempDir.resolve("deployment-context.json");
+        Files.writeString(fixture, """
+            {
+              "stackName": "jtest",
+              "applicationId": "jenkins",
+              "applicationName": "Jenkins",
+              "environment": "prod",
+              "runtime": "FARGATE",
+              "authMode": "application-oidc",
+              "domain": "cloudforge.localhost",
+              "subdomain": "jenkins",
+              "fqdn": "jenkins.cloudforge.localhost",
+              "enableSsl": false,
+              "complianceFrameworks": ["soc2"]
+            }
+            """);
+
+        DeploymentConfig loaded = DeploymentConfig.fromFile(fixture);
 
         assertEquals("jtest", loaded.stackName);
         assertEquals("cloudforge.localhost", loaded.domain);
