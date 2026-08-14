@@ -15,9 +15,10 @@ import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 
 import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.services.autoscaling.AdditionalHealthCheckType;
+import software.amazon.awscdk.services.autoscaling.AdditionalHealthChecksOptions;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
-import software.amazon.awscdk.services.autoscaling.ElbHealthCheckOptions;
-import software.amazon.awscdk.services.autoscaling.HealthCheck;
+import software.amazon.awscdk.services.autoscaling.HealthChecks;
 import software.amazon.awscdk.services.ec2.BlockDevice;
 import software.amazon.awscdk.services.ec2.BlockDeviceVolume;
 import software.amazon.awscdk.services.ec2.EbsDeviceOptions;
@@ -636,8 +637,11 @@ public class Ec2Factory extends BaseFactory {
             .desiredCapacity(desiredCapacity)
             .maxCapacity(maxCapacity)
             .launchTemplate(launchTemplate)
-            .healthCheck(HealthCheck.elb(ElbHealthCheckOptions.builder()
-                    .grace(Duration.seconds(gracePeriodSeconds))
+            // HealthCheck.elb(ElbHealthCheckOptions) is deprecated — HealthChecks.withAdditionalChecks
+            // layers ELB target-health awareness on top of the implicit baseline EC2 check.
+            .healthChecks(HealthChecks.withAdditionalChecks(AdditionalHealthChecksOptions.builder()
+                    .additionalTypes(List.of(AdditionalHealthCheckType.ELB))
+                    .gracePeriod(Duration.seconds(gracePeriodSeconds))
                     .build()))
             .notifications(List.of(NotificationConfiguration.builder()
                     .topic(asgNotificationTopic)

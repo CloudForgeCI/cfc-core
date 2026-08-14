@@ -186,6 +186,8 @@ public final class LocalStackDeployPreflight {
         return snapshot;
     }
 
+    /** @deprecated wraps the deprecated {@link #requireDefault}; prefer {@link #validateForDeployment} */
+    @Deprecated
     public static LocalStackCapabilitySnapshot requireFargatePath() throws IOException {
         return requireDefault(
             LocalStackServiceCapability.ECS,

@@ -80,9 +80,8 @@ class ManagerRuntimeBridgeTest {
 
     @Test
     void awsDefaultRegionDefaultsToUsEast1WhenUnset() {
-        Map<String, String> values = new HashMap<>();
-
-        ManagerRuntimeBridge.apply(values::get);
+        // Nothing supplied by the lookup on purpose — this is the "unset" case under test.
+        ManagerRuntimeBridge.apply(key -> null);
 
         assertEquals("us-east-1", System.getProperty(ManagerEnvKeys.AWS_DEFAULT_REGION));
     }

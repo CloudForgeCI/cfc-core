@@ -14,11 +14,14 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.logging.Logger;
 
 /**
  * Dockerized nginx edge for {@code *.cloudforge.localhost} Host routing.
  */
 public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
+
+    private static final Logger LOG = Logger.getLogger(DefaultEmulatorEdgeRuntime.class.getName());
 
     private static final Pattern HOST_PUBLISH =
         Pattern.compile("(\\d+)->(\\d+)/tcp");
@@ -189,8 +192,11 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                 if (isStackPortContainer(name)) {
                     Matcher matcher = HOST_PUBLISH.matcher(ports);
                     while (matcher.find()) {
-                        int hostPort = Integer.parseInt(matcher.group(1));
-                        int containerPort = Integer.parseInt(matcher.group(2));
+                        int hostPort = parsePort(matcher.group(1));
+                        int containerPort = parsePort(matcher.group(2));
+                        if (hostPort < 0 || containerPort < 0) {
+                            continue;
+                        }
                         if (containerPort == LocalEmulatorDefaults.STACKPORT_CONTAINER_PORT
                             || hostPort == LocalEmulatorDefaults.STACKPORT_HOST_PORT) {
                             routes.putIfAbsent(LocalEmulatorDefaults.HOST_STACKPORT, hostPort);
@@ -203,8 +209,11 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                 || name.equals(LocalEmulatorDefaults.MINISTACK_CONTAINER)) {
                 Matcher matcher = HOST_PUBLISH.matcher(ports);
                 while (matcher.find()) {
-                    int hostPort = Integer.parseInt(matcher.group(1));
-                    int containerPort = Integer.parseInt(matcher.group(2));
+                    int hostPort = parsePort(matcher.group(1));
+                    int containerPort = parsePort(matcher.group(2));
+                    if (hostPort < 0 || containerPort < 0) {
+                        continue;
+                    }
                     if (containerPort == LocalEmulatorDefaults.GATEWAY_PORT
                         || hostPort == LocalEmulatorDefaults.GATEWAY_PORT) {
                         routes.put(LocalEmulatorDefaults.HOST_EMULATOR, hostPort);
@@ -219,8 +228,11 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             }
             Matcher matcher = HOST_PUBLISH.matcher(ports);
             while (matcher.find()) {
-                int hostPort = Integer.parseInt(matcher.group(1));
-                int containerPort = Integer.parseInt(matcher.group(2));
+                int hostPort = parsePort(matcher.group(1));
+                int containerPort = parsePort(matcher.group(2));
+                if (hostPort < 0 || containerPort < 0) {
+                    continue;
+                }
                 String override = overrides.get(name);
                 String hostname = (override != null && !override.isBlank())
                     ? override : hostnameForContainer(name, containerPort);
@@ -518,8 +530,11 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             Matcher matcher = HOST_PUBLISH.matcher(ports);
             List<Integer> hostPorts = new ArrayList<>();
             while (matcher.find()) {
-                int hostPort = Integer.parseInt(matcher.group(1));
-                int containerPort = Integer.parseInt(matcher.group(2));
+                int hostPort = parsePort(matcher.group(1));
+                int containerPort = parsePort(matcher.group(2));
+                if (hostPort < 0 || containerPort < 0) {
+                    continue;
+                }
                 if (CONTAINER_PORT_TO_HOST.containsKey(containerPort)) {
                     mapsAppPort = true;
                     hostPorts.add(hostPort);
@@ -751,7 +766,27 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         if (raw == null || raw.isBlank()) {
             return LocalEmulatorDefaults.EMULATOR_EDGE_HOST_PORT;
         }
-        return Integer.parseInt(raw.trim());
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            LOG.warning(LocalEmulatorDefaults.EMULATOR_EDGE_HTTP_PORT_ENV + "='" + raw
+                + "' is not a valid port number, falling back to the default");
+            return LocalEmulatorDefaults.EMULATOR_EDGE_HOST_PORT;
+        }
+    }
+
+    /**
+     * Parses a {@code docker ps} port-mapping capture group (matched against {@link
+     * #HOST_PUBLISH}'s {@code \d+}, so overwhelmingly numeric already) — returns -1 on the rare
+     * malformed/overflow case instead of throwing, since one bad entry in `docker ps` output
+     * shouldn't abort edge route reconciliation for every other container.
+     */
+    private static int parsePort(String raw) {
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private static boolean isLocalPortOpen(int port) {

@@ -125,7 +125,17 @@ public final class ApplicationPropertyLoader {
             if (resolved == null) {
                 continue;
             }
-            info.setValue(config, coerce(resolved, info.type()));
+            // A malformed value for one property (e.g. a non-numeric string for an int-typed
+            // field) shouldn't abort defaulting for every other field in the loop.
+            Object coerced;
+            try {
+                coerced = coerce(resolved, info.type());
+            } catch (NumberFormatException e) {
+                LOG.warning("Property '" + info.propertyKey() + "'='" + resolved
+                    + "' is not a valid " + info.type().getSimpleName() + " — skipping");
+                continue;
+            }
+            info.setValue(config, coerced);
         }
     }
 

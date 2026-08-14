@@ -546,7 +546,10 @@ public class IdentityCenterSamlFactory extends BaseFactory {
         String trustedTokenIssuerName = stackName + "-cognito-idp";
 
         LOG.info("  Issuer URL: " + issuerUrl);
-        LOG.info("  Trusted Token Issuer Name: " + trustedTokenIssuerName);
+        // Not logged with its value (nor below, with its resolved ARN) — resource identifiers,
+        // not credentials, but keeping them out of logs avoids handing an attacker with log
+        // access a ready-made resource reference.
+        LOG.info("  Trusted Token Issuer Name configured");
 
         // Create trusted token issuer in Identity Center
         // This tells Identity Center to trust OIDC JWT tokens from Cognito
@@ -603,7 +606,9 @@ public class IdentityCenterSamlFactory extends BaseFactory {
         String trustedTokenIssuerArn = trustedTokenIssuer.getResponseField("TrustedTokenIssuerArn");
 
         LOG.info("Cognito configured as trusted token issuer for Identity Center");
-        LOG.info("  Trusted Token Issuer ARN: " + trustedTokenIssuerArn);
+        // Not logged with its value — see the comment above configureCognitoAsExternalIdP's
+        // Trusted Token Issuer Name log for why.
+        LOG.info("  Trusted Token Issuer ARN configured");
 
         // Configure application grant with audience claim for Cognito token validation
         // Wait for Cognito Client ID to be available, then configure the grant
@@ -667,13 +672,18 @@ public class IdentityCenterSamlFactory extends BaseFactory {
      * Implement once Identity Center SAML flow is ready.</p>
      *
      * @param applicationArn          Identity Center application ARN
-     * @param trustedTokenIssuerArn   ARN of the Cognito trusted token issuer
+     * @param trustedTokenIssuerArn   ARN of the Cognito trusted token issuer (not used currently —
+     *                                its value is deliberately kept out of logs, see the log line
+     *                                below; reserved for the actual grant configuration once the
+     *                                SAML integration above is implemented)
      * @param cognitoClientId         Cognito app client ID (used as audience claim)
      */
     private void configureApplicationGrant(String applicationArn, String trustedTokenIssuerArn, String cognitoClientId) {
         LOG.warning("configureApplicationGrant() not yet implemented — SAML integration pending.");
         LOG.warning("  Application ARN: " + applicationArn);
-        LOG.warning("  Trusted Token Issuer ARN: " + trustedTokenIssuerArn);
+        // Not logged with its value — see the comment above configureCognitoAsExternalIdP's
+        // Trusted Token Issuer Name log for why.
+        LOG.warning("  Trusted Token Issuer ARN configured");
         LOG.warning("  Cognito Client ID: " + cognitoClientId);
     }
 }

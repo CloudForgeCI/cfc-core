@@ -38,7 +38,30 @@ public final class LocalEmulatorHostPortProbe {
         .connectTimeout(Duration.ofSeconds(2))
         .build();
 
+    private static final String DOCKER_EXECUTABLE = resolveExecutable("docker");
+
     private LocalEmulatorHostPortProbe() {
+    }
+
+    /**
+     * Resolves {@code name} to an absolute path by searching {@code PATH} — running an
+     * executable by its bare name lets whatever comes first on PATH win, which on a compromised
+     * PATH could be an attacker-controlled binary instead of the real {@code docker}. Falls back
+     * to the bare name if not found anywhere on PATH: probeDocker() below already treats a failed
+     * launch as "no Docker available" rather than a hard error, so this preserves that behavior
+     * in environments without Docker at all (e.g. most CI runners).
+     */
+    private static String resolveExecutable(String name) {
+        String path = System.getenv("PATH");
+        if (path != null) {
+            for (String dir : path.split(java.io.File.pathSeparator)) {
+                java.io.File candidate = new java.io.File(dir, name);
+                if (candidate.isFile() && candidate.canExecute()) {
+                    return candidate.getAbsolutePath();
+                }
+            }
+        }
+        return name;
     }
 
     public static List<LocalHostPortOccupant> probe(URI endpoint, DeploymentTarget target)
@@ -70,7 +93,7 @@ public final class LocalEmulatorHostPortProbe {
             case AWS -> throw new IllegalArgumentException("AWS is not a local emulator target");
         };
         ProcessBuilder builder = new ProcessBuilder(
-            "docker", "ps", "--format", "{{.Names}}\t{{.Ports}}");
+            DOCKER_EXECUTABLE, "ps", "--format", "{{.Names}}\t{{.Ports}}");
         builder.redirectErrorStream(true);
         Process process;
         try {

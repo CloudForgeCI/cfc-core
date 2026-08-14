@@ -45,7 +45,7 @@ class MiniStackTemplateAdapterTest {
         ObjectNode canonical = templateWithActions("""
             [{"Type":"forward","TargetGroupArn":{"Ref":"TargetGroup"}}]
             """);
-        canonical.with("Outputs").putObject("ApplicationUrl").put("Value", "https://ci.example.com");
+        canonical.withObjectProperty("Outputs").putObject("ApplicationUrl").put("Value", "https://ci.example.com");
 
         TemplateAdaptationResult result = MiniStackTemplateAdapter.adapt(canonical);
 

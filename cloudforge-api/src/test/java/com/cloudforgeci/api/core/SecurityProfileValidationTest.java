@@ -178,14 +178,16 @@ class SecurityProfileValidationTest {
     @Test
     @DisplayName("Should validate security profile configuration interface")
     void shouldValidateSecurityProfileConfigurationInterface() {
-        // Given
-        var devConfig = new DevSecurityProfileConfiguration();
-        var stagingConfig = new StagingSecurityProfileConfiguration();
-        var productionConfig = new ProductionSecurityProfileConfiguration();
+        // Given — declared as the interface type itself: implementing SecurityProfileConfiguration
+        // is then enforced by the compiler, not a runtime instanceof against an already-statically
+        // known concrete type (which is always true and never meaningfully tests anything).
+        SecurityProfileConfiguration devConfig = new DevSecurityProfileConfiguration();
+        SecurityProfileConfiguration stagingConfig = new StagingSecurityProfileConfiguration();
+        SecurityProfileConfiguration productionConfig = new ProductionSecurityProfileConfiguration();
 
         // When & Then
-        assertTrue(devConfig instanceof SecurityProfileConfiguration);
-        assertTrue(stagingConfig instanceof SecurityProfileConfiguration);
-        assertTrue(productionConfig instanceof SecurityProfileConfiguration);
+        assertNotNull(devConfig);
+        assertNotNull(stagingConfig);
+        assertNotNull(productionConfig);
     }
 }

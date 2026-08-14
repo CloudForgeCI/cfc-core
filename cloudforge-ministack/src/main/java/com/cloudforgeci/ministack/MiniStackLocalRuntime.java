@@ -183,8 +183,12 @@ public final class MiniStackLocalRuntime implements LocalAuthRuntime {
     }
 
     private static int authPort() {
-        return Integer.parseInt(
-            System.getenv().getOrDefault("MINISTACK_AUTH_PORT", "4180"));
+        String raw = System.getenv().getOrDefault("MINISTACK_AUTH_PORT", "4180");
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException e) {
+            return 4180;
+        }
     }
 
     private static String absoluteClasspath() {

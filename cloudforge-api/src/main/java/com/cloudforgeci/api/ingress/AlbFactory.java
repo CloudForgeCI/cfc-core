@@ -322,13 +322,6 @@ public class AlbFactory extends BaseFactory {
     }
 
     /**
-     * Validate prerequisites for ALB access logging.
-     *
-     * @param region The AWS region (must not be null, empty, or contain CDK tokens)
-     * @param stackName The stack name (must not be null or empty)
-     * @return Error message if validation fails, null if validation passes
-     */
-    /**
      * Get or create ALB logs bucket with SSM tracking for PRODUCTION mode.
      *
      * For PRODUCTION mode:
@@ -524,6 +517,13 @@ public class AlbFactory extends BaseFactory {
         return bucket;
     }
 
+    /**
+     * Validate prerequisites for ALB access logging.
+     *
+     * @param region The AWS region (must not be null, empty, or contain CDK tokens)
+     * @param stackName The stack name (must not be null or empty)
+     * @return Error message if validation fails, null if validation passes
+     */
     private String validateLoggingPrerequisites(String region, String stackName) {
         if (region == null || region.isEmpty() || region.contains("$")) {
             return "Region is not available. Set 'region' in deployment context or CDK_DEFAULT_REGION environment variable";

@@ -31,14 +31,18 @@ public final class CloudFormationTemplateDiff {
 
         List<ResourceChange> changes = new ArrayList<>();
         for (String logicalId : logicalIds) {
+            // logicalId is drawn from the union of both resource maps' field names, so exactly
+            // one of oldResource/newResource can be null here, never the one being read below —
+            // guarded defensively anyway since ObjectNode#get(String) returning null on a
+            // missing key isn't obvious from this method's own signature alone.
             JsonNode oldResource = beforeResources.get(logicalId);
             JsonNode newResource = afterResources.get(logicalId);
             if (oldResource == null) {
                 changes.add(new ResourceChange(
-                    Action.ADD, logicalId, newResource.path("Type").asText()));
+                    Action.ADD, logicalId, orMissing(newResource).path("Type").asText()));
             } else if (newResource == null) {
                 changes.add(new ResourceChange(
-                    Action.REMOVE, logicalId, oldResource.path("Type").asText()));
+                    Action.REMOVE, logicalId, orMissing(oldResource).path("Type").asText()));
             } else if (!oldResource.equals(newResource)) {
                 changes.add(new ResourceChange(
                     Action.MODIFY, logicalId, newResource.path("Type").asText()));
@@ -52,5 +56,9 @@ public final class CloudFormationTemplateDiff {
         return node instanceof ObjectNode objectNode
             ? objectNode
             : template.objectNode();
+    }
+
+    private static JsonNode orMissing(JsonNode node) {
+        return node == null ? com.fasterxml.jackson.databind.node.MissingNode.getInstance() : node;
     }
 }

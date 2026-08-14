@@ -55,6 +55,7 @@ class DefaultValueResolverTest {
         }
 
         // Method that returns a simple value (used by defaultFrom)
+        @Override
         public int defaultCpu() {
             return 2048;
         }

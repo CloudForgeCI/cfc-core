@@ -529,7 +529,11 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
         for (String key : List.of("CFC_LOCALSTACK_GATEWAY_PORT", "LOCALSTACK_GATEWAY_PORT")) {
             String value = System.getenv(key);
             if (value != null && !value.isBlank()) {
-                return Integer.parseInt(value.trim());
+                try {
+                    return Integer.parseInt(value.trim());
+                } catch (NumberFormatException ignored) {
+                    // fall through to the next candidate key, then the endpoint-derived port below
+                }
             }
         }
         String endpoint = System.getenv("LOCALSTACK_ENDPOINT");

@@ -42,7 +42,7 @@ public final class LocalHostPortConflictChecker {
             JsonNode template,
             List<LocalHostPortOccupant> occupants,
             List<PreflightViolation> violations) {
-        int requiredPort = LocalHostPortPolicy.resolveRequiredHostPort(config, spec, template);
+        int requiredPort = LocalHostPortPolicy.resolveRequiredHostPort(spec, template);
         if (requiredPort <= 0) {
             return;
         }

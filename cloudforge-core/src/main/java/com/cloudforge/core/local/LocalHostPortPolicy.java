@@ -1,6 +1,5 @@
 package com.cloudforge.core.local;
 
-import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -16,7 +15,6 @@ public final class LocalHostPortPolicy {
      * Host port pinned by the MiniStack adapter (container port on {@code localhost}).
      */
     public static int resolveRequiredHostPort(
-            DeploymentConfig config,
             ApplicationSpec spec,
             JsonNode canonicalTemplate) {
         if (canonicalTemplate != null && !canonicalTemplate.isMissingNode()) {
