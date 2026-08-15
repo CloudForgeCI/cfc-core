@@ -97,27 +97,21 @@ jobs:
           echo "Root pom version: $VERSION"
 
       - name: Import GPG signing key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          trust_level: 5
+
+      - name: Point the release profile's gpg-plugin homedir at the imported keyring
         run: |
-          if [ -z "$GPG_PRIVATE_KEY" ]; then
-            echo "::error::GPG_PRIVATE_KEY secret is not set — cannot sign artifacts."
-            exit 1
-          fi
-          export GNUPGHOME="$RUNNER_TEMP/gnupg"
-          mkdir -p "$GNUPGHOME"
-          chmod 700 "$GNUPGHOME"
-          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
-          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
-          # without it, the agent still tries (and fails, headless) to launch a real pinentry
-          # program ("gpg: signing failed: No pinentry").
-          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
-          echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
-          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
           # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
-          # not GNUPGHOME (the gpg CLI's own var) -- both must point at the same imported keyring,
-          # or the plugin falls back to gpg's default (nonexistent) homedir and fails opaquely
-          # ("Too much data for IPC layer") instead of a clear "no secret key" error.
+          # not GNUPGHOME (the gpg CLI's own var, already set by crazy-max/ghaction-import-gpg above)
+          # -- both must point at the same imported keyring. Switched from hand-rolled gpg --import +
+          # gpg-agent.conf to this action after "Too much data for IPC layer" reproduced on the real
+          # signing key on the Linux runner regardless of plugin version/homedir/loopback config, but
+          # never reproduced locally against any equivalent local key/config -- pointing at something
+          # specific to the runner's own GnuPG build that this battle-tested action already handles.
           echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
 
       - name: Configure Maven settings.xml (Central Portal credentials)
@@ -198,23 +192,21 @@ jobs:
         run: mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.release_version }} -DprocessAllModules=true -DgenerateBackupPoms=false
 
       - name: Import GPG signing key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          trust_level: 5
+
+      - name: Point the release profile's gpg-plugin homedir at the imported keyring
         run: |
-          export GNUPGHOME="$RUNNER_TEMP/gnupg"
-          mkdir -p "$GNUPGHOME"
-          chmod 700 "$GNUPGHOME"
-          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
-          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
-          # without it, the agent still tries (and fails, headless) to launch a real pinentry
-          # program ("gpg: signing failed: No pinentry").
-          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
-          echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
-          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
           # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
-          # not GNUPGHOME (the gpg CLI's own var) -- both must point at the same imported keyring,
-          # or the plugin falls back to gpg's default (nonexistent) homedir and fails opaquely
-          # ("Too much data for IPC layer") instead of a clear "no secret key" error.
+          # not GNUPGHOME (the gpg CLI's own var, already set by crazy-max/ghaction-import-gpg above)
+          # -- both must point at the same imported keyring. Switched from hand-rolled gpg --import +
+          # gpg-agent.conf to this action after "Too much data for IPC layer" reproduced on the real
+          # signing key on the Linux runner regardless of plugin version/homedir/loopback config, but
+          # never reproduced locally against any equivalent local key/config -- pointing at something
+          # specific to the runner's own GnuPG build that this battle-tested action already handles.
           echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
 
       - name: Configure Maven settings.xml (Central Portal credentials)
