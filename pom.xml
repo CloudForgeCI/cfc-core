@@ -66,7 +66,7 @@
     <!-- 3.2.x regressed gpg-agent IPC handling ("Too much data for IPC layer" on every sign,
          reproduced in CI regardless of GNUPGHOME/GPG_HOMEDIR config) — pinned to the last known-
          good version before that regression. -->
-    <maven.gpg.plugin.version>3.1.0</maven.gpg.plugin.version>
+    <maven.gpg.plugin.version>3.2.8</maven.gpg.plugin.version>
     <maven.deploy.plugin.version>3.1.1</maven.deploy.plugin.version>
     <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
     <cyclonedx.plugin.version>2.8.2</cyclonedx.plugin.version>
@@ -276,10 +276,13 @@
             <plugin>
               <groupId>org.apache.maven.plugins</groupId>
               <artifactId>maven-gpg-plugin</artifactId>
-              <!-- 3.2.x regressed gpg-agent IPC handling ("Too much data for IPC layer" on every
-                   sign, reproduced in CI regardless of GNUPGHOME/GPG_HOMEDIR config) — pinned to
-                   the last known-good version before that regression. -->
-              <version>3.1.0</version>
+              <!-- 3.2.0 through 3.2.4 were tried and reproduced "Too much data for IPC layer" on
+                   every sign; downgrading to 3.1.0 didn't fix it either, same bug, independent
+                   of version. Bumped to 3.2.8, latest, includes a real fix for a different,
+                   Windows-specific IPC bug in the 3.2.0 to 3.2.7 range, since 3.2.8 combined with
+                   the rest of the current setup, allow-loopback-pinentry, explicit
+                   -Dgpg.passphrase, a freshly verified key, had never actually been tested. -->
+              <version>3.2.8</version>
               <executions>
                 <execution>
                   <id>sign-artifacts</id>

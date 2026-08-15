@@ -157,6 +157,17 @@ jobs:
           </settings>
           EOF
 
+      - name: Check runner resources (memory/CPU theory check)
+        run: |
+          echo "=== CPU ==="
+          sysctl -n hw.ncpu
+          echo "=== MEMORY (total) ==="
+          sysctl -n hw.memsize | awk '{printf "%.2f GB\n", $1/1024/1024/1024}'
+          echo "=== MEMORY (live pressure) ==="
+          vm_stat
+          echo "=== free vs used (approx, via vm_stat page counts) ==="
+          top -l 1 -n 0 | grep "PhysMem"
+
       - name: Deploy SNAPSHOT (cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack)
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
