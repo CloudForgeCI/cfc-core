@@ -141,10 +141,34 @@ jobs:
             ${{ runner.os }}-maven-release-
             ${{ runner.os }}-maven-
 
+      - name: Decode GPG private key
+        id: decode_gpg_key
+        env:
+          GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          # Decode rather than relying on ghaction-import-gpg's own base64
+          # auto-detection -- plain `base64 -d` reliably decoded this secret every time
+          # today (import always succeeded by hand); the action's own detection fails
+          # on the same value regardless of key content ("Misformed armored text",
+          # reproduced against two different keys).
+          DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
+          # ::add-mask:: only masks a single line -- a multi-line PGP armor block fed
+          # to it directly would only mask its first line, leaving the rest (almost the
+          # whole key) printed as plain text the moment it appears in any later log
+          # output. Mask every line individually instead.
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done <<< "$DECODED"
+          {
+            echo "key<<GPGKEY_EOF"
+            echo "$DECODED"
+            echo "GPGKEY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Import GPG signing key
         uses: crazy-max/ghaction-import-gpg@v7
         with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg_private_key: ${{ steps.decode_gpg_key.outputs.key }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
           trust_level: 5
 
