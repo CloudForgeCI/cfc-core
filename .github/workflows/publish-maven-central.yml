@@ -141,36 +141,33 @@ jobs:
             ${{ runner.os }}-maven-release-
             ${{ runner.os }}-maven-
 
-      - name: Decode GPG private key
-        id: decode_gpg_key
+      - name: Install gpg1 (classic GnuPG, no gpg-agent/IPC layer for secret-key ops)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gnupg1
+
+      - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          # Decode rather than relying on ghaction-import-gpg's own base64
-          # auto-detection -- plain `base64 -d` reliably decoded this secret every time
-          # today (import always succeeded by hand); the action's own detection fails
-          # on the same value regardless of key content ("Misformed armored text",
-          # reproduced against two different keys).
+          # gpg1, not gpg2/ghaction-import-gpg -- see pom.xml's maven-gpg-plugin config
+          # comment for why (a real, reproduced gpg-agent "Too much data for IPC layer" bug
+          # on this runner's GnuPG 2.4.4, independent of key content, plugin version, or
+          # homedir/pinentry config -- all ruled out individually). gpg1 does secret-key
+          # operations directly with no agent/IPC layer, so it structurally can't hit that
+          # bug class. It also uses its own legacy keyring format (secring.gpg/pubring.gpg),
+          # incompatible with gpg2's, so it needs its own import here.
+          export GNUPGHOME="$RUNNER_TEMP/gnupg1"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
           DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
-          # ::add-mask:: only masks a single line -- a multi-line PGP armor block fed
-          # to it directly would only mask its first line, leaving the rest (almost the
-          # whole key) printed as plain text the moment it appears in any later log
-          # output. Mask every line individually instead.
+          # ::add-mask:: only masks a single line -- mask every line of the multi-line
+          # armor block individually, or everything after the first line prints in plain
+          # text the moment it appears in any later log output.
           while IFS= read -r line; do
             [ -n "$line" ] && echo "::add-mask::$line"
           done <<< "$DECODED"
-          {
-            echo "key<<GPGKEY_EOF"
-            echo "$DECODED"
-            echo "GPGKEY_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Import GPG signing key
-        uses: crazy-max/ghaction-import-gpg@v7
-        with:
-          gpg_private_key: ${{ steps.decode_gpg_key.outputs.key }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          trust_level: 5
+          echo "$DECODED" | gpg1 --homedir "$GNUPGHOME" --batch --import
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
 
       - name: Point the release profile's gpg-plugin homedir at the imported keyring
         run: |
