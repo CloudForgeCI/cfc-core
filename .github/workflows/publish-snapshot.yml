@@ -34,6 +34,7 @@ on:
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
       - 'cloudforge-localstack/**'
+      - 'cloudforge-ministack/**'
       - '.github/workflows/publish-snapshot.yml'
   push:
     branches: [ develop ] # real release, only once a PR actually merges
@@ -42,6 +43,7 @@ on:
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
       - 'cloudforge-localstack/**'
+      - 'cloudforge-ministack/**'
       - '.github/workflows/publish-snapshot.yml'
   workflow_dispatch: {}
 
@@ -65,7 +67,7 @@ jobs:
           cache: 'maven'
 
       - name: Build and test
-        run: mvn -B -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack -am clean verify
+        run: mvn -B -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean verify
 
   publish-snapshot:
     name: Publish SNAPSHOT to Central
@@ -99,6 +101,20 @@ jobs:
             exit 1
           fi
           echo "Root pom version: $VERSION"
+
+      - name: Install Homebrew's gnupg (a different build than the runner's system package)
+        run: |
+          # Every gpg-agent "Too much data for IPC layer" attempt so far has reproduced on
+          # this runner's system-packaged GnuPG regardless of version (2.4.4 on ubuntu-latest,
+          # an older 2.2.x/2.4.x line on ubuntu-22.04) or plugin/key config -- but never
+          # reproduced locally on macOS against Homebrew's GnuPG build. Installing Homebrew's
+          # gnupg here (a genuinely different build/libassuan linkage, not just a different
+          # version number) and putting it first on PATH to test whether the bug is specific
+          # to Ubuntu's packaged GnuPG build rather than GnuPG in general.
+          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+          /home/linuxbrew/.linuxbrew/bin/brew install gnupg
+          /home/linuxbrew/.linuxbrew/bin/gpg --version | head -1
 
       - name: Import GPG signing key
         env:
@@ -155,7 +171,7 @@ jobs:
       - name: Deploy SNAPSHOT (cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack)
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
@@ -208,6 +224,20 @@ jobs:
       - name: Set release version
         run: mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.release_version }} -DprocessAllModules=true -DgenerateBackupPoms=false
 
+      - name: Install Homebrew's gnupg (a different build than the runner's system package)
+        run: |
+          # Every gpg-agent "Too much data for IPC layer" attempt so far has reproduced on
+          # this runner's system-packaged GnuPG regardless of version (2.4.4 on ubuntu-latest,
+          # an older 2.2.x/2.4.x line on ubuntu-22.04) or plugin/key config -- but never
+          # reproduced locally on macOS against Homebrew's GnuPG build. Installing Homebrew's
+          # gnupg here (a genuinely different build/libassuan linkage, not just a different
+          # version number) and putting it first on PATH to test whether the bug is specific
+          # to Ubuntu's packaged GnuPG build rather than GnuPG in general.
+          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+          /home/linuxbrew/.linuxbrew/bin/brew install gnupg
+          /home/linuxbrew/.linuxbrew/bin/gpg --version | head -1
+
       - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -259,7 +289,7 @@ jobs:
       - name: Build, sign, and publish the release (no re-test — already validated as a SNAPSHOT this run)
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack -am clean deploy -DskipTests -Djacoco.skip=true "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy -DskipTests -Djacoco.skip=true "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()

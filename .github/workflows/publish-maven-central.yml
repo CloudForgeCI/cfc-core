@@ -48,6 +48,7 @@ on:
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
       - 'cloudforge-localstack/**'
+      - 'cloudforge-ministack/**'
       - '.github/workflows/publish-maven-central.yml'
   workflow_dispatch:
     inputs:
@@ -145,6 +146,20 @@ jobs:
             ${{ runner.os }}-maven-release-
             ${{ runner.os }}-maven-
 
+      - name: Install Homebrew's gnupg (a different build than the runner's system package)
+        run: |
+          # Every gpg-agent "Too much data for IPC layer" attempt so far has reproduced on
+          # this runner's system-packaged GnuPG regardless of version (2.4.4 on ubuntu-latest,
+          # an older 2.2.x/2.4.x line on ubuntu-22.04) or plugin/key config -- but never
+          # reproduced locally on macOS against Homebrew's GnuPG build. Installing Homebrew's
+          # gnupg here (a genuinely different build/libassuan linkage, not just a different
+          # version number) and putting it first on PATH to test whether the bug is specific
+          # to Ubuntu's packaged GnuPG build rather than GnuPG in general.
+          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+          /home/linuxbrew/.linuxbrew/bin/brew install gnupg
+          /home/linuxbrew/.linuxbrew/bin/gpg --version | head -1
+
       - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -202,7 +217,7 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api + cloudforge-localstack..."
-          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
