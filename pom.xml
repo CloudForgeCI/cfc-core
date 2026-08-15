@@ -375,15 +375,18 @@
               </execution>
             </executions>
             <configuration>
-              <!-- Works with gpg2 and CI -->
-              <!-- Use env vars: GPG_KEYNAME, GPG_PASSPHRASE, GPG_HOMEDIR (optional) -->
+              <!-- Works with gpg2 and CI. "gpg1" (Ubuntu's gnupg1 package) was tried as a way
+                   to route around a reproduced gpg-agent "Too much data for IPC layer" bug on
+                   ubuntu-latest's GnuPG 2.4.4 (independent of key content, plugin version, or
+                   this config) — but Ubuntu's gnupg1 turned out to be a gpg2 compatibility shim
+                   ("migration succeeded" in its own output gives it away), not real legacy
+                   GnuPG 1.x, so it hit the identical bug. Reverted; see the runs-on pin on the
+                   signing jobs in the workflow files instead for the actual current mitigation.
+                   Use env vars: GPG_KEYNAME, GPG_PASSPHRASE, GPG_HOMEDIR (optional) -->
               <gpgArguments>
                 <arg>--pinentry-mode</arg><arg>loopback</arg>
               </gpgArguments>
               <homedir>${env.GPG_HOMEDIR}</homedir>
-              <!-- uncomment to force gpg2
-              <executable>gpg2</executable>
-              -->
             </configuration>
           </plugin>
 

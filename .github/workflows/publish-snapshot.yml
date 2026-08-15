@@ -69,7 +69,11 @@ jobs:
 
   publish-snapshot:
     name: Publish SNAPSHOT to Central
-    runs-on: ubuntu-latest
+    # Pinned (not ubuntu-latest) -- ubuntu-latest (24.04, GnuPG 2.4.4) reproduces a real
+    # gpg-agent "Too much data for IPC layer" bug on every single sign, independent of key
+    # content, plugin version, config, or import method (all ruled out individually).
+    # ubuntu-22.04 ships an older, more mature GnuPG 2.2.x line.
+    runs-on: ubuntu-22.04
     needs: build-test
     timeout-minutes: 30
     outputs:
@@ -96,23 +100,23 @@ jobs:
           fi
           echo "Root pom version: $VERSION"
 
-      - name: Install gpg1 (classic GnuPG, no gpg-agent/IPC layer for secret-key ops)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq gnupg1
-
       - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          # gpg1, not gpg2/ghaction-import-gpg -- see pom.xml's maven-gpg-plugin config
-          # comment for why (a real, reproduced gpg-agent "Too much data for IPC layer" bug
-          # on this runner's GnuPG 2.4.4, independent of key content, plugin version, or
-          # homedir/pinentry config -- all ruled out individually). gpg1 does secret-key
-          # operations directly with no agent/IPC layer, so it structurally can't hit that
-          # bug class. It also uses its own legacy keyring format (secring.gpg/pubring.gpg),
-          # incompatible with gpg2's, so it needs its own import here.
-          export GNUPGHOME="$RUNNER_TEMP/gnupg1"
+          # gpg2 (default), not gpg1 -- Ubuntu's gnupg1 package turned out to be a gpg2
+          # compatibility shim ("migration succeeded" in its own output gives it away), not
+          # real legacy GnuPG 1.x, so it hit the identical gpg-agent "Too much data for IPC
+          # layer" bug this was meant to route around. See the runs-on pin on this job instead
+          # for the actual current mitigation (an older, more mature GnuPG on ubuntu-22.04).
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
+          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
+          # without it, the agent still tries (and fails, headless) to launch a real pinentry
+          # program ("gpg: signing failed: No pinentry").
+          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
           DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
           # ::add-mask:: only masks a single line -- mask every line of the multi-line
           # armor block individually, or everything after the first line prints in plain
@@ -120,19 +124,10 @@ jobs:
           while IFS= read -r line; do
             [ -n "$line" ] && echo "::add-mask::$line"
           done <<< "$DECODED"
-          echo "$DECODED" | gpg1 --homedir "$GNUPGHOME" --batch --import
+          echo "$DECODED" | gpg --batch --import
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
-          echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
-
-      - name: Point the release profile's gpg-plugin homedir at the imported keyring
-        run: |
           # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
-          # not GNUPGHOME (the gpg CLI's own var, already set by crazy-max/ghaction-import-gpg above)
-          # -- both must point at the same imported keyring. Switched from hand-rolled gpg --import +
-          # gpg-agent.conf to this action after "Too much data for IPC layer" reproduced on the real
-          # signing key on the Linux runner regardless of plugin version/homedir/loopback config, but
-          # never reproduced locally against any equivalent local key/config -- pointing at something
-          # specific to the runner's own GnuPG build that this battle-tested action already handles.
+          # not GNUPGHOME (the gpg CLI's own var) -- both must point at the same imported keyring.
           echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
 
       - name: Configure Maven settings.xml (Central Portal credentials)
@@ -170,7 +165,8 @@ jobs:
 
   auto-release:
     name: Auto-release and bump to next SNAPSHOT
-    runs-on: ubuntu-latest
+    # Pinned (not ubuntu-latest) -- see the publish-snapshot job above for why.
+    runs-on: ubuntu-22.04
     needs: publish-snapshot
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     timeout-minutes: 30
@@ -212,23 +208,23 @@ jobs:
       - name: Set release version
         run: mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.release_version }} -DprocessAllModules=true -DgenerateBackupPoms=false
 
-      - name: Install gpg1 (classic GnuPG, no gpg-agent/IPC layer for secret-key ops)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq gnupg1
-
       - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          # gpg1, not gpg2/ghaction-import-gpg -- see pom.xml's maven-gpg-plugin config
-          # comment for why (a real, reproduced gpg-agent "Too much data for IPC layer" bug
-          # on this runner's GnuPG 2.4.4, independent of key content, plugin version, or
-          # homedir/pinentry config -- all ruled out individually). gpg1 does secret-key
-          # operations directly with no agent/IPC layer, so it structurally can't hit that
-          # bug class. It also uses its own legacy keyring format (secring.gpg/pubring.gpg),
-          # incompatible with gpg2's, so it needs its own import here.
-          export GNUPGHOME="$RUNNER_TEMP/gnupg1"
+          # gpg2 (default), not gpg1 -- Ubuntu's gnupg1 package turned out to be a gpg2
+          # compatibility shim ("migration succeeded" in its own output gives it away), not
+          # real legacy GnuPG 1.x, so it hit the identical gpg-agent "Too much data for IPC
+          # layer" bug this was meant to route around. See the runs-on pin on this job instead
+          # for the actual current mitigation (an older, more mature GnuPG on ubuntu-22.04).
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
+          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
+          # without it, the agent still tries (and fails, headless) to launch a real pinentry
+          # program ("gpg: signing failed: No pinentry").
+          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
           DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
           # ::add-mask:: only masks a single line -- mask every line of the multi-line
           # armor block individually, or everything after the first line prints in plain
@@ -236,19 +232,10 @@ jobs:
           while IFS= read -r line; do
             [ -n "$line" ] && echo "::add-mask::$line"
           done <<< "$DECODED"
-          echo "$DECODED" | gpg1 --homedir "$GNUPGHOME" --batch --import
+          echo "$DECODED" | gpg --batch --import
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
-          echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
-
-      - name: Point the release profile's gpg-plugin homedir at the imported keyring
-        run: |
           # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
-          # not GNUPGHOME (the gpg CLI's own var, already set by crazy-max/ghaction-import-gpg above)
-          # -- both must point at the same imported keyring. Switched from hand-rolled gpg --import +
-          # gpg-agent.conf to this action after "Too much data for IPC layer" reproduced on the real
-          # signing key on the Linux runner regardless of plugin version/homedir/loopback config, but
-          # never reproduced locally against any equivalent local key/config -- pointing at something
-          # specific to the runner's own GnuPG build that this battle-tested action already handles.
+          # not GNUPGHOME (the gpg CLI's own var) -- both must point at the same imported keyring.
           echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
 
       - name: Configure Maven settings.xml (Central Portal credentials)
