@@ -86,6 +86,13 @@ jobs:
     timeout-minutes: 30
     outputs:
       version: ${{ steps.version.outputs.version }}
+    defaults:
+      run:
+        # Inside a container: job, Actions defaults run: steps to sh (dash on this Debian-based
+        # image), not bash -- the import step below uses a bash-only here-string (<<<), which
+        # dash rejects ("Syntax error: redirection unexpected"). Force bash for every step in
+        # this job instead of rewriting to POSIX sh, matching the shell used everywhere else.
+        shell: bash
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
