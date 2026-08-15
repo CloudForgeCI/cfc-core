@@ -71,34 +71,33 @@ jobs:
 
   publish-snapshot:
     name: Publish SNAPSHOT to Central
-    runs-on: ubuntu-22.04
-    # Runs inside a container instead of directly on the runner VM. Every GnuPG-side variable
-    # has been ruled out at this point: 3 different GnuPG builds (ubuntu-latest's system 2.4.4,
-    # ubuntu-22.04's system build, and Homebrew's 2.5.21 -- a completely different major/build),
-    # 2 plugin versions, 2 different keys, every homedir/pinentry/passphrase config combination,
-    # gpg1, both import methods -- all reproduce the identical gpg-agent "Too much data for IPC
-    # layer" bug on the very first sign, every time, on Linux, never once locally on macOS. That
-    # rules out GnuPG itself as the variable; testing whether it's actually the bare runner VM's
-    # own kernel/socket environment by running the whole job inside a container instead.
-    container:
-      image: maven:3.9-eclipse-temurin-21
+    # macOS, not any Linux variant. Every GnuPG-side variable has been ruled out at this point:
+    # 3 different GnuPG builds (ubuntu-latest's system 2.4.4, ubuntu-22.04's system build, and
+    # Homebrew's 2.5.21 -- a completely different major/build), 2 plugin versions, 2 different
+    # keys, every homedir/pinentry/passphrase config combination, gpg1, both import methods, and
+    # running inside a container (maven:3.9-eclipse-temurin-21 -- worked locally in Docker
+    # Desktop's own Linux VM, still failed identically on GitHub's own runner, since containers
+    # share their host's kernel rather than getting their own -- whatever's causing this lives at
+    # the GitHub Linux runner kernel level, not in GnuPG, our config, or containerization).
+    # macOS has never once failed, locally, all day, across every one of the above combinations.
+    runs-on: macos-latest
     needs: build-test
     timeout-minutes: 30
     outputs:
       version: ${{ steps.version.outputs.version }}
-    defaults:
-      run:
-        # Inside a container: job, Actions defaults run: steps to sh (dash on this Debian-based
-        # image), not bash -- the import step below uses a bash-only here-string (<<<), which
-        # dash rejects ("Syntax error: redirection unexpected"). Force bash for every step in
-        # this job instead of rewriting to POSIX sh, matching the shell used everywhere else.
-        shell: bash
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
       - name: Install gnupg
-        run: apt-get update -qq && apt-get install -y -qq gnupg
+        run: brew install gnupg
 
       - name: Read project version
         id: version
@@ -115,11 +114,6 @@ jobs:
         env:
           GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          # gpg2 (default), not gpg1 -- Ubuntu's gnupg1 package turned out to be a gpg2
-          # compatibility shim ("migration succeeded" in its own output gives it away), not
-          # real legacy GnuPG 1.x, so it hit the identical gpg-agent "Too much data for IPC
-          # layer" bug this was meant to route around. See the runs-on pin on this job instead
-          # for the actual current mitigation (an older, more mature GnuPG on ubuntu-22.04).
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
@@ -176,8 +170,8 @@ jobs:
 
   auto-release:
     name: Auto-release and bump to next SNAPSHOT
-    # Pinned (not ubuntu-latest) -- see the publish-snapshot job above for why.
-    runs-on: ubuntu-22.04
+    # macOS -- see the publish-snapshot job above for why.
+    runs-on: macos-latest
     needs: publish-snapshot
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     timeout-minutes: 30
@@ -219,29 +213,13 @@ jobs:
       - name: Set release version
         run: mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.release_version }} -DprocessAllModules=true -DgenerateBackupPoms=false
 
-      - name: Install Homebrew's gnupg (a different build than the runner's system package)
-        run: |
-          # Every gpg-agent "Too much data for IPC layer" attempt so far has reproduced on
-          # this runner's system-packaged GnuPG regardless of version (2.4.4 on ubuntu-latest,
-          # an older 2.2.x/2.4.x line on ubuntu-22.04) or plugin/key config -- but never
-          # reproduced locally on macOS against Homebrew's GnuPG build. Installing Homebrew's
-          # gnupg here (a genuinely different build/libassuan linkage, not just a different
-          # version number) and putting it first on PATH to test whether the bug is specific
-          # to Ubuntu's packaged GnuPG build rather than GnuPG in general.
-          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
-          /home/linuxbrew/.linuxbrew/bin/brew install gnupg
-          /home/linuxbrew/.linuxbrew/bin/gpg --version | head -1
+      - name: Install gnupg
+        run: brew install gnupg
 
       - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          # gpg2 (default), not gpg1 -- Ubuntu's gnupg1 package turned out to be a gpg2
-          # compatibility shim ("migration succeeded" in its own output gives it away), not
-          # real legacy GnuPG 1.x, so it hit the identical gpg-agent "Too much data for IPC
-          # layer" bug this was meant to route around. See the runs-on pin on this job instead
-          # for the actual current mitigation (an older, more mature GnuPG on ubuntu-22.04).
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"

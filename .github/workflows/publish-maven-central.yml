@@ -117,11 +117,13 @@ jobs:
 
   publish:
     name: Build, sign, and publish
-    # Pinned (not ubuntu-latest) -- ubuntu-latest (24.04, GnuPG 2.4.4) reproduces a real
-    # gpg-agent "Too much data for IPC layer" bug on every single sign, independent of key
-    # content, plugin version, config, or import method (all ruled out individually).
-    # ubuntu-22.04 ships an older, more mature GnuPG 2.2.x line.
-    runs-on: ubuntu-22.04
+    # macOS, not any Linux variant -- every GnuPG build/version tried on Linux (ubuntu-latest's
+    # system GnuPG, ubuntu-22.04's system GnuPG, Homebrew's own Linux build) reproduced an
+    # identical gpg-agent "Too much data for IPC layer" bug on the very first sign, independent
+    # of key content, plugin version, or config (all ruled out individually) -- including inside
+    # a container, which shares its host's kernel rather than getting its own. macOS has never
+    # once failed.
+    runs-on: macos-latest
     needs: check-version
     if: needs.check-version.outputs.should_publish == 'true'
     timeout-minutes: 45
@@ -146,29 +148,13 @@ jobs:
             ${{ runner.os }}-maven-release-
             ${{ runner.os }}-maven-
 
-      - name: Install Homebrew's gnupg (a different build than the runner's system package)
-        run: |
-          # Every gpg-agent "Too much data for IPC layer" attempt so far has reproduced on
-          # this runner's system-packaged GnuPG regardless of version (2.4.4 on ubuntu-latest,
-          # an older 2.2.x/2.4.x line on ubuntu-22.04) or plugin/key config -- but never
-          # reproduced locally on macOS against Homebrew's GnuPG build. Installing Homebrew's
-          # gnupg here (a genuinely different build/libassuan linkage, not just a different
-          # version number) and putting it first on PATH to test whether the bug is specific
-          # to Ubuntu's packaged GnuPG build rather than GnuPG in general.
-          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
-          /home/linuxbrew/.linuxbrew/bin/brew install gnupg
-          /home/linuxbrew/.linuxbrew/bin/gpg --version | head -1
+      - name: Install gnupg
+        run: brew install gnupg
 
       - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          # gpg2 (default), not gpg1 -- Ubuntu's gnupg1 package turned out to be a gpg2
-          # compatibility shim ("migration succeeded" in its own output gives it away), not
-          # real legacy GnuPG 1.x, so it hit the identical gpg-agent "Too much data for IPC
-          # layer" bug this was meant to route around. See the runs-on pin on this job instead
-          # for the actual current mitigation (an older, more mature GnuPG on ubuntu-22.04).
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
