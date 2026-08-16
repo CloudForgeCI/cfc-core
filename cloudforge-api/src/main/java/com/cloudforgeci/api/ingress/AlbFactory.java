@@ -411,6 +411,24 @@ public class AlbFactory extends BaseFactory {
                     .id("PCI.DSS.321-S3DefaultEncryptionKMS")
                     .reason("ALB access logging requires S3-managed encryption. KMS encryption is not " +
                            "supported for ALB access logs due to AWS service limitations.")
+                    .build(),
+                // Same three findings, flagged again under HIPAA's own rule IDs when HIPAA is one
+                // of the active compliance frameworks -- same justification as the PCI-DSS
+                // suppressions above, since the underlying architecture doesn't change per framework.
+                NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3BucketReplicationEnabled")
+                    .reason("S3 replication is not required for single-region deployments. " +
+                           "ALB access logs are retained with versioning enabled for compliance.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3BucketLoggingEnabled")
+                    .reason("ALB access logs bucket receives logs from ALB. Server access logging " +
+                           "would create circular dependency. CloudTrail S3 data events provide audit logging.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3DefaultEncryptionKMS")
+                    .reason("ALB access logging requires S3-managed encryption. KMS encryption is not " +
+                           "supported for ALB access logs due to AWS service limitations.")
                     .build()
             ),
             Boolean.TRUE

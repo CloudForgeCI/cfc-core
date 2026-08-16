@@ -129,6 +129,18 @@ class Util {
         if (obj instanceof String s) {
             String json = s.trim();
             if (json.isEmpty()) return java.util.Collections.emptyMap();
+            // A leading '@' means "read the JSON from this file" instead of treating the string
+            // itself as JSON (matches the convention `cdk synth --context cfc=@file.json`
+            // callers expect, e.g. comprehensive-synth-test.sh) -- resolved relative to the
+            // JVM's working directory, same as where `cdk synth` itself was invoked from.
+            if (json.startsWith("@")) {
+                java.nio.file.Path path = java.nio.file.Path.of(json.substring(1));
+                try {
+                    json = java.nio.file.Files.readString(path).trim();
+                } catch (java.io.IOException e) {
+                    throw new RuntimeException("Failed to read context file: " + path, e);
+                }
+            }
             try {
                 return getMapper().readValue(json, new TypeReference<Map<String, Object>>() {});
             } catch (Exception e) {

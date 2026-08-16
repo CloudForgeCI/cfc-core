@@ -17,7 +17,7 @@ LocalStack supports **every** ServiceLoader plugin when the probed tier exposes 
 | EC2 + Auto Scaling | `runtime: ec2` |
 | EFS / Backup (Ultimate) | Native resources; Base tier adapts EFS to bind mounts and strips Backup |
 
-Preflight: `LOCALSTACK_PREFLIGHT=enforce` (default). Details are in the [README preflight](README.md#deploy-preflight-option-10).
+Preflight: `LOCALSTACK_PREFLIGHT=enforce` (default). Details are in the [README preflight](README.md#deploy-preflight-option-8).
 
 ---
 

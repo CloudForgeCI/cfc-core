@@ -29,7 +29,7 @@ These controls can contribute infrastructure evidence to a compliance program, b
 
 ### For Customers
 - **[This README](#features)** - Feature overview and benefits
-- **[Cost Breakdown](#cost-analysis)** - Transparent pricing information
+- **[Cost Breakdown](#example-cost-estimate)** - Transparent pricing information
 
 ---
 

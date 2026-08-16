@@ -40,7 +40,7 @@ MiniStack binds **`localhost:<appPort>`**. Only one stack per port:
 
 **RDS required:** GitLab, Harbor, Superset, Mattermost, all CMS/e-commerce/forum apps (WordPress, Drupal, Magento, …), Craft CMS sample plugin.
 
-Preflight blocks before CloudFormation. See [preflight in README](README.md#deploy-preflight-option-8).
+Preflight blocks before CloudFormation. See [preflight in README](README.md#deploy-preflight-option-6).
 
 ---
 

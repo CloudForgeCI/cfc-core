@@ -374,7 +374,7 @@ public class ComplianceStack {
 - [AWS Audit Manager Documentation](https://docs.aws.amazon.com/audit-manager/)
 - [AWS Audit Manager Pricing](https://aws.amazon.com/audit-manager/pricing/)
 - [Compliance Framework Guide](https://docs.aws.amazon.com/audit-manager/latest/userguide/framework-overviews.html)
-- [CloudForge Security Configuration](guides/SECURITY_RULES_README.md#security-profiles-comparison)
+- [CloudForge Security Configuration](guides/SECURITY_RULES_README.md#comparison)
 
 ## Support
 

@@ -51,7 +51,10 @@
     <cdknag.version>2.37.55</cdknag.version>
 
     <!-- Core Library Versions -->
-    <jackson.version>2.19.4</jackson.version>
+    <jackson.version>2.21.4</jackson.version>
+    <!-- jackson-annotations versions independently of core/databind (2.20, 2.21, 2.22, no
+         patch suffix), so it can't share ${jackson.version} once that has one. -->
+    <jackson-annotations.version>2.21</jackson-annotations.version>
     <jakarta.validation.version>3.0.2</jakarta.validation.version>
 
     <!-- Test Dependency Versions -->
@@ -139,7 +142,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-annotations</artifactId>
-        <version>${jackson.version}</version>
+        <version>${jackson-annotations.version}</version>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>

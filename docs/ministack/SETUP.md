@@ -15,7 +15,7 @@ See also: [README](README.md) · [Deployment](DEPLOYMENT.md) · [Troubleshooting
 | **Maven** | Build libraries and the testing platform |
 | **AWS CDK CLI** | `npm install -g aws-cdk` for synthesis |
 | **Network** | Port `4566` (MiniStack gateway), `3001` (mock OIDC), `4180` (auth proxy, default) |
-| **AWS CLI** | Optional — used for verification queries against MiniStack; see [Jenkins on MiniStack](JENKINS.md#4-configure-aws-cli-for-ministack) for profile setup |
+| **AWS CLI** | Optional — used for verification queries against MiniStack; see [Jenkins on MiniStack](JENKINS.md#5-configure-aws-cli-for-ministack) for profile setup |
 
 ---
 
