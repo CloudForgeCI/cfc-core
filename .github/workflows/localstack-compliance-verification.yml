@@ -197,6 +197,31 @@ jobs:
           output = json
           EOF
 
+      - name: Cache cfn-guard binary
+        id: cache-cfn-guard
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/cfn-guard
+          key: cfn-guard-v3.1.1-${{ runner.os }}-sha256-106db0d9
+
+      # TruthTableValidationTest's Layer 3 validation shells out to cfn-guard; without it on
+      # PATH those tests error out before ever writing a template to cfn-templates/. Same
+      # install as publish-reports.yml's equivalent step.
+      - name: Install CloudFormation Guard (cfn-guard)
+        if: steps.cache-cfn-guard.outputs.cache-hit != 'true'
+        run: |
+          CFN_GUARD_VERSION="3.1.1"
+          CFN_GUARD_TARBALL="cfn-guard-v3-ubuntu-latest.tar.gz"
+          CFN_GUARD_SHA256="106db0d9fcbd11605349dd650145ac148a0c10e2c0b4d6f45898f222f3ae473b"
+          wget -q "https://github.com/aws-cloudformation/cloudformation-guard/releases/download/${CFN_GUARD_VERSION}/${CFN_GUARD_TARBALL}"
+          echo "${CFN_GUARD_SHA256}  ${CFN_GUARD_TARBALL}" | sha256sum -c -
+          tar -xzf "${CFN_GUARD_TARBALL}"
+          sudo mv cfn-guard-v3-ubuntu-latest/cfn-guard /usr/local/bin/
+          cfn-guard --version
+
+      - name: Verify cfn-guard installation
+        run: cfn-guard --version
+
       - name: Build reactor
         run: mvn -B -pl cloudforge-core,cloudforge-api,cloudforge-localstack -am install -DskipTests
 
