@@ -231,6 +231,12 @@ jobs:
           mvn -B clean package -DskipTests
           cd scripts
           mkdir -p validation-results
+          # TruthTableValidationTest's @BeforeAll requires truth-table.json to already exist --
+          # it's gitignored, so a fresh checkout never has it, and every test method silently
+          # skips via a JUnit Assumption (not a failure) without it, never reaching the point
+          # where it writes a template. Generate it first, same as master-validation-system.sh
+          # does internally for publish-reports.yml's equivalent step.
+          python3 truth-table-generator.py
           python3 compliance-report-generator.py
         # This is the same test run publish-reports.yml's own "Generate compliance truth table
         # reports" step does -- duplicated here rather than shared, since this workflow triggers
