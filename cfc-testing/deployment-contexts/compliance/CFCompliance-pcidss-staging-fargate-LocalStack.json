@@ -1,0 +1,21 @@
+{
+  "stackName": "CFCompliance-pcidss-staging-fargate",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "description": "Compliance matrix: PCI-DSS / STAGING / FARGATE on LocalStack",
+  "environment": "development",
+  "runtime": "FARGATE",
+  "securityProfile": "STAGING",
+  "topology": "APPLICATION_SERVICE",
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+  "authMode": "none",
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "complianceFrameworks": "PCI-DSS",
+  "cpu": 512,
+  "memory": 1024,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
+  "awsConfigEnabled": true
+}

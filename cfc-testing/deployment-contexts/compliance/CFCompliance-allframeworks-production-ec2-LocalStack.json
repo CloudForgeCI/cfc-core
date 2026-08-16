@@ -1,0 +1,20 @@
+{
+  "stackName": "CFCompliance-allframeworks-production-ec2",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "description": "Compliance matrix: all 4 frameworks combined / PRODUCTION / EC2 on LocalStack",
+  "environment": "production",
+  "runtime": "EC2",
+  "securityProfile": "PRODUCTION",
+  "topology": "APPLICATION_SERVICE",
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+  "authMode": "none",
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "complianceFrameworks": "SOC2,PCI-DSS,HIPAA,GDPR",
+  "instanceType": "t3.small",
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
+  "awsConfigEnabled": true
+}

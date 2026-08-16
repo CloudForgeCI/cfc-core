@@ -41,7 +41,10 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # weekly, Monday 06:00 UTC
   push:
-    branches: [ develop ]
+    # feat/cms_upgrade: temporary, for verifying this workflow before it reaches develop --
+    # workflow_dispatch only registers once a workflow file exists on the default branch, so a
+    # push trigger is the only way to run it from a feature branch. Remove once merged.
+    branches: [ develop, feat/cms_upgrade ]
     paths:
       - 'cloudforge-localstack/**'
       - 'cfc-testing/scripts/deploy-localstack-compliance-matrix.sh'

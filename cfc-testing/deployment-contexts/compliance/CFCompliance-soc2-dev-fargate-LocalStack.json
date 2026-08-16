@@ -1,0 +1,21 @@
+{
+  "stackName": "CFCompliance-soc2-dev-fargate",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "description": "Compliance matrix: SOC2 / DEV / FARGATE on LocalStack",
+  "environment": "development",
+  "runtime": "FARGATE",
+  "securityProfile": "DEV",
+  "topology": "APPLICATION_SERVICE",
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+  "authMode": "none",
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "complianceFrameworks": "SOC2",
+  "cpu": 512,
+  "memory": 1024,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
+  "awsConfigEnabled": true
+}
