@@ -91,6 +91,23 @@ class DefaultEmulatorEdgeRuntimeTest {
     }
 
     @Test
+    void defaultServerBlockSetsDefaultTypeOnItsOwnNotJustTheMatchedHostnameBlock() {
+        // The whole-config `conf.contains(...)` check above passes even if only the
+        // matched-hostname block sets default_type — isolate the default_server block specifically.
+        String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(
+            Map.of("jenkins.cloudforge.localhost", 18080));
+        int defaultServerStart = conf.indexOf("listen 80 default_server;");
+        int defaultServerEnd = conf.indexOf("\n}\n", defaultServerStart);
+        assertTrue(defaultServerStart >= 0 && defaultServerEnd > defaultServerStart,
+            "could not isolate the default_server block in the generated config");
+        String defaultServerBlock = conf.substring(defaultServerStart, defaultServerEnd);
+        assertTrue(defaultServerBlock.contains("default_type text/plain;"),
+            "default_server block must set default_type itself -- otherwise its 404 response "
+                + "serves as application/octet-stream and browsers download it instead of "
+                + "rendering it");
+    }
+
+    @Test
     void renderNginxConfEmptyStillHasNginxStatus() {
         String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(Map.of());
         assertTrue(conf.contains("listen 80 default_server;"));

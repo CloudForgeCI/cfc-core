@@ -653,6 +653,9 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             + "    listen 80 default_server;\n"
             + "    server_name _;\n"
             + "    access_log /var/log/nginx/access.log combined;\n"
+            // Without this, the 404 response has no default_type and nginx serves it as
+            // application/octet-stream, which browsers download instead of rendering.
+            + "    default_type text/plain;\n"
             + "    location = /favicon.ico { access_log off; return 204; }\n"
             + "    location / { return 404 \"CloudForge application route not found\\n\"; }\n"
             + "}\n\n"

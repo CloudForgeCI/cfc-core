@@ -213,6 +213,66 @@ class DeploymentContextPreparerTest {
         assertEquals(AuthMode.NONE, config.authMode);
     }
 
+    // ========== enableAutoScaling smart-default ==========
+
+    @Test
+    void enableAutoScalingUnsetDerivesTrueWhenMaxExceedsMin() {
+        DeploymentConfig config = new DeploymentConfig();
+        config.stackName = "Jenkins-Stack";
+        config.applicationId = "jenkins";
+        config.minInstanceCapacity = 1;
+        config.maxInstanceCapacity = 3;
+        config.enableAutoScaling = null;
+
+        DeploymentContextPreparer.prepare(config, new SampleJenkinsSpec(), null);
+
+        assertEquals(Boolean.TRUE, config.enableAutoScaling);
+    }
+
+    @Test
+    void enableAutoScalingUnsetDerivesFalseWhenMinEqualsMax() {
+        DeploymentConfig config = new DeploymentConfig();
+        config.stackName = "Jenkins-Stack";
+        config.applicationId = "jenkins";
+        config.minInstanceCapacity = 1;
+        config.maxInstanceCapacity = 1;
+        config.enableAutoScaling = null;
+
+        DeploymentContextPreparer.prepare(config, new SampleJenkinsSpec(), null);
+
+        assertEquals(Boolean.FALSE, config.enableAutoScaling);
+    }
+
+    @Test
+    void enableAutoScalingExplicitFalseIsPreservedEvenWithACapacityRange() {
+        // The user explicitly opted out -- prepare() must not overwrite that just because
+        // maxInstanceCapacity > minInstanceCapacity would otherwise derive true.
+        DeploymentConfig config = new DeploymentConfig();
+        config.stackName = "Jenkins-Stack";
+        config.applicationId = "jenkins";
+        config.minInstanceCapacity = 1;
+        config.maxInstanceCapacity = 5;
+        config.enableAutoScaling = false;
+
+        DeploymentContextPreparer.prepare(config, new SampleJenkinsSpec(), null);
+
+        assertEquals(Boolean.FALSE, config.enableAutoScaling);
+    }
+
+    @Test
+    void enableAutoScalingExplicitTrueIsPreservedEvenWithoutACapacityRange() {
+        DeploymentConfig config = new DeploymentConfig();
+        config.stackName = "Jenkins-Stack";
+        config.applicationId = "jenkins";
+        config.minInstanceCapacity = 1;
+        config.maxInstanceCapacity = 1;
+        config.enableAutoScaling = true;
+
+        DeploymentContextPreparer.prepare(config, new SampleJenkinsSpec(), null);
+
+        assertEquals(Boolean.TRUE, config.enableAutoScaling);
+    }
+
     @Test
     void preservesExplicitDomainAndSslForJenkinsLocalStack() {
         DeploymentConfig config = new DeploymentConfig();

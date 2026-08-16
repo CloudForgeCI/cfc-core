@@ -201,7 +201,7 @@ public class MediaWikiApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/images/*",
             "/skins/*",
@@ -411,7 +411,7 @@ public class MediaWikiApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of MediaWiki administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/mw-config/*"    // Installation wizard
         );

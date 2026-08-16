@@ -200,7 +200,7 @@ public class FlarumApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/assets/*"
         );
@@ -277,7 +277,8 @@ public class FlarumApplicationSpec implements CmsSpec, DatabaseSpec {
 
     @Override
     public DatabaseRequirement databaseRequirement() {
-        return DatabaseRequirement.required("mysql", "5.6")
+        // MySQL 5.6 is no longer a valid RDS parameter group family; 5.7 is Flarum's next-supported version.
+        return DatabaseRequirement.required("mysql", "5.7")
             .withInstanceClass("db.t3.micro")
             .withStorage(20)
             .withDatabaseName("flarum");
@@ -394,7 +395,7 @@ public class FlarumApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of Flarum administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/admin/*"    // Admin dashboard
         );

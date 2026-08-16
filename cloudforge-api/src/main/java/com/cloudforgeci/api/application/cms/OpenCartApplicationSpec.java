@@ -201,7 +201,7 @@ public class OpenCartApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/image/*",
             "/catalog/*",
@@ -392,7 +392,7 @@ public class OpenCartApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of OpenCart administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/admin/*"    // Store administration panel
         );

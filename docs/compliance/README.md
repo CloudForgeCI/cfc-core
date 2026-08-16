@@ -20,6 +20,7 @@ These controls can contribute infrastructure evidence to a compliance program, b
 - **[Automated Compliance Features](AUTOMATED_COMPLIANCE.md)** - Technical deep-dive into implementation
 - **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Step-by-step deployment instructions
 - **[Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md)** - Supporting multiple frameworks simultaneously
+- **[Retained Resources](RETAINED_RESOURCES.md)** - Every deletion-protected / RemovalPolicy.RETAIN resource, why, and how to remove it
 
 ### For Compliance Teams
 - **[Quick Start Guide](QUICK_START_GUIDE.md)** - Initial compliance-control configuration

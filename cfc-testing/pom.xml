@@ -66,6 +66,14 @@
         <artifactId>cloudforge-localstack</artifactId>
     </dependency>
 
+    <!-- CloudForgeManagerApplicationSpec, needed to deploy cloudforge-manager as an app.
+         cloudforge-manager itself (the Spring Boot app) is not a dependency here. -->
+    <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-manager-deployment</artifactId>
+        <version>${cloudforge.version}</version>
+    </dependency>
+
     <!-- AWS CDK - explicit dependency for IDE support -->
     <!-- Version managed by BOM -->
     <dependency>

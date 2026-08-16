@@ -202,7 +202,7 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/styles/*",
             "/images/*",
@@ -540,7 +540,7 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of phpBB administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/adm/*",      // Administrator Control Panel
             "/install/*"   // Installation directory (protect during setup)

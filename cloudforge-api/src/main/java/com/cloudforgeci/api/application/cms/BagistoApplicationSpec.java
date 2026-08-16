@@ -201,7 +201,7 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/storage/*",
             "/vendor/*",
@@ -415,7 +415,7 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of Bagisto administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/admin/*"    // Store administration panel
         );

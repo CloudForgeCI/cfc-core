@@ -212,7 +212,9 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
 
     @Override
     public List<String> cdnAdminPaths() {
-        return List.of("/admin/*", "/admin-dev/*");
+        // "/admin*" (no trailing slash) catches PrestaShop's randomized admin folder name
+        // (e.g. admin123abc), a standard PrestaShop security convention.
+        return List.of("/admin*", "/admin-dev/*", "/install/*");
     }
 
     @Override
@@ -432,25 +434,4 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
 
     // ========== Path-Based Authentication ==========
 
-    /**
-     * Returns default protected paths for PrestaShop when using ALB-level OIDC.
-     *
-     * <p>PrestaShop administrative areas:</p>
-     * <ul>
-     *   <li>/admin* - Admin panel (PrestaShop uses random folder suffix)</li>
-     *   <li>/install - Installation directory</li>
-     * </ul>
-     *
-     * <p>Note: PrestaShop renames the admin folder with a random suffix (e.g., admin123abc)
-     * for security. If your admin folder has a custom name, override via DeploymentContext.</p>
-     *
-     * @return list of PrestaShop administrative paths requiring authentication
-     */
-    @Override
-    public List<String> protectedPaths() {
-        return List.of(
-            "/admin*",      // Admin panel (catches admin123abc, etc.)
-            "/install/*"    // Installation directory
-        );
-    }
 }

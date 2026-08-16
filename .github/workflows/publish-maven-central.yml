@@ -18,10 +18,12 @@ name: Publish to Maven Central
 # cfc-core's own pom (resolved from Central, not a local checkout — see its pom.xml) is exactly
 # what lets it publish independently while still inheriting this release profile.
 #
-# Deliberately does NOT publish cloudforge-manager itself either (the Spring Boot app carrying all
-# the LicenseSeat/Checkpoint A/B licensing logic) — its distribution strategy (Docker Hub vs.
-# Central vs. something else) is a separate, still-open decision; nothing here forecloses adding
-# it later, in its own eventual repo's own workflow, same shape as cloudforge-manager-deployment.
+# Does NOT publish cloudforge-manager either (the Spring Boot app carrying all the LicenseSeat/
+# Checkpoint A/B licensing logic) — same reasoning as cloudforge-manager-deployment above: it's
+# now published too, but from its own standalone repo's own publish-maven-central.yml /
+# publish-snapshot.yml (deliberately NOT inheriting cfc-core's release profile via <parent> the
+# way cloudforge-manager-deployment does — see that pom's own comment on why), not bundled into
+# this workflow's cadence.
 #
 # Required repo secrets (none of these can be set by CI itself — add them under Settings →
 # Secrets and variables → Actions before the publish job will do anything but skip):

@@ -1,0 +1,335 @@
+name: LocalStack Compliance Verification
+
+# Two independent real-deploy verifications against a genuine LocalStack instance, both feeding
+# compliance-report-generator.py's dashboard (the "Real Deploy" tab on each row's LocalStack
+# verification modal, and the header's live-verification banner) -- without this workflow having
+# run recently, the dashboard is honest about being synth-only:
+#
+#   compliance-matrix    The 13 representative compliance configs (4 frameworks x 3 security
+#                         profiles on Fargate, plus one EC2 all-frameworks sample), via
+#                         InteractiveDeployer + full deployment-context JSON, same as a real user
+#                         deploy. Confirms LocalStackTemplateAdapter produces a deployable
+#                         template for the exact configs a real customer would pick.
+#
+#   template-sweep       Every individual CFN template the compliance test suite itself
+#                         generates (cfn-templates/, ~260 files from the 375 TruthTableValidation
+#                         test-method scenarios) -- deployed directly via LocalStackCli, which
+#                         takes a canonical template file straight rather than needing its own
+#                         deployment-context JSON. This is what actually verifies the templates
+#                         shown in the 375-row dashboard, not just the 13 representative configs.
+#                         Split across 8 parallel batches (jobs deploy-template-batch, matrix
+#                         0-7): sequentially deploying ~260 templates with a LocalStack restart
+#                         between each (needed -- most carry a GuardDuty::Detector and/or
+#                         Config::ConfigRule, account-level-singleton-shaped resources that
+#                         conflict across stacks without a clean slate) would run for hours in a
+#                         single job.
+#
+# Self-disables cleanly when no LOCALSTACK_AUTH_TOKEN is configured (localstack/localstack
+# refuses to start at all without one) -- same pattern as cloudforge-manager's
+# localstack-integration.yml: a cheap check-token job first, since a job-level `if:` can't
+# reference the secrets context directly.
+#
+# Deliberately not run on every push -- both verifications are slow (13, and ~260, sequential
+# deploy+restart cycles) and this is a paid LocalStack Pro feature. Manual dispatch plus a weekly
+# schedule keeps the verification current without adding cost/latency to normal development.
+#
+# Required repo secret:
+#   LOCALSTACK_AUTH_TOKEN   From https://app.localstack.cloud -- Account -> Auth Tokens.
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 6 * * 1'  # weekly, Monday 06:00 UTC
+  push:
+    branches: [ develop ]
+    paths:
+      - 'cloudforge-localstack/**'
+      - 'cfc-testing/scripts/deploy-localstack-compliance-matrix.sh'
+      - 'cfc-testing/deployment-contexts/compliance/**'
+      - '.github/workflows/localstack-compliance-verification.yml'
+
+jobs:
+  check-token:
+    name: Check for LOCALSTACK_AUTH_TOKEN
+    runs-on: ubuntu-latest
+    outputs:
+      has_token: ${{ steps.check.outputs.has_token }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  compliance-matrix:
+    name: Deploy compliance matrix to LocalStack
+    needs: check-token
+    if: needs.check-token.outputs.has_token == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+        # Same real fixes as cloudforge-manager/localstack-integration.yml -- see that file for
+        # why each of these is needed (Lambda/RDS emulation need the host docker.sock and a real
+        # host path for LocalStack's own bind mounts; the network-alias matches the hostname
+        # LocalEmulatorDefaults.LOCALSTACK_CONTAINER assumes).
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+          - /tmp/localstack-volume:/var/lib/localstack
+        options: --network-alias cfc-localstack
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Open up permissions on the LocalStack volume bind mount
+        run: sudo chmod -R 777 /tmp/localstack-volume
+
+      - name: Wait for LocalStack to be healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:4566/_localstack/health | grep -q '"cloudformation": "available"'; then
+              echo "LocalStack is up."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::LocalStack never became healthy within 3 minutes -- check that LOCALSTACK_AUTH_TOKEN is valid and current."
+          curl -s http://localhost:4566/_localstack/health || true
+          exit 1
+
+      - name: Build cloudforge-core, cloudforge-api, cloudforge-localstack
+        run: mvn -B -pl cloudforge-core,cloudforge-api,cloudforge-localstack -am install -DskipTests
+
+      - name: Build cfc-testing
+        run: |
+          cd cfc-testing
+          mvn -B clean package -DskipTests
+          mvn -B dependency:copy-dependencies -DoutputDirectory=target/dependency -q
+          chmod +x scripts/*.sh
+
+      - name: Run the compliance matrix against LocalStack
+        env:
+          LOCALSTACK_CONTAINER_ID: ${{ job.services.localstack.id }}
+        run: |
+          cd cfc-testing
+          bash scripts/deploy-localstack-compliance-matrix.sh
+
+      - name: Dump LocalStack container logs
+        if: failure()
+        run: docker logs "${{ job.services.localstack.id }}" 2>&1 | tail -300
+
+      - name: Collect results for the compliance dashboard
+        if: always()
+        run: |
+          mkdir -p localstack-compliance-artifact/cdk-out
+          cp cfc-testing/scripts/validation-results/localstack-compliance-matrix-results.tsv \
+            localstack-compliance-artifact/ 2>/dev/null || true
+          # The .localstack.template.json / .localstack-adaptations.json files are what
+          # compliance-report-generator.py's match_real_deploy_config looks for; the canonical
+          # .template.json travels too so the standalone comparison script has both sides without
+          # needing a fresh synth.
+          find cfc-testing/cdk.out -maxdepth 1 \( -name 'CFCompliance-*.template.json' \
+            -o -name 'CFCompliance-*.localstack.template.json' \
+            -o -name 'CFCompliance-*.localstack-adaptations.json' \) \
+            -exec cp {} localstack-compliance-artifact/cdk-out/ \; 2>/dev/null || true
+          echo "Collected:"
+          find localstack-compliance-artifact -type f
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: localstack-compliance-results
+          path: localstack-compliance-artifact/
+          retention-days: 90
+          if-no-files-found: warn
+
+  generate-templates:
+    name: Generate CFN templates from the compliance test suite
+    needs: check-token
+    if: needs.check-token.outputs.has_token == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Configure AWS credentials (for CDK synth only)
+        env:
+          MOCK_AWS_ACCESS_KEY_ID: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
+          MOCK_AWS_SECRET_ACCESS_KEY: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id = ${MOCK_AWS_ACCESS_KEY_ID}
+          aws_secret_access_key = ${MOCK_AWS_SECRET_ACCESS_KEY}
+          EOF
+          cat > ~/.aws/config << EOF
+          [default]
+          region = us-east-1
+          output = json
+          EOF
+
+      - name: Build reactor
+        run: mvn -B -pl cloudforge-core,cloudforge-api,cloudforge-localstack -am install -DskipTests
+
+      - name: Run the compliance test suite to produce cfn-templates/
+        run: |
+          cd cfc-testing
+          mvn -B clean package -DskipTests
+          cd scripts
+          mkdir -p validation-results
+          python3 compliance-report-generator.py
+        # This is the same test run publish-reports.yml's own "Generate compliance truth table
+        # reports" step does -- duplicated here rather than shared, since this workflow triggers
+        # independently (schedule/dispatch) and needs templates guaranteed fresh for the current
+        # commit rather than racing a separate workflow's Pages publish.
+
+      - name: Upload cfn-templates artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfn-templates-for-localstack
+          path: cfc-testing/scripts/validation-results/cfn-templates/
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy-template-batch:
+    name: Deploy template batch ${{ matrix.batch }}/8
+    needs: generate-templates
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [0, 1, 2, 3, 4, 5, 6, 7]
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+          - /tmp/localstack-volume:/var/lib/localstack
+        options: --network-alias cfc-localstack
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Open up permissions on the LocalStack volume bind mount
+        run: sudo chmod -R 777 /tmp/localstack-volume
+
+      - name: Wait for LocalStack to be healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:4566/_localstack/health | grep -q '"cloudformation": "available"'; then
+              echo "LocalStack is up."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::LocalStack never became healthy within 3 minutes -- check that LOCALSTACK_AUTH_TOKEN is valid and current."
+          curl -s http://localhost:4566/_localstack/health || true
+          exit 1
+
+      - name: Build cloudforge-core, cloudforge-api, cloudforge-localstack
+        run: mvn -B -pl cloudforge-core,cloudforge-api,cloudforge-localstack -am install -DskipTests
+
+      - name: Build cfc-testing
+        run: |
+          cd cfc-testing
+          mvn -B clean package -DskipTests
+          mvn -B dependency:copy-dependencies -DoutputDirectory=target/dependency -q
+          chmod +x scripts/*.sh
+
+      - name: Download cfn-templates artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cfn-templates-for-localstack
+          path: cfc-testing/scripts/validation-results/cfn-templates
+
+      - name: Deploy this batch's templates
+        env:
+          LOCALSTACK_CONTAINER_ID: ${{ job.services.localstack.id }}
+        run: |
+          cd cfc-testing
+          bash scripts/deploy-localstack-template-batch.sh \
+            scripts/validation-results/cfn-templates \
+            "scripts/validation-results/localstack-template-batch-${{ matrix.batch }}-results.tsv" \
+            ${{ matrix.batch }} 8
+
+      - name: Dump LocalStack container logs
+        if: failure()
+        run: docker logs "${{ job.services.localstack.id }}" 2>&1 | tail -300
+
+      - name: Upload batch results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: localstack-template-batch-${{ matrix.batch }}-results
+          path: cfc-testing/scripts/validation-results/localstack-template-batch-${{ matrix.batch }}-results.tsv
+          retention-days: 7
+          if-no-files-found: warn
+
+  merge-template-results:
+    name: Merge template sweep results
+    needs: [check-token, deploy-template-batch]
+    if: always() && needs.check-token.outputs.has_token == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all batch result artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: localstack-template-batch-*-results
+          path: batch-results
+          merge-multiple: true
+
+      - name: Merge into one TSV
+        run: |
+          echo -e "config_name\tresult\tadaptation_count" > localstack-template-sweep-results.tsv
+          for f in batch-results/*.tsv; do
+            [ -f "$f" ] || continue
+            tail -n +2 "$f" >> localstack-template-sweep-results.tsv
+          done
+          echo "Merged $(tail -n +2 localstack-template-sweep-results.tsv | wc -l) template results"
+          column -t -s$'\t' localstack-template-sweep-results.tsv | head -30
+
+      - name: Upload merged results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: localstack-template-sweep-results
+          path: localstack-template-sweep-results.tsv
+          retention-days: 90
+          if-no-files-found: warn

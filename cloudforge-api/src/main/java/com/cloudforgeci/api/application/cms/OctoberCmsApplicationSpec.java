@@ -200,7 +200,7 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/storage/app/media/*",
             "/themes/*/assets/*",
@@ -400,7 +400,7 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of October CMS administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/backend/*"    // Backend administration panel
         );

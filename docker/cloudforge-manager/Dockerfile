@@ -40,8 +40,12 @@ COPY cloudforge-localstack ./cloudforge-localstack
 COPY cloudforge-manager-deployment ./cloudforge-manager-deployment
 COPY cloudforge-manager ./cloudforge-manager
 COPY --from=ui /work/src/main/resources/public ./cloudforge-manager/src/main/resources/public
+# cloudforge-manager and cloudforge-manager-deployment are no longer reactor members of the root
+# pom (see its <modules> list), so build each in dependency order instead of `-pl ... -am`.
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -pl cloudforge-manager -am package -DskipTests -Djacoco.skip=true -q
+    mvn -q install -DskipTests -Djacoco.skip=true \
+ && mvn -q -f cloudforge-manager-deployment/pom.xml install -DskipTests -Djacoco.skip=true \
+ && mvn -q -f cloudforge-manager/pom.xml package -DskipTests -Djacoco.skip=true
 
 # ── Runtime ────────────────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-jammy

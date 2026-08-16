@@ -476,6 +476,35 @@ class LocalStackTemplateAdapterTest {
     }
 
     @Test
+    void stripsS3AutoDeleteObjectsAndCleansDependsOn() {
+        ObjectNode canonical = MAPPER.createObjectNode();
+        ObjectNode resources = canonical.putObject("Resources");
+
+        ObjectNode bucket = resources.putObject("CloudTrailBucket");
+        bucket.put("Type", "AWS::S3::Bucket");
+        bucket.putObject("Properties");
+        bucket.put("DependsOn", "CloudTrailBucketAutoDeleteObjects");
+
+        ObjectNode autoDelete = resources.putObject("CloudTrailBucketAutoDeleteObjects");
+        autoDelete.put("Type", "Custom::S3AutoDeleteObjects");
+        autoDelete.putObject("Properties").put("BucketName", "cloudtrail-bucket");
+
+        ObjectNode keep = resources.putObject("KeepMe");
+        keep.put("Type", "AWS::SNS::Topic");
+        keep.putObject("Properties").put("TopicName", "keep");
+
+        var result = adaptBase(canonical, "Compliance-Staging");
+        ObjectNode adapted = (ObjectNode) result.template().path("Resources");
+        assertFalse(adapted.has("CloudTrailBucketAutoDeleteObjects"));
+        assertTrue(adapted.has("CloudTrailBucket"));
+        assertFalse(adapted.path("CloudTrailBucket").has("DependsOn"));
+        assertTrue(adapted.has("KeepMe"));
+        assertTrue(result.adaptations().stream()
+            .anyMatch(a -> a.path().contains("CloudTrailBucketAutoDeleteObjects")
+                && a.reason().contains("Custom::S3AutoDeleteObjects")));
+    }
+
+    @Test
     void stripsCustomAwsResourcesAndCleansDependsOn() {
         ObjectNode canonical = MAPPER.createObjectNode();
         ObjectNode resources = canonical.putObject("Resources");

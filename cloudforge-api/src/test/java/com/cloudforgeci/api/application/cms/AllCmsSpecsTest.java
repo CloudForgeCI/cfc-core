@@ -257,6 +257,63 @@ class AllCmsSpecsTest {
         assertEquals("crm", new SuiteCrmApplicationSpec().cmsCategory());
     }
 
+    // ========== CDN Configuration ==========
+
+    @ParameterizedTest
+    @MethodSource("allCmsSpecs")
+    void cdnMediaPathsReturnsNonNullList(CmsSpec spec) {
+        assertNotNull(spec.cdnMediaPaths(), spec.applicationId() + " cdnMediaPaths() must not return null");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allCmsSpecs")
+    void cdnStaticPathsReturnsNonNullList(CmsSpec spec) {
+        assertNotNull(spec.cdnStaticPaths(), spec.applicationId() + " cdnStaticPaths() must not return null");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allCmsSpecs")
+    void cdnAdminPathsReturnsNonNullList(CmsSpec spec) {
+        assertNotNull(spec.cdnAdminPaths(), spec.applicationId() + " cdnAdminPaths() must not return null");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allCmsSpecs")
+    void cdnPathsAreUrlPatterns(CmsSpec spec) {
+        for (String path : spec.cdnMediaPaths()) {
+            assertTrue(path.startsWith("/"), spec.applicationId() + " cdnMediaPaths entry must start with /: " + path);
+        }
+        for (String path : spec.cdnStaticPaths()) {
+            assertTrue(path.startsWith("/"), spec.applicationId() + " cdnStaticPaths entry must start with /: " + path);
+        }
+        for (String path : spec.cdnAdminPaths()) {
+            assertTrue(path.startsWith("/"), spec.applicationId() + " cdnAdminPaths entry must start with /: " + path);
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("allCmsSpecs")
+    void cdnIntegrationHasRealPathsWhenSupported(CmsSpec spec) {
+        // A spec that declares CDN support but leaves all three path lists empty is a silent
+        // no-op — CmsCdnConfiguration builds zero CloudFront cache behaviors for it.
+        if (spec.supportsCdnIntegration()) {
+            boolean hasRealPaths = !spec.cdnMediaPaths().isEmpty()
+                || !spec.cdnStaticPaths().isEmpty()
+                || !spec.cdnAdminPaths().isEmpty();
+            assertTrue(hasRealPaths, spec.applicationId()
+                + " claims supportsCdnIntegration() but declares zero real CDN paths -- CloudFront would get no cache behaviors for it");
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("allCmsSpecs")
+    void protectedPathsStaysInSyncWithCdnAdminPaths(CmsSpec spec) {
+        // CmsSpec's default protectedPaths() delegates to cdnAdminPaths() so ALB OIDC protection
+        // and CDN cache-bypass routing can't drift apart — override cdnAdminPaths() only.
+        assertEquals(spec.cdnAdminPaths(), spec.protectedPaths(), spec.applicationId()
+            + " protectedPaths() must match cdnAdminPaths()");
+    }
+
     // ========== OIDC ==========
 
     @ParameterizedTest

@@ -33,6 +33,34 @@ import java.util.Map;
  *   <li>OIDC authentication via plugins</li>
  * </ul>
  *
+ * <h2>4.0 migration intent</h2>
+ * <p>This interface is the 3.x CMS/e-commerce convenience contract and remains supported as a
+ * compatibility surface during the 4.0 migration. It must not become the template for a new
+ * large interface per application family. A CMS implementation remains an {@link ApplicationSpec}
+ * and will be adapted into the same typed application requirements, provider selection, policy,
+ * entitlement, compliance, resolved-plan, and binding contracts used by every other application.</p>
+ *
+ * <p>The adapter maps shared infrastructure concerns to named requirements, for example:</p>
+ * <ul>
+ *   <li>PHP version, extensions, FPM and OPcache settings to a runtime requirement;</li>
+ *   <li>the primary CMS database to {@code database.primary};</li>
+ *   <li>persistent content/files and media offload to named storage requirements;</li>
+ *   <li>object/session/page cache to named cache requirements;</li>
+ *   <li>CDN, TLS, DNS, and public/admin routes to delivery and ingress policies; and</li>
+ *   <li>cron/background work to scheduled-work requirements.</li>
+ * </ul>
+ *
+ * <p>CMS-specific runtime behavior stays application-owned: a plugin may still describe PHP
+ * configuration and how resolved database, storage, cache, identity, and ingress bindings become
+ * its environment, secret references, configuration files, commands, or EC2 user data. The CMS
+ * plugin does not select arbitrary infrastructure providers, create raw resources, override
+ * platform profiles, bypass entitlement restrictions, or weaken required compliance controls.</p>
+ *
+ * <p>New 4.0 application plugins should declare the narrow reusable requirement records directly.
+ * Existing {@code CmsSpec}, {@link CmsMediaStorageSpec}, and {@link CmsObjectCacheSpec}
+ * implementations will be retained behind compatibility adapters until synthesis, integration,
+ * parameterized, and compliance regressions prove equivalent behavior.</p>
+ *
  * @since 3.1.0
  * @see ApplicationSpec
  * @see com.cloudforge.core.annotation.CmsPlugin
@@ -263,9 +291,19 @@ public interface CmsSpec extends ApplicationSpec {
      *   <li>Drupal: {@code ["/sites/default/files/*"]}</li>
      * </ul>
      *
-     * @return List of URL path patterns for S3 media origin (default: empty)
+     * @return List of URL path patterns for S3 media origin (default: derived from
+     *         {@link #mediaUploadPath()}, empty if that path isn't under the web root)
      */
     default List<String> cdnMediaPaths() {
+        // Derives a default from mediaUploadPath() so CDN media caching works without an
+        // explicit override. Apps whose upload directory lives outside the web root (e.g.
+        // Moodle's /var/moodledata, served through a script rather than directly) fall through
+        // to the empty list.
+        String webRoot = "/var/www/html";
+        String uploadPath = mediaUploadPath();
+        if (uploadPath != null && uploadPath.startsWith(webRoot + "/")) {
+            return List.of(uploadPath.substring(webRoot.length()) + "/*");
+        }
         return List.of();
     }
 

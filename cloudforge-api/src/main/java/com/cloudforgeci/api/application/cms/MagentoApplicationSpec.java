@@ -220,7 +220,8 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
 
     @Override
     public List<String> cdnAdminPaths() {
-        return List.of("/admin/*", "/backend/*");
+        // Admin path is customizable in real Magento installs; override this method if you've changed it.
+        return List.of("/admin/*", "/backend/*", "/setup/*");
     }
 
     @Override
@@ -519,30 +520,5 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
      */
     public static PhpRuntimeConfig getPhpConfig() {
         return PhpRuntimeConfig.forMagento();
-    }
-
-    // ========== Path-Based Authentication ==========
-
-    /**
-     * Returns default protected paths for Magento when using ALB-level OIDC.
-     *
-     * <p>Magento administrative areas:</p>
-     * <ul>
-     *   <li>/admin/* - Default admin panel (path is customizable)</li>
-     *   <li>/setup/* - Installation/upgrade wizard</li>
-     * </ul>
-     *
-     * <p>Note: Magento admin path can be customized. If you've changed
-     * the admin path, override this via DeploymentContext.protectedPaths.</p>
-     *
-     * @return list of Magento administrative paths requiring authentication
-     */
-    @Override
-    public List<String> protectedPaths() {
-        return List.of(
-            "/admin/*",    // Admin panel (default path)
-            "/backend/*",  // Alternative admin path (matches cdnAdminPaths)
-            "/setup/*"     // Setup wizard
-        );
     }
 }

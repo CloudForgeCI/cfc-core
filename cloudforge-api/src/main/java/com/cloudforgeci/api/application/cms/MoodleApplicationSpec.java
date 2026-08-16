@@ -201,7 +201,7 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/theme/*",
             "/lib/*",
@@ -417,7 +417,9 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of Moodle administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
+        // cdnMediaPaths() stays empty: mediaUploadPath() returns /var/moodledata, outside the web
+        // root and not directly URL-reachable — Moodle serves files through pluginfile.php instead.
         return List.of(
             "/admin/*",    // Site administration
             "/login/*"     // Login pages

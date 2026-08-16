@@ -76,7 +76,9 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
     // Auto-scaling configuration for both Fargate and EC2 services (only when maxInstanceCapacity > 1)
     Integer maxCap = c.maxInstanceCapacity.get().orElse(null);
     Integer minCap = c.minInstanceCapacity.get().orElse(null);
-    boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1;
+    // Respect an explicit enableAutoScaling=false even when the capacity range would otherwise enable it.
+    boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1
+        && !Boolean.FALSE.equals(c.cfc.enableAutoScaling());
     if (scale) {
       // Fargate autoscaling - use service.autoScaleTaskCount() directly
       // Check if callback has already been registered to prevent multiple registrations

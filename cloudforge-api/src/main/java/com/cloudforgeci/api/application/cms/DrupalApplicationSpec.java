@@ -452,7 +452,7 @@ public class DrupalApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of Drupal administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/admin/*",      // Admin pages
             "/user/*",       // User login/registration

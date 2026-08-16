@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -25,6 +26,55 @@ except ImportError:
     import xml.etree.ElementTree as ET
     print("⚠️  WARNING: defusedxml not found. Using standard xml.etree.ElementTree.", file=sys.stderr)
     print("⚠️  Install defusedxml for secure XML parsing: pip install defusedxml", file=sys.stderr)
+
+
+# The 9 AWS Config auto-remediation actions ComplianceFactory wires up (see
+# cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java),
+# matched against a config's deployed Config rules by rule identity (ConfigRuleName, or
+# Source.SourceIdentifier for AWS-managed rules -- see config_rule_identity below). "match" is
+# a suffix/equality check against that identity rather than a full stack-qualified name, since
+# the same control (e.g. RDS deletion protection) gets a per-framework-prefixed rule name.
+REMEDIATIONS = [
+    {"label": "Set IAM account password policy", "document": "AWSConfigRemediation-SetIAMPasswordPolicy",
+     "kind": "AWS-managed", "match": lambda rid: rid == "IAM_PASSWORD_POLICY"},
+    {"label": "Enable S3 bucket versioning", "document": "AWS-ConfigureS3BucketVersioning",
+     "kind": "AWS-managed", "match": lambda rid: rid == "S3_BUCKET_VERSIONING_ENABLED"},
+    {"label": "Fix CloudTrail bucket policy", "document": "cloudTrailFixDocument",
+     "kind": "custom", "match": lambda rid: rid == "CLOUD_TRAIL_ENABLED"},
+    {"label": "Enable RDS deletion protection", "document": "rdsDeletionProtectionDocument",
+     "kind": "custom", "match": lambda rid: rid.endswith("-rds-deletion-protection-enabled")},
+    {"label": "Enable RDS auto minor-version upgrade", "document": "rdsAutoUpgradeDocument",
+     "kind": "custom", "match": lambda rid: rid.endswith("-rds-automatic-minor-version-upgrade")},
+    {"label": "Enable Security Hub", "document": "securityHubDocument",
+     "kind": "custom", "match": lambda rid: rid.endswith("-soc2-security-hub-enabled")},
+    {"label": "Enable Inspector", "document": "inspectorDocument",
+     "kind": "custom", "match": lambda rid: rid.endswith("-soc2-inspector-enabled")},
+    {"label": "Enable Macie", "document": "macieDocument",
+     "kind": "custom", "match": lambda rid: rid.endswith("-soc2-macie-enabled")},
+    {"label": "Enable GuardDuty", "document": "guardDutyDocument",
+     "kind": "custom", "match": lambda rid: rid.endswith("-pci-dss-guardduty-enabled")},
+]
+
+
+def config_rule_identity(properties: dict) -> str:
+    """Identify an AWS::Config::ConfigRule resource by its ConfigRuleName (custom rules) or,
+    for AWS-managed rules that don't set one, Source.SourceIdentifier -- every ConfigRule
+    resource has exactly one or the other."""
+    name = properties.get("ConfigRuleName")
+    if name:
+        return name
+    return properties.get("Source", {}).get("SourceIdentifier", "?")
+
+
+def matched_remediations(config_rule_ids: List[str]) -> List[dict]:
+    """Which of the 9 known auto-remediation actions apply to this set of deployed Config
+    rules, i.e. whose watched rule is actually present in this config."""
+    matches = []
+    for remediation in REMEDIATIONS:
+        hit = next((rid for rid in config_rule_ids if remediation["match"](rid)), None)
+        if hit:
+            matches.append({**{k: v for k, v in remediation.items() if k != "match"}, "rule": hit})
+    return matches
 
 
 class ComplianceTestResult:
@@ -83,6 +133,9 @@ class ComplianceReportGenerator:
         self.output_dir = project_root / "cfc-testing" / "scripts" / "validation-results"
         self.results: List[ComplianceTestResult] = []
         self.incremental_results_file = self.output_dir / "compliance-results-incremental.jsonl"
+        self.cdk_out_dir = project_root / "cfc-testing" / "cdk.out"
+        self._real_deploy_results: Optional[Dict[str, dict]] = None
+        self._template_sweep_results: Optional[Dict[str, dict]] = None
 
     def run_compliance_tests(self) -> bool:
         """Run split test methods sequentially to avoid JSII memory issues."""
@@ -1247,6 +1300,121 @@ class ComplianceReportGenerator:
                 result.cdk_nag_status = "skipped"
                 result.cfn_guard_status = "skipped"
 
+    def load_real_deploy_results(self) -> Dict[str, dict]:
+        """Real LocalStack deploy PASS/FAIL per config, from
+        deploy-localstack-compliance-matrix.sh's TSV output (13 representative configs)."""
+        if self._real_deploy_results is not None:
+            return self._real_deploy_results
+        tsv_path = self.output_dir / "localstack-compliance-matrix-results.tsv"
+        results = {}
+        if tsv_path.exists():
+            import csv
+            with open(tsv_path) as f:
+                for row in csv.DictReader(f, delimiter="\t"):
+                    results[row["config"]] = row
+        self._real_deploy_results = results
+        return results
+
+    def load_template_sweep_results(self) -> Dict[str, dict]:
+        """Real LocalStack deploy PASS/FAIL keyed directly by config_name, from
+        localstack-compliance-verification.yml's deploy-template-batch jobs -- these deploy the
+        exact cfn-templates/<config_name>.json file each of the 375 test rows already links to
+        (via LocalStackCli, not a deployment-context JSON), so matching is an exact key lookup
+        rather than match_real_deploy_config's best-effort profile-token guess."""
+        if self._template_sweep_results is not None:
+            return self._template_sweep_results
+        tsv_path = self.output_dir / "localstack-template-sweep-results.tsv"
+        results = {}
+        if tsv_path.exists():
+            import csv
+            with open(tsv_path) as f:
+                for row in csv.DictReader(f, delimiter="\t"):
+                    results[row["config_name"]] = row
+        self._template_sweep_results = results
+        return results
+
+    def match_real_deploy_config(self, config_name: str, framework: str, runtime: str) -> Optional[str]:
+        """Best-effort match from a test's own config_name to one of the 13 CFCompliance-*
+        configs actually deployed to real LocalStack, when the test's config_name encodes a
+        clean DEV/STAGING/PRODUCTION security profile (most of the 375 scenario/boundary tests
+        don't -- they exercise specific edge cases and won't match, which is expected)."""
+        profile_match = re.search(r"\b(DEV|STAGING|PRODUCTION)\b", config_name)
+        if not profile_match:
+            return None
+        profile = profile_match.group(1).lower()
+        fw_slug = {"SOC2": "soc2", "PCI-DSS": "pcidss", "HIPAA": "hipaa", "GDPR": "gdpr"}.get(framework)
+        if not fw_slug:
+            return None
+        runtime_slug = runtime.lower()
+        ctx_name = f"CFCompliance-{fw_slug}-{profile}-{runtime_slug}"
+        return ctx_name if (self.cdk_out_dir / f"{ctx_name}.template.json").exists() else None
+
+    def build_localstack_detail(self, result: "ComplianceTestResult") -> Optional[dict]:
+        """Everything the LocalStack verification modal needs for one test row: resource /
+        Config rule counts from that test's own synthesized template (cfn-templates/<config
+        name>.json), which of the 9 known auto-remediation actions apply, and -- for the
+        subset of rows that match one of the 13 representative configs actually deployed to
+        real LocalStack -- the real PASS/FAIL result and exactly what LocalStackTemplateAdapter
+        changed to make it deployable."""
+        template_path = self.output_dir / "cfn-templates" / f"{result.config_name}.json"
+        if not template_path.exists():
+            return None
+        try:
+            template = json.loads(template_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return None
+
+        resources = template.get("Resources", {})
+        type_counts = Counter(r["Type"] for r in resources.values())
+        config_rules = sorted({
+            config_rule_identity(r.get("Properties", {}))
+            for r in resources.values() if r["Type"] == "AWS::Config::ConfigRule"
+        })
+
+        detail = {
+            "total_resources": len(resources),
+            "resource_types": sorted(type_counts.items(), key=lambda kv: -kv[1]),
+            "config_rules": config_rules,
+            "remediations": matched_remediations(config_rules),
+            "real_deploy": None,
+        }
+
+        # Exact match first: the template sweep deploys this row's own template directly, so a
+        # hit here is a real, direct verification, not a same-shape-config approximation.
+        sweep = self.load_template_sweep_results().get(result.config_name)
+        if sweep:
+            detail["real_deploy"] = {
+                "config": result.config_name,
+                "deployed": True,
+                "result": sweep["result"],
+                "stack_status": None,
+                "adaptation_count": int(sweep.get("adaptation_count") or 0),
+                "adaptation_reasons": [],
+            }
+            return detail
+
+        ctx_name = self.match_real_deploy_config(result.config_name, result.framework, result.runtime)
+        if ctx_name:
+            deploy_results = self.load_real_deploy_results()
+            deploy = deploy_results.get(ctx_name)
+            adaptations_path = self.cdk_out_dir / f"{ctx_name}.localstack-adaptations.json"
+            adapted_path = self.cdk_out_dir / f"{ctx_name}.localstack.template.json"
+            adaptations = []
+            if adaptations_path.exists():
+                try:
+                    adaptations = json.loads(adaptations_path.read_text())
+                except (json.JSONDecodeError, OSError):
+                    adaptations = []
+            detail["real_deploy"] = {
+                "config": ctx_name,
+                "deployed": adapted_path.exists(),
+                "result": deploy["result"] if deploy else None,
+                "stack_status": deploy["stack_status"] if deploy else None,
+                "adaptation_count": len(adaptations),
+                "adaptation_reasons": sorted({a["reason"] for a in adaptations}),
+            }
+        return detail
+
     def generate_json_report(self) -> Path:
         """Generate JSON report with all test results."""
         advisory_count = len([r for r in self.results if r.status == "passed" and r.has_advisories])
@@ -1347,6 +1515,7 @@ class ComplianceReportGenerator:
         # Generate JSON data for JavaScript
         results_json = json.dumps([{
             "config_name": r.config_name,
+            "localstack": self.build_localstack_detail(r),
             "framework": r.framework,
             "runtime": r.runtime,
             "network_mode": r.network_mode,
@@ -1378,9 +1547,48 @@ class ComplianceReportGenerator:
         frameworks_json = json.dumps(list(frameworks.keys()))
         runtimes_json = json.dumps(list(runtimes))
 
+        # Whether this build actually includes real LocalStack deploy verification (from
+        # localstack-compliance-verification.yml) or is synth-only -- surfaced up front so the
+        # dashboard never implies live verification it doesn't have. See build_localstack_detail.
+        # Two separate sources: the template sweep deploys these rows' own templates directly
+        # (the one that actually matters for "were the 375 configs shown here tested"); the
+        # 13-config matrix is a coarser, representative-configs-only check reported alongside it.
+        sweep_results = self.load_template_sweep_results()
+        sweep_passed = len([d for d in sweep_results.values() if d["result"] == "PASS"])
+        sweep_total = len(sweep_results)
+        real_deploy_results = self.load_real_deploy_results()
+        real_deploy_passed = len([d for d in real_deploy_results.values() if d["result"] == "PASS"])
+        real_deploy_total = len(real_deploy_results)
+        if sweep_total > 0:
+            localstack_banner = (
+                f'<p style="margin-top: 15px;"><span style="display:inline-block; padding:6px 14px; '
+                f'border-radius: 20px; background: rgba(39,174,96,0.25); font-weight: 600;">'
+                f'✅ Verified against a live LocalStack instance: {sweep_passed}/{sweep_total} of these '
+                f'configs\' own templates deployed successfully'
+                f'{f" (plus {real_deploy_passed}/{real_deploy_total} representative configs)" if real_deploy_total else ""}'
+                f'</span></p>'
+            )
+        elif real_deploy_total > 0:
+            localstack_banner = (
+                f'<p style="margin-top: 15px;"><span style="display:inline-block; padding:6px 14px; '
+                f'border-radius: 20px; background: rgba(255,193,7,0.25); font-weight: 600;">'
+                f'⚠️ {real_deploy_passed}/{real_deploy_total} representative configs verified against a live '
+                f'LocalStack instance, but none of the individual configs shown below were -- '
+                f'run localstack-compliance-verification.yml\'s template sweep for row-level verification'
+                f'</span></p>'
+            )
+        else:
+            localstack_banner = (
+                '<p style="margin-top: 15px;"><span style="display:inline-block; padding:6px 14px; '
+                'border-radius: 20px; background: rgba(255,255,255,0.15); font-weight: 500;">'
+                'ℹ️ Synth-only build -- not verified against a live LocalStack instance '
+                '(run localstack-compliance-verification.yml to add real deploy verification)</span></p>'
+            )
+
         html_content = f"""<!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>CloudForge Compliance Validation Dashboard</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -1500,6 +1708,41 @@ class ComplianceReportGenerator:
 
         .result-count {{ color: #7f8c8d; font-size: 0.9em; margin-bottom: 15px; }}
         .chart-container {{ margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; }}
+
+        /* LocalStack verification trigger + modal */
+        .localstack-btn {{ display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; font-weight: 600; background: #e8f0fe; color: #1a56db; border: none; cursor: pointer; }}
+        .localstack-btn:hover {{ background: #d2e3fc; }}
+        .modal-overlay {{ display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }}
+        .modal-overlay.open {{ display: flex; }}
+        .modal-box {{ background: white; border-radius: 12px; width: 100%; max-width: 1000px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }}
+        /* flex-shrink: 0 keeps header/tabs at their natural size in the flex column below --
+           without it, a tall .modal-body (e.g. 60 Config rules) squeezes every flex sibling
+           proportionally instead of only itself, collapsing the header and tab bar to slivers. */
+        .modal-header {{ display: flex; justify-content: space-between; align-items: center; padding: 20px 25px; border-bottom: 1px solid #eee; flex-shrink: 0; }}
+        .modal-header h3 {{ color: #2c3e50; font-family: monospace; font-size: 1.05em; }}
+        .modal-close {{ background: none; border: none; font-size: 1.4em; cursor: pointer; color: #7f8c8d; line-height: 1; }}
+        .modal-close:hover {{ color: #2c3e50; }}
+        .modal-tabs {{ display: flex; gap: 4px; padding: 0 25px; border-bottom: 1px solid #eee; overflow-x: auto; flex-shrink: 0; }}
+        .modal-tab {{ padding: 12px 16px; border: none; background: none; cursor: pointer; font-weight: 600; color: #7f8c8d; border-bottom: 3px solid transparent; white-space: nowrap; }}
+        .modal-tab:hover {{ color: #2c3e50; }}
+        .modal-tab.active {{ color: #667eea; border-bottom-color: #667eea; }}
+        /* min-height: 0 lets this flex item shrink below its content's intrinsic size so
+           overflow-y: auto actually scrolls instead of growing past the modal's max-height. */
+        .modal-body {{ padding: 20px 25px; overflow-y: auto; flex: 1; min-height: 0; }}
+        .ls-overview-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+        .ls-stat {{ background: #f8f9fa; border-radius: 8px; padding: 15px; text-align: center; border-left: 4px solid #667eea; }}
+        .ls-stat .n {{ font-size: 1.6em; font-weight: bold; color: #2c3e50; }}
+        .ls-stat .l {{ font-size: 0.8em; color: #7f8c8d; }}
+        .ls-layer-row {{ display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }}
+        .ls-grid-table {{ width: 100%; border-collapse: collapse; font-size: 0.88em; }}
+        .ls-grid-table th {{ background: #34495e; color: white; padding: 8px 10px; text-align: left; }}
+        .ls-grid-table td {{ padding: 8px 10px; border-bottom: 1px solid #eee; font-family: monospace; font-size: 0.95em; }}
+        .ls-grid-table tr:hover {{ background: #f8f9fa; }}
+        .ls-empty {{ color: #7f8c8d; text-align: center; padding: 30px; }}
+        .ls-remediation-active {{ color: #27ae60; font-weight: 600; }}
+        .ls-deploy-pass {{ color: #27ae60; font-weight: 700; }}
+        .ls-deploy-fail {{ color: #e74c3c; font-weight: 700; }}
+        .ls-reason-list {{ margin: 0; padding-left: 18px; font-size: 0.85em; color: #555; }}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -1510,6 +1753,8 @@ class ComplianceReportGenerator:
             <h1>🔒 Multi-Layer Compliance Validation Dashboard</h1>
             <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
             <p style="margin-top: 10px;">Defense-in-depth validation across 4 independent layers</p>
+            {localstack_banner}
+            {'<p style="margin-top: 15px;"><a href="localstack-compliance-comparison.html" class="back-link">🚀 Real LocalStack deploy comparison (L5) →</a></p>' if (self.output_dir / 'localstack-compliance-comparison.html').exists() else ''}
         </div>
 
         <div class="content">
@@ -1682,6 +1927,23 @@ class ComplianceReportGenerator:
         </div>
     </div>
 
+    <div class="modal-overlay" id="ls-modal-overlay" onclick="if (event.target === this) closeLocalStackModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="ls-modal-title"></h3>
+                <button class="modal-close" onclick="closeLocalStackModal()">&times;</button>
+            </div>
+            <div class="modal-tabs" id="ls-modal-tabs">
+                <button class="modal-tab active" data-tab="overview" onclick="switchLocalStackTab('overview')">Overview</button>
+                <button class="modal-tab" data-tab="resources" onclick="switchLocalStackTab('resources')">Resources Created</button>
+                <button class="modal-tab" data-tab="rules" onclick="switchLocalStackTab('rules')">Config Rules</button>
+                <button class="modal-tab" data-tab="remediation" onclick="switchLocalStackTab('remediation')">Remediation</button>
+                <button class="modal-tab" data-tab="deploy" id="ls-tab-deploy-btn" style="display:none;" onclick="switchLocalStackTab('deploy')">Real Deploy</button>
+            </div>
+            <div class="modal-body" id="ls-modal-body"></div>
+        </div>
+    </div>
+
     <script>
         // Test results data
         const allTests = {results_json};
@@ -1849,6 +2111,7 @@ class ComplianceReportGenerator:
                         ${{test.is_negative_test ? '<span class="neg-badge">NEG</span>' : ''}}
                         ${{violationsCount > 0 ? `<span class="violations-count">(${{violationsCount}} violations)</span>` : ''}}
                         ${{warningsCount > 0 ? `<span class="violations-count" style="color:#f39c12;">(${{warningsCount}} advisories)</span>` : ''}}
+                        ${{test.localstack ? `<button class="localstack-btn" onclick="openLocalStackModal(${{globalIdx}})">🚀 LocalStack</button>` : ''}}
                     </td>
                     <td><span class="framework-badge ${{frameworkClass}}">${{test.framework}}</span></td>
                     <td><span class="runtime-badge ${{runtimeClass}}">${{test.runtime}}</span></td>
@@ -2069,6 +2332,106 @@ class ComplianceReportGenerator:
             }}
         }}
 
+        // ═══════════════════════════════════════════════════════════════
+        // LocalStack verification modal -- per-row detail sourced from that row's own
+        // synthesized template (cfn-templates/<config_name>.json): resources actually created,
+        // Config rules deployed, which of the 9 known auto-remediation actions apply, and (for
+        // rows matching one of the 13 representative configs) the real LocalStack deploy result.
+        // ═══════════════════════════════════════════════════════════════
+        let currentLsTest = null;
+        let currentLsTab = 'overview';
+
+        function openLocalStackModal(idx) {{
+            const test = allTests[idx];
+            if (!test || !test.localstack) return;
+            currentLsTest = test;
+            currentLsTab = 'overview';
+
+            document.getElementById('ls-modal-title').textContent = '🚀 ' + test.config_name;
+            document.querySelectorAll('.modal-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === 'overview'));
+            document.getElementById('ls-tab-deploy-btn').style.display = test.localstack.real_deploy ? '' : 'none';
+
+            renderLsTabContent('overview');
+            document.getElementById('ls-modal-overlay').classList.add('open');
+        }}
+
+        function closeLocalStackModal() {{
+            document.getElementById('ls-modal-overlay').classList.remove('open');
+            currentLsTest = null;
+        }}
+
+        function switchLocalStackTab(tab) {{
+            currentLsTab = tab;
+            document.querySelectorAll('.modal-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+            renderLsTabContent(tab);
+        }}
+
+        function renderLsTabContent(tab) {{
+            const test = currentLsTest;
+            const body = document.getElementById('ls-modal-body');
+            if (!test || !test.localstack) {{ body.innerHTML = '<div class="ls-empty">No LocalStack data for this configuration.</div>'; return; }}
+            const ls = test.localstack;
+
+            if (tab === 'overview') {{
+                const remediationCount = ls.remediations.length;
+                const deployBadge = ls.real_deploy
+                    ? (ls.real_deploy.result === 'PASS' ? '<span class="ls-deploy-pass">✅ PASS</span>' : '<span class="ls-deploy-fail">❌ FAIL</span>')
+                    : '<span style="color:#7f8c8d;">not in real-deploy sweep</span>';
+                body.innerHTML = `
+                    <div class="ls-overview-grid">
+                        <div class="ls-stat"><div class="n">${{ls.total_resources}}</div><div class="l">Resources in template</div></div>
+                        <div class="ls-stat"><div class="n">${{ls.config_rules.length}}</div><div class="l">AWS Config rules</div></div>
+                        <div class="ls-stat"><div class="n">${{remediationCount}}</div><div class="l">Auto-remediations active</div></div>
+                        <div class="ls-stat"><div class="n">${{deployBadge}}</div><div class="l">Real LocalStack deploy</div></div>
+                    </div>
+                    <h4 style="margin-bottom:8px;color:#2c3e50;">Validation layers for this configuration</h4>
+                    <div class="ls-layer-row"><span>Layer 1 &mdash; cdk-nag (construct-level)</span>${{getStatusBadge(test.cdk_nag_status)}}</div>
+                    <div class="ls-layer-row"><span>Layer 2 &mdash; FrameworkRules (business logic)</span>${{getStatusBadge(test.framework_rules_status)}}</div>
+                    <div class="ls-layer-row"><span>Layer 3 &mdash; cfn-guard (policy-as-code)</span>${{getStatusBadge(test.cfn_guard_status)}}</div>
+                    <div class="ls-layer-row"><span>Layer 4 &mdash; AWS Config (runtime monitoring)</span>${{getStatusBadge(test.aws_config_status)}}</div>
+                `;
+            }} else if (tab === 'resources') {{
+                if (ls.resource_types.length === 0) {{ body.innerHTML = '<div class="ls-empty">No resources in this template.</div>'; return; }}
+                body.innerHTML = `
+                    <table class="ls-grid-table">
+                        <thead><tr><th>Resource Type</th><th>Count</th></tr></thead>
+                        <tbody>${{ls.resource_types.map(([type, count]) => `<tr><td>${{type}}</td><td>${{count}}</td></tr>`).join('')}}</tbody>
+                    </table>`;
+            }} else if (tab === 'rules') {{
+                if (ls.config_rules.length === 0) {{ body.innerHTML = '<div class="ls-empty">No AWS::Config::ConfigRule resources in this template.</div>'; return; }}
+                const remediatedRules = new Set(ls.remediations.map(r => r.rule));
+                body.innerHTML = `
+                    <table class="ls-grid-table">
+                        <thead><tr><th>Config Rule</th><th>Auto-remediation</th></tr></thead>
+                        <tbody>${{ls.config_rules.map(rule => `<tr><td>${{rule}}</td><td>${{remediatedRules.has(rule) ? '<span class="ls-remediation-active">✓ active</span>' : '&mdash;'}}</td></tr>`).join('')}}</tbody>
+                    </table>`;
+            }} else if (tab === 'remediation') {{
+                if (ls.remediations.length === 0) {{ body.innerHTML = '<div class="ls-empty">None of the 9 known auto-remediation actions apply -- this configuration doesn\\'t deploy any of their watched Config rules.</div>'; return; }}
+                body.innerHTML = `
+                    <table class="ls-grid-table">
+                        <thead><tr><th>Remediation</th><th>SSM Document</th><th>Kind</th><th>Watched Rule</th></tr></thead>
+                        <tbody>${{ls.remediations.map(r => `<tr><td>${{r.label}}</td><td>${{r.document}}</td><td>${{r.kind}}</td><td>${{r.rule}}</td></tr>`).join('')}}</tbody>
+                    </table>`;
+            }} else if (tab === 'deploy') {{
+                if (!ls.real_deploy) {{ body.innerHTML = '<div class="ls-empty">This configuration wasn\\'t one of the 13 representative configs in the real LocalStack deploy sweep.</div>'; return; }}
+                const rd = ls.real_deploy;
+                const resultBadge = rd.result === 'PASS' ? '<span class="ls-deploy-pass">✅ PASS</span>' : rd.result === 'FAIL' ? '<span class="ls-deploy-fail">❌ FAIL</span>' : '<em>no result recorded</em>';
+                body.innerHTML = `
+                    <div class="ls-overview-grid">
+                        <div class="ls-stat"><div class="n">${{resultBadge}}</div><div class="l">${{rd.stack_status || 'unknown status'}}</div></div>
+                        <div class="ls-stat"><div class="n">${{rd.deployed ? 'yes' : 'no'}}</div><div class="l">LocalStackTemplateAdapter ran</div></div>
+                        <div class="ls-stat"><div class="n">${{rd.adaptation_count}}</div><div class="l">Template adaptations applied</div></div>
+                    </div>
+                    <p style="color:#7f8c8d; font-size:0.85em; margin-bottom:10px;">Matched real-deploy config: <code>${{rd.config}}</code></p>
+                    ${{rd.adaptation_reasons.length > 0 ? '<h4 style="margin-bottom:8px;color:#2c3e50;">What LocalStackTemplateAdapter changed</h4><ul class="ls-reason-list">' + rd.adaptation_reasons.map(r => `<li>${{r}}</li>`).join('') + '</ul>' : ''}}
+                `;
+            }}
+        }}
+
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') closeLocalStackModal();
+        }});
+
         function displayPagination() {{
             const totalPages = Math.ceil(filteredTests.length / testsPerPage);
             const pagination = document.getElementById('pagination');
@@ -2134,7 +2497,7 @@ class ComplianceReportGenerator:
 </html>"""
 
         html_file = self.output_dir / "compliance-validation-dashboard.html"
-        with open(html_file, 'w') as f:
+        with open(html_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
 
         print(f"✅ HTML dashboard saved to: {html_file}")

@@ -142,6 +142,7 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
         redirectAlbToLocalhostPort(local, adaptations);
         rewriteApplicationOidcForLocalStack(local, adaptations);
         removeUnsupportedLogRetentionCustomResources(local, adaptations);
+        removeUnsupportedS3AutoDeleteObjectsCustomResources(local, adaptations);
         removeUnsupportedCustomAwsResources(local, adaptations);
         removeRoute53QueryLogging(local, adaptations);
         String edgeHostname = removeRoute53RecordSets(local, adaptations);
@@ -851,6 +852,38 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                 adaptations.add(new TemplateAdaptation(
                     "Resources." + entry.getKey(),
                     "LocalStack CloudFormation hangs on CDK Custom::LogRetention; retention skipped",
+                    entry.getValue().deepCopy()
+                ));
+                remove.add(entry.getKey());
+            }
+        });
+        if (remove.isEmpty()) {
+            return;
+        }
+        remove.forEach(resources::remove);
+        cleanupDependsOnReferences(resources, remove);
+    }
+
+    /**
+     * CDK {@code Custom::S3AutoDeleteObjects} (from {@code Bucket.autoDeleteObjects(true)}) hangs
+     * the same way {@code Custom::LogRetention} does -- the provider Lambda never leaves
+     * CREATE_IN_PROGRESS on LocalStack. Bucket contents just won't be auto-purged on stack
+     * deletion locally, which doesn't matter for an emulator.
+     */
+    private static void removeUnsupportedS3AutoDeleteObjectsCustomResources(
+            ObjectNode template,
+            List<TemplateAdaptation> adaptations) {
+        ObjectNode resources = asObject(template.get("Resources"));
+        if (resources == null) {
+            return;
+        }
+        List<String> remove = new ArrayList<>();
+        resources.properties().forEach(entry -> {
+            String type = entry.getValue().path("Type").asText();
+            if ("Custom::S3AutoDeleteObjects".equals(type)) {
+                adaptations.add(new TemplateAdaptation(
+                    "Resources." + entry.getKey(),
+                    "LocalStack CloudFormation hangs on CDK Custom::S3AutoDeleteObjects; bucket auto-purge skipped",
                     entry.getValue().deepCopy()
                 ));
                 remove.add(entry.getKey());

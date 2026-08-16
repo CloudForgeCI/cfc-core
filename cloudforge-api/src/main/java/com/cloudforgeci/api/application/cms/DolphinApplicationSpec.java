@@ -430,25 +430,4 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     public List<String> getSupportedAuthModes() {
         return List.of("alb-oidc", "none");
     }
-
-    // ========== Path-Based Authentication ==========
-
-    /**
-     * Returns default protected paths for UNA/Dolphin when using ALB-level OIDC.
-     *
-     * <p>UNA administrative areas:</p>
-     * <ul>
-     *   <li>/studio - Studio (admin panel)</li>
-     *   <li>/install - Installation wizard</li>
-     * </ul>
-     *
-     * @return list of UNA administrative paths requiring authentication
-     */
-    @Override
-    public List<String> protectedPaths() {
-        return List.of(
-            "/studio/*",     // Studio (admin panel)
-            "/install/*"     // Installation wizard
-        );
-    }
 }

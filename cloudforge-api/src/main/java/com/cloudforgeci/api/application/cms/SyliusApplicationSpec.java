@@ -202,7 +202,7 @@ public class SyliusApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/media/*",
             "/bundles/*",
@@ -403,7 +403,7 @@ public class SyliusApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of Sylius administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/admin/*"    // Store administration panel
         );

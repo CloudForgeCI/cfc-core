@@ -218,7 +218,9 @@ public final class CmsServiceTopologyConfiguration implements TopologyConfigurat
     private void wireBaseAutoscalingAndDns(SystemContext c) {
         Integer maxCap = c.maxInstanceCapacity.get().orElse(null);
         Integer minCap = c.minInstanceCapacity.get().orElse(null);
-        boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1;
+        // Respect an explicit enableAutoScaling=false even when the capacity range would otherwise enable it.
+        boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1
+            && !Boolean.FALSE.equals(c.cfc.enableAutoScaling());
 
         if (scale && !c.fargateAutoscalingCallbackRegistered.get().isPresent()) {
             whenBoth(c.fargateService, c.alb, (service, alb) -> {

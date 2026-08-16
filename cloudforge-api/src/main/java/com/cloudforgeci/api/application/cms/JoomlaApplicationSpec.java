@@ -429,23 +429,4 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
     public List<String> getSupportedAuthModes() {
         return List.of("application-oidc", "alb-oidc", "none");
     }
-
-    // ========== Path-Based Authentication ==========
-
-    /**
-     * Returns default protected paths for Joomla when using ALB-level OIDC.
-     *
-     * <p>Joomla administrative areas:</p>
-     * <ul>
-     *   <li>/administrator/* - Backend administration panel</li>
-     * </ul>
-     *
-     * @return list of Joomla administrative paths requiring authentication
-     */
-    @Override
-    public List<String> protectedPaths() {
-        return List.of(
-            "/administrator/*"  // Backend admin panel
-        );
-    }
 }

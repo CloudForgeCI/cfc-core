@@ -30,6 +30,19 @@ import java.util.Map;
  * }
  * }</pre>
  *
+ * <h2>4.0 migration intent</h2>
+ * <p>This is a CMS compatibility/binding contract, not a CMS-only cache provisioning model.
+ * During the 4.0 migration, object, session, and page-cache needs are adapted to named typed
+ * requirements such as {@code cache.object}, {@code cache.sessions}, and {@code cache.pages}.
+ * The platform resolves the allowed provider/profile, endpoint binding, network placement,
+ * encryption, access policy, target capability, entitlement restriction, and applicable
+ * compliance controls.</p>
+ *
+ * <p>CMS-specific environment/configuration mapping remains application-owned. New application
+ * plugins should request reusable cache capabilities directly; existing implementations remain
+ * supported through the 4.0 compatibility adapter until synthesis, integration, parameterized,
+ * and compliance regressions prove equivalent behavior.</p>
+ *
  * @since 3.1.0
  * @see CmsSpec
  */

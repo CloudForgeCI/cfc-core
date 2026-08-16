@@ -84,7 +84,9 @@ public final class ApplicationServiceTopologyConfiguration implements TopologyCo
     // Auto-scaling policies apply only when maxInstanceCapacity > 1
     Integer maxCap = c.maxInstanceCapacity.get().orElse(null);
     Integer minCap = c.minInstanceCapacity.get().orElse(null);
-    boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1;
+    // Respect an explicit enableAutoScaling=false even when the capacity range would otherwise enable it.
+    boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1
+        && !Boolean.FALSE.equals(c.cfc.enableAutoScaling());
     LOG.fine("=== ApplicationServiceTopologyConfiguration.wire() called ===");
     LOG.fine("minCap=" + minCap + ", maxCap=" + maxCap + ", scale=" + scale);
     LOG.fine("fargateService present: " + c.fargateService.get().isPresent());

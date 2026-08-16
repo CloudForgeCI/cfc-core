@@ -340,17 +340,21 @@ public final class DeploymentContext {
     public String databaseEngine() { return config.databaseEngine; }
     public String databaseVersion() { return config.databaseVersion; }
     public Integer databaseReadReplicaCount() { return config.databaseReadReplicaCount; }
-    // NOTE: databaseInstanceClass/databaseAllocatedStorageGB/databaseName/
-    // databaseBackupRetentionDays/databaseMultiAz/enableAutoScaling are deliberately NOT exposed
-    // here even though ApplicationFactory declares @DeploymentContext fields for them — adding
-    // getters (tried during the account-cipher-key work below) made RdsFactory/compliance rules
-    // read DeploymentConfig's class-level defaults (e.g. databaseMultiAz=false,
-    // databaseBackupRetentionDays=7) instead of falling through to their existing
-    // SecurityProfileConfiguration-driven defaults, which regressed 14+ compliance truth-table
-    // tests (HIPAA/PCI-DSS/SOC2/GDPR × EC2/Fargate expecting profile-driven MultiAZ/retention).
-    // Those six fields were already silently inert before this file existed; fixing them for
-    // real needs the profile-fallback logic updated in lockstep, not just a getter added here —
-    // tracked as a separate follow-up, out of scope for provisionManagerAccountCipherKey.
+
+    public String databaseInstanceClass() { return config.databaseInstanceClass; }
+    public Integer databaseAllocatedStorageGB() { return config.databaseAllocatedStorageGB; }
+    public String databaseName() { return config.databaseName; }
+
+    // databaseMultiAz/databaseBackupRetentionDays/enableAutoScaling carry a non-null class-level
+    // default on DeploymentConfig, so a plain forwarding getter can't distinguish "unset" from
+    // "explicitly set to the default" — checking `raw` (the incoming context map) instead lets an
+    // unset field fall through to its profile/requirement-driven default rather than always
+    // overriding it. Doesn't cover a DeploymentConfig round-tripped through toContextMap() (e.g.
+    // redeploy-from-history), which re-serializes these as explicit values regardless.
+    public Boolean databaseMultiAz() { return raw.containsKey("databaseMultiAz") ? config.databaseMultiAz : null; }
+    public Integer databaseBackupRetentionDays() { return raw.containsKey("databaseBackupRetentionDays") ? config.databaseBackupRetentionDays : null; }
+    public Boolean enableAutoScaling() { return raw.containsKey("enableAutoScaling") ? config.enableAutoScaling : null; }
+
     public Boolean provisionManagerRedisSessions() { return config.provisionManagerRedisSessions; }
     public Boolean provisionManagerAccountCipherKey() { return config.provisionManagerAccountCipherKey; }
     public Boolean enableS3VersioningRemediation() { return config.enableS3VersioningRemediation; }

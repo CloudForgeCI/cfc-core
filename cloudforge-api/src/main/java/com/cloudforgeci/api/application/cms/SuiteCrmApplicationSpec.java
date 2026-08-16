@@ -201,7 +201,7 @@ public class SuiteCrmApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/themes/*",
             "/include/*",
@@ -414,7 +414,9 @@ public class SuiteCrmApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of SuiteCRM administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
+        // /api/* belongs here rather than cdnStaticPaths: API responses must never be
+        // edge-cached and need full session/header forwarding.
         return List.of(
             "/api/*",         // Backend API
             "/install.php"    // Installation script

@@ -200,7 +200,7 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/application/files/*",
             "/concrete/css/*",
@@ -405,7 +405,7 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of Concrete CMS administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/dashboard/*",    // Site dashboard
             "/ccm/*"           // Core system routes

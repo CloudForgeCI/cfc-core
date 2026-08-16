@@ -466,25 +466,4 @@ public class WordPressApplicationSpec implements CmsSpec, DatabaseSpec {
     public List<String> getSupportedAuthModes() {
         return List.of("application-oidc", "alb-oidc", "none");
     }
-
-    // ========== Path-Based Authentication ==========
-
-    /**
-     * Returns default protected paths for WordPress when using ALB-level OIDC.
-     *
-     * <p>WordPress administrative areas:</p>
-     * <ul>
-     *   <li>/wp-admin/* - Admin dashboard and all admin pages</li>
-     *   <li>/wp-login.php - Login page</li>
-     * </ul>
-     *
-     * @return list of WordPress administrative paths requiring authentication
-     */
-    @Override
-    public List<String> protectedPaths() {
-        return List.of(
-            "/wp-admin/*",     // Admin dashboard
-            "/wp-login.php"    // Login page
-        );
-    }
 }

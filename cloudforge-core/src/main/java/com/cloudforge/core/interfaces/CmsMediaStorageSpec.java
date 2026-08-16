@@ -25,6 +25,19 @@ import java.util.Map;
  * }
  * }</pre>
  *
+ * <h2>4.0 migration intent</h2>
+ * <p>This is a CMS compatibility/binding contract, not a CMS-only infrastructure model. During
+ * the 4.0 migration, its shared storage and delivery concerns are adapted to named typed
+ * requirements such as {@code storage.media} and an optional delivery/CDN policy. Provider
+ * selection, bucket naming, IAM, encryption, public-access blocking, retention, versioning,
+ * target support, entitlement restrictions, and compliance evidence are resolved by the platform,
+ * not by this interface or a CMS plugin.</p>
+ *
+ * <p>Methods that describe how a particular CMS configures its S3/offload extension remain
+ * application-owned binding behavior. New application plugins should request reusable object
+ * storage and delivery capabilities directly; existing implementations remain supported through
+ * the 4.0 compatibility adapter until their regression coverage proves equivalent behavior.</p>
+ *
  * @since 3.1.0
  * @see CmsSpec
  */

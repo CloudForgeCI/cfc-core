@@ -201,7 +201,7 @@ public class MyBBApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public List<String> cdnAssetPaths() {
+    public List<String> cdnStaticPaths() {
         return List.of(
             "/images/*",
             "/jscripts/*",
@@ -280,7 +280,8 @@ public class MyBBApplicationSpec implements CmsSpec, DatabaseSpec {
 
     @Override
     public DatabaseRequirement databaseRequirement() {
-        return DatabaseRequirement.required("mysql", "5.0")
+        // MySQL 5.0 is no longer a valid RDS parameter group family; MyBB 1.8 supports 5.7.
+        return DatabaseRequirement.required("mysql", "5.7")
             .withInstanceClass("db.t3.micro")
             .withStorage(20)
             .withDatabaseName("mybb");
@@ -405,7 +406,7 @@ public class MyBBApplicationSpec implements CmsSpec, DatabaseSpec {
      * @return list of MyBB administrative paths requiring authentication
      */
     @Override
-    public List<String> protectedPaths() {
+    public List<String> cdnAdminPaths() {
         return List.of(
             "/admin/*",     // Admin Control Panel
             "/install/*"    // Installation directory
