@@ -24,7 +24,7 @@ public final class MiniStackDeploymentPipeline {
     private MiniStackDeploymentPipeline() {
     }
 
-    /** @deprecated use {@link LocalDeploymentArtifactPaths#forTarget} via {@link LocalDeploymentRequest}. */
+    /** @deprecated use {@link com.cloudforge.core.local.LocalDeploymentArtifactPaths#forTarget} via {@link LocalDeploymentRequest}. */
     @Deprecated
     public record ArtifactPaths(Path canonicalTemplate, Path localTemplate, Path adaptationReport) {
         public static ArtifactPaths inDirectory(Path outputDirectory, String contextStackName) {

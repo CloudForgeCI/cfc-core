@@ -81,6 +81,9 @@ jobs:
           - 4566:4566
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          # AWS::Config::ConfigRule (60+ per compliance stack) currently deploys but LocalStack
+          # has flagged it for a hard failure in a future release without this set.
+          CFN_IGNORE_UNSUPPORTED_RESOURCE_TYPES: "1"
         # Same real fixes as cloudforge-manager/localstack-integration.yml -- see that file for
         # why each of these is needed (Lambda/RDS emulation need the host docker.sock and a real
         # host path for LocalStack's own bind mounts; the network-alias matches the hostname
@@ -267,6 +270,9 @@ jobs:
           - 4566:4566
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          # AWS::Config::ConfigRule (60+ per compliance stack) currently deploys but LocalStack
+          # has flagged it for a hard failure in a future release without this set.
+          CFN_IGNORE_UNSUPPORTED_RESOURCE_TYPES: "1"
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
           - /tmp/localstack-volume:/var/lib/localstack

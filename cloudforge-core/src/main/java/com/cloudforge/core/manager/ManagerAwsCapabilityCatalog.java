@@ -90,8 +90,8 @@ public final class ManagerAwsCapabilityCatalog {
         /**
          * Lets a cross-account connection's role verify its own effective permissions via {@code
          * iam:SimulatePrincipalPolicy} — this is how {@code AccountsController}'s "Validate
-         * connection" surfaces a real least-privilege report (which of {@link
-         * com.cloudforgeci.manager.accounts.CrossAccountRoleTemplateFactory}'s granted actions
+         * connection" surfaces a real least-privilege report (which of
+         * {@code CrossAccountRoleTemplateFactory}'s granted actions
          * actually evaluate to Allow) instead of just proving {@code sts:AssumeRole} works.
          * Simulate-only — never executes anything, so this is safe to grant broadly. Connections
          * whose role predates this capability simply report "unable to verify" rather than
