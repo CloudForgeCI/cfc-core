@@ -187,7 +187,7 @@ def render_html(rows) -> str:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>LocalStack Compliance: Synth vs Adapted vs Real Deploy</title>
+    <title>LocalStack Compliance: Synth vs Adapted vs Live Deploy</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }}
@@ -217,8 +217,8 @@ def render_html(rows) -> str:
 <body>
 <div class="container">
     <div class="header">
-        <h1>LocalStack Compliance: Synth vs Adapted vs Real Deploy</h1>
-        <p>Per config: what CDK synth produced, what LocalStackTemplateAdapter changed to make it deployable, and the real deploy result — read directly from cdk.out, no live LocalStack query needed</p>
+        <h1>LocalStack Compliance: Synth vs Adapted vs Live Deploy</h1>
+        <p>Per config: what CDK synth produced, what changed to make it deployable on LocalStack, and the live deploy result — read directly from cdk.out, no live LocalStack query needed</p>
         <p><small>Generated {datetime.now().isoformat()}</small></p>
     </div>
     <a class="back-link" href="compliance-validation-dashboard.html">← Back to Compliance Dashboard</a>
@@ -227,7 +227,7 @@ def render_html(rows) -> str:
             <div class="stat-card"><div class="stat-number">{total}</div><div class="stat-label">Configs</div></div>
             <div class="stat-card {'success' if synthesized == total else 'failed'}"><div class="stat-number">{synthesized}/{total}</div><div class="stat-label">Synthesized</div></div>
             <div class="stat-card {'success' if adapted_ok == total else 'failed'}"><div class="stat-number">{adapted_ok}/{total}</div><div class="stat-label">LocalStack-adapted</div></div>
-            <div class="stat-card success"><div class="stat-number">{real_pass}/{total}</div><div class="stat-label">Real deploys passed</div></div>
+            <div class="stat-card success"><div class="stat-number">{real_pass}/{total}</div><div class="stat-label">Live deploys passed</div></div>
             <div class="stat-card {'failed' if config_rule_drops else 'success'}"><div class="stat-number">{config_rule_drops}</div><div class="stat-label">Config rules lost in adapt</div></div>
         </div>
         <table>
@@ -236,7 +236,7 @@ def render_html(rows) -> str:
                     <th>Framework / Profile / Runtime</th>
                     <th>Synth (canonical template)</th>
                     <th>LocalStack adapt (what changed)</th>
-                    <th>Real deploy</th>
+                    <th>Live deploy</th>
                     <th>cdk-nag findings</th>
                 </tr>
             </thead>

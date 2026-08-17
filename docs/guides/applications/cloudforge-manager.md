@@ -33,18 +33,19 @@ Application deployments do not depend on Manager availability. The local action 
 ## Build the container image
 
 Unlike Jenkins (`jenkins/jenkins:lts` from Docker Hub — no in-repo build), CloudForge Manager
-uses a custom image. Dockerfile lives at [`docker/cloudforge-manager/`](../../docker/cloudforge-manager/)
-(same root `docker/` layout as OpenCart/WooCommerce). Build from repo root:
+uses a custom image. The Dockerfile lives in `cloudforge-manager`'s own repo (checked out as a
+local sibling here for dev convenience) and builds against published Maven artifacts rather than
+this repo's source. Build from repo root, same as any other app in this compose file:
 
 ```bash
 docker compose build cloudforge-manager
-# or:
-docker build -t cloudforgeci/cloudforge-manager:latest \
-  -f docker/cloudforge-manager/Dockerfile .
 ```
 
-For MiniStack, ensure the image is available to the MiniStack Docker daemon
-(build on the same host, or push/pull as needed).
+`CloudForgeManagerDeploymentExtension` builds this image locally whenever the `cloudforge-manager`
+sibling checkout is present, or pulls the latest prebuilt image from GHCR
+(`ghcr.io/cloudforgeci/cloudforge-manager:latest`, published by that repo's own CI on every push
+to `develop`) whenever it isn't — CI included. Nothing to build or push manually in the normal
+case.
 
 ## Deploy
 

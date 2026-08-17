@@ -1754,7 +1754,7 @@ class ComplianceReportGenerator:
             <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
             <p style="margin-top: 10px;">Defense-in-depth validation across 4 independent layers</p>
             {localstack_banner}
-            {'<p style="margin-top: 15px;"><a href="localstack-compliance-comparison.html" class="back-link">🚀 Real LocalStack deploy comparison (L5) →</a></p>' if (self.output_dir / 'localstack-compliance-comparison.html').exists() else ''}
+            {'<p style="margin-top: 15px;"><a href="localstack-compliance-comparison.html" class="back-link">🚀 LocalStack deploy comparison →</a></p>' if (self.output_dir / 'localstack-compliance-comparison.html').exists() else ''}
         </div>
 
         <div class="content">
@@ -1938,7 +1938,7 @@ class ComplianceReportGenerator:
                 <button class="modal-tab" data-tab="resources" onclick="switchLocalStackTab('resources')">Resources Created</button>
                 <button class="modal-tab" data-tab="rules" onclick="switchLocalStackTab('rules')">Config Rules</button>
                 <button class="modal-tab" data-tab="remediation" onclick="switchLocalStackTab('remediation')">Remediation</button>
-                <button class="modal-tab" data-tab="deploy" id="ls-tab-deploy-btn" style="display:none;" onclick="switchLocalStackTab('deploy')">Real Deploy</button>
+                <button class="modal-tab" data-tab="deploy" id="ls-tab-deploy-btn" style="display:none;" onclick="switchLocalStackTab('deploy')">LocalStack Deploy</button>
             </div>
             <div class="modal-body" id="ls-modal-body"></div>
         </div>
@@ -2376,13 +2376,13 @@ class ComplianceReportGenerator:
                 const remediationCount = ls.remediations.length;
                 const deployBadge = ls.real_deploy
                     ? (ls.real_deploy.result === 'PASS' ? '<span class="ls-deploy-pass">✅ PASS</span>' : '<span class="ls-deploy-fail">❌ FAIL</span>')
-                    : '<span style="color:#7f8c8d;">not in real-deploy sweep</span>';
+                    : '<span style="color:#7f8c8d;">synth-only</span>';
                 body.innerHTML = `
                     <div class="ls-overview-grid">
                         <div class="ls-stat"><div class="n">${{ls.total_resources}}</div><div class="l">Resources in template</div></div>
                         <div class="ls-stat"><div class="n">${{ls.config_rules.length}}</div><div class="l">AWS Config rules</div></div>
                         <div class="ls-stat"><div class="n">${{remediationCount}}</div><div class="l">Auto-remediations active</div></div>
-                        <div class="ls-stat"><div class="n">${{deployBadge}}</div><div class="l">Real LocalStack deploy</div></div>
+                        <div class="ls-stat"><div class="n">${{deployBadge}}</div><div class="l">LocalStack deploy result</div></div>
                     </div>
                     <h4 style="margin-bottom:8px;color:#2c3e50;">Validation layers for this configuration</h4>
                     <div class="ls-layer-row"><span>Layer 1 &mdash; cdk-nag (construct-level)</span>${{getStatusBadge(test.cdk_nag_status)}}</div>
@@ -2413,17 +2413,18 @@ class ComplianceReportGenerator:
                         <tbody>${{ls.remediations.map(r => `<tr><td>${{r.label}}</td><td>${{r.document}}</td><td>${{r.kind}}</td><td>${{r.rule}}</td></tr>`).join('')}}</tbody>
                     </table>`;
             }} else if (tab === 'deploy') {{
-                if (!ls.real_deploy) {{ body.innerHTML = '<div class="ls-empty">This configuration wasn\\'t one of the 13 representative configs in the real LocalStack deploy sweep.</div>'; return; }}
+                if (!ls.real_deploy) {{ body.innerHTML = '<div class="ls-empty">Not part of the 13 representative configs deployed to a live LocalStack instance.</div>'; return; }}
                 const rd = ls.real_deploy;
                 const resultBadge = rd.result === 'PASS' ? '<span class="ls-deploy-pass">✅ PASS</span>' : rd.result === 'FAIL' ? '<span class="ls-deploy-fail">❌ FAIL</span>' : '<em>no result recorded</em>';
+                const ranBadge = rd.deployed ? '<span class="ls-deploy-pass">✅</span>' : '<span class="ls-deploy-fail">—</span>';
                 body.innerHTML = `
                     <div class="ls-overview-grid">
                         <div class="ls-stat"><div class="n">${{resultBadge}}</div><div class="l">${{rd.stack_status || 'unknown status'}}</div></div>
-                        <div class="ls-stat"><div class="n">${{rd.deployed ? 'yes' : 'no'}}</div><div class="l">LocalStackTemplateAdapter ran</div></div>
+                        <div class="ls-stat"><div class="n">${{ranBadge}}</div><div class="l">Ran against a live LocalStack instance</div></div>
                         <div class="ls-stat"><div class="n">${{rd.adaptation_count}}</div><div class="l">Template adaptations applied</div></div>
                     </div>
-                    <p style="color:#7f8c8d; font-size:0.85em; margin-bottom:10px;">Matched real-deploy config: <code>${{rd.config}}</code></p>
-                    ${{rd.adaptation_reasons.length > 0 ? '<h4 style="margin-bottom:8px;color:#2c3e50;">What LocalStackTemplateAdapter changed</h4><ul class="ls-reason-list">' + rd.adaptation_reasons.map(r => `<li>${{r}}</li>`).join('') + '</ul>' : ''}}
+                    <p style="color:#7f8c8d; font-size:0.85em; margin-bottom:10px;">Matched representative config: <code>${{rd.config}}</code></p>
+                    ${{rd.adaptation_reasons.length > 0 ? '<h4 style="margin-bottom:8px;color:#2c3e50;">What changed to make it deployable on LocalStack</h4><ul class="ls-reason-list">' + rd.adaptation_reasons.map(r => `<li>${{r}}</li>`).join('') + '</ul>' : ''}}
                 `;
             }}
         }}

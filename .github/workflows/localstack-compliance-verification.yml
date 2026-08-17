@@ -129,6 +129,19 @@ jobs:
           mvn -B dependency:copy-dependencies -DoutputDirectory=target/dependency -q
           chmod +x scripts/*.sh
 
+      # Every compliance config deploys applicationId: cloudforge-manager, which
+      # CloudForgeManagerDeploymentExtension builds from local source when the cloudforge-manager/
+      # sibling checkout is present, or pulls from GHCR otherwise -- always the pull path here,
+      # since this checkout is cfc-core alone. Requires a repo secret with read:packages access to
+      # the private CloudForgeCI/cloudforge-manager package (cfc-core's own GITHUB_TOKEN can't
+      # read another repo's packages).
+      - name: Log in to GHCR for the cloudforge-manager image pull
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PULL_TOKEN }}
+
       - name: Run the compliance matrix against LocalStack
         env:
           LOCALSTACK_CONTAINER_ID: ${{ job.services.localstack.id }}
