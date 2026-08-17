@@ -162,6 +162,7 @@ create_deployment_context() {
   "createConfigInfrastructure": "$create_config_infrastructure",
   "domain": "$DOMAIN",
   "subdomain": "$subdomain",
+  "createZone": "true",
   "logRetentionDays": "7",
   "region": "us-east-1",
   "enableEncryption": "true"
@@ -341,10 +342,12 @@ run_synthesis() {
         echo -e "  ${RED}❌ Synthesis failed - no template generated${NC}"
         echo "  📄 Error log: $synth_error"
 
-        # Show first 10 lines of error for debugging
+        # jsii's untested-node-version banner (if present) is ~20 lines of "!!"-bordered noise
+        # that pushes the real exception straight out of a fixed head -N window -- strip it and
+        # blank lines first so the actual error is what gets shown, not always the same banner.
         if [ -f "$synth_error" ] && [ -s "$synth_error" ]; then
-            echo "  📋 Error details (first 10 lines):"
-            head -10 "$synth_error" | sed 's/^/     /'
+            echo "  📋 Error details (up to 40 lines, banner/blank lines stripped):"
+            grep -v '^!!' "$synth_error" | grep -v '^$' | head -40 | sed 's/^/     /'
         fi
 
         return 1
@@ -361,14 +364,23 @@ analyze_results() {
     local successful_tests=0
     local failed_tests=0
     
-    # Count tests
+    # Count tests -- EC2 only ever runs ec1/ec2/ec3 subdomains, FARGATE only fc1/fc2/fc3 (see the
+    # actual test-execution loops below); skip the other runtime's subdomain set rather than
+    # counting it as a failure, or every run reports 18 phantom failures that were never real
+    # tests (e.g. EC2-DEV-fc1, which is never synthesized in the first place).
     for runtime in "EC2" "FARGATE"; do
         for security_profile in "DEV" "STAGING" "PRODUCTION"; do
             for subdomain in "ec1" "ec2" "ec3" "fc1" "fc2" "fc3"; do
+                if [[ "$runtime" == "EC2" && ! "$subdomain" =~ ^ec ]]; then
+                    continue
+                fi
+                if [[ "$runtime" == "FARGATE" && ! "$subdomain" =~ ^fc ]]; then
+                    continue
+                fi
                 total_tests=$((total_tests + 1))
                 local stack_name="$(echo $runtime | tr '[:upper:]' '[:lower:]')-$(echo $security_profile | tr '[:upper:]' '[:lower:]')-${subdomain}"
                 local template_file="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-template.json"
-                
+
                 if [ -f "$template_file" ]; then
                     successful_tests=$((successful_tests + 1))
                 else
@@ -390,6 +402,12 @@ analyze_results() {
     for runtime in "EC2" "FARGATE"; do
         for security_profile in "DEV" "STAGING" "PRODUCTION"; do
             for subdomain in "ec1" "ec2" "ec3" "fc1" "fc2" "fc3"; do
+                if [[ "$runtime" == "EC2" && ! "$subdomain" =~ ^ec ]]; then
+                    continue
+                fi
+                if [[ "$runtime" == "FARGATE" && ! "$subdomain" =~ ^fc ]]; then
+                    continue
+                fi
                 local template_file="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-template.json"
                 if [ -f "$template_file" ]; then
                     local route53_count=$(grep -c "AWS::Route53::RecordSet" "$template_file" 2>/dev/null || echo "0")
@@ -407,6 +425,12 @@ analyze_results() {
     for runtime in "EC2" "FARGATE"; do
         for security_profile in "DEV" "STAGING" "PRODUCTION"; do
             for subdomain in "ec1" "ec2" "ec3" "fc1" "fc2" "fc3"; do
+                if [[ "$runtime" == "EC2" && ! "$subdomain" =~ ^ec ]]; then
+                    continue
+                fi
+                if [[ "$runtime" == "FARGATE" && ! "$subdomain" =~ ^fc ]]; then
+                    continue
+                fi
                 local template_file="$RESULTS_DIR/${runtime}-${security_profile}-${subdomain}-template.json"
                 if [ -f "$template_file" ]; then
                     local sg_count=$(grep -c "AWS::EC2::SecurityGroup" "$template_file" 2>/dev/null || echo "0")

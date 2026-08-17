@@ -380,6 +380,21 @@ jobs:
           bash generate-synth-report.sh
           echo "✅ Synthesis report generation complete"
 
+      # Full error logs (comprehensive-synth-test.sh only ever prints an excerpt to stdout) --
+      # the runner's disk is gone once the job ends, so without this any failure investigation
+      # is stuck re-running blind. Always uploads, pass or fail, since a partial failure still
+      # leaves useful logs for the configs that did fail.
+      - name: Upload synthesis test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comprehensive-synth-logs
+          path: |
+            cfc-testing/comprehensive-synth.log
+            cfc-testing/scripts/synth-results/*-error.log
+          retention-days: 90
+          if-no-files-found: warn
+
       - name: Capture build snapshot
         run: |
           set -o pipefail
