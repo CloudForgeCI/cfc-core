@@ -157,6 +157,11 @@ public final class SystemContext extends Construct {
   // ContainerFactory's binding of this into CFC_MANAGER_ACCOUNT_SECRET_KEY.
   public final Slot<String> accountCipherKeySecretArn = new Slot<>();
 
+  // Customer license key (Secrets Manager) — currently only populated for cloudforge-manager
+  // when DeploymentContext.managerLicenseKey is set, see ApplicationFactory's provisioning and
+  // ContainerFactory's binding of this into CFC_MANAGER_LICENSESEAT_LICENSE_KEY.
+  public final Slot<String> licenseKeySecretArn = new Slot<>();
+
   // INTERNAL USE ONLY: Cognito client secret Custom Resource (for CDK dependency tracking)
   // This is used internally to ensure ECS tasks don't start before the secret is created in Secrets Manager.
   // Do not use this field directly - it is managed automatically by CognitoAuthenticationFactory.
@@ -1050,6 +1055,18 @@ public final class SystemContext extends Construct {
     // HIPAA suppressions
     suppressions.add(NagPackSuppression.builder()
         .id("HIPAA.Security-SecretsManagerRotationEnabled")
+        .reason("Secrets rotation is application-dependent and configured per deployment requirements. " +
+                "Applications using database credentials can enable rotation through deployment config.")
+        .build());
+
+    // Same finding as HIPAA.Security-SecretsManagerRotationEnabled above, under the generic
+    // AWS Solutions pack's own rule ID rather than a framework-specific one — that pack loads
+    // whenever any compliance framework is enabled (it isn't gated by complianceMode the way the
+    // framework-specific packs' violations are), so a stack with frameworks enabled but no HIPAA
+    // suppression coverage (e.g. SOC2/PCI-DSS/GDPR only) would otherwise hard-fail synthesis on
+    // this exact same non-issue.
+    suppressions.add(NagPackSuppression.builder()
+        .id("AwsSolutions-SMG4")
         .reason("Secrets rotation is application-dependent and configured per deployment requirements. " +
                 "Applications using database credentials can enable rotation through deployment config.")
         .build());

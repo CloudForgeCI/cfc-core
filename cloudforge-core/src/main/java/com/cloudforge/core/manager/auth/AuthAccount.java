@@ -12,9 +12,12 @@ import java.time.Instant;
  * <ul>
  *   <li>{@code enabled}/{@code status} — Cognito-only (account enable state / Cognito's
  *       {@code UserStatus}, e.g. {@code "CONFIRMED"}); always {@code null} for local accounts.</li>
- *   <li>{@code firstSeenAt}/{@code lastSeenAt}/{@code lastLoginAt}/{@code activeSessionCount} —
- *       local-only (Manager tracks these itself; Cognito sessions aren't Manager's to track);
- *       always {@code null} for Cognito accounts.</li>
+ *   <li>{@code firstSeenAt}/{@code lastSeenAt}/{@code lastLoginAt} — local-only; always {@code
+ *       null} for Cognito accounts (Manager keeps no local row for the timestamps themselves).
+ *       {@code activeSessionCount} is populated for both backends — a Cognito-authenticated login
+ *       still gets a real Manager-tracked session (see {@code CognitoAuthBackend}'s own javadoc),
+ *       so it's {@code null} only when a backend genuinely can't determine it, not by backend
+ *       type.</li>
  *   <li>{@code linkedAccountId} — the counterpart account's {@link #id()} in the *other* backend,
  *       when this account was created by (or has since been linked during) a migration; {@code
  *       null} otherwise. See {@code AuthBackendMigrationService} for how this avoids creating

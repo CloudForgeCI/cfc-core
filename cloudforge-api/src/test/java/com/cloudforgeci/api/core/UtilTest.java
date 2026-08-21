@@ -3,6 +3,7 @@ package com.cloudforgeci.api.core;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -223,5 +224,24 @@ class UtilTest {
         assertNotNull(context1);
         assertNotNull(context2);
         assertNotSame(context1, context2);
+    }
+
+    /** Regression: {@code complianceFrameworks} arriving as a {@code List} (e.g. from a raw JSON
+     *  array — {@code convertToContext} legitimately produces this shape) previously threw
+     *  {@code ClassCastException} on a blind {@code (String)} cast, before {@code
+     *  DeploymentConfig.fromMap} ever got a chance to normalize it. Must normalize to the same
+     *  comma-joined string form a plain string value already uses. */
+    @Test
+    void complianceFrameworksAsListIsNormalizedNotCastBlind() {
+        Map<String, Object> contextMap = new HashMap<>();
+        contextMap.put("stackName", "TestStack");
+        contextMap.put("complianceFrameworks", List.of("soc2", "hipaa"));
+
+        DeploymentContext context = Util.createDeploymentContext(contextMap);
+
+        assertNotNull(context);
+        assertNotNull(context.complianceFrameworks());
+        assertTrue(context.complianceFrameworks().toUpperCase().contains("SOC2"));
+        assertTrue(context.complianceFrameworks().toUpperCase().contains("HIPAA"));
     }
 }

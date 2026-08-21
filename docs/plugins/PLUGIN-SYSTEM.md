@@ -7,7 +7,7 @@ CloudForge supports two plugin types for extending application deployment and co
 | Plugin Type | Purpose | Interface | Examples |
 |-------------|---------|-----------|----------|
 | **Application Plugins** | Deploy custom applications | `ApplicationSpec` | Vault, GitLab, Grafana, Mattermost |
-| **Compliance Plugins** | Add compliance frameworks | `FrameworkRules<SystemContext>` + `@ComplianceFramework` | NIST 800-53, FedRAMP, custom policies |
+| **Compliance Plugins** | Add compliance frameworks | `FrameworkRules<SystemContext>` + `@ComplianceFramework` | NIST 800-53, custom policies |
 
 ---
 
@@ -203,7 +203,6 @@ Compliance frameworks use priorities to control execution order:
 | **SOC2** | 40 | ❌ | ✅ Built-in |
 | **ISO-27001** | 50 | ❌ | ✅ Built-in |
 | NIST 800-53 | 25 | ❌ | 🚧 Plugin |
-| FedRAMP | 26 | ❌ | 🚧 Plugin |
 
 ---
 

@@ -273,6 +273,62 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             if (name.contains("gitlab")) {
                 return "gitlab.cloudforge.localhost";
             }
+            // The rest of the CMS/e-commerce catalog (ApplicationSpec#applicationPort) also
+            // listens on 80 — without its own case here each one silently fell through to
+            // CONTAINER_PORT_TO_HOST's gitlab default below. "woocommerce" is checked before
+            // "wordpress" purely for readability; WooCommerceApplicationSpec's own stack naming
+            // never contains "wordpress" so the order doesn't actually matter.
+            if (name.contains("wordpress")) {
+                return "wordpress.cloudforge.localhost";
+            }
+            if (name.contains("woocommerce")) {
+                return "woocommerce.cloudforge.localhost";
+            }
+            if (name.contains("drupal")) {
+                return "drupal.cloudforge.localhost";
+            }
+            if (name.contains("magento")) {
+                return "magento.cloudforge.localhost";
+            }
+            if (name.contains("prestashop")) {
+                return "prestashop.cloudforge.localhost";
+            }
+            if (name.contains("opencart")) {
+                return "opencart.cloudforge.localhost";
+            }
+            if (name.contains("bagisto")) {
+                return "bagisto.cloudforge.localhost";
+            }
+            if (name.contains("sylius")) {
+                return "sylius.cloudforge.localhost";
+            }
+            if (name.contains("concretecms")) {
+                return "concretecms.cloudforge.localhost";
+            }
+            if (name.contains("octobercms")) {
+                return "octobercms.cloudforge.localhost";
+            }
+            if (name.contains("typo3")) {
+                return "typo3.cloudforge.localhost";
+            }
+            if (name.contains("mediawiki")) {
+                return "mediawiki.cloudforge.localhost";
+            }
+            if (name.contains("moodle")) {
+                return "moodle.cloudforge.localhost";
+            }
+            if (name.contains("suitecrm")) {
+                return "suitecrm.cloudforge.localhost";
+            }
+            if (name.contains("mybb")) {
+                return "mybb.cloudforge.localhost";
+            }
+            if (name.contains("flarum")) {
+                return "flarum.cloudforge.localhost";
+            }
+            if (name.contains("dolphinuna")) {
+                return "dolphinuna.cloudforge.localhost";
+            }
         }
         return CONTAINER_PORT_TO_HOST.get(containerPort);
     }
@@ -353,16 +409,39 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                 appendProxyPass(sb, hostPort);
                 appendPrefixResponseRewrites(sb, pathPrefix);
                 sb.append("    }\n\n");
-                // Prefer /login over Jenkins anonymous 403 + meta-refresh under the ELB prefix.
-                sb.append("    location = / {\n")
-                    .append("        return 302 /login;\n")
-                    .append("    }\n\n");
+                // Jenkins-specific: an anonymous request to bare "/" under the ELB prefix gets a
+                // 403 + meta-refresh instead of a clean redirect, so /login is preferred instead.
+                // This block used to run for every path-prefixed app regardless of hostname —
+                // harmless while Jenkins was the only one with a real vhost, but once the rest of
+                // the CMS catalog (WordPress etc., see hostnameForContainer) got their own vhosts
+                // too, they inherited a forced "/" → "/login" redirect to a route that doesn't
+                // exist for them, breaking their real root path. "/login" itself is also Jenkins-
+                // specific (its actual login URL) — not a generic app convention.
+                if (hostname.contains("jenkins")) {
+                    sb.append("    location = / {\n")
+                        .append("        return 302 /login;\n")
+                        .append("    }\n\n");
+                }
             }
             sb.append("    location / {\n");
             appendProxyHeaders(sb, gateway);
-            if (pathPrefix != null) {
-                // Applications with an ALB path prefix (for example Jenkins) serve beneath it.
+            if (pathPrefix != null && hostname.contains("jenkins")) {
+                // Jenkins's own --prefix flag makes it expect every request already carrying
+                // the ALB path prefix, so a bare "/" needs it injected before proxying.
                 sb.append("        rewrite ^/(.*)$ ").append(pathPrefix).append("/$1 break;\n");
+                appendProxyPass(sb, hostPort);
+                appendPrefixResponseRewrites(sb, pathPrefix);
+            } else if (pathPrefix != null) {
+                // Everything else (WordPress etc.) expects to be hit at its own root — it fakes
+                // the ALB-prefix illusion itself, purely for asset-URL generation (e.g.
+                // WordPress's WORDPRESS_CONFIG_EXTRA env var), not for request routing. Forcing
+                // the prefix into the request path here turned a valid "/" into a literal
+                // sub-path the app's own webserver can't resolve to a real file (a genuine 404,
+                // not proxied at all) — same root cause as the /login redirect above, this
+                // block used to run unconditionally too. Response-side rewrites still apply: the
+                // backend's own redirects/asset links legitimately carry that prefix regardless
+                // of whether it's injected into the request, and still need translating back to
+                // the friendly hostname's root.
                 appendProxyPass(sb, hostPort);
                 appendPrefixResponseRewrites(sb, pathPrefix);
             } else {

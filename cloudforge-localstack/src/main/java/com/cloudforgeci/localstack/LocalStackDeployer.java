@@ -209,6 +209,11 @@ public final class LocalStackDeployer implements LocalDeployer {
         if (cognitoSynced || datasourceSynced) {
             restartEcsServices(stackName);
         }
+        // Both register their own corrected task definition revision and redeploy services onto
+        // it directly — unlike the two reconcilers above, forceNewDeployment on the OLD revision
+        // (what restartEcsServices does) wouldn't pick up a baked-in env var correction at all.
+        LocalStackMysqlPortReconciler.reconcileAfterDeploy(cloudFormation, stackName, endpoint, region);
+        LocalStackOidcClientSecretReconciler.reconcileAfterDeploy(cloudFormation, stackName, endpoint, region);
     }
 
     private void restartEcsServices(String stackName) {

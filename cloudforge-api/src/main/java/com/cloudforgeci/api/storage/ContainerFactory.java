@@ -33,6 +33,12 @@ public class ContainerFactory extends BaseFactory {
     @DeploymentContext("fqdn")
     private String fqdn;
 
+    @DeploymentContext("domain")
+    private String domain;
+
+    @DeploymentContext("certificateArn")
+    private String certificateArn;
+
     @DeploymentContext("enableSsl")
     private Boolean enableSsl;
 
@@ -99,6 +105,9 @@ public class ContainerFactory extends BaseFactory {
 
     @SystemContext("accountCipherKeySecretArn")
     private String accountCipherKeySecretArn;
+
+    @SystemContext("licenseKeySecretArn")
+    private String licenseKeySecretArn;
 
     @SystemContext("applicationOidcConfig")
     private OidcConfiguration applicationOidcConfig;
@@ -172,6 +181,13 @@ public class ContainerFactory extends BaseFactory {
             environment.put("CFC_MANAGER_ALB_SIGNER_ARN", alb.getLoadBalancerArn());
         }
 
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())) {
+            boolean publiclyTrusted = com.cloudforgeci.api.core.TlsTrustEvaluator.isPubliclyTrusted(
+                sslEnabled, domain, fqdn, certificateArn);
+            environment.put(com.cloudforge.core.manager.ManagerEnvKeys.PUBLIC_TLS_TRUSTED,
+                String.valueOf(publiclyTrusted));
+        }
+
         if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
                 && redisSessionStoreEndpoint != null && !redisSessionStoreEndpoint.isBlank()) {
             // See ApplicationFactory's provisionManagerRedisSessions handling for where this
@@ -220,6 +236,34 @@ public class ContainerFactory extends BaseFactory {
             ecsSecrets.put(com.cloudforge.core.manager.ManagerEnvKeys.ACCOUNT_SECRET_KEY,
                           software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(accountCipherKeySecret));
             LOG.info("  ✅ Account cipher key mapped to CFC_MANAGER_ACCOUNT_SECRET_KEY");
+        }
+
+        // Bind a deploy-time-supplied customer license key (see ApplicationFactory's
+        // provisioning above) to the exact env var ManagerRuntimeConfiguration's "stopgap" path
+        // already reads. Independent of database provisioning, same as the cipher key above.
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+                && licenseKeySecretArn != null && !licenseKeySecretArn.isBlank()) {
+            ISecret licenseKeySecret =
+                Secret.fromSecretCompleteArn(this, "LicenseKeySecret", licenseKeySecretArn);
+
+            if (fargateTaskDef.getExecutionRole() != null) {
+                fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
+                    PolicyStatement.Builder.create()
+                        .sid("AllowReadLicenseKey")
+                        .effect(Effect.ALLOW)
+                        .actions(List.of(
+                            "secretsmanager:GetSecretValue",
+                            "secretsmanager:DescribeSecret"
+                        ))
+                        .resources(List.of(licenseKeySecretArn))
+                        .build()
+                );
+                LOG.info("  ✅ Added IAM policy for license key secret access");
+            }
+
+            ecsSecrets.put(com.cloudforge.core.manager.ManagerEnvKeys.LICENSE_KEY,
+                          software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(licenseKeySecret));
+            LOG.info("  ✅ License key mapped to CFC_MANAGER_LICENSESEAT_LICENSE_KEY");
         }
 
         // Add database password from Secrets Manager for applications with external database

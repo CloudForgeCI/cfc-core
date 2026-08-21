@@ -122,8 +122,9 @@ a CloudForge Fargate application inside the emulator, use the standard
 
 ```bash
 # Repository root — build the cfc-testing classpath. No manual `docker compose build` needed:
-# CloudForgeManagerDeploymentExtension.beforeDeploy() builds the image automatically for both
-# MiniStack and LocalStack now.
+# CloudForgeManagerDeploymentExtension.beforeDeploy() resolves the image automatically for both
+# MiniStack and LocalStack — using a locally tagged build if you already made one, otherwise
+# pulling the latest published image from GHCR.
 mvn -f cfc-testing package -Dmaven.test.skip=true
 
 cd cfc-testing

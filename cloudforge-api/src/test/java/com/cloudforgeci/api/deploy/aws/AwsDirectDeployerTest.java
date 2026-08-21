@@ -184,6 +184,25 @@ class AwsDirectDeployerTest {
         }
     }
 
+    /** The literal CLI code path (see {@code DeployOptionsTest}'s javadoc): {@code
+     *  InteractiveDeployer.deployLocalTarget} never supplies a credentials override, always
+     *  reaching this 1-arg constructor. Reflection, not a public accessor — {@code
+     *  credentialsOverride} is a genuinely private implementation detail everywhere else. */
+    @Test
+    void oneArgConstructorLeavesCredentialsOverrideNull() throws Exception {
+        DeploymentConfig config = new DeploymentConfig();
+        config.stackName = "App";
+        config.applicationId = "jenkins";
+        config.runtime = RuntimeType.FARGATE;
+        config.region = "us-east-1";
+
+        try (AwsDirectDeployer deployer = new AwsDirectDeployer(config)) {
+            var field = AwsDirectDeployer.class.getDeclaredField("credentialsOverride");
+            field.setAccessible(true);
+            assertEquals(null, field.get(deployer));
+        }
+    }
+
     @Test
     void stackExistsPropagatesConnectionFailuresRatherThanReportingAbsent() {
         try (AwsDirectDeployer deployer = unreachableDeployer("jenkins", RuntimeType.FARGATE)) {

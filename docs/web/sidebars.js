@@ -56,7 +56,6 @@ const sidebars = {
             'guides/applications/redis',
             'guides/applications/superset',
             'guides/applications/vault',
-            'guides/applications/cloudforge-manager',
           ],
         },
         {

@@ -151,6 +151,13 @@ public class ApplicationOidcFactory extends BaseFactory {
     @DeploymentContext("ssoInstanceArn")
     private String ssoInstanceArn;
 
+    // CloudForge Manager as OIDC Provider (Option 4) — see
+    // com.cloudforgeci.manager.auth.oidcprovider's own package javadoc for the Manager-side half
+    // of this. oidcClientId/oidcClientSecretName below are shared with Option 3 (External IdP) —
+    // both are "an admin registered this app's credentials by hand" providers.
+    @DeploymentContext("cloudforgeManagerIssuerUrl")
+    private String cloudforgeManagerIssuerUrl;
+
     // Manual OIDC Configuration (Option 3)
     @DeploymentContext("oidcIssuer")
     private String oidcIssuer;
@@ -282,7 +289,7 @@ public class ApplicationOidcFactory extends BaseFactory {
 
     /**
      * Build OidcConfiguration from deployment context.
-     * Priority: Cognito > Identity Center SAML > Manual OIDC endpoints
+     * Priority: Cognito > Identity Center SAML > CloudForge Manager > Manual OIDC endpoints
      */
     private OidcConfiguration buildOidcConfiguration(OidcIntegration oidcIntegration) {
         // Option 1: Cognito (auto-provisioned or existing)
@@ -295,6 +302,13 @@ public class ApplicationOidcFactory extends BaseFactory {
         // Option 2: IAM Identity Center SAML (auto-provisioned)
         if (Boolean.TRUE.equals(autoProvisionIdentityCenter) && ssoInstanceArn != null) {
             return buildIdentityCenterSamlConfiguration(oidcIntegration);
+        }
+
+        // Option 4: CloudForge Manager as OIDC provider — checked before the generic manual-OIDC
+        // option below since it's a more specific match (oidcProvider == cloudforge-manager).
+        if ("cloudforge-manager".equals(oidcProvider)
+                && cloudforgeManagerIssuerUrl != null && !cloudforgeManagerIssuerUrl.isEmpty()) {
+            return buildCloudForgeManagerConfiguration(oidcIntegration);
         }
 
         // Option 3: Manual OIDC endpoints (External IdP)
@@ -575,6 +589,49 @@ public class ApplicationOidcFactory extends BaseFactory {
             adminGroup,
             developerGroup,
             viewerGroup
+        );
+    }
+
+    /**
+     * Build OIDC configuration for CloudForge Manager acting as this app's OIDC provider.
+     *
+     * <p>Manager's own OIDC-provider endpoints are at fixed paths relative to its issuer URL
+     * (Spring Authorization Server's own layout: {@code /oauth2/authorize}, {@code /oauth2/token},
+     * {@code /userinfo}, {@code /oauth2/jwks}) — so unlike Option 3 (External IdP), only {@link
+     * #cloudforgeManagerIssuerUrl} needs entering, not each endpoint separately. The client
+     * id/secret still come from {@link #oidcClientId}/{@link #oidcClientSecretName}, populated by
+     * hand from Manager's own Trusted Apps settings page (see {@code
+     * com.cloudforgeci.manager.auth.oidcprovider.TrustedAppStore#issue}) — Phase 1 has no
+     * push-based sync, matching the "manual reconfiguration on drift" design.</p>
+     *
+     * <p>No groups claim: Manager's Phase 1 id_token carries only {@code sub} —
+     * {@code isGroupBasedAccessEnabled() == false} tells consuming apps to grant full access to
+     * any authenticated user rather than expect group membership that doesn't exist yet.</p>
+     */
+    private OidcConfiguration buildCloudForgeManagerConfiguration(OidcIntegration oidcIntegration) {
+        String issuer = cloudforgeManagerIssuerUrl.endsWith("/")
+            ? cloudforgeManagerIssuerUrl.substring(0, cloudforgeManagerIssuerUrl.length() - 1)
+            : cloudforgeManagerIssuerUrl;
+
+        if (oidcClientId == null || oidcClientId.isEmpty()) {
+            LOG.warning("CloudForge Manager OIDC configuration incomplete — oidcClientId required "
+                + "(register this app via Manager's Trusted Apps settings page first)");
+            return null;
+        }
+
+        LOG.info("Using CloudForge Manager as OIDC provider: [REDACTED]");
+
+        String applicationUrl = buildApplicationUrl();
+        if (applicationUrl != null) {
+            LOG.info("Application URL: " + applicationUrl);
+        }
+
+        return new CloudForgeManagerOidcConfiguration(
+            issuer,
+            oidcClientId,
+            buildClientSecretArn("cloudforge-manager"),
+            applicationUrl,
+            buildRedirectUrl(applicationUrl, oidcIntegration)
         );
     }
 
@@ -887,5 +944,71 @@ public class ApplicationOidcFactory extends BaseFactory {
         public boolean isGroupBasedAccessEnabled() {
             return groupsEnabled;
         }
+    }
+
+    /**
+     * OIDC configuration for CloudForge Manager as this app's identity provider — see {@link
+     * #buildCloudForgeManagerConfiguration}'s own javadoc for why this isn't just another {@link
+     * SimplifiedOidcConfiguration} call: that class's {@code getJwksUri()} hardcodes the generic
+     * {@code /.well-known/jwks.json} suffix, which is wrong for Manager's own {@code /oauth2/jwks}
+     * path (Spring Authorization Server's layout, not the generic OIDC-discovery convention).
+     */
+    private static class CloudForgeManagerOidcConfiguration implements OidcConfiguration {
+        private final String issuerUrl;
+        private final String clientId;
+        private final String clientSecretArn;
+        private final String applicationUrl;
+        private final String redirectUrl;
+
+        CloudForgeManagerOidcConfiguration(String issuerUrl, String clientId, String clientSecretArn,
+                                            String applicationUrl, String redirectUrl) {
+            this.issuerUrl = issuerUrl;
+            this.clientId = clientId;
+            this.clientSecretArn = clientSecretArn;
+            this.applicationUrl = applicationUrl;
+            this.redirectUrl = redirectUrl;
+        }
+
+        @Override
+        public String getProviderType() { return "CloudForge Manager"; }
+
+        @Override
+        public String getIssuerUrl() { return issuerUrl; }
+
+        @Override
+        public String getAuthorizationEndpoint() { return issuerUrl + "/oauth2/authorize"; }
+
+        @Override
+        public String getTokenEndpoint() { return issuerUrl + "/oauth2/token"; }
+
+        @Override
+        public String getUserInfoEndpoint() { return issuerUrl + "/userinfo"; }
+
+        @Override
+        public String getJwksUri() { return issuerUrl + "/oauth2/jwks"; }
+
+        @Override
+        public String getLogoutEndpoint() { return null; }
+
+        @Override
+        public String getClientId() { return clientId; }
+
+        @Override
+        public String getClientSecretArn() { return clientSecretArn; }
+
+        @Override
+        public String getRedirectUrl() { return redirectUrl; }
+
+        @Override
+        public String getScopes() { return "openid profile email"; }
+
+        @Override
+        public String getUsernameClaim() { return "sub"; }
+
+        @Override
+        public String getApplicationUrl() { return applicationUrl; }
+
+        @Override
+        public boolean isGroupBasedAccessEnabled() { return false; }
     }
 }

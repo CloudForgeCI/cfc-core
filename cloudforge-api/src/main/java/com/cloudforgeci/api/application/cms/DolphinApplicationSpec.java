@@ -338,8 +338,8 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public List<String> ec2LogPaths() {
         return List.of(
-            "/var/log/apache2/access.log",
-            "/var/log/apache2/error.log",
+            "/var/log/httpd/access_log",
+            "/var/log/httpd/error_log",
             "/var/log/php-fpm/error.log",
             "/var/www/html/logs/una.log",
             "/var/log/userdata.log"

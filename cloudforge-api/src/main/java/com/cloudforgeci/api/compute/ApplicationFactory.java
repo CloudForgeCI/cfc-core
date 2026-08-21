@@ -111,6 +111,9 @@ public class ApplicationFactory extends BaseFactory {
     @com.cloudforge.core.annotation.DeploymentContext("provisionManagerAccountCipherKey")
     private Boolean provisionManagerAccountCipherKey;
 
+    @com.cloudforge.core.annotation.DeploymentContext("managerLicenseKey")
+    private String managerLicenseKey;
+
     @com.cloudforge.core.annotation.DeploymentContext("enableAutoScaling")
     private Boolean enableAutoScaling;
 
@@ -325,6 +328,33 @@ public class ApplicationFactory extends BaseFactory {
                 ctx.accountCipherKeySecretArn.set(accountCipherKeySecret.getSecretArn());
                 LOG.info("Successfully provisioned Manager account cipher key secret: "
                     + accountCipherKeySecret.getSecretName());
+            }
+
+            // Provision a Secrets Manager entry for a deploy-time-supplied customer license key
+            // (DeploymentContext.managerLicenseKey) — delivered as an ECS Secret bound to
+            // CFC_MANAGER_LICENSESEAT_LICENSE_KEY (ContainerFactory), mirroring the account
+            // cipher key above. Unlike that key, this one is a fixed value the user supplies
+            // rather than a generated one, so it uses secretStringValue/unsafePlainText instead
+            // of generateSecretString — "unsafe" here just means the literal value round-trips
+            // through the CDK template the way any other deploy-time input does, same as a
+            // database name or stack name; it is still never a plaintext ECS task-definition
+            // environment variable. Opt-in: no license key configured, nothing is provisioned.
+            if ("cloudforge-manager".equals(applicationSpec.applicationId())
+                    && managerLicenseKey != null && !managerLicenseKey.isBlank()) {
+                LOG.info("Provisioning license key secret for cloudforge-manager");
+                software.amazon.awscdk.services.secretsmanager.Secret licenseKeySecret =
+                    software.amazon.awscdk.services.secretsmanager.Secret.Builder.create(
+                            this, "LicenseKeySecret")
+                        .description("LicenseSeat license key for "
+                            + software.amazon.awscdk.Stack.of(this).getStackName()
+                            + " (CFC_MANAGER_LICENSESEAT_LICENSE_KEY)")
+                        .secretStringValue(
+                            software.amazon.awscdk.SecretValue.unsafePlainText(managerLicenseKey))
+                        .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
+                        .build();
+                ctx.licenseKeySecretArn.set(licenseKeySecret.getSecretArn());
+                LOG.info("Successfully provisioned Manager license key secret: "
+                    + licenseKeySecret.getSecretName());
             }
 
             // NOTE: WAF is created by security profile configurations (ProductionSecurityConfiguration, StagingSecurityConfiguration)

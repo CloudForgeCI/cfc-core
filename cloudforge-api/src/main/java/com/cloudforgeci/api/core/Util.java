@@ -58,8 +58,16 @@ class Util {
      * @return merged configuration map with framework requirements
      */
     private static Map<String, Object> mergeFrameworkConfiguration(Map<String, Object> userConfig) {
-        // Get enabled frameworks from user config
-        String frameworksStr = (String) userConfig.get("complianceFrameworks");
+        // Get enabled frameworks from user config. convertToContext(...) may legitimately
+        // materialize this as a List (e.g. from a raw JSON array, "complianceFrameworks":
+        // ["soc2", "hipaa"]) rather than the comma-joined string form the rest of this pipeline
+        // expects (ComplianceFrameworkType.toCommaSeparated's own canonical shape) — a blind
+        // (String) cast throws ClassCastException on that otherwise-valid input, before
+        // DeploymentConfig.fromMap(...) ever gets a chance to normalize it.
+        Object frameworksValue = userConfig.get("complianceFrameworks");
+        String frameworksStr = frameworksValue instanceof List<?> list
+            ? list.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","))
+            : (String) frameworksValue;
         if (frameworksStr == null || frameworksStr.trim().isEmpty()) {
             return userConfig; // No frameworks enabled, return as-is
         }

@@ -68,6 +68,54 @@ class DefaultEmulatorEdgeRuntimeTest {
         assertFalse(routes.containsKey("gitlab.cloudforge.localhost"));
     }
 
+    /** Real bug this guards: 17 of the CMS/e-commerce catalog's applications all listen on
+     *  container port 80 (see each's {@code applicationPort()}) — only drone/joomla/gitlab had
+     *  their own disambiguation, so every other one silently fell through to the port-80 default
+     *  (gitlab) and got routed under the wrong hostname, or — for a stack whose own name doesn't
+     *  contain "gitlab" either, like a generically-named leftover test stack — still resolved to
+     *  {@code gitlab.cloudforge.localhost} rather than its own vhost, leaving its real hostname
+     *  (e.g. {@code wordpress.cloudforge.localhost}) with no route at all. */
+    @Test
+    void parseDockerPortPublishesDisambiguatesEveryPort80CmsApplication() {
+        Map<String, Integer> routes = DefaultEmulatorEdgeRuntime.parseDockerPortPublishes(List.of(
+            "ls-ecs-WordPressStack-task\t0.0.0.0:23001->80/tcp",
+            "ls-ecs-WooCommerceStack-task\t0.0.0.0:23002->80/tcp",
+            "ls-ecs-DrupalStack-task\t0.0.0.0:23003->80/tcp",
+            "ls-ecs-MagentoStack-task\t0.0.0.0:23004->80/tcp",
+            "ls-ecs-PrestaShopStack-task\t0.0.0.0:23005->80/tcp",
+            "ls-ecs-OpenCartStack-task\t0.0.0.0:23006->80/tcp",
+            "ls-ecs-BagistoStack-task\t0.0.0.0:23007->80/tcp",
+            "ls-ecs-SyliusStack-task\t0.0.0.0:23008->80/tcp",
+            "ls-ecs-ConcreteCMSStack-task\t0.0.0.0:23009->80/tcp",
+            "ls-ecs-OctoberCMSStack-task\t0.0.0.0:23010->80/tcp",
+            "ls-ecs-TYPO3Stack-task\t0.0.0.0:23011->80/tcp",
+            "ls-ecs-MediaWikiStack-task\t0.0.0.0:23012->80/tcp",
+            "ls-ecs-MoodleStack-task\t0.0.0.0:23013->80/tcp",
+            "ls-ecs-SuiteCRMStack-task\t0.0.0.0:23014->80/tcp",
+            "ls-ecs-MyBBStack-task\t0.0.0.0:23015->80/tcp",
+            "ls-ecs-FlarumStack-task\t0.0.0.0:23016->80/tcp",
+            "ls-ecs-DolphinUNAStack-task\t0.0.0.0:23017->80/tcp"));
+
+        assertEquals(23001, routes.get("wordpress.cloudforge.localhost").intValue());
+        assertEquals(23002, routes.get("woocommerce.cloudforge.localhost").intValue());
+        assertEquals(23003, routes.get("drupal.cloudforge.localhost").intValue());
+        assertEquals(23004, routes.get("magento.cloudforge.localhost").intValue());
+        assertEquals(23005, routes.get("prestashop.cloudforge.localhost").intValue());
+        assertEquals(23006, routes.get("opencart.cloudforge.localhost").intValue());
+        assertEquals(23007, routes.get("bagisto.cloudforge.localhost").intValue());
+        assertEquals(23008, routes.get("sylius.cloudforge.localhost").intValue());
+        assertEquals(23009, routes.get("concretecms.cloudforge.localhost").intValue());
+        assertEquals(23010, routes.get("octobercms.cloudforge.localhost").intValue());
+        assertEquals(23011, routes.get("typo3.cloudforge.localhost").intValue());
+        assertEquals(23012, routes.get("mediawiki.cloudforge.localhost").intValue());
+        assertEquals(23013, routes.get("moodle.cloudforge.localhost").intValue());
+        assertEquals(23014, routes.get("suitecrm.cloudforge.localhost").intValue());
+        assertEquals(23015, routes.get("mybb.cloudforge.localhost").intValue());
+        assertEquals(23016, routes.get("flarum.cloudforge.localhost").intValue());
+        assertEquals(23017, routes.get("dolphinuna.cloudforge.localhost").intValue());
+        assertFalse(routes.containsKey("gitlab.cloudforge.localhost"));
+    }
+
     @Test
     void renderNginxConfIncludesProxyPassAndNginxStatus() {
         String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(
@@ -138,6 +186,29 @@ class DefaultEmulatorEdgeRuntimeTest {
         assertTrue(conf.contains("location = / {\n        return 302 /login;"));
         assertTrue(conf.contains("sub_filter \"/_aws/elb/cfc-xnp5kj\" \"\";"));
         assertTrue(conf.contains("proxy_pass http://host.docker.internal:48843;"));
+    }
+
+    /** Real bug this guards: the /login redirect and the "inject the ALB prefix into every
+     *  request" rewrite are both Jenkins-specific workarounds — Jenkins's own --prefix flag makes
+     *  it expect requests to already carry that prefix, and an anonymous bare "/" under it gets a
+     *  403 + meta-refresh instead of a clean redirect. Both used to run for every path-prefixed
+     *  app regardless of hostname, harmless while Jenkins was the only one with a real vhost. Once
+     *  the rest of the CMS catalog got their own vhosts too (see hostnameForContainer), they
+     *  inherited both: a forced "/" → "/login" redirect to a route that doesn't exist for them,
+     *  and a forced-prefix request path their own webserver can't resolve to a real file (a
+     *  genuine 404, never even reaching the app) — breaking their real root path outright. */
+    @Test
+    void nonJenkinsPathPrefixedAppIsProxiedAtItsOwnRootWithNoLoginRedirect() {
+        String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(
+            Map.of("wordpress.cloudforge.localhost", 58967),
+            Map.of("wordpress.cloudforge.localhost", "/_aws/elb/cfc-1pb6buq"));
+
+        assertTrue(conf.contains("location ^~ /_aws/elb/cfc-1pb6buq/"));
+        assertFalse(conf.contains("return 302 /login;"));
+        assertFalse(conf.contains("rewrite ^/(.*)$ /_aws/elb/cfc-1pb6buq/$1 break;"));
+        // The bare "location / { ... }" block still proxies straight through, response
+        // rewrites and all — just without injecting the prefix into the request itself.
+        assertTrue(conf.contains("proxy_redirect /_aws/elb/cfc-1pb6buq/ /;"));
     }
 
     @Test

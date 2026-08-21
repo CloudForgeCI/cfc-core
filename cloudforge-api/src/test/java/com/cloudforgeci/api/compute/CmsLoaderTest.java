@@ -6,16 +6,31 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class CmsLoaderTest {
 
+    /** Every built-in CMS application id, from this module's own {@code META-INF/services}
+     *  registration (see CmsLoaderTest's own package — nothing outside cloudforge-api is on this
+     *  module's test classpath, so a real third-party plugin like cfc-testing's CraftCmsApplicationSpec
+     *  never appears here). Asserting the exact set (not just {@code size() >= 19}) means a missing
+     *  *or* duplicate registration is actually caught — a count-only assertion stays green either way
+     *  once you're already above 19. */
+    private static final Set<String> EXPECTED_BUILT_IN_IDS = Set.of(
+        "wordpress", "woocommerce", "drupal", "joomla", "typo3", "concrete-cms", "october-cms",
+        "magento", "prestashop", "opencart", "sylius", "bagisto", "phpbb", "flarum", "mybb",
+        "suitecrm", "mediawiki", "moodle", "dolphin-una"
+    );
+
     @Test
-    void discoverReturnsAllBuiltInPlatforms() {
+    void discoverReturnsExactlyTheExpectedBuiltInPlatforms() {
         Map<String, CmsSpec> platforms = CmsLoader.discover();
         assertNotNull(platforms);
-        assertTrue(platforms.size() >= 19, "Expected at least 19 built-in CMS platforms, got: " + platforms.size());
+        assertEquals(EXPECTED_BUILT_IN_IDS, platforms.keySet(),
+            "Built-in CMS platform ids changed — update EXPECTED_BUILT_IN_IDS if this is intentional "
+                + "(a new platform added, or one removed), otherwise this is a real regression");
     }
 
     @Test

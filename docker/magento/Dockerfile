@@ -27,7 +27,7 @@ RUN { \
     echo 'opcache.enable = 1'; \
     echo 'opcache.memory_consumption = 512'; \
     echo 'opcache.max_accelerated_files = 60000'; \
-    echo 'opcache.validate_timestamps = 0'; \
+    echo 'opcache.validate_timestamps = 1'; \
   } > /usr/local/etc/php/conf.d/magento.ini
 
 # ── Apache config for Magento ─────────────────────────────────────────────────

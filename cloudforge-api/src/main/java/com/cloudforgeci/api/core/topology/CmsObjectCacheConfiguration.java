@@ -98,13 +98,22 @@ public final class CmsObjectCacheConfiguration {
      *
      * @param ctx the SystemContext
      * @param spec the application specification
-     * @param numReplicas number of read replicas (1-5)
+     * @param numReplicas number of read replicas (0-5 — 0 is a valid, supported single-node/no-
+     *        failover configuration, see {@code automaticFailoverEnabled(numReplicas > 0)} below;
+     *        5 is ElastiCache's own hard ceiling of 6 total nodes per replication group)
      * @return Redis replication group
+     * @throws IllegalArgumentException if numReplicas is outside 0-5
      */
     public static CfnReplicationGroup createRedisReplicationGroup(
             SystemContext ctx,
             ApplicationSpec spec,
             int numReplicas) {
+
+        if (numReplicas < 0 || numReplicas > 5) {
+            throw new IllegalArgumentException(
+                "numReplicas must be between 0 and 5 (ElastiCache's own limit of 6 total nodes "
+                    + "per replication group), got: " + numReplicas);
+        }
 
         String replicationGroupId = generateClusterId(ctx, spec, "-rg");
         String nodeType = determineNodeType(ctx);

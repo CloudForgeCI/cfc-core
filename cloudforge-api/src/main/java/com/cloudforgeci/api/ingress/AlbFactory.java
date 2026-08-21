@@ -437,7 +437,12 @@ public class AlbFactory extends BaseFactory {
         // Store bucket ARN in SSM at deployment time using Custom Resource (stack-scoped)
         String ssmParameterName = "/cloudforge/shared/" + region + "/stack/" + this.stackName + "/alb-logs/bucket-arn";
         // Scope the IAM policy to the exact parameter rather than resources: ["*"]
-        String ssmParameterArn = "arn:aws:ssm:" + region + ":" + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
+        // Partition-aware (not a hardcoded "arn:aws" literal) — a literal breaks this custom
+        // resource's policy outside the standard AWS partition (GovCloud's "arn:aws-us-gov",
+        // China's "arn:aws-cn"), which this project's own compliance/FedRAMP-adjacent posture
+        // makes a plausible real target even though this codebase doesn't deploy there today.
+        String ssmParameterArn = "arn:" + Stack.of(this).getPartition() + ":ssm:" + region + ":"
+            + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
 
         AwsSdkCall putParameterCall = AwsSdkCall.builder()
                 .service("SSM")

@@ -91,6 +91,9 @@ import java.util.Optional;
  *   <li>cognitoUserPoolName: User Pool name (optional)</li>
  *   <li>cognitoMfaEnabled: Enable MFA (default: false)</li>
  *   <li>cognitoMfaMethod: "totp" | "sms" | "both" (default: "both")</li>
+ *   <li>cognitoSelfSignupEnabled: override the security profile's self-signup default
+ *       (default: null — profile decides); enabling it under an active compliance framework
+ *       logs a synthesis-time warning</li>
  *   <li>cognitoCreateGroups: Create admin/user groups (default: true)</li>
  *   <li>cognitoAdminGroupName: Admin group name (default: "Jenkins-Admins")</li>
  *   <li>cognitoUserGroupName: User group name (default: "Jenkins-Users")</li>
@@ -306,6 +309,16 @@ public final class DeploymentContext {
     public Boolean cloudfrontEnabled() { return config.cloudfrontEnabled; }
     public LoadBalancerType lbType() { return config.lbType; }
 
+    // oidcProvider itself was never exposed here despite years of @DeploymentContext("oidcProvider")
+    // usage (ApplicationOidcFactory, ApplicationSamlFactory, CognitoSamlFactory, KeycloakFactory) --
+    // silently no-op the whole time (see ContextInjector's own "no field or getter found" fallback),
+    // just never noticed because none of those call sites' actual branching logic reads its value
+    // (they all key off other fields like cognitoAutoProvision/oidcIssuer instead). The
+    // cloudforge-manager provider branch is the first one that actually needs its value, which is
+    // what surfaced the gap.
+    public String oidcProvider() { return config.oidcProvider; }
+    public String cloudforgeManagerIssuerUrl() { return config.cloudforgeManagerIssuerUrl; }
+
     public Integer cpuTargetUtilization() { return config.cpuTargetUtilization; }
     public Integer maxInstanceCapacity() { return config.maxInstanceCapacity; }
     public Integer minInstanceCapacity() { return config.minInstanceCapacity; }
@@ -357,6 +370,7 @@ public final class DeploymentContext {
 
     public Boolean provisionManagerRedisSessions() { return config.provisionManagerRedisSessions; }
     public Boolean provisionManagerAccountCipherKey() { return config.provisionManagerAccountCipherKey; }
+    public String managerLicenseKey() { return config.managerLicenseKey; }
     public Boolean enableS3VersioningRemediation() { return config.enableS3VersioningRemediation; }
     public Boolean enableCloudTrailBucketAccessRemediation() { return config.enableCloudTrailBucketAccessRemediation; }
     public Boolean enableRdsDeletionProtectionRemediation() { return config.enableRdsDeletionProtectionRemediation; }
@@ -377,6 +391,7 @@ public final class DeploymentContext {
     public String cognitoUserPoolName() { return config.cognitoUserPoolName; }
     public Boolean cognitoMfaEnabled() { return config.cognitoMfaEnabled; }
     public String cognitoMfaMethod() { return config.cognitoMfaMethod; }
+    public Boolean cognitoSelfSignupEnabled() { return config.cognitoSelfSignupEnabled; }
     public Boolean cognitoCreateGroups() { return config.cognitoCreateGroups; }
     public String cognitoAdminGroupName() { return config.cognitoAdminGroupName; }
     public String cognitoUserGroupName() { return config.cognitoUserGroupName; }
@@ -415,6 +430,10 @@ public final class DeploymentContext {
 
     public boolean enableSsl() { return config.enableSsl != null && config.enableSsl; }
     public boolean createZone() { return config.createZone != null && config.createZone; }
+
+    /** See {@code DeploymentConfig#certificateArn}'s javadoc — takes priority over both of
+     *  {@code FargateRuntimeConfiguration}'s other certificate paths when set. */
+    public String certificateArn() { return config.certificateArn; }
 
     /** Raw immutable view of all context keys. */
     public Map<String, Object> raw() { return raw; }
@@ -580,6 +599,7 @@ public final class DeploymentContext {
             case "jenkins-service", "jenkins_service", "service" -> TopologyType.JENKINS_SERVICE;
             case "s3-website", "s3_website", "s3" -> TopologyType.S3_WEBSITE;
             case "application-service", "application_service", "app-service", "application" -> TopologyType.APPLICATION_SERVICE;
+            case "cms-service", "cms_service", "cms" -> TopologyType.CMS_SERVICE;
             // CloudForge 3.0.0: No default fallback - explicit topology required
             default -> throw new IllegalArgumentException(
                 "Unknown topology '" + val + "'. Valid values: jenkins-service, s3-website, application-service, cms-service. " +

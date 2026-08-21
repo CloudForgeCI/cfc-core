@@ -735,6 +735,55 @@ class LocalStackTemplateAdapterTest {
             .path("Properties").path("ContainerDefinitions").get(0).has("Secrets"));
     }
 
+    /** Real bug this guards: Manager's own Cognito CallbackURLs are built from the ALB's real DNS
+     *  name (an Fn::Join token, not a literal placeholder host like Jenkins/GitLab's
+     *  "jenkins.local.test"), so {@code findNamedLocalCallbackHost} never matches it and the base
+     *  URL fell back to {@code http://localhost:<containerPort>} — the container's own internal
+     *  port, unreachable from the browser and not stable across a LocalStack container respawn
+     *  either. Manager's redirect URI/CallbackURLs should use the emulator edge's stable vhost
+     *  instead, same as every other application-oidc app already gets via its named placeholder. */
+    @Test
+    void rewritesApplicationOidcManagerCallbacksToTheEmulatorEdgeVhost() {
+        ObjectNode canonical = MAPPER.createObjectNode();
+        ObjectNode resources = canonical.putObject("Resources");
+
+        ObjectNode client = resources.putObject("OidcClient");
+        client.put("Type", "AWS::Cognito::UserPoolClient");
+        ObjectNode join = MAPPER.createObjectNode();
+        join.putArray("Fn::Join").add("").addArray()
+            .add("https://").add(MAPPER.createObjectNode().put("Fn::GetAtt", "Alb.DNSName"))
+            .add("/api/v1/auth/oidc/callback");
+        client.putObject("Properties").putArray("CallbackURLs").add(join);
+
+        ObjectNode task = resources.putObject("Task");
+        task.put("Type", "AWS::ECS::TaskDefinition");
+        ArrayNode containers = task.putObject("Properties").putArray("ContainerDefinitions");
+        ObjectNode container = containers.addObject();
+        container.putArray("PortMappings").addObject().put("ContainerPort", 1958);
+        container.putArray("Environment").addObject()
+            .put("Name", com.cloudforge.core.manager.ManagerEnvKeys.OIDC_REDIRECT_URL)
+            .put("Value", "https://cfc-test.elb.localhost.localstack.cloud/api/v1/auth/oidc/callback");
+        container.putArray("Secrets").addObject()
+            .put("Name", com.cloudforge.core.manager.ManagerEnvKeys.OIDC_CLIENT_SECRET)
+            .put("ValueFrom", "arn:aws:secretsmanager:us-east-1:000000000000:secret:manager-oidc");
+
+        var result = adaptBase(canonical, "CloudForgeManager-Dev");
+
+        ArrayNode adaptedEnv = (ArrayNode) result.template().path("Resources").path("Task")
+            .path("Properties").path("ContainerDefinitions").get(0).path("Environment");
+        String redirectUrl = null;
+        for (JsonNode env : adaptedEnv) {
+            if (com.cloudforge.core.manager.ManagerEnvKeys.OIDC_REDIRECT_URL.equals(env.path("Name").asText())) {
+                redirectUrl = env.path("Value").asText();
+            }
+        }
+        assertEquals("http://manager.cloudforge.localhost/api/v1/auth/oidc/callback", redirectUrl);
+
+        ArrayNode callbacks = (ArrayNode) result.template().path("Resources").path("OidcClient")
+            .path("Properties").path("CallbackURLs");
+        assertEquals("http://manager.cloudforge.localhost/api/v1/auth/oidc/callback", callbacks.get(0).asText());
+    }
+
     /** Real bug this guards: WordPressApplicationSpec.databaseEnvVars builds WORDPRESS_DB_HOST as
      *  {@code host + ":" + port} — CDK renders that Java string concatenation on tokens as an
      *  Fn::Join wrapping a nested Fn::GetAtt, not a bare Fn::GetAtt like the plain DB_HOST env var

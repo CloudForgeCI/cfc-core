@@ -65,10 +65,17 @@ public interface CmsObjectCacheSpec {
     /**
      * Returns whether object caching is enabled.
      *
+     * <p>{@code null}/blank {@link #getCacheBackend()} counts as disabled, not enabled — a
+     * {@code CmsSpec} implementation that hasn't configured a backend yet (including third-party
+     * plugins, which won't have been through the same internal review as the built-in specs)
+     * should fail safe to "no cache," not silently report caching as active with a meaningless
+     * endpoint/port downstream.</p>
+     *
      * @return true if object caching is enabled
      */
     default boolean isObjectCacheEnabled() {
-        return !"none".equals(getCacheBackend());
+        String backend = getCacheBackend();
+        return backend != null && !backend.isBlank() && !"none".equals(backend);
     }
 
     /**

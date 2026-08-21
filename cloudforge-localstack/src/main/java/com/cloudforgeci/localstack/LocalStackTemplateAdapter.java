@@ -5,6 +5,7 @@ import com.cloudforge.core.local.TemplateAdaptation;
 import com.cloudforge.core.local.TemplateAdaptationResult;
 import com.cloudforge.core.local.TemplateAdapter;
 import com.cloudforge.core.local.TemplateAdapterSupport;
+import com.cloudforge.core.manager.ManagerEnvKeys;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -43,6 +44,14 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
     public static final String OUTPUT_ELB_HOSTNAME_URL = "LocalStackElbHostnameUrl";
     public static final String OUTPUT_AUTHENTICATED_URL = "LocalStackAuthenticatedUrl";
     public static final String OUTPUT_HOST_VOLUME_PREFIX = "LocalStackHostVolume";
+    // CloudForge Manager's own application-oidc env vars — built server-side (Application/
+    // CognitoAuthenticationFactory), unlike Jenkins/GitLab's JAVA_OPTS/GITLAB_OMNIBUS_CONFIG
+    // which bake OIDC URLs into a shell command string — so they need their own name-matched
+    // rewrite pass rather than falling out of the Command-node walk above.
+    private static final Set<String> MANAGER_OIDC_ENDPOINT_ENV_NAMES = Set.of(
+        ManagerEnvKeys.OIDC_ISSUER, ManagerEnvKeys.OIDC_AUTHORIZATION_ENDPOINT,
+        ManagerEnvKeys.OIDC_TOKEN_ENDPOINT, ManagerEnvKeys.OIDC_USERINFO_ENDPOINT,
+        ManagerEnvKeys.OIDC_JWKS_URI);
     private static final Pattern NAMED_LOCAL_CALLBACK_URL = Pattern.compile(
         "https?://([a-zA-Z0-9-]+\\.cloudforge\\.localhost)(?::\\d+)?(/[^'\\\"\\s]*)?");
     private static final Pattern NAMED_LOCAL_HOST_URL = Pattern.compile(
@@ -1756,12 +1765,60 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                 String name = env.path("Name").asText();
                 if ("JENKINS_URL".equals(name)) {
                     env.put("Value", appBase);
+                } else if (ManagerEnvKeys.OIDC_REDIRECT_URL.equals(name)) {
+                    // The app's own redirect_uri (sent as an OAuth query param, and what Cognito
+                    // sends the browser back to after login) is built from the ALB's real DNS
+                    // name via a deploy-time Fn::Join/Fn::GetAtt chain — correct for a real AWS
+                    // deployment, but on LocalStack that host either isn't reachable at all or
+                    // has nothing listening on the implicit HTTPS port, so the browser sees
+                    // "can't connect" right after a successful login. Full-value override rather
+                    // than a pattern rewrite (the ALB-DNSName join tree has no fixed literal
+                    // prefix to match against, unlike the Cognito-domain-based endpoints above) —
+                    // matches exactly what the Cognito App Client's own CallbackURLs already get
+                    // rewritten to below (`appBase + callbackPath`), since a redirect_uri that
+                    // doesn't match a registered callback is itself invalid regardless of the
+                    // unreachable-host problem.
+                    env.put("Value", appBase + com.cloudforge.core.oidc.CloudForgeManagerOidcIntegration.CALLBACK_PATH);
                 } else if ("JAVA_OPTS".equals(name)) {
                     env.put("Value", rewriteLocalStackOidcText(
                         env.path("Value").asText(""), appBase, browserGateway, containerGateway, issuerGateway));
                 } else if ("GITLAB_OMNIBUS_CONFIG".equals(name)) {
                     env.put("Value", rewriteLocalStackOidcText(
                         env.path("Value").asText(""), appBase, browserGateway, containerGateway, issuerGateway));
+                } else if (MANAGER_OIDC_ENDPOINT_ENV_NAMES.contains(name)) {
+                    // CloudForge Manager's own application-oidc env vars (built server-side by
+                    // ApplicationOidcFactory/CognitoAuthenticationFactory, not baked into a
+                    // Command string the way Jenkins/GitLab's are) never went through this
+                    // rewrite at all until now — Manager's Cognito Hosted UI redirect pointed at
+                    // the real, unreachable amazoncognito.com domain on LocalStack instead of the
+                    // emulator's `/_aws/cognito-idp/...` endpoints this same helper already knows
+                    // how to target for every other application-oidc app.
+                    //
+                    // Unlike JAVA_OPTS/GITLAB_OMNIBUS_CONFIG, these values are not always plain
+                    // strings: the issuer/JWKS URIs embed the Cognito User Pool's ID, which isn't
+                    // known until deploy time, so CDK builds them as an `Fn::Join` combining a
+                    // literal prefix with a `Ref`/`Fn::GetAtt` token. Coercing a non-textual node
+                    // with `.asText()` silently discards that intrinsic and replaces it with an
+                    // empty string instead of rewriting it — handle those two by walking the join
+                    // parts directly rather than reusing rewriteOidcCommandNode/
+                    // rewriteLocalStackOidcText: the JWKS URI's correct target gateway (container-
+                    // reachable, since the container itself fetches its own signing keys) depends
+                    // on recognizing the "...well-known/jwks.json" suffix, which only exists in a
+                    // *different* join part once split, not in the same string as the prefix.
+                    JsonNode value = env.get("Value");
+                    if (value == null) {
+                        continue;
+                    }
+                    if (value.isTextual()) {
+                        env.put("Value", rewriteLocalStackOidcText(
+                            value.asText(""), appBase, browserGateway, containerGateway, issuerGateway));
+                    } else if (ManagerEnvKeys.OIDC_ISSUER.equals(name)) {
+                        rewriteRealCognitoIdpPrefix(value, issuerGateway);
+                    } else if (ManagerEnvKeys.OIDC_JWKS_URI.equals(name)) {
+                        rewriteRealCognitoIdpPrefix(value, containerGateway);
+                    } else {
+                        rewriteOidcCommandNode(value, appBase, browserGateway, containerGateway, issuerGateway);
+                    }
                 }
             }
         }
@@ -1828,6 +1885,34 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
         }
     }
 
+    /** Replaces the literal {@code https://cognito-idp.us-east-1.amazonaws.com/} prefix CDK
+     *  bakes into an {@code Fn::Join}-shaped OIDC issuer/JWKS URI with the given gateway, leaving
+     *  the join's other parts (the {@code Ref}/{@code Fn::GetAtt} User Pool ID token) untouched.
+     *  A direct prefix swap rather than {@link #rewriteLocalStackOidcText}'s broader
+     *  pattern-matching, because that helper's issuer-vs-JWKS distinction depends on seeing the
+     *  {@code .well-known/jwks.json} suffix in the *same* string as the prefix — true for
+     *  Jenkins's single-string CASC config, not for a value split across join parts. */
+    private static void rewriteRealCognitoIdpPrefix(JsonNode node, String targetGateway) {
+        if (node == null || !node.isObject() || !node.has("Fn::Join")) {
+            return;
+        }
+        JsonNode joinNode = node.get("Fn::Join");
+        if (!(joinNode instanceof ArrayNode join) || join.size() < 2) {
+            return;
+        }
+        JsonNode partsNode = join.get(1);
+        if (!(partsNode instanceof ArrayNode parts)) {
+            return;
+        }
+        String realPrefix = "https://cognito-idp.us-east-1.amazonaws.com/";
+        for (int i = 0; i < parts.size(); i++) {
+            JsonNode part = parts.get(i);
+            if (part.isTextual() && part.asText().startsWith(realPrefix)) {
+                parts.set(i, targetGateway + "/" + part.asText().substring(realPrefix.length()));
+            }
+        }
+    }
+
     private static String rewriteLocalStackOidcText(
             String value,
             String appBase,
@@ -1871,7 +1956,44 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
             // The emulator edge is HTTP unless a local TLS listener has explicitly been added.
             return "http://" + namedHost;
         }
+        // CloudForge Manager's own Cognito CallbackURLs are built from the ALB's real DNS name
+        // (an Fn::Join/Fn::GetAtt token, not a literal placeholder host like Jenkins/GitLab's
+        // "jenkins.local.test"), so findNamedLocalCallbackHost above never matches for it. The
+        // emulator edge still assigns Manager a stable vhost (HOST_MANAGER) regardless — this
+        // template just never says so anywhere. Falling back to raw localhost:<port> here used
+        // the container's own internal port, which the browser can't reach directly and which
+        // doesn't survive LocalStack respawning the container onto a new host port either;
+        // HOST_MANAGER does.
+        if (referencesManagerOidcRedirect(template)) {
+            return "http://" + LocalEmulatorDefaults.HOST_MANAGER;
+        }
         return "http://localhost:" + appPort;
+    }
+
+    private static boolean referencesManagerOidcRedirect(ObjectNode template) {
+        ObjectNode resources = asObject(template.get("Resources"));
+        if (resources == null) {
+            return false;
+        }
+        for (JsonNode resource : resources) {
+            if (!"AWS::ECS::TaskDefinition".equals(resource.path("Type").asText())) {
+                continue;
+            }
+            if (!(resource.path("Properties").get("ContainerDefinitions") instanceof ArrayNode containers)) {
+                continue;
+            }
+            for (JsonNode container : containers) {
+                if (!(container.get("Environment") instanceof ArrayNode environment)) {
+                    continue;
+                }
+                for (JsonNode env : environment) {
+                    if (ManagerEnvKeys.OIDC_REDIRECT_URL.equals(env.path("Name").asText())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static String findNamedLocalCallbackHost(JsonNode node) {
@@ -1902,6 +2024,7 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
     }
 
     private static String callbackPath(JsonNode callbacks) {
+        boolean sawIntrinsic = false;
         if (callbacks.isArray()) {
             for (JsonNode callback : callbacks) {
                 if (callback.isTextual()) {
@@ -1910,10 +2033,21 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                         String path = matcher.group(2);
                         return path == null || path.isBlank() ? "/securityRealm/finishLogin" : path;
                     }
+                } else {
+                    // Jenkins/GitLab's canonical CallbackURLs use a fixed literal placeholder
+                    // domain ("jenkins.local.test") the regex above matches directly. CloudForge
+                    // Manager has no such placeholder — without a custom domain configured, its
+                    // canonical CallbackURLs are built from the ALB's real DNS name via a
+                    // deploy-time Fn::Join/Fn::GetAtt token, which arrives here as a JSON object,
+                    // not a string. Falling through to Jenkins's own callback path for that case
+                    // silently registered the wrong path for Manager's Cognito client.
+                    sawIntrinsic = true;
                 }
             }
         }
-        return "/securityRealm/finishLogin";
+        return sawIntrinsic
+            ? com.cloudforge.core.oidc.CloudForgeManagerOidcIntegration.CALLBACK_PATH
+            : "/securityRealm/finishLogin";
     }
 
     /** Browser URLs and JWT issuer stay on LocalStack public host; token/JWKS calls use the container gateway. */

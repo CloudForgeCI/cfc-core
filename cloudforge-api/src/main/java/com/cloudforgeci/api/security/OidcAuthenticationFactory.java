@@ -12,6 +12,7 @@ import software.constructs.Construct;
 
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 /**
  * OIDC Authentication Factory for ALB-based authentication with any OIDC provider.
@@ -406,6 +407,27 @@ public class OidcAuthenticationFactory extends BaseFactory {
             List<String> protectedPathPatterns,
             List<String> publicPathPatterns) {
 
+        // Public paths are registered at the highest ALB listener priority (see this method's own
+        // javadoc) so a broad public pattern can silently shadow a narrower protected one — e.g.
+        // public=/* would forward every request, including /admin/*, without ever reaching the
+        // protected rule's auth check. Set.removeAll in calculateEffectiveProtectedPaths only
+        // catches an exact literal duplicate between the two lists, not this glob-containment
+        // case, so it doesn't guard against this on its own. Fail loud at synth time instead of
+        // silently deploying a listener that exposes a "protected" route unauthenticated.
+        for (String publicPattern : publicPathPatterns) {
+            for (String protectedPattern : protectedPathPatterns) {
+                if (publicPatternShadowsProtectedPattern(publicPattern, protectedPattern)) {
+                    throw new IllegalStateException(
+                        "OIDC path configuration error: public path pattern '" + publicPattern
+                            + "' would shadow protected path pattern '" + protectedPattern
+                            + "' (public paths are evaluated at higher ALB listener priority, so '"
+                            + protectedPattern + "' would never reach its authentication rule). "
+                            + "Narrow the public pattern, or remove '" + protectedPattern
+                            + "' from protectedPaths if it's genuinely meant to be public.");
+                }
+            }
+        }
+
         // ALB rules support up to 5 path-pattern values per condition
         int batchSize = 5;
         int priority = 1;
@@ -517,5 +539,38 @@ public class OidcAuthenticationFactory extends BaseFactory {
         // IAM Identity Center ARNs don't contain account IDs
         // Use the account from the CDK stack instead
         return Stack.of(this).getAccount();
+    }
+
+    /**
+     * Whether every request path {@code protectedPattern} matches would also match {@code
+     * publicPattern} — i.e. the public rule (evaluated first, see {@link
+     * #configurePathBasedOidcAuthenticationRules}'s own javadoc) would forward the request before
+     * the protected rule's authentication check is ever reached. ALB path patterns support only
+     * {@code *} (zero-or-more of any character) and {@code ?} (exactly one character), so this
+     * checks containment by building one concrete, representative path from {@code
+     * protectedPattern} (each wildcard replaced with a literal token) and testing it against
+     * {@code publicPattern}'s own glob — sufficient for real ALB glob syntax, not general regex
+     * containment.
+     */
+    private static boolean publicPatternShadowsProtectedPattern(String publicPattern, String protectedPattern) {
+        String representativePath = protectedPattern.replace("*", "x").replace("?", "x");
+        return globToRegex(publicPattern).matcher(representativePath).matches();
+    }
+
+    private static Pattern globToRegex(String pattern) {
+        StringBuilder regex = new StringBuilder();
+        for (char c : pattern.toCharArray()) {
+            switch (c) {
+                case '*' -> regex.append(".*");
+                case '?' -> regex.append('.');
+                default -> {
+                    if ("\\.[]{}()+-^$|".indexOf(c) >= 0) {
+                        regex.append('\\');
+                    }
+                    regex.append(c);
+                }
+            }
+        }
+        return Pattern.compile(regex.toString());
     }
 }

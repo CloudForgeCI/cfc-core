@@ -301,7 +301,8 @@ public class FargateFactory extends BaseFactory {
     boolean assignPublicIp = networkMode == NetworkMode.PUBLIC;
     SubnetType subnetType = assignPublicIp ? SubnetType.PUBLIC : SubnetType.PRIVATE_WITH_EGRESS;
 
-    // Enable ECS Exec only if bastionCidr is configured (indicates remote access needed)
+    // ECS Exec is enabled unconditionally (see enableEcsExec above) -- not gated on bastionCidr;
+    // access is IAM-controlled and CloudTrail-logged rather than restricted at the CDK level.
     FargateService service = FargateService.Builder.create(this, "Service")
             .cluster(cluster)
             .securityGroups(List.of(serviceSg))

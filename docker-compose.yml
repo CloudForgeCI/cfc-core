@@ -129,10 +129,12 @@ services:
       retries: 5
       start_period: 60s
 
-  # CloudForge Manager — Operations Panel (Spring Boot; UI baked in Dockerfile). Dockerfile lives
-  # in cloudforge-manager's own repo now, checked out here as a local sibling for dev convenience
-  # (see CloudForgeManagerDeploymentExtension, which falls back to pulling a prebuilt image from
-  # GHCR instead whenever that sibling checkout isn't present, e.g. in CI).
+  # CloudForge Manager — Operations Panel (Spring Boot; UI baked in Dockerfile). The Dockerfile
+  # and its build context live entirely in cloudforge-manager's own repo, checked out here as a
+  # local sibling purely for this manual `docker compose build` convenience — nothing automated
+  # ever builds it from here. CloudForgeManagerDeploymentExtension (the automated deploy path)
+  # never builds either: it uses this image as-is if a `cloudforge-manager` build already tagged
+  # it locally, otherwise pulls the latest one cloudforge-manager's own CI published to GHCR.
   cloudforge-manager:
     build:
       context: cloudforge-manager

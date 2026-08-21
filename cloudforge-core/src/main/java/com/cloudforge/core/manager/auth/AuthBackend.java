@@ -1,6 +1,7 @@
 package com.cloudforge.core.manager.auth;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * CloudForge Manager's Users-page CRUD, abstracted over whichever directory of accounts is
@@ -51,5 +52,26 @@ public interface AuthBackend {
      * LocalH2AuthBackend} has nothing to prepare.
      */
     default void prepareForIncomingMigration() {
+    }
+
+    /**
+     * Finds one account by its {@link AuthAccount#id()}, or empty if this backend has no such
+     * account. Exists so callers that only have an id — e.g. Access Control's policy-override
+     * editor, given whatever id {@link #listAccounts()} last handed the frontend — can resolve a
+     * username/role for display without requiring the account to also exist somewhere else (the
+     * bug this closes: Access Control used to look a Cognito-backend account's id up in Manager's
+     * own local user table only, which a pure-Cognito account with no local row — never having
+     * signed in through application-oidc — was never going to be in, producing "user not found"
+     * for an account {@link #listAccounts()} had just shown a moment earlier).
+     *
+     * <p>Default implementation scans {@link #listAccounts()} — correct for any backend, just not
+     * the cheapest possible lookup; override when a backend can look up a single account more
+     * directly (see {@code CognitoAuthBackend}).
+     */
+    default Optional<AuthAccount> findAccount(String accountId) {
+        if (accountId == null || accountId.isBlank()) {
+            return Optional.empty();
+        }
+        return listAccounts().stream().filter(account -> accountId.equals(account.id())).findFirst();
     }
 }

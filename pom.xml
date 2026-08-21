@@ -83,10 +83,15 @@
       <!--
         CloudForge Modules (BOM) — docs/architecture/module-boundaries-and-refactor.plan.md
 
-        cloudforge-core       Shared contracts, DeploymentConfig, com.cloudforge.core.local
-        cloudforge-api        CloudForgeDeployment, ApplicationSpecs, CMS, CDK factories
-        cloudforge-ministack  MiniStack adapter/deployer/pipeline (depends: core)
-        cloudforge-localstack LocalStack adapter/deployer/pipeline (depends: core)
+        cloudforge-core         Shared contracts, DeploymentConfig, com.cloudforge.core.local
+        cloudforge-api          CloudForgeDeployment, ApplicationSpecs, CMS, CDK factories
+        cloudforge-ministack    MiniStack adapter/deployer/pipeline (depends: core)
+        cloudforge-localstack   LocalStack adapter/deployer/pipeline (depends: core)
+        cloudforge-synth-service  Thin HTTP wrapper around CloudForgeSynthesizer (depends: api) —
+          isolates jsii/AWS-CDK synthesis behind a same-task sidecar boundary so
+          cloudforge-manager itself can compile to a GraalVM native image without linking against
+          jsii. No proprietary content of its own (see its own pom.xml header) — public like every
+          other module here despite existing only for cloudforge-manager's benefit.
 
         cloudforge-manager-deployment and cloudforge-manager are NOT managed here anymore — split
         into their own private repos (CloudForgeCI/cloudforge-manager-deployment,
@@ -116,6 +121,11 @@
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-localstack</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-synth-service</artifactId>
         <version>${project.version}</version>
       </dependency>
 
@@ -206,11 +216,12 @@
   </scm>
 
   <modules>
-    <!-- Reactor order: core → target adapters → api. -->
+    <!-- Reactor order: core → target adapters → api → api-dependent leaves. -->
     <module>cloudforge-core</module>
     <module>cloudforge-ministack</module>
     <module>cloudforge-localstack</module>
     <module>cloudforge-api</module>
+    <module>cloudforge-synth-service</module>
     <!-- cloudforge-manager-deployment / cloudforge-manager: split into their own private repos
          (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager) — no longer
          reactor modules here (not listed as <module> above, so not part of this reactor's build

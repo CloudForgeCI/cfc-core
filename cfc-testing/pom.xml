@@ -132,55 +132,52 @@
     </dependency>
 
     <!-- ============================================ -->
-    <!-- AWS SDK v2 for programmatic testing          -->
+    <!-- AWS SDK v2 — used by cfc-testing's own JUnit tests, and (transitively-overriding, since a
+         direct declaration always wins Maven's dependency mediation over an inherited one
+         regardless of scope) by InteractiveDeployer's real LocalStack/MiniStack deploy path via
+         cloudforge-localstack/cloudforge-ministack — must NOT be test-scoped, or `mvn exec:java`
+         hits a real ClassNotFoundException at runtime (e.g. CloudFormationException, used by
+         LocalStackCapabilityProbe's real deploy-time preflight, not just tests). -->
     <!-- ============================================ -->
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>cloudformation</artifactId>
         <version>${aws.sdk.version}</version>
-        <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>ec2</artifactId>
         <version>${aws.sdk.version}</version>
-        <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>iam</artifactId>
         <version>${aws.sdk.version}</version>
-        <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>cognitoidentityprovider</artifactId>
         <version>${aws.sdk.version}</version>
-        <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>rds</artifactId>
         <version>${aws.sdk.version}</version>
-        <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>ecs</artifactId>
         <version>${aws.sdk.version}</version>
-        <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>elasticloadbalancingv2</artifactId>
         <version>${aws.sdk.version}</version>
-        <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>route53</artifactId>
         <version>${aws.sdk.version}</version>
-        <scope>test</scope>
     </dependency>
 </dependencies>
 

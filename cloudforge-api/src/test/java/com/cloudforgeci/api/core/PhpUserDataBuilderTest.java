@@ -194,6 +194,22 @@ class PhpUserDataBuilderTest {
         assertFalse(builder.commands.isEmpty());
     }
 
+    /** Regression: the getenforce probe must be quoted with a `|| true` fallback and use POSIX
+     *  `=` (not bash's `==`) — an AMI without getenforce on PATH left the command substitution
+     *  empty, producing `[ == 'Enforcing' ]`: a genuine `[`/test syntax error that aborts the
+     *  whole user-data script under `set -e`. */
+    @Test
+    void configureSELinuxProbeIsQuotedAndToleratesAMissingGetenforceBinary() {
+        PhpUserDataBuilder.configureSELinux(builder, "/var/www/html");
+        String probeLine = builder.commands.stream()
+            .filter(c -> c.contains("getenforce"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no getenforce probe line found"));
+        assertTrue(probeLine.contains("\"$(getenforce 2>/dev/null || true)\""),
+            "expected a quoted substitution with a || true fallback, got: " + probeLine);
+        assertFalse(probeLine.contains("=="), "expected POSIX '=', not bash's '==': " + probeLine);
+    }
+
     // ===== completeInstallation =====
 
     @Test

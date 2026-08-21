@@ -350,6 +350,10 @@ class TopologyRulesTest {
                 SecurityProfile.DEV, iamProfile, cfc);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
+        // The actual side effect install() is for: ctx.cfc.cmsSpec() -> ctx.applicationSpec, not
+        // just "did it throw" — a broken/no-op resolution here would still pass assertDoesNotThrow.
+        assertTrue(ctx.applicationSpec.get().isPresent(), "applicationSpec must be set for CMS_SERVICE topology");
+        assertEquals("wordpress", ctx.applicationSpec.get().get().applicationId());
     }
 
     @Test
@@ -364,6 +368,8 @@ class TopologyRulesTest {
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
+        assertTrue(ctx.applicationSpec.get().isPresent(), "applicationSpec must be set for CMS_SERVICE topology");
+        assertEquals("drupal", ctx.applicationSpec.get().get().applicationId());
     }
 
     @Test
@@ -378,6 +384,8 @@ class TopologyRulesTest {
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
+        assertTrue(ctx.applicationSpec.get().isPresent(), "applicationSpec must be set for CMS_SERVICE topology");
+        assertEquals("magento", ctx.applicationSpec.get().get().applicationId());
     }
 
     private Map<String, Object> buildCmsContext(String stackName, SecurityProfile profile, String applicationId) {

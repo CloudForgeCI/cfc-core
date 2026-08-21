@@ -3,9 +3,6 @@ package com.cloudforgeci.api.compute;
 import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.PhpRuntimeConfig;
 import com.cloudforgeci.api.application.cms.WordPressApplicationSpec;
-import com.cloudforgeci.api.application.cms.MagentoApplicationSpec;
-import com.cloudforgeci.api.application.cms.DrupalApplicationSpec;
-import com.cloudforgeci.api.application.cms.PhpBBApplicationSpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -17,13 +14,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PhpContainerFactoryTest {
 
+    /** Driven off {@link CmsLoader#discoverAsList()}, not a 4-of-19 hand-picked subset — every
+     *  "...ForAllSpecs" test below is a generic, spec-agnostic assertion (non-empty output), so
+     *  restricting it to a hand-list meant a new CMS platform silently got zero coverage from this
+     *  suite until someone remembered to add it here. The scenario-specific tests above (WordPress
+     *  multisite nginx config, Magento nginx config, etc.) still construct their own spec directly
+     *  — only the generic "for all specs" ones needed this. */
     static Stream<CmsSpec> allSpecs() {
-        return Stream.of(
-            new WordPressApplicationSpec(),
-            new MagentoApplicationSpec(),
-            new DrupalApplicationSpec(),
-            new PhpBBApplicationSpec()
-        );
+        return CmsLoader.discoverAsList().stream();
     }
 
     // ===== createEnvironment =====

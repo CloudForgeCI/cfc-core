@@ -12,6 +12,16 @@ public final class ManagerEnvKeys {
     public static final String PORT = "CFC_MANAGER_PORT";
     public static final String BIND = "CFC_MANAGER_BIND";
     public static final String PUBLIC_URL = "CFC_MANAGER_PUBLIC_URL";
+    /** {@code "true"}/{@code "false"} — whether THIS deployment's ALB HTTPS listener is wearing a
+     *  publicly-trusted certificate (the imported-ARN or DNS-validated ACM paths in {@code
+     *  FargateRuntimeConfiguration}) as opposed to the untrusted AWS Private CA fallback used
+     *  when SSL is on but no domain/cert is configured, or absent entirely when SSL is off. Set
+     *  by {@code ContainerFactory}, computed the same way {@code FargateRuntimeConfiguration}
+     *  itself decides which cert path to take — see that class for why Private CA certs can't
+     *  answer "yes" here. Consumed by cloudforge-manager to decide whether embedding a real
+     *  payment form (which requires the hosting page to be genuinely trusted) is safe on this
+     *  installation, or whether to fall back to a redirect-based purchase flow instead. */
+    public static final String PUBLIC_TLS_TRUSTED = "CFC_MANAGER_PUBLIC_TLS_TRUSTED";
     public static final String TARGET = "CFC_MANAGER_TARGET";
     public static final String AUTH_MODE = "CFC_MANAGER_AUTH_MODE";
     public static final String DB_MODE = "CFC_MANAGER_DB_MODE";
@@ -33,6 +43,19 @@ public final class ManagerEnvKeys {
     public static final String OIDC_GROUPS_CLAIM = "CFC_MANAGER_OIDC_GROUPS_CLAIM";
     public static final String OIDC_ADMIN_GROUP = "CFC_MANAGER_OIDC_ADMIN_GROUP";
     public static final String OIDC_MANAGER_GROUP = "CFC_MANAGER_OIDC_MANAGER_GROUP";
+    /** The one real source for these two role-group defaults — every place that needs a fallback
+     *  when {@code cognitoAdminGroupName}/{@code cognitoUserGroupName} aren't explicitly set
+     *  (cloudforge-manager's own {@code ManagerRuntimeConfiguration} and {@code
+     *  CognitoUserManagementService}; cloudforge-manager-deployment's {@code
+     *  CloudForgeManagerApplicationSpec}, for alb-oidc specifically — application-oidc gets the
+     *  real configured value from {@code CloudForgeManagerOidcIntegration} instead, see that
+     *  class's javadoc) references these constants instead of its own copy of the literal
+     *  strings. Three independent copies of "ManagerAdmins"/"ManagerUsers" already drifted once —
+     *  one hardcoded "admin"/"manager"/"viewer" instead, which meant every Cognito-backend-listed
+     *  user resolved to "viewer" regardless of real group membership — this is what prevents that
+     *  class of bug from recurring a fourth time. */
+    public static final String DEFAULT_OIDC_ADMIN_GROUP = "ManagerAdmins";
+    public static final String DEFAULT_OIDC_MANAGER_GROUP = "ManagerUsers";
 
     public static final String DB_HOST = "CFC_MANAGER_DB_HOST";
     public static final String DB_PORT = "CFC_MANAGER_DB_PORT";
@@ -61,6 +84,11 @@ public final class ManagerEnvKeys {
      *  derive from Manager's own {@code sts:GetCallerIdentity} — for deployments that front
      *  Manager with a different role than the one its own AWS calls run as. */
     public static final String TRUST_PRINCIPAL_ARN = "CFC_MANAGER_TRUST_PRINCIPAL_ARN";
+
+    /** Matches {@code ManagerRuntimeConfiguration.LicenseSeat}'s "stopgap" env-var path exactly
+     *  (cloudforge-manager) — a deploy-time-supplied customer license key, delivered as a
+     *  Secrets Manager-backed ECS Secret, never a literal value in the task definition. */
+    public static final String LICENSE_KEY = "CFC_MANAGER_LICENSESEAT_LICENSE_KEY";
 
     public static final String LOCALSTACK_ENDPOINT = "LOCALSTACK_ENDPOINT";
     public static final String AWS_ENDPOINT_URL = "AWS_ENDPOINT_URL";

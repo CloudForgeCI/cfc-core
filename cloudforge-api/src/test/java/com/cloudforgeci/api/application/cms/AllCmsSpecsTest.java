@@ -2,6 +2,7 @@ package com.cloudforgeci.api.application.cms;
 
 import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.oidc.CognitoOidcConfiguration;
+import com.cloudforgeci.api.compute.CmsLoader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -13,28 +14,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AllCmsSpecsTest {
 
+    /** Driven off {@link CmsLoader#discoverAsList()} (the same {@code META-INF/services}
+     *  registration production code uses) rather than a hand-maintained list of {@code new
+     *  ...ApplicationSpec()} calls — a new CMS platform registered there gets this whole
+     *  contract-test suite automatically instead of silently getting zero coverage until someone
+     *  remembers to add it here by hand. */
     static Stream<CmsSpec> allCmsSpecs() {
-        return Stream.of(
-            new WordPressApplicationSpec(),
-            new WooCommerceApplicationSpec(),
-            new DrupalApplicationSpec(),
-            new JoomlaApplicationSpec(),
-            new Typo3ApplicationSpec(),
-            new ConcreteCmsApplicationSpec(),
-            new OctoberCmsApplicationSpec(),
-            new MagentoApplicationSpec(),
-            new PrestaShopApplicationSpec(),
-            new OpenCartApplicationSpec(),
-            new SyliusApplicationSpec(),
-            new BagistoApplicationSpec(),
-            new PhpBBApplicationSpec(),
-            new FlarumApplicationSpec(),
-            new MyBBApplicationSpec(),
-            new SuiteCrmApplicationSpec(),
-            new MediaWikiApplicationSpec(),
-            new MoodleApplicationSpec(),
-            new DolphinApplicationSpec()
-        );
+        return CmsLoader.discoverAsList().stream();
     }
 
     // ========== ApplicationSpec contract ==========

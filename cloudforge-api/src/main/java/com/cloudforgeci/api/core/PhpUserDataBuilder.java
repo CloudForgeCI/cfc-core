@@ -363,7 +363,7 @@ public final class PhpUserDataBuilder {
     public static void configureSELinux(UserDataBuilder builder, String documentRoot) {
         builder.addCommands(
             "# Configure SELinux (if enabled)",
-            "if [ $(getenforce 2>/dev/null) == 'Enforcing' ]; then",
+            "if [ \"$(getenforce 2>/dev/null || true)\" = 'Enforcing' ]; then",
             "    setsebool -P httpd_can_network_connect 1",
             "    setsebool -P httpd_can_network_connect_db 1",
             "    setsebool -P httpd_unified 1",

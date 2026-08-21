@@ -95,6 +95,7 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       final boolean ssl   = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl());
       final String domain = norm(c.cfc != null ? c.cfc.domain() : null);
       final String fqdn   = norm(c.cfc != null ? c.cfc.fqdn()   : null);
+      final String importedCertArn = norm(c.cfc != null ? c.cfc.certificateArn() : null);
 
       final boolean haveHost   = (domain != null && !domain.isBlank()) || (fqdn != null && !fqdn.isBlank());
       final boolean wantDns    = haveHost;           // publish A/AAAA when a host is provided
@@ -183,17 +184,32 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
     }
 
     // ── 2) SSL MODE ─────────────────────────────────────────────────────────────
-    // Two paths:
-    // A) SSL + custom domain → Use ACM public certificate with DNS validation
-    // B) SSL + no domain → Use AWS Private CA certificate for ALB DNS name
-    //    (Required for application-oidc/alb-oidc without custom domain)
+    // Three paths, in priority order:
+    // A0) certificateArn set → import the existing (already publicly-trusted) ACM certificate
+    //     as-is — no Route53 zone needed, works for any publicly-issued cert (ACM's own, a
+    //     Let's Encrypt cert, a purchased one, ...) as long as it's already sitting in this
+    //     account's ACM under that ARN.
+    // A) SSL + custom domain, no certificateArn → ACM public certificate with DNS validation
+    //     (needs a Route53 hosted zone this deployment controls)
+    // B) SSL + no domain, no certificateArn → AWS Private CA certificate for ALB DNS name
+    //    (Required for application-oidc/alb-oidc without custom domain — NOT trusted by
+    //    browsers, see the warning logged below; use A0 instead if a real trusted cert matters)
 
     if (!ssl) {
       return; // No SSL requested
     }
 
-    // 2a) Create certificate - either public (with domain) or private (without domain)
-    if (wantSslDns) {
+    // 2a) Create certificate - imported ARN, public (with domain), or private (without domain)
+    if (importedCertArn != null && !importedCertArn.isBlank()) {
+      c.alb.onSet(alb -> {
+        if (c.cert.get().isPresent()) {
+          return;
+        }
+        LOG.info("Using imported ACM certificate: " + importedCertArn);
+        var cert = Certificate.fromCertificateArn(c, "ImportedHttpsCert", importedCertArn);
+        c.cert.set(cert);
+      });
+    } else if (wantSslDns) {
       // Path A: Public ACM certificate with DNS validation
       whenBoth(c.zone, c.alb, (zone, alb) -> {
         if (c.cert.get().isPresent()) {

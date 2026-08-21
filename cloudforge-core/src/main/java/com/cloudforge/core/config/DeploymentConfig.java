@@ -155,6 +155,29 @@ public class DeploymentConfig {
     )
     public Boolean enableSsl;
 
+    /**
+     * ARN of an existing ACM certificate to use for the ALB's HTTPS listener, instead of
+     * provisioning a new one. Takes priority over both of {@code FargateRuntimeConfiguration}'s
+     * other two certificate paths — the DNS-validated public cert (needs a Route53 hosted zone
+     * this deployment controls) and the AWS Private CA cert (issued for the bare ALB DNS name,
+     * NOT trusted by browsers — see that class's own comments). This is how a deployment gets a
+     * genuinely publicly-trusted certificate without either of those: import your own cert
+     * (issued by any public CA — ACM's own DNS/email validation, Let's Encrypt, a purchased
+     * cert, ...) into ACM yourself first (e.g. {@code aws acm import-certificate}, entirely
+     * within your own account — the key material never has to pass through this deployment
+     * config or CloudFormation), then point this at the resulting ARN.
+     */
+    @ConfigField(
+        displayName = "Existing Certificate ARN",
+        description = "ARN of an ACM certificate you've already issued/imported — used as-is instead of provisioning a new one",
+        category = "domain",
+        pattern = "^arn:aws[a-zA-Z-]*:acm:[a-z0-9-]+:\\d{12}:certificate/[a-f0-9-]+$",
+        example = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012",
+        visibleWhen = "enableSsl == true",
+        order = 35
+    )
+    public String certificateArn;
+
     // ========== Runtime Configuration ==========
 
     /** Runtime type (FARGATE or EC2) */
@@ -437,7 +460,7 @@ public class DeploymentConfig {
         displayName = "OIDC Provider",
         description = "Identity provider for OIDC authentication",
         category = "security",
-        allowedValues = {"none", "cognito", "identity-center", "external-idp"},
+        allowedValues = {"none", "cognito", "identity-center", "external-idp", "cloudforge-manager"},
         visibleWhen = "authMode != none",
         order = 30
     )
@@ -494,6 +517,25 @@ public class DeploymentConfig {
         order = 75
     )
     public String cognitoMfaMethod = "both";
+
+    /**
+     * Overrides the security-profile default for whether users can self-register on the
+     * Cognito hosted UI (development defaults to allowed, staging/production to admin-only).
+     * Left {@code null}, the profile default applies unchanged. Self-signup is not enforced
+     * by any compliance framework rule today — a self-registered user still gets no group
+     * membership and resolves to the lowest-privilege role — but enabling it while a compliance
+     * framework is active (advisory or enforce) logs a warning at synthesis time, since open
+     * self-registration into an ops panel is a common audit finding independent of what role
+     * it grants.
+     */
+    @ConfigField(
+        displayName = "Enable Self-Signup",
+        description = "Override the security profile's default for self-service Cognito signup",
+        category = "security",
+        visibleWhen = "cognitoAutoProvision == true",
+        order = 78
+    )
+    public Boolean cognitoSelfSignupEnabled = null;
 
     /** Create admin and user groups in Cognito */
     @ConfigField(
@@ -583,6 +625,24 @@ public class DeploymentConfig {
     )
     public String oidcIssuer = null;
 
+    /** CloudForge Manager's own public URL, used as the OIDC issuer when this app trusts a
+     *  CloudForge Manager install as its identity provider (see
+     *  com.cloudforgeci.manager.auth.oidcprovider's own package javadoc). Authorization/token/
+     *  userinfo endpoints are computed from this one URL (CloudForge Manager's OIDC-provider
+     *  endpoints are at fixed paths — /oauth2/authorize, /oauth2/token, /userinfo — so unlike
+     *  the generic external-idp option above, only the base URL needs entering here, not each
+     *  endpoint separately). */
+    @ConfigField(
+        displayName = "CloudForge Manager URL",
+        description = "Public URL of the CloudForge Manager install this app trusts as its identity provider",
+        category = "security",
+        visibleWhen = "oidcProvider == cloudforge-manager",
+        pattern = "^https?://.*$",
+        example = "https://manager.example.com",
+        order = 195
+    )
+    public String cloudforgeManagerIssuerUrl = null;
+
     /** OIDC authorization endpoint */
     @ConfigField(
         displayName = "Authorization Endpoint",
@@ -616,22 +676,26 @@ public class DeploymentConfig {
     )
     public String oidcUserInfoEndpoint = null;
 
-    /** OIDC client ID */
+    /** OIDC client ID — shared by external-idp and cloudforge-manager, both providers where an
+     *  admin registers this app's client credentials by hand (external IdP's own console, or
+     *  CloudForge Manager's Trusted Apps settings page) rather than CloudForge auto-provisioning
+     *  them, so the field means the same thing either way. */
     @ConfigField(
         displayName = "OIDC Client ID",
         description = "Client ID from your identity provider",
         category = "security",
-        visibleWhen = "oidcProvider == external-idp",
+        visibleWhen = "oidcProvider == external-idp || oidcProvider == cloudforge-manager",
         order = 240
     )
     public String oidcClientId = null;
 
-    /** OIDC client secret name in Secrets Manager */
+    /** OIDC client secret name in Secrets Manager — same sharing rationale as {@link
+     *  #oidcClientId}. */
     @ConfigField(
         displayName = "Client Secret (Secrets Manager)",
         description = "Name of the secret in AWS Secrets Manager containing the client secret",
         category = "security",
-        visibleWhen = "oidcProvider == external-idp",
+        visibleWhen = "oidcProvider == external-idp || oidcProvider == cloudforge-manager",
         sensitive = true,
         order = 250
     )
@@ -1030,6 +1094,36 @@ public class DeploymentConfig {
         order = 91
     )
     public Boolean provisionManagerAccountCipherKey = true;
+
+    /**
+     * A customer's LicenseSeat license key ({@code LS-XXXX-XXXX-XXXX-XXXX}), injected at deploy
+     * time so an install activates immediately instead of requiring a follow-up visit to the
+     * owner-only License settings screen after the stack comes up. When set, {@code
+     * ApplicationFactory} provisions a dedicated Secrets Manager entry for it and {@code
+     * ContainerFactory} binds that as {@code CFC_MANAGER_LICENSESEAT_LICENSE_KEY} — the exact
+     * env var {@code ManagerRuntimeConfiguration}'s "stopgap" path already reads (see its {@code
+     * LicenseSeat} record javadoc, cloudforge-manager). Purely additive: the in-app License
+     * settings screen still works, and a key activated through it still takes precedence (see
+     * {@code LicenseKeyStore}, cloudforge-manager) — this only seeds the initial value.
+     *
+     * <p>{@code category = "database"} despite not being a database setting: it sits right next
+     * to {@code provisionManagerAccountCipherKey} above for the same reason that field does —
+     * {@code InteractiveDeployer.configureDatabaseOptions()} is the one place that currently
+     * discovers and prompts for manager-only fields by reflection ({@code
+     * ConfigurationIntrospector.discoverVisibleFields(..., "database")}); a genuine "security"
+     * category discovery pass would also surface ~30 unrelated existing security fields that
+     * were never meant for CLI prompting.
+     */
+    @ConfigField(
+        displayName = "License Key",
+        description = "LicenseSeat customer license key (LS-XXXX-XXXX-XXXX-XXXX) to activate this "
+            + "install with on first boot, delivered via a dedicated Secrets Manager entry",
+        category = "database",
+        visibleWhen = "applicationId == cloudforge-manager",
+        sensitive = true,
+        order = 92
+    )
+    public String managerLicenseKey;
 
     /** Enable RDS deletion protection remediation */
     @ConfigField(
