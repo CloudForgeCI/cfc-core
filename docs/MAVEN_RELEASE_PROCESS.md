@@ -1,479 +1,183 @@
 # Maven Release Process
 
-This document describes the automated Maven release process for `cfc-core`.
+[![Maven Central](https://img.shields.io/maven-central/v/com.cloudforgeci/cfc-core.svg)](https://central.sonatype.com/artifact/com.cloudforgeci/cfc-core)
+
+This document describes how `cfc-core`'s Maven artifacts actually get published today.
+(A much older version of this doc described a `main`-branch, conventional-commit-driven
+auto-release workflow that doesn't exist anymore — this is a full rewrite.)
+
+The badge above always reflects the real latest *published* release (live-queried from Central
+each time it renders) — it can't show the in-progress `-SNAPSHOT` version on `develop`, only
+real releases. For that, check `pom.xml` directly.
 
 ## Overview
 
-The project uses an automated GitHub Actions workflow to:
-1. **Auto-bump** the version based on commit messages or manual selection
-2. **Build and test** the release
-3. **Sign artifacts** with GPG
-4. **Publish** to Maven Central
-5. **Create** GitHub releases and tags
-6. **Update** to the next development version
+Two separate workflows, in `.github/workflows/`:
 
-## Versioning Strategy
+- **`publish-snapshot.yml`** — the day-to-day pipeline. `develop`'s `pom.xml` always carries a
+  `-SNAPSHOT` version.
+  - **PR opened/updated against `develop`** → build, test, publish that `-SNAPSHOT` to Central's
+    snapshots repository. Requesting review is what makes a snapshot available to downstream
+    consumers (`cloudforge-manager-deployment`, `cloudforge-manager`), not waiting for the merge.
+  - **Push to `develop`** (i.e. the PR actually merged) → same snapshot publish, **plus**
+    auto-release: strip `-SNAPSHOT`, build/sign/publish that as a real numbered release to Maven
+    Central (no re-test — the snapshot build already validated this exact code), tag `vX.Y.Z`,
+    bump `develop`'s `pom.xml` to the next patch `-SNAPSHOT`, and push that bump commit with
+    `[skip ci]` so it doesn't re-trigger the workflow.
 
-### Semantic Versioning
+  So **every merge to `develop` is both a snapshot and a real Central release** — deliberate,
+  continuous-release design, not a staged/manual process.
 
-We follow [Semantic Versioning 2.0.0](https://semver.org/):
-- **MAJOR** (X.0.0): Breaking changes
-- **MINOR** (x.X.0): New features, backward compatible
-- **PATCH** (x.x.X): Bug fixes, backward compatible
+- **`publish-maven-central.yml`** — a manual `workflow_dispatch`-only escape hatch. Only fires
+  automatically on a push to `develop` if the root pom's `<version>` isn't already tagged
+  (`v<version>`) in the repo, which never happens under the flow above (the only commit
+  `publish-snapshot.yml` ever pushes back is a `-SNAPSHOT` bump). Useful for re-running a
+  publish after a partial failure (`force: true` input) without going through the full
+  snapshot→auto-release cycle again.
 
-### Version Bump Detection
+`cloudforge-manager-deployment` (a separate repo, its own single-module `pom.xml`, `com.cloudforgeci`
+parent resolved from Central) has its own identically-shaped pair of workflows, publishing
+itself the same way. `cloudforge-manager-deployment` **secrets are separate from `cfc-core`'s**
+— GitHub secrets don't cross repos, even within the same org.
 
-When pushing to `main`, the workflow automatically determines the version bump type:
+## What Gets Published
 
-#### Automatic Detection (from commit messages)
+From `cfc-core`, one command publishes all of these together (same `-pl` list in both
+workflows):
 
-| Commit Message Pattern | Version Bump | Example |
-|------------------------|--------------|---------|
-| `BREAKING CHANGE:` in commit body | **MAJOR** | 2.0.6 → 3.0.0 |
-| `feat!:` or `fix!:` | **MAJOR** | 2.0.6 → 3.0.0 |
-| `feat:` or `feat(scope):` | **MINOR** | 2.0.6 → 2.1.0 |
-| `fix:`, `chore:`, `docs:`, etc. | **PATCH** | 2.0.6 → 2.0.7 |
+- `cfc-core` itself (the root/BOM `pom`)
+- `cloudforge-core`
+- `cloudforge-api`
+- `cloudforge-localstack`
+- `cloudforge-ministack`
 
-#### Manual Selection
-
-Trigger the workflow manually via GitHub Actions UI and select:
-- **patch** - Bug fixes (2.0.6 → 2.0.7)
-- **minor** - New features (2.0.6 → 2.1.0)
-- **major** - Breaking changes (2.0.6 → 3.0.0)
-
-## Triggering a Release
-
-### Automatic Release (Recommended)
-
-1. **Merge PR to `main`**:
-   ```bash
-   git checkout develop
-   git pull origin develop
-   git checkout -b feature/my-feature
-   # ... make changes ...
-   git commit -m "feat: add new feature"
-   git push origin feature/my-feature
-   # Create PR to main, get approval, and merge
-   ```
-
-2. **Use conventional commits** to control version bumping:
-   ```bash
-   # Patch release (2.0.6 → 2.0.7)
-   git commit -m "fix: resolve authentication bug"
-
-   # Minor release (2.0.6 → 2.1.0)
-   git commit -m "feat: add new IAM role configuration"
-
-   # Major release (2.0.6 → 3.0.0)
-   git commit -m "feat!: redesign security configuration API"
-   # or
-   git commit -m "feat: redesign security API
-
-   BREAKING CHANGE: SecurityConfig constructor signature changed"
-   ```
-
-3. **Workflow runs automatically** when changes are pushed to `main`
-
-### Manual Release
-
-1. Go to **Actions** → **Maven Release**
-2. Click **Run workflow**
-3. Select branch: `main`
-4. Choose version bump type: `patch`, `minor`, or `major`
-5. Click **Run workflow**
-
-## What Happens During a Release
-
-### Step-by-Step Process
-
-1. **Checkout**: Fetches the latest code from `main`
-2. **Version Calculation**:
-   - Reads current version from `pom.xml` (e.g., `2.0.6-SNAPSHOT`)
-   - Determines bump type (patch/minor/major)
-   - Calculates next release version (e.g., `2.0.7`)
-   - Calculates next dev version (e.g., `2.0.8-SNAPSHOT`)
-
-3. **Version Update (Release)**:
-   - Updates `pom.xml` to release version `2.0.7`
-   - Commits: `chore: bump version to 2.0.7 [skip ci]`
-
-4. **Build and Test**:
-   - Runs `mvn clean verify -P release`
-   - Executes all unit tests
-   - Verifies code coverage thresholds
-   - Generates Javadoc and source JARs
-
-5. **Deploy to Maven Central**:
-   - Signs artifacts with GPG
-   - Publishes to Sonatype Central Portal
-   - Auto-publishes to Maven Central
-
-6. **Create Git Tag**:
-   - Tags commit as `v2.0.7`
-
-7. **Version Update (Development)**:
-   - Updates `pom.xml` to next dev version `2.0.8-SNAPSHOT`
-   - Commits: `chore: bump version to 2.0.8-SNAPSHOT [skip ci]`
-
-8. **Push Changes**:
-   - Pushes version commits to `main`
-   - Pushes tag `v2.0.7`
-
-9. **Create GitHub Release**:
-   - Creates release with changelog
-   - Attaches SBOM (Software Bill of Materials)
+**Not published:**
+- `cfc-testing` — the reference/sample consumer, deliberately not part of the reactor's publish
+  scope (see `pom.xml`'s own module comments)
+- `cloudforge-manager-deployment` — separate repo, own independent versioning, own workflow
+- `cloudforge-manager` — the Spring Boot app itself (LicenseSeat/Checkpoint A/B logic lives here);
+  distribution strategy (Docker Hub vs. Central vs. something else) is still an open decision,
+  deliberately not published anywhere yet
 
 ## Required Secrets
 
-Configure these in **GitHub Repository Settings** → **Secrets and variables** → **Actions**:
-
-### Maven Central (Sonatype)
-
-| Secret | Description | How to Get |
-|--------|-------------|------------|
-| `OSSRH_USERNAME` | Sonatype username | Register at [issues.sonatype.org](https://issues.sonatype.org) |
-| `OSSRH_TOKEN` | Sonatype token | Generate in Sonatype profile |
-
-### GPG Signing
-
-| Secret | Description | How to Get |
-|--------|-------------|------------|
-| `GPG_PRIVATE_KEY` | GPG private key (ASCII-armored) | `gpg --armor --export-secret-keys KEY_ID` |
-| `GPG_PASSPHRASE` | GPG key passphrase | The passphrase you set when creating the key |
-| `GPG_KEYNAME` | GPG key ID | `gpg --list-secret-keys --keyid-format LONG` |
-
-### GitHub Token
+Configure under **Repository Settings → Secrets and variables → Actions**, separately in
+`cfc-core` and in `cloudforge-manager-deployment`:
 
 | Secret | Description |
 |--------|-------------|
-| `GITHUB_TOKEN` | Automatically provided by GitHub Actions |
+| `GPG_PRIVATE_KEY` | The full ASCII-armored private key block, base64-encoded as **one line** — see exact command below. Not just the base64 of the content between the markers; the `-----BEGIN.../-----END...` markers must be included in what gets base64-encoded. |
+| `GPG_PASSPHRASE` | The key's passphrase |
+| `CENTRAL_PORTAL_USERNAME` | Central Portal "Generate User Token" username half — **not** your account login |
+| `CENTRAL_PORTAL_PASSWORD` | Same token's password half |
 
-## Setting Up GPG for Signing
+There is no `GPG_KEYNAME` secret and no `OSSRH_USERNAME`/`OSSRH_TOKEN` — those belonged to the
+old Sonatype OSSRH staging flow, which Central Portal replaced.
 
-### Generate GPG Key
-
-```bash
-# Generate a new GPG key
-gpg --full-generate-key
-
-# Select:
-# - Key type: RSA and RSA
-# - Key size: 4096
-# - Expiration: 0 (no expiration) or set as needed
-# - Real name: Your name
-# - Email: Your verified GitHub email
-
-# List keys and note the key ID
-gpg --list-secret-keys --keyid-format LONG
-
-# Output example:
-# sec   rsa4096/ABCD1234EF567890 2024-01-01 [SC]
-#       ^^^^^^^^^^^^^^^^^^^^ This is your KEY_ID
-```
-
-### Export GPG Key for GitHub
+### Generating and exporting the key
 
 ```bash
-# Export private key (ASCII-armored)
-gpg --armor --export-secret-keys ABCD1234EF567890 > private-key.asc
+# Generate (RSA 4096 sign+cert primary, RSA 4096 encrypt subkey, 3-year expiry)
+cat > /tmp/newkey.batch <<'EOF'
+%echo Generating new signing key
+Key-Type: RSA
+Key-Length: 4096
+Key-Usage: sign,cert
+Subkey-Type: RSA
+Subkey-Length: 4096
+Subkey-Usage: encrypt
+Name-Real: CloudForgeCI
+Name-Email: support@cloudforgeci.com
+Expire-Date: 3y
+%ask-passphrase
+%commit
+EOF
+gpg --batch --gen-key /tmp/newkey.batch
+rm /tmp/newkey.batch
 
-# Copy the entire contents of private-key.asc to GPG_PRIVATE_KEY secret
-cat private-key.asc
+# Note the key ID
+gpg --list-secret-keys --keyid-format long support@cloudforgeci.com
 
-# Upload public key to keyserver
-gpg --keyserver keyserver.ubuntu.com --send-keys ABCD1234EF567890
+# Publish the PUBLIC key to a keyserver -- Central Portal needs to verify your
+# signature against a publicly known key, or release validation rejects it
+gpg --keyserver keyserver.ubuntu.com --send-keys <KEY_ID>
+
+# Export the private key for the GitHub secret -- full armor block INCLUDING the
+# BEGIN/END markers, base64-encoded as one line. This exact form is what
+# GPG_PRIVATE_KEY must contain.
+gpg --armor --export-secret-keys <KEY_ID> | base64 -w0
 ```
 
-### Configure Secrets
+Paste that whole base64 string as the `GPG_PRIVATE_KEY` secret value. `GPG_PASSPHRASE` is
+whatever passphrase you gave it above.
 
-1. Go to **Repository Settings** → **Secrets and variables** → **Actions**
-2. Add the following secrets:
-   - `GPG_PRIVATE_KEY`: Contents of `private-key.asc`
-   - `GPG_PASSPHRASE`: The passphrase for your GPG key
-   - `GPG_KEYNAME`: Your key ID (e.g., `ABCD1234EF567890`)
+### Central Portal setup
 
-## Maven Central Setup
+Sonatype's OSSRH/JIRA namespace-claim flow is retired. Current process:
 
-### Register with Sonatype
+1. Create an account at [central.sonatype.com](https://central.sonatype.com)
+2. Verify the `com.cloudforgeci` namespace (GitHub repo ownership or DNS TXT record)
+3. Log in → username → **View Account** → **Generate User Token** → copy the username/password
+   halves into `CENTRAL_PORTAL_USERNAME`/`CENTRAL_PORTAL_PASSWORD`
 
-1. Create account at [issues.sonatype.org](https://issues.sonatype.org)
-2. Create a JIRA ticket to claim your group ID (e.g., `com.cloudforgeci`)
-3. Verify domain ownership (GitHub repository or DNS TXT record)
-4. Wait for approval (~1 business day)
+## GPG Signing — How It's Actually Wired
 
-### Generate User Token
+The release Maven profile's `maven-gpg-plugin` config reads `<homedir>${env.GPG_HOMEDIR}</homedir>`
+and `--pinentry-mode loopback`. Each signing job:
 
-1. Log in to [central.sonatype.com](https://central.sonatype.com)
-2. Click your username → **View Account**
-3. Click **Generate User Token**
-4. Copy the username and password
-5. Add to GitHub secrets:
-   - `OSSRH_USERNAME`: The generated username
-   - `OSSRH_TOKEN`: The generated password
+1. Installs **Homebrew's `gnupg`** on the runner and puts it first on `PATH`, ahead of Ubuntu's
+   system-packaged GnuPG.
+2. Decodes `GPG_PRIVATE_KEY` itself (`base64 -d`) and imports with plain `gpg --batch --import`
+   — masking each line of the decoded multi-line armor block individually via `::add-mask::`
+   before it's ever written anywhere (a single `::add-mask::` call only masks its first line for
+   a multi-line value — this matters).
+3. Writes `allow-loopback-pinentry` into a fresh `$GNUPGHOME/gpg-agent.conf` before anything else
+   touches that homedir.
+4. Exports both `GNUPGHOME` (the `gpg` CLI's own var) and `GPG_HOMEDIR` (what the Maven plugin
+   config actually reads) pointing at the same imported keyring.
+5. Passes `-Dgpg.passphrase="$MAVEN_GPG_PASSPHRASE"` explicitly on the `mvn ... deploy` command
+   line, rather than relying on env-var auto-detection (version-dependent in `maven-gpg-plugin`).
 
-## POM Configuration
+The signing jobs are also pinned to `runs-on: ubuntu-22.04` (not `ubuntu-latest`).
 
-The `pom.xml` is already configured with:
-
-- **Parent POM**: `com.cloudforgeci:cloudforge:1.1.1`
-- **Version**: `2.0.6` (auto-bumped by workflow)
-- **Release Profile**: Includes GPG signing, Javadoc, sources
-- **Central Publishing Plugin**: Deploys to Sonatype Central Portal
-- **SCM Section**: GitHub repository URLs
-- **Distribution Management**: Maven Central repository
+**Why all of this**: a real, reproduced `gpg-agent` bug — `gpg: signing failed: Too much data for
+IPC layer` — on GitHub's Ubuntu runners, on the very first sign, every time. Ruled out
+individually and in combination: `maven-gpg-plugin` version (3.1.0 vs 3.2.4), `GNUPGHOME`/
+`GPG_HOMEDIR` config, `allow-loopback-pinentry`, explicit passphrase, two completely different
+GPG keys, the import mechanism (hand-rolled vs. `crazy-max/ghaction-import-gpg`), `gpg1` (turned
+out to be a `gpg2` compatibility shim on Ubuntu, not real legacy GnuPG — same bug), and
+`ubuntu-22.04` vs `ubuntu-latest`. Never once reproduced locally (macOS, Homebrew GnuPG 2.4.8).
+The Homebrew-on-the-runner step is the current attempt at a fix, on the theory that it's specific
+to Ubuntu's own GnuPG *build* rather than GnuPG in general. **As of this writing that fix has not
+yet been confirmed working end-to-end against a real publish** — if you're reading this because
+publishing is broken again, that's the place to start looking, and `Import GPG signing key` /
+`Deploy SNAPSHOT` step logs are where every one of the above symptoms actually showed up.
 
 ## Verification
 
-### Check Release Status
-
-1. **GitHub**:
-   - Go to **Releases** → verify new release is created
-   - Go to **Tags** → verify tag `v2.0.7` exists
-   - Go to **Actions** → verify workflow completed successfully
-
-2. **Maven Central**:
-   - Visit [search.maven.org](https://search.maven.org/search?q=g:com.cloudforgeci%20AND%20a:cfc-core)
-   - Note: Indexing may take 2-4 hours
-
-3. **Sonatype Central Portal**:
-   - Log in to [central.sonatype.com](https://central.sonatype.com)
-   - Go to **Deployments** → verify deployment status
-
-### Test Published Artifact
-
-```xml
-<!-- Add to a test project pom.xml -->
-<dependency>
-    <groupId>com.cloudforgeci</groupId>
-    <artifactId>cfc-core</artifactId>
-    <version>2.0.7</version>
-</dependency>
-```
-
-```bash
-# Clear local cache and force download from Maven Central
-rm -rf ~/.m2/repository/com/cloudforgeci/cfc-core/2.0.7
-mvn dependency:get -Dartifact=com.cloudforgeci:cfc-core:2.0.7
-```
+- **Central Portal**: [central.sonatype.com](https://central.sonatype.com) → **Deployments**
+- **Maven Central search** (snapshots don't appear here, only real releases, and indexing lags
+  15-30+ minutes): [search.maven.org](https://search.maven.org/search?q=g:com.cloudforgeci)
+- **Snapshots repository** (browsable directly):
+  `https://central.sonatype.com/repository/maven-snapshots/com/cloudforgeci/`
+- **Git tags**: a successful auto-release pushes `v<version>` — check `git tag -l` /
+  the repo's Tags page
 
 ## Troubleshooting
 
-### Common Issues
+Real issues actually hit while building this pipeline, not theoretical:
 
-#### 1. GPG Signing Fails
+| Symptom | Cause | Fix |
+|---|---|---|
+| `gpg: signing failed: No secret key` / import reports 0 keys | Malformed `GPG_PRIVATE_KEY` secret — missing `BEGIN`/`END` markers, or base64 of just the inner content | Re-export with the exact one-line command above, markers included |
+| `Misformed armored text` (from `crazy-max/ghaction-import-gpg` specifically) | That action's own base64 auto-detection doesn't reliably handle this secret's format | Decode with plain `base64 -d` yourself first (see step 2 above), don't rely on the action's detection |
+| `gpg: signing failed: No pinentry` | `--pinentry-mode loopback` is silently ignored by `gpg-agent` without an explicit `allow-loopback-pinentry` permission | Write `allow-loopback-pinentry` into `$GNUPGHOME/gpg-agent.conf` before importing |
+| `gpg: signing failed: Too much data for IPC layer` | Still under investigation — see the GPG Signing section above | Currently: Homebrew's `gnupg` on the runner instead of the system package |
+| Non-resolvable parent POM / dependency for a downstream repo (`cloudforge-manager-deployment`, `cloudforge-manager`, `cfc-testing`) | The SNAPSHOT they depend on hasn't actually been published yet — check whether `publish-snapshot.yml` has run (successfully) on `cfc-core` recently, and whether the downstream repo's own `pom.xml` has a `<repositories>` block pointing at `https://central.sonatype.com/repository/maven-snapshots/` | Open/update a PR against `develop` in the repo that owns the missing artifact to trigger its snapshot publish; add the snapshots `<repositories>` block if it's missing |
+| `Root pom version 'X' isn't a SNAPSHOT` | `develop`'s `pom.xml` isn't on a `-SNAPSHOT` version, which `publish-snapshot.yml` requires by design | `develop` should always carry `-SNAPSHOT`; the auto-release job is what's responsible for the brief non-SNAPSHOT window (never actually pushed as its own commit) |
 
-**Error**: `gpg: signing failed: No secret key`
+## Rollback
 
-**Solution**:
-- Verify `GPG_PRIVATE_KEY` secret contains the full ASCII-armored key
-- Ensure key starts with `-----BEGIN PGP PRIVATE KEY BLOCK-----`
-- Check `GPG_KEYNAME` matches the key ID
-
-#### 2. Maven Central Deployment Fails
-
-**Error**: `401 Unauthorized`
-
-**Solution**:
-- Verify `OSSRH_USERNAME` and `OSSRH_TOKEN` are correct
-- Regenerate token in Sonatype Central Portal
-- Ensure Sonatype account is approved for `com.cloudforgeci` group
-
-#### 3. Version Already Exists
-
-**Error**: `Version 2.0.7 already exists`
-
-**Solution**:
-- Maven Central doesn't allow re-deploying the same version
-- Delete the Git tag: `git push --delete origin v2.0.7`
-- Manually trigger workflow with the next version
-
-#### 4. Tests Fail During Release
-
-**Solution**:
-- Fix tests on `develop` branch first
-- Ensure PR validation passes before merging to `main`
-- Check [cfc-validation.yml](.github/workflows/cfc-validation.yml) results
-
-#### 5. Push to Main Fails
-
-**Error**: `failed to push some refs`
-
-**Solution**:
-- Ensure workflow has write permissions
-- Check branch protection rules allow `github-actions[bot]` to push
-- Verify `GITHUB_TOKEN` has sufficient permissions
-
-## Rollback Procedure
-
-If a release needs to be rolled back:
-
-1. **Do NOT delete from Maven Central** (not allowed)
-2. **Release a new version** with the fix
-3. **Update documentation** to skip the problematic version
-4. **Notify users** via GitHub release notes
-
-## Development Workflow
-
-### Feature Development
-
-```bash
-# Work on develop branch
-git checkout develop
-git pull origin develop
-
-# Create feature branch
-git checkout -b feature/my-feature
-
-# Make changes and commit with conventional commits
-git commit -m "feat: add new feature"
-
-# Push and create PR to develop
-git push origin feature/my-feature
-
-# After PR approval, merge to develop
-# After testing, merge develop to main to trigger release
-```
-
-### Hotfix Workflow
-
-```bash
-# Create hotfix branch from main
-git checkout main
-git pull origin main
-git checkout -b hotfix/critical-fix
-
-# Make fix and commit
-git commit -m "fix: resolve critical security issue"
-
-# Push and create PR to main
-git push origin hotfix/critical-fix
-
-# Merge triggers automatic patch release
-```
-
-## Conventional Commits Reference
-
-Use these commit message formats to control version bumping:
-
-| Type | Description | Version Bump |
-|------|-------------|--------------|
-| `fix:` | Bug fix | PATCH |
-| `feat:` | New feature | MINOR |
-| `feat!:` | Breaking feature | MAJOR |
-| `fix!:` | Breaking bug fix | MAJOR |
-| `BREAKING CHANGE:` | In commit body | MAJOR |
-| `chore:` | Maintenance | PATCH |
-| `docs:` | Documentation | PATCH |
-| `style:` | Code style | PATCH |
-| `refactor:` | Code refactoring | PATCH |
-| `perf:` | Performance | PATCH |
-| `test:` | Tests | PATCH |
-| `ci:` | CI/CD changes | PATCH |
-
-### Examples
-
-```bash
-# Patch release (2.0.6 → 2.0.7)
-git commit -m "fix: handle null pointer in SecurityConfig"
-
-# Minor release (2.0.6 → 2.1.0)
-git commit -m "feat: add CloudTrail auto-remediation support"
-
-# Major release (2.0.6 → 3.0.0)
-git commit -m "feat!: redesign IAM role configuration API"
-
-# Major release with body
-git commit -m "feat: redesign security configuration
-
-BREAKING CHANGE: SecurityConfig constructor now requires ComplianceMode parameter"
-```
-
-## Best Practices
-
-1. **Always use conventional commits** for automatic version bumping
-2. **Test thoroughly on develop** before merging to main
-3. **Run local builds** with release profile: `mvn clean verify -P release`
-4. **Update CHANGELOG** for significant releases
-5. **Monitor Maven Central sync** after deployment (2-4 hours)
-6. **Verify artifacts** are accessible before announcing release
-7. **Tag important milestones** with annotated tags
-8. **Keep GPG key secure** and backed up
-9. **Rotate Sonatype tokens** periodically
-10. **Document breaking changes** in release notes
-
-## Monitoring
-
-### Workflow Notifications
-
-- **Success**: GitHub Action summary shows release details
-- **Failure**: GitHub Action failure notification sent to committers
-- **Artifacts**: SBOM and build reports uploaded as artifacts
-
-### Maven Central Status
-
-Check deployment status:
-- Sonatype Central Portal: [central.sonatype.com](https://central.sonatype.com)
-- Maven Central Search: [search.maven.org](https://search.maven.org/search?q=g:com.cloudforgeci%20AND%20a:cfc-core)
-- Maven Central Repository: [repo1.maven.org](https://repo1.maven.org/maven2/com/cloudforgeci/cfc-core/)
-
-## Security Considerations
-
-### Secret Protection in Workflow
-
-The Maven release workflow implements multiple layers of security to prevent secret leakage:
-
-1. **GitHub Secret Masking**: GitHub Actions automatically masks all secret values in logs
-2. **Environment Variables Only**: Secrets are passed via environment variables, never as command-line arguments
-3. **Disabled Command Echoing**: `set +x` disables bash command echoing during sensitive operations
-4. **Minimal GPG Output**: GPG operations suppress verbose key information
-5. **No Secret Logging**: Scripts never echo or print secret values
-
-### GPG Key Security
-
-1. **Never commit GPG private keys** to repository
-2. **Use strong passphrase** (20+ characters, mix of characters)
-3. **Backup key to secure location** (encrypted offline storage)
-4. **Revoke key if compromised** immediately
-5. **Upload public key to keyserver** for verification
-6. **Set key expiration** (recommended: 2-3 years)
-
-### Token Security
-
-1. **Use GitHub encrypted secrets** for all credentials
-2. **Rotate tokens every 90 days** as a best practice
-3. **Limit token scope** to minimum required permissions
-4. **Monitor token usage** in Sonatype Central Portal
-5. **Never share tokens** across projects or teams
-6. **Revoke unused tokens** immediately
-
-### Access Control
-
-1. **Limit who can push to `main`** branch
-2. **Require PR reviews** before merge (minimum 1-2 reviewers)
-3. **Enable branch protection rules**:
-   - Require status checks to pass
-   - Require up-to-date branches
-   - Include administrators in restrictions
-4. **Use CODEOWNERS file** for critical paths
-5. **Enable 2FA** for all maintainers
-6. **Audit access logs** regularly
-
-## Additional Resources
-
-- [Maven Central Publishing Guide](https://central.sonatype.org/publish/publish-guide/)
-- [Semantic Versioning](https://semver.org/)
-- [Conventional Commits](https://www.conventionalcommits.org/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [GPG Signing Guide](https://docs.github.com/en/authentication/managing-commit-signature-verification)
-
-## Support
-
-For issues with the release process:
-
-1. Check workflow logs in GitHub Actions
-2. Review this documentation
-3. Check Sonatype Central Portal for deployment status
-4. Open an issue in the repository with:
-   - Workflow run URL
-   - Error messages
-   - Steps to reproduce
+Maven Central doesn't allow re-publishing or deleting a version. If a release needs to be
+undone, publish a new version with the fix and note the bad version in release notes — normal
+Maven Central practice, not `cfc-core`-specific.

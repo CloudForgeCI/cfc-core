@@ -1,0 +1,22 @@
+{
+  "stackName": "Jenkins-AutoScaling",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
+  "description": "LocalStack autoscaling verification — low CPU target so a deterministic scale-out is easy to trigger",
+  "environment": "dev",
+  "runtime": "FARGATE",
+  "securityProfile": "DEV",
+  "topology": "APPLICATION_SERVICE",
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+  "authMode": "none",
+  "enableSsl": false,
+  "cpu": 512,
+  "memory": 1024,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 3,
+  "cpuTargetUtilization": 10,
+  "wafEnabled": false,
+  "enableMonitoring": true,
+  "logRetentionDays": 7
+}

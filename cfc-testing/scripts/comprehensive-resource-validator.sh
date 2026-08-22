@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Comprehensive Resource Validation System
+# Resource Validation Matrix
 # Creates a truth table of expected resources for every configuration combination
 # and validates actual synthesized resources against expectations
 
@@ -28,7 +28,7 @@ CDK_OUT_DIR="$BASE_DIR/cdk.out"
 # Create directories
 mkdir -p "$VALIDATION_DIR"
 
-echo -e "${BLUE}🔍 Comprehensive Resource Validation System${NC}"
+echo -e "${BLUE}Resource Validation Matrix${NC}"
 echo -e "${BLUE}===========================================${NC}"
 echo "Domain: $DOMAIN"
 echo "Validation Directory: $VALIDATION_DIR"
@@ -63,7 +63,7 @@ declare -A EXPECTED_RESOURCES
 # 4. WAFWebACL only for PRODUCTION profile
 # 5. S3Bucket created for ALB access logging in STAGING/PRODUCTION with JENKINS_SERVICE
 initialize_truth_table() {
-    echo -e "${CYAN}📋 Initializing truth table...${NC}"
+    echo -e "${CYAN}Initializing truth table...${NC}"
 
     # Base resources that should ALWAYS exist
     local base_resources="VPC,Subnets,SecurityGroups,IAMRoles,CloudWatchLogs"
@@ -321,7 +321,7 @@ synthesize_and_validate() {
     
     local stack_name="val-$(echo $key | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
     
-    echo -e "${PURPLE}🧪 Testing: $key${NC}"
+    echo -e "${PURPLE}Testing: $key${NC}"
     echo "  Stack: $stack_name"
     echo "  Expected: $expected"
     
@@ -359,13 +359,13 @@ EOF
         # Restore original cdk.json
         mv "$backup_cdk_json" "$original_cdk_json"
         
-        echo -e "  ${GREEN}✅ Synthesis successful${NC}"
+        echo -e "  ${GREEN}Synthesis successful${NC}"
         
         # Validate resources
         if [ -f "$template_file" ]; then
             validate_resources "$template_file" "$expected" "$key"
         else
-            echo -e "  ${RED}❌ Template file not found${NC}"
+            echo -e "  ${RED}ERROR: Template file not found${NC}"
             echo "$key: SYNTHESIS_FAILED - Template not generated" >> "$DRIFT_REPORT_FILE"
         fi
         
@@ -373,7 +373,7 @@ EOF
         # Restore original cdk.json on failure
         mv "$backup_cdk_json" "$original_cdk_json"
 
-        echo -e "  ${RED}❌ Synthesis failed${NC}"
+        echo -e "  ${RED}ERROR: Synthesis failed${NC}"
         echo "$key: SYNTHESIS_FAILED - $(head -1 $synth_error)" >> "$DRIFT_REPORT_FILE"
     fi
     
@@ -388,7 +388,7 @@ validate_resources() {
 
     local validation_output="$VALIDATION_DIR/${config_key}-validation.json"
 
-    echo "  🔍 Validating resources..."
+    echo "  Validating resources..."
 
     # Extract all resource types from template
     local actual_resources=$(jq -r '.Resources | to_entries[] | .value.Type' "$template_file" 2>/dev/null | sort | uniq | tr '\n' ',' | sed 's/,$//')
@@ -569,9 +569,9 @@ EOF
     fi
 }
 
-# Function to generate comprehensive report
+# Function to generate the validation report
 generate_comprehensive_report() {
-    echo -e "${BLUE}📊 Generating comprehensive validation report...${NC}"
+    echo -e "${BLUE}Generating validation report...${NC}"
     
     local report_file="$VALIDATION_DIR/comprehensive-validation-report.html"
     
@@ -579,7 +579,7 @@ generate_comprehensive_report() {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>CloudForge Core - Comprehensive Resource Validation Report</title>
+    <title>CloudForge Core Resource Validation Report</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         .header { background: #f0f0f0; padding: 15px; border-radius: 5px; }
@@ -599,7 +599,7 @@ generate_comprehensive_report() {
 </head>
 <body>
     <div class="header">
-        <h1>CloudForge Core - Comprehensive Resource Validation Report</h1>
+        <h1>CloudForge Core Resource Validation Report</h1>
         <p>Generated: $(date)</p>
         <p>Validation Directory: $VALIDATION_DIR</p>
     </div>
@@ -641,12 +641,12 @@ generate_comprehensive_report() {
 </html>
 EOF
     
-    echo -e "${GREEN}📋 Report generated: $report_file${NC}"
+    echo -e "${GREEN}Report generated: $report_file${NC}"
 }
 
 # Main execution
 main() {
-    echo -e "${CYAN}🚀 Starting comprehensive resource validation...${NC}"
+    echo -e "${CYAN}Starting resource validation...${NC}"
     
     # Initialize truth table
     initialize_truth_table
@@ -694,7 +694,7 @@ main() {
     generate_comprehensive_report
     
     # Print summary
-    echo -e "${BLUE}📈 Validation Summary${NC}"
+    echo -e "${BLUE}Validation Summary${NC}"
     echo -e "${BLUE}====================${NC}"
     echo "Total Configurations: $total_configs"
     echo "Valid Configurations: $((total_configs - invalid_configs))"
@@ -703,7 +703,7 @@ main() {
     echo "Failed Validations: $failed_configs"
     echo "Success Rate: $(( (passed_configs * 100) / (total_configs - invalid_configs) ))%"
     echo ""
-    echo -e "${GREEN}✅ Comprehensive validation completed!${NC}"
+    echo -e "${GREEN}Resource validation completed.${NC}"
     echo "Results saved in: $VALIDATION_DIR"
     echo "Drift report: $DRIFT_REPORT_FILE"
     echo ""
@@ -713,7 +713,7 @@ main() {
         echo "Failed configurations:"
         grep "MISSING_RESOURCES\|SYNTHESIS_FAILED" "$DRIFT_REPORT_FILE" | head -10
     else
-        echo -e "${GREEN}🎉 All validations passed!${NC}"
+        echo -e "${GREEN}All validations passed.${NC}"
     fi
 }
 

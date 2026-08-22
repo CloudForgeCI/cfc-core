@@ -1,0 +1,19 @@
+{
+  "stackName": "CloudForgeManager-Fresh",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "environment": "development",
+  "runtime": "FARGATE",
+  "securityProfile": "DEV",
+  "authMode": "none",
+  "enableSsl": true,
+  "lbType": "alb",
+  "oidcProvider": "cognito",
+  "cognitoAutoProvision": true,
+  "cognitoUserPoolName": "cloudforge-manager-dev",
+  "cognitoDomainPrefix": "cloudforge-manager-dev",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "admin",
+  "cognitoUserGroupName": "user",
+  "managerDirectDeployEnabled": true
+}

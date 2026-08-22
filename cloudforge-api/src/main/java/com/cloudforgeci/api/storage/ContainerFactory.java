@@ -6,10 +6,12 @@ import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import software.amazon.awscdk.services.ecs.*;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.logs.LogGroup;
@@ -30,6 +32,12 @@ public class ContainerFactory extends BaseFactory {
 
     @DeploymentContext("fqdn")
     private String fqdn;
+
+    @DeploymentContext("domain")
+    private String domain;
+
+    @DeploymentContext("certificateArn")
+    private String certificateArn;
 
     @DeploymentContext("enableSsl")
     private Boolean enableSsl;
@@ -89,8 +97,23 @@ public class ContainerFactory extends BaseFactory {
     @SystemContext("dbDatasourceParameter")
     private StringParameter dbDatasourceParameter;
 
+    @SystemContext("redisSessionStoreEndpoint")
+    private String redisSessionStoreEndpoint;
+
+    @SystemContext("redisSessionStorePort")
+    private Integer redisSessionStorePort;
+
+    @SystemContext("accountCipherKeySecretArn")
+    private String accountCipherKeySecretArn;
+
+    @SystemContext("licenseKeySecretArn")
+    private String licenseKeySecretArn;
+
     @SystemContext("applicationOidcConfig")
     private OidcConfiguration applicationOidcConfig;
+
+    @SystemContext("alb")
+    private ApplicationLoadBalancer alb;
 
     @SystemContext("samlIdpMetadataUrl")
     private String samlIdpMetadataUrl;
@@ -126,9 +149,19 @@ public class ContainerFactory extends BaseFactory {
                     );
                     environment.putAll(dbEnv);
                 } catch (NoSuchMethodException e) {
-                    // Application doesn't have 4-parameter method, use standard 3-parameter
-                    LOG.info("Application " + applicationSpec.applicationId() + " doesn't support database connection parameter");
+                    // CMS specifications use the DatabaseSpec databaseEnvVars contract rather
+                    // than the newer four-argument ApplicationSpec convenience method.
+                    // Preserve their normal application settings and add the database values.
+                    LOG.info("Application " + applicationSpec.applicationId()
+                        + " uses DatabaseSpec database environment variables");
                     environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode.getValue()));
+                    if (applicationSpec instanceof CmsSpec cmsSpec) {
+                        environment.putAll(cmsSpec.databaseEnvVars(
+                            dbConnection.endpoint(),
+                            dbConnection.port(),
+                            dbConnection.databaseName(),
+                            dbConnection.username()));
+                    }
                 } catch (Exception e) {
                     LOG.warning("Error calling containerEnvironmentVariables with database connection: " + e.getMessage());
                     environment.putAll(applicationSpec.containerEnvironmentVariables(fqdn, sslEnabled, authMode.getValue()));
@@ -143,8 +176,95 @@ public class ContainerFactory extends BaseFactory {
             }
         }
 
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+                && authMode == AuthMode.ALB_OIDC && alb != null) {
+            environment.put("CFC_MANAGER_ALB_SIGNER_ARN", alb.getLoadBalancerArn());
+        }
+
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())) {
+            boolean publiclyTrusted = com.cloudforgeci.api.core.TlsTrustEvaluator.isPubliclyTrusted(
+                sslEnabled, domain, fqdn, certificateArn);
+            environment.put(com.cloudforge.core.manager.ManagerEnvKeys.PUBLIC_TLS_TRUSTED,
+                String.valueOf(publiclyTrusted));
+        }
+
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+                && redisSessionStoreEndpoint != null && !redisSessionStoreEndpoint.isBlank()) {
+            // See ApplicationFactory's provisionManagerRedisSessions handling for where this
+            // cluster gets created, and ManagerRuntimeConfiguration.Sessions /
+            // SessionStoreConfiguration (cloudforge-manager) for how these are consumed.
+            environment.put("CFC_MANAGER_SESSION_MODE", "redis");
+            environment.put("CFC_MANAGER_REDIS_HOST", redisSessionStoreEndpoint);
+            environment.put("CFC_MANAGER_REDIS_PORT",
+                String.valueOf(redisSessionStorePort != null ? redisSessionStorePort : 6379));
+            // CmsObjectCacheConfiguration.createRedisCluster() builds a single-node
+            // CfnCacheCluster, which has no transitEncryptionEnabled property at all (unlike
+            // CfnReplicationGroup) — there is no TLS listener to point Jedis at, so this must
+            // stay false or RedisSessionStoreConfiguration's Jedis client will fail the TLS
+            // handshake against a plaintext port.
+            environment.put("CFC_MANAGER_REDIS_TLS", "false");
+            LOG.info("✅ Configured CFC_MANAGER_SESSION_MODE=redis (" + redisSessionStoreEndpoint + ")");
+        }
+
         // Collect ECS secrets (from Secrets Manager) to be mounted as environment variables
         Map<String, software.amazon.awscdk.services.ecs.Secret> ecsSecrets = new HashMap<>();
+
+        // Bind the AES cipher key CloudForge Manager uses to encrypt cross-account connection
+        // secrets (see ApplicationFactory's provisionManagerAccountCipherKey handling and
+        // SecretCipher/AesGcmSecretCipher in cloudforge-manager). Independent of database
+        // provisioning — applies whenever the secret was provisioned, embedded H2 included.
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+                && accountCipherKeySecretArn != null && !accountCipherKeySecretArn.isBlank()) {
+            ISecret accountCipherKeySecret =
+                Secret.fromSecretCompleteArn(this, "AccountCipherKeySecret", accountCipherKeySecretArn);
+
+            if (fargateTaskDef.getExecutionRole() != null) {
+                fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
+                    PolicyStatement.Builder.create()
+                        .sid("AllowReadAccountCipherKey")
+                        .effect(Effect.ALLOW)
+                        .actions(List.of(
+                            "secretsmanager:GetSecretValue",
+                            "secretsmanager:DescribeSecret"
+                        ))
+                        .resources(List.of(accountCipherKeySecretArn))
+                        .build()
+                );
+                LOG.info("  ✅ Added IAM policy for account cipher key secret access");
+            }
+
+            ecsSecrets.put(com.cloudforge.core.manager.ManagerEnvKeys.ACCOUNT_SECRET_KEY,
+                          software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(accountCipherKeySecret));
+            LOG.info("  ✅ Account cipher key mapped to CFC_MANAGER_ACCOUNT_SECRET_KEY");
+        }
+
+        // Bind a deploy-time-supplied customer license key (see ApplicationFactory's
+        // provisioning above) to the exact env var ManagerRuntimeConfiguration's "stopgap" path
+        // already reads. Independent of database provisioning, same as the cipher key above.
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+                && licenseKeySecretArn != null && !licenseKeySecretArn.isBlank()) {
+            ISecret licenseKeySecret =
+                Secret.fromSecretCompleteArn(this, "LicenseKeySecret", licenseKeySecretArn);
+
+            if (fargateTaskDef.getExecutionRole() != null) {
+                fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
+                    PolicyStatement.Builder.create()
+                        .sid("AllowReadLicenseKey")
+                        .effect(Effect.ALLOW)
+                        .actions(List.of(
+                            "secretsmanager:GetSecretValue",
+                            "secretsmanager:DescribeSecret"
+                        ))
+                        .resources(List.of(licenseKeySecretArn))
+                        .build()
+                );
+                LOG.info("  ✅ Added IAM policy for license key secret access");
+            }
+
+            ecsSecrets.put(com.cloudforge.core.manager.ManagerEnvKeys.LICENSE_KEY,
+                          software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(licenseKeySecret));
+            LOG.info("  ✅ License key mapped to CFC_MANAGER_LICENSESEAT_LICENSE_KEY");
+        }
 
         // Add database password from Secrets Manager for applications with external database
         if (applicationSpec instanceof DatabaseSpec && dbConnection != null) {
@@ -200,6 +320,28 @@ public class ContainerFactory extends BaseFactory {
                                   software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
                     LOG.info("  ✅ Database password mapped to SUPERSET_DATABASE_PASSWORD");
                     break;
+                case "cloudforge-manager":
+                    ecsSecrets.put("CFC_MANAGER_DATABASE_PASSWORD",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to CFC_MANAGER_DATABASE_PASSWORD");
+                    break;
+                case "joomla":
+                    ecsSecrets.put("JOOMLA_DB_PASSWORD",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to JOOMLA_DB_PASSWORD");
+                    break;
+                case "wordpress":
+                case "woocommerce":
+                    // Same official wordpress:* image bootstrap either way (WooCommerce is a
+                    // WordPress plugin on top, sharing WordPressApplicationSpec's env var
+                    // conventions — see WooCommerceApplicationSpec). Falling through to the
+                    // generic DATABASE_PASSWORD default here left WORDPRESS_DB_PASSWORD unset —
+                    // the official image's entrypoint reads that name specifically, not
+                    // DATABASE_PASSWORD, so it connected with no password at all and failed.
+                    ecsSecrets.put("WORDPRESS_DB_PASSWORD",
+                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                    LOG.info("  ✅ Database password mapped to WORDPRESS_DB_PASSWORD");
+                    break;
                 case "mattermost-enterprise":
                 case "mattermost-team":
                     // Mattermost is distroless (Go binary, no shell) - cannot use shell variable substitution
@@ -248,11 +390,13 @@ public class ContainerFactory extends BaseFactory {
                     if (clientSecretArn != null && !clientSecretArn.isEmpty() && !isIdentityCenterSaml) {
                         LOG.info("  Mounting OIDC client secret from Secrets Manager for application: " + applicationSpec.applicationId());
 
-                        // clientSecretArn contains COMPLETE ARN with suffix (same as RDS pattern)
-                        // Example: arn:aws:secretsmanager:region:account:secret:name-AbCd12
-
-                        // Import secret using complete ARN (same pattern as database password)
-                        ISecret clientSecret = Secret.fromSecretCompleteArn(this, "OidcClientSecret", clientSecretArn);
+                        // OidcConfiguration historically calls this field clientSecretArn, but
+                        // external-provider configuration supplies a Secrets Manager *name*.
+                        // Support both forms so application OIDC can synthesize and deploy with
+                        // managed or pre-existing secrets.
+                        ISecret clientSecret = clientSecretArn.startsWith("arn:")
+                            ? Secret.fromSecretCompleteArn(this, "OidcClientSecret", clientSecretArn)
+                            : Secret.fromSecretNameV2(this, "OidcClientSecret", clientSecretArn);
 
                         // Grant the ECS task execution role permission to read the secret
                         if (fargateTaskDef.getExecutionRole() != null) {
@@ -264,7 +408,7 @@ public class ContainerFactory extends BaseFactory {
                                         "secretsmanager:GetSecretValue",
                                         "secretsmanager:DescribeSecret"
                                     ))
-                                    .resources(List.of(clientSecretArn))
+                                    .resources(List.of(clientSecret.getSecretArn()))
                                     .build()
                             );
 
@@ -300,6 +444,12 @@ public class ContainerFactory extends BaseFactory {
                                 ecsSecrets.put("GITLAB_OIDC_CLIENT_SECRET",
                                               software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
                                 LOG.info("  ✅ OIDC client secret mapped to GITLAB_OIDC_CLIENT_SECRET");
+                                break;
+                            case "cloudforge-manager":
+                                ecsSecrets.put(com.cloudforge.core.manager.ManagerEnvKeys.OIDC_CLIENT_SECRET,
+                                              software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
+                                LOG.info("  ✅ OIDC client secret mapped to "
+                                    + com.cloudforge.core.manager.ManagerEnvKeys.OIDC_CLIENT_SECRET);
                                 break;
                             default:
                                 // Generic naming: <APP>_OIDC_CLIENT_SECRET
@@ -347,6 +497,11 @@ public class ContainerFactory extends BaseFactory {
             LOG.info("Container will have " + ecsSecrets.size() + " secret(s) mounted as environment variables");
         }
 
+        // Set by the OIDC entrypoint-wrapper block below whenever it configures its own
+        // command — guards the general-purpose CmsSpec.containerCommand() hook further down
+        // from clobbering it. OIDC's wrapper is app-specific too; the two aren't composed.
+        boolean commandConfigured = false;
+
         // Track whether we need an init container for SAML certificate
         // Uses OidcIntegration interface methods for application-specific paths
         boolean needsSamlCertInit = false;
@@ -393,6 +548,7 @@ public class ContainerFactory extends BaseFactory {
                         if (startupCommand != null) {
                             List<String> command = List.of(startupCommand);
                             containerOptionsBuilder.command(command);
+                            commandConfigured = true;
                             LOG.info("✅ Configured direct startup command for distroless " + applicationSpec.applicationId());
                         } else {
                             LOG.info("✅ Using default container entrypoint for " + applicationSpec.applicationId());
@@ -423,6 +579,7 @@ public class ContainerFactory extends BaseFactory {
                         );
 
                         containerOptionsBuilder.command(command);
+                        commandConfigured = true;
                         LOG.info("✅ Configured OIDC entrypoint wrapper for " + applicationSpec.applicationId());
                     }
                 } else {
@@ -430,6 +587,23 @@ public class ContainerFactory extends BaseFactory {
                 }
             } else {
                 LOG.severe("❌ applicationOidcConfig NOT PRESENT - entrypoint wrapper NOT configured!");
+            }
+        }
+
+        // CmsSpec's own startup customization (e.g. phpBB reconfiguring Apache's listen port
+        // and downloading its source on first run) — independent of OIDC, so it applies
+        // regardless of authMode, but only when the OIDC branch above hasn't already claimed
+        // the container's command. Real bug this fixed: CmsSpec.containerCommand() has existed
+        // as an interface hook (and PhpBBApplicationSpec implemented it) with no caller anywhere
+        // in the synthesis path — every app relying on it silently got the stock image entrypoint
+        // instead, e.g. phpBB starting Apache on its image's default port 80 while every other
+        // part of the stack (ALB target group, container port mappings, generated URLs) assumed
+        // the app spec's declared applicationPort().
+        if (!commandConfigured && applicationSpec instanceof CmsSpec cmsSpec) {
+            List<String> command = cmsSpec.containerCommand();
+            if (command != null && !command.isEmpty()) {
+                containerOptionsBuilder.command(command);
+                LOG.info("✅ Configured containerCommand() startup script for " + applicationSpec.applicationId());
             }
         }
 

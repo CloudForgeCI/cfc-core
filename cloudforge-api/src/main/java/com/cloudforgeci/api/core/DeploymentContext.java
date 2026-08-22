@@ -8,6 +8,8 @@ import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
+import com.cloudforge.core.interfaces.CmsSpec;
+import com.cloudforgeci.api.compute.CmsLoader;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
@@ -18,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Typed configuration interface for CDK deployment context.
@@ -52,7 +55,7 @@ import java.util.Map;
  * <ul>
  *   <li>tier: "public" | "enterprise" (default: public)</li>
  *   <li>runtime: "ec2" | "fargate" (default: fargate)</li>
- *   <li>topology: "jenkins-single-node" | "jenkins-service" | "s3-website"</li>
+ *   <li>topology: "jenkins-service" | "s3-website" | "application-service" | "cms-service"</li>
  *   <li>env: "dev" | "stage" | "prod" (default: dev)</li>
  *   <li>securityProfile: "dev" | "staging" | "production" (default: dev)</li>
  *   <li>region: AWS region (default: us-east-1)</li>
@@ -73,7 +76,7 @@ import java.util.Map;
  *   <li>wafEnabled: Enable AWS WAF (default: false)</li>
  *   <li>albAccessLogging: Enable ALB access logs to S3 (default: false)</li>
  *   <li>cloudfront: Enable CloudFront distribution (default: false)</li>
- *   <li>bastionCidr: CIDR for SSH bastion access (default: 10.0.1.0/24)</li>
+ *   <li>bastionCidr: Retained for backwards compatibility; no longer gates ECS Exec or SSH. Instance access uses SSM Session Manager; Fargate access uses ECS Exec.</li>
  * </ul>
  *
  * <p><b>Authentication:</b></p>
@@ -88,6 +91,9 @@ import java.util.Map;
  *   <li>cognitoUserPoolName: User Pool name (optional)</li>
  *   <li>cognitoMfaEnabled: Enable MFA (default: false)</li>
  *   <li>cognitoMfaMethod: "totp" | "sms" | "both" (default: "both")</li>
+ *   <li>cognitoSelfSignupEnabled: override the security profile's self-signup default
+ *       (default: null — profile decides); enabling it under an active compliance framework
+ *       logs a synthesis-time warning</li>
  *   <li>cognitoCreateGroups: Create admin/user groups (default: true)</li>
  *   <li>cognitoAdminGroupName: Admin group name (default: "Jenkins-Admins")</li>
  *   <li>cognitoUserGroupName: User group name (default: "Jenkins-Users")</li>
@@ -171,7 +177,10 @@ import java.util.Map;
 public final class DeploymentContext {
 
     // Backing configuration loaded via Jackson (type-safe)
-    private final DeploymentConfig config;
+    // Public so new fields on DeploymentConfig are accessible without adding forwarding getters.
+    // Existing forwarding getters are retained for backward compatibility but new code should
+    // access fields directly: ctx.cfc.config.myField
+    public final DeploymentConfig config;
 
     // Raw map snapshot (frozen) - kept for backward compatibility
     private final Map<String, Object> raw;
@@ -232,15 +241,26 @@ public final class DeploymentContext {
 
     /** Build from the 'cfc' context object on the App. */
     public static DeploymentContext from(App app) {
-        return Util.extractDeploymentContext(app.getNode().tryGetContext("cfc"));
+        return Util.createDeploymentContext(app.getNode().tryGetContext("cfc"));
     }
 
     /** Build from the 'cfc' context object on any Construct scope. */
     public static DeploymentContext from(Construct scope) {
-        return Util.extractDeploymentContext(scope.getNode().tryGetContext("cfc"));
+        return Util.createDeploymentContext(scope.getNode().tryGetContext("cfc"));
     }
 
-    // --------- Public getters (delegate to config) ---------
+    /**
+     * Returns the backing {@link DeploymentConfig}.
+     *
+     * <p>New code should access config fields directly via {@code ctx.cfc.config.myField}
+     * or {@code ctx.cfc.getConfig().myField} rather than adding forwarding getters
+     * to this class. The existing getters below are retained for backward compatibility.</p>
+     *
+     * @return the backing DeploymentConfig instance
+     */
+    public DeploymentConfig getConfig() { return config; }
+
+    // --------- Forwarding getters (legacy — use config field directly for new fields) ---------
 
     public String tier() { return tier; }
     public String env() { return env; }
@@ -289,6 +309,16 @@ public final class DeploymentContext {
     public Boolean cloudfrontEnabled() { return config.cloudfrontEnabled; }
     public LoadBalancerType lbType() { return config.lbType; }
 
+    // oidcProvider itself was never exposed here despite years of @DeploymentContext("oidcProvider")
+    // usage (ApplicationOidcFactory, ApplicationSamlFactory, CognitoSamlFactory, KeycloakFactory) --
+    // silently no-op the whole time (see ContextInjector's own "no field or getter found" fallback),
+    // just never noticed because none of those call sites' actual branching logic reads its value
+    // (they all key off other fields like cognitoAutoProvision/oidcIssuer instead). The
+    // cloudforge-manager provider branch is the first one that actually needs its value, which is
+    // what surfaced the gap.
+    public String oidcProvider() { return config.oidcProvider; }
+    public String cloudforgeManagerIssuerUrl() { return config.cloudforgeManagerIssuerUrl; }
+
     public Integer cpuTargetUtilization() { return config.cpuTargetUtilization; }
     public Integer maxInstanceCapacity() { return config.maxInstanceCapacity; }
     public Integer minInstanceCapacity() { return config.minInstanceCapacity; }
@@ -314,11 +344,33 @@ public final class DeploymentContext {
     public Boolean awsConfigEnabled() { return config.awsConfigEnabled; }
     public Boolean createConfigInfrastructure() { return config.createConfigInfrastructure; }
     public Boolean auditManagerEnabled() { return config.auditManagerEnabled; }
+    public Boolean managerDirectDeployEnabled() { return config.managerDirectDeployEnabled; }
     public String complianceFrameworks() { return complianceFrameworks; }
     public ComplianceMode complianceMode() { return complianceMode; }
     public Integer logRetentionDays() { return config.logRetentionDays != null ? Integer.parseInt(config.logRetentionDays) : null; }
     public String instanceType() { return config.instanceType; }
     public Boolean provisionDatabase() { return config.provisionDatabase; }
+    public String databaseEngine() { return config.databaseEngine; }
+    public String databaseVersion() { return config.databaseVersion; }
+    public Integer databaseReadReplicaCount() { return config.databaseReadReplicaCount; }
+
+    public String databaseInstanceClass() { return config.databaseInstanceClass; }
+    public Integer databaseAllocatedStorageGB() { return config.databaseAllocatedStorageGB; }
+    public String databaseName() { return config.databaseName; }
+
+    // databaseMultiAz/databaseBackupRetentionDays/enableAutoScaling carry a non-null class-level
+    // default on DeploymentConfig, so a plain forwarding getter can't distinguish "unset" from
+    // "explicitly set to the default" — checking `raw` (the incoming context map) instead lets an
+    // unset field fall through to its profile/requirement-driven default rather than always
+    // overriding it. Doesn't cover a DeploymentConfig round-tripped through toContextMap() (e.g.
+    // redeploy-from-history), which re-serializes these as explicit values regardless.
+    public Boolean databaseMultiAz() { return raw.containsKey("databaseMultiAz") ? config.databaseMultiAz : null; }
+    public Integer databaseBackupRetentionDays() { return raw.containsKey("databaseBackupRetentionDays") ? config.databaseBackupRetentionDays : null; }
+    public Boolean enableAutoScaling() { return raw.containsKey("enableAutoScaling") ? config.enableAutoScaling : null; }
+
+    public Boolean provisionManagerRedisSessions() { return config.provisionManagerRedisSessions; }
+    public Boolean provisionManagerAccountCipherKey() { return config.provisionManagerAccountCipherKey; }
+    public String managerLicenseKey() { return config.managerLicenseKey; }
     public Boolean enableS3VersioningRemediation() { return config.enableS3VersioningRemediation; }
     public Boolean enableCloudTrailBucketAccessRemediation() { return config.enableCloudTrailBucketAccessRemediation; }
     public Boolean enableRdsDeletionProtectionRemediation() { return config.enableRdsDeletionProtectionRemediation; }
@@ -339,6 +391,7 @@ public final class DeploymentContext {
     public String cognitoUserPoolName() { return config.cognitoUserPoolName; }
     public Boolean cognitoMfaEnabled() { return config.cognitoMfaEnabled; }
     public String cognitoMfaMethod() { return config.cognitoMfaMethod; }
+    public Boolean cognitoSelfSignupEnabled() { return config.cognitoSelfSignupEnabled; }
     public Boolean cognitoCreateGroups() { return config.cognitoCreateGroups; }
     public String cognitoAdminGroupName() { return config.cognitoAdminGroupName; }
     public String cognitoUserGroupName() { return config.cognitoUserGroupName; }
@@ -378,6 +431,10 @@ public final class DeploymentContext {
     public boolean enableSsl() { return config.enableSsl != null && config.enableSsl; }
     public boolean createZone() { return config.createZone != null && config.createZone; }
 
+    /** See {@code DeploymentConfig#certificateArn}'s javadoc — takes priority over both of
+     *  {@code FargateRuntimeConfiguration}'s other certificate paths when set. */
+    public String certificateArn() { return config.certificateArn; }
+
     /** Raw immutable view of all context keys. */
     public Map<String, Object> raw() { return raw; }
 
@@ -388,6 +445,48 @@ public final class DeploymentContext {
     /** Legacy raw accessors (compat only). */
     @Deprecated public String runtimeRaw() { return runtimeRaw; }
     @Deprecated public String topologyRaw() { return topologyRaw; }
+
+    // --------- Application resolution ---------
+
+    /**
+     * Returns the canonical application identifier from the deployment context.
+     *
+     * <p>All topologies select their application through
+     * {@link DeploymentConfig#applicationId}.</p>
+     *
+     * <p>Example cdk.json usage:</p>
+     * <pre>{@code
+     * "cfc": {
+     *   "topology": "cms-service",
+     *   "applicationId": "wordpress",
+     *   "runtime": "fargate"
+     * }
+     * }</pre>
+     *
+     * @return the application ID (e.g., "wordpress", "magento") or {@code null} if not set
+     */
+    public String applicationId() {
+        if (config.applicationId != null && !config.applicationId.isBlank()) {
+            return config.applicationId.trim();
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the {@link CmsSpec} for the configured application via {@link CmsLoader}.
+     *
+     * <p>Returns {@link Optional#empty()} when no {@code applicationId} is set,
+     * or when the ID does not match any registered CMS plugin.</p>
+     *
+     * @return the resolved CmsSpec, or empty if not a CMS deployment
+     */
+    public Optional<CmsSpec> cmsSpec() {
+        String id = applicationId();
+        if (id == null || id.isBlank()) {
+            return Optional.empty();
+        }
+        return CmsLoader.findById(id);
+    }
 
     // --------- Helpers / derived behavior ---------
 
@@ -500,9 +599,10 @@ public final class DeploymentContext {
             case "jenkins-service", "jenkins_service", "service" -> TopologyType.JENKINS_SERVICE;
             case "s3-website", "s3_website", "s3" -> TopologyType.S3_WEBSITE;
             case "application-service", "application_service", "app-service", "application" -> TopologyType.APPLICATION_SERVICE;
+            case "cms-service", "cms_service", "cms" -> TopologyType.CMS_SERVICE;
             // CloudForge 3.0.0: No default fallback - explicit topology required
             default -> throw new IllegalArgumentException(
-                "Unknown topology '" + val + "'. Valid values: jenkins-service, s3-website, application-service. " +
+                "Unknown topology '" + val + "'. Valid values: jenkins-service, s3-website, application-service, cms-service. " +
                 "Note: JENKINS_SINGLE_NODE was removed in 3.0.0 - use jenkins-service instead."
             );
         };

@@ -1,18 +1,18 @@
 # IAM Rules System
 
-This document describes the comprehensive IAM (Identity and Access Management) Rules system that has been integrated into the CloudForge Community (CFC) core API. The system provides configurable permission profiles that minimize required roles and permissions while ensuring security best practices.
+This document describes the IAM (Identity and Access Management) rules in the CloudForge CI API. The rules select configurable permission profiles and validate supported security-profile combinations.
 
 ## Overview
 
-The IAM Rules system follows the same pattern as the existing RuntimeRules, TopologyRules, and SecurityRules, providing a consistent and extensible approach to permission management. It integrates seamlessly with the SystemContext and RuleKit infrastructure, and automatically maps IAM profiles based on security profiles.
+The IAM rules follow the same pattern as `RuntimeRules`, `TopologyRules`, and `SecurityRules`. They integrate with `SystemContext` and `RuleKit`, and map IAM profiles from security profiles.
 
 ## Key Features
 
-- **Principle of Least Privilege**: Only grants the minimum permissions required for each topology/runtime combination
+- **Least-Privilege Profiles**: Defines intended permissions for supported topology/runtime combinations; review synthesized policies for your workload
 - **Automatic Security Integration**: IAM profiles are automatically mapped based on security profiles
 - **Validation System**: Prevents dangerous permission combinations (e.g., PRODUCTION + EXTENDED IAM)
-- **Permission Matrix**: Comprehensive matrix defining required permissions for each combination
-- **Compliance Ready**: Designed for SOC/HIPAA/PCI-DSS compliance requirements
+- **Permission Matrix**: Defines expected permissions for supported combinations
+- **Compliance Control Support**: Supplies IAM configuration that can contribute to SOC 2, HIPAA, and PCI DSS controls
 
 ## Components
 
@@ -268,21 +268,21 @@ SystemContext.start(scope, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, Securi
 
 The JenkinsFactory methods have been updated to maintain backward compatibility while providing the new IAM functionality.
 
-## Compliance Features
+## Compliance-Control Support
 
-### SOC 2 Compliance
+### SOC 2
 - Principle of least privilege enforcement
 - Regular permission validation
 - Audit trail through CloudWatch logs
 - Separation of duties through profile separation
 
-### HIPAA Compliance
+### HIPAA
 - Minimal permissions for production environments
 - No unnecessary data access permissions
 - Encrypted communication requirements
 - Access logging and monitoring
 
-### PCI-DSS Compliance
+### PCI DSS
 - Restricted administrative access
 - Regular permission reviews
 - Secure communication protocols
@@ -290,9 +290,9 @@ The JenkinsFactory methods have been updated to maintain backward compatibility 
 
 ## Future Enhancements
 
-### Recently Completed ✅
+### Implemented
 
-1. ~~**Compliance Reporting**~~ - ✅ **COMPLETED**: Multi-layer compliance dashboard with automated report generation (see [CSV_PARAMETERIZED_TESTING.md](../compliance/CSV_PARAMETERIZED_TESTING.md))
+1. **Compliance reporting**: Multi-layer compliance dashboard and report generation (see [CSV_PARAMETERIZED_TESTING.md](../compliance/CSV_PARAMETERIZED_TESTING.md))
 
 ### Planned Enhancements
 

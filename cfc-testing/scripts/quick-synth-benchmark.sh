@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}⚡ Quick Synthesis Benchmark${NC}"
+echo -e "${BLUE}Quick Synthesis Benchmark${NC}"
 echo -e "${BLUE}============================${NC}"
 echo ""
 
@@ -21,7 +21,7 @@ measure_synth() {
     local stack_name="$2"
     local description="$3"
     
-    echo -e "${YELLOW}📊 $test_name${NC}"
+    echo -e "${YELLOW}$test_name${NC}"
     echo -e "${YELLOW}$description${NC}"
     
     # Clean up
@@ -36,7 +36,7 @@ measure_synth() {
     local end_time=$(date +%s.%N)
     local duration=$(echo "$end_time - $start_time" | bc)
     
-    echo -e "${GREEN}✅ Completed in ${duration}s${NC}"
+    echo -e "${GREEN}Completed in ${duration}s${NC}"
     echo ""
     
     # Return duration for comparison
@@ -44,7 +44,7 @@ measure_synth() {
 }
 
 # Run quick benchmarks
-echo -e "${BLUE}🚀 Running Quick Synthesis Benchmarks${NC}"
+echo -e "${BLUE}Running Quick Synthesis Benchmarks${NC}"
 echo ""
 
 # Test 1: Basic Fargate
@@ -63,7 +63,7 @@ ec2_domain_time=$(measure_synth "EC2 + Domain" "quick-ec2-domain" "EC2 Jenkins w
 production_time=$(measure_synth "Production Security" "quick-production" "Production security profile with all features")
 
 # Display results
-echo -e "${BLUE}📈 Quick Benchmark Results${NC}"
+echo -e "${BLUE}Quick Benchmark Results${NC}"
 echo -e "${BLUE}===========================${NC}"
 echo ""
 echo -e "${GREEN}Basic Fargate:        ${fargate_time}s${NC}"
@@ -77,11 +77,11 @@ echo ""
 fastest=$(echo -e "$fargate_time\n$ec2_time\n$fargate_domain_time\n$ec2_domain_time\n$production_time" | sort -n | head -1)
 slowest=$(echo -e "$fargate_time\n$ec2_time\n$fargate_domain_time\n$ec2_domain_time\n$production_time" | sort -n | tail -1)
 
-echo -e "${BLUE}🏆 Performance Highlights${NC}"
+echo -e "${BLUE}Duration Range${NC}"
 echo -e "${GREEN}Fastest: ${fastest}s${NC}"
 echo -e "${GREEN}Slowest: ${slowest}s${NC}"
 echo ""
 
 # Cleanup
 rm -f deployment-context.json
-echo -e "${GREEN}✅ Quick benchmark completed!${NC}"
+echo -e "${GREEN}Quick benchmark completed.${NC}"

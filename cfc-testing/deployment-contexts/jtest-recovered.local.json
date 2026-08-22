@@ -1,0 +1,17 @@
+{
+  "stackName": "jtest-recovered-2",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
+  "environment": "prod",
+  "runtime": "FARGATE",
+  "authMode": "application-oidc",
+  "domain": "cloudforge.localhost",
+  "subdomain": "jenkins",
+  "fqdn": "jenkins.cloudforge.localhost",
+  "enableSsl": false,
+  "cognitoAutoProvision": false,
+  "cognitoUserPoolId": "us-east-1_4e0cbf7919f440e696d572fb985d8749",
+  "cognitoAppClientId": "u1pob0q477ckf8hz4rf95xw9sm",
+  "cognitoUserPoolClientId": "u1pob0q477ckf8hz4rf95xw9sm",
+  "cognitoDomainPrefix": "jtest-auth-jtest"
+}

@@ -2,13 +2,15 @@
 
 ## Overview
 
-CloudForge CI provides **automated compliance enforcement** for HIPAA, SOC2, PCI-DSS, and GDPR. Our intelligent compliance system automatically configures security controls, retention policies, and remediation actions based on your selected frameworks.
+CloudForge CI configures AWS infrastructure controls associated with HIPAA, SOC 2, PCI DSS, and GDPR. Selected frameworks affect resource settings, retention policies, AWS Config rules, and supported remediation actions.
 
-**Key Benefits:**
-- ✅ **Zero Manual Configuration** - Compliance settings auto-adapt to your frameworks
-- ✅ **Continuous Enforcement** - Automatic remediation fixes non-compliant resources
-- ✅ **Cost Optimized** - Intelligent lifecycle policies reduce storage costs by up to 90%
-- ✅ **Audit Ready** - Complete audit trail with immutable logs
+These controls can contribute infrastructure evidence to a compliance program, but they do not provide certification or replace organizational policies, application controls, legal review, or an independent audit.
+
+**Capabilities:**
+- **Framework-based configuration** - Selected frameworks determine applicable infrastructure settings
+- **Continuous evaluation** - AWS Config evaluates supported resources after deployment
+- **Supported remediation** - Some findings can invoke configured SSM remediation actions
+- **Evidence sources** - CloudTrail, AWS Config, and related services record infrastructure activity
 
 ---
 
@@ -18,21 +20,22 @@ CloudForge CI provides **automated compliance enforcement** for HIPAA, SOC2, PCI
 - **[Automated Compliance Features](AUTOMATED_COMPLIANCE.md)** - Technical deep-dive into implementation
 - **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Step-by-step deployment instructions
 - **[Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md)** - Supporting multiple frameworks simultaneously
+- **[Retained Resources](RETAINED_RESOURCES.md)** - Every deletion-protected / RemovalPolicy.RETAIN resource, why, and how to remove it
 
 ### For Compliance Teams
-- **[Quick Start Guide](QUICK_START_GUIDE.md)** - Fast path to compliance
+- **[Quick Start Guide](QUICK_START_GUIDE.md)** - Initial compliance-control configuration
 - **[PCI-DSS Compliance](PCI_DSS_COMPLIANCE.md)** - PCI-DSS specific requirements
 - **[Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md)** - Detailed framework mapping
 
 ### For Customers
 - **[This README](#features)** - Feature overview and benefits
-- **[Cost Breakdown](#cost-analysis)** - Transparent pricing information
+- **[Cost Breakdown](#example-cost-estimate)** - Transparent pricing information
 
 ---
 
 ## Features
 
-### 1. Intelligent S3 Lifecycle Management
+### 1. S3 Lifecycle Management
 
 **Problem:** Compliance requires years of log retention, but storing everything in S3 Standard is expensive.
 
@@ -90,10 +93,10 @@ All frameworks require uppercase, lowercase, numbers, and symbols.
 
 **Solution:** S3 versioning prevents deletion or modification of audit logs.
 
-**Benefits:**
+**Behavior:**
 - **Immutability**: Cannot overwrite previous versions
 - **Recovery**: Restore accidentally deleted files
-- **Compliance**: Meets regulatory requirements for audit trails
+- **Evidence support**: Preserves prior object versions for review
 
 **Applied To:**
 - ✅ CloudTrail logs
@@ -249,14 +252,14 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
    - Automatic remediation when non-compliant
    - Compliance status dashboard
 
-5. **Results visible immediately**
+5. **Review evaluation results**
    - Config dashboard shows compliance
    - CloudWatch alarms for violations
    - Audit Manager collects evidence
 
 ---
 
-## Cost Analysis
+## Example Cost Estimate
 
 ### Monthly Cost Breakdown (PRODUCTION with HIPAA)
 
@@ -272,16 +275,7 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
 | CloudWatch | Alarms & Logs | $5 |
 | **Total** | | **~$40/month** |
 
-**ROI Analysis:**
-- **Without Automation**: $5,000-20,000/year for manual compliance management
-- **With CloudForge**: $480/year in AWS costs
-- **Savings**: 90-98% cost reduction
-
-**Hidden Costs Eliminated:**
-- No manual policy configuration
-- No dedicated compliance engineer needed
-- No audit preparation time
-- Reduced audit costs (evidence pre-collected)
+This example is not a quote or savings projection. Actual charges depend on region, resource count, evaluation frequency, log volume, retention, and current AWS pricing. Use the [AWS Pricing Calculator](https://calculator.aws.amazon.com/) for a workload-specific estimate.
 
 ---
 
@@ -293,7 +287,7 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
 - AWS CDK installed
 - Java 17+ and Maven
 
-### 5-Minute Quick Start
+### Initial Setup
 
 ```bash
 # 1. Clone repository
@@ -320,7 +314,7 @@ aws configservice describe-compliance-by-config-rule \
   --output table
 ```
 
-**Expected Output:**
+**Example Output:**
 ```
 ----------------------------------------
 |  DescribeComplianceByConfigRule       |
@@ -412,7 +406,7 @@ A: Account-level settings (password policy, EBS encryption) persist. S3 buckets 
 A: Yes, but ensure you meet minimum compliance requirements for your frameworks. Customization requires code changes.
 
 **Q: Does this work with AWS Organizations?**
-A: Yes! Deploy via CloudFormation StackSets to apply compliance across all accounts.
+A: Organization-wide deployment requires separate StackSets or account-provisioning configuration; validate that workflow for your environment.
 
 **Q: How often does Config evaluate rules?**
 A: Continuously for configuration changes, plus periodic evaluations every 24 hours.
@@ -423,8 +417,8 @@ A: Yes, set `.automatic(false)` in the remediation configuration. Manual approva
 **Q: What if remediation fails?**
 A: Config will retry up to 5 times with 60-second intervals. Check SSM Automation execution history for errors.
 
-**Q: How do I prove compliance to auditors?**
-A: Use AWS Audit Manager to automatically collect evidence and generate reports for your chosen framework.
+**Q: How do I provide infrastructure evidence to auditors?**
+A: Configure AWS Audit Manager and the relevant logging services, then review exported evidence with your compliance team or auditor.
 
 **Q: Can I add custom compliance rules?**
 A: Yes! Add custom Config rules in `ComplianceFactory.java`. Follow existing patterns.
@@ -487,19 +481,9 @@ Apache 2.0 - See LICENSE file in the project root for details
 
 ## Changelog
 
-### Version 2.0.0 (Current)
-- ✅ Automated S3 lifecycle policies based on compliance frameworks
-- ✅ S3 versioning enabled on all compliance buckets
-- ✅ IAM password policy auto-remediation via AWS Config
-- ✅ Multi-framework support (HIPAA, SOC2, PCI-DSS, GDPR)
-- ✅ Strictest-requirement logic for multiple frameworks
-- ✅ Comprehensive documentation
-
-### Version 1.0.0
-- Initial compliance features
-- Manual configuration required
+Release history is maintained in the project changelog and Git history.
 
 ---
 
 *Last Updated: 2025*
-*CloudForge CI - Automated Compliance for AWS*
+*CloudForge CI compliance-control documentation*

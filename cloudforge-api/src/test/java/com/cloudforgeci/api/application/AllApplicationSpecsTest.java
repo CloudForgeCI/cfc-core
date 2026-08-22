@@ -38,6 +38,7 @@ class AllApplicationSpecsTest {
             new DroneApplicationSpec(),
             new GitLabApplicationSpec(),
             new MattermostApplicationSpec(),
+            new MattermostTeamApplicationSpec(),
             new PostgreSQLApplicationSpec(),
             new RedisApplicationSpec(),
             new GrafanaApplicationSpec(),
@@ -259,6 +260,71 @@ class AllApplicationSpecsTest {
         GiteaApplicationSpec gitea = new GiteaApplicationSpec();
         assertEquals("gitea", gitea.applicationId());
         assertEquals(3000, gitea.applicationPort());
+    }
+
+    // ========== Cross-app structural parity checks ==========
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testDefaultCpuIsPositive(ApplicationSpec spec) {
+        assertTrue(spec.defaultCpu() > 0, spec.applicationId() + " defaultCpu must be positive");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testDefaultMemoryIsPositive(ApplicationSpec spec) {
+        assertTrue(spec.defaultMemory() > 0, spec.applicationId() + " defaultMemory must be positive");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testDisplayNameIsNonEmpty(ApplicationSpec spec) {
+        assertNotNull(spec.displayName(), spec.applicationId() + " displayName must not be null");
+        assertFalse(spec.displayName().isEmpty(), spec.applicationId() + " displayName must not be empty");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testCategoryIsNonEmpty(ApplicationSpec spec) {
+        assertNotNull(spec.category(), spec.applicationId() + " category must not be null");
+        assertFalse(spec.category().isEmpty(), spec.applicationId() + " category must not be empty");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testPublicPathsReturnsNonNullList(ApplicationSpec spec) {
+        assertNotNull(spec.publicPaths(), spec.applicationId() + " publicPaths() must not return null");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testProtectedPathsReturnsNonNullList(ApplicationSpec spec) {
+        assertNotNull(spec.protectedPaths(), spec.applicationId() + " protectedPaths() must not return null");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testSupportsAtLeastOneRuntime(ApplicationSpec spec) {
+        assertTrue(spec.supportsFargate() || spec.supportsEc2(),
+            spec.applicationId() + " must support at least one runtime (Fargate or EC2)");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testSupportedAuthModesIsNonEmpty(ApplicationSpec spec) {
+        var modes = spec.getSupportedAuthModes();
+        assertNotNull(modes, spec.applicationId() + " getSupportedAuthModes() must not return null");
+        assertFalse(modes.isEmpty(), spec.applicationId() + " must support at least one auth mode");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void testRecommendedAuthModeIsSupported(ApplicationSpec spec) {
+        String recommended = spec.getRecommendedAuthMode();
+        var supported = spec.getSupportedAuthModes();
+        assertNotNull(recommended, spec.applicationId() + " getRecommendedAuthMode() must not return null");
+        assertTrue(supported.contains(recommended),
+            spec.applicationId() + " recommended auth mode must be one of its own supported modes");
     }
 
     // OIDC support tests

@@ -258,8 +258,6 @@ CI/CD generates detailed reports showing:
 ### Planned Improvements
 
 1. **Additional Compliance Frameworks**
-   - FedRAMP Moderate (in progress - see [FEDRAMP_CONTROLS_MAPPING.md](FEDRAMP_CONTROLS_MAPPING.md))
-   - FedRAMP High
    - ISO 27001
    - NIST 800-53
    - Custom user-defined frameworks via plugin system

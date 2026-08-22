@@ -465,6 +465,64 @@ class ApplicationOidcFactoryTest {
     }
 
     @Test
+    void testApplicationOidcFactoryWithCloudForgeManagerProvider() {
+        // Given: A stack trusting a CloudForge Manager install as its OIDC provider
+        App app = new App();
+        Stack stack = new Stack(app, "TestAppOidcCfcManager");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestAppOidcCfcManager");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("enableSsl", true);
+        cfcContext.put("oidcProvider", "cloudforge-manager");
+        cfcContext.put("cloudforgeManagerIssuerUrl", "https://manager.example.com");
+        cfcContext.put("oidcClientId", "cfc_client_abc123");
+        cfcContext.put("region", "us-east-1");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        ctx.applicationSpec.set(new MockApplicationSpec(true, new MockOidcIntegration()));
+
+        // When: Creating ApplicationOidcFactory with CloudForge Manager as the provider
+        ApplicationOidcFactory factory = new ApplicationOidcFactory(stack, "AppOidc");
+
+        // Then: Should configure CloudForge Manager OIDC
+        assertDoesNotThrow(factory::create);
+    }
+
+    /** Regression: {@code CloudForgeManagerOidcConfiguration}'s endpoints must use Manager's own
+     *  real paths ({@code /oauth2/authorize}, {@code /oauth2/token}, {@code /userinfo}, {@code
+     *  /oauth2/jwks}), not {@code SimplifiedOidcConfiguration}'s generic {@code
+     *  /.well-known/jwks.json} convention, which would silently break signature verification for
+     *  any real OIDC client. Constructed directly via reflection (a private nested class) rather
+     *  than through the full factory — isolates the endpoint-computation logic from CDK construct
+     *  wiring. */
+    @Test
+    void testCloudForgeManagerOidcConfigurationComputesRealEndpoints() throws Exception {
+        Class<?> configClass = Class.forName(
+            "com.cloudforgeci.api.security.ApplicationOidcFactory$CloudForgeManagerOidcConfiguration");
+        var ctor = configClass.getDeclaredConstructor(
+            String.class, String.class, String.class, String.class, String.class);
+        ctor.setAccessible(true);
+        OidcConfiguration config = (OidcConfiguration) ctor.newInstance(
+            "https://manager.example.com", "cfc_client_abc123", "arn:aws:secretsmanager:us-east-1:123456789012:secret:s",
+            "https://jenkins.example.com", "https://jenkins.example.com/securityRealm/finishLogin");
+
+        assertEquals("https://manager.example.com", config.getIssuerUrl());
+        assertEquals("https://manager.example.com/oauth2/authorize", config.getAuthorizationEndpoint());
+        assertEquals("https://manager.example.com/oauth2/token", config.getTokenEndpoint());
+        assertEquals("https://manager.example.com/userinfo", config.getUserInfoEndpoint());
+        assertEquals("https://manager.example.com/oauth2/jwks", config.getJwksUri());
+        assertEquals("cfc_client_abc123", config.getClientId());
+        assertFalse(config.isGroupBasedAccessEnabled(), "Phase 1 has no groups claim yet");
+    }
+
+    @Test
     void testApplicationOidcFactoryWithManualOidcIncompleteConfiguration() {
         // Given: A stack with incomplete manual OIDC configuration
         App app = new App();

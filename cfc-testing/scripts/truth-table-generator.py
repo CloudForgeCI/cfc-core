@@ -771,6 +771,7 @@ class TruthTableGenerator:
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>CloudForge Core - Truth Table & Test Matrix</title>
     <style>
         body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f8f9fa; }}

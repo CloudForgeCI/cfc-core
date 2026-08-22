@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Generate comprehensive audit evidence package for compliance audits
 # Supports SOC 2, HIPAA, PCI-DSS, and GDPR frameworks
 

@@ -1,7 +1,6 @@
 # Multi-Framework Compliance
 
-## Reality Check
-
+:::warning Infrastructure Controls Only
 This gives you **infrastructure controls only**. Not full compliance. You still need:
 
 - Organizational policies and procedures
@@ -9,6 +8,7 @@ This gives you **infrastructure controls only**. Not full compliance. You still 
 - Third-party audits (QSA for PCI-DSS, CPA for SOC 2, etc.)
 - Application-level controls
 - Documentation and evidence beyond what infrastructure provides
+:::
 
 ## What This Does
 
@@ -25,6 +25,28 @@ When you enable AWS Audit Manager, the system creates **one assessment per frame
 - Appear in AWS Audit Manager console when created
 - Are tracked as part of your CloudFormation stack
 - Are automatically deleted when you run `cdk destroy`
+
+## AWS Config Rules Deployment
+
+When compliance frameworks are enabled, AWS Config rules are automatically deployed for continuous compliance monitoring:
+
+| Framework Configuration | Base Controls | Framework-Specific Controls | Total AWS Config Rules |
+|------------------------|---------------|----------------------------|----------------------|
+| **SOC2 only** | 9 rules | + 7 SOC2-specific | = **16 rules** |
+| **HIPAA only** | 9 rules | + 8 HIPAA-specific | = **17 rules** |
+| **PCI-DSS only** | 9 rules | + 8 PCI-DSS-specific | = **17 rules** |
+| **GDPR only** | 9 rules | + 8 GDPR-specific | = **17 rules** |
+| **Multi-framework (all 4)** | 9 base | + 31 framework-specific | = **40 rules total** |
+
+:::info Base Rules
+**Base controls (9 rules)** are always deployed regardless of framework:
+- Encryption (EBS, S3, RDS)
+- IAM policies and password requirements
+- CloudTrail logging
+- VPC Flow Logs
+
+Framework-specific controls only deploy when enabled via `complianceFrameworks` configuration property.
+:::
 
 ## Quick Config
 

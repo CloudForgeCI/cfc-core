@@ -155,10 +155,31 @@ mvn test -Dtest=YourTestClass
 
 ### Code Organization
 
-- Place new features in appropriate packages:
-  - `cloudforge-core`: Core interfaces and annotations
-  - `cloudforge-api`: Implementation classes
-  - `cfc-testing`: Test utilities and examples
+Place changes in the **owning module**:
+
+| Module | Owns |
+|--------|------|
+| `cloudforge-core` | Contracts, `DeploymentConfig`, `com.cloudforge.core.local` |
+| `cloudforge-api` | `CloudForgeDeployment`, ApplicationSpecs, CMS, CDK factories |
+| `cloudforge-ministack` | MiniStack adapter/deployer only |
+| `cloudforge-localstack` | LocalStack adapter/deployer only |
+| `cloudforge-manager` | Application Panel runtime |
+| `cfc-testing` | Sample entrypoint (`InteractiveDeployer`, `LocalDeploymentShell`) — not library logic |
+
+### Issue triage and module labels
+
+Use GitHub issue templates (`.github/ISSUE_TEMPLATE/`) and prefix titles with the owning module when possible, e.g. `[module:localstack]`.
+
+| Label / prefix | Module |
+|----------------|--------|
+| `module:core` | `cloudforge-core` |
+| `module:api` | `cloudforge-api` |
+| `module:ministack` | `cloudforge-ministack` |
+| `module:localstack` | `cloudforge-localstack` |
+| `module:manager` | `cloudforge-manager` |
+| `module:sample` | `cfc-testing` / docs / entrypoint only |
+
+Maintainers may apply matching GitHub labels after triage. Emulator bugs → target module; CMS factory bugs → api; shared interface bugs → core.
 
 ### Naming Conventions
 

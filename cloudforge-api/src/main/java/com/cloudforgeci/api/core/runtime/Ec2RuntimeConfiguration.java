@@ -73,9 +73,9 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
       rules.add(require("targetGroup", x -> x.albTargetGroup));
     }
 
-    // AutoScalingGroup is only required for JENKINS_SERVICE topology when maxInstanceCapacity > 1
-    // When maxInstanceCapacity <= 1, JenkinsFactory creates a single instance instead of ASG
-    if (c.topology == TopologyType.JENKINS_SERVICE && c.cfc.maxInstanceCapacity() != null && c.cfc.maxInstanceCapacity() > 1) {
+    // AutoScalingGroup is required for EC2 service topologies (single-instance uses min=max=1 ASG)
+    if (c.runtime == RuntimeType.EC2
+        && (c.topology == TopologyType.JENKINS_SERVICE || c.topology == TopologyType.APPLICATION_SERVICE)) {
         rules.add(require("asg", x -> x.asg));
     }
 
@@ -93,6 +93,32 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
     }
 
     LOG.info("Configuring EC2 runtime for " + c.topology + " topology, " + c.security + " profile");
+
+    // ── URL output: stable "ApplicationUrl" key + per-app alias, mirroring
+    // FargateFactory.createApplicationUrlOutput() so CloudFormationInventory.preferredUrl
+    // resolves an "Open" link/health URL for EC2 apps the same way it does for Fargate —
+    // previously EC2 emitted no application-URL output at all. Fires once ALB is available
+    // (works for both the SSL and non-SSL branches below). Guarded with tryFindChild because
+    // wire() can re-enter for the same SystemContext (see the scalingPoliciesApplied guard
+    // further down) and CfnOutput construct IDs must stay unique.
+    c.alb.onSet(alb -> {
+      software.amazon.awscdk.Stack stack = software.amazon.awscdk.Stack.of(c);
+      if (stack.getNode().tryFindChild("ApplicationUrl") != null) {
+        return;
+      }
+      String appId = c.applicationSpec.get().map(spec -> spec.applicationId()).orElse("application");
+      String capitalized = appId.substring(0, 1).toUpperCase(Locale.ROOT) + appId.substring(1);
+      String url = "http://" + alb.getLoadBalancerDnsName();
+
+      software.amazon.awscdk.CfnOutput.Builder.create(c, capitalized + "Url")
+          .description(capitalized + " URL (ALB DNS)")
+          .value(url)
+          .build();
+      software.amazon.awscdk.CfnOutput.Builder.create(stack, "ApplicationUrl")
+          .description("Application URL (ALB DNS)")
+          .value(url)
+          .build();
+    });
 
     // Inputs & flags
     final boolean ssl = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl());

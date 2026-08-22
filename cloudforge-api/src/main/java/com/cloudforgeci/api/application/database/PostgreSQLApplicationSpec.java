@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * PostgreSQL ApplicationSpec implementation.
  *
- * <p>PostgreSQL is a powerful, open-source object-relational database system.</p>
+ * <p>PostgreSQL is an open-source object-relational database system.</p>
  *
  * <p><strong>Key Features:</strong></p>
  * <ul>

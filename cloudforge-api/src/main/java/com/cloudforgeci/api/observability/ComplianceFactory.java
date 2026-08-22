@@ -1539,10 +1539,11 @@ public class ComplianceFactory extends BaseFactory {
                 "StaticValue", Map.of("Values", List.of(ssmAutomationRole.getRoleArn()))
             ),
             "TrailName", Map.of(
-                "StaticValue", Map.of("Values", List.of(this.trailName != null ? this.trailName : "cloudforge-cloudtrail-" + this.region))
+                // Guaranteed non-null/non-empty by the guard clauses at the top of this method.
+                "StaticValue", Map.of("Values", List.of(this.trailName))
             ),
             "BucketName", Map.of(
-                "StaticValue", Map.of("Values", List.of(this.trailBucket != null ? this.trailBucket.getBucketName() : ""))
+                "StaticValue", Map.of("Values", List.of(this.trailBucket.getBucketName()))
             )
         ));
 
@@ -3460,7 +3461,7 @@ public class ComplianceFactory extends BaseFactory {
                 .resources(List.of("*"))
                 .build());
 
-        LOG.info("Created shared Audit Manager role and bucket with comprehensive permissions");
+        LOG.info("Created shared Audit Manager role and bucket with evidence storage and service read permissions");
 
         // Suppress CDK-nag warnings for IAM wildcards - all are justified
         NagSuppressions.addResourceSuppressions(
@@ -3704,18 +3705,6 @@ public class ComplianceFactory extends BaseFactory {
             "Environment", security.name().toLowerCase(),
             "Framework", frameworkName
         ));
-
-        // Build resource ARN patterns for this region and account
-        // AWS Audit Manager creates frameworks, controls, and control sets that need tagging permissions
-        String accountId = software.amazon.awscdk.Stack.of(this).getAccount();
-        String awsRegion = software.amazon.awscdk.Stack.of(this).getRegion();
-        String arnBase = String.format("arn:aws:auditmanager:%s:%s", awsRegion, accountId);
-
-        List<String> auditManagerResources = List.of(
-            arnBase + ":assessmentFramework/*",  // Custom frameworks
-            arnBase + ":control/*",               // Controls created within frameworks
-            arnBase + ":controlSet/*"             // Control sets within frameworks
-        );
 
         // Ensure Audit Manager is enabled before creating frameworks
         // RegisterAccount is idempotent - safe to call even if already registered

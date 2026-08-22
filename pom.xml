@@ -3,11 +3,20 @@
 
   <groupId>com.cloudforgeci</groupId>
   <artifactId>cfc-core</artifactId>
-  <version>3.1.0-SNAPSHOT</version>
+  <version>3.2.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>CloudForge Core BOM</name>
-  <description>Bill of Materials (BOM) for CloudForge infrastructure deployment libraries</description>
+  <description>
+    Bill of Materials (BOM) for CloudForge — import as type pom / scope import.
+    Modules: cloudforge-core, cloudforge-api, cloudforge-ministack, cloudforge-localstack.
+    Sample entrypoint: cfc-testing (not in BOM). cloudforge-manager-deployment and
+    cloudforge-manager are no longer part of this BOM/reactor — split into their own private repos
+    (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager), each with a
+    standalone pom.xml and independent versioning.
+    See docs/architecture/cloudforge-sample-bom.template.md and
+    docs/architecture/module-boundaries-and-refactor.plan.md.
+  </description>
   <url>https://github.com/CloudForgeCI/cfc-core</url>
 
   <licenses>
@@ -42,8 +51,28 @@
     <cdknag.version>2.37.55</cdknag.version>
 
     <!-- Core Library Versions -->
-    <jackson.version>2.19.4</jackson.version>
+    <!-- 2.21.4 originally flagged with 4 HIGH CVEs by dependency-check's SBOM scan:
+         CVE-2026-68497 (resource exhaustion), CVE-2026-19032 (unsafe reflection via
+         unrestricted Path deserialization), CVE-2026-59889 (@JsonView bypass via
+         @JsonUnwrapped), CVE-2026-54515 (@JsonIgnoreProperties bypass via case-insensitive
+         property rebuild). Bumping to 2.21.5 (all 4 CVEs' own documented fix version) still
+         left 2 of the 4 open per a follow-up scan, NVD/OSSIndex's own fix-version metadata
+         for at least one of these was evidently less precise than the advisory text
+         suggested. 2.21.6 is the next real patch in the same line (confirmed to exist on
+         Central, not a guess), taking it outright rather than trying to pin down exactly
+         which CVE's real fix version was underreported. -->
+    <jackson.version>2.21.6</jackson.version>
+    <!-- jackson-annotations versions independently of core/databind (2.20, 2.21, 2.22, no
+         patch suffix), so it can't share ${jackson.version} once that has one. -->
+    <jackson-annotations.version>2.21</jackson-annotations.version>
     <jakarta.validation.version>3.0.2</jakarta.validation.version>
+    <!-- 4.1.136.Final, not the 4.1.107.Final AWS SDK v2 2.25.0's own BOM pulls in transitively
+         (via netty-nio-client): dependency-check's SBOM scan found 57-58 CVEs against that
+         pinned version, several CRITICAL (DNS cache-poisoning via unvalidated CNAME/NS-record
+         bailiwick, HTTP request smuggling via Transfer-Encoding/chunked-extension parsing, XXE in
+         XmlDecoder). Netty 4.1.x patch releases are binary-compatible within the same minor line,
+         so overriding just the version here (not the AWS SDK's own BOM) is safe. -->
+    <netty.version>4.1.136.Final</netty.version>
 
     <!-- Test Dependency Versions -->
     <jupiter.version>5.12.2</jupiter.version>
@@ -54,7 +83,10 @@
     <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
     <maven.source.plugin.version>3.3.0</maven.source.plugin.version>
     <maven.javadoc.plugin.version>3.7.0</maven.javadoc.plugin.version>
-    <maven.gpg.plugin.version>3.2.4</maven.gpg.plugin.version>
+    <!-- 3.2.x regressed gpg-agent IPC handling ("Too much data for IPC layer" on every sign,
+         reproduced in CI regardless of GNUPGHOME/GPG_HOMEDIR config) — pinned to the last known-
+         good version before that regression. -->
+    <maven.gpg.plugin.version>3.2.8</maven.gpg.plugin.version>
     <maven.deploy.plugin.version>3.1.1</maven.deploy.plugin.version>
     <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
     <cyclonedx.plugin.version>2.8.2</cyclonedx.plugin.version>
@@ -65,16 +97,108 @@
 
   <dependencyManagement>
     <dependencies>
-      <!-- CloudForge Modules -->
+      <!--
+        CloudForge Modules (BOM) — docs/architecture/module-boundaries-and-refactor.plan.md
+
+        cloudforge-core         Shared contracts, DeploymentConfig, com.cloudforge.core.local
+        cloudforge-api          CloudForgeDeployment, ApplicationSpecs, CMS, CDK factories
+        cloudforge-ministack    MiniStack adapter/deployer/pipeline (depends: core)
+        cloudforge-localstack   LocalStack adapter/deployer/pipeline (depends: core)
+        cloudforge-synth-service  Thin HTTP wrapper around CloudForgeSynthesizer (depends: api) —
+          isolates jsii/AWS-CDK synthesis behind a same-task sidecar boundary so
+          cloudforge-manager itself can compile to a GraalVM native image without linking against
+          jsii. No proprietary content of its own (see its own pom.xml header) — public like every
+          other module here despite existing only for cloudforge-manager's benefit.
+
+        cloudforge-manager-deployment and cloudforge-manager are NOT managed here anymore — split
+        into their own private repos (CloudForgeCI/cloudforge-manager-deployment,
+        CloudForgeCI/cloudforge-manager) with independent versioning; a consumer that needs them
+        declares an explicit <version> for those coordinates directly.
+
+        Consumer sample: docs/architecture/cloudforge-sample-bom.template.md
+        Not in BOM: cfc-testing (monorepo entrypoint / cloudforge-sample reference)
+      -->
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-core</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <!-- Central deploy-everything API + CDK synthesis -->
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-api</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <!-- Local emulator targets (optional consumer dependencies) -->
+      <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-ministack</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-localstack</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-synth-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!-- Netty override, see ${netty.version}'s own comment above. AWS SDK v2's netty-nio-client
+           pulls these in transitively at 4.1.107.Final; every artifact it actually resolves needs
+           managing here or Maven's nearest-wins rule would leave some of them on the older,
+           vulnerable version even with the others overridden. -->
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-buffer</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec-http</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec-http2</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-common</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-handler</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-resolver</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport-classes-epoll</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport-native-unix-common</artifactId>
+        <version>${netty.version}</version>
       </dependency>
 
       <!-- AWS CDK Dependencies -->
@@ -100,7 +224,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-annotations</artifactId>
-        <version>${jackson.version}</version>
+        <version>${jackson-annotations.version}</version>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
@@ -164,10 +288,39 @@
   </scm>
 
   <modules>
+    <!-- Reactor order: core → target adapters → api → api-dependent leaves. -->
     <module>cloudforge-core</module>
+    <module>cloudforge-ministack</module>
+    <module>cloudforge-localstack</module>
     <module>cloudforge-api</module>
-    <!-- cfc-testing is intentionally excluded - it's an independent consumer module -->
-    <!-- cfc-testing depends on cloudforge-core but is not part of the reactor build -->
+    <module>cloudforge-synth-service</module>
+    <!-- cloudforge-manager-deployment / cloudforge-manager: split into their own private repos
+         (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager) — no longer
+         reactor modules here (not listed as <module> above, so not part of this reactor's build
+         order or default `mvn install`/`deploy` — each still builds via its own standalone
+         invocation, see either module's pom.xml). The directories stay in this working tree
+         (gitignored, not tracked by cfc-core's own history) for local development.
+
+         cloudforge-manager-deployment DOES declare cfc-core (this pom) as its Maven <parent> —
+         resolved from the repository via an explicit empty <relativePath/>, never from this
+         local checkout, so it keeps building correctly once split into its own repo as long as
+         cfc-core:pom is resolvable from Central (or already `mvn install`ed locally, which any
+         CI build of it does first regardless). This is deliberately NOT the same as ordinary
+         reactor-membership parent inheritance — it's how that module inherits cfc-core's whole
+         release/GPG/Central-publishing profile for free instead of hand-duplicating it, since
+         cloudforge-manager-deployment has zero licensing-sensitive code and does publish to
+         Maven Central (see .github/workflows/publish-maven-central.yml). cloudforge-manager
+         itself stays a genuinely standalone pom, no parent — it holds all the LicenseSeat/
+         Checkpoint A/B logic and is deliberately NOT published to Central (distribution
+         strategy still undecided; revisit separately, see the license-gate design discussion).
+
+         cfc-testing (this repo's own validation/sample consumer) deliberately does NOT depend on
+         it — cfc-core's own CI only unit-tests cloudforge-api, cloudforge-core,
+         cloudforge-localstack, and cloudforge-ministack; a real cloudforge-manager consumer
+         resolves cloudforge-manager-deployment as a normal external Maven dependency itself
+         (see cloudforge-manager's own pom.xml).
+    -->
+    <!-- cfc-testing: independent consumer / cloudforge-sample entrypoint (BOM import, not in reactor) -->
   </modules>
 
   <profiles>
@@ -209,7 +362,13 @@
             <plugin>
               <groupId>org.apache.maven.plugins</groupId>
               <artifactId>maven-gpg-plugin</artifactId>
-              <version>3.2.4</version>
+              <!-- 3.2.0 through 3.2.4 were tried and reproduced "Too much data for IPC layer" on
+                   every sign; downgrading to 3.1.0 didn't fix it either, same bug, independent
+                   of version. Bumped to 3.2.8, latest, includes a real fix for a different,
+                   Windows-specific IPC bug in the 3.2.0 to 3.2.7 range, since 3.2.8 combined with
+                   the rest of the current setup, allow-loopback-pinentry, explicit
+                   -Dgpg.passphrase, a freshly verified key, had never actually been tested. -->
+              <version>3.2.8</version>
               <executions>
                 <execution>
                   <id>sign-artifacts</id>
@@ -305,15 +464,18 @@
               </execution>
             </executions>
             <configuration>
-              <!-- Works with gpg2 and CI -->
-              <!-- Use env vars: GPG_KEYNAME, GPG_PASSPHRASE, GPG_HOMEDIR (optional) -->
+              <!-- Works with gpg2 and CI. "gpg1" (Ubuntu's gnupg1 package) was tried as a way
+                   to route around a reproduced gpg-agent "Too much data for IPC layer" bug on
+                   ubuntu-latest's GnuPG 2.4.4 (independent of key content, plugin version, or
+                   this config) — but Ubuntu's gnupg1 turned out to be a gpg2 compatibility shim
+                   ("migration succeeded" in its own output gives it away), not real legacy
+                   GnuPG 1.x, so it hit the identical bug. Reverted; see the runs-on pin on the
+                   signing jobs in the workflow files instead for the actual current mitigation.
+                   Use env vars: GPG_KEYNAME, GPG_PASSPHRASE, GPG_HOMEDIR (optional) -->
               <gpgArguments>
                 <arg>--pinentry-mode</arg><arg>loopback</arg>
               </gpgArguments>
               <homedir>${env.GPG_HOMEDIR}</homedir>
-              <!-- uncomment to force gpg2
-              <executable>gpg2</executable>
-              -->
             </configuration>
           </plugin>
 
@@ -365,6 +527,14 @@
           <configuration>
             <source>${maven.compiler.source}</source>
             <target>${maven.compiler.target}</target>
+            <!-- Required for Spring MVC to resolve @PathVariable/@RequestParam by their Java
+                 parameter name when no explicit name is given on the annotation — without it,
+                 every such binding fails at runtime with "Name for argument of type [...] not
+                 specified, and parameter name information not available via reflection" the
+                 instant real HTTP hits it, even though it compiles and unit tests (which call
+                 controller methods directly, bypassing Spring's argument resolution) never
+                 notice. Found via an actual deployed Manager instance, not a test. -->
+            <parameters>true</parameters>
           </configuration>
         </plugin>
         <!-- Maven Source Plugin -->

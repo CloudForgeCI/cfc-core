@@ -177,6 +177,8 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
                 .resources(List.of("*"))
                 .build());
 
+        ManagerOperatorIamSupport.attachOperatorBaselinePolicies(c, ec2Role);
+        ManagerOperatorIamSupport.attachDeployCapabilities(c, ec2Role);
         c.ec2InstanceRole.set(ec2Role);
     }
 
@@ -270,6 +272,9 @@ public final class ExtendedIAMConfiguration implements IAMConfiguration {
                 ))
                 .resources(List.of("*"))
                 .build());
+
+        ManagerOperatorIamSupport.attachOperatorBaselinePolicies(c, taskRole);
+        ManagerOperatorIamSupport.attachDeployCapabilities(c, taskRole);
 
         c.fargateExecutionRole.set(executionRole);
         c.fargateTaskRole.set(taskRole);

@@ -1,6 +1,6 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <version>3.1.0-SNAPSHOT</version>
+    <version>3.2.0</version>
 
     <artifactId>com.cloudforgeci.testing</artifactId>
     <groupId>core-testing</groupId>
@@ -9,15 +9,30 @@
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
+        <cloudforge.version>3.2.0-SNAPSHOT</cloudforge.version>
+        <testcontainers.version>1.21.0</testcontainers.version>
+        <aws.sdk.version>2.25.0</aws.sdk.version>
     </properties>
 
-    <!-- Import CloudForge BOM for centralized version management -->
+    <!-- Maven doesn't check the Central Portal's snapshots URL by default — needed to resolve
+         the cfc-core BOM below while it's on a -SNAPSHOT version. Real releases (non-SNAPSHOT)
+         never touch this repository at all. -->
+    <repositories>
+        <repository>
+            <id>central-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <!-- Import CloudForge BOM — see docs/architecture/cloudforge-sample-bom.template.md -->
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>com.cloudforgeci</groupId>
                 <artifactId>cfc-core</artifactId>
-                <version>3.1.0-SNAPSHOT</version>
+                <version>${cloudforge.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -37,6 +52,26 @@
     <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-api</artifactId>
+    </dependency>
+
+    <!-- MiniStack local deployment (adapter, deployer, pipeline) -->
+    <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-ministack</artifactId>
+    </dependency>
+
+    <!-- LocalStack local deployment (adapter, deployer, pipeline) -->
+    <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-localstack</artifactId>
+    </dependency>
+
+    <!-- CloudForgeManagerApplicationSpec, needed to deploy cloudforge-manager as an app.
+         cloudforge-manager itself (the Spring Boot app) is not a dependency here. -->
+    <dependency>
+        <groupId>com.cloudforgeci</groupId>
+        <artifactId>cloudforge-manager-deployment</artifactId>
+        <version>${cloudforge.version}</version>
     </dependency>
 
     <!-- AWS CDK - explicit dependency for IDE support -->
@@ -79,6 +114,71 @@
         <groupId>com.fasterxml.jackson.dataformat</groupId>
         <artifactId>jackson-dataformat-yaml</artifactId>
     </dependency>
+
+    <!-- ============================================ -->
+    <!-- Testcontainers for the independent MiniStack emulator -->
+    <!-- ============================================ -->
+    <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
+    </dependency>
+
+    <!-- ============================================ -->
+    <!-- AWS SDK v2 — used by cfc-testing's own JUnit tests, and (transitively-overriding, since a
+         direct declaration always wins Maven's dependency mediation over an inherited one
+         regardless of scope) by InteractiveDeployer's real LocalStack/MiniStack deploy path via
+         cloudforge-localstack/cloudforge-ministack — must NOT be test-scoped, or `mvn exec:java`
+         hits a real ClassNotFoundException at runtime (e.g. CloudFormationException, used by
+         LocalStackCapabilityProbe's real deploy-time preflight, not just tests). -->
+    <!-- ============================================ -->
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>cloudformation</artifactId>
+        <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>ec2</artifactId>
+        <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>iam</artifactId>
+        <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>cognitoidentityprovider</artifactId>
+        <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>rds</artifactId>
+        <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>ecs</artifactId>
+        <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>elasticloadbalancingv2</artifactId>
+        <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>route53</artifactId>
+        <version>${aws.sdk.version}</version>
+    </dependency>
 </dependencies>
 
     <build>
@@ -87,7 +187,6 @@
                 <artifactId>maven-clean-plugin</artifactId>
                 <version>3.4.1</version>
                 <configuration>
-                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
                     <filesets>
                         <fileset>
                             <directory>${project.basedir}/cdk.out</directory>
@@ -135,6 +234,51 @@
                     </execution>
                 </executions>
             </plugin>
+
         </plugins>
     </build>
+
+    <!-- ============================================ -->
+    <!-- MiniStack-related synth/parity tests         -->
+    <!-- Live MiniStack integration (@Tag ministack)  -->
+    <!-- lives in cloudforge-ministack (-P ministack). -->
+    <!-- ============================================ -->
+    <profiles>
+        <profile>
+            <id>ministack</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups>ministack</groups>
+                            <systemPropertyVariables>
+                                <java.util.logging.config.file>${project.basedir}/logging.properties</java.util.logging.config.file>
+                                <MINISTACK>true</MINISTACK>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>localstack</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups>localstack</groups>
+                            <systemPropertyVariables>
+                                <java.util.logging.config.file>${project.basedir}/logging.properties</java.util.logging.config.file>
+                                <LOCALSTACK>true</LOCALSTACK>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

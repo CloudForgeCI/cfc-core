@@ -1,0 +1,46 @@
+{
+  "stackName": "CloudForgeManager-Production",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "description": "Operations Panel with optional PostgreSQL for durable history",
+  "environment": "production",
+
+  "runtime": "fargate",
+  "securityProfile": "production",
+  "topology": "application-service",
+
+  "domain": "example.com",
+  "subdomain": "manager",
+  "enableSsl": true,
+
+  "networkMode": "private-with-nat",
+  "region": "us-east-1",
+
+  "authMode": "alb-oidc",
+  "cognitoAutoProvision": true,
+  "cognitoDomainPrefix": "cfc-manager-prod-CHANGEME",
+  "cognitoMfaEnabled": true,
+  "cognitoMfaMethod": "totp",
+  "cognitoCreateGroups": true,
+  "cognitoAdminGroupName": "ManagerAdmins",
+  "cognitoUserGroupName": "ManagerUsers",
+
+  "cpu": 512,
+  "memory": 1024,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 2,
+
+  "provisionDatabase": true,
+  "databaseEngine": "postgres",
+  "databaseVersion": "15",
+  "databaseInstanceClass": "db.t3.micro",
+  "databaseAllocatedStorageGB": 20,
+  "databaseMultiAz": true,
+  "databaseName": "cloudforge_manager",
+  "databaseBackupRetentionDays": 14,
+
+  "enableMonitoring": true,
+  "enableEncryption": true,
+  "logRetentionDays": "90",
+  "retainStorage": true
+}

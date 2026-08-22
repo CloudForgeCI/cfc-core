@@ -2,7 +2,6 @@
 cdk.out/
 cdk.context.json
 deployment-context.json
-cdk.json
 
 # CDK output and timing files
 cdk-output.log
@@ -57,3 +56,7 @@ scripts/validation-results
 scripts/synth-results
 
 benchmark-results
+
+# Local MiniStack bind-mount data (Jenkins home, etc.)
+.ministack-volumes/
+.localstack-volumes/

@@ -1,8 +1,8 @@
 # Changelog
 
-All notable changes to CloudForge Community Core are documented here.
+All notable changes to CloudForge CI are documented here.
 
-## [3.0.0] - Current Release
+## [3.0.0]
 
 ### Added
 

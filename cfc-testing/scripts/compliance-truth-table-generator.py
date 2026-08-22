@@ -888,8 +888,8 @@ class ComplianceTruthTableGenerator:
 <!DOCTYPE html>
 <html>
 <head>
-    <title>CloudForge Core - Compliance Truth Tables</title>
     <meta charset="UTF-8">
+    <title>CloudForge Core - Compliance Truth Tables</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         * {{

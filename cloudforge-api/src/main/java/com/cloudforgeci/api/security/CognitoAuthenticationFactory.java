@@ -4,6 +4,7 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.util.CfnStringUtils;
 import software.amazon.awscdk.Fn;
@@ -103,6 +104,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
     @DeploymentContext("cognitoMfaMethod")
     private String cognitoMfaMethod;
+
+    @DeploymentContext("cognitoSelfSignupEnabled")
+    private Boolean cognitoSelfSignupEnabled;
 
     // User groups configuration
     @DeploymentContext("cognitoCreateGroups")
@@ -274,6 +278,28 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             throw new IllegalStateException("SecurityProfileConfiguration not injected - ensure SystemContext is properly initialized");
         }
 
+        // Self-signup: deployment context override, then security profile default (dev allows
+        // it, staging/production don't). No compliance framework rule blocks self-signup today —
+        // a self-registered user still lands with no group membership and the lowest-privilege
+        // role — but enabling it under an active framework is a common independent audit finding
+        // (SOC2 CC6.1/6.2, PCI-DSS Req.7/8 both ask how accounts get provisioned, regardless of
+        // what role they end up with), so warn rather than silently allowing it. Computed here,
+        // ahead of the summary log below, so both that log and the actual builder call
+        // (selfSignUpEnabled(...) further down) agree on the same effective value.
+        boolean selfSignupEnabled = (cognitoSelfSignupEnabled != null)
+            ? cognitoSelfSignupEnabled : securityProfileConfig.isSelfSignupEnabled();
+        String complianceFrameworks = ctx != null && ctx.cfc != null ? ctx.cfc.complianceFrameworks() : null;
+        ComplianceMode complianceMode = ctx != null && ctx.cfc != null ? ctx.cfc.complianceMode() : null;
+        boolean complianceActive = complianceFrameworks != null && !complianceFrameworks.isBlank()
+            && (complianceMode == ComplianceMode.ADVISORY || complianceMode == ComplianceMode.ENFORCE);
+        if (selfSignupEnabled && complianceActive) {
+            LOG.warning("Cognito self-signup is enabled while compliance frameworks are active "
+                + "(" + complianceFrameworks + ", mode=" + complianceMode + "). Open self-registration "
+                + "into an ops panel is a common audit finding independent of the role it grants — "
+                + "review whether cognitoSelfSignupEnabled should stay unset (profile default) or be "
+                + "explicitly disabled for this deployment.");
+        }
+
         LOG.info("Security Profile: " + securityProfileConfig.getSecurityProfile());
         LOG.info("Profile-aware authentication settings:");
         LOG.info("  - MFA Required: " + securityProfileConfig.isMfaRequired());
@@ -283,7 +309,8 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         LOG.info("  - Access Token Validity: " + securityProfileConfig.getAccessTokenValidityHours() + " hours");
         LOG.info("  - ID Token Validity: " + securityProfileConfig.getIdTokenValidityHours() + " hours");
         LOG.info("  - Refresh Token Validity: " + securityProfileConfig.getRefreshTokenValidityDays() + " days");
-        LOG.info("  - Self-Signup Enabled: " + securityProfileConfig.isSelfSignupEnabled());
+        LOG.info("  - Self-Signup Enabled: " + selfSignupEnabled
+            + (cognitoSelfSignupEnabled != null ? " (deployment context override)" : " (security profile default)"));
         LOG.info("  - Prevent User Existence Errors: " + securityProfileConfig.isPreventUserExistenceErrorsEnabled());
         LOG.info("  - Advanced Security: " + securityProfileConfig.isAdvancedSecurityEnabled());
 
@@ -455,8 +482,8 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 // CDK validates this, so we must set it even though we'll remove it from CloudFormation
                 .featurePlan(securityProfileConfig.isAdvancedSecurityEnabled() ?
                     FeaturePlan.PLUS : FeaturePlan.LITE)
-                // Self-service signup - profile-aware (disabled in staging/production)
-                .selfSignUpEnabled(securityProfileConfig.isSelfSignupEnabled())
+                // Self-service signup - profile-aware, deployment-context-overridable (see above)
+                .selfSignUpEnabled(selfSignupEnabled)
                 // Removal policy - RETAIN for production, DESTROY for dev/staging
                 .removalPolicy(userPoolRemovalPolicy);
 
@@ -526,6 +553,31 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // Create user groups if enabled
         createUserGroups(userPool);
 
+        // cloudforge-manager's Users tab writes a role edit through to this pool's real group
+        // membership (AuthService.syncOidcRoleToCognito) instead of only updating its own local
+        // cache — Cognito stays the single source of truth for who's in which role regardless of
+        // whether that role's group membership changed via our own UI or directly in Cognito.
+        // Scoped to this one pool's ARN; harmless to grant even if that Manager feature is never
+        // exercised for a given deployment. onSet (not a direct getter) because IAM-profile
+        // configuration (which creates fargateTaskRole) and Cognito provisioning have no fixed
+        // ordering relative to each other.
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+                && cognitoCreateGroups != null && cognitoCreateGroups) {
+            String userPoolArn = userPool.getUserPoolArn();
+            ctx.fargateTaskRole.onSet(taskRole -> taskRole.addToPrincipalPolicy(
+                PolicyStatement.Builder.create()
+                    .sid("AllowManagerCognitoRoleGroupSync")
+                    .effect(software.amazon.awscdk.services.iam.Effect.ALLOW)
+                    .actions(List.of(
+                        "cognito-idp:AdminAddUserToGroup",
+                        "cognito-idp:AdminRemoveUserFromGroup",
+                        "cognito-idp:AdminListGroupsForUser"
+                    ))
+                    .resources(List.of(userPoolArn))
+                    .build()));
+            LOG.info("  ✅ Added IAM policy for Manager Cognito role-group sync (Users tab role edits)");
+        }
+
         // Create initial admin user if email provided (even if groups are disabled)
         if (cognitoInitialAdminEmail != null && !cognitoInitialAdminEmail.isEmpty() &&
             (cognitoCreateGroups == null || !cognitoCreateGroups)) {
@@ -550,7 +602,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         LOG.info("Logout URL: " + logoutUrl);
 
         // Create App Client for ALB OIDC authentication
-        UserPoolClient appClient = UserPoolClient.Builder.create(this, "AppClient")
+        UserPoolClient.Builder appClientBuilder = UserPoolClient.Builder.create(this, "AppClient")
                 .userPool(userPool)
                 .userPoolClientName(stackName + "-alb-client")
                 // Generate client secret (required for ALB OIDC)
@@ -576,10 +628,37 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .refreshTokenValidity(software.amazon.awscdk.Duration.days(
                     securityProfileConfig.getRefreshTokenValidityDays()))
                 // Prevent user existence errors - profile-aware (enabled in staging/production)
-                .preventUserExistenceErrors(securityProfileConfig.isPreventUserExistenceErrorsEnabled())
-                .build();
+                .preventUserExistenceErrors(securityProfileConfig.isPreventUserExistenceErrorsEnabled());
+        if (authMode == AuthMode.APPLICATION_OIDC) {
+            // Manager's own custom login form calls Cognito's InitiateAuth/RespondToAuthChallenge
+            // directly (ApplicationOidcAuthenticator#completeDirectLogin) instead of redirecting
+            // the browser to Cognito Hosted UI — needs USER_PASSWORD_AUTH enabled on the client to
+            // be accepted at all. Scoped to application-oidc only: alb-oidc's client secret is
+            // managed internally by Cognito and never reaches Manager's own app code (see below),
+            // so nothing would ever call InitiateAuth for it — least privilege, not just inertness.
+            appClientBuilder = appClientBuilder.authFlows(AuthFlow.builder().userPassword(true).build());
+        }
+        UserPoolClient appClient = appClientBuilder.build();
 
         LOG.info("App Client created: " + appClient.getUserPoolClientId());
+
+        // Opt this domain into Cognito's newer "Managed Login" branding version instead of the
+        // classic Hosted UI's plain/dated default look — useCognitoProvidedValues gives Cognito's
+        // own sensible default styling with no custom logo/color assets to author or host.
+        // CfnManagedLoginBranding needs the domain on managedLoginVersion=2; the L2 UserPoolDomain
+        // construct doesn't yet surface that property, hence the L1 escape hatch. Applies whenever
+        // Cognito auto-provisions the pool/domain, since Hosted UI is reachable regardless of
+        // authMode — alb-oidc always, application-oidc via its own "Sign in with Cognito instead"
+        // link (see ApplicationOidcAuthenticator/manager-route-access.service.ts).
+        CfnUserPoolDomain cfnUserPoolDomain = (CfnUserPoolDomain) userPoolDomain.getNode().getDefaultChild();
+        cfnUserPoolDomain.setManagedLoginVersion(2);
+        CfnManagedLoginBranding managedLoginBranding = CfnManagedLoginBranding.Builder.create(this, "ManagedLoginBranding")
+                .userPoolId(userPool.getUserPoolId())
+                .clientId(appClient.getUserPoolClientId())
+                .useCognitoProvidedValues(true)
+                .build();
+        managedLoginBranding.getNode().addDependency(cfnUserPoolDomain);
+        LOG.info("Managed Login branding enabled (Cognito-provided default styling)");
 
         // Note: For ALB-level OIDC (alb-oidc), Cognito manages client secret internally
         // For application-level OIDC (application-oidc), we need to store secret in Secrets Manager

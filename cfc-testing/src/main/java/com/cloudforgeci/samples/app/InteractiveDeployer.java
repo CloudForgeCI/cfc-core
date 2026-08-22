@@ -1,7 +1,11 @@
 package com.cloudforgeci.samples.app;
 
 import com.cloudforgeci.api.compute.ApplicationLoader;
+import com.cloudforgeci.api.deploy.CanonicalTemplateResolver;
+import com.cloudforgeci.api.deploy.DeployOptions;
+import com.cloudforgeci.api.deploy.DeploymentResult;
 import com.cloudforge.core.config.ApplicationInfo;
+import com.cloudforge.core.config.ApplicationPropertyLoader;
 import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforge.core.enums.AuthMode;
@@ -15,6 +19,12 @@ import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.samples.launchers.ApplicationEc2Stack;
 import com.cloudforgeci.samples.launchers.ApplicationFargateStack;
+import com.cloudforge.core.local.DeploymentTarget;
+import com.cloudforge.core.deploy.ApplicationDeploymentExtensions;
+import com.cloudforge.core.deploy.ApplicationDeploymentPresets;
+import com.cloudforge.core.local.PlatformRuntimeAction;
+import com.cloudforge.core.local.PlatformRuntimeProvider;
+import com.cloudforge.core.local.PlatformRuntimeProviders;
 
 // Auto-discovery via ApplicationLoader - no need to import all ApplicationSpecs manually
 import com.cloudforge.core.interfaces.ApplicationSpec;
@@ -30,6 +40,7 @@ import io.github.cdklabs.cdknag.NagPack;
 import com.cloudforge.core.config.ConfigFieldInfo;
 import com.cloudforge.core.config.ConfigurationIntrospector;
 import com.cloudforge.core.config.DefaultValueResolver;
+import com.cloudforge.core.config.DeploymentContextPreparer;
 import com.cloudforge.core.config.ValidationResult;
 import com.cloudforge.core.annotation.FieldTag;
 
@@ -37,6 +48,8 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Aspects;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.cxapi.CloudAssembly;
+import software.amazon.awscdk.cxapi.CloudFormationStackArtifact;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -51,38 +64,27 @@ import java.util.*;
 import java.util.logging.Logger;
 
 /**
- * CloudForge 3.0.0 Universal Application Deployer
+ * Interactive configuration and deployment entry point for CloudForge applications.
  *
- * <p>Uses ApplicationLoader for auto-discovery of application plugins via ServiceLoader.
- * Built-in applications and external plugins are automatically discovered from
- * META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec registrations.</p>
- *
- * <p>Revamped with intelligent question skipping using truth tables:</p>
- * <ul>
- *   <li>Application selection determines available runtimes</li>
- *   <li>Security profile determines default compliance settings</li>
- *   <li>Runtime type determines resource configuration options</li>
- *   <li>OIDC support is application-specific</li>
- * </ul>
- *
- * <p>Built-in applications (14+) across 8 categories:</p>
- * <ul>
- *   <li>CI/CD: Jenkins, GitLab, Drone</li>
- *   <li>VCS: Gitea</li>
- *   <li>Monitoring: Grafana, Prometheus</li>
- *   <li>Databases: PostgreSQL, Redis</li>
- *   <li>Secrets Management: HashiCorp Vault</li>
- *   <li>Artifact Registry: Nexus, Harbor</li>
- *   <li>Collaboration: Mattermost</li>
- *   <li>Analytics: Metabase, Superset</li>
- * </ul>
- *
- * <p>External plugins (like SonarQube in cfc-testing) are automatically included.</p>
+ * <p>Uses {@link ApplicationLoader} to discover built-in and external application
+ * specifications registered through {@link java.util.ServiceLoader}. Available prompts
+ * depend on the selected application's runtime and authentication support. Security
+ * profiles supply environment-specific defaults, which can be reviewed before synthesis
+ * or deployment.</p>
  */
 public class InteractiveDeployer {
 
     private static final Logger LOG = Logger.getLogger(InteractiveDeployer.class.getName());
     private static final Scanner scanner = createScanner();
+    // Jackson ObjectMapper for JSON operations
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON_MAPPER =
+        new com.fasterxml.jackson.databind.ObjectMapper();
+    static {
+        JSON_MAPPER.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+    }
+
+    /** Cloud assembly from the most recent in-process synth (templates may not be on disk yet). */
+    private static CloudAssembly synthesizedAssembly;
 
     /**
      * Create a Scanner that reads from /dev/tty on Unix systems.
@@ -167,7 +169,10 @@ public class InteractiveDeployer {
         if (skipMenu) {
             // We're in a deploy subprocess or cdk destroy - just synthesize quietly without menu
             try {
-                String contextFile = "deployment-context.json";
+                String contextFile = System.getenv("CFC_CONTEXT_FILE");
+                if (contextFile == null || contextFile.isBlank()) {
+                    contextFile = "deployment-context.json";
+                }
                 if (Files.exists(Paths.get(contextFile))) {
                     DeploymentConfig config = DeploymentConfig.fromFile(contextFile);
                     // Reconstruct applicationSpec from applicationId
@@ -186,9 +191,18 @@ public class InteractiveDeployer {
 
         printWelcomeBanner();
 
+        if (Arrays.asList(args).contains("--platform")) {
+            runPlatformMenu();
+            return;
+        }
+
         // Check for command line arguments
         String customStackName = null;
         String deploymentOption = null;
+        String contextFile = System.getenv("CFC_CONTEXT_FILE");
+        if (contextFile == null || contextFile.isBlank()) {
+            contextFile = "deployment-context.json";
+        }
         boolean forceInteractive = false;
         boolean forceDelete = false;
 
@@ -199,6 +213,16 @@ public class InteractiveDeployer {
             } else if (args[i].equals("--force") || args[i].equals("-f")) {
                 forceDelete = true;
                 System.out.println("🗑️  Force mode enabled - will delete existing context");
+            } else if (args[i].equals("--context") || args[i].equals("-c")) {
+                if (i + 1 < args.length) {
+                    contextFile = args[++i];
+                    System.out.println("📄 Using deployment context: " + contextFile);
+                }
+            } else if (args[i].equals("--ministack") || args[i].equals("-m")) {
+                System.out.println("ℹ️  --ministack/-m is obsolete; MiniStack is always available as menu option 6");
+            } else if (deploymentOption == null && args[i].matches("[0-9]")) {
+                deploymentOption = args[i];
+                System.out.println("📝 Using deployment option: " + deploymentOption);
             } else if (customStackName == null) {
                 customStackName = args[i];
                 System.out.println("📝 Using custom stack name: " + customStackName);
@@ -220,8 +244,6 @@ public class InteractiveDeployer {
         }
 
         try {
-            String contextFile = "deployment-context.json";
-
             // --force: delete existing context and start fresh
             if (forceDelete && Files.exists(Paths.get(contextFile))) {
                 System.out.println("🗑️  Deleting existing deployment context...");
@@ -236,7 +258,7 @@ public class InteractiveDeployer {
                     DeploymentConfig config = collectConfiguration(customStackName);
                     deployInfrastructure(config, deploymentOption);
                 } else {
-                    System.out.println("📁 Found saved deployment context: " + contextFile);
+                    System.out.println("📁 Found deployment context: " + contextFile);
                     loadContextFromFileAndDeploy(contextFile, deploymentOption, customStackName);
                 }
             } else {
@@ -252,67 +274,55 @@ public class InteractiveDeployer {
         }
     }
 
-    /**
-     * Show action menu when existing context is found.
-     * Returns the deployment option (1-7) or null if user wants to reconfigure.
-     */
-    private static String showActionMenu() {
-        System.out.println("\n📋 What would you like to do?");
-        System.out.println("==============================");
-        System.out.println("1. Synthesize only");
-        System.out.println("2. Deploy");
-        System.out.println("3. Redeploy (delete + deploy)");
-        System.out.println("4. Dry-run (changeset)");
-        System.out.println("5. Export Template (YAML/JSON)");
-        System.out.println("6. Reconfigure (start fresh interactive setup)");
-        System.out.println("7. Cancel");
-        System.out.print("\nChoose option [1-7]: ");
-
-        try {
-            if (scanner.hasNextLine()) {
-                String choice = scanner.nextLine().trim();
-                switch (choice) {
-                    case "1", "2", "3", "4", "5":
-                        return choice;
-                    case "6":
-                        return null; // Signal to reconfigure
-                    case "7":
-                        System.out.println("❌ Cancelled by user");
-                        System.exit(0);
-                    default:
-                        System.out.println("Invalid choice. Defaulting to synthesis only.");
-                        return "1";
-                }
-            }
-        } catch (Exception e) {
-            System.out.println("Input error: " + e.getMessage());
-        }
-        return "1";
-    }
-
     private static void printWelcomeBanner() {
         int appCount = APPLICATION_REGISTRY.size();
         int categoryCount = APPLICATION_CATEGORIES.size();
 
         System.out.println("╔═══════════════════════════════════════════════════════════════╗");
-        System.out.println("║  🚀 CloudForge 3.0.0 Universal Application Deployer          ║");
+        System.out.println("║  CloudForge Interactive Application Deployer                  ║");
         System.out.println("╚═══════════════════════════════════════════════════════════════╝");
         System.out.println("");
-        System.out.println("📖 Deploy containerized applications with compliance-first infrastructure:");
-        System.out.println("   ✓ " + appCount + " Applications across " + categoryCount + " categories (auto-discovered via ServiceLoader)");
-        System.out.println("   ✓ EC2 or Fargate runtime options");
-        System.out.println("   ✓ OIDC Authentication (Cognito, IAM Identity Center)");
-        System.out.println("   ✓ Automatic SSL certificate management");
-        System.out.println("   ✓ Security profiles (DEV/STAGING/PRODUCTION)");
-        System.out.println("   ✓ SOC2, PCI-DSS, HIPAA, GDPR compliance validation");
-        System.out.println("   ✓ Advanced monitoring and encryption");
+        System.out.println("Configure and deploy containerized applications:");
+        System.out.println("   " + appCount + " applications across " + categoryCount + " categories (discovered via ServiceLoader)");
+        System.out.println("   EC2 and Fargate runtime options");
+        System.out.println("   Cognito and IAM Identity Center authentication options");
+        System.out.println("   SSL certificate, monitoring, and encryption configuration");
+        System.out.println("   DEV, STAGING, and PRODUCTION security profiles");
+        System.out.println("   CDK Nag validation for selected compliance rule sets");
         System.out.println("");
     }
 
     /**
-     * TRUTH TABLE-DRIVEN CONFIGURATION COLLECTION
+     * Target lifecycle menu. Providers are discovered from target artifacts, keeping this
+     * sample application free of LocalStack, MiniStack, Docker, and image implementation code.
+     */
+    private static void runPlatformMenu() {
+        Map<DeploymentTarget, PlatformRuntimeProvider> providers = PlatformRuntimeProviders.all();
+        if (providers.isEmpty()) {
+            System.out.println("No platform runtime providers are available on the classpath.");
+            return;
+        }
+        List<PlatformRuntimeProvider> available = new ArrayList<>(providers.values());
+        System.out.println("\nPlatform lifecycle");
+        for (int i = 0; i < available.size(); i++) {
+            System.out.println((i + 1) + ". " + available.get(i).target().configKey());
+        }
+        int selected = promptIntWithValidation("Platform", 1, 1, available.size());
+        String[] actions = Arrays.stream(PlatformRuntimeAction.values())
+            .map(action -> action.name().toLowerCase(Locale.ROOT)).toArray(String[]::new);
+        String selectedAction = promptChoice("Action", actions, "status");
+        try {
+            available.get(selected - 1).execute(
+                PlatformRuntimeAction.valueOf(selectedAction.toUpperCase(Locale.ROOT)));
+        } catch (IOException e) {
+            throw new IllegalStateException("Platform lifecycle action failed", e);
+        }
+    }
+
+    /**
+     * Collects configuration using dependencies between prompts.
      *
-     * Questions are intelligently skipped based on previous answers:
+     * Questions are skipped when previous answers make them inapplicable:
      * - Application selection → determines available runtimes & OIDC support
      * - Security profile → auto-enables compliance features
      * - Runtime type → determines resource configuration options
@@ -337,6 +347,7 @@ public class InteractiveDeployer {
         config.applicationId = selectedApp.id;
         config.applicationName = selectedApp.name;
         config.applicationSpec = APPLICATION_REGISTRY.get(selectedApp.id);
+        ApplicationDeploymentPresets.find(config.applicationId).ifPresent(preset -> preset.applyDefaults(config));
 
         // Auto-enable database provisioning for applications that require it
         if (config.applicationSpec instanceof com.cloudforge.core.interfaces.DatabaseSpec dbSpec) {
@@ -348,13 +359,19 @@ public class InteractiveDeployer {
             }
         }
 
+        // cloudforge-manager itself (its ManagerDeploymentPreset RDS/H2 database presets) lives in
+        // cloudforge-manager-deployment, its own repo, not a dependency of cfc-testing — see
+        // maybePrintManagerHint() below for the one cloudforge-manager-specific affordance this
+        // sample still carries (a generic post-deploy URL hint keyed off applicationId, no
+        // cloudforge-manager-deployment dependency needed for that).
+
         // ========== SECURITY PROFILE (determines many defaults) ==========
         System.out.println("\n🔒 Security Profile Selection:");
         System.out.println("================================");
-        System.out.println("Security profiles determine compliance requirements and defaults:");
-        System.out.println("  • DEV: Relaxed security, minimal compliance, lower costs");
-        System.out.println("  • STAGING: Moderate security, recommended for pre-production testing");
-        System.out.println("  • PRODUCTION: Strict security, full compliance enforcement");
+        System.out.println("Security profiles select environment-specific controls and defaults:");
+        System.out.println("  • DEV: Reduced controls for development environments");
+        System.out.println("  • STAGING: Intermediate controls for pre-production testing");
+        System.out.println("  • PRODUCTION: Stricter security and monitoring defaults");
         System.out.println("");
         config.securityProfile = SecurityProfile.valueOf(
             promptChoice("Security Profile", new String[]{"DEV", "STAGING", "PRODUCTION"}, "STAGING").toUpperCase());
@@ -399,8 +416,8 @@ public class InteractiveDeployer {
 
         // ========== OIDC AUTHENTICATION (truth table: only if application supports it) ==========
         if (selectedApp.supportsOidc) {
-            System.out.println("\n🔐 OIDC Authentication (Application Supports It!):");
-            System.out.println("===================================================");
+            System.out.println("\n🔐 OIDC Authentication:");
+            System.out.println("=======================");
             System.out.println("✅ " + selectedApp.name + " supports OIDC integration");
             System.out.println("");
 
@@ -541,10 +558,10 @@ public class InteractiveDeployer {
         }
 
         // For SAML apps (Mattermost, Metabase), offer Cognito SAML instead of Identity Center
-        // Cognito SAML has full API support - no manual console steps required
+        // Cognito SAML resources are managed by the deployment
         if (supportsIdentityCenterSaml && "SAML".equals(authType)) {
             availableProviders.add("cognito-saml");
-            providerDescriptions.add("Cognito SAML - Full API support, group sync (recommended for SAML apps)");
+            providerDescriptions.add("Cognito SAML - Managed user pool and group mapping");
         }
 
         // External IdP is always available as fallback
@@ -619,8 +636,8 @@ public class InteractiveDeployer {
             System.out.println("\n🔧 Authentication Mode:");
             System.out.println("======================");
             System.out.println("Choose where OIDC authentication happens:");
-            System.out.println("  1. alb-oidc - Authentication at ALB (works for all applications)");
-            System.out.println("  2. application-oidc - Authentication within the application (deeper integration)");
+            System.out.println("  1. alb-oidc - Authentication handled by the load balancer");
+            System.out.println("  2. application-oidc - Authentication handled by the application");
             System.out.println("");
             System.out.println("Recommendation: " + recommendedAuthMode);
             System.out.println("");
@@ -712,10 +729,9 @@ public class InteractiveDeployer {
         System.out.println("================================");
         System.out.println("✅ Cognito User Pool will act as SAML 2.0 Identity Provider");
         System.out.println("");
-        System.out.println("Cognito SAML provides:");
-        System.out.println("  • Full API support - no manual console steps required");
-        System.out.println("  • Automatic SAML attribute mapping");
-        System.out.println("  • Group sync support for team/channel membership");
+        System.out.println("The deployment configures:");
+        System.out.println("  • Cognito SAML endpoints and attribute mapping");
+        System.out.println("  • Group mapping for supported applications");
         System.out.println("");
 
         boolean autoProvision = promptYesNo("Auto-provision new Cognito User Pool", true);
@@ -798,21 +814,19 @@ public class InteractiveDeployer {
     }
 
     /**
-     * COMPLIANCE CONFIGURATION using truth table synthesis:
-     * - PRODUCTION → Enable all compliance features by default
-     * - STAGING → Enable monitoring and encryption
-     * - DEV → Minimal compliance
+     * Configures security controls and optional compliance rule-set validation.
+     * Defaults vary by security profile and do not establish compliance or certification.
      */
     private static void configureCompliance(DeploymentConfig config) {
         System.out.println("\n🔧 Compliance & Security Configuration:");
         System.out.println("========================================");
-        System.out.println("📖 Settings are auto-configured based on security profile");
+        System.out.println("Defaults are selected from the security profile and can be reviewed below.");
         System.out.println("");
 
         // Truth table: Encryption required for STAGING/PRODUCTION
         boolean defaultEncryption = (config.securityProfile == SecurityProfile.STAGING ||
                                      config.securityProfile == SecurityProfile.PRODUCTION);
-        config.enableEncryption = promptYesNo("Enable Encryption at Rest (required for PCI-DSS, HIPAA, GDPR)",
+        config.enableEncryption = promptYesNo("Enable Encryption at Rest",
             defaultEncryption);
 
         // Truth table: Monitoring required for STAGING/PRODUCTION
@@ -842,9 +856,8 @@ public class InteractiveDeployer {
             config.securityProfile == SecurityProfile.STAGING) {
             System.out.println("\n🛡️  AWS GuardDuty - Threat Detection:");
             System.out.println("====================================");
-            System.out.println("Continuous monitoring for malicious activity");
-            System.out.println("  • Cost: ~$30-100/month");
-            System.out.println("  • Compliance: Required for PCI-DSS Req 11.4");
+            System.out.println("Produces findings from AWS account and workload activity");
+            System.out.println("  • Cost varies with analyzed data and enabled protection plans");
             config.guardDutyEnabled = promptYesNo("Enable AWS GuardDuty",
                 config.securityProfile == SecurityProfile.PRODUCTION);
         } else {
@@ -860,7 +873,7 @@ public class InteractiveDeployer {
             // PRODUCTION mode: Always enable and select frameworks
             if (config.securityProfile == SecurityProfile.PRODUCTION) {
                 config.auditManagerEnabled = true;
-                System.out.println("✓ Compliance framework validation is REQUIRED for PRODUCTION deployments");
+                System.out.println("The PRODUCTION profile enables framework rule-set validation.");
                 selectComplianceFrameworks(config);
             } else {
                 // STAGING mode: Ask if they want it
@@ -881,9 +894,9 @@ public class InteractiveDeployer {
             System.out.println("\n🔍 Compliance Validation Mode:");
             System.out.println("==============================");
             System.out.println("Controls how cdk-nag and cfn-guard handle violations:");
-            System.out.println("  • ENFORCE: Block deployment on violations (recommended for PRODUCTION)");
-            System.out.println("  • ADVISORY: Log warnings only, allow deployment (recommended for DEV/STAGING)");
-            System.out.println("  • DISABLED: Skip validation (not recommended)");
+            System.out.println("  • ENFORCE: Block deployment on violations");
+            System.out.println("  • ADVISORY: Log warnings and allow deployment");
+            System.out.println("  • DISABLED: Skip validation");
             System.out.println("");
 
             String defaultMode = config.securityProfile == SecurityProfile.PRODUCTION ? "enforce" : "advisory";
@@ -899,7 +912,8 @@ public class InteractiveDeployer {
 
         // Log retention based on compliance
         if (config.enableMonitoring) {
-            System.out.println("\n📋 Log Retention Guidelines:");
+            System.out.println("\n📋 Example Log Retention Periods:");
+            System.out.println("Confirm the retention period required by your policies and obligations.");
             System.out.println("  • PCI-DSS: 365 days minimum");
             System.out.println("  • SOC2: 730 days (2 years)");
             System.out.println("  • HIPAA: 2190 days (6 years)");
@@ -938,13 +952,13 @@ public class InteractiveDeployer {
         if (config.awsConfigEnabled && !config.complianceFrameworks.isEmpty()) {
             System.out.println("\n🔧 Database Automated Remediation:");
             System.out.println("==================================");
-            System.out.println("Automatically fix database compliance violations:");
+            System.out.println("Apply selected resource configuration changes:");
             System.out.println("");
 
             // RDS Deletion Protection
             System.out.println("📌 RDS Deletion Protection:");
             System.out.println("  • Prevents accidental database deletion");
-            System.out.println("  • Required for: HIPAA, SOC2, GDPR");
+            System.out.println("  • Can support data-protection and availability controls");
             System.out.println("  • Safety: SAFE (only enables, never disables)");
             config.enableRdsDeletionProtectionRemediation = promptYesNo(
                 "Enable automatic deletion protection remediation",
@@ -953,7 +967,7 @@ public class InteractiveDeployer {
             // RDS Auto Minor Version Upgrade
             System.out.println("\n🔄 RDS Auto Minor Version Upgrade:");
             System.out.println("  • Automatically apply security patches");
-            System.out.println("  • Required for: PCI-DSS, SOC2, HIPAA, GDPR");
+            System.out.println("  • Can support patch-management controls");
             System.out.println("  • Safety: SAFE (only minor versions, during maintenance window)");
             config.enableRdsAutoMinorVersionUpgradeRemediation = promptYesNo(
                 "Enable automatic version upgrade remediation",
@@ -965,13 +979,13 @@ public class InteractiveDeployer {
 
             System.out.println("S3 Versioning:");
             System.out.println("  • Automatically enable S3 bucket versioning");
-            System.out.println("  • Required for: SOC2, GDPR (data protection)");
+            System.out.println("  • Can support recovery and data-protection controls");
             config.enableS3VersioningRemediation = promptYesNo(
                 "Enable S3 versioning remediation", false);
 
             System.out.println("\nCloudTrail Bucket Access Logging:");
             System.out.println("  • Automatically enable CloudTrail S3 bucket logging");
-            System.out.println("  • Required for: PCI-DSS, HIPAA (audit trail)");
+            System.out.println("  • Can provide additional storage access records");
             config.enableCloudTrailBucketAccessRemediation = promptYesNo(
                 "Enable CloudTrail bucket logging remediation", false);
         }
@@ -1342,6 +1356,7 @@ public class InteractiveDeployer {
             case "artifactregistry" -> "Artifact Registry";
             case "collaboration" -> "Collaboration";
             case "analytics" -> "Analytics";
+            case "operations" -> "Operations";
             // CMS categories from @CmsPlugin
             case "cms" -> "Content Management";
             case "ecommerce" -> "E-commerce";
@@ -1359,7 +1374,7 @@ public class InteractiveDeployer {
     // ============================================================================
 
     /**
-     * Shows a comprehensive configuration summary before deployment.
+     * Shows the collected configuration before deployment.
      *
      * <p>Displays all configured values grouped by category, highlighting:</p>
      * <ul>
@@ -1540,7 +1555,12 @@ public class InteractiveDeployer {
     private static void deployInfrastructure(DeploymentConfig config, String deploymentOption, boolean saveContext) {
         LOG.info("Building CDK Context...");
 
-        Map<String, Object> cfcContext = buildCfcContext(config);
+        if (config.applicationSpec == null && config.applicationId != null) {
+            config.applicationSpec = APPLICATION_REGISTRY.get(config.applicationId);
+        }
+        printPreparedDefaults(config, deploymentOption);
+
+        Map<String, Object> cfcContext = config.toContextMap();
 
         LOG.fine("CDK Context: runtime=" + cfcContext.get("runtime") +
                  ", topology=" + cfcContext.get("topology") +
@@ -1552,12 +1572,15 @@ public class InteractiveDeployer {
         System.out.println("\n🚀 Deployment Options:");
         System.out.println("========================");
         System.out.println("1. Synthesize only");
-        System.out.println("2. Deploy");
-        System.out.println("3. Redeploy (delete + deploy)");
-        System.out.println("4. Dry-run (changeset)");
+        System.out.println("2. Deploy to AWS (requires AWS credentials)");
+        System.out.println("3. Redeploy to AWS (delete + deploy)");
+        System.out.println("4. Dry-run (AWS changeset / MiniStack adapt)");
         System.out.println("5. Export Template (YAML/JSON)");
-        System.out.println("6. Reconfigure (start fresh interactive setup)");
-        System.out.println("7. Cancel");
+        System.out.println("6. Deploy to MiniStack");
+        System.out.println("7. Run MiniStack synthesis and validation");
+        System.out.println("8. Deploy to LocalStack");
+        System.out.println("9. Reconfigure (start fresh interactive setup)");
+        System.out.println("0. Cancel");
 
         String choice;
         if (deploymentOption != null && !deploymentOption.trim().isEmpty()) {
@@ -1568,7 +1591,7 @@ public class InteractiveDeployer {
             try {
                 java.io.BufferedReader ttyReader = new java.io.BufferedReader(
                     new java.io.InputStreamReader(new java.io.FileInputStream("/dev/tty")));
-                System.out.print("Choose option [1-7]: ");
+                System.out.print("Choose option [0-9]: ");
                 System.out.flush();
                 choice = ttyReader.readLine();
                 if (choice == null || choice.trim().isEmpty()) {
@@ -1601,12 +1624,21 @@ public class InteractiveDeployer {
                 System.out.println("\n📄 Exporting CloudFormation Template...");
                 break;
             case "6":
+                System.out.println("\n🏗️  Starting MiniStack deployment...");
+                break;
+            case "7":
+                System.out.println("\n🏗️  Starting MiniStack synthesis and validation...");
+                break;
+            case "8":
+                System.out.println("\n🏗️  Starting LocalStack deployment...");
+                break;
+            case "9":
                 // Reconfigure - start fresh interactive setup
                 System.out.println("\n🔄 Starting fresh configuration...\n");
                 DeploymentConfig newConfig = collectConfiguration(null);
                 deployInfrastructure(newConfig, null);
                 return;
-            case "7":
+            case "0":
                 System.out.println("❌ Deployment cancelled by user");
                 return;
             default:
@@ -1614,11 +1646,14 @@ public class InteractiveDeployer {
                 System.out.println("\n🚀 Starting CDK Synthesis...");
         }
 
+        synthesizedAssembly = null;
+
         // Create App with output suppression properties
         App app = App.Builder.create()
                 .analyticsReporting(false)  // Disable analytics
                 .autoSynth(false)           // Disable auto-synthesis
                 .treeMetadata(false)        // Disable tree metadata
+                .outdir("cdk.out")
                 .build();
         app.getNode().setContext("cfc", cfcContext);
 
@@ -1732,7 +1767,7 @@ public class InteractiveDeployer {
             System.setErr(nullErr);
 
             try {
-                app.synth();
+                synthesizedAssembly = app.synth();
             } finally {
                 // Restore original stdout and stderr
                 System.setOut(originalOut);
@@ -1765,36 +1800,52 @@ public class InteractiveDeployer {
         switch (choice) {
             case "2" -> {
                 runCdkDeploy();
+                maybePrintManagerHint(config, null, DeploymentTarget.AWS);
             }
             case "3" -> {
                 System.out.println("\n🗑️  Deleting existing stack...");
                 runCdkDestroy(config.stackName);
                 System.out.println("\n🚀 Starting CDK deployment...");
                 runCdkDeploy("--require-approval", "never");
+                maybePrintManagerHint(config, null, DeploymentTarget.AWS);
             }
             case "4" -> {
-                System.out.println("\n📋 Synthesis complete. To create changeset (dry-run), run:");
+                try {
+                    DeploymentResult result = LocalDeploymentShell.dryRun(
+                        config, DeploymentTarget.MINISTACK, synthesizedAssembly);
+                    DeploymentResultPrinter.printDryRun(result);
+                } catch (IOException e) {
+                    throw new RuntimeException("MiniStack dry-run failed", e);
+                }
+                System.out.println("\n📋 For an AWS CloudFormation changeset (dry-run), run:");
                 System.out.println("   cdk deploy --no-execute --require-approval never");
             }
-            case "5" -> {
-                exportTemplate(config.stackName);
+            case "5" -> exportTemplate(app, config.stackName);
+            case "6" -> {
+                DeploymentResult result = deployLocalTarget(config, DeploymentTarget.MINISTACK);
+                maybePrintManagerHint(config, result == null ? null : result.outputs(), DeploymentTarget.MINISTACK);
+            }
+            case "7" -> {
+                DeploymentResult result = runFullMiniStackPipeline(config);
+                maybePrintManagerHint(config, result == null ? null : result.outputs(), DeploymentTarget.MINISTACK);
+            }
+            case "8" -> {
+                DeploymentResult result = deployLocalTarget(config, DeploymentTarget.LOCALSTACK);
+                maybePrintManagerHint(config, result == null ? null : result.outputs(), DeploymentTarget.LOCALSTACK);
             }
             default -> {
-                System.out.println("\n📋 Synthesis complete. To deploy, run:");
-                System.out.println("   cdk deploy");
+                System.out.println("\n📋 Synthesis complete. To deploy:");
+                System.out.println("   Option 2 — AWS (cdk deploy)");
+                System.out.println("   Option 6 — MiniStack (local emulator)");
+                System.out.println("   Option 8 — LocalStack (local emulator)");
             }
         }
     }
 
-    private static void exportTemplate(String stackName) {
+    private static void exportTemplate(App app, String stackName) {
         try {
-            // Read the synthesized JSON template from cdk.out
-            java.nio.file.Path templatePath = java.nio.file.Paths.get("cdk.out", stackName + ".template.json");
-            if (!java.nio.file.Files.exists(templatePath)) {
-                System.out.println("❌ Template not found: " + templatePath);
-                return;
-            }
-
+            java.nio.file.Path templatePath = CanonicalTemplateResolver.resolve(
+                Paths.get("cdk.out"), stackName, synthesizedAssembly);
             String jsonContent = java.nio.file.Files.readString(templatePath);
 
             // Ask user for format with clear visual separation
@@ -1848,6 +1899,81 @@ public class InteractiveDeployer {
 
         } catch (Exception e) {
             System.out.println("❌ Error exporting template: " + e.getMessage());
+        }
+    }
+
+    private static void printPreparedDefaults(DeploymentConfig config, String deploymentOption) {
+        String target = deploymentTargetFromOption(deploymentOption);
+        DeploymentContextPreparer.PrepareResult result =
+            DeploymentContextPreparer.prepare(config, config.applicationSpec, target);
+        if (result.messages().isEmpty()) {
+            return;
+        }
+        System.out.println("\n📋 Applied ApplicationSpec / deployment defaults:");
+        for (String message : result.messages()) {
+            System.out.println("  • " + message);
+        }
+    }
+
+    private static String deploymentTargetFromOption(String deploymentOption) {
+        if (deploymentOption == null) {
+            return null;
+        }
+        return switch (deploymentOption.trim()) {
+            case "2", "3" -> "aws";
+            case "6", "7" -> "ministack";
+            case "8" -> "localstack";
+            default -> null;
+        };
+    }
+
+    /**
+     * Prints a post-deploy install checklist for CloudForge Manager: the real URL resolved
+     * from the just-deployed stack's own CFN outputs (same precedence
+     * {@code CloudFormationInventory} uses, via the shared
+     * {@link com.cloudforge.core.local.PreferredUrlResolver}), plus auth-mode-specific next
+     * steps — a Cognito callback URL to register for {@code application-oidc}, or a note on
+     * where first-run setup is reachable from for {@code none}. {@code outputs} is null/empty
+     * for the AWS {@code cdk deploy} subprocess paths (choices 2/3), which print CFN's own
+     * "Outputs:" section directly to the console (inherited stdio) but don't hand back a
+     * structured result to resolve a URL from here — that gap is tracked, not silently masked
+     * by falling back to a possibly-stale config URL.
+     */
+    private static void maybePrintManagerHint(
+            DeploymentConfig config, java.util.Map<String, String> outputs, DeploymentTarget target) {
+        if (config == null || !"cloudforge-manager".equals(config.applicationId)) {
+            return;
+        }
+        String url = com.cloudforge.core.local.PreferredUrlResolver.preferredUrl(outputs);
+        if (url == null || url.isBlank()) {
+            ApplicationPropertyLoader.applyPropertyDefaults(config);
+            url = config.managerUrl;
+            if (url == null || url.isBlank()) {
+                url = ApplicationPropertyLoader.resolve("cfc.manager.url");
+            }
+        }
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        String base = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+        System.out.println("\n📋 CloudForge Manager install checklist:");
+        System.out.println("   Open:   " + url);
+        System.out.println("   Health: " + base + "/api/v1/health");
+        String authMode = config.authMode == null ? "none" : config.authMode.getValue();
+        System.out.println("   Auth:   " + authMode);
+        boolean localEmulator = target == DeploymentTarget.MINISTACK || target == DeploymentTarget.LOCALSTACK;
+        switch (authMode) {
+            case "application-oidc" -> System.out.println(
+                "   Register this callback URL with the Cognito app client: "
+                    + base + "/api/v1/auth/oidc/callback");
+            case "alb-oidc" -> System.out.println(
+                "   ALB owns the Cognito redirect — no callback URL to register here; "
+                    + "confirm the ALB listener rule's Cognito action points at this stack.");
+            default -> System.out.println(localEmulator
+                ? "   First-run setup: open the URL above — MiniStack/LocalStack are reachable directly."
+                : "   First-run setup requires loopback access or a CFC_MANAGER_SETUP_TOKEN header "
+                    + "(X-CFC-Setup-Token) — see ManagerLocalAccess.setupAllowed. CloudForge does not "
+                    + "currently generate/inject this token at deploy time for AWS.");
         }
     }
 
@@ -2165,14 +2291,12 @@ public class InteractiveDeployer {
         System.out.println("  provisionDatabase: " + config.provisionDatabase);
         System.out.println("  complianceFrameworks: '" + config.complianceFrameworks + "'");
         System.out.println("  region: '" + config.region + "'");
+        System.out.println("  domain: '" + config.domain + "'");
+        System.out.println("  authMode: " + config.authMode);
+        System.out.println("  enableSsl: " + config.enableSsl);
 
         // Pass false to prevent overwriting the saved deployment-context.json
         deployInfrastructure(config, deploymentOption, false);
-    }
-
-    private static Map<String, Object> buildCfcContext(DeploymentConfig config) {
-        // Use DeploymentConfig's built-in Jackson serialization (replaces manual ObjectMapper config)
-        return config.toContextMap();
     }
 
     private static void printConfiguration(DeploymentConfig config) {
@@ -2926,6 +3050,104 @@ public class InteractiveDeployer {
                         .build();
             }
         };
+    }
+
+    // ============================================================================
+    // LOCAL TARGET DEPLOYMENT (delegates to cloudforge-api)
+    // ============================================================================
+
+    private static DeploymentResult deployLocalTarget(
+            DeploymentConfig config,
+            DeploymentTarget target) {
+        String targetLabel = DeploymentResultPrinter.targetLabel(target);
+        warnIfAuthModeUnsupportedOnTarget(config, target);
+        try {
+            DeploymentResultPrinter.printDeployStarted(targetLabel);
+            var extension = ApplicationDeploymentExtensions.find(config.applicationId)
+                .filter(candidate -> candidate.supports(target));
+            if (extension.isPresent()) {
+                extension.get().beforeDeploy(config, target, Path.of("").toAbsolutePath().normalize());
+            }
+            DeploymentResult result = LocalDeploymentShell.deploy(
+                config,
+                target,
+                synthesizedAssembly,
+                DeployOptions.defaults());
+            if (extension.isPresent()) {
+                extension.get().afterDeploy(config, target, Path.of("").toAbsolutePath().normalize());
+            }
+            DeploymentResultPrinter.printDeployMetadata(result);
+            DeploymentResultPrinter.printOutcome(result, targetLabel, config.applicationId);
+            return result;
+        } catch (IOException e) {
+            System.err.println("❌ " + e.getMessage());
+            throw new RuntimeException(e);
+        } catch (Exception e) {
+            System.err.println("❌ " + targetLabel + " deployment failed: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Warns (does not block) when the configured auth mode isn't in the ApplicationSpec's
+     * target-aware supported list — e.g. {@code alb-oidc} on MiniStack/LocalStack, where there's
+     * no real ALB and the template adapter silently strips the OIDC listener action instead of
+     * deploying what was configured. Uses {@code ApplicationSpec.getSupportedAuthModes(String)}
+     * — a target-aware override any {@code ApplicationSpec} can provide (default: same as the
+     * no-arg list; {@code CloudForgeManagerApplicationSpec} overrides it) — that
+     * {@code collectConfiguration()} can't apply when the auth-mode prompt runs, since the
+     * deploy target isn't chosen until later in the flow (menu option 6/7/8/2/3). This is the
+     * decision-tree gap from the plan surfaced as a runtime check instead of docs alone: laptop/
+     * MiniStack/LocalStack vs AWS support different auth-mode sets, and picking one during
+     * config that the eventual target doesn't fully support previously deployed silently instead
+     * of telling the operator.
+     */
+    private static void warnIfAuthModeUnsupportedOnTarget(DeploymentConfig config, DeploymentTarget target) {
+        if (config.applicationSpec == null || config.authMode == null) {
+            return;
+        }
+        java.util.List<String> supported = config.applicationSpec.getSupportedAuthModes(target.configKey());
+        String configured = config.authMode.getValue();
+        if (!supported.contains(configured)) {
+            System.out.println("\n⚠️  authMode '" + configured + "' is not fully supported on "
+                + DeploymentResultPrinter.targetLabel(target) + " (supported: " + supported + "). "
+                + "The template adapter may strip or downgrade it — for example, ALB OIDC actions "
+                + "are removed on local emulators, which have no real ALB — so deployed behavior "
+                + "may differ from what you configured.");
+        }
+    }
+
+    private static DeploymentResult runFullMiniStackPipeline(DeploymentConfig config) {
+        System.out.println("\n🏗️  MiniStack Synthesis and Validation");
+        System.out.println("=======================================");
+
+        System.out.println("\n📋 Step 1: Compliance Validation (cdk-nag + FrameworkRules)...");
+        System.out.println("\n📋 Step 2: cfn-guard Validation...");
+        boolean guardPassed = runCfnGuardValidation(config);
+        if (!guardPassed) {
+            throw new IllegalStateException("cfn-guard validation failed");
+        }
+
+        System.out.println("\n📋 Step 3: Deploy to MiniStack...");
+        DeploymentResult result = deployLocalTarget(config, DeploymentTarget.MINISTACK);
+
+        System.out.println("\n📋 Step 4: Verification...");
+        verifyMiniStackDeployment(config);
+
+        System.out.println("\n✅ MiniStack synthesis and validation complete!");
+        return result;
+    }
+
+    /**
+     * Verify a MiniStack deployment by checking stack status.
+     */
+    private static void verifyMiniStackDeployment(DeploymentConfig config) {
+        try {
+            DeploymentResult result = LocalDeploymentShell.verify(config, DeploymentTarget.MINISTACK);
+            DeploymentResultPrinter.printVerify(result);
+        } catch (Exception e) {
+            throw new RuntimeException("MiniStack verification failed", e);
+        }
     }
 
     // ============================================================================

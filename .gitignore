@@ -10,6 +10,13 @@ pom.xml.versionsBackup
 *.ipr
 *.iws
 
+# Eclipse / MyEclipse project + run-configuration files (local machine only, not shared)
+.project
+.classpath
+.settings/
+.launch
+*.launch
+
 # OS files
 .DS_Store
 # CDK artifacts (contains AWS account numbers and sensitive info)
@@ -30,6 +37,12 @@ credentials
 .env.production
 .env.staging
 .env.development
+
+# Local emulator volume roots
+.ministack-volumes/
+.localstack-volumes/
+.stackport-volumes/
+.emulator-edge/
 
 # Log files that might contain sensitive info
 *.log
@@ -66,9 +79,20 @@ venv.bak/
 *.backup
 *.orig
 
+# Local working notes (not for commit)
+*.local.md
+*.plan.md
+
 # OWASP Dependency-Check reports
 dependency-check-report.html
 dependency-check-report.json
 dependency-check-report.xml
 dependency-check-report.csv
 **/dependency-check-report.*
+
+# Split into their own repos (CloudForgeCI/cloudforge-manager,
+# CloudForgeCI/cloudforge-manager-deployment) — no longer part of cfc-core's reactor or
+# dependencyManagement (see root pom.xml). Kept as working-tree checkouts here for local dev
+# convenience, but never tracked by cfc-core's own git history.
+/cloudforge-manager/
+/cloudforge-manager-deployment/

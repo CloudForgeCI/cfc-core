@@ -201,7 +201,7 @@ public class TestInfrastructureBuilder {
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
                         software.amazon.awscdk.services.ec2.InstanceClass.T3,
                         software.amazon.awscdk.services.ec2.InstanceSize.MICRO))
-                .machineImage(software.amazon.awscdk.services.ec2.MachineImage.latestAmazonLinux())
+                .machineImage(software.amazon.awscdk.services.ec2.MachineImage.latestAmazonLinux2023())
                 .minCapacity(1)
                 .maxCapacity(1)
                 .desiredCapacity(1)
@@ -263,12 +263,13 @@ public class TestInfrastructureBuilder {
     }
 
     public TestInfrastructureBuilder createAlarms() {
-        AlarmFactory alarmFactory = new AlarmFactory(stack, "Alarms", null);
+        // Constructing registers this Construct on `stack`; the reference itself isn't needed.
+        new AlarmFactory(stack, "Alarms", null);
         return this;
     }
 
     public TestInfrastructureBuilder createScaling() {
-        ScalingFactory scalingFactory = new ScalingFactory(stack, "Scaling");
+        new ScalingFactory(stack, "Scaling");
         return this;
     }
 
@@ -339,6 +340,11 @@ public class TestInfrastructureBuilder {
         return this;
     }
 
+    public TestInfrastructureBuilder withApplicationId(String applicationId) {
+        updateContext("applicationId", applicationId);
+        return this;
+    }
+
     public TestInfrastructureBuilder withCognitoAutoProvision(boolean enabled) {
         updateContext("cognitoAutoProvision", enabled);
         return this;
@@ -351,6 +357,11 @@ public class TestInfrastructureBuilder {
 
     public TestInfrastructureBuilder withCognitoDomainPrefix(String prefix) {
         updateContext("cognitoDomainPrefix", prefix);
+        return this;
+    }
+
+    public TestInfrastructureBuilder withManagerDirectDeployEnabled(boolean enabled) {
+        updateContext("managerDirectDeployEnabled", enabled);
         return this;
     }
 

@@ -109,16 +109,16 @@ public class PluginDiscoveryTest {
         System.out.println("\n🔧 Testing Built-In Applications");
         System.out.println("=================================\n");
 
-        // Test some known built-in applications
+        // Test some known built-in applications (must resolve via ServiceLoader). cloudforge-manager
+        // is deliberately excluded — it lives in cloudforge-manager-deployment, its own repo, not a
+        // dependency of cfc-testing; cfc-core's own validation only covers cloudforge-api,
+        // cloudforge-core, cloudforge-localstack, and cloudforge-ministack.
         String[] knownApps = {"jenkins", "gitlab", "grafana", "vault", "postgresql"};
 
         for (String appId : knownApps) {
             Optional<ApplicationSpec> spec = ApplicationLoader.findById(appId);
-            if (spec.isPresent()) {
-                System.out.println("  ✅ " + spec.get().displayName() + " (" + appId + ") - " + spec.get().category());
-            } else {
-                System.out.println("  ⚠️  " + appId + " not found");
-            }
+            assertTrue(spec.isPresent(), "Built-in application not discovered: " + appId);
+            System.out.println("  ✅ " + spec.get().displayName() + " (" + appId + ") - " + spec.get().category());
         }
         System.out.println();
     }

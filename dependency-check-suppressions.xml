@@ -96,4 +96,62 @@
        <cve>CVE-2021-23497</cve>
     </suppress>
 
+    <!--
+    aws-cdk-lib bundled npm tooling (minimatch, yaml): real packages at real vulnerable
+    versions, not a detection error, these ARE npm packages, not misidentified data files
+    like the awscli suppressions above. Suppressed on criterion 3 (CVE doesn't apply to our
+    usage pattern), based on tracing the actual bundled JS source in
+    aws-cdk-lib-2.196.0.jsii.tgz, not assumption:
+
+    - minimatch@3.1.2 has exactly two call sites in aws-cdk-lib core: GlobIgnoreStrategy
+      (core/lib/fs/ignore.js), reached only via Code.fromAsset()/Source.asset()/
+      BucketDeployment's `exclude` option, cloudforge-api never calls any of those APIs
+      anywhere (every app here deploys from a pre-built Docker image, never local asset
+      bundling), so this path is unreachable. And Stack's bundling-gate check
+      (core/lib/stack.js), which matches CDK's own internal construct path against a
+      context-supplied pattern list defaulting to ["**"], we never set BUNDLING_STACKS
+      context, and the tested string is never attacker input.
+    - yaml@1.10.2's real callers are core/lib/private/yaml-cfn.js and aws-eks/lib/cluster.js
+      (Kubernetes manifest parsing). cloudforge-api uses neither EKS nor CfnInclude anywhere.
+
+    Re-verified newer aws-cdk-lib releases don't fix this by version bump alone: checked
+    2.196.0 (pinned), 2.196.1 (same-line patch), and 2.199.0 (latest available at suppression
+    time), all three bundle the identical minimatch@3.1.2/yaml@1.10.2. Not a "we're behind"
+    situation; AWS hasn't updated these internal build-tooling deps in any recent release.
+    Bumping past 2.196.0 also isn't free regardless, see cdk.version's own pom.xml comment
+    on why 2.197.0+ was deliberately avoided (nodejs22.x AwsCustomResource default,
+    unavailable in some regions).
+    -->
+
+    <suppress until="2026-11-22Z">
+       <notes><![CDATA[
+       CVE doesn't apply to our usage: ReDoS requires attacker control over the glob
+       *pattern* passed to minimatch, not just the tested string. Traced both real call
+       sites in aws-cdk-lib core -- GlobIgnoreStrategy is only reached via CDK asset-bundling
+       APIs (Code.fromAsset/Source.asset/BucketDeployment's exclude option) that
+       cloudforge-api never calls; every application here deploys from a pre-built Docker
+       image, never local file-asset bundling. See dependency-check-suppressions.xml's own
+       header comment above this block for the full trace, including confirmation that newer
+       aws-cdk-lib releases (checked through 2.199.0) still bundle this exact version.
+       ]]></notes>
+       <packageUrl regex="true">^pkg:npm/minimatch@.*$</packageUrl>
+       <cve>CVE-2026-26996</cve>
+       <cve>CVE-2026-27903</cve>
+       <cve>CVE-2026-27904</cve>
+    </suppress>
+
+    <suppress until="2026-11-22Z">
+       <notes><![CDATA[
+       CVE doesn't apply to our usage: requires the yaml library to actually parse
+       attacker-supplied YAML text. Its real callers inside aws-cdk-lib
+       (core/lib/private/yaml-cfn.js, aws-eks/lib/cluster.js) are CFN-YAML-template and EKS
+       Kubernetes-manifest parsing -- cloudforge-api uses neither EKS nor CfnInclude anywhere.
+       See dependency-check-suppressions.xml's own header comment above this block for the
+       full trace, including confirmation that newer aws-cdk-lib releases (checked through
+       2.199.0) still bundle this exact version.
+       ]]></notes>
+       <packageUrl regex="true">^pkg:npm/yaml@.*$</packageUrl>
+       <cve>CVE-2026-33532</cve>
+    </suppress>
+
 </suppressions>

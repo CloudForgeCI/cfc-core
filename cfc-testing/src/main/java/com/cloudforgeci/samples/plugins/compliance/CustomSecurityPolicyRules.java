@@ -50,7 +50,7 @@ import java.util.logging.Logger;
 @ComplianceFramework(
     value = "CustomSecurity",
     priority = 60,
-    alwaysLoad = true,  // Always enforce internal security policy
+    alwaysLoad = false,  // Only load when explicitly enabled via complianceFrameworks
     displayName = "ACME Security Policy",
     description = "Internal security and compliance requirements for ACME Corporation"
 )

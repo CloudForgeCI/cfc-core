@@ -178,8 +178,19 @@ public class AlbFactory extends BaseFactory {
                     new IStringProducer() {
                         @Override
                         public String produce(IResolveContext context) {
-                            // STACK-SPECIFIC bucket name to avoid conflicts between stacks
-                            return (stackName + "-alb-logs-" + accountId + "-" + effectiveRegion).toLowerCase();
+                            // STACK-SPECIFIC bucket name to avoid conflicts between stacks.
+                            //
+                            // Real bug: calling .toLowerCase() on the WHOLE composite string — including
+                            // the embedded accountId token — corrupts CDK's token marker (e.g.
+                            // "${Token[AWS.AccountId.7]}" becomes "${token[aws.accountid.7]}"), which no
+                            // longer matches anything in CDK's token registry. Instead of resolving back
+                            // into a proper Fn::Sub/Ref against AWS::AccountId, the now-broken marker text
+                            // leaks straight through into the synthesized template as a literal string —
+                            // producing bucket names like "teset-alb-logs-${token[aws.accountid.7]}-us-east-1"
+                            // that both real S3 and LocalStack reject as invalid. Account IDs are always
+                            // numeric digits (case has no effect on them), so only the literal parts need
+                            // lowercasing — the token itself must pass through untouched.
+                            return stackName.toLowerCase() + "-alb-logs-" + accountId + "-" + effectiveRegion.toLowerCase();
                         }
                     },
                     LazyStringValueOptions.builder()
@@ -311,13 +322,6 @@ public class AlbFactory extends BaseFactory {
     }
 
     /**
-     * Validate prerequisites for ALB access logging.
-     *
-     * @param region The AWS region (must not be null, empty, or contain CDK tokens)
-     * @param stackName The stack name (must not be null or empty)
-     * @return Error message if validation fails, null if validation passes
-     */
-    /**
      * Get or create ALB logs bucket with SSM tracking for PRODUCTION mode.
      *
      * For PRODUCTION mode:
@@ -407,6 +411,24 @@ public class AlbFactory extends BaseFactory {
                     .id("PCI.DSS.321-S3DefaultEncryptionKMS")
                     .reason("ALB access logging requires S3-managed encryption. KMS encryption is not " +
                            "supported for ALB access logs due to AWS service limitations.")
+                    .build(),
+                // Same three findings, flagged again under HIPAA's own rule IDs when HIPAA is one
+                // of the active compliance frameworks -- same justification as the PCI-DSS
+                // suppressions above, since the underlying architecture doesn't change per framework.
+                NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3BucketReplicationEnabled")
+                    .reason("S3 replication is not required for single-region deployments. " +
+                           "ALB access logs are retained with versioning enabled for compliance.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3BucketLoggingEnabled")
+                    .reason("ALB access logs bucket receives logs from ALB. Server access logging " +
+                           "would create circular dependency. CloudTrail S3 data events provide audit logging.")
+                    .build(),
+                NagPackSuppression.builder()
+                    .id("HIPAA.Security-S3DefaultEncryptionKMS")
+                    .reason("ALB access logging requires S3-managed encryption. KMS encryption is not " +
+                           "supported for ALB access logs due to AWS service limitations.")
                     .build()
             ),
             Boolean.TRUE
@@ -414,6 +436,13 @@ public class AlbFactory extends BaseFactory {
 
         // Store bucket ARN in SSM at deployment time using Custom Resource (stack-scoped)
         String ssmParameterName = "/cloudforge/shared/" + region + "/stack/" + this.stackName + "/alb-logs/bucket-arn";
+        // Scope the IAM policy to the exact parameter rather than resources: ["*"]
+        // Partition-aware (not a hardcoded "arn:aws" literal) — a literal breaks this custom
+        // resource's policy outside the standard AWS partition (GovCloud's "arn:aws-us-gov",
+        // China's "arn:aws-cn"), which this project's own compliance/FedRAMP-adjacent posture
+        // makes a plausible real target even though this codebase doesn't deploy there today.
+        String ssmParameterArn = "arn:" + Stack.of(this).getPartition() + ":ssm:" + region + ":"
+            + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
 
         AwsSdkCall putParameterCall = AwsSdkCall.builder()
                 .service("SSM")
@@ -434,7 +463,7 @@ public class AlbFactory extends BaseFactory {
                 .onUpdate(putParameterCall)
                 .policy(AwsCustomResourcePolicy.fromSdkCalls(
                         software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
+                                .resources(List.of(ssmParameterArn))
                                 .build()
                 ))
                 .build();
@@ -452,10 +481,6 @@ public class AlbFactory extends BaseFactory {
                     .id("PCI.DSS.321-LambdaInsideVPC")
                     .reason("CDK custom resource Lambdas only make AWS API calls (SSM) " +
                            "and do not require VPC access.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM5")
-                    .reason("SSM parameter operations require wildcard resource patterns.")
                     .build()
             ),
             Boolean.TRUE
@@ -515,6 +540,13 @@ public class AlbFactory extends BaseFactory {
         return bucket;
     }
 
+    /**
+     * Validate prerequisites for ALB access logging.
+     *
+     * @param region The AWS region (must not be null, empty, or contain CDK tokens)
+     * @param stackName The stack name (must not be null or empty)
+     * @return Error message if validation fails, null if validation passes
+     */
     private String validateLoggingPrerequisites(String region, String stackName) {
         if (region == null || region.isEmpty() || region.contains("$")) {
             return "Region is not available. Set 'region' in deployment context or CDK_DEFAULT_REGION environment variable";

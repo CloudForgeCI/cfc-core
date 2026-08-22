@@ -22,12 +22,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @ComplianceFramework(
-    value = "FEDRAMP",  // Matches config: "complianceFrameworks": "FEDRAMP"
-    priority = 50,       // Load order (lower = earlier)
-    displayName = "FedRAMP Moderate Baseline",
-    description = "Federal Risk and Authorization Management Program compliance"
+    value = "ACME-SECURITY",  // Matches config: "complianceFrameworks": "ACME-SECURITY"
+    priority = 50,             // Load order (lower = earlier)
+    displayName = "Acme Corp Internal Security Baseline",
+    description = "Example of an organization-specific compliance framework"
 )
-public class FedRampRules implements FrameworkRules<SystemContext> {
+public class AcmeRules implements FrameworkRules<SystemContext> {
 
     @Override
     public void install(SystemContext ctx) {
@@ -39,14 +39,14 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
 
             if (!config.isGuardDutyEnabled()) {
                 rules.add(ComplianceRule.fail(
-                    "FEDRAMP-AC-2",
-                    "GuardDuty required for account management (FedRAMP AC-2)",
+                    "ACME-AC-2",
+                    "GuardDuty required for account management (Acme AC-2)",
                     "Enable AWS GuardDuty"
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
-                    "FEDRAMP-AC-2",
-                    "GuardDuty enabled (FedRAMP AC-2)"
+                    "ACME-AC-2",
+                    "GuardDuty enabled (Acme AC-2)"
                 ));
             }
 
@@ -74,7 +74,7 @@ Add the JAR to your CloudForge project classpath, then:
 ```json
 {
   "cfc": {
-    "complianceFrameworks": "FEDRAMP",
+    "complianceFrameworks": "ACME-SECURITY",
     "auditManagerEnabled": true
   }
 }
@@ -225,7 +225,7 @@ frameworks.add(createStaticAdapter(HipaaRules.class, 10, false));
 **Step 1:** Create `META-INF/services/com.cloudforge.core.interfaces.FrameworkRules`
 
 ```
-com.example.compliance.FedRampRules
+com.example.compliance.AcmeRules
 com.example.compliance.Nist80053Rules
 ```
 
@@ -234,20 +234,20 @@ com.example.compliance.Nist80053Rules
 ```xml
 <!-- pom.xml -->
 <project>
-    <artifactId>cloudforge-fedramp-plugin</artifactId>
+    <artifactId>cloudforge-acme-plugin</artifactId>
     <version>1.0.0</version>
 
     <dependencies>
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-core</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.0</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-api</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
@@ -259,7 +259,7 @@ com.example.compliance.Nist80053Rules
 ```xml
 <dependency>
     <groupId>com.example</groupId>
-    <artifactId>cloudforge-fedramp-plugin</artifactId>
+    <artifactId>cloudforge-acme-plugin</artifactId>
     <version>1.0.0</version>
 </dependency>
 ```
@@ -269,7 +269,7 @@ com.example.compliance.Nist80053Rules
 ```json
 {
   "cfc": {
-    "complianceFrameworks": "FEDRAMP",
+    "complianceFrameworks": "ACME-SECURITY",
     "auditManagerEnabled": true
   }
 }
@@ -283,9 +283,9 @@ Users can drop your JAR file directly into their classpath:
 
 ```bash
 mvn install:install-file \
-  -Dfile=cloudforge-fedramp-plugin-1.0.0.jar \
+  -Dfile=cloudforge-acme-plugin-1.0.0.jar \
   -DgroupId=com.example \
-  -DartifactId=cloudforge-fedramp-plugin \
+  -DartifactId=cloudforge-acme-plugin \
   -Dversion=1.0.0 \
   -Dpackaging=jar
 ```
@@ -298,7 +298,7 @@ mvn install:install-file \
 
 ```java
 public record ComplianceRule(
-    String ruleId,                    // "FEDRAMP-AC-2"
+    String ruleId,                    // "ACME-AC-2"
     String description,               // Human-readable requirement
     Optional<String> configRuleId,    // AWS Config rule ID (optional)
     boolean passed,
@@ -311,15 +311,15 @@ public record ComplianceRule(
 ```java
 // Passing rule
 ComplianceRule.pass(
-    "FEDRAMP-AC-2",
-    "GuardDuty enabled (FedRAMP AC-2)",
+    "ACME-AC-2",
+    "GuardDuty enabled (Acme AC-2)",
     "GuardDutyEnabled"  // AWS Config rule ID
 );
 
 // Failing rule
 ComplianceRule.fail(
-    "FEDRAMP-AC-2",
-    "GuardDuty required (FedRAMP AC-2)",
+    "ACME-AC-2",
+    "GuardDuty required (Acme AC-2)",
     "GuardDutyEnabled",
     "Enable AWS GuardDuty for threat detection"
 );
@@ -362,7 +362,7 @@ See [SecurityProfileConfiguration.java](../interfaces/SecurityProfileConfigurati
 | **-10 to -5** | Cross-framework infrastructure | KeyManagement, DatabaseSecurity |
 | **-4 to 0** | Cross-framework security | ThreatProtection, IncidentResponse |
 | **10-20** | Core compliance frameworks | HIPAA (10), PCI-DSS (12), SOC2 (15), GDPR (18) |
-| **50-100** | Extended/contributed frameworks | ISO-27001 (50), FedRAMP (55), NIST 800-53 (60) |
+| **50-100** | Extended/contributed frameworks | ISO-27001 (50), NIST 800-53 (60) |
 | **100+** | Custom/organizational frameworks | Internal policies |
 
 **Rule:** Lower priority loads first. Use negative priorities for foundation rules that other frameworks depend on.
@@ -375,7 +375,7 @@ See [SecurityProfileConfiguration.java](../interfaces/SecurityProfileConfigurati
 
 ```java
 @Test
-void testFedRampAccessControl() {
+void testAcmeAccessControl() {
     App app = new App();
     Stack stack = new Stack(app, "TestStack");
 
@@ -383,7 +383,7 @@ void testFedRampAccessControl() {
     Map<String, Object> cfcContext = new HashMap<>();
     cfcContext.put("stackName", "TestStack");
     cfcContext.put("securityProfile", "PRODUCTION");
-    cfcContext.put("complianceFrameworks", "FEDRAMP");
+    cfcContext.put("complianceFrameworks", "ACME-SECURITY");
     cfcContext.put("auditManagerEnabled", true);
     stack.getNode().setContext("cfc", cfcContext);
 
@@ -398,7 +398,7 @@ void testFedRampAccessControl() {
     );
 
     // Install your framework
-    new FedRampRules().install(ctx);
+    new AcmeRules().install(ctx);
 
     // Verify it doesn't throw (compliance passes)
     assertDoesNotThrow(() -> Template.fromStack(stack));
@@ -412,7 +412,7 @@ void testFedRampAccessControl() {
 ### 1. **Use Specific Rule IDs**
 ```java
 // Good: Traceable to specific control
-"FEDRAMP-AC-2.1"
+"ACME-AC-2.1"
 
 // Bad: Generic
 "ACCESS_CONTROL_1"
@@ -421,7 +421,7 @@ void testFedRampAccessControl() {
 ### 2. **Map to AWS Config Rules**
 ```java
 ComplianceRule.fail(
-    "FEDRAMP-AC-2",
+    "ACME-AC-2",
     "GuardDuty required",
     "GuardDutyEnabled",  // ← AWS Config rule ID
     "Enable GuardDuty"
@@ -458,7 +458,7 @@ if (mode == ComplianceMode.ADVISORY) {
 ### 5. **Write Actionable Error Messages**
 ```java
 // Good: Tells user exactly what to do
-"Enable AWS GuardDuty for threat detection (FedRAMP AC-2)"
+"Enable AWS GuardDuty for threat detection (Acme AC-2)"
 
 // Bad: Vague
 "Security requirement not met"
@@ -466,7 +466,7 @@ if (mode == ComplianceMode.ADVISORY) {
 
 ---
 
-## Example: Complete FedRAMP Plugin
+## Example: Complete Framework Plugin
 
 See [Iso27001Rules.java](../core/rules/Iso27001Rules.java) for a complete working example demonstrating:
 - Instance-based design
@@ -477,7 +477,7 @@ See [Iso27001Rules.java](../core/rules/Iso27001Rules.java) for a complete workin
 
 ---
 
-## Migration Guide: v3.0.0 → v3.0.0 → future versions
+## Migration Guide: v2.x → v3.0.0 → v3.1.0+
 
 ### v3.0.0 (Static Methods Only)
 ```java
@@ -510,14 +510,14 @@ Same as v3.0.0, but static methods will be deprecated.
 
 **Check 1:** Verify ServiceLoader registration
 ```bash
-jar tf cloudforge-fedramp-plugin.jar | grep services
+jar tf cloudforge-acme-plugin.jar | grep services
 # Should show: META-INF/services/com.cloudforge.core.interfaces.FrameworkRules
 ```
 
 **Check 2:** Verify annotation
 ```java
-@ComplianceFramework(value = "FEDRAMP", priority = 50)  // ✓ Correct
-@ComplianceFramework("FEDRAMP")  // ✗ Missing priority
+@ComplianceFramework(value = "ACME-SECURITY", priority = 50)  // ✓ Correct
+@ComplianceFramework("ACME-SECURITY")  // ✗ Missing priority
 ```
 
 **Check 3:** Enable debug logging
@@ -529,10 +529,10 @@ Logger.getLogger("com.cloudforgeci.api.core.rules").setLevel(Level.FINE);
 
 **Check:** Ensure framework ID matches config
 ```java
-@ComplianceFramework(value = "FEDRAMP")  // Must match exactly
+@ComplianceFramework(value = "ACME-SECURITY")  // Must match exactly
 
 // In deployment context:
-"complianceFrameworks": "FEDRAMP"  // Case-sensitive!
+"complianceFrameworks": "ACME-SECURITY"  // Case-sensitive!
 ```
 
 ---
@@ -557,9 +557,9 @@ We welcome external compliance framework contributions! To add your plugin to th
 **Plugin Naming Convention:** `cloudforge-{framework}-plugin`
 
 Examples:
-- `cloudforge-fedramp-plugin`
 - `cloudforge-nist-plugin`
 - `cloudforge-iso27001-plugin`
+- `cloudforge-acme-plugin`
 
 ---
 

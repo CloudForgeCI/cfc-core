@@ -1,0 +1,23 @@
+{
+  "stackName": "CloudForgeManager-RDS-MySQL",
+  "applicationId": "cloudforge-manager",
+  "applicationName": "CloudForge Manager",
+  "description": "LocalStack Wave 2 Phase B — Manager with provisionDatabase (RDS MySQL)",
+  "environment": "development",
+  "runtime": "FARGATE",
+  "securityProfile": "DEV",
+  "topology": "APPLICATION_SERVICE",
+  "networkMode": "public-no-nat",
+  "region": "us-east-1",
+  "authMode": "none",
+  "provisionDatabase": true,
+  "databaseEngine": "mysql",
+  "databaseVersion": "8.0",
+  "cpu": 512,
+  "memory": 1024,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
+  "wafEnabled": false,
+  "enableMonitoring": false,
+  "logRetentionDays": 7
+}

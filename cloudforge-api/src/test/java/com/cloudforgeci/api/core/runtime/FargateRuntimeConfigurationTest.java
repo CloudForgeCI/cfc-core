@@ -129,6 +129,36 @@ class FargateRuntimeConfigurationTest {
     }
 
     @Test
+    void testFargateRuntimeConfigurationWithImportedCertificateArn() {
+        // Given: A Fargate deployment with SSL, no domain, but an imported ACM certificate ARN —
+        // should take priority over both the DNS-validated and Private CA paths, working with
+        // neither a Route53 zone nor a custom domain configured.
+        App app = new App();
+        Map<String, Object> context = new HashMap<>();
+        context.put("enableSsl", true);
+        context.put("certificateArn",
+            "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012");
+        Stack stack = new Stack(app, "TestFargateImportedCert");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestFargateImportedCert");
+        cfcContext.put("securityProfile", SecurityProfile.DEV.name());
+        cfcContext.putAll(context);
+        // Intentionally omit domain/fqdn — the imported ARN must not need either.
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.DEV, iamProfile, cfc);
+
+        FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
+
+        // When: Wiring with an imported certificate ARN and no domain
+        assertDoesNotThrow(() -> config.wire(ctx));
+    }
+
+    @Test
     void testFargateRuntimeConfigurationWithHttpToHttpsRedirect() {
         // Given: A Fargate deployment with HTTP to HTTPS redirect
         App app = new App();

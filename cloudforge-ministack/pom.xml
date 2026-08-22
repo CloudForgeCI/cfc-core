@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.cloudforgeci</groupId>
+    <artifactId>cfc-core</artifactId>
+    <version>3.2.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>cloudforge-ministack</artifactId>
+  <version>3.2.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  <name>CloudForge MiniStack</name>
+  <description>MiniStack local deployment adapter, deployer, and pipeline for CloudForge templates</description>
+
+  <properties>
+    <aws.sdk.version>2.25.0</aws.sdk.version>
+    <testcontainers.version>1.21.0</testcontainers.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.cloudforgeci</groupId>
+      <artifactId>cloudforge-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>cloudformation</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>ec2</artifactId>
+      <version>${aws.sdk.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>elasticloadbalancingv2</artifactId>
+      <version>${aws.sdk.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>route53</artifactId>
+      <version>${aws.sdk.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>acm</artifactId>
+      <version>${aws.sdk.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <excludedGroups>ministack</excludedGroups>
+        </configuration>
+      </plugin>
+      <!-- Coverage check deferred until deployer/runtime tests expand -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>check</id>
+            <phase>none</phase>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>ministack</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration combine.self="override">
+              <!-- Run full module test suite (unit + @Tag("ministack") integration) -->
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

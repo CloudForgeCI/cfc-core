@@ -2,13 +2,14 @@
 
 ## Overview
 
-CloudForge provides a powerful plugin system for custom applications, enabling developers to:
+Application plugins implement `ApplicationSpec` so CloudForge can configure an application for supported runtimes. A plugin can:
 
-- ✅ Deploy any application on AWS using CloudForge infrastructure
-- ✅ Support both Docker/ECS (Fargate) and EC2 deployments automatically
-- ✅ Distribute applications as standalone JAR files
-- ✅ Integrate with CloudForge's security, compliance, and OIDC systems
-- ✅ Reuse battle-tested infrastructure patterns (VPC, ALB, EFS, monitoring)
+- Define Docker/ECS (Fargate) and EC2 deployment behavior
+- Be distributed as a standalone JAR file
+- Integrate with CloudForge security-profile, validation, and OIDC hooks
+- Reuse VPC, ALB, EFS, and monitoring configuration
+
+Implement and test each runtime you intend to support; implementing the interface does not by itself validate an application for production use.
 
 ## Quick Start
 
@@ -29,7 +30,7 @@ CloudForge provides a powerful plugin system for custom applications, enabling d
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-core</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.0</version>
             <scope>provided</scope>
         </dependency>
 
@@ -37,7 +38,7 @@ CloudForge provides a powerful plugin system for custom applications, enabling d
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-api</artifactId>
-            <version>3.0.0</version>
+            <version>3.1.0</version>
             <scope>provided</scope>
         </dependency>
 
@@ -803,7 +804,7 @@ Optional<String> accessPointId = context.accessPointId();
 
 ## Best Practices
 
-### 1. ✅ DO: Support Both Runtimes
+### 1. Support Each Declared Runtime
 
 Test your application on both Fargate and EC2:
 
@@ -815,7 +816,7 @@ cdk deploy -c runtimeType=FARGATE
 cdk deploy -c runtimeType=EC2
 ```
 
-### 2. ✅ DO: Use Official Images
+### 2. Prefer Official Images
 
 Prefer official Docker images when available:
 - ✅ `jenkins/jenkins:lts`
@@ -823,7 +824,7 @@ Prefer official Docker images when available:
 - ✅ `hashicorp/vault:latest`
 - ❌ `random-user/jenkins:custom`
 
-### 3. ✅ DO: Configure Health Checks
+### 3. Configure Health Checks
 
 Provide application-specific health endpoints:
 
@@ -834,7 +835,7 @@ public String healthCheckPath() {
 }
 ```
 
-### 4. ✅ DO: Log Everything
+### 4. Configure Operational Logs
 
 Send logs to CloudWatch for debugging:
 
@@ -845,7 +846,7 @@ builder.addCommands(
 );
 ```
 
-### 5. ❌ DON'T: Hard-Code Credentials
+### 5. Do Not Hard-Code Credentials
 
 Never hard-code passwords or secrets:
 
@@ -857,7 +858,7 @@ environment.put("DB_PASSWORD", "hardcoded");
 environment.put("DB_PASSWORD_SECRET_ARN", secretArn);
 ```
 
-### 6. ❌ DON'T: Assume Filesystem Paths
+### 6. Do Not Assume Filesystem Paths
 
 Check context for EFS vs EBS:
 
@@ -965,7 +966,7 @@ java -cp "cloudforge-api.jar:vault-application-1.0.0.jar" ...
 
 ## Example Application Plugins
 
-Here are application ideas you can implement:
+The repository includes some of these application specifications; the remaining entries are possible plugin ideas. Check the application catalog and source before relying on a listed integration.
 
 ### CI/CD Tools
 - ✅ Jenkins (built-in)
@@ -1003,10 +1004,10 @@ Here are application ideas you can implement:
 
 ## Support and Community
 
-- **Documentation:** https://github.com/cloudforgeci/cfc-core/docs
+- **Documentation:** https://github.com/cloudforgeci/cfc-core/tree/main/docs
 - **Issues:** https://github.com/cloudforgeci/cfc-core/issues
-- **Examples:** https://github.com/cloudforgeci/cfc-core/tree/main/examples/applications
+- **Reference plugin:** https://github.com/CloudForgeCI/cloudforge-sample
 
 ---
 
-**Happy Application Development!** 🚀
+For plugin discovery and registration details, see the [Plugin System](PLUGIN-SYSTEM.md).

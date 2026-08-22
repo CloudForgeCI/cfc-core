@@ -214,6 +214,11 @@ public class GitLabOidcIntegration implements OidcIntegration {
     }
 
     @Override
+    public String getOidcCallbackPath() {
+        return "/users/auth/openid_connect/callback";
+    }
+
+    @Override
     public String getPostDeploymentInstructions() {
         return """
                 GitLab OIDC Integration Completed

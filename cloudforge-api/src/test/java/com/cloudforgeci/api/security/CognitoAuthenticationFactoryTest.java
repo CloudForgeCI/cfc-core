@@ -102,6 +102,48 @@ class CognitoAuthenticationFactoryTest {
         assertDoesNotThrow(factory::create);
     }
 
+    /** Managed Login branding (Cognito's own default styling, not the classic Hosted UI's plain
+     *  look) — real regression this guards: the domain's own managedLoginVersion=2 has to be set
+     *  via the L1 escape hatch (the L2 UserPoolDomain construct doesn't surface that property
+     *  yet). Inspects the construct tree directly rather than {@code Template.fromStack} — full
+     *  synthesis here trips SystemContext's own cross-factory validation (real VPC/ALB/Fargate
+     *  required), the same reason OidcAuthenticationFactoryTest's equivalent tests are {@code
+     *  @Disabled} rather than standing up that whole scaffold just for this. */
+    @Test
+    void testManagedLoginBrandingIsEnabledOnAutoProvisionedDomain() {
+        App app = new App();
+        Stack stack = new Stack(app, "TestCognitoBranding");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestCognitoBranding");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("domain", "example.com");
+        cfcContext.put("enableSsl", true);
+        cfcContext.put("fqdn", "app.example.com");
+        cfcContext.put("authMode", "alb-oidc");
+        cfcContext.put("cognitoAutoProvision", true);
+        cfcContext.put("cognitoDomainPrefix", "test-branding-auth");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        CognitoAuthenticationFactory factory = new CognitoAuthenticationFactory(stack, "Cognito");
+        factory.create();
+
+        var userPoolDomain = (software.amazon.awscdk.services.cognito.CfnUserPoolDomain)
+            factory.getNode().findChild("UserPoolDomain").getNode().getDefaultChild();
+        assertEquals(2, userPoolDomain.getManagedLoginVersion());
+
+        var branding = (software.amazon.awscdk.services.cognito.CfnManagedLoginBranding)
+            factory.getNode().findChild("ManagedLoginBranding");
+        assertEquals(Boolean.TRUE, branding.getUseCognitoProvidedValues());
+        assertNotNull(branding.getClientId());
+        assertNotNull(branding.getUserPoolId());
+    }
+
     @Test
     void testCognitoAuthenticationFactoryWithMfaTOTP() {
         // Given: A stack with TOTP MFA enabled

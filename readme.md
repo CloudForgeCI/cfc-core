@@ -1,71 +1,76 @@
-# CloudForge 3.0.0 — Compliance-Ready AWS Infrastructure Framework
+# CloudForge CI 3.2.0 — AWS Infrastructure Framework
 
-**Open-source infrastructure-as-code framework for deploying secure, auditable application workloads on AWS**
+CloudForge CI is an open-source infrastructure-as-code project for defining and deploying
+application workloads on AWS. Its CloudForge tool provides the deployment and validation
+workflows described below.
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.cloudforgeci/cloudforge-api)](https://central.sonatype.com/artifact/com.cloudforgeci/cloudforge-api)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 
-Deploy secure, compliance-ready application infrastructure on AWS in minutes. **10+ applications across 8 categories**: CI/CD (Jenkins, GitLab, Drone), Version Control (Gitea), Monitoring (Grafana, Prometheus), Databases (PostgreSQL, Redis), Secrets Management (Vault), Artifact Registry (Nexus, Harbor), Collaboration (Mattermost), and Analytics (Metabase, Superset). Built-in OIDC authentication (AWS Cognito, IAM Identity Center) and automated compliance validation for SOC2, HIPAA, PCI-DSS, GDPR, and ISO 27001.
+The framework includes definitions for **33 applications across 14 categories**: CI/CD (Jenkins, GitLab, Drone), version control (Gitea), monitoring (Grafana, Prometheus), databases (PostgreSQL, Redis), secrets management (Vault), artifact registries (Nexus, Harbor), collaboration (Mattermost), analytics (Metabase, Superset), and **19 CMS/e-commerce platforms** (WordPress, WooCommerce, Magento, Drupal, Joomla, PrestaShop, Moodle, MediaWiki, phpBB, and others). It supports OIDC authentication through AWS Cognito and IAM Identity Center, plus automated validation of infrastructure controls mapped to SOC 2, HIPAA, PCI DSS, GDPR, and ISO 27001.
 
-**📈 [Live Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** — Coverage, validation, compliance truth tables & drift detection
+**[Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** — Coverage, validation, compliance truth tables, and drift detection
 
-> **⚠️ IMPORTANT:** This software is provided "AS IS" under the Apache License 2.0. It is **compliance-ready**, not compliance-certified. While CloudForge provides tools, controls, and configurations designed to support compliance efforts, it does NOT guarantee compliance with any regulatory framework. Organizations are solely responsible for conducting their own compliance assessments, engaging qualified auditors and legal counsel, and meeting all applicable regulatory requirements. See [LICENSE](LICENSE) for full terms.
+> **Important:** This software is provided "AS IS" under the Apache License 2.0. CloudForge provides controls, validation, and framework mappings; it is not compliance-certified and does not guarantee compliance with any regulatory framework. Organizations remain responsible for their own compliance assessments, qualified audit and legal review, and applicable regulatory requirements. See [LICENSE](LICENSE) for full terms.
 
 ---
 
-## 📚 Documentation Hub
+## Documentation
 
-### 🚀 Getting Started
-- **[Quick Start Guide](docs/compliance/QUICK_START_GUIDE.md)** - Get running in 10 minutes
-- **[Sample Project](https://github.com/CloudForgeCI/cloudforge-sample)** - Complete working example
-- **[Interactive Deployer](docs/guides/INTERACTIVE_DEPLOYER.md)** - User-friendly CLI deployment tool
+### Getting Started
+- **[Local Emulator Quick Start](docs/guides/LOCAL_EMULATOR_QUICK_START.md)** - Build, MiniStack, and LocalStack from repository root
+- **[Quick Start Guide](docs/compliance/QUICK_START_GUIDE.md)** - Configure compliance validation
+- **[Sample Project](https://github.com/CloudForgeCI/cloudforge-sample)** - Example deployment project
+- **[CloudForge Sample BOM Template](docs/architecture/cloudforge-sample-bom.template.md)** - Standalone project POM & layout
+- **[Interactive Deployer](docs/guides/INTERACTIVE_DEPLOYER.md)** - CLI deployment tool
 
-### 🔌 Plugin System
-- **[Plugin Ecosystem Overview](docs/plugins/PLUGIN-ECOSYSTEM.md)** - 14 built-in applications + custom plugins
+### Plugin System
+- **[Plugin Ecosystem Overview](docs/plugins/PLUGIN-ECOSYSTEM.md)** - 33 built-in applications + custom plugins
 - **[Plugin System Guide](docs/plugins/PLUGIN-SYSTEM.md)** - Architecture and development
 - **[Application Plugin Guide](docs/plugins/APPLICATION-PLUGIN-GUIDE.md)** - Build custom application plugins
 - **[Compliance Plugin Guide](docs/plugins/COMPLIANCE-PLUGIN-GUIDE.md)** - Build compliance framework plugins
 
-### 🔐 Security & Authentication
+### Security & Authentication
 - **[OIDC Integration Guide](docs/applications/OIDC.md)** - Application-level OIDC (Grafana, GitLab, Jenkins)
-- **[Identity Center Setup](docs/setup/AWS_IDENTITY_CENTER_SETUP.md)** - Enterprise SSO with ALB-OIDC (Okta, Auth0)
+- **[Identity Center Setup](docs/setup/AWS_IDENTITY_CENTER_SETUP.md)** - SSO with ALB-OIDC (Okta, Auth0)
 - **[Cognito MFA Setup](docs/setup/COGNITO_MFA_COMPLIANCE_SETUP.md)** - AWS Cognito user pools with MFA for compliance
 - **[IAM Best Practices](docs/guides/IAM_RULES.md)** - IAM security rules and policies
 - **[Security Hardening](SECURITY.md)** - Security best practices
 
-### 💾 Database (RDS) Integration
+### Database (RDS) Integration
 - **[Database Deployment Guide](docs/databases/DATABASE-DEPLOYMENT-GUIDE.md)** - RDS provisioning, compliance, and automated remediation
 
-### ✅ Compliance
-- **[Compliance Overview](docs/compliance/README.md)** - Complete compliance documentation hub
+### Compliance
+- **[Compliance Overview](docs/compliance/README.md)** - Compliance documentation index
 - **[Compliance Posture & Testing](docs/COMPLIANCE_POSTURE.md)** - Infrastructure control status & coverage analysis
 - **[Auditor Compliance Mapping](docs/AUDITOR_COMPLIANCE_MAPPING.md)** - Control mappings for external audits
 - **[Automated Compliance](docs/compliance/AUTOMATED_COMPLIANCE.md)** - Auto-remediation features
 - **[Multi-Framework Guide](docs/compliance/MULTI_FRAMEWORK_COMPLIANCE.md)** - SOC2, HIPAA, PCI-DSS, GDPR
 - **[S3 Versioning Remediation](docs/compliance/S3_VERSIONING_REMEDIATION.md)** - Automatic versioning
 - **[PCI-DSS Compliance](docs/compliance/PCI_DSS_COMPLIANCE.md)** - Payment card security
-- **[Security Rules](docs/guides/SECURITY_RULES_README.md)** - Comprehensive guidelines
+- **[Security Rules](docs/guides/SECURITY_RULES_README.md)** - Security guidelines
 
-### 📖 Advanced Topics
+### Advanced Topics
+- **[CloudForge Sample BOM Template](docs/architecture/cloudforge-sample-bom.template.md)** - External deployment project template
 - **[Deployment Guide](docs/compliance/DEPLOYMENT_GUIDE.md)** - Production strategies
 - **[AWS Config Multi-Stack](docs/compliance/AWS_CONFIG_MULTI_STACK.md)** - Multi-account setup
-- **[Extended Testing](docs/guides/EXTENDED-TESTING.md)** - Comprehensive testing (deployment configurations)
+- **[Extended Testing](docs/guides/EXTENDED-TESTING.md)** - Testing deployment configurations
 - **[Compliance Truth Tables](docs/testing/COMPLIANCE_TRUTH_TABLES.md)** - Systematic compliance rules testing
 - **[AWS Audit Manager](docs/AUDIT_MANAGER.md)** - Continuous auditing
 
-### 📊 Reports & Testing
-- **[📈 Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** - Live coverage, validation, compliance & drift reports
+### Reports & Testing
+- **[Test Reports Dashboard](https://cloudforgeci.github.io/cfc-core/)** - Published coverage, validation, compliance, and drift reports
 
-### 📑 Indexes
+### Indexes
 - **[Documentation Index](docs/README.md)** - All documentation
 - **[Compliance README](docs/compliance/README.md)** - All compliance docs
 
 ---
 
-## 🎯 Quick Start
+## Quick Start
 
-### Option 1: Use the Sample Project (Recommended)
+### Option 1: Use the Sample Project
 
 ```bash
 git clone https://github.com/CloudForgeCI/cloudforge-sample.git
@@ -75,13 +80,13 @@ mvn clean package
 cdk deploy
 ```
 
-Includes example configurations for all scenarios: OIDC/Cognito auth, SOC2/HIPAA/PCI-DSS/GDPR compliance, EC2 and Fargate runtimes.
+Includes example configurations for OIDC/Cognito authentication, controls mapped to SOC 2, HIPAA, PCI DSS, and GDPR, and EC2 and Fargate runtimes.
 
 ### Option 2: Add to Your Existing Project
 
 ```xml
 <properties>
-  <cloudforge.version>2.0.6</cloudforge.version>
+  <cloudforge.version>3.2.0</cloudforge.version>
 </properties>
 
 <dependencies>
@@ -100,13 +105,29 @@ Check [Maven Central](https://central.sonatype.com/artifact/com.cloudforgeci/clo
 ```bash
 git clone https://github.com/CloudForgeCI/cfc-core.git
 cd cfc-core
-./mvnw -T1C -DskipTests install  # Fast build (skip tests)
-./mvnw clean verify               # Full build with tests
+mvn -T1C -DskipTests -Djacoco.skip=true install  # Fast build (skip tests)
+mvn clean verify                                   # Full build with tests
 ```
+
+### Option 4: MiniStack or LocalStack (no AWS account)
+
+From the repository root after `mvn install`:
+
+```bash
+# Start MiniStack or LocalStack from the Interactive Deployer platform menu.
+# `--platform` lists target-owned lifecycle actions.
+cd cfc-testing
+java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer --platform
+
+# LocalStack requires LOCALSTACK_AUTH_TOKEN.
+export LOCALSTACK_AUTH_TOKEN=...
+```
+
+Full build, synth, deploy, and StackPort steps: **[Local Emulator Quick Start](docs/guides/LOCAL_EMULATOR_QUICK_START.md)**.
 
 ---
 
-## ⚙️ Configuration Reference
+## Configuration Reference
 
 CloudForge uses `deployment-context.json` to configure deployments. **All properties are optional** unless marked **[required]**.
 
@@ -115,7 +136,7 @@ CloudForge uses `deployment-context.json` to configure deployments. **All proper
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `runtime` | string | `"fargate"` | **Compute platform:** `"ec2"` or `"fargate"` |
-| `topology` | string | `"jenkins-service"` | **Architecture:** `"jenkins-service"` (HA), `"jenkins-single-node"`, or `"s3-website"` |
+| `topology` | string | `"jenkins-service"` | **Architecture:** `"jenkins-service"` (HA), `"application-service"` (any app), `"cms-service"` (PHP/CMS — auto-wires S3, Redis, CDN), or `"s3-website"` |
 | `securityProfile` | string | `"dev"` | **Security level:** `"dev"`, `"staging"`, or `"production"` |
 | `region` | string | `"us-east-1"` | AWS region to deploy to |
 | `stackName` | string | auto | CloudFormation stack name |
@@ -263,7 +284,7 @@ Enable additional ports for applications that support them.
 
 ---
 
-## 📋 Example Configurations
+## Example Configurations
 
 ### Minimal Dev Setup (No Domain)
 
@@ -279,7 +300,7 @@ Enable additional ports for applications that support them.
 - ✅ Jenkins on Fargate
 - ✅ No domain (uses ALB DNS name)
 - ✅ HTTP only (no SSL)
-- ✅ Perfect for testing
+- Intended for testing
 
 ### Production with SSL & Authentication
 
@@ -305,9 +326,9 @@ EC2 with auto-scaling, SSL, Cognito MFA, and custom domain.
 
 ---
 
-## 🔌 Application-Specific Configurations
+## Application-Specific Configurations
 
-CloudForge supports 14 applications. Set `applicationId` to deploy any application.
+CloudForge supports 33 applications. Set `applicationId` for every topology; choose `cms-service` for CMS-specific infrastructure or `application-service` for a general application deployment.
 
 ### GitLab (CI/CD + Version Control)
 
@@ -430,13 +451,13 @@ CloudForge supports 14 applications. Set `applicationId` to deploy any applicati
 
 ---
 
-## 🏆 Compliance Framework Configurations
+## Compliance Framework Configurations
 
 **Testing Status:**
 - ✅ **SOC2** - Fully tested in production
 - ⚠️ **HIPAA, PCI-DSS, GDPR** - Configuration provided, not yet tested in production
 
-### SOC 2 Compliance ✅ Tested
+### SOC 2 Controls (Production Tested)
 
 Access controls, monitoring, 2-year log retention.
 
@@ -463,7 +484,7 @@ Enables IAM password policy remediation, S3 versioning remediation, MFA, and con
 
 ---
 
-### HIPAA Compliance ⚠️ Not Yet Tested
+### HIPAA Controls (Not Yet Production Tested)
 
 Encryption, access controls, audit trails, 6-year retention.
 
@@ -492,7 +513,7 @@ Encryption, access controls, audit trails, 6-year retention.
 
 ---
 
-### PCI-DSS Compliance ⚠️ Not Yet Tested
+### PCI DSS Controls (Not Yet Production Tested)
 
 Network segmentation, WAF, threat detection, 1-year retention.
 
@@ -522,7 +543,7 @@ WAF (Req 6.6), GuardDuty (Req 11.4), ALB logging (Req 10.2), certificate monitor
 
 ---
 
-### GDPR Compliance ⚠️ Not Yet Tested
+### GDPR Controls (Not Yet Production Tested)
 
 Encryption, access controls, audit trails, 2-year retention.
 
@@ -549,7 +570,7 @@ EU region deployment, encryption at rest/transit, MFA, S3 versioning, CloudTrail
 
 ---
 
-### Multi-Framework Compliance ⚠️ Not Yet Tested
+### Multi-Framework Controls (Not Yet Production Tested)
 
 Combine multiple frameworks - strictest requirements win.
 
@@ -584,7 +605,7 @@ Combines all security controls: 14-char passwords, 6-year retention, WAF, GuardD
 
 ---
 
-## 🎓 Framework Comparison
+## Framework Comparison
 
 | Requirement | SOC2 | HIPAA | PCI-DSS | GDPR |
 |-------------|------|-------|---------|------|
@@ -600,7 +621,7 @@ Combines all security controls: 14-char passwords, 6-year retention, WAF, GuardD
 
 ---
 
-## 🧰 Full Configuration Reference
+## Full Configuration Reference
 
 <details>
 <summary id="cognito-configuration-full"><b>Cognito Configuration (Full Options)</b></summary>
@@ -672,7 +693,7 @@ Combines all security controls: 14-char passwords, 6-year retention, WAF, GuardD
 
 ---
 
-## 🧪 Testing & Validation
+## Testing & Validation
 
 ### Quick Syntax Test
 
@@ -695,11 +716,11 @@ cd cfc-testing
 ./benchmark-synth.sh
 ```
 
-See **[Extended Testing Guide](docs/guides/EXTENDED-TESTING.md)** for comprehensive testing documentation.
+See the **[Extended Testing Guide](docs/guides/EXTENDED-TESTING.md)** for additional testing procedures.
 
 ---
 
-## 🔐 Security & SBOM
+## Security & SBOM
 
 ### Generate Software Bill of Materials
 
@@ -726,13 +747,13 @@ See **[SECURITY.md](SECURITY.md)** for details.
 
 ---
 
-## 🏗️ Repository Structure
+## Repository Structure
 
 ```
 cfc-core/
 ├── cloudforge-api/          # Core API: configuration, interfaces
 ├── cfc-testing/             # Testing framework & sample app
-├── docs/                    # Complete documentation
+├── docs/                    # Documentation
 │   ├── compliance/          # Compliance guides (SOC2, HIPAA, PCI-DSS, GDPR)
 │   ├── setup/               # Setup guides (OIDC, Cognito, Identity Center)
 │   └── guides/              # Advanced guides (testing, IAM, security)
@@ -743,9 +764,9 @@ cfc-core/
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines.
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for contribution guidelines.
 
 ### Prerequisites
 
@@ -758,48 +779,48 @@ We welcome contributions! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for guideli
 
 ```bash
 # Fast build (skip tests)
-./mvnw -T1C -DskipTests install
+mvn -T1C -DskipTests -Djacoco.skip=true install
 
 # Full build
-./mvnw clean verify
+mvn clean verify
 
 # Single module
-./mvnw -pl cloudforge-api -am package
+mvn -pl cloudforge-api -am package
 ```
 
 ---
 
-## 📈 Changelog
+## Changelog
 
 See **[CHANGELOG.md](CHANGELOG.md)** for release history.
 
 ---
 
-## 🆘 Support
+## Support
 
 - **GitHub Issues:** [Report bugs or request features](https://github.com/CloudForgeCI/cfc-core/issues)
-- **Sample Project:** [Complete example](https://github.com/CloudForgeCI/cloudforge-sample)
-- **Documentation:** [Full docs](docs/README.md)
+- **Sample Project:** [Example deployment project](https://github.com/CloudForgeCI/cloudforge-sample)
+- **Documentation:** [Documentation index](docs/README.md)
 
 ---
 
-## 💖 Sponsors
+## Sponsors
 
-If CloudForge CI saved you time and money, consider **[supporting development](SPONSORS.md)**!
+See **[SPONSORS.md](SPONSORS.md)** for ways to support development.
 
 ---
 
-## 📄 License
+## License
 
 Apache License 2.0 — see **[LICENSE](LICENSE)**
 
 ---
 
-## 🔗 Related Projects
+## Related Projects
 
-- **[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample)** - Complete working example
+- **[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample)** - Example deployment project
 - **[cloudforge-community](https://github.com/CloudForgeCI/cloudforge-community)** - Community wrappers
 
 ---
 
-**Built with ❤️ by the CloudForge CI community**
+Maintained by the CloudForge CI community.

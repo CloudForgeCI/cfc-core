@@ -1,0 +1,308 @@
+name: Publish Snapshot & Auto-Release
+
+# Continuous delivery for cfc-core's OSS deployment library (cfc-core's own root/BOM pom,
+# cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack,
+# cloudforge-synth-service). The pom.xml always carries a -SNAPSHOT version.
+#
+#   1. build-test       — full build + test. Nothing downstream runs unless this passes.
+#   2. publish-snapshot — deploys the current -SNAPSHOT version to Central Portal's snapshots
+#      repository (https://central.sonatype.com/repository/maven-snapshots/), so
+#      cloudforge-manager-deployment/cloudforge-manager can immediately resolve it in their own
+#      CI. Tied to a pull request being open against develop (opened/updated), not to merging —
+#      requesting review is what should make a snapshot available downstream, not waiting for the
+#      merge itself.
+#   3. auto-release     — develop only, i.e. only once a PR actually merges (a push, not a pull
+#      request event). Strips "-SNAPSHOT", builds/signs/publishes that as a real numbered release
+#      to Maven Central (no re-test — build-test already validated this exact code), tags
+#      vX.Y.Z, then bumps develop's pom to the next patch -SNAPSHOT and pushes that commit with
+#      "[skip ci]" so it doesn't re-trigger this workflow.
+#
+# Every merge to develop is therefore both a snapshot AND a real Central release — deliberate,
+# confirmed design (not a staged/manual release process). publish-maven-central.yml still exists
+# as a manual workflow_dispatch-only escape hatch; it never fires from a push under this flow
+# because the only commit this workflow ever pushes back to develop is a -SNAPSHOT bump.
+#
+# Required repo secrets (same four already configured for publish-maven-central.yml):
+#   GPG_PRIVATE_KEY, GPG_PASSPHRASE, CENTRAL_PORTAL_USERNAME, CENTRAL_PORTAL_PASSWORD
+
+on:
+  pull_request:
+    branches: [ develop ] # snapshot as soon as a PR targeting develop is opened/updated
+    types: [ opened, synchronize, reopened ]
+    paths:
+      - 'pom.xml'
+      - 'cloudforge-core/**'
+      - 'cloudforge-api/**'
+      - 'cloudforge-localstack/**'
+      - 'cloudforge-ministack/**'
+      - 'cloudforge-synth-service/**'
+      - '.github/workflows/publish-snapshot.yml'
+  push:
+    branches: [ develop ] # real release, only once a PR actually merges
+    paths:
+      - 'pom.xml'
+      - 'cloudforge-core/**'
+      - 'cloudforge-api/**'
+      - 'cloudforge-localstack/**'
+      - 'cloudforge-ministack/**'
+      - 'cloudforge-synth-service/**'
+      - '.github/workflows/publish-snapshot.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # to push the release tag and the next-snapshot bump commit
+
+jobs:
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build and test
+        run: mvn -B -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean verify
+
+  publish-snapshot:
+    name: Publish SNAPSHOT to Central
+    # macOS, not any Linux variant. Every GnuPG-side variable has been ruled out at this point:
+    # 3 different GnuPG builds (ubuntu-latest's system 2.4.4, ubuntu-22.04's system build, and
+    # Homebrew's 2.5.21 -- a completely different major/build), 2 plugin versions, 2 different
+    # keys, every homedir/pinentry/passphrase config combination, gpg1, both import methods, and
+    # running inside a container (maven:3.9-eclipse-temurin-21 -- worked locally in Docker
+    # Desktop's own Linux VM, still failed identically on GitHub's own runner, since containers
+    # share their host's kernel rather than getting their own -- whatever's causing this lives at
+    # the GitHub Linux runner kernel level, not in GnuPG, our config, or containerization).
+    # macOS has never once failed, locally, all day, across every one of the above combinations.
+    runs-on: macos-latest
+    needs: build-test
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Install gnupg
+        run: brew install gnupg
+
+      - name: Read project version
+        id: version
+        run: |
+          VERSION=$(mvn -q -pl . help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" != *-SNAPSHOT ]]; then
+            echo "::error::Root pom version '$VERSION' isn't a SNAPSHOT — develop's pom.xml should always carry a -SNAPSHOT version under this workflow. Nothing to publish here."
+            exit 1
+          fi
+          echo "Root pom version: $VERSION"
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
+          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
+          # without it, the agent still tries (and fails, headless) to launch a real pinentry
+          # program ("gpg: signing failed: No pinentry").
+          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
+          DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
+          # ::add-mask:: only masks a single line -- mask every line of the multi-line
+          # armor block individually, or everything after the first line prints in plain
+          # text the moment it appears in any later log output.
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done <<< "$DECODED"
+          echo "$DECODED" | gpg --batch --import
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
+          # not GNUPGHOME (the gpg CLI's own var) -- both must point at the same imported keyring.
+          echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
+
+      - name: Configure Maven settings.xml (Central Portal credentials)
+        env:
+          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+        run: |
+          if [ -z "$CENTRAL_PORTAL_USERNAME" ] || [ -z "$CENTRAL_PORTAL_PASSWORD" ]; then
+            echo "::error::CENTRAL_PORTAL_USERNAME/CENTRAL_PORTAL_PASSWORD secrets are not set."
+            exit 1
+          fi
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << EOF
+          <settings>
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${CENTRAL_PORTAL_USERNAME}</username>
+                <password>${CENTRAL_PORTAL_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+      - name: Check runner resources (memory/CPU theory check)
+        run: |
+          echo "=== CPU ==="
+          sysctl -n hw.ncpu
+          echo "=== MEMORY (total) ==="
+          sysctl -n hw.memsize | awk '{printf "%.2f GB\n", $1/1024/1024/1024}'
+          echo "=== MEMORY (live pressure) ==="
+          vm_stat
+          echo "=== free vs used (approx, via vm_stat page counts) ==="
+          top -l 1 -n 0 | grep "PhysMem"
+
+      - name: Deploy SNAPSHOT (cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack)
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+
+      - name: Clean up credentials
+        if: always()
+        run: |
+          rm -f ~/.m2/settings.xml
+          rm -rf "${GNUPGHOME:-$RUNNER_TEMP/gnupg}"
+
+  auto-release:
+    name: Auto-release and bump to next SNAPSHOT
+    # macOS -- see the publish-snapshot job above for why.
+    runs-on: macos-latest
+    needs: publish-snapshot
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 30
+    concurrency:
+      group: publish-snapshot-cfc-core-auto-release
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need full tag history
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Compute release and next-snapshot versions
+        id: versions
+        run: |
+          SNAPSHOT_VERSION="${{ needs.publish-snapshot.outputs.version }}"
+          RELEASE_VERSION="${SNAPSHOT_VERSION%-SNAPSHOT}"
+
+          if git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo "::error::v$RELEASE_VERSION is already tagged. Refusing to re-release; bump the version manually if this is intentional."
+            exit 1
+          fi
+
+          # Patch-level bump for the next in-progress version: 3.2.0 -> 3.2.1-SNAPSHOT
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
+          NEXT_SNAPSHOT="${MAJOR}.${MINOR}.$((PATCH + 1))-SNAPSHOT"
+
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "next_snapshot=$NEXT_SNAPSHOT" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$RELEASE_VERSION, next snapshot will be $NEXT_SNAPSHOT"
+
+      - name: Set release version
+        run: mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.release_version }} -DprocessAllModules=true -DgenerateBackupPoms=false
+
+      - name: Install gnupg
+        run: brew install gnupg
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
+          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
+          # without it, the agent still tries (and fails, headless) to launch a real pinentry
+          # program ("gpg: signing failed: No pinentry").
+          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
+          DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
+          # ::add-mask:: only masks a single line -- mask every line of the multi-line
+          # armor block individually, or everything after the first line prints in plain
+          # text the moment it appears in any later log output.
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done <<< "$DECODED"
+          echo "$DECODED" | gpg --batch --import
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
+          # not GNUPGHOME (the gpg CLI's own var) -- both must point at the same imported keyring.
+          echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
+
+      - name: Configure Maven settings.xml (Central Portal credentials)
+        env:
+          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << EOF
+          <settings>
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${CENTRAL_PORTAL_USERNAME}</username>
+                <password>${CENTRAL_PORTAL_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+      - name: Build, sign, and publish the release (no re-test — already validated as a SNAPSHOT this run)
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean deploy -DskipTests -Djacoco.skip=true "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+
+      - name: Clean up credentials
+        if: always()
+        run: |
+          rm -f ~/.m2/settings.xml
+          rm -rf "${GNUPGHOME:-$RUNNER_TEMP/gnupg}"
+
+      - name: Tag the published release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.versions.outputs.release_version }}" -m "Publish v${{ steps.versions.outputs.release_version }} to Maven Central (cfc-core, cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack, cloudforge-synth-service)"
+          git push origin "v${{ steps.versions.outputs.release_version }}"
+
+      - name: Bump develop to the next SNAPSHOT
+        run: |
+          mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.next_snapshot }} -DprocessAllModules=true -DgenerateBackupPoms=false
+          git add -A
+          git commit -m "chore: bump to ${{ steps.versions.outputs.next_snapshot }} [skip ci]"
+          git push origin HEAD:develop
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## Snapshot & Auto-Release" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Snapshot published:** ${{ needs.publish-snapshot.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Release published:** ${{ steps.versions.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Next snapshot:** ${{ steps.versions.outputs.next_snapshot }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack, cloudforge-synth-service" >> $GITHUB_STEP_SUMMARY

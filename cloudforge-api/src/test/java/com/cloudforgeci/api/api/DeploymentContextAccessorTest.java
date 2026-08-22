@@ -245,6 +245,18 @@ class DeploymentContextAccessorTest {
         }
 
         @Test
+        @DisplayName("databaseEngine() and databaseVersion() return configured RDS overrides")
+        void databaseEngineAndVersionAccessors() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("databaseEngine", "mysql");
+            config.put("databaseVersion", "8.0");
+            DeploymentContext ctx = createContext(config);
+
+            assertEquals("mysql", ctx.databaseEngine());
+            assertEquals("8.0", ctx.databaseVersion());
+        }
+
+        @Test
         @DisplayName("bastionCidr() returns configured bastion CIDR")
         void bastionCidrAccessor() {
             Map<String, Object> config = new LinkedHashMap<>();
@@ -723,6 +735,72 @@ class DeploymentContextAccessorTest {
 
             assertEquals(ctx.topology(), ctx.getTopology());
             assertEquals(TopologyType.JENKINS_SERVICE, ctx.getTopology());
+        }
+    }
+
+    @Nested
+    @DisplayName("CMS Accessor Tests")
+    class CmsAccessorTests {
+
+        @Test
+        @DisplayName("applicationId() returns the shared application selector")
+        void applicationIdReturnsSharedSelector() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("applicationId", "wordpress");
+            DeploymentContext ctx = createContext(config);
+            assertEquals("wordpress", ctx.applicationId());
+        }
+
+        @Test
+        @DisplayName("applicationId() returns null when not configured")
+        void applicationIdReturnsNullWhenAbsent() {
+            DeploymentContext ctx = createContext(new LinkedHashMap<>());
+            assertNull(ctx.applicationId());
+        }
+
+        @Test
+        @DisplayName("applicationId() reads DeploymentConfig.applicationId")
+        void applicationIdReadsConfigField() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("applicationId", "cloudforge-manager");
+            DeploymentContext ctx = createContext(config);
+            assertEquals("cloudforge-manager", ctx.applicationId());
+        }
+
+        @Test
+        @DisplayName("cmsSpec() resolves wordpress to WordPressApplicationSpec")
+        void cmsSpecResolvesWordPress() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("applicationId", "wordpress");
+            DeploymentContext ctx = createContext(config);
+            assertTrue(ctx.cmsSpec().isPresent(), "cmsSpec() must resolve 'wordpress'");
+            assertEquals("wordpress", ctx.cmsSpec().get().applicationId());
+        }
+
+        @Test
+        @DisplayName("cmsSpec() resolves magento to MagentoApplicationSpec")
+        void cmsSpecResolvesMagento() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("applicationId", "magento");
+            DeploymentContext ctx = createContext(config);
+            assertTrue(ctx.cmsSpec().isPresent());
+            assertEquals("magento", ctx.cmsSpec().get().applicationId());
+        }
+
+        @Test
+        @DisplayName("cmsSpec() returns empty when application not set")
+        void cmsSpecEmptyWhenNoApplication() {
+            DeploymentContext ctx = createContext(new LinkedHashMap<>());
+            assertFalse(ctx.cmsSpec().isPresent());
+        }
+
+        @Test
+        @DisplayName("cmsSpec() returns empty for unknown application id")
+        void cmsSpecEmptyForUnknownId() {
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("applicationId", "not-a-real-cms");
+            DeploymentContext ctx = createContext(config);
+            assertFalse(ctx.cmsSpec().isPresent());
         }
     }
 }

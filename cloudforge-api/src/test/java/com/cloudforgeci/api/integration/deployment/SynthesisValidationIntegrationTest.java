@@ -20,8 +20,11 @@ import software.amazon.awscdk.assertions.Match;
 import software.amazon.awscdk.assertions.Template;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Comprehensive synthesis validation integration tests that verify CloudFormation
@@ -1021,6 +1024,65 @@ class SynthesisValidationIntegrationTest {
             "BackupRetentionPeriod", 30,
             "DeletionProtection", true,
             "PubliclyAccessible", false
+        ));
+    }
+
+    @Test
+    void testDatabaseEngineOverrideMysqlFromDeploymentContext() {
+        App app = new App();
+        Stack stack = createTestStack(app, "MysqlEngineOverride");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "MysqlEngineOverride");
+        cfcContext.put("lbType", "alb");
+        cfcContext.put("provisionDatabase", true);
+        cfcContext.put("databaseEngine", "mysql");
+        cfcContext.put("databaseVersion", "8.0");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        assertEquals("mysql", cfc.databaseEngine());
+        assertEquals("8.0", cfc.databaseVersion());
+
+        ApplicationFactory.createFargate(
+            stack, "ManagerMysql", cfc, SecurityProfile.DEV,
+            IAMProfile.STANDARD,
+            new com.cloudforgeci.api.application.analytics.MetabaseApplicationSpec()
+        );
+
+        Template template = Template.fromStack(stack);
+        template.resourceCountIs("AWS::RDS::DBInstance", 1);
+        template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
+            "Engine", "mysql",
+            "EngineVersion", "8.0"
+        ));
+    }
+
+    @Test
+    void testDatabaseEngineOverrideMariadbFromDeploymentContext() {
+        App app = new App();
+        Stack stack = createTestStack(app, "MariadbEngineOverride");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "MariadbEngineOverride");
+        cfcContext.put("lbType", "alb");
+        cfcContext.put("provisionDatabase", true);
+        cfcContext.put("databaseEngine", "mariadb");
+        cfcContext.put("databaseVersion", "10.11");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+
+        ApplicationFactory.createFargate(
+            stack, "ManagerMariadb", cfc, SecurityProfile.DEV,
+            IAMProfile.STANDARD,
+            new com.cloudforgeci.api.application.analytics.MetabaseApplicationSpec()
+        );
+
+        Template template = Template.fromStack(stack);
+        template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
+            "Engine", "mariadb",
+            "EngineVersion", "10.11"
         ));
     }
 }

@@ -1,4 +1,4 @@
 {
-  "app": "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.InteractiveDeployer",
+  "app": "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample",
   "context": {}
 }

@@ -383,3 +383,4 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
                 '}';
     }
 }
+

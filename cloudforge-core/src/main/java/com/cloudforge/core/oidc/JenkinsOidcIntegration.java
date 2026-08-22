@@ -104,6 +104,9 @@ public class JenkinsOidcIntegration implements OidcIntegration {
         jcascConfig.append("        manual:\n");
         jcascConfig.append(String.format("          authorizationServerUrl: \"%s\"\n", config.getAuthorizationEndpoint()));
         jcascConfig.append(String.format("          tokenServerUrl: \"%s\"\n", config.getTokenEndpoint()));
+        // The Jenkins OIDC plugin defaults to client_secret_post. Cognito supports
+        // client_secret_basic and LocalStack's hosted Cognito token endpoint requires it.
+        jcascConfig.append("          tokenAuthMethod: client_secret_basic\n");
         jcascConfig.append(String.format("          userInfoServerUrl: \"%s\"\n", config.getUserInfoEndpoint()));
         jcascConfig.append(String.format("          jwksServerUrl: \"%s\"\n", config.getJwksUri()));
         jcascConfig.append(String.format("          issuer: \"%s\"\n", config.getIssuerUrl()));
@@ -262,6 +265,7 @@ public class JenkinsOidcIntegration implements OidcIntegration {
         commands.add("        manual:");
         commands.add("          authorizationServerUrl: \"" + config.getAuthorizationEndpoint() + "\"");
         commands.add("          tokenServerUrl: \"" + config.getTokenEndpoint() + "\"");
+        commands.add("          tokenAuthMethod: client_secret_basic");
         commands.add("          userInfoServerUrl: \"" + config.getUserInfoEndpoint() + "\"");
         commands.add("          jwksServerUrl: \"" + config.getJwksUri() + "\"");
         commands.add("          issuer: \"" + config.getIssuerUrl() + "\"");

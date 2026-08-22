@@ -2,3 +2,6 @@
 
 # Code Quality
 com.cloudforgeci.samples.plugins.application.SonarQubeApplicationSpec
+
+# CMS
+com.cloudforgeci.samples.plugins.cms.CraftCmsApplicationSpec

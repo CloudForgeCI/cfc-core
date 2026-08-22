@@ -1,6 +1,5 @@
 package com.cloudforgeci.api.core.security;
 
-import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.SystemContext;
@@ -19,7 +18,7 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
 
 /**
  * Production security configuration with hardened security settings.
- * Implements comprehensive security measures for SOC/HIPAA compliance.
+ * Configures infrastructure controls used by SOC 2 and HIPAA deployments.
  * Integrates with SecurityProfileConfiguration for observability settings.
  */
 public final class ProductionSecurityConfiguration implements SecurityConfiguration {
@@ -69,18 +68,14 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
 
         // Debug: Check what slots are available
 
-        // Production security settings - maximum restrictions
+        // Production security settings - restricted network access
 
         // Instance security group - only for EC2 runtime
         if (c.runtime == RuntimeType.EC2) {
             whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
-                // SSH only from specific bastion host or VPN CIDR (configurable via bastionCidr)
-                instanceSg.addIngressRule(
-                    Peer.ipv4(c.cfc.bastionCidr()),
-                    Port.tcp(22),
-                    "SSH_from_bastion/VPN_(PRODUCTION)",
-                    false
-                );
+                // SSH access is provided via AWS Systems Manager Session Manager (no port 22 needed).
+                // All IAM configurations already include AmazonSSMManagedInstanceCore.
+                // Connect with: aws ssm start-session --target <instance-id>
 
                 // Application port only from ALB security group
                 if (c.albSg.get().isPresent()) {
@@ -221,12 +216,12 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("PRODUCTION profile configured with log retention: " + profileConfig.getLogRetentionDays());
         }
 
-        // Configure flow logs (comprehensive for production)
+        // Configure flow logs for accepted and rejected traffic
         if (profileConfig.isFlowLogsEnabled()) {
             LOG.info("Flow logs enabled for PRODUCTION profile with traffic type: " + profileConfig.getFlowLogTrafficType());
         }
 
-        // Configure security monitoring (comprehensive for production)
+        // Configure CloudTrail, GuardDuty, and AWS Config monitoring
         if (profileConfig.isSecurityMonitoringEnabled()) {
             LOG.info("Security monitoring enabled for PRODUCTION profile");
 
@@ -260,7 +255,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("S3 encryption enabled for PRODUCTION profile (mandatory)");
         }
 
-        // Configure backup (comprehensive for production)
+        // Configure automated and cross-region backups
         if (profileConfig.isAutomatedBackupEnabled()) {
             LOG.info("Automated backup enabled for PRODUCTION profile with retention: " + profileConfig.getBackupRetentionDays() + " days");
         }
@@ -269,12 +264,12 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("Cross-region backup enabled for PRODUCTION profile (disaster recovery)");
         }
 
-        // Configure auto-scaling (comprehensive for production)
+        // Configure the production instance capacity range
         if (profileConfig.isAutoScalingEnabled()) {
             LOG.info("Auto-scaling enabled for PRODUCTION profile: " + profileConfig.getMinInstanceCount() + "-" + profileConfig.getMaxInstanceCount() + " instances");
         }
 
-        // Configure network security (maximum for production)
+        // Configure VPC endpoints, NAT, WAF, and CloudFront
         if (profileConfig.isVpcEndpointsEnabled()) {
             LOG.info("VPC endpoints enabled for PRODUCTION profile (network security)");
         }
@@ -291,7 +286,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("CloudFront enabled for PRODUCTION profile (DDoS protection)");
         }
 
-        // Configure compliance and audit (comprehensive for production)
+        // Configure detailed billing and ALB access logs
         if (profileConfig.isDetailedBillingEnabled()) {
             LOG.info("Detailed billing enabled for PRODUCTION profile (cost management)");
         }
@@ -300,7 +295,7 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             LOG.info("ALB access logging enabled for PRODUCTION profile with retention: " + profileConfig.getAlbAccessLogRetentionDays());
         }
 
-        // Configure reliability (maximum for production)
+        // Configure Multi-AZ deployment
         if (profileConfig.isMultiAzEnforced()) {
             LOG.info("Multi-AZ deployment enforced for PRODUCTION profile (high availability)");
         }
@@ -345,17 +340,8 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             }
         });
 
-        // Authentication Configuration - centralized auth handling
-        whenBoth(c.authMode, c.alb, (authMode, alb) -> {
-            if (AuthMode.ALB_OIDC == AuthMode.fromString(authMode)) {
-                // Configure ALB OIDC authentication
-                // OIDC configuration would go here
-                LOG.info("ALB OIDC authentication configured");
-            }
-        });
-
-        // Note: Additional security configurations can be added here
-        // For now, focusing on security group restrictions for production hardening
+        // Note: OIDC/auth factory wiring is handled by SystemContext.createSecurityFactories(),
+        // not here. ProductionSecurityConfiguration owns network/SG restrictions only.
     }
 
     private static <A,B> void whenBoth(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b,
@@ -365,20 +351,6 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             if (ao.isPresent() && bo.isPresent()) fn.accept(ao.get(), bo.get());
         };
         a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run()); tryRun.run();
-    }
-
-    private static <A,B,C,D> void whenAll(com.cloudforgeci.api.core.Slot<A> a, com.cloudforgeci.api.core.Slot<B> b,
-                                         com.cloudforgeci.api.core.Slot<C> c, com.cloudforgeci.api.core.Slot<D> d,
-                                         Function4<A,B,C,D,Void> fn) {
-        Runnable tryRun = () -> {
-            var ao = a.get(); var bo = b.get(); var co = c.get(); var do_ = d.get();
-            if (ao.isPresent() && bo.isPresent() && co.isPresent() && do_.isPresent()) {
-                fn.apply(ao.get(), bo.get(), co.get(), do_.get());
-            }
-        };
-        a.onSet(x -> tryRun.run()); b.onSet(y -> tryRun.run());
-        c.onSet(z -> tryRun.run()); d.onSet(w -> tryRun.run());
-        tryRun.run();
     }
 
     /**
@@ -416,19 +388,4 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         }
     }
 
-    /**
-     * Check if we're in a test environment.
-     */
-    private boolean isTestEnvironment() {
-        // Check if we're running in a test environment
-        String testEnv = System.getProperty("test.environment");
-        return "true".equalsIgnoreCase(testEnv) ||
-               System.getProperty("java.class.path").contains("junit") ||
-               System.getProperty("java.class.path").contains("test");
-    }
-
-    @FunctionalInterface
-    private interface Function4<A, B, C, D, R> {
-        R apply(A a, B b, C c, D d);
-    }
 }

@@ -1,10 +1,10 @@
 # CloudForge CI Documentation
 
-Complete documentation for deploying and managing secure, compliant Jenkins infrastructure on AWS.
+Documentation for defining, deploying, and validating supported application infrastructure on AWS with CloudForge.
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Applications & Plugins](#applications--plugins)
@@ -15,13 +15,14 @@ Complete documentation for deploying and managing secure, compliant Jenkins infr
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 **New to CloudForge?** Start here:
 
-1. **[Quick Start Guide](compliance/QUICK_START_GUIDE.md)** - Get running in 10 minutes
-2. **[Sample Project](https://github.com/CloudForgeCI/cloudforge-sample)** - Clone and deploy
-3. **[Interactive Deployer](guides/INTERACTIVE_DEPLOYER.md)** - User-friendly CLI tool
+1. **[Quick Start Guide](compliance/QUICK_START_GUIDE.md)** - Configure compliance validation
+2. **[Local Emulator Quick Start](guides/LOCAL_EMULATOR_QUICK_START.md)** - Build, MiniStack, and LocalStack from repository root
+3. **[Sample Project](https://github.com/CloudForgeCI/cloudforge-sample)** - Clone and deploy
+4. **[Interactive Deployer](guides/INTERACTIVE_DEPLOYER.md)** - CLI deployment tool
 
 **Example deployment:**
 ```bash
@@ -33,11 +34,11 @@ cdk deploy --context cfc=@deployment-context.json
 
 ---
 
-## 🔌 Applications & Plugins
+## Applications & Plugins
 
 ### Application Guides
 
-Comprehensive guides for each application with deployment-context examples:
+Application guides with deployment-context examples:
 
 | Application | Status | Guide |
 |-------------|--------|-------|
@@ -56,7 +57,7 @@ Comprehensive guides for each application with deployment-context examples:
 
 | Document | Description |
 |----------|-------------|
-| **[Application Catalog](applications/README.md)** | Complete catalog of 14 built-in applications |
+| **[Application Catalog](applications/README.md)** | Catalog of 33 built-in applications |
 | **[Application Compliance](applications/COMPLIANCE.md)** | Compliance requirements for each application |
 | **[OIDC Integration](applications/OIDC.md)** | Application-level OIDC authentication (Grafana, GitLab, Jenkins) |
 
@@ -71,13 +72,13 @@ Comprehensive guides for each application with deployment-context examples:
 
 ---
 
-## ⚙️ Setup & Configuration
+## Setup & Configuration
 
 ### Authentication
 
 | Document | Description | Best For |
 |----------|-------------|----------|
-| **[Identity Center Setup](setup/AWS_IDENTITY_CENTER_SETUP.md)** | AWS IAM Identity Center + ALB-OIDC (Okta, Auth0) | Enterprise SSO |
+| **[Identity Center Setup](setup/AWS_IDENTITY_CENTER_SETUP.md)** | AWS IAM Identity Center + ALB-OIDC (Okta, Auth0) | Organization-managed SSO |
 | **[Cognito MFA Compliance](setup/COGNITO_MFA_COMPLIANCE_SETUP.md)** | AWS Cognito user pools with MFA | HIPAA, PCI-DSS, Quick setup |
 
 ### Configuration Files
@@ -87,9 +88,26 @@ Comprehensive guides for each application with deployment-context examples:
 | **[deployment-context.json Reference](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#configuration-reference)** | All configuration properties |
 | **[Compliance Configurations](https://github.com/CloudForgeCI/cfc-core/blob/main/readme.md#compliance-framework-configurations)** | Framework-specific settings |
 
+### Local AWS Emulation (MiniStack & LocalStack)
+
+Deploy without an AWS account from the repository root. Start here:
+
+| Document | Description |
+|----------|-------------|
+| **[Local Emulator Quick Start](guides/LOCAL_EMULATOR_QUICK_START.md)** | Build, start emulators, synth, deploy (root commands) |
+| **[Local Emulator Hostnames](guides/LOCAL_EMULATOR_HOSTS.md)** | `/etc/hosts` `*.cloudforge.localhost` for MiniStack and LocalStack |
+| **[Local Emulator Edge (nginx)](guides/LOCAL_EMULATOR_EDGE.md)** | Port-free `Host` routing; StackPort for resource deep-dive |
+| **[MiniStack Overview](ministack/README.md)** | Architecture, fidelity table, source layout |
+| **[LocalStack Overview](localstack/README.md)** | Token and adapter behavior |
+| **[Setup](ministack/SETUP.md)** | MiniStack prerequisites and environment detail |
+| **[Deployment](ministack/DEPLOYMENT.md)** | Interactive Deployer, Jenkins walkthrough |
+| **[Verification](ministack/VERIFICATION.md)** | Confirm deployed resources |
+| **[Advanced](ministack/ADVANCED.md)** | Auth proxy, incremental updates, env vars |
+| **[Troubleshooting](ministack/TROUBLESHOOTING.md)** | Debugging local deployments |
+
 ---
 
-## 🔐 Compliance & Security
+## Compliance & Security
 
 ### Compliance Frameworks
 
@@ -118,12 +136,18 @@ Comprehensive guides for each application with deployment-context examples:
 | Document | Description |
 |----------|-------------|
 | **[Security Hardening](https://github.com/CloudForgeCI/cfc-core/blob/main/SECURITY.md)** | Security best practices and policies |
-| **[Security Rules](guides/SECURITY_RULES_README.md)** | Comprehensive security guidelines |
+| **[Security Rules](guides/SECURITY_RULES_README.md)** | Security guidelines |
 | **[IAM Rules](guides/IAM_RULES.md)** | IAM best practices and policies |
 
 ---
 
-## 📚 Advanced Topics
+## Advanced Topics
+
+### Architecture
+
+| Document | Description |
+|----------|-------------|
+| **[CloudForge Sample BOM Template](architecture/cloudforge-sample-bom.template.md)** | Standalone project / cloudforge-sample POM |
 
 ### Audit & Monitoring
 
@@ -136,19 +160,21 @@ Comprehensive guides for each application with deployment-context examples:
 
 | Document | Description |
 |----------|-------------|
-| **[Extended Testing](guides/EXTENDED-TESTING.md)** | Comprehensive testing guide |
+| **[Extended Testing](guides/EXTENDED-TESTING.md)** | Testing procedures and configurations |
 | **[Compliance Truth Tables](testing/COMPLIANCE_TRUTH_TABLES.md)** | Systematic compliance rules testing |
+| **[Integration Tests](testing/INTEGRATION_TESTS.md)** | AWS-focused integration tests |
+| **[MiniStack Local Deployment](ministack/README.md)** | Local MiniStack setup, deploy, verify (`cfc-testing`) |
 
 ### Developer Resources
 
 | Document | Description |
 |----------|-------------|
 | **[IAM Rules](guides/IAM_RULES.md)** | IAM best practices and policies |
-| **[Security Rules](guides/SECURITY_RULES_README.md)** | Comprehensive security guidelines |
+| **[Security Rules](guides/SECURITY_RULES_README.md)** | Security guidelines |
 
 ---
 
-## 📑 Reference
+## Reference
 
 ### Indexes & Catalogs
 
@@ -164,14 +190,14 @@ Comprehensive guides for each application with deployment-context examples:
 
 ---
 
-## 🎯 Documentation by Use Case
+## Documentation by Use Case
 
 ### "I want to deploy an application"
-1. [Application Guides](guides/applications/) - Comprehensive guides for each app
-2. [Deployment Context Examples](docs/examples/) - Ready-to-use JSON configs
+1. [Application Guides](guides/applications/) - Configuration guides for supported applications
+2. [Deployment Context Examples](docs/examples/) - Example JSON configurations
 3. [Interactive Deployer](guides/INTERACTIVE_DEPLOYER.md) - CLI deployment tool
 
-### "I want to deploy Jenkins quickly"
+### "I want to deploy Jenkins"
 1. [Jenkins Guide](guides/applications/jenkins.md)
 2. [Jenkins Dev Example](docs/examples/jenkins-dev.json)
 3. [Quick Start Guide](compliance/QUICK_START_GUIDE.md)
@@ -202,7 +228,7 @@ Comprehensive guides for each application with deployment-context examples:
 
 ---
 
-## 📞 Getting Help
+## Getting Help
 
 - **Issues:** [GitHub Issues](https://github.com/CloudForgeCI/cfc-core/issues)
 - **Examples:** [cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample)
@@ -210,15 +236,12 @@ Comprehensive guides for each application with deployment-context examples:
 
 ---
 
-## 🤝 Contributing
-
-Found a documentation error or want to improve something?
+## Contributing
 
 1. Read [CONTRIBUTING.md](https://github.com/CloudForgeCI/cfc-core/blob/main/CONTRIBUTING.md)
 2. Submit a pull request
-3. Help others by sharing your knowledge
 
 ---
 
-**Last Updated:** 2025-12-07
-**Documentation Version:** 3.0.0
+**Last Updated:** June 2026
+**Documentation Version:** 3.2.0

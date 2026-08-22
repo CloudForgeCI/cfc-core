@@ -1,0 +1,64 @@
+name: Bug report
+description: Report incorrect behavior in a CloudForge module
+title: "[module:???] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Select the **owning module** so work stays compartmentalized.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Owning module
+      description: Where the fix should land
+      options:
+        - "module:core (cloudforge-core — contracts, config)"
+        - "module:api (cloudforge-api — deploy API, ApplicationSpecs, CMS)"
+        - "module:ministack (cloudforge-ministack)"
+        - "module:localstack (cloudforge-localstack)"
+        - "module:manager (cloudforge-manager — Application Panel)"
+        - "module:sample (cfc-testing / entrypoint / docs only)"
+        - "unknown / not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: Deployment target
+      options:
+        - AWS
+        - MiniStack
+        - LocalStack
+        - N/A (library-only)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Expected vs actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. deployment-context.json or menu options used
+        2. command run
+        3. error output
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: CloudForge version
+      placeholder: "3.2.0"
+    validations:
+      required: true

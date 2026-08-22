@@ -293,6 +293,65 @@ jobs:
           echo "Running full validation to generate truth tables for GitHub Pages..."
           bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log
 
+      # Real LocalStack deploy verification (localstack-compliance-verification.yml) runs
+      # separately -- it's slow (13 representative configs, plus ~260 individual templates
+      # split across 8 parallel batches) and needs a paid LOCALSTACK_AUTH_TOKEN, so it isn't
+      # part of this job's own build. Pull its most recent successful output in instead:
+      # compliance-report-generator.py's build_localstack_detail looks for exactly these files
+      # to show real PASS/FAIL and what LocalStackTemplateAdapter changed, alongside the
+      # synth-only data this job always has. Same download-last-successful-artifact pattern
+      # already used below for metrics-dashboards.
+      - name: Download LocalStack compliance verification artifact
+        id: download-localstack-results
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: localstack-compliance-verification.yml
+          name: localstack-compliance-results
+          path: ./downloaded-localstack-results
+          if_no_artifact_found: warn
+          allow_forks: false
+          workflow_conclusion: success
+          search_artifacts: true
+        continue-on-error: true
+
+      # The template sweep is the one that actually matters for row-level verification (see
+      # build_localstack_detail's exact config_name match) -- it deploys each of the individual
+      # templates this dashboard's rows link to, not just the 13 representative configs above.
+      - name: Download LocalStack template sweep artifact
+        id: download-template-sweep
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: localstack-compliance-verification.yml
+          name: localstack-template-sweep-results
+          path: ./downloaded-template-sweep
+          if_no_artifact_found: warn
+          allow_forks: false
+          workflow_conclusion: success
+          search_artifacts: true
+        continue-on-error: true
+
+      - name: Place LocalStack verification results where the report generator expects them
+        run: |
+          mkdir -p cfc-testing/scripts/validation-results cfc-testing/cdk.out
+
+          if [ -f "downloaded-localstack-results/localstack-compliance-matrix-results.tsv" ]; then
+            cp downloaded-localstack-results/localstack-compliance-matrix-results.tsv \
+              cfc-testing/scripts/validation-results/
+            cp downloaded-localstack-results/cdk-out/*.json cfc-testing/cdk.out/ 2>/dev/null || true
+            echo "✅ Representative-config LocalStack deploy data present"
+          else
+            echo "ℹ️  No representative-config LocalStack artifact found"
+          fi
+
+          if [ -f "downloaded-template-sweep/localstack-template-sweep-results.tsv" ]; then
+            cp downloaded-template-sweep/localstack-template-sweep-results.tsv \
+              cfc-testing/scripts/validation-results/
+            echo "✅ Template sweep data present -- dashboard rows will show real per-config PASS/FAIL"
+          else
+            echo "ℹ️  No template sweep artifact found -- dashboard rows will show synth-only status"
+            echo "   (expected until localstack-compliance-verification.yml has run successfully at least once)"
+          fi
+
       - name: Generate compliance truth table reports
         run: |
           set -o pipefail
@@ -320,6 +379,21 @@ jobs:
           echo "Generating synthesis test HTML report..."
           bash generate-synth-report.sh
           echo "✅ Synthesis report generation complete"
+
+      # Full error logs (comprehensive-synth-test.sh only ever prints an excerpt to stdout) --
+      # the runner's disk is gone once the job ends, so without this any failure investigation
+      # is stuck re-running blind. Always uploads, pass or fail, since a partial failure still
+      # leaves useful logs for the configs that did fail.
+      - name: Upload synthesis test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comprehensive-synth-logs
+          path: |
+            cfc-testing/comprehensive-synth.log
+            cfc-testing/scripts/synth-results/*-error.log
+          retention-days: 90
+          if-no-files-found: warn
 
       - name: Capture build snapshot
         run: |
@@ -387,6 +461,20 @@ jobs:
           if [ -f "cfc-testing/comprehensive-synth.log" ]; then
             cp cfc-testing/comprehensive-synth.log github-pages-reports/validation/
             echo "✅ Copied comprehensive synthesis log"
+          fi
+
+      - name: Copy LocalStack verification JSON to hosted docs
+        run: |
+          echo "Copying LocalStack verification data..."
+
+          if [ -d "downloaded-localstack-results/cdk-out" ]; then
+            mkdir -p github-pages-reports/validation/localstack-verification
+            cp downloaded-localstack-results/cdk-out/*.json \
+              github-pages-reports/validation/localstack-verification/ 2>/dev/null || true
+            COUNT=$(find github-pages-reports/validation/localstack-verification -name '*.json' | wc -l)
+            echo "✅ Published ${COUNT} LocalStack verification JSON files (real deploy templates + adaptations)"
+          else
+            echo "ℹ️  No LocalStack verification JSON to publish this run"
           fi
 
       - name: Copy cdk-nag compliance reports

@@ -663,4 +663,4 @@ cat /var/jenkins_home/casc_configs/oidc.yaml
 
 ---
 
-**CloudForge 3.0.0** - Enterprise Authentication for Cloud Applications
+**CloudForge 3.1.0** - Enterprise Authentication for Cloud Applications

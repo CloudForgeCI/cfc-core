@@ -53,6 +53,7 @@ class CapacityValidatorTest {
             100.0,                  // max
             "",                     // pattern
             "",                     // defaultFrom
+            "",                     // propertyKey
             false,                  // sensitive
             "",                     // sourceConfig
             new com.cloudforge.core.annotation.FieldTag[]{},  // tags
@@ -76,6 +77,7 @@ class CapacityValidatorTest {
             new String[]{},
             Double.MIN_VALUE,
             Double.MAX_VALUE,
+            "",
             "",
             "",
             false,

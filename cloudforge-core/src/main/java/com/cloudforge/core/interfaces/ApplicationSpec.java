@@ -263,6 +263,19 @@ public interface ApplicationSpec {
     }
 
     /**
+     * Auth modes allowed for a deployment target ({@code aws}, {@code ministack}, {@code localstack}).
+     *
+     * <p>Default: same as {@link #getSupportedAuthModes()}. Specs may restrict Cognito/OIDC
+     * on MiniStack while keeping it optional on LocalStack/AWS.</p>
+     *
+     * @param deploymentTarget target id, or null/blank for the default list
+     * @return non-empty list of auth mode strings
+     */
+    default List<String> getSupportedAuthModes(String deploymentTarget) {
+        return getSupportedAuthModes();
+    }
+
+    /**
      * Returns the recommended (default) authentication mode for this application.
      *
      * <p>This is the first mode from {@link #getSupportedAuthModes()}.</p>
@@ -271,6 +284,16 @@ public interface ApplicationSpec {
      */
     default String getRecommendedAuthMode() {
         return getSupportedAuthModes().get(0);
+    }
+
+    /**
+     * Recommended auth mode for a deployment target.
+     *
+     * @param deploymentTarget target id ({@code aws}, {@code ministack}, {@code localstack})
+     * @return first entry from {@link #getSupportedAuthModes(String)}
+     */
+    default String getRecommendedAuthMode(String deploymentTarget) {
+        return getSupportedAuthModes(deploymentTarget).get(0);
     }
 
     // ========== Path-Based Authentication ==========
@@ -524,6 +547,19 @@ public interface ApplicationSpec {
             return true; // Default to supported
         }
         return annotation.supportsEc2();
+    }
+
+    /**
+     * Whether this application requires a managed database (RDS) in the canonical template.
+     *
+     * <p>Reads {@link ApplicationPlugin#requiresDatabase()} when present; defaults to false.</p>
+     */
+    default boolean requiresDatabase() {
+        ApplicationPlugin annotation = getClass().getAnnotation(ApplicationPlugin.class);
+        if (annotation == null) {
+            return false;
+        }
+        return annotation.requiresDatabase();
     }
 
     /**

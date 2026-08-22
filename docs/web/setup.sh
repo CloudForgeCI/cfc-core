@@ -3,29 +3,29 @@
 
 set -e
 
-echo "🚀 Setting up Docusaurus for CloudForge CI documentation..."
+echo "Setting up Docusaurus documentation..."
 echo ""
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then
-  echo "❌ Error: package.json not found. Are you in docs/web/ directory?"
+  echo "Error: package.json not found. Run this script from docs/web/."
   exit 1
 fi
 
 # Install dependencies
-echo "📦 Installing Node.js dependencies..."
+echo "Installing Node.js dependencies..."
 npm install
 
 # Generate package-lock.json
-echo "✅ Generated package-lock.json"
+echo "Generated package-lock.json"
 
 # Test build
 echo ""
-echo "🔨 Testing documentation build..."
+echo "Testing documentation build..."
 npm run build
 
 echo ""
-echo "✅ Setup complete!"
+echo "Documentation build succeeded."
 echo ""
 echo "Next steps:"
 echo "  1. Replace static/img/logo.svg with your brand logo"

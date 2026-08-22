@@ -76,7 +76,9 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
     // Auto-scaling configuration for both Fargate and EC2 services (only when maxInstanceCapacity > 1)
     Integer maxCap = c.maxInstanceCapacity.get().orElse(null);
     Integer minCap = c.minInstanceCapacity.get().orElse(null);
-    boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1;
+    // Respect an explicit enableAutoScaling=false even when the capacity range would otherwise enable it.
+    boolean scale = maxCap != null && minCap != null && minCap > 0 && maxCap > 1
+        && !Boolean.FALSE.equals(c.cfc.enableAutoScaling());
     if (scale) {
       // Fargate autoscaling - use service.autoScaleTaskCount() directly
       // Check if callback has already been registered to prevent multiple registrations
@@ -98,22 +100,20 @@ public final class JenkinsServiceTopologyConfiguration implements TopologyConfig
         c.fargateAutoscalingCallbackRegistered.set(true);
       } else {
       }
+    }
 
-      // EC2 autoscaling - add AutoScalingGroup to target group
-      // Check if callback has already been registered to prevent multiple registrations
-      if (!c.ec2AutoscalingCallbackRegistered.get().isPresent()) {
-        whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
-          // Check if AutoScalingGroup has already been added to target group (inside callback to prevent multiple executions)
-          if (c.asgAddedToTargetGroup.get().isPresent()) {
-            return;
-          }
+    // EC2: register ASG with the ALB target group for both single- and multi-instance stacks
+    if (!c.ec2AutoscalingCallbackRegistered.get().isPresent()) {
+      whenBoth(c.asg, c.albTargetGroup, (asg, tg) -> {
+        if (c.asgAddedToTargetGroup.get().isPresent()) {
+          return;
+        }
 
-          tg.addTarget(asg);
-          c.asgAddedToTargetGroup.set(true);
-        });
-        c.ec2AutoscalingCallbackRegistered.set(true);
-      } else {
-      }
+        tg.addTarget(asg);
+        c.asgAddedToTargetGroup.set(true);
+      });
+      c.ec2AutoscalingCallbackRegistered.set(true);
+    } else {
     }
 
     // DNS A/AAAA records for ALB (for both SSL and non-SSL deployments)

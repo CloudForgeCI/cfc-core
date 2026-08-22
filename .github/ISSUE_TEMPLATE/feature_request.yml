@@ -1,0 +1,46 @@
+name: Feature request
+description: Propose a new capability or enhancement
+title: "[module:???] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Proposals should name the **target module** up front.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Primary module
+      options:
+        - "module:core (cloudforge-core)"
+        - "module:api (cloudforge-api)"
+        - "module:ministack (cloudforge-ministack)"
+        - "module:localstack (cloudforge-localstack)"
+        - "module:manager (cloudforge-manager)"
+        - "module:sample (cfc-testing / cloudforge-sample)"
+        - "cross-cutting (needs plan update)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: breaking
+    attributes:
+      label: Impact
+      options:
+        - label: This may require a breaking change (major version)
+        - label: This should stay additive (minor/patch)

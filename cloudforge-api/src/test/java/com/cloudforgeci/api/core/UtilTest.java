@@ -3,6 +3,7 @@ package com.cloudforgeci.api.core;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -27,7 +28,7 @@ class UtilTest {
         contextMap.put("region", "us-east-1");
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(contextMap);
+        DeploymentContext context = Util.createDeploymentContext(contextMap);
 
         // Then: Should create valid DeploymentContext
         assertNotNull(context);
@@ -39,7 +40,7 @@ class UtilTest {
         String json = "{\"stackName\":\"TestStack\",\"securityProfile\":\"STAGING\",\"region\":\"us-west-2\"}";
 
         // When: Extracting deployment context from JSON
-        DeploymentContext context = Util.extractDeploymentContext(json);
+        DeploymentContext context = Util.createDeploymentContext(json);
 
         // Then: Should parse JSON and create DeploymentContext
         assertNotNull(context);
@@ -51,7 +52,7 @@ class UtilTest {
         Object nullInput = null;
 
         // When: Extracting deployment context from null
-        DeploymentContext context = Util.extractDeploymentContext(nullInput);
+        DeploymentContext context = Util.createDeploymentContext(nullInput);
 
         // Then: Should create empty DeploymentContext
         assertNotNull(context);
@@ -63,7 +64,7 @@ class UtilTest {
         String emptyJson = "";
 
         // When: Extracting deployment context from empty string
-        DeploymentContext context = Util.extractDeploymentContext(emptyJson);
+        DeploymentContext context = Util.createDeploymentContext(emptyJson);
 
         // Then: Should create empty DeploymentContext
         assertNotNull(context);
@@ -75,7 +76,7 @@ class UtilTest {
         String whitespaceJson = "   ";
 
         // When: Extracting deployment context from whitespace
-        DeploymentContext context = Util.extractDeploymentContext(whitespaceJson);
+        DeploymentContext context = Util.createDeploymentContext(whitespaceJson);
 
         // Then: Should create empty DeploymentContext
         assertNotNull(context);
@@ -88,7 +89,7 @@ class UtilTest {
 
         // When/Then: Should throw RuntimeException
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-            Util.extractDeploymentContext(invalidJson);
+            Util.createDeploymentContext(invalidJson);
         });
 
         assertTrue(exception.getMessage().contains("Failed to parse context JSON"));
@@ -109,7 +110,7 @@ class UtilTest {
             """;
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(complexJson);
+        DeploymentContext context = Util.createDeploymentContext(complexJson);
 
         // Then: Should parse all properties
         assertNotNull(context);
@@ -124,7 +125,7 @@ class UtilTest {
         contextMap.put(true, "boolean-key");
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(contextMap);
+        DeploymentContext context = Util.createDeploymentContext(contextMap);
 
         // Then: Should convert keys to strings and create context
         assertNotNull(context);
@@ -136,7 +137,7 @@ class UtilTest {
         Map<String, Object> emptyMap = new HashMap<>();
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(emptyMap);
+        DeploymentContext context = Util.createDeploymentContext(emptyMap);
 
         // Then: Should create empty DeploymentContext
         assertNotNull(context);
@@ -152,7 +153,7 @@ class UtilTest {
         contextMap.put("tags", Map.of("Environment", "Production"));
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(contextMap);
+        DeploymentContext context = Util.createDeploymentContext(contextMap);
 
         // Then: Should preserve data types and create context
         assertNotNull(context);
@@ -164,7 +165,7 @@ class UtilTest {
         String json = "{\"stackName\":\"TestStack\",\"enableMonitoring\":true,\"guardDutyEnabled\":false}";
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(json);
+        DeploymentContext context = Util.createDeploymentContext(json);
 
         // Then: Should parse booleans correctly and create context
         assertNotNull(context);
@@ -176,7 +177,7 @@ class UtilTest {
         String json = "{\"stackName\":\"TestStack\",\"logRetentionDays\":180,\"maxAzs\":3}";
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(json);
+        DeploymentContext context = Util.createDeploymentContext(json);
 
         // Then: Should parse numbers correctly and create context
         assertNotNull(context);
@@ -191,7 +192,7 @@ class UtilTest {
         contextMap.put("description", "Stack with special chars: @#$%");
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(contextMap);
+        DeploymentContext context = Util.createDeploymentContext(contextMap);
 
         // Then: Should preserve special characters and create context
         assertNotNull(context);
@@ -203,7 +204,7 @@ class UtilTest {
         String json = "{\"stackName\":\"TestStack\",\"tags\":{\"Environment\":\"Production\",\"Team\":\"DevOps\"}}";
 
         // When: Extracting deployment context
-        DeploymentContext context = Util.extractDeploymentContext(json);
+        DeploymentContext context = Util.createDeploymentContext(json);
 
         // Then: Should handle nested objects and create context
         assertNotNull(context);
@@ -216,12 +217,31 @@ class UtilTest {
         contextMap.put("stackName", "TestStack");
 
         // When: Extracting deployment context multiple times
-        DeploymentContext context1 = Util.extractDeploymentContext(contextMap);
-        DeploymentContext context2 = Util.extractDeploymentContext(contextMap);
+        DeploymentContext context1 = Util.createDeploymentContext(contextMap);
+        DeploymentContext context2 = Util.createDeploymentContext(contextMap);
 
         // Then: Should create separate context instances
         assertNotNull(context1);
         assertNotNull(context2);
         assertNotSame(context1, context2);
+    }
+
+    /** Regression: {@code complianceFrameworks} arriving as a {@code List} (e.g. from a raw JSON
+     *  array — {@code convertToContext} legitimately produces this shape) previously threw
+     *  {@code ClassCastException} on a blind {@code (String)} cast, before {@code
+     *  DeploymentConfig.fromMap} ever got a chance to normalize it. Must normalize to the same
+     *  comma-joined string form a plain string value already uses. */
+    @Test
+    void complianceFrameworksAsListIsNormalizedNotCastBlind() {
+        Map<String, Object> contextMap = new HashMap<>();
+        contextMap.put("stackName", "TestStack");
+        contextMap.put("complianceFrameworks", List.of("soc2", "hipaa"));
+
+        DeploymentContext context = Util.createDeploymentContext(contextMap);
+
+        assertNotNull(context);
+        assertNotNull(context.complianceFrameworks());
+        assertTrue(context.complianceFrameworks().toUpperCase().contains("SOC2"));
+        assertTrue(context.complianceFrameworks().toUpperCase().contains("HIPAA"));
     }
 }

@@ -1,12 +1,18 @@
 package com.cloudforge.core.config;
 
 import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.enums.ComplianceFrameworkType;
 import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -63,17 +69,23 @@ class DeploymentConfigTest {
 
     @Test
     void testDefaultDatabaseEngine() {
-        assertEquals("postgres", config.databaseEngine);
+        // Deliberately null, not a static "postgres" default — DeploymentContextPreparer only
+        // resolves a field's defaultFrom (here, ApplicationSpec.databaseRequirement().engine())
+        // when the field is currently null/blank. A non-null static default here previously
+        // blocked that resolution for every app, silently forcing engine=postgres regardless of
+        // what the deployed application actually required (broke MySQL-only apps like WordPress
+        // with an invalid "mysql15" RDS parameter group family). See the field's javadoc.
+        assertNull(config.databaseEngine);
     }
 
     @Test
     void testDefaultDatabaseVersion() {
-        assertEquals("15", config.databaseVersion);
+        assertNull(config.databaseVersion);
     }
 
     @Test
     void testDefaultDatabaseInstanceClass() {
-        assertEquals("db.t3.small", config.databaseInstanceClass);
+        assertNull(config.databaseInstanceClass);
     }
 
     @Test
@@ -104,6 +116,56 @@ class DeploymentConfigTest {
     @Test
     void testDefaultUnhealthyThreshold() {
         assertEquals(3, config.unhealthyThreshold);
+    }
+
+    @Test
+    void deserializesDeploymentContextFields() throws Exception {
+        DeploymentConfig loaded = DeploymentConfig.fromJson("""
+            {
+              "stackName": "jtest",
+              "applicationId": "jenkins",
+              "domain": "cloudforge.localhost",
+              "subdomain": "jenkins",
+              "runtime": "FARGATE"
+            }
+            """);
+
+        assertEquals("jtest", loaded.stackName);
+        assertEquals("jenkins", loaded.applicationId);
+        assertEquals("cloudforge.localhost", loaded.domain);
+        assertEquals("jenkins", loaded.subdomain);
+        assertEquals(RuntimeType.FARGATE, loaded.runtime);
+    }
+
+    @Test
+    void deserializesSavedDeploymentContextFile(@TempDir Path tempDir) throws Exception {
+        // Mirrors cfc-testing/deployment-context.json's shape — that file is gitignored (a local
+        // interactive-deployer artifact), so this writes its own fixture rather than depending on
+        // a path outside the module that won't exist on a clean checkout.
+        Path fixture = tempDir.resolve("deployment-context.json");
+        Files.writeString(fixture, """
+            {
+              "stackName": "jtest",
+              "applicationId": "jenkins",
+              "applicationName": "Jenkins",
+              "environment": "prod",
+              "runtime": "FARGATE",
+              "authMode": "application-oidc",
+              "domain": "cloudforge.localhost",
+              "subdomain": "jenkins",
+              "fqdn": "jenkins.cloudforge.localhost",
+              "enableSsl": false,
+              "complianceFrameworks": ["soc2"]
+            }
+            """);
+
+        DeploymentConfig loaded = DeploymentConfig.fromFile(fixture);
+
+        assertEquals("jtest", loaded.stackName);
+        assertEquals("cloudforge.localhost", loaded.domain);
+        assertEquals("jenkins", loaded.subdomain);
+        assertEquals("jenkins", loaded.applicationId);
+        assertEquals(List.of(ComplianceFrameworkType.SOC2), loaded.complianceFrameworks);
     }
 
     // ========== Boolean Default Tests ==========
@@ -509,5 +571,27 @@ class DeploymentConfigTest {
         assertEquals(500, config.databaseAllocatedStorageGB);
         assertTrue(config.databaseMultiAz);
         assertEquals(35, config.databaseBackupRetentionDays);
+    }
+
+    @Test
+    void toHistoryContextMapIncludesNonSensitiveFieldsAndRedactsSensitive() {
+        config.stackName = "CloudForgeManager-Dev";
+        config.applicationId = "cloudforge-manager";
+        config.environment = "development";
+        config.region = "us-east-1";
+        config.oidcClientSecretName = "my/oidc/secret";
+        config.managerHistoryToken = "super-secret-token";
+        config.managerUrl = "http://127.0.0.1:1958";
+
+        var history = config.toHistoryContextMap();
+
+        assertEquals("CloudForgeManager-Dev", history.get("stackName"));
+        assertEquals("cloudforge-manager", history.get("applicationId"));
+        assertEquals("development", history.get("env"));
+        assertEquals("us-east-1", history.get("region"));
+        assertEquals("http://127.0.0.1:1958", history.get("managerUrl"));
+        assertFalse(history.containsKey("oidcClientSecretName"));
+        assertFalse(history.containsKey("managerHistoryToken"));
+        assertFalse(history.containsKey("environment"));
     }
 }

@@ -2,14 +2,17 @@
 
 ## Overview
 
-CloudForge CI provides **automated compliance enforcement** that adapts to your selected compliance frameworks (HIPAA, SOC2, PCI-DSS, GDPR). The system automatically configures security controls, retention policies, and remediation actions based on the strictest requirements of your enabled frameworks.
+CloudForge configures selected security controls, retention policies, and remediation
+actions based on enabled compliance frameworks (HIPAA, SOC2, PCI-DSS, and GDPR). When
+framework requirements differ, the configuration applies the strictest encoded value.
+These controls can support a compliance program but do not establish certification.
 
 ## Key Features
 
 ### 1. Compliance-Driven Configuration
-- **Automatic Policy Selection**: Requirements automatically adapt based on enabled frameworks
+- **Policy Selection**: Configuration values derive from enabled frameworks
 - **Strictest-Wins Logic**: When multiple frameworks are enabled, the strictest requirement is applied
-- **Zero Manual Configuration**: No need to manually configure compliance settings
+- **Overrides**: Deployment configuration can be reviewed and adjusted for organization-specific requirements
 
 ### 2. Continuous Enforcement
 - **AWS Config Monitoring**: Continuously monitors resources for compliance
@@ -17,7 +20,7 @@ CloudForge CI provides **automated compliance enforcement** that adapts to your 
 - **Persistent Settings**: Account-level settings survive stack deletion
 
 ### 3. Audit Trail
-- **Comprehensive Logging**: All compliance actions are logged to CloudTrail
+- **Action Logging**: Supported compliance actions are logged to CloudTrail
 - **Lifecycle Management**: Automatic log retention and archival based on compliance requirements
 - **Version Control**: S3 versioning enabled on all compliance buckets
 

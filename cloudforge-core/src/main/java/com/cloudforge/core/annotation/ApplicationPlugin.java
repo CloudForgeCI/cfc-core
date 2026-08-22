@@ -38,6 +38,7 @@ import java.lang.annotation.*;
  *   <li><strong>artifactregistry:</strong> Artifact repositories (Nexus, Harbor)</li>
  *   <li><strong>secrets:</strong> Secrets management (Vault)</li>
  *   <li><strong>collaboration:</strong> Team collaboration (Mattermost)</li>
+ *   <li><strong>operations:</strong> Operations (CloudForge Manager)</li>
  *   <li><strong>code-quality:</strong> Code analysis (SonarQube, etc.)</li>
  * </ul>
  *
@@ -61,7 +62,7 @@ public @interface ApplicationPlugin {
      * <p>This value is used in deployment-context.json to specify which application to deploy:</p>
      * <pre>{@code
      * {
-     *   "application": "jenkins",
+     *   "applicationId": "jenkins",
      *   "runtimeType": "FARGATE"
      * }
      * }</pre>
@@ -78,7 +79,7 @@ public @interface ApplicationPlugin {
      * <p>Categories help organize applications in deployment tools and documentation.</p>
      *
      * <p>Standard categories: cicd, vcs, monitoring, analytics, database, artifactregistry,
-     * secrets, collaboration, code-quality</p>
+     * secrets, collaboration, operations, code-quality</p>
      *
      * @return the application category
      */

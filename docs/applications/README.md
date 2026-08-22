@@ -1,6 +1,6 @@
 # CloudForge ApplicationSpec Catalog
 
-This directory contains ApplicationSpec implementations for deploying various containerized applications using CloudForge 3.0.0.
+This directory contains ApplicationSpec implementations for deploying various containerized applications using CloudForge 3.1.0.
 
 ## Overview
 
@@ -491,6 +491,71 @@ storage:
 
 ---
 
+---
+
+## CMS / E-commerce / Platform Applications (19 Platforms)
+
+CloudForge 3.1.0 adds 19 PHP-based CMS platforms under the `cms-service` topology. Unlike the general `ApplicationSpec` plugins above, these implement `CmsSpec` which adds PHP runtime, media storage, CDN path routing, Redis object cache, and cron management on top of the base spec.
+
+**Quick deploy any CMS:**
+
+```json
+{
+  "cfc": {
+    "topology":    "cms-service",
+    "applicationId": "wordpress",
+    "runtime":     "fargate",
+    "domain":      "example.com",
+    "enableSsl":   true
+  }
+}
+```
+
+For the full CMS guide — resource requirements, OIDC methods, compliance notes, and how to write a custom CMS plugin — see **[CMS Deployment Guide](CMS.md)**.
+
+### Content Management
+
+| Application | ID | PHP | Default Image | OIDC | S3 Media | Redis |
+|-------------|-----|-----|---------------|------|---------|-------|
+| WordPress | `wordpress` | 8.2 | `wordpress:php8.2-fpm-alpine` | ✅ OpenID Connect Generic | ✅ | ✅ |
+| WooCommerce | `woocommerce` | 8.2 | `wordpress:php8.2-fpm-alpine` | ✅ OpenID Connect Generic | ✅ | ✅ |
+| Drupal | `drupal` | 8.2 | `drupal:10-php8.2-fpm-alpine` | ✅ Native OIDC module | ✅ | ✅ |
+| Joomla | `joomla` | 8.2 | `joomla:php8.2-fpm-alpine` | ✅ miniOrange plugin | ✅ | ✅ |
+| TYPO3 | `typo3` | 8.2 | `typo3/cms-base-distribution` | — | — | ✅ |
+| Concrete CMS | `concrete-cms` | 8.2 | `concretecms/concretecms` | — | — | — |
+| October CMS | `october-cms` | 8.2 | `octobercms/october` | — | — | — |
+
+### E-commerce
+
+| Application | ID | PHP | CPU | Memory | Notes |
+|-------------|-----|-----|-----|--------|-------|
+| Magento 2 | `magento` | 8.2 | 4096 | 8192 MB | Enterprise; 3-database Redis; PCI-DSS |
+| PrestaShop | `prestashop` | 8.1 | 2048 | 4096 MB | S3 media, Redis |
+| OpenCart | `opencart` | 8.2 | 1024 | 2048 MB | Lightweight |
+| Sylius | `sylius` | 8.2 | 2048 | 4096 MB | Symfony-based |
+| Bagisto | `bagisto` | 8.2 | 1024 | 2048 MB | Laravel-based |
+
+### Forum / Community
+
+| Application | ID | PHP |
+|-------------|-----|-----|
+| phpBB | `phpbb` | 8.2 |
+| Flarum | `flarum` | 8.2 |
+| MyBB | `mybb` | 8.2 |
+
+### CRM / Wiki / LMS / Social
+
+| Application | ID | Category | Notes |
+|-------------|-----|----------|-------|
+| SuiteCRM | `suitecrm` | CRM | GDPR-relevant |
+| MediaWiki | `mediawiki` | Wiki | Wikipedia engine |
+| Moodle | `moodle` | LMS | FERPA-relevant |
+| UNA / Dolphin | `dolphin-una` | Social | ALB OIDC |
+
+**Package**: `com.cloudforgeci.api.application.cms`
+
+---
+
 ## Compliance Summary Matrix
 
 | Application | SOC2 | PCI-DSS | HIPAA | GDPR | FERPA | Risk Level |
@@ -709,5 +774,5 @@ For questions or issues with ApplicationSpecs:
 
 ---
 
-**CloudForge 3.0.0** - Universal Application Deployment Platform
+**CloudForge 3.1.0** - Universal Application Deployment Platform
 *Making cloud infrastructure deployment painless*

@@ -76,13 +76,9 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
         // Instance security group - only for EC2 runtime
         if (c.runtime == RuntimeType.EC2) {
             whenBoth(c.vpc, c.instanceSg, (vpc, instanceSg) -> {
-                // SSH only from VPC CIDR
-                instanceSg.addIngressRule(
-                    Peer.ipv4(vpc.getVpcCidrBlock()),
-                    Port.tcp(22),
-                    "SSH from VPC CIDR (STAGING)",
-                    false
-                );
+                // SSH access is provided via AWS Systems Manager Session Manager (no port 22 needed).
+                // All IAM configurations already include AmazonSSMManagedInstanceCore.
+                // Connect with: aws ssm start-session --target <instance-id>
 
                 // Application port only from ALB security group
                 if (c.albSg.get().isPresent()) {

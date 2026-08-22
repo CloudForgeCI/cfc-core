@@ -12,16 +12,18 @@ import software.constructs.Construct;
 
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 /**
- * OIDC Authentication Factory for ALB-based authentication with AWS IAM Identity Center.
+ * OIDC Authentication Factory for ALB-based authentication with any OIDC provider.
  *
- * This factory handles OIDC authentication ONLY for AWS IAM Identity Center (formerly AWS SSO).
- * For Cognito User Pool authentication, use CognitoAuthenticationFactory instead.
+ * This factory handles OIDC authentication for manual endpoint configuration (IAM Identity Center,
+ * Okta, Auth0, or any external IdP). For Cognito User Pool authentication, use
+ * CognitoAuthenticationFactory instead.
  *
  * Provides:
- * - Infrastructure-level authentication before requests reach Jenkins
- * - Integration with AWS IAM Identity Center for enterprise SSO
+ * - Infrastructure-level authentication before requests reach the application
+ * - Integration with any OIDC-compliant identity provider via manual endpoint configuration
  * - Compliance with security requirements (PCI-DSS Req 8, HIPAA §164.312(d), SOC 2 CC6.2, GDPR Art. 32)
  *
  * Configuration (MANUAL OIDC ENDPOINTS - Recommended):
@@ -132,7 +134,7 @@ public class OidcAuthenticationFactory extends BaseFactory {
             return;
         }
 
-        // Priority 3: Fall back to legacy auto-construction approach (not recommended)
+        // Fallback: legacy auto-construction approach from ssoInstanceArn (not recommended, may not work)
         if (ssoInstanceArn != null && !ssoInstanceArn.isEmpty()) {
             LOG.warning("Using legacy auto-constructed OIDC endpoints from ssoInstanceArn");
             LOG.warning("This may not work with all IAM Identity Center configurations");
@@ -243,19 +245,23 @@ public class OidcAuthenticationFactory extends BaseFactory {
             ctx.albTargetGroup.onSet(targetGroup -> {
                 LOG.info("Adding OIDC authentication rule to HTTPS listener");
 
-                // Calculate effective protected paths
+                // Calculate effective paths
                 List<String> effectiveProtectedPaths = calculateEffectiveProtectedPaths();
+                List<String> effectivePublicPaths = calculateEffectivePublicPaths();
 
-                if (effectiveProtectedPaths.isEmpty()) {
-                    // No specific paths defined - protect everything (existing behavior)
-                    LOG.info("No specific protected paths defined - protecting all paths");
+                if (effectiveProtectedPaths.isEmpty() && effectivePublicPaths.isEmpty()) {
+                    // No path configuration — authenticate all paths (most secure)
+                    LOG.info("No path configuration — authenticating all paths");
                     configureFullOidcAuthenticationRule(https, targetGroup, finalIssuer, finalAuthEndpoint,
                             finalTokenEndpoint, finalUserInfoEndpoint, finalClientId, finalSecretName);
                 } else {
-                    // Specific paths defined - create path-based authentication rules
-                    LOG.info("Path-based authentication enabled with " + effectiveProtectedPaths.size() + " protected path(s)");
+                    // Path-based rules: explicit public paths bypass auth; everything else requires auth
+                    LOG.info("Path-based authentication: " + effectiveProtectedPaths.size()
+                            + " explicitly protected, " + effectivePublicPaths.size()
+                            + " explicitly public (all other paths require auth)");
                     configurePathBasedOidcAuthenticationRules(https, targetGroup, finalIssuer, finalAuthEndpoint,
-                            finalTokenEndpoint, finalUserInfoEndpoint, finalClientId, finalSecretName, effectiveProtectedPaths);
+                            finalTokenEndpoint, finalUserInfoEndpoint, finalClientId, finalSecretName,
+                            effectiveProtectedPaths, effectivePublicPaths);
                 }
 
                 LOG.info("OIDC authentication configured successfully");
@@ -315,6 +321,30 @@ public class OidcAuthenticationFactory extends BaseFactory {
     }
 
     /**
+     * Compute the explicit public paths that must bypass authentication.
+     * These paths get dedicated forward-only rules at the highest priority so they
+     * can never be shadowed by a protected-path rule (e.g. a wildcard in protectedPaths).
+     *
+     * Sources (union):
+     *   - DeploymentContext.publicPaths
+     *   - ApplicationSpec.publicPaths()
+     */
+    private List<String> calculateEffectivePublicPaths() {
+        java.util.Set<String> paths = new java.util.LinkedHashSet<>();
+        if (publicPaths != null && !publicPaths.isEmpty()) {
+            paths.addAll(publicPaths);
+            LOG.info("Public paths from DeploymentContext: " + publicPaths);
+        }
+        if (applicationSpec != null && !applicationSpec.publicPaths().isEmpty()) {
+            paths.addAll(applicationSpec.publicPaths());
+            LOG.info("Public paths from ApplicationSpec: " + applicationSpec.publicPaths());
+        }
+        List<String> result = new java.util.ArrayList<>(paths);
+        LOG.info("Effective public paths (no auth): " + (result.isEmpty() ? "[none]" : result));
+        return result;
+    }
+
+    /**
      * Configure OIDC authentication rule that protects all paths (original behavior).
      */
     private void configureFullOidcAuthenticationRule(
@@ -355,11 +385,15 @@ public class OidcAuthenticationFactory extends BaseFactory {
     /**
      * Configure path-based OIDC authentication rules.
      *
-     * <p>Creates separate rules:</p>
-     * <ul>
-     *   <li>Priority 1-N: Protected paths require authentication</li>
-     *   <li>Priority N+1: Catch-all rule forwards without authentication</li>
-     * </ul>
+     * <p>Rule ordering (highest → lowest ALB priority):</p>
+     * <ol>
+     *   <li>Explicit public paths — forward without auth (health checks, webhooks, etc.)</li>
+     *   <li>Explicitly protected paths — authenticate then forward</li>
+     *   <li>Catch-all {@code /*} — authenticate then forward (secure default; no unauthenticated fallthrough)</li>
+     * </ol>
+     *
+     * <p>Public paths are placed at the highest priority so they cannot be shadowed by a
+     * wildcard pattern in {@code protectedPaths} (e.g. {@code /*}).</p>
      */
     private void configurePathBasedOidcAuthenticationRules(
             ApplicationListener https,
@@ -370,24 +404,54 @@ public class OidcAuthenticationFactory extends BaseFactory {
             String userInfoEndpoint,
             String clientId,
             String secretName,
-            List<String> protectedPathPatterns) {
+            List<String> protectedPathPatterns,
+            List<String> publicPathPatterns) {
 
-        // ALB rules can have multiple path patterns per rule (up to 5 values per condition)
-        // Group paths into batches of 5 for efficiency
+        // Public paths are registered at the highest ALB listener priority (see this method's own
+        // javadoc) so a broad public pattern can silently shadow a narrower protected one — e.g.
+        // public=/* would forward every request, including /admin/*, without ever reaching the
+        // protected rule's auth check. Set.removeAll in calculateEffectiveProtectedPaths only
+        // catches an exact literal duplicate between the two lists, not this glob-containment
+        // case, so it doesn't guard against this on its own. Fail loud at synth time instead of
+        // silently deploying a listener that exposes a "protected" route unauthenticated.
+        for (String publicPattern : publicPathPatterns) {
+            for (String protectedPattern : protectedPathPatterns) {
+                if (publicPatternShadowsProtectedPattern(publicPattern, protectedPattern)) {
+                    throw new IllegalStateException(
+                        "OIDC path configuration error: public path pattern '" + publicPattern
+                            + "' would shadow protected path pattern '" + protectedPattern
+                            + "' (public paths are evaluated at higher ALB listener priority, so '"
+                            + protectedPattern + "' would never reach its authentication rule). "
+                            + "Narrow the public pattern, or remove '" + protectedPattern
+                            + "' from protectedPaths if it's genuinely meant to be public.");
+                }
+            }
+        }
+
+        // ALB rules support up to 5 path-pattern values per condition
         int batchSize = 5;
         int priority = 1;
 
-        for (int i = 0; i < protectedPathPatterns.size(); i += batchSize) {
-            int endIndex = Math.min(i + batchSize, protectedPathPatterns.size());
-            List<String> batch = protectedPathPatterns.subList(i, endIndex);
-
-            String ruleName = "OidcAuth" + (priority > 1 ? "-" + priority : "");
-
+        // Step 1: Explicit public paths — forward without auth (highest priority)
+        for (int i = 0; i < publicPathPatterns.size(); i += batchSize) {
+            List<String> batch = publicPathPatterns.subList(i, Math.min(i + batchSize, publicPathPatterns.size()));
+            String ruleName = "PublicPath" + (i == 0 ? "" : "-" + (i / batchSize + 1));
             https.addAction(ruleName, AddApplicationActionProps.builder()
                 .priority(priority)
-                .conditions(List.of(
-                    ListenerCondition.pathPatterns(batch)
-                ))
+                .conditions(List.of(ListenerCondition.pathPatterns(batch)))
+                .action(ListenerAction.forward(List.of(targetGroup)))
+                .build());
+            LOG.info("  Rule '" + ruleName + "' (priority " + priority + "): Forward without auth for " + batch);
+            priority++;
+        }
+
+        // Step 2: Explicitly protected paths — authenticate then forward
+        for (int i = 0; i < protectedPathPatterns.size(); i += batchSize) {
+            List<String> batch = protectedPathPatterns.subList(i, Math.min(i + batchSize, protectedPathPatterns.size()));
+            String ruleName = "OidcAuth" + (i == 0 ? "" : "-" + (i / batchSize + 1));
+            https.addAction(ruleName, AddApplicationActionProps.builder()
+                .priority(priority)
+                .conditions(List.of(ListenerCondition.pathPatterns(batch)))
                 .action(ListenerAction.authenticateOidc(
                     AuthenticateOidcOptions.builder()
                         .issuer(issuer)
@@ -402,22 +466,32 @@ public class OidcAuthenticationFactory extends BaseFactory {
                         .build()
                 ))
                 .build());
-
             LOG.info("  Rule '" + ruleName + "' (priority " + priority + "): Authenticate for paths " + batch);
             priority++;
         }
 
-        // Add catch-all rule that forwards without authentication (lower priority)
-        https.addAction("PublicForward", AddApplicationActionProps.builder()
+        // Step 3: Catch-all — authenticate then forward (secure default; replaces old forward-only catch-all)
+        // Any path not explicitly listed in publicPaths or protectedPaths requires authentication.
+        https.addAction("AuthCatchAll", AddApplicationActionProps.builder()
             .priority(priority)
-            .conditions(List.of(
-                ListenerCondition.pathPatterns(List.of("/*"))
+            .conditions(List.of(ListenerCondition.pathPatterns(List.of("/*"))))
+            .action(ListenerAction.authenticateOidc(
+                AuthenticateOidcOptions.builder()
+                    .issuer(issuer)
+                    .authorizationEndpoint(authorizationEndpoint)
+                    .tokenEndpoint(tokenEndpoint)
+                    .userInfoEndpoint(userInfoEndpoint)
+                    .clientId(clientId)
+                    .clientSecret(SecretValue.secretsManager(secretName))
+                    .scope("openid")
+                    .onUnauthenticatedRequest(UnauthenticatedAction.AUTHENTICATE)
+                    .next(ListenerAction.forward(List.of(targetGroup)))
+                    .build()
             ))
-            .action(ListenerAction.forward(List.of(targetGroup)))
             .build());
 
-        LOG.info("  Rule 'PublicForward' (priority " + priority + "): Forward without auth for all other paths");
-        LOG.info("  Authentication: Only protected paths require OIDC authentication");
+        LOG.info("  Rule 'AuthCatchAll' (priority " + priority + "): Authenticate all remaining paths (secure default)");
+        LOG.info("  Only paths listed in publicPaths bypass authentication; everything else requires OIDC");
     }
 
 
@@ -465,5 +539,38 @@ public class OidcAuthenticationFactory extends BaseFactory {
         // IAM Identity Center ARNs don't contain account IDs
         // Use the account from the CDK stack instead
         return Stack.of(this).getAccount();
+    }
+
+    /**
+     * Whether every request path {@code protectedPattern} matches would also match {@code
+     * publicPattern} — i.e. the public rule (evaluated first, see {@link
+     * #configurePathBasedOidcAuthenticationRules}'s own javadoc) would forward the request before
+     * the protected rule's authentication check is ever reached. ALB path patterns support only
+     * {@code *} (zero-or-more of any character) and {@code ?} (exactly one character), so this
+     * checks containment by building one concrete, representative path from {@code
+     * protectedPattern} (each wildcard replaced with a literal token) and testing it against
+     * {@code publicPattern}'s own glob — sufficient for real ALB glob syntax, not general regex
+     * containment.
+     */
+    private static boolean publicPatternShadowsProtectedPattern(String publicPattern, String protectedPattern) {
+        String representativePath = protectedPattern.replace("*", "x").replace("?", "x");
+        return globToRegex(publicPattern).matcher(representativePath).matches();
+    }
+
+    private static Pattern globToRegex(String pattern) {
+        StringBuilder regex = new StringBuilder();
+        for (char c : pattern.toCharArray()) {
+            switch (c) {
+                case '*' -> regex.append(".*");
+                case '?' -> regex.append('.');
+                default -> {
+                    if ("\\.[]{}()+-^$|".indexOf(c) >= 0) {
+                        regex.append('\\');
+                    }
+                    regex.append(c);
+                }
+            }
+        }
+        return Pattern.compile(regex.toString());
     }
 }

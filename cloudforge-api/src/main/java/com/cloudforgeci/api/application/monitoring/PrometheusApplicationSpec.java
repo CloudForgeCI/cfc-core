@@ -15,7 +15,7 @@ import java.util.List;
  * <p><strong>Key Features:</strong></p>
  * <ul>
  *   <li>Multi-dimensional time-series data</li>
- *   <li>Powerful query language (PromQL)</li>
+ *   <li>PromQL query language</li>
  *   <li>Service discovery</li>
  *   <li>Alerting with Alertmanager</li>
  * </ul>

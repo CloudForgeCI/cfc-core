@@ -1,6 +1,6 @@
 # CloudForge Application Guides
 
-Comprehensive guides for deploying applications with CloudForge, including detailed configuration options, deployment-context examples, and best practices.
+Guides for deploying applications with CloudForge include configuration options and deployment-context examples.
 
 ## Available Applications
 
@@ -60,6 +60,12 @@ Comprehensive guides for deploying applications with CloudForge, including detai
 | Application | Status | Guide |
 |-------------|--------|-------|
 | **Vault** | Available | [Vault Guide](vault.md) |
+
+### Operations
+
+| Application | Status | Guide |
+|-------------|--------|-------|
+| **CloudForge Manager** | Available | [CloudForge Manager Guide](cloudforge-manager.md) |
 
 ### Code Quality (Plugin Example)
 
@@ -129,6 +135,8 @@ docs/examples/applications/
 ├── metabase-production.json   # Metabase production
 ├── gitlab-production.json     # GitLab with registry
 ├── grafana-production.json    # Grafana with database
+├── cloudforge-manager-dev.json
+├── cloudforge-manager-production.json  # optional Postgres
 └── ... more examples
 ```
 

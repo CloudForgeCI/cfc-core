@@ -121,6 +121,7 @@ class JenkinsOidcIntegrationTest {
         assertTrue(config.contains("manual:"));
         assertTrue(config.contains("authorizationServerUrl:"));
         assertTrue(config.contains("tokenServerUrl:"));
+        assertTrue(config.contains("tokenAuthMethod: client_secret_basic"));
         assertTrue(config.contains("userInfoServerUrl:"));
     }
 

@@ -1,6 +1,6 @@
 # CloudForge CI - Quick Start Guide
 
-Get CloudForge CI running in your AWS account in **under 10 minutes** with zero compliance overhead, or configure a fully compliant production environment in under 30 minutes.
+This guide provides example configurations for development and production deployments. Deployment duration and AWS service costs depend on the selected resources, region, account state, and AWS service availability. The compliance configurations implement and validate technical controls; they do not certify an environment.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ Get CloudForge CI running in your AWS account in **under 10 minutes** with zero 
 - AWS CDK installed (`npm install -g aws-cdk`)
 - Java 21 (for building from source)
 
-## Path 1: Fastest Start (5 Minutes)
+## Path 1: Minimal Development Deployment
 
 **Goal**: Get Jenkins running with minimal configuration for evaluation/development.
 
@@ -26,7 +26,7 @@ cd cfc-testing
 ### Step 2: Use Minimal Dev Template
 
 ```bash
-cp docs/examples/dev-minimal.json deployment-context.json
+cp ../docs/examples/dev-minimal.json deployment-context.json
 ```
 
 ### Step 3: Bootstrap CDK (First Time Only)
@@ -45,7 +45,7 @@ cdk deploy
 
 ### Step 5: Access Jenkins
 
-After deployment completes (3-5 minutes):
+After the deployment completes:
 
 ```bash
 # Get ALB DNS name
@@ -73,7 +73,7 @@ Navigate to the DNS name in your browser. **No authentication required** for dev
 
 ---
 
-## Path 2: Standard Development (10 Minutes)
+## Path 2: Standard Development
 
 **Goal**: Team development environment with basic security.
 
@@ -124,15 +124,15 @@ Navigate to ALB DNS, authenticate with Cognito (you'll create an account on firs
 
 ---
 
-## Path 3: Production with SOC 2 (30 Minutes)
+## Path 3: Production with SOC 2 Controls
 
-**Goal**: Production-ready deployment with SOC 2 compliance.
+**Goal**: Production deployment with infrastructure controls mapped to SOC 2.
 
 ### Step 1: Prepare Configuration
 
 ```bash
 cd cfc-testing
-cp docs/examples/production-soc2.json deployment-context.json
+cp ../docs/examples/production-soc2.json deployment-context.json
 ```
 
 ### Step 2: Customize for Your Environment
@@ -178,15 +178,15 @@ grep "Type: AWS::" /tmp/template.yaml | wc -l
 cdk deploy --require-approval never
 ```
 
-Deployment takes 15-20 minutes. Components deployed:
-1. VPC, subnets, NAT gateways (2 min)
-2. Security groups (1 min)
-3. ALB, target groups (3 min)
-4. EFS file system (2 min)
-5. EC2 Auto Scaling Group (5 min)
-6. Cognito User Pool (2 min)
-7. AWS Config, CloudTrail, GuardDuty (3 min)
-8. Config Rules and auto-remediation (2 min)
+The deployment provisions:
+1. VPC, subnets, and NAT gateways
+2. Security groups
+3. ALB and target groups
+4. EFS file system
+5. EC2 Auto Scaling Group
+6. Cognito User Pool
+7. AWS Config, CloudTrail, and GuardDuty
+8. Config rules and auto-remediation
 
 ### Step 6: Verify Deployment
 
@@ -243,15 +243,15 @@ Navigate to `https://jenkins.mycompany.com` (or ALB DNS if domain not configured
 - ✅ 2-year log retention
 - **Cost**: ~$400/month
 
-**✅ SOC 2 Type II Ready** - All technical controls implemented
+**Compliance scope:** This configuration enables the listed technical controls mapped to SOC 2. It does not establish SOC 2 Type II certification or replace an audit.
 
 ---
 
-## Path 4: HIPAA Compliance (30 Minutes)
+## Path 4: HIPAA-Mapped Controls
 
 **For healthcare applications handling PHI/ePHI.**
 
-### Quick Setup
+### Configuration
 
 ```bash
 cd cfc-testing
@@ -274,11 +274,11 @@ cdk deploy
 
 ---
 
-## Path 5: PCI-DSS Compliance (30 Minutes)
+## Path 5: PCI DSS-Mapped Controls
 
 **For payment card processing systems.**
 
-### Quick Setup
+### Configuration
 
 ```bash
 cd cfc-testing
@@ -297,16 +297,16 @@ cdk deploy
 - ✅ Certificate expiration monitoring
 - ✅ Enhanced WAF rules
 - ✅ CloudFront access logging (if enabled)
-- ✅ Comprehensive network segmentation validation
+- ✅ Network segmentation validation
 - **Cost**: ~$710/month
 
 ---
 
-## Path 6: Applications with Databases (20 Minutes)
+## Path 6: Applications with Databases
 
 **Goal**: Deploy applications that require RDS databases (GitLab, Mattermost, Metabase, etc.)
 
-### Quick Setup
+### Configuration
 
 ```bash
 cd cfc-testing
@@ -404,13 +404,26 @@ For applications that support both RDS and embedded databases (Metabase, Grafana
 }
 ```
 
-### Add Bastion Host Access
+### Access Running Instances
 
-```json
-{
-  "bastionCidr": "203.0.113.0/24"  // Your office IP range
-}
+CloudForge does not open port 22. All instance and container access goes through AWS Systems Manager — no SSH keys, no open ports, and every session is CloudTrail-logged.
+
+**EC2 instances** (e.g. Jenkins):
+```bash
+aws ssm start-session --target <instance-id>
 ```
+
+**Fargate tasks** (ECS Exec, enabled on all tasks):
+```bash
+aws ecs execute-command \
+  --cluster <cluster-name> \
+  --task <task-id> \
+  --container <container-name> \
+  --interactive \
+  --command "/bin/sh"
+```
+
+Both require the caller's IAM identity to have `ssm:StartSession` or `ecs:ExecuteCommand` permission respectively. The `bastionCidr` deployment context field is retained for backwards compatibility but no longer gates access.
 
 ---
 
@@ -566,7 +579,7 @@ aws cloudformation get-template \
 
 ## Cost Optimization Tips
 
-1. **Use Fargate Spot** (50% savings):
+1. **Use Fargate Spot** where interruption-tolerant workloads permit:
    ```json
    {
      "runtime": "fargate",
@@ -595,13 +608,13 @@ aws cloudformation get-template \
    }
    ```
 
-5. **Use Reserved Instances** (production EC2 - 40% savings)
+5. **Evaluate Reserved Instances** for stable production EC2 usage
 
 6. **Enable S3 lifecycle policies** for log archival
 
 ---
 
-## Next Steps
+## Related Guides
 
 - **Development**: [Extended Testing Guide](guides/EXTENDED-TESTING.md)
 - **Production**: [Deployment Guide](compliance/DEPLOYMENT_GUIDE.md)

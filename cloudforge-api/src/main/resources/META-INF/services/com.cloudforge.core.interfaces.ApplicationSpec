@@ -31,3 +31,36 @@ com.cloudforgeci.api.application.secrets.VaultApplicationSpec
 # Collaboration
 com.cloudforgeci.api.application.collaboration.MattermostApplicationSpec
 com.cloudforgeci.api.application.collaboration.MattermostTeamApplicationSpec
+
+# CMS / Content Management
+com.cloudforgeci.api.application.cms.WordPressApplicationSpec
+com.cloudforgeci.api.application.cms.WooCommerceApplicationSpec
+com.cloudforgeci.api.application.cms.DrupalApplicationSpec
+com.cloudforgeci.api.application.cms.JoomlaApplicationSpec
+com.cloudforgeci.api.application.cms.Typo3ApplicationSpec
+com.cloudforgeci.api.application.cms.ConcreteCmsApplicationSpec
+com.cloudforgeci.api.application.cms.OctoberCmsApplicationSpec
+
+# E-commerce
+com.cloudforgeci.api.application.cms.MagentoApplicationSpec
+com.cloudforgeci.api.application.cms.PrestaShopApplicationSpec
+com.cloudforgeci.api.application.cms.OpenCartApplicationSpec
+com.cloudforgeci.api.application.cms.SyliusApplicationSpec
+com.cloudforgeci.api.application.cms.BagistoApplicationSpec
+
+# Forum / Community
+com.cloudforgeci.api.application.cms.PhpBBApplicationSpec
+com.cloudforgeci.api.application.cms.FlarumApplicationSpec
+com.cloudforgeci.api.application.cms.MyBBApplicationSpec
+
+# CRM
+com.cloudforgeci.api.application.cms.SuiteCrmApplicationSpec
+
+# Wiki
+com.cloudforgeci.api.application.cms.MediaWikiApplicationSpec
+
+# LMS
+com.cloudforgeci.api.application.cms.MoodleApplicationSpec
+
+# Social
+com.cloudforgeci.api.application.cms.DolphinApplicationSpec

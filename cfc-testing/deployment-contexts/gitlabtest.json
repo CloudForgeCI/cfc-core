@@ -1,0 +1,1 @@
+{"stackName":"gitlabtest","applicationId":"gitlab","applicationName":"GitLab","environment":"prod","runtime":"FARGATE","authMode":"application-oidc"}
