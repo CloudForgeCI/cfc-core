@@ -51,12 +51,17 @@
     <cdknag.version>2.37.55</cdknag.version>
 
     <!-- Core Library Versions -->
-    <!-- 2.21.5, not 2.21.4: CVE-2026-68497 (resource exhaustion), CVE-2026-19032 (unsafe
-         reflection via unrestricted Path deserialization), CVE-2026-59889 (@JsonView bypass via
+    <!-- 2.21.4 originally flagged with 4 HIGH CVEs by dependency-check's SBOM scan:
+         CVE-2026-68497 (resource exhaustion), CVE-2026-19032 (unsafe reflection via
+         unrestricted Path deserialization), CVE-2026-59889 (@JsonView bypass via
          @JsonUnwrapped), CVE-2026-54515 (@JsonIgnoreProperties bypass via case-insensitive
-         property rebuild), all fixed in 2.21.5, all HIGH, found by dependency-check's SBOM scan
-         against the exact version this project had pinned. -->
-    <jackson.version>2.21.5</jackson.version>
+         property rebuild). Bumping to 2.21.5 (all 4 CVEs' own documented fix version) still
+         left 2 of the 4 open per a follow-up scan, NVD/OSSIndex's own fix-version metadata
+         for at least one of these was evidently less precise than the advisory text
+         suggested. 2.21.6 is the next real patch in the same line (confirmed to exist on
+         Central, not a guess), taking it outright rather than trying to pin down exactly
+         which CVE's real fix version was underreported. -->
+    <jackson.version>2.21.6</jackson.version>
     <!-- jackson-annotations versions independently of core/databind (2.20, 2.21, 2.22, no
          patch suffix), so it can't share ${jackson.version} once that has one. -->
     <jackson-annotations.version>2.21</jackson-annotations.version>
