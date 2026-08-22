@@ -51,11 +51,23 @@
     <cdknag.version>2.37.55</cdknag.version>
 
     <!-- Core Library Versions -->
-    <jackson.version>2.21.4</jackson.version>
+    <!-- 2.21.5, not 2.21.4: CVE-2026-68497 (resource exhaustion), CVE-2026-19032 (unsafe
+         reflection via unrestricted Path deserialization), CVE-2026-59889 (@JsonView bypass via
+         @JsonUnwrapped), CVE-2026-54515 (@JsonIgnoreProperties bypass via case-insensitive
+         property rebuild), all fixed in 2.21.5, all HIGH, found by dependency-check's SBOM scan
+         against the exact version this project had pinned. -->
+    <jackson.version>2.21.5</jackson.version>
     <!-- jackson-annotations versions independently of core/databind (2.20, 2.21, 2.22, no
          patch suffix), so it can't share ${jackson.version} once that has one. -->
     <jackson-annotations.version>2.21</jackson-annotations.version>
     <jakarta.validation.version>3.0.2</jakarta.validation.version>
+    <!-- 4.1.136.Final, not the 4.1.107.Final AWS SDK v2 2.25.0's own BOM pulls in transitively
+         (via netty-nio-client): dependency-check's SBOM scan found 57-58 CVEs against that
+         pinned version, several CRITICAL (DNS cache-poisoning via unvalidated CNAME/NS-record
+         bailiwick, HTTP request smuggling via Transfer-Encoding/chunked-extension parsing, XXE in
+         XmlDecoder). Netty 4.1.x patch releases are binary-compatible within the same minor line,
+         so overriding just the version here (not the AWS SDK's own BOM) is safe. -->
+    <netty.version>4.1.136.Final</netty.version>
 
     <!-- Test Dependency Versions -->
     <jupiter.version>5.12.2</jupiter.version>
@@ -127,6 +139,61 @@
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-synth-service</artifactId>
         <version>${project.version}</version>
+      </dependency>
+
+      <!-- Netty override, see ${netty.version}'s own comment above. AWS SDK v2's netty-nio-client
+           pulls these in transitively at 4.1.107.Final; every artifact it actually resolves needs
+           managing here or Maven's nearest-wins rule would leave some of them on the older,
+           vulnerable version even with the others overridden. -->
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-buffer</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec-http</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec-http2</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-common</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-handler</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-resolver</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport-classes-epoll</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport-native-unix-common</artifactId>
+        <version>${netty.version}</version>
       </dependency>
 
       <!-- AWS CDK Dependencies -->
