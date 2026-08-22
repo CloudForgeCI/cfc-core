@@ -38,15 +38,11 @@ on:
       - 'cloudforge-synth-service/**'
       - '.github/workflows/publish-snapshot.yml'
   push:
-    branches: [ develop ] # real release, only once a PR actually merges
-    paths:
-      - 'pom.xml'
-      - 'cloudforge-core/**'
-      - 'cloudforge-api/**'
-      - 'cloudforge-localstack/**'
-      - 'cloudforge-ministack/**'
-      - 'cloudforge-synth-service/**'
-      - '.github/workflows/publish-snapshot.yml'
+    branches: [ develop ] # real release, on every push to develop (a PR merge, most commonly) —
+                           # deliberately no path filter: the safety gate below (root pom's
+                           # <version> not already tagged) is what actually decides whether a run
+                           # does anything, so a path filter here only risks silently skipping a
+                           # real release rather than saving any meaningful CI time.
   workflow_dispatch: {}
 
 permissions:
