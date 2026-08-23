@@ -10,6 +10,7 @@ import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.iam.Effect;
@@ -743,6 +744,46 @@ public class ContainerFactory extends BaseFactory {
                 .sourceVolume(volumeName)
                 .readOnly(false)
                 .build());
+
+        // Same-task sidecar containers (see ApplicationSpec.SidecarContainer's own javadoc) —
+        // empty for every app except cloudforge-manager today. Always-running, essential=true:
+        // unlike the SAML init container above, a sidecar has no exit condition, so its own
+        // death is treated the same as the main container's — ECS replaces the whole task.
+        if (applicationSpec != null) {
+            for (ApplicationSpec.SidecarContainer sidecar : applicationSpec.sidecarContainers()) {
+                ContainerDefinition sidecarContainer = fargateTaskDef.addContainer(sidecar.containerName(),
+                    ContainerDefinitionOptions.builder()
+                        .containerName(sidecar.containerName())
+                        .image(ContainerImage.fromRegistry(sidecar.image()))
+                        .essential(true)
+                        .environment(sidecar.environment())
+                        .healthCheck(HealthCheck.builder()
+                            .command(sidecar.healthCheckCommand())
+                            .interval(Duration.seconds(30))
+                            .timeout(Duration.seconds(5))
+                            .retries(3)
+                            .startPeriod(Duration.seconds(10))
+                            .build())
+                        .logging(LogDriver.awsLogs(AwsLogDriverProps.builder()
+                            .logGroup(logs)
+                            .streamPrefix(sidecar.containerName())
+                            .build()))
+                        .build());
+                sidecarContainer.addPortMappings(PortMapping.builder()
+                    .containerPort(sidecar.containerPort())
+                    .build());
+
+                // Main container waits for the sidecar to report HEALTHY (not just running)
+                // before ECS starts it, since the main container's first request to it would
+                // otherwise race the sidecar's own JVM/HTTP-server startup.
+                container.addContainerDependencies(ContainerDependency.builder()
+                    .container(sidecarContainer)
+                    .condition(ContainerDependencyCondition.HEALTHY)
+                    .build());
+                LOG.info("  ✅ Added sidecar container '" + sidecar.containerName() + "' on port " + sidecar.containerPort());
+            }
+        }
+
         ctx.container.set(container);
     }
 

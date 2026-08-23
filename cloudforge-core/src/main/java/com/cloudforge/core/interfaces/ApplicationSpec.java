@@ -437,6 +437,42 @@ public interface ApplicationSpec {
         return List.of();
     }
 
+    /**
+     * Declares an always-running, same-Fargate-task companion container: {@code ContainerFactory}
+     * adds it to the same task definition as this app's own container, wires the main container
+     * to wait for it (a startup dependency on {@code HEALTHY}, not {@code SUCCESS} — unlike the
+     * SAML certificate init container this deliberately isn't modeled after, a sidecar never
+     * exits), and gives it its own CloudWatch log stream. No IAM task-role grants and no inbound
+     * security-group rule are added for it — a sidecar reachable only over the task's own loopback
+     * interface (the way every container in one Fargate/{@code awsvpc} task already shares one ENI)
+     * needs neither.
+     *
+     * @param containerName unique name within the task definition (also the log stream prefix)
+     * @param image container image reference (registry/repo:tag)
+     * @param containerPort port the sidecar listens on inside the task's shared network namespace
+     * @param healthCheckCommand ECS container health check command, e.g.
+     *     {@code List.of("CMD-SHELL", "curl -f http://localhost:8090/v1/healthz || exit 1")} —
+     *     required, since the main container's startup dependency needs a {@code HEALTHY} signal
+     *     to wait on
+     * @param environment environment variables for the sidecar container
+     */
+    record SidecarContainer(String containerName, String image, int containerPort,
+                             List<String> healthCheckCommand, java.util.Map<String, String> environment) {
+    }
+
+    /**
+     * Returns same-task sidecar containers this application needs alongside its own container.
+     *
+     * <p>Empty for every application by default — this exists for
+     * {@code cloudforge-manager}'s {@code cloudforge-synth-service} sidecar (see that spec's own
+     * override), not a general-purpose extension point most applications need.</p>
+     *
+     * @return list of sidecar containers (empty by default)
+     */
+    default List<SidecarContainer> sidecarContainers() {
+        return List.of();
+    }
+
     // ========== Plugin Metadata Methods ==========
 
     /**
