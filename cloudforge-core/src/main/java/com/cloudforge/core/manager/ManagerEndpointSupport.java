@@ -34,10 +34,23 @@ public final class ManagerEndpointSupport {
      * ManagerRuntimeConfiguration.Target} for Manager's own dev/test-loop calls) — never
      * re-derived from these same env vars, or this gate would just move one level up instead of
      * closing.
+     *
+     * <p>{@code MINISTACK} and {@code LOCALSTACK} deliberately check different dedicated env vars
+     * first ({@code MINISTACK_ENDPOINT} / {@code LOCALSTACK_ENDPOINT} respectively) before the
+     * shared {@code AWS_ENDPOINT_URL} fallback — an installation running both emulators side by
+     * side needs a {@code MINISTACK}-targeted call to reach MiniStack, not silently fall through
+     * to whichever one {@code LOCALSTACK_ENDPOINT} happens to point at.
      */
     public static String resolveLocalEmulatorEndpoint(DeploymentTarget target) {
         if (target == null || target == DeploymentTarget.AWS) {
             return null;
+        }
+        if (target == DeploymentTarget.MINISTACK) {
+            String ministack = first(ManagerEnvKeys.MINISTACK_ENDPOINT);
+            if (ministack != null) {
+                return ministack;
+            }
+            return first(ManagerEnvKeys.AWS_ENDPOINT_URL);
         }
         String localstack = first(ManagerEnvKeys.LOCALSTACK_ENDPOINT);
         if (localstack != null) {

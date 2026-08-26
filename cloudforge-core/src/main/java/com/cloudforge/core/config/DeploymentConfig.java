@@ -1798,11 +1798,13 @@ public class DeploymentConfig {
         description = "Deployment target recorded in history entries",
         category = "operations",
         required = false,
-        allowedValues = {"AWS", "MINISTACK", "LOCALSTACK"},
-        example = "MINISTACK",
+        allowedValues = {"aws", "ministack", "localstack"},
+        example = "ministack",
         propertyKey = "cfc.manager.target",
         order = 9010
     )
+    @JsonSerialize(using = DeploymentTargetConverter.Serializer.class)
+    @JsonDeserialize(using = DeploymentTargetConverter.Deserializer.class)
     public DeploymentTarget managerTarget;
 
     /**

@@ -34,6 +34,12 @@ public final class ManagerEnvKeys {
      *  LocalStackTemplateAdapter}/{@code MiniStackTemplateAdapter} set this explicitly to a
      *  host-reachable address for those two targets only. */
     public static final String SYNTH_SERVICE_URL = "SYNTH_SERVICE_URL";
+    /** The sidecar's own listen port, and the port every hardcoded fallback URL above must agree
+     *  with — {@code SynthServiceMain}'s {@code SYNTH_SERVICE_PORT} env-var default,
+     *  {@code LocalStackTemplateAdapter}'s {@code host.docker.internal} override, and {@code
+     *  ApplicationSpec}'s health-check command example all reference this one constant instead of
+     *  repeating the literal, so a future port change can't drift out of sync in one of them. */
+    public static final int SYNTH_SERVICE_DEFAULT_PORT = 8090;
     public static final String AUTH_MODE = "CFC_MANAGER_AUTH_MODE";
     public static final String DB_MODE = "CFC_MANAGER_DB_MODE";
     public static final String VERSION = "CFC_MANAGER_VERSION";

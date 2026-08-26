@@ -453,7 +453,9 @@ public interface ApplicationSpec {
      * @param healthCheckCommand ECS container health check command, e.g.
      *     {@code List.of("CMD-SHELL", "curl -f http://localhost:8090/v1/healthz || exit 1")} —
      *     required, since the main container's startup dependency needs a {@code HEALTHY} signal
-     *     to wait on
+     *     to wait on. The port in that example is the {@code cloudforge-synth-service} sidecar's
+     *     own default — see {@link com.cloudforge.core.manager.ManagerEnvKeys#SYNTH_SERVICE_DEFAULT_PORT}
+     *     for the one place that port is actually declared
      * @param environment environment variables for the sidecar container
      */
     record SidecarContainer(String containerName, String image, int containerPort,

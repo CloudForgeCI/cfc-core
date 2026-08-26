@@ -1,5 +1,6 @@
 package com.cloudforgeci.synthservice;
 
+import com.cloudforge.core.manager.ManagerEnvKeys;
 import com.sun.net.httpserver.HttpServer;
 
 import java.net.InetSocketAddress;
@@ -23,7 +24,8 @@ public final class SynthServiceMain {
     }
 
     public static void main(String[] args) throws Exception {
-        int port = Integer.parseInt(System.getenv().getOrDefault("SYNTH_SERVICE_PORT", "8090"));
+        int port = Integer.parseInt(System.getenv().getOrDefault("SYNTH_SERVICE_PORT",
+            Integer.toString(ManagerEnvKeys.SYNTH_SERVICE_DEFAULT_PORT)));
         HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
         server.createContext("/v1/synthesize", new SynthHttpHandler());
         server.createContext("/v1/healthz", exchange -> {
