@@ -10,10 +10,16 @@
 # No GPG signing here (unlike publish-snapshot.yml's release job) -- Azure Artifacts feeds don't
 # require it, and the release profile that adds it isn't activated by this build.
 #
-# Manual/scheduled trigger only for now, not on every push -- avoids racing the existing GitHub
-# auto-release pipeline while this path is new and unproven. Revisit once confirmed working a few
-# times.
-trigger: none
+# Triggers on pushes to develop -- every merge auto-publishes here alongside the existing GitHub
+# auto-release pipeline; the two don't race each other, they just both react to the same push
+# independently. pr: none stays regardless: that's the half of this that actually matters for a
+# public repo -- it's what stops an external fork's PR from ever getting this pipeline to run
+# pipeline-authored code with the feed's injected Maven credentials. A push-only trigger carries
+# none of that risk, since nothing reaches develop without already going through a reviewed merge.
+trigger:
+  branches:
+    include:
+      - develop
 pr: none
 
 pool:
