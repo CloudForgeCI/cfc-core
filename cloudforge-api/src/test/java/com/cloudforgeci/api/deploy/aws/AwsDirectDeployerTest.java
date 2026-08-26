@@ -2,6 +2,7 @@ package com.cloudforgeci.api.deploy.aws;
 
 import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.local.DeploymentTarget;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -178,7 +179,7 @@ class AwsDirectDeployerTest {
         config.region = null;
         // Building the client is not a network call (AWS SDK v2 clients are lazy) — this only
         // proves construction doesn't NPE when region/credentials aren't resolvable yet.
-        try (AwsDirectDeployer deployer = new AwsDirectDeployer(config)) {
+        try (AwsDirectDeployer deployer = new AwsDirectDeployer(config, DeploymentTarget.AWS)) {
             assertTrue(deployer.managedTags().stream().anyMatch(t ->
                 AwsDirectDeployer.TAG_RUNTIME.equals(t.key()) && "ec2".equals(t.value())));
         }
@@ -196,7 +197,7 @@ class AwsDirectDeployerTest {
         config.runtime = RuntimeType.FARGATE;
         config.region = "us-east-1";
 
-        try (AwsDirectDeployer deployer = new AwsDirectDeployer(config)) {
+        try (AwsDirectDeployer deployer = new AwsDirectDeployer(config, DeploymentTarget.AWS)) {
             var field = AwsDirectDeployer.class.getDeclaredField("credentialsOverride");
             field.setAccessible(true);
             assertEquals(null, field.get(deployer));

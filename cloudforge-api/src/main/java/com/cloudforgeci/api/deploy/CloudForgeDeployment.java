@@ -171,7 +171,7 @@ public final class CloudForgeDeployment {
         Map<String, String> outputs = Map.of();
 
         try (AwsDirectDeployer deployer = new AwsDirectDeployer(
-                request.config(), request.options().credentialsOverride())) {
+                request.config(), request.target(), request.options().credentialsOverride())) {
             switch (request.mode()) {
                 case DRY_RUN -> {
                     // No adaptation pipeline for AWS — the canonical template deploys as-is.

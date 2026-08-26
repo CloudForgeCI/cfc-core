@@ -64,6 +64,18 @@
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
+        <!-- proc=none for this module's own compile only: BuildModeProcessor is registered via
+             this module's own META-INF/services, which javac's default annotation-processing
+             auto-discovers on the compile classpath, but during this module's own first build
+             from clean, that classpath can't yet contain a compiled BuildModeProcessor.class
+             (it's itself one of the sources being compiled right now), so auto-discovery fails
+             with "Provider ... not found". Consumers (e.g. cloudforge-manager) don't hit this: by
+             the time they compile, cloudforge-core is already a complete, published/installed jar
+             with both the compiled processor and the service registration in it, no bootstrapping
+             problem. Nothing in this module's own source needs BuildModeProcessor anyway. -->
+        <configuration>
+          <proc>none</proc>
+        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>

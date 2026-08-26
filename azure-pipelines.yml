@@ -1,0 +1,45 @@
+# Publishes cloudforge-core/cloudforge-api/cloudforge-localstack/cloudforge-ministack/
+# cloudforge-synth-service to the cfc-core Azure Artifacts feed, so cloudforge-manager's ADO
+# pipeline can resolve them without hitting Maven Central snapshots directly.
+#
+# Deliberately separate from .github/workflows/publish-snapshot.yml, which stays the
+# publish-of-record to real Maven Central -- this pipeline never touches that path. No
+# pom.xml/distributionManagement change anywhere: -DaltDeploymentRepository below redirects only
+# this pipeline's own deploy, so the existing GitHub->Central publish is completely unaffected.
+#
+# No GPG signing here (unlike publish-snapshot.yml's release job) -- Azure Artifacts feeds don't
+# require it, and the release profile that adds it isn't activated by this build.
+#
+# Manual/scheduled trigger only for now, not on every push -- avoids racing the existing GitHub
+# auto-release pipeline while this path is new and unproven. Revisit once confirmed working a few
+# times.
+trigger: none
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  FEED_URL: 'https://pkgs.dev.azure.com/CloudForgeCI/cloudforge-manager/_packaging/cfc-core/maven/v1'
+  MODULES: '.,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service'
+
+steps:
+  - task: JavaToolInstaller@0
+    inputs:
+      versionSpec: '21'
+      jdkArchitectureOption: 'x64'
+      jdkSourceOption: 'PreInstalled'
+
+  # artifactsFeeds (not mavenServiceConnections) since cfc-core is a feed in this same ADO
+  # organization -- no separate Maven-type service connection needed. Injects credentials into a
+  # generated settings.xml with a <server> id matching the feed name, which -DaltDeploymentRepository
+  # below references directly.
+  - task: MavenAuthenticate@0
+    inputs:
+      artifactsFeeds: 'cfc-core'
+
+  - script: |
+      mvn -B -pl $(MODULES) -am clean deploy \
+        -DskipTests -Djacoco.skip=true \
+        -DaltDeploymentRepository=cfc-core::default::$(FEED_URL)
+    displayName: 'Build and publish to the cfc-core Artifacts feed'

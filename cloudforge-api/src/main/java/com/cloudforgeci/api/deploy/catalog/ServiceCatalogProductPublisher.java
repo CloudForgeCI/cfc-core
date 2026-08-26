@@ -1,5 +1,7 @@
 package com.cloudforgeci.api.deploy.catalog;
 
+import com.cloudforge.core.local.DeploymentTarget;
+import com.cloudforge.core.manager.ManagerEndpointSupport;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -72,9 +74,23 @@ public final class ServiceCatalogProductPublisher implements AutoCloseable {
     private final S3Client s3;
     private final String templateBucket;
 
-    /** Real AWS by default; redirects to a local emulator when one is detected — see class javadoc. */
+    /**
+     * Defaults {@code target} to {@link DeploymentTarget#AWS} — no current caller exists (see
+     * class javadoc's own history), kept as a safe default for whenever one is wired up; prefer
+     * the 2-arg overload for any new caller so the target is explicit rather than assumed.
+     */
     public ServiceCatalogProductPublisher(String region) {
-        this(serviceCatalogClient(region), s3Client(region), templateBucketName(region));
+        this(region, DeploymentTarget.AWS);
+    }
+
+    /**
+     * Real AWS by default; redirects to a local emulator instead when {@code target} resolves to
+     * one via {@link ManagerEndpointSupport#resolveLocalEmulatorEndpoint} — see class javadoc.
+     * {@code target} must be the caller's own already-known, validated target (never re-derived
+     * from env vars here — see that method's own javadoc for why).
+     */
+    public ServiceCatalogProductPublisher(String region, DeploymentTarget target) {
+        this(serviceCatalogClient(region, target), s3Client(region, target), templateBucketName(region));
     }
 
     /** Visible for tests — inject pre-built clients. */
@@ -84,28 +100,9 @@ public final class ServiceCatalogProductPublisher implements AutoCloseable {
         this.templateBucket = templateBucket;
     }
 
-    /**
-     * Same {@code LOCALSTACK_ENDPOINT}/{@code AWS_ENDPOINT_URL} detection {@code
-     * AwsDirectDeployer}/{@code ServiceCatalogDeployer} already use — kept independent (not
-     * shared via a common utility) since none of those three classes may depend on a fourth one
-     * just for this, and duplicating four lines is cheaper than the module-boundary question that
-     * would raise.
-     */
-    private static String resolveLocalEmulatorEndpoint() {
-        String localstackEndpoint = System.getenv("LOCALSTACK_ENDPOINT");
-        if (localstackEndpoint != null && !localstackEndpoint.isBlank()) {
-            return localstackEndpoint.trim();
-        }
-        String awsEndpoint = System.getenv("AWS_ENDPOINT_URL");
-        if (awsEndpoint != null && !awsEndpoint.isBlank()) {
-            return awsEndpoint.trim();
-        }
-        return null;
-    }
-
-    private static ServiceCatalogClient serviceCatalogClient(String region) {
+    private static ServiceCatalogClient serviceCatalogClient(String region, DeploymentTarget target) {
         Region resolvedRegion = Region.of(region == null || region.isBlank() ? "us-east-1" : region);
-        String localEndpoint = resolveLocalEmulatorEndpoint();
+        String localEndpoint = ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target);
         if (localEndpoint == null) {
             return ServiceCatalogClient.builder()
                 .region(resolvedRegion)
@@ -120,9 +117,9 @@ public final class ServiceCatalogProductPublisher implements AutoCloseable {
             .build();
     }
 
-    private static S3Client s3Client(String region) {
+    private static S3Client s3Client(String region, DeploymentTarget target) {
         Region resolvedRegion = Region.of(region == null || region.isBlank() ? "us-east-1" : region);
-        String localEndpoint = resolveLocalEmulatorEndpoint();
+        String localEndpoint = ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target);
         if (localEndpoint == null) {
             return S3Client.builder()
                 .region(resolvedRegion)
