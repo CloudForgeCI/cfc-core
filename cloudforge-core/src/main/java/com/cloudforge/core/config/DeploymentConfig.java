@@ -8,6 +8,7 @@ import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.LoadBalancerType;
 import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.local.DeploymentTarget;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.interfaces.ApplicationSpec;
@@ -1794,15 +1795,17 @@ public class DeploymentConfig {
      */
     @ConfigField(
         displayName = "Manager Target",
-        description = "Deployment target recorded in history entries (ministack or aws)",
+        description = "Deployment target recorded in history entries",
         category = "operations",
         required = false,
-        allowedValues = {"ministack", "aws"},
+        allowedValues = {"aws", "ministack", "localstack"},
         example = "ministack",
         propertyKey = "cfc.manager.target",
         order = 9010
     )
-    public String managerTarget;
+    @JsonSerialize(using = DeploymentTargetConverter.Serializer.class)
+    @JsonDeserialize(using = DeploymentTargetConverter.Deserializer.class)
+    public DeploymentTarget managerTarget;
 
     /**
      * Bearer token for POST /api/v1/history. Prefer CFC_MANAGER_HISTORY_TOKEN env — do not commit.

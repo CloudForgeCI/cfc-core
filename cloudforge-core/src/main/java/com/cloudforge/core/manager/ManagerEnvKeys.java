@@ -23,6 +23,23 @@ public final class ManagerEnvKeys {
      *  installation, or whether to fall back to a redirect-based purchase flow instead. */
     public static final String PUBLIC_TLS_TRUSTED = "CFC_MANAGER_PUBLIC_TLS_TRUSTED";
     public static final String TARGET = "CFC_MANAGER_TARGET";
+    /** Base URL of the {@code cloudforge-synth-service} sidecar (see {@code
+     *  ManagerSynthesisService}, cloudforge-manager) — read directly by the sidecar HTTP client,
+     *  not one of the {@code CFC_MANAGER_*}-prefixed keys, since it names the sidecar, not
+     *  Manager itself. Unset on an AWS deploy (the code default, {@code http://localhost:8090},
+     *  is already correct there: Fargate's {@code awsvpc} networking shares one ENI/loopback
+     *  across every container in a task). LocalStack's and MiniStack's own ECS emulation gives
+     *  each task container a separate Docker network namespace instead of sharing one — a
+     *  divergence from AWS's own networking model, not a configuration gap — so {@code
+     *  LocalStackTemplateAdapter}/{@code MiniStackTemplateAdapter} set this explicitly to a
+     *  host-reachable address for those two targets only. */
+    public static final String SYNTH_SERVICE_URL = "SYNTH_SERVICE_URL";
+    /** The sidecar's own listen port, and the port every hardcoded fallback URL above must agree
+     *  with — {@code SynthServiceMain}'s {@code SYNTH_SERVICE_PORT} env-var default,
+     *  {@code LocalStackTemplateAdapter}'s {@code host.docker.internal} override, and {@code
+     *  ApplicationSpec}'s health-check command example all reference this one constant instead of
+     *  repeating the literal, so a future port change can't drift out of sync in one of them. */
+    public static final int SYNTH_SERVICE_DEFAULT_PORT = 8090;
     public static final String AUTH_MODE = "CFC_MANAGER_AUTH_MODE";
     public static final String DB_MODE = "CFC_MANAGER_DB_MODE";
     public static final String VERSION = "CFC_MANAGER_VERSION";

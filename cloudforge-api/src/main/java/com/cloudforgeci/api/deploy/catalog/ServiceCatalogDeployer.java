@@ -1,5 +1,7 @@
 package com.cloudforgeci.api.deploy.catalog;
 
+import com.cloudforge.core.local.DeploymentTarget;
+import com.cloudforge.core.manager.ManagerEndpointSupport;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -66,16 +68,28 @@ public final class ServiceCatalogDeployer implements AutoCloseable {
     private final ServiceCatalogClient client;
 
     /**
-     * Real AWS by default; redirects to a local emulator instead when
-     * {@code LOCALSTACK_ENDPOINT}/{@code AWS_ENDPOINT_URL} is set — see class javadoc.
+     * Defaults {@code target} to {@link DeploymentTarget#AWS} — this constructor predates a
+     * target parameter existing at all, and every caller today is a real-AWS Service Catalog
+     * operation; prefer the 2-arg overload for any new caller so the target is explicit rather
+     * than assumed.
      */
     public ServiceCatalogDeployer(String region) {
-        this(client(region));
+        this(region, DeploymentTarget.AWS);
     }
 
-    private static ServiceCatalogClient client(String region) {
+    /**
+     * Real AWS by default; redirects to a local emulator instead when {@code target} resolves to
+     * one via {@link ManagerEndpointSupport#resolveLocalEmulatorEndpoint} — see class javadoc.
+     * {@code target} must be the caller's own already-known, validated target (never re-derived
+     * from env vars here — see that method's own javadoc for why).
+     */
+    public ServiceCatalogDeployer(String region, DeploymentTarget target) {
+        this(client(region, target));
+    }
+
+    private static ServiceCatalogClient client(String region, DeploymentTarget target) {
         Region resolvedRegion = Region.of(region == null || region.isBlank() ? "us-east-1" : region);
-        String localEndpoint = resolveLocalEmulatorEndpoint();
+        String localEndpoint = ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target);
         if (localEndpoint == null) {
             return ServiceCatalogClient.builder()
                 .region(resolvedRegion)
@@ -88,19 +102,6 @@ public final class ServiceCatalogDeployer implements AutoCloseable {
             .credentialsProvider(StaticCredentialsProvider.create(
                 AwsBasicCredentials.create("test", "test")))
             .build();
-    }
-
-    /** Identical resolution order to {@code AwsDirectDeployer.resolveLocalEmulatorEndpoint()}. */
-    private static String resolveLocalEmulatorEndpoint() {
-        String localstackEndpoint = System.getenv("LOCALSTACK_ENDPOINT");
-        if (localstackEndpoint != null && !localstackEndpoint.isBlank()) {
-            return localstackEndpoint.trim();
-        }
-        String awsEndpoint = System.getenv("AWS_ENDPOINT_URL");
-        if (awsEndpoint != null && !awsEndpoint.isBlank()) {
-            return awsEndpoint.trim();
-        }
-        return null;
     }
 
     /** Visible for tests — inject a pre-built client (mock, or pointed at a test endpoint). */

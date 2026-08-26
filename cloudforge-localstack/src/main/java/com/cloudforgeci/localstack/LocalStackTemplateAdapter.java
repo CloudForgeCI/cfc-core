@@ -382,6 +382,14 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                 upsertEnvironment(environment, "LOCALSTACK_ENDPOINT", endpoint);
                 upsertEnvironment(environment, "AWS_ENDPOINT_URL", endpoint);
                 upsertEnvironment(environment, "LOCALSTACK_VOLUME_ROOT", managerVolumeRoot());
+                // cloudforge-synth-service sidecar (see ManagerEnvKeys.SYNTH_SERVICE_URL's own
+                // javadoc for why this is needed only on LocalStack/MiniStack): the sidecar
+                // publishes its port to the host (see ApplicationSpec.SidecarContainer's own
+                // wiring in ContainerFactory), so host.docker.internal:<port> reaches it from
+                // Manager's own, separate container namespace under this target's ECS emulation.
+                upsertEnvironment(environment, com.cloudforge.core.manager.ManagerEnvKeys.SYNTH_SERVICE_URL,
+                    "http://host.docker.internal:"
+                        + com.cloudforge.core.manager.ManagerEnvKeys.SYNTH_SERVICE_DEFAULT_PORT);
                 adaptations.add(new TemplateAdaptation(
                     "Resources." + entry.getKey() + ".Properties.ContainerDefinitions["
                         + i + "].Environment",

@@ -1,5 +1,7 @@
 package com.cloudforge.core.config;
 
+import com.cloudforge.core.local.DeploymentTarget;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -207,6 +209,14 @@ public final class ApplicationPropertyLoader {
         }
         if (type == Long.class || type == long.class) {
             return Long.parseLong(value);
+        }
+        // DeploymentTarget's own case-insensitive parsing (blank -> AWS, garbage -> a real
+        // IllegalArgumentException) is the one already established elsewhere in this codebase for
+        // this exact type -- reused here rather than a generic Enum.valueOf, which is
+        // case-sensitive and wouldn't match every other place this type gets parsed from a raw
+        // string.
+        if (type == DeploymentTarget.class) {
+            return DeploymentTarget.fromConfigKey(value);
         }
         return value;
     }

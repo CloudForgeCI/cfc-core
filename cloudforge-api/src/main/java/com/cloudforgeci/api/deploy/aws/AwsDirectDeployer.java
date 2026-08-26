@@ -2,6 +2,8 @@ package com.cloudforgeci.api.deploy.aws;
 
 import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.local.DeploymentTarget;
+import com.cloudforge.core.manager.ManagerEndpointSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -126,62 +128,44 @@ public final class AwsDirectDeployer implements AutoCloseable {
 
     /**
      * Real AWS by default (default credential/region chain, region from {@code config.region});
-     * redirects to a local emulator instead when {@link #resolveLocalEmulatorEndpoint()} finds
-     * one — see class javadoc. Equivalent to {@code AwsDirectDeployer(config, null)}.
+     * redirects to a local emulator instead when {@code target} is {@link DeploymentTarget#LOCALSTACK}/
+     * {@link DeploymentTarget#MINISTACK} and {@link ManagerEndpointSupport#resolveLocalEmulatorEndpoint}
+     * finds one — see class javadoc. {@code target} must be the caller's own already-known,
+     * validated target (never re-derived from env vars here — see that method's own javadoc for
+     * why). Equivalent to {@code AwsDirectDeployer(config, target, null)}.
      */
-    public AwsDirectDeployer(DeploymentConfig config) {
-        this(config, null);
+    public AwsDirectDeployer(DeploymentConfig config, DeploymentTarget target) {
+        this(config, target, null);
     }
 
     /**
-     * Same as {@link #AwsDirectDeployer(DeploymentConfig)}, but with an explicit credentials
-     * provider to use for real-AWS calls instead of the default chain — e.g. a caller that
-     * assumed a cross-account IAM role and wants this deployer to act as that principal. {@code
-     * null} means "use the default credential chain," exactly {@link
-     * #AwsDirectDeployer(DeploymentConfig)}'s only prior behavior.
+     * Same as {@link #AwsDirectDeployer(DeploymentConfig, DeploymentTarget)}, but with an
+     * explicit credentials provider to use for real-AWS calls instead of the default chain — e.g.
+     * a caller that assumed a cross-account IAM role and wants this deployer to act as that
+     * principal. {@code null} means "use the default credential chain," exactly {@link
+     * #AwsDirectDeployer(DeploymentConfig, DeploymentTarget)}'s only prior behavior.
      *
-     * <p>Ignored when {@link #resolveLocalEmulatorEndpoint()} finds a local emulator — a real
-     * AssumeRole against LocalStack/MiniStack is meaningless, so the fixed {@code test}/{@code
-     * test} static credentials still win in that case, unchanged from before this overload
-     * existed.</p>
+     * <p>Ignored when {@code target} resolves to a local emulator — a real AssumeRole against
+     * LocalStack/MiniStack is meaningless, so the fixed {@code test}/{@code test} static
+     * credentials still win in that case, unchanged from before this overload existed.</p>
      */
-    public AwsDirectDeployer(DeploymentConfig config, AwsCredentialsProvider credentialsOverride) {
+    public AwsDirectDeployer(
+            DeploymentConfig config, DeploymentTarget target, AwsCredentialsProvider credentialsOverride) {
         this(
-            cloudFormationClient(config, credentialsOverride),
-            s3Client(config, credentialsOverride),
+            cloudFormationClient(config, target, credentialsOverride),
+            s3Client(config, target, credentialsOverride),
             config.applicationId,
             runtimeTag(config.runtime),
             templateBucketName(config.region),
-            resolveLocalEmulatorEndpoint() != null,
+            ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target) != null,
             Region.of(config.region == null ? "us-east-1" : config.region),
             credentialsOverride);
     }
 
-    /**
-     * {@code LOCALSTACK_ENDPOINT} then {@code AWS_ENDPOINT_URL} — identical resolution order to
-     * {@code LocalStackDeployer.resolveEndpoint()} (this Manager container's own env, when it's
-     * itself hosted in LocalStack/MiniStack; unset on real AWS). {@code null} means "use real
-     * AWS's default endpoint resolution," not "default to localhost:4566" — unlike
-     * {@code LocalStackDeployer}, which is only ever constructed when a LocalStack target was
-     * explicitly chosen, so it can safely default; this class's default caller has no such signal
-     * and must not silently assume a local emulator when neither env var is set.
-     */
-    static String resolveLocalEmulatorEndpoint() {
-        String localstackEndpoint = System.getenv("LOCALSTACK_ENDPOINT");
-        if (localstackEndpoint != null && !localstackEndpoint.isBlank()) {
-            return localstackEndpoint.trim();
-        }
-        String awsEndpoint = System.getenv("AWS_ENDPOINT_URL");
-        if (awsEndpoint != null && !awsEndpoint.isBlank()) {
-            return awsEndpoint.trim();
-        }
-        return null;
-    }
-
     private static CloudFormationClient cloudFormationClient(
-            DeploymentConfig config, AwsCredentialsProvider credentialsOverride) {
+            DeploymentConfig config, DeploymentTarget target, AwsCredentialsProvider credentialsOverride) {
         Region region = Region.of(config.region == null ? "us-east-1" : config.region);
-        String localEndpoint = resolveLocalEmulatorEndpoint();
+        String localEndpoint = ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target);
         if (localEndpoint == null) {
             return CloudFormationClient.builder()
                 .region(region)
@@ -190,7 +174,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
                 .build();
         }
         // Local emulator always wins, regardless of any credentialsOverride — see
-        // AwsDirectDeployer(DeploymentConfig, AwsCredentialsProvider)'s javadoc.
+        // AwsDirectDeployer(DeploymentConfig, DeploymentTarget, AwsCredentialsProvider)'s javadoc.
         return CloudFormationClient.builder()
             .region(region)
             .endpointOverride(URI.create(localEndpoint))
@@ -200,9 +184,9 @@ public final class AwsDirectDeployer implements AutoCloseable {
     }
 
     private static S3Client s3Client(
-            DeploymentConfig config, AwsCredentialsProvider credentialsOverride) {
+            DeploymentConfig config, DeploymentTarget target, AwsCredentialsProvider credentialsOverride) {
         Region region = Region.of(config.region == null ? "us-east-1" : config.region);
-        String localEndpoint = resolveLocalEmulatorEndpoint();
+        String localEndpoint = ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target);
         if (localEndpoint == null) {
             return S3Client.builder()
                 .region(region)
