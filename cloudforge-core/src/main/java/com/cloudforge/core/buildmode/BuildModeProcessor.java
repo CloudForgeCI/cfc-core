@@ -45,7 +45,7 @@ import java.util.Set;
  */
 @SupportedAnnotationTypes("*")
 @SupportedOptions({BuildModeProcessor.OPTION, BuildModeProcessor.TARGET_CLASS_OPTION})
-@SupportedSourceVersion(SourceVersion.RELEASE_21)
+@SupportedSourceVersion(SourceVersion.RELEASE_25)
 public final class BuildModeProcessor extends AbstractProcessor {
 
     /** {@code -A} option carrying the baked value, {@code "true"}/{@code "false"} (case-sensitive,

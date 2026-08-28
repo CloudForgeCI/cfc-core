@@ -239,9 +239,23 @@ public class FargateFactory extends BaseFactory {
     // Enable unconditionally; restrict access via IAM policies rather than at the CDK level.
     boolean enableEcsExec = true;
 
+    // Explicit, not omitted -- omitting runtimePlatform entirely defaults a task definition to
+    // X86_64, which only matches applicationSpec.cpuArchitecture()'s own default by coincidence.
+    // Every built-in ApplicationSpec keeps that X86_64 default (their images are x86_64-only or
+    // x86_64-primary); cloudforge-manager's own spec overrides it to ARM64, since its native-image
+    // pipeline publishes arm64-only images now.
+    CpuArchitecture cpuArchitecture = applicationSpec.cpuArchitecture()
+        == com.cloudforge.core.enums.CpuArchitecture.ARM64
+        ? CpuArchitecture.ARM64
+        : CpuArchitecture.X86_64;
+
     FargateTaskDefinition taskDef = FargateTaskDefinition.Builder.create(this, "Task")
             .cpu(cpu)
             .memoryLimitMiB(memory)
+            .runtimePlatform(RuntimePlatform.builder()
+                .cpuArchitecture(cpuArchitecture)
+                .operatingSystemFamily(OperatingSystemFamily.LINUX)
+                .build())
             .executionRole(fargateExecutionRole)
             .taskRole(fargateTaskRole)
             .build();

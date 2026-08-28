@@ -109,6 +109,22 @@ public interface ApplicationSpec {
     String efsPermissions();
 
     /**
+     * Returns the CPU architecture this application's container image is built for, so a Fargate
+     * task definition requests matching compute rather than silently defaulting to X86_64.
+     *
+     * <p>Defaults to {@code X86_64} -- almost every built-in application image (Jenkins, GitLab,
+     * Grafana, etc.) is x86_64-only or x86_64-primary today. Override only when the image is
+     * confirmed to actually support the declared architecture; a mismatch fails the task at
+     * startup with no fallback, since Fargate provisions the underlying compute from this value
+     * before it ever pulls the image.</p>
+     *
+     * @return the target CPU architecture, defaulting to X86_64
+     */
+    default com.cloudforge.core.enums.CpuArchitecture cpuArchitecture() {
+        return com.cloudforge.core.enums.CpuArchitecture.X86_64;
+    }
+
+    /**
      * Configures application-specific environment variables for the container.
      *
      * <p>Applications can override this to provide custom environment variables
