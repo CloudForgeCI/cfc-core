@@ -19,8 +19,8 @@
   </scm>
 
   <properties>
-    <maven.compiler.source>21</maven.compiler.source>
-    <maven.compiler.target>21</maven.compiler.target>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
     <!-- Matches the version cloudforge-localstack/cloudforge-ministack/cloudforge-manager each
          pin independently — no central AWS SDK BOM entry exists in the root pom yet. -->
     <aws.sdk.version>2.25.0</aws.sdk.version>
@@ -121,6 +121,31 @@
       </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+      <!-- Diagnostic-only, not wired into any lifecycle phase — run explicitly via
+           `mvn org.pitest:pitest-maven:mutationCoverage`. Scoped to core.rules (compliance
+           enforcement) rather than the whole module: mutation testing re-runs the test suite
+           once per surviving mutant, and this module's full suite is thousands of tests —
+           unscoped, a full run would take hours. -->
+      <plugin>
+        <groupId>org.pitest</groupId>
+        <artifactId>pitest-maven</artifactId>
+        <version>1.30.0</version>
+        <dependencies>
+          <dependency>
+            <groupId>org.pitest</groupId>
+            <artifactId>pitest-junit5-plugin</artifactId>
+            <version>1.2.3</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <targetClasses>
+            <param>com.cloudforgeci.api.core.rules.*</param>
+          </targetClasses>
+          <targetTests>
+            <param>com.cloudforgeci.api.core.rules.*</param>
+          </targetTests>
+        </configuration>
       </plugin>
     </plugins>
   </build>

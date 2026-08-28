@@ -7,8 +7,8 @@
     <name>CloudForge Community (cfc) Testing Platform</name>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
         <cloudforge.version>3.2.1-SNAPSHOT</cloudforge.version>
         <!-- Independently versioned from cloudforge.version above, since cloudforge-manager-deployment
              lives in its own repo with its own release cadence; it just happens to currently sit
@@ -209,10 +209,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
+                <version>3.15.0</version>
                 <configuration>
-                    <source>21</source>
-                    <target>21</target>
+                    <source>25</source>
+                    <target>25</target>
                     <!-- Force recompile when dependencies change (e.g., cloudforge-core) -->
                     <useIncrementalCompilation>false</useIncrementalCompilation>
                 </configuration>
