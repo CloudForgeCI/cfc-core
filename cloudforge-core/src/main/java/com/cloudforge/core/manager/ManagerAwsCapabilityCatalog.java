@@ -15,7 +15,7 @@ import java.util.Set;
  */
 public final class ManagerAwsCapabilityCatalog {
 
-    public static final String CATALOG_VERSION = "1.1.0";
+    public static final String CATALOG_VERSION = "1.2.0";
 
     private ManagerAwsCapabilityCatalog() {
     }
@@ -24,6 +24,7 @@ public final class ManagerAwsCapabilityCatalog {
         CFN_INVENTORY(
             "cloudformation:DescribeStacks",
             "cloudformation:DescribeStackResources",
+            "cloudformation:ListStackResources",
             "cloudformation:DescribeStackEvents",
             "cloudformation:ListStacks",
             "cloudformation:GetTemplate"),
