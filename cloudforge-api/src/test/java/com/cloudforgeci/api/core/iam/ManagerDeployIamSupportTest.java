@@ -38,7 +38,7 @@ class ManagerDeployIamSupportTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void deployStatementsReturnsThreeConditionScopedStatementsForManager() {
+    void deployStatementsReturnsFourStatementsForManager() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "ManagerDeployStatements", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
@@ -48,7 +48,32 @@ class ManagerDeployIamSupportTest {
             .createFargate();
 
         List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
-        assertEquals(3, statements.size());
+        assertEquals(4, statements.size());
+    }
+
+    /** Confirmed live: deploy:create's own template upload had no S3 grant at all before this --
+     *  AwsDirectDeployer puts the CloudFormation template into a bucket before CreateStack/
+     *  CreateChangeSet ever runs, and the three tag-conditioned statements above only ever
+     *  covered CloudFormation/IAM actions. */
+    @Test
+    void deployStatementsGrantsS3OnTheTemplateBucketPrefix() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerDeployTemplateBucket", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
+        PolicyStatement bucketStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployTemplateBucket".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+
+        assertTrue(bucketStatement.getActions().contains("s3:*"));
+        assertTrue(bucketStatement.getResources().stream()
+            .anyMatch(r -> r.contains(com.cloudforgeci.api.deploy.aws.AwsDirectDeployer.TEMPLATE_BUCKET_PREFIX)));
     }
 
     @Test

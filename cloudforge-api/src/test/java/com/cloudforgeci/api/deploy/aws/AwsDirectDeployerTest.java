@@ -48,7 +48,7 @@ class AwsDirectDeployerTest {
             .build();
         return new AwsDirectDeployer(
             cloudFormation, s3, applicationId, AwsDirectDeployer.runtimeTag(runtime),
-            AwsDirectDeployer.templateBucketName("us-east-1"));
+            AwsDirectDeployer.templateBucketName("000000000000", "us-east-1"));
     }
 
     private static AwsDirectDeployer unreachableDeployer(boolean localEmulatorTarget) {
@@ -68,7 +68,7 @@ class AwsDirectDeployerTest {
             .build();
         return new AwsDirectDeployer(
             cloudFormation, s3, "jenkins", AwsDirectDeployer.runtimeTag(RuntimeType.FARGATE),
-            AwsDirectDeployer.templateBucketName("us-east-1"), localEmulatorTarget, Region.US_EAST_1);
+            AwsDirectDeployer.templateBucketName("000000000000", "us-east-1"), localEmulatorTarget, Region.US_EAST_1);
     }
 
     @Test
@@ -118,10 +118,17 @@ class AwsDirectDeployerTest {
     }
 
     @Test
-    void templateBucketNameIncludesRegionAndDefaultsWhenBlank() {
-        assertEquals("cfc-cfn-templates-us-west-2", AwsDirectDeployer.templateBucketName("us-west-2"));
-        assertEquals("cfc-cfn-templates-us-east-1", AwsDirectDeployer.templateBucketName(null));
-        assertEquals("cfc-cfn-templates-us-east-1", AwsDirectDeployer.templateBucketName(""));
+    void templateBucketNameIncludesAccountAndRegionAndDefaultsRegionWhenBlank() {
+        // Confirmed live: the previous name had no account ID at all, so it collided with
+        // whatever AWS account anywhere had already claimed "cfc-cfn-templates-<region>" --
+        // every headBucket/createBucket/putObject call against it came back 403 Access Denied,
+        // not a friendlier "already exists".
+        assertEquals("cfc-cfn-templates-111111111111-us-west-2",
+            AwsDirectDeployer.templateBucketName("111111111111", "us-west-2"));
+        assertEquals("cfc-cfn-templates-111111111111-us-east-1",
+            AwsDirectDeployer.templateBucketName("111111111111", null));
+        assertEquals("cfc-cfn-templates-111111111111-us-east-1",
+            AwsDirectDeployer.templateBucketName("111111111111", ""));
     }
 
     @Test

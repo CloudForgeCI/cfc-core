@@ -2,6 +2,7 @@ package com.cloudforgeci.api.core.iam;
 
 import com.cloudforge.core.manager.ManagerAwsCapabilityCatalog;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.deploy.aws.AwsDirectDeployer;
 import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.services.iam.PolicyStatement;
@@ -127,7 +128,20 @@ public final class ManagerOperatorIamSupport {
             .resources(List.of("*"))
             .conditions(Map.of("StringEquals", Map.of("iam:ResourceTag/" + TAG_MANAGED, "true")))
             .build();
-        return List.of(create, update, passRole);
+        // The very gap this class's own "Caveat, stated plainly" javadoc above warned about,
+        // confirmed live the first time deploy:create ran against an AWS account: AwsDirectDeployer
+        // uploads the template to a bucket before CreateStack/CreateChangeSet ever runs, and
+        // nothing granted that upload -- no S3 statement existed here at all. S3 bucket ARNs carry
+        // no account segment, so a fixed prefix match is exactly as scoped as the tag-conditioned
+        // statements above, without needing a matching condition key.
+        PolicyStatement templateBucket = PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerDeployTemplateBucket")
+            .actions(List.of("s3:*"))
+            .resources(List.of(
+                "arn:aws:s3:::" + AwsDirectDeployer.TEMPLATE_BUCKET_PREFIX + "*",
+                "arn:aws:s3:::" + AwsDirectDeployer.TEMPLATE_BUCKET_PREFIX + "*/*"))
+            .build();
+        return List.of(create, update, passRole, templateBucket);
     }
 
     /**

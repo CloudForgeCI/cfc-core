@@ -112,6 +112,9 @@ public final class AwsDirectDeployer implements AutoCloseable {
     private static final Duration LOCAL_EMULATOR_WAITER_TIMEOUT = Duration.ofMinutes(5);
     /** CloudFormation inline template body limit (same on real AWS as LocalStack). */
     private static final int MAX_INLINE_TEMPLATE_BYTES = 51_200;
+    /** Shared with {@code ManagerOperatorIamSupport}'s S3 grant for this bucket — keep the two in
+     *  sync rather than duplicating the literal. */
+    public static final String TEMPLATE_BUCKET_PREFIX = "cfc-cfn-templates-";
 
     public static final String TAG_MANAGED = "cloudforge:managed";
     public static final String TAG_APPLICATION = "cloudforge:application";
@@ -156,7 +159,10 @@ public final class AwsDirectDeployer implements AutoCloseable {
             s3Client(config, target, credentialsOverride),
             config.applicationId,
             runtimeTag(config.runtime),
-            templateBucketName(config.region),
+            // null, not an eagerly-computed name -- resolvedTemplateBucket() fills in the
+            // account-scoped name lazily (see its own javadoc for why: same "no network call in
+            // the constructor" rule resolveAccountId() already follows).
+            null,
             ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target) != null,
             Region.of(config.region == null ? "us-east-1" : config.region),
             credentialsOverride);
@@ -280,8 +286,19 @@ public final class AwsDirectDeployer implements AutoCloseable {
         return runtime == null ? "unknown" : runtime.name().toLowerCase(Locale.ROOT);
     }
 
-    static String templateBucketName(String region) {
-        return "cfc-cfn-templates-" + (region == null || region.isBlank() ? "us-east-1" : region);
+    /**
+     * S3 bucket names are globally unique across every AWS account, not just this one — the
+     * previous {@code "cfc-cfn-templates-" + region} name (no account ID) collided with whatever
+     * account anywhere happened to have claimed it first, and every {@code headBucket}/
+     * {@code createBucket}/{@code putObject} call against a bucket this account doesn't own comes
+     * back 403 Access Denied, not a friendlier "already exists" error — confirmed live: a deploy
+     * submission hit exactly this. {@code accountId} makes the name as
+     * unique as CDK's own bootstrap bucket convention ({@code cdk-hnb659fds-assets-<account>-
+     * <region>}) already relies on.
+     */
+    static String templateBucketName(String accountId, String region) {
+        return TEMPLATE_BUCKET_PREFIX + accountId + "-"
+            + (region == null || region.isBlank() ? "us-east-1" : region);
     }
 
     /**
@@ -610,24 +627,36 @@ public final class AwsDirectDeployer implements AutoCloseable {
     }
 
     private String uploadTemplateToS3(String stackName, String templateBody) throws IOException {
-        ensureTemplateBucket();
+        String bucket = resolvedTemplateBucket();
+        ensureTemplateBucket(bucket);
         String key = stackName + ".template.json";
         s3.putObject(
             PutObjectRequest.builder()
-                .bucket(templateBucket)
+                .bucket(bucket)
                 .key(key)
                 .contentType("application/json")
                 .build(),
             RequestBody.fromString(templateBody, StandardCharsets.UTF_8));
-        return s3.utilities().getUrl(builder -> builder.bucket(templateBucket).key(key)).toString();
+        return s3.utilities().getUrl(builder -> builder.bucket(bucket).key(key)).toString();
     }
 
-    private void ensureTemplateBucket() {
+    /**
+     * The production constructor leaves {@link #templateBucket} {@code null} rather than eagerly
+     * computing a name at construction time — same "no network call in the constructor" rule
+     * {@link #resolveAccountId} already documents, since the caller's own account ID is now part
+     * of the name (see that method's own account-ID-collision fix). Test-visible constructors that
+     * inject an explicit bucket name still win outright, unchanged.
+     */
+    private String resolvedTemplateBucket() {
+        return templateBucket != null ? templateBucket : templateBucketName(resolveAccountId(), region.id());
+    }
+
+    private void ensureTemplateBucket(String bucket) {
         try {
-            s3.headBucket(HeadBucketRequest.builder().bucket(templateBucket).build());
+            s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
         } catch (NoSuchBucketException e) {
             try {
-                s3.createBucket(CreateBucketRequest.builder().bucket(templateBucket).build());
+                s3.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
             } catch (BucketAlreadyExistsException | BucketAlreadyOwnedByYouException ignored) {
                 // concurrent create
             }
