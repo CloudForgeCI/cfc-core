@@ -38,7 +38,7 @@ class ManagerDeployIamSupportTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void deployStatementsReturnsFourStatementsForManager() {
+    void deployStatementsReturnsTwelveStatementsForManager() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "ManagerDeployStatements", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
@@ -48,7 +48,43 @@ class ManagerDeployIamSupportTest {
             .createFargate();
 
         List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
-        assertEquals(4, statements.size());
+        assertEquals(12, statements.size());
+    }
+
+    /** Confirmed live, twice, that DescribeChangeSet/ExecuteChangeSet/DeleteChangeSet can't
+     *  share a tag condition with CreateChangeSet at all -- aws:RequestTag never has a value
+     *  (those three don't accept a Tags parameter), and aws:ResourceTag fails for a CREATE-type
+     *  change set specifically, since CloudFormation only applies a change set's Tags to the
+     *  stack when it executes, not when it's merely created: a brand-new stack sits in
+     *  REVIEW_IN_PROGRESS with zero tags for as long as its first change set is pending. No
+     *  condition at all, matching this class's SC_PROVISION precedent -- CreateChangeSet's own
+     *  tag requirement already gates who can start a managed change set in the first place. */
+    @Test
+    void deployStatementsGrantsChangeSetLifecycleWithNoTagCondition() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerDeployChangeSetLifecycle", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
+        PolicyStatement changeSetStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployChangeSetLifecycle".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+
+        assertTrue(changeSetStatement.getActions().contains("cloudformation:DescribeChangeSet"));
+        assertTrue(changeSetStatement.getActions().contains("cloudformation:ExecuteChangeSet"));
+        assertTrue(changeSetStatement.getActions().contains("cloudformation:DeleteChangeSet"));
+        assertFalse(changeSetStatement.toJSON().toString().contains("cloudforge:managed"));
+
+        PolicyStatement createStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployCreate".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+        assertFalse(createStatement.getActions().contains("cloudformation:DescribeChangeSet"));
     }
 
     /** Confirmed live: deploy:create's own template upload had no S3 grant at all before this --
@@ -74,6 +110,176 @@ class ManagerDeployIamSupportTest {
         assertTrue(bucketStatement.getActions().contains("s3:*"));
         assertTrue(bucketStatement.getResources().stream()
             .anyMatch(r -> r.contains(com.cloudforgeci.api.deploy.aws.AwsDirectDeployer.TEMPLATE_BUCKET_PREFIX)));
+    }
+
+    /** Confirmed live: fixing the template bucket alone wasn't enough -- a deploy against a real
+     *  AWS account also failed on S3 access for the standard CDK bootstrap asset bucket, which
+     *  AwsDirectDeployer.deploy() always publishes to via LocalStackCdkAssetPublisher (for real
+     *  AWS as much as a local emulator, despite the class name). */
+    @Test
+    void deployStatementsGrantsS3OnTheCdkAssetBucketPrefix() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerDeployCdkAssetBucket", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
+        PolicyStatement bucketStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployCdkAssetBucket".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+
+        assertTrue(bucketStatement.getActions().contains("s3:*"));
+        assertTrue(bucketStatement.getResources().stream()
+            .anyMatch(r -> r.contains("cdk-hnb659fds-assets-")));
+    }
+
+    /** Confirmed live: even with both S3 grants in place, CloudFormation itself resolves the
+     *  synthesized template's BootstrapVersion dynamic reference using the deploying principal's
+     *  own credentials -- Manager's task role needs its own read access to that SSM parameter,
+     *  regardless of whether the account has ever run a real cdk bootstrap. */
+    @Test
+    void deployStatementsGrantsSsmReadOnTheCdkBootstrapVersionParameter() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerDeployCdkBootstrapParameter", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
+        PolicyStatement ssmStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployCdkBootstrapParameter".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+
+        assertTrue(ssmStatement.getActions().contains("ssm:GetParameters"));
+        assertTrue(ssmStatement.getResources().stream()
+            .anyMatch(r -> r.contains("cdk-bootstrap/hnb659fds")));
+    }
+
+    /** Confirmed live: iam:PassRole alone wasn't enough either -- CloudFormation creates and
+     *  manages the deployed application's own IAM roles (task role, task execution role) using
+     *  the deploying principal's own credentials, the same as every other resource type in the
+     *  template. Surfaced by a rollback that failed on iam:DeleteRole/iam:DetachRolePolicy after
+     *  an unrelated resource failure triggered an automatic rollback. */
+    @Test
+    void deployStatementsGrantsIamRoleLifecycleSplitByCreateVsManage() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerDeployIamRoleLifecycle", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
+
+        PolicyStatement createStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployIamRoleCreate".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+        assertTrue(createStatement.getActions().contains("iam:CreateRole"));
+        assertTrue(createStatement.getActions().contains("iam:TagRole"));
+        // Resource-name-scoped, not iam:RequestTag-conditioned -- confirmed live: a genuinely
+        // first-ever CreateRole call was denied by the RequestTag condition even though the
+        // synthesized template carried the correct inline tag, consistent with CloudFormation's
+        // IAM::Role provider not reliably surfacing template tags to iam:RequestTag evaluation.
+        assertTrue(createStatement.getResources().contains("arn:aws:iam::*:role/*SystemContextExtendedTask*"));
+        assertTrue(createStatement.getResources().contains("arn:aws:iam::*:role/*LogRetention*"));
+        assertFalse(createStatement.toJSON().toString().contains("iam:RequestTag"));
+
+        PolicyStatement manageStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployIamRoleManage".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+        assertTrue(manageStatement.getActions().contains("iam:DeleteRole"));
+        assertTrue(manageStatement.getActions().contains("iam:AttachRolePolicy"));
+        assertTrue(manageStatement.getActions().contains("iam:DetachRolePolicy"));
+        assertTrue(manageStatement.getActions().contains("iam:PutRolePolicy"));
+        // Resource-name-scoped, not iam:ResourceTag-conditioned -- a real IAM tag-propagation
+        // race, confirmed live: CloudFormation's automatic rollback deletes a just-created role
+        // faster than its own tags reliably propagate into tag-based condition evaluation.
+        assertTrue(manageStatement.getResources().contains("arn:aws:iam::*:role/*SystemContextExtendedTask*"));
+        // CDK's own builtin custom-resource Lambda service role -- see ManagerOperatorIamSupport's
+        // own comment for why this pattern has no "ServiceRole" requirement (truncated away
+        // before that point in a real observed physical name).
+        assertTrue(manageStatement.getResources().contains("arn:aws:iam::*:role/*LogRetention*"));
+        assertFalse(manageStatement.toJSON().toString().contains("iam:ResourceTag"));
+
+        // The LogRetention custom resource is a Lambda *function*, not just the IAM role above --
+        // confirmed live: lambda:CreateFunction was denied outright (no lambda:* grant existed at
+        // all), and the same gap then blocked the stack's own rollback on lambda:DeleteFunction,
+        // leaving a real stack stuck in ROLLBACK_FAILED.
+        PolicyStatement functionStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployLogRetentionFunctionManage".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+        assertTrue(functionStatement.getActions().contains("lambda:CreateFunction"));
+        assertTrue(functionStatement.getActions().contains("lambda:DeleteFunction"));
+        assertTrue(functionStatement.getResources().contains("arn:aws:lambda:*:*:function:*LogRetention*"));
+    }
+
+    /** The layer {@link PermissionMatrix} does not cover: Manager's own role actually creating a
+     *  target app's VPC/EFS/ALB/ECS-cluster resources, not the deployed app's own workload
+     *  permissions once running. */
+    @Test
+    void deployStatementsGrantsTargetInfrastructureProvisioning() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerTargetInfrastructure", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
+        // Split across two statements/managed policies -- see ManagerOperatorIamSupport's own
+        // comment on why: a role's combined inline-policy size is capped at 10,240 bytes total,
+        // which the flat 212-action single statement this used to be blew past the moment the
+        // database/KMS/secrets permissions were added.
+        PolicyStatement networkStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployTargetInfrastructureNetwork".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+        PolicyStatement computeDataStatement = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployTargetInfrastructureComputeData".equals(s.getSid()))
+            .findFirst()
+            .orElseThrow();
+
+        assertTrue(networkStatement.getActions().contains("ec2:CreateVpc"));
+        assertTrue(networkStatement.getActions().contains("ec2:CreateInternetGateway"));
+        assertTrue(networkStatement.getActions().contains("elasticfilesystem:CreateFileSystem"));
+        assertTrue(networkStatement.getActions().contains("elasticfilesystem:TagResource"));
+        assertTrue(networkStatement.getActions().contains("elasticloadbalancing:CreateLoadBalancer"));
+
+        assertTrue(computeDataStatement.getActions().contains("ecs:CreateCluster"));
+        assertTrue(computeDataStatement.getActions().contains("logs:CreateLogGroup"));
+        // Compliance dimension -- confirmed the finicky part in practice: account-level
+        // singleton services (Config, GuardDuty) need their own service-linked role the first
+        // time either is ever enabled in the account.
+        assertTrue(computeDataStatement.getActions().contains("config:PutConfigurationRecorder"));
+        assertTrue(computeDataStatement.getActions().contains("guardduty:CreateDetector"));
+        assertTrue(computeDataStatement.getActions().contains("wafv2:CreateWebACL"));
+        assertTrue(computeDataStatement.getActions().contains("iam:CreateServiceLinkedRole"));
+        // Database dimension -- confirmed live on a real database-backed app deploy: KMS key
+        // creation for RDS encryption, and the auto-generated Secrets Manager credential
+        // RdsFactory always pairs with it, were both entirely missing before that deploy.
+        assertTrue(computeDataStatement.getActions().contains("rds:CreateDBInstance"));
+        assertTrue(computeDataStatement.getActions().contains("rds:DescribeDBParameterGroups"));
+        assertTrue(computeDataStatement.getActions().contains("rds:DescribeEngineDefaultParameters"));
+        assertTrue(computeDataStatement.getActions().contains("kms:CreateKey"));
+        assertTrue(computeDataStatement.getActions().contains("secretsmanager:GetRandomPassword"));
+        // Deliberately unconditioned -- see OperatorProvisioningPermissionMatrix's own javadoc:
+        // these resources have no stable name pattern to scope by the way IAM roles do, and
+        // individually splitting ~150 actions by RequestTag/ResourceTag would reproduce the same
+        // tag-propagation race iamRoleManage was fixed for above.
+        assertFalse(networkStatement.toJSON().toString().contains("cloudforge:managed"));
+        assertFalse(computeDataStatement.toJSON().toString().contains("cloudforge:managed"));
     }
 
     @Test
@@ -131,6 +337,13 @@ class ManagerDeployIamSupportTest {
         assertTrue(templateJson.contains("CloudForgeManagerDeployUpdate"));
         assertTrue(templateJson.contains("CloudForgeManagerDeployPassRole"));
         assertTrue(templateJson.contains("CloudForgeManagerDeployCatalog"));
+        assertTrue(templateJson.contains("CloudForgeManagerDeployTemplateBucket"));
+        assertTrue(templateJson.contains("CloudForgeManagerDeployCdkAssetBucket"));
+        assertTrue(templateJson.contains("CloudForgeManagerDeployCdkBootstrapParameter"));
+        assertTrue(templateJson.contains("CloudForgeManagerDeployChangeSetLifecycle"));
+        assertTrue(templateJson.contains("CloudForgeManagerDeployIamRoleCreate"));
+        assertTrue(templateJson.contains("CloudForgeManagerDeployIamRoleManage"));
+        assertTrue(templateJson.contains("CloudForgeManagerDeployTargetInfrastructure"));
 
         Set<String> actions = iamActions(template);
         assertTrue(actions.contains("cloudformation:CreateStack"));

@@ -15,7 +15,7 @@ import java.util.Set;
  */
 public final class ManagerAwsCapabilityCatalog {
 
-    public static final String CATALOG_VERSION = "1.2.0";
+    public static final String CATALOG_VERSION = "1.4.0";
 
     private ManagerAwsCapabilityCatalog() {
     }
@@ -44,7 +44,12 @@ public final class ManagerAwsCapabilityCatalog {
             "rds:DescribeDBSnapshots"),
         RDS_SNAPSHOT(
             "rds:CreateDBSnapshot",
-            "rds:DeleteDBSnapshot"),
+            "rds:DeleteDBSnapshot",
+            // RDS instances created with CopyTagsToSnapshot enabled make AWS call this
+            // transparently on the caller's behalf right after CreateDBSnapshot succeeds --
+            // without it, snapshot creation itself succeeds but the automatic tag-copy step
+            // gets denied, confirmed live against a real deployed instance.
+            "rds:AddTagsToResource"),
         RDS_RESTORE("rds:RestoreDBInstanceFromDBSnapshot"),
         RDS_ENGINE_UPGRADE("rds:ModifyDBInstance"),
         LOGS_READ(
@@ -53,6 +58,32 @@ public final class ManagerAwsCapabilityCatalog {
         AUDIT_MANAGER_READ(
             "auditmanager:GetAssessment",
             "auditmanager:GetEvidence"),
+        /**
+         * "Cognito as the whole Users directory" -- the separate, admin-opted-in feature that
+         * lets the Users page and its API manage a Cognito User Pool's users directly instead of
+         * the local DB (see {@code CognitoUserManagementService}/{@code CognitoPoolLookupService}
+         * and {@code manager_auth_backend.cognito_enabled}). Confirmed live: not having this at
+         * all in the operator baseline meant even the pool-lookup step failed with
+         * {@code cognito-idp:ListUserPools} denied before the feature could do anything.
+         * {@code ListUserPools} itself has no per-pool resource to scope by (it's what
+         * discovers the pool ID in the first place), so this whole group stays {@code
+         * Resource: "*"} like every other operator-baseline capability in this catalog.
+         */
+        COGNITO_USER_MANAGEMENT(
+            "cognito-idp:ListUserPools",
+            "cognito-idp:DescribeUserPool",
+            "cognito-idp:ListUsers",
+            "cognito-idp:AdminCreateUser",
+            "cognito-idp:AdminDeleteUser",
+            "cognito-idp:AdminUpdateUserAttributes",
+            "cognito-idp:AdminEnableUser",
+            "cognito-idp:AdminDisableUser",
+            "cognito-idp:AdminUserGlobalSignOut",
+            "cognito-idp:AdminAddUserToGroup",
+            "cognito-idp:AdminRemoveUserFromGroup",
+            "cognito-idp:AdminListGroupsForUser",
+            "cognito-idp:CreateGroup",
+            "cognito-idp:ListGroups"),
         /**
          * Direct-deploy path for creating/updating CloudForge-managed AWS infrastructure —
          * {@code deploy:create} in {@code ManagerPolicyCatalog} (admin-only) routes here.
@@ -121,7 +152,8 @@ public final class ManagerAwsCapabilityCatalog {
             Capability.RDS_DESCRIBE,
             Capability.RDS_SNAPSHOT,
             Capability.RDS_RESTORE,
-            Capability.RDS_ENGINE_UPGRADE);
+            Capability.RDS_ENGINE_UPGRADE,
+            Capability.COGNITO_USER_MANAGEMENT);
     }
 
     /**

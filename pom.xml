@@ -44,6 +44,14 @@
     <java.version>25</java.version>
     <build.version.suffix></build.version.suffix> <!-- Blank by default -->
 
+    <!-- Tests skip by default; this reactor's full suite (cloudforge-api alone runs ~6000
+         tests) takes 15-20+ minutes, too slow to be every contributor's default `mvn install`
+         experience. Real verification is one flag away: the "ci" profile below (`-Pci`), which
+         every CI job that actually needs tests to run passes explicitly. Keep it that way when
+         adding a new test-dependent CI step, since a bare `mvn install`/`verify` here is silently
+         a no-op for tests, unlike the Maven-wide convention this inverts. -->
+    <skipTests>true</skipTests>
+
     <!-- AWS CDK Versions -->
     <!-- Note: v2.197.0+ defaults to nodejs22.x for AwsCustomResource which isn't available in all regions -->
     <cdk.version>2.196.0</cdk.version>
@@ -333,6 +341,15 @@
 
 
 
+    </profile>
+    <!-- Opt-in for CI jobs that genuinely need the real test run; pairs with the
+         skipTests=true default above. `mvn clean install -Pci` (or `verify -Pci`) instead of
+         scattering -DskipTests=false across individual workflow steps. -->
+    <profile>
+      <id>ci</id>
+      <properties>
+        <skipTests>false</skipTests>
+      </properties>
     </profile>
     <profile>
       <id>release</id>

@@ -277,7 +277,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           echo "Running tests with coverage..."
-          mvn clean verify
+          mvn clean verify -Pci
           echo "Tests complete"
 
       - name: List generated coverage reports

@@ -100,7 +100,7 @@ jobs:
       - name: Build and test project
         run: |
           echo "Building and testing CFC Core..."
-          mvn clean install -B -V
+          mvn clean install -Pci -B -V
           echo "Build and tests complete"
 
       - name: Prepare CDK dependencies

@@ -10,6 +10,7 @@ import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
+import com.cloudforge.core.local.DeploymentTarget;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
@@ -79,6 +80,9 @@ public class ContainerFactory extends BaseFactory {
 
     @DeploymentContext("enableSentinel")
     private Boolean enableSentinel;
+
+    @DeploymentContext("managerTarget")
+    private DeploymentTarget managerTarget;
 
     @DeploymentContext("enableCluster")
     private Boolean enableCluster;
@@ -187,6 +191,20 @@ public class ContainerFactory extends BaseFactory {
                 sslEnabled, domain, fqdn, certificateArn);
             environment.put(com.cloudforge.core.manager.ManagerEnvKeys.PUBLIC_TLS_TRUSTED,
                 String.valueOf(publiclyTrusted));
+        }
+
+        // ManagerRuntimeConfiguration.Target's own defaultTarget() is null whenever this is
+        // unset -- until this was added, a real AWS self-deployment never set CFC_MANAGER_TARGET
+        // at all, so ManagerDatabase.open()'s AWS-only fail-closed guard (a missing remote DB
+        // host must never silently fall back to embedded H2 on a real deploy) could never
+        // actually fire on the one target it exists to protect. managerTarget has no default in
+        // DeploymentConfig (required = false) precisely so LocalStack/MiniStack's own explicit
+        // "localstack"/"ministack" opt-in stays the only way this resolves to anything other than
+        // null -- a real AWS deployment's deployment-context.json must set managerTarget: "aws"
+        // for itself, same as LocalStack/MiniStack already set their own value today.
+        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+                && managerTarget != null) {
+            environment.put(com.cloudforge.core.manager.ManagerEnvKeys.TARGET, managerTarget.configKey());
         }
 
         if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
@@ -491,6 +509,26 @@ public class ContainerFactory extends BaseFactory {
         // Only set user if specified (some apps like GitLab need to run as root)
         if (containerUser != null) {
             containerOptionsBuilder.user(containerUser);
+            // Confirmed live: forcing a non-root user at the ECS container level applies from
+            // PID 1 onward, bypassing the image's own normal root-then-drop-privileges startup
+            // (Apache's docker-entrypoint starts as root specifically so its master process can
+            // bind a privileged port, then forks www-data workers) -- Joomla's official Apache
+            // image failed outright with "Permission denied: could not bind to address :80" the
+            // moment containerUser forced it to start as UID 33 from the beginning. WordPress
+            // shares this exact same containerUser value and would hit the identical failure on
+            // a real deploy. Rather than dropping the non-root hardening, grant the one Linux
+            // capability that actually closes the gap -- NET_BIND_SERVICE lets a non-root process
+            // bind ports below 1024 and nothing else, so this stays as narrowly scoped as the
+            // problem it fixes. Only relevant when the app's own port is privileged (anything on
+            // 1024+, the common case, never needed root to bind it in the first place) and the
+            // app is actually running non-root -- a spec that explicitly sets "0:0" is already
+            // root and gains nothing from this capability.
+            boolean explicitRoot = containerUser.startsWith("0:") || containerUser.equals("0");
+            if (appPort < 1024 && !explicitRoot) {
+                LinuxParameters linuxParameters = new LinuxParameters(this, "LinuxParameters");
+                linuxParameters.addCapabilities(Capability.NET_BIND_SERVICE);
+                containerOptionsBuilder.linuxParameters(linuxParameters);
+            }
         }
 
         // Log container configuration

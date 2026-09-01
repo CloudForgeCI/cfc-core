@@ -12,10 +12,19 @@ class ManagerAwsCapabilityCatalogTest {
         var actions = ManagerAwsCapabilityCatalog.operatorBaselineIamActions();
         assertTrue(actions.contains("rds:CreateDBSnapshot"));
         assertTrue(actions.contains("rds:DeleteDBSnapshot"));
+        // AWS calls this transparently on the caller's behalf right after CreateDBSnapshot
+        // succeeds, for any RDS instance created with CopyTagsToSnapshot enabled -- confirmed
+        // live: snapshot creation itself succeeded, but the automatic tag-copy step was denied
+        // without this grant.
+        assertTrue(actions.contains("rds:AddTagsToResource"));
         assertTrue(actions.contains("rds:RestoreDBInstanceFromDBSnapshot"));
         assertTrue(actions.contains("ecs:UpdateService"));
         assertTrue(actions.contains("cloudformation:DeleteStack"));
         assertTrue(actions.contains("cloudformation:GetTemplate"));
+        // "Cognito as the whole Users directory" -- confirmed live: not having ListUserPools at
+        // all meant even discovering the pool ID failed before the feature could do anything.
+        assertTrue(actions.contains("cognito-idp:ListUserPools"));
+        assertTrue(actions.contains("cognito-idp:AdminCreateUser"));
     }
 
     @Test

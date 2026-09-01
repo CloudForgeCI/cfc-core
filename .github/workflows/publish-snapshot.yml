@@ -65,7 +65,7 @@ jobs:
           cache: 'maven'
 
       - name: Build and test
-        run: mvn -B -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean verify
+        run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean verify
 
   publish-snapshot:
     name: Publish SNAPSHOT to Central
@@ -169,7 +169,10 @@ jobs:
       - name: Deploy SNAPSHOT (cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack)
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+        # No re-test -- needs: build-test above already ran the real suite with -Pci and gates
+        # whether this step runs at all; explicit here so it doesn't silently depend on the
+        # skipTests=true default happening to be correct.
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()

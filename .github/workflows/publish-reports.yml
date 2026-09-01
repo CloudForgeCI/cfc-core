@@ -246,7 +246,7 @@ jobs:
       - name: Build and test with coverage
         run: |
           echo "Building project with tests and coverage..."
-          mvn clean install -B -V
+          mvn clean install -Pci -B -V
           echo "Build complete"
 
       - name: Generate surefire HTML reports

@@ -19,7 +19,10 @@
 # it shares with cloudforge-manager's container in the same ECS task.
 
 # ── Maven package (reactor build — needs cloudforge-api from the same checkout) ─────────────────
-FROM maven:3.9-eclipse-temurin-21 AS build
+# temurin-25, matching the reactor's own JDK 25 target (every pom compiles at release 25 now) —
+# this was still pinned to temurin-21 from before that migration, which fails the reactor build
+# outright ("invalid target release: 25") rather than producing an old-but-working artifact.
+FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /src
 COPY pom.xml ./
 COPY cloudforge-core/pom.xml cloudforge-core/pom.xml
@@ -41,7 +44,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 # image: this sidecar carries none of the crypto-provider/charset reflection gaps that motivated
 # jlink there (no LicenseSeat, no Ed25519 verification, no Jackson record serialization at all) —
 # a full JRE is the simpler, lower-risk choice until this image's own footprint is worth trimming.
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:25-jre AS runtime
 
 # Node.js is required at runtime, not just at build time: CloudForgeSynthesizer.synthesize runs
 # aws-cdk-lib in-process via its jsii bridge, which spawns a `node` child process to execute the

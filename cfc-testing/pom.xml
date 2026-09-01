@@ -9,7 +9,7 @@
     <properties>
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
-        <cloudforge.version>3.2.1-SNAPSHOT</cloudforge.version>
+        <cloudforge.version>3.2.5-SNAPSHOT</cloudforge.version>
         <!-- Independently versioned from cloudforge.version above, since cloudforge-manager-deployment
              lives in its own repo with its own release cadence; it just happens to currently sit
              at the same numeric version cfc-core did before cfc-core's own 3.2.0 release bumped
@@ -17,7 +17,7 @@
              cloudforge.version, so the two can drift independently without this dependency
              silently trying to resolve a cloudforge-manager-deployment version that was never
              actually published. -->
-        <cloudforge-manager-deployment.version>3.2.0-SNAPSHOT</cloudforge-manager-deployment.version>
+        <cloudforge-manager-deployment.version>3.2.6-SNAPSHOT</cloudforge-manager-deployment.version>
         <testcontainers.version>1.21.0</testcontainers.version>
         <aws.sdk.version>2.25.0</aws.sdk.version>
     </properties>
