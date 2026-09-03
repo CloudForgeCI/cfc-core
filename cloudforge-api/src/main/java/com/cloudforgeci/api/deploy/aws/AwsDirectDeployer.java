@@ -68,11 +68,10 @@ import java.util.UUID;
  * *Manager itself* is running inside one</b> — same {@code LOCALSTACK_ENDPOINT}/
  * {@code AWS_ENDPOINT_URL} env-var detection {@link
  * com.cloudforgeci.localstack.LocalStackDeployer#resolveEndpoint()} already uses, deliberately
- * mirrored here rather than left real-AWS-only. Found and fixed as a real bug (not a design
- * choice): the original version built its clients with no endpoint override at all, so a
- * {@code deploy:create} click from a Manager instance hosted on LocalStack tried to reach
- * {@code cloudformation.us-east-1.amazonaws.com} — a real, live "shouldn't be making calls to
- * real AWS in LocalStack" failure, not a hypothetical one.</p>
+ * mirrored here rather than left real-AWS-only — without an endpoint override, a {@code
+ * deploy:create} click from a Manager instance hosted on LocalStack would try to reach
+ * {@code cloudformation.us-east-1.amazonaws.com} instead of the local emulator it's actually
+ * running against.</p>
  *
  * <p>Every stack this deployer creates or updates is tagged with the same
  * {@code cloudforge:managed}/{@code cloudforge:application}/{@code cloudforge:runtime}
@@ -99,15 +98,14 @@ public final class AwsDirectDeployer implements AutoCloseable {
     private static final Duration OPERATION_TIMEOUT = Duration.ofMinutes(30);
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
     /**
-     * Real bug this closes: the stack create/update waiter below ({@code
-     * cloudFormation.waiter().waitUntilStackCreateComplete(...)}) was called with no override at
-     * all, so it ran on the AWS SDK's own default waiter config — up to ~60 minutes (120 attempts
-     * x 30s) before giving up. A hung LocalStack resource (a common emulation gap, not a real
-     * deploy ever taking that long) left the journal entry — and so the UI polling it — showing
-     * "RUNNING" for the better part of an hour with zero indication anything was wrong. Real AWS
-     * keeps the SDK default (a genuinely large stack can legitimately take a while); local
-     * emulator targets get a much shorter ceiling, since a LocalStack deploy that hasn't finished
-     * in 5 minutes is hung, not slow.
+     * Caps how long the stack create/update waiter below ({@code
+     * cloudFormation.waiter().waitUntilStackCreateComplete(...)}) will wait for a LocalStack
+     * target specifically — real AWS keeps the SDK's own default waiter config (up to ~60
+     * minutes; a genuinely large stack can legitimately take a while), but a LocalStack resource
+     * that hangs (a common emulation gap) is not a real deploy taking a long time, and shouldn't
+     * leave the journal entry — and the UI polling it — showing "RUNNING" for the better part of
+     * an hour with no indication anything is wrong. A LocalStack deploy that hasn't finished in
+     * 5 minutes is hung, not slow.
      */
     private static final Duration LOCAL_EMULATOR_WAITER_TIMEOUT = Duration.ofMinutes(5);
     /** CloudFormation inline template body limit (same on real AWS as LocalStack). */
@@ -291,10 +289,9 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * previous {@code "cfc-cfn-templates-" + region} name (no account ID) collided with whatever
      * account anywhere happened to have claimed it first, and every {@code headBucket}/
      * {@code createBucket}/{@code putObject} call against a bucket this account doesn't own comes
-     * back 403 Access Denied, not a friendlier "already exists" error — confirmed live: a deploy
-     * submission hit exactly this. {@code accountId} makes the name as
-     * unique as CDK's own bootstrap bucket convention ({@code cdk-hnb659fds-assets-<account>-
-     * <region>}) already relies on.
+     * back 403 Access Denied, not a friendlier "already exists" error. {@code accountId} makes
+     * the name as unique as CDK's own bootstrap bucket convention ({@code
+     * cdk-hnb659fds-assets-<account>-<region>}) already relies on.
      */
     static String templateBucketName(String accountId, String region) {
         return TEMPLATE_BUCKET_PREFIX + accountId + "-"
@@ -305,12 +302,11 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * The actual CloudFormation stack name every AWS/S3 API call in this class uses —
      * {@code stackName} plus a {@code -localstack} suffix when targeting a local emulator, the
      * exact same convention {@code LocalStackDeployer}'s caller already applies for its own
-     * deploys. Real bug this closes: {@code StackListingPolicy.acceptsName} requires that suffix
-     * for a stack to appear under Manager's LocalStack target view — without this, a
-     * {@code deploy:create} stack redirected to a local emulator (see class javadoc) deployed
-     * successfully on CloudFormation's side but was invisible in both Manager's Instances list
-     * and its Catalog list, discovered from a real successful deploy whose stack simply never
-     * showed up anywhere. Every public method on this class still deals exclusively in the
+     * deploys. {@code StackListingPolicy.acceptsName} requires that suffix for a stack to appear
+     * under Manager's LocalStack target view — without it, a {@code deploy:create} stack
+     * redirected to a local emulator (see class javadoc) deploys successfully on CloudFormation's
+     * side but stays invisible in both Manager's Instances list and its Catalog list. Every
+     * public method on this class still deals exclusively in the
      * logical, unsuffixed name — both what callers pass in and what
      * {@link AwsStackDeployResult#stackName()} reports back — this conversion is applied once,
      * internally, and never leaks out.
@@ -338,10 +334,9 @@ public final class AwsDirectDeployer implements AutoCloseable {
         // logical name; only the CloudFormation-facing stack name below gets suffixed.
         //
         // Unconditional — real cdk deploy always publishes assets before its own CloudFormation
-        // call too, for real AWS as much as a local emulator. See LocalStackCdkAssetPublisher's
-        // class javadoc for the real bug this fixes (every asset-backed resource, including
-        // aws-cdk-lib's own LogRetention custom resource, failed the instant a real deploy
-        // reached it — this class never published assets anywhere before this).
+        // call too, for real AWS as much as a local emulator. Without this, any asset-backed
+        // resource (including aws-cdk-lib's own LogRetention custom resource) fails the instant a
+        // real deploy reaches it, since nothing published its asset anywhere first.
         LocalStackCdkAssetPublisher.publish(template.getParent(), stackName, s3, resolveAccountId());
 
         boolean exists = stackExists(physical) && stackIsDeployable(physical);

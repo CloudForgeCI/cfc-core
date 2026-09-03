@@ -16,9 +16,9 @@ import java.util.Map;
  * read SSM params, put CloudWatch metrics). This class defines what <i>Manager's own role</i>
  * needs to bring that app's infrastructure into existence and tear it back down in the first
  * place — CloudFormation issues every one of these calls under Manager's identity, not the
- * deployed app's. Confirmed live: a stack's own workload permissions being perfectly correct
- * (which {@link PermissionMatrix} already ensures) says nothing about whether Manager was ever
- * allowed to create that stack's VPC/EFS/ALB/ECS resources at all.</p>
+ * deployed app's. A stack's own workload permissions being perfectly correct (which {@link
+ * PermissionMatrix} already ensures) says nothing about whether Manager was ever allowed to
+ * create that stack's VPC/EFS/ALB/ECS resources at all.</p>
  *
  * <p>Tiered by the same {@link IAMProfile} enum {@link PermissionMatrix} uses, not a parallel
  * concept — MINIMAL is read-only (inventory/troubleshooting, no condition since Describe- and
@@ -126,9 +126,9 @@ public final class OperatorProvisioningPermissionMatrix {
             "elasticfilesystem:DescribeMountTargetSecurityGroups",
             "elasticfilesystem:DescribeLifecycleConfiguration",
             "elasticfilesystem:DescribeBackupPolicy",
-            // Confirmed live: CloudFormation checks for an existing replication configuration
-            // as part of DeleteFileSystem's own preconditions, even on a file system that was
-            // never replicated -- without this, deleting an EFS file system fails outright.
+            // CloudFormation checks for an existing replication configuration as part of
+            // DeleteFileSystem's own preconditions, even on a file system that was never
+            // replicated -- without this, deleting an EFS file system fails outright.
             "elasticfilesystem:DescribeReplicationConfigurations"
         ),
         IAMProfile.STANDARD, List.of(
@@ -235,13 +235,11 @@ public final class OperatorProvisioningPermissionMatrix {
      * secret every encrypted instance provisions alongside it -- grouped together, not split into
      * three separate maps, since {@code RdsFactory} always creates the three together for any app
      * whose {@code DatabaseSpec} requests a database (there is no "RDS without its own secret and
-     * key" shape in this codebase to scope more narrowly than that). Confirmed live on a genuinely
-     * fresh database-backed app deploy: {@code kms:CreateKey}'s own tagging step failed the same
-     * "UnauthorizedTaggingOperation" way {@code iamRoleCreate} did (see that class's own comment --
-     * this is CloudFormation's error-classification label for <i>any</i> denied create-with-tags
-     * call, not proof of a tag-condition mismatch specifically), and
-     * {@code rds:DescribeDBParameterGroups}/{@code secretsmanager:GetRandomPassword} were plain,
-     * simple missing grants -- this whole category simply didn't exist before that deploy.
+     * key" shape in this codebase to scope more narrowly than that). {@code kms:CreateKey}'s own
+     * tagging step fails with "UnauthorizedTaggingOperation" without {@code kms:TagResource}
+     * granted alongside it (see {@code ManagerOperatorIamSupport}'s {@code iamRoleCreate} for the
+     * same CloudFormation error-classification label on a different action -- it denotes any
+     * denied create-with-tags call, not a tag-condition mismatch specifically).
      */
     public static final Map<IAMProfile, List<String>> DATABASE_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
@@ -249,9 +247,9 @@ public final class OperatorProvisioningPermissionMatrix {
             "rds:DescribeDBSubnetGroups",
             "rds:DescribeDBParameterGroups",
             "rds:DescribeDBParameters",
-            // Confirmed live: CloudFormation resolves the engine's own default parameter values
-            // before applying ParameterGroup's custom overrides, even when every override is
-            // explicit -- without this, DBParameterGroup creation fails outright.
+            // CloudFormation resolves the engine's own default parameter values before applying
+            // ParameterGroup's custom overrides, even when every override is explicit -- without
+            // this, DBParameterGroup creation fails outright.
             "rds:DescribeEngineDefaultParameters",
             "rds:ListTagsForResource",
             "kms:DescribeKey",
@@ -307,9 +305,8 @@ public final class OperatorProvisioningPermissionMatrix {
      * fourth {@link IAMProfile} tier, since compliance mode is an independent boolean toggle on
      * {@code DeploymentConfig} ({@code complianceMode}/{@code awsConfigEnabled}/{@code
      * guardDutyEnabled}), orthogonal to which IAMProfile tier an app's own workload role runs
-     * under. Confirmed live in this project before (production + compliance enforcement is one
-     * of the most fragile combinations here): AWS Config and GuardDuty are both account-level
-     * <i>singletons</i>, and enabling either for the very first time in an account requires
+     * under. AWS Config and GuardDuty are both account-level <i>singletons</i>, and enabling
+     * either for the very first time in an account requires
      * {@code iam:CreateServiceLinkedRole} for that service's own service-linked role -- a step
      * with no equivalent in the VPC/EFS/ALB/ECS categories above, easy to miss because it's only
      * needed exactly once per account, not once per deployment.
@@ -419,17 +416,15 @@ public final class OperatorProvisioningPermissionMatrix {
      * byte size rather than by category count -- {@link #VPC_PERMISSIONS}/{@link #ALB_PERMISSIONS}/
      * {@link #EFS_PERMISSIONS} ("network") on one side, {@link #ECS_PERMISSIONS}/{@link
      * #LOGS_PERMISSIONS}/{@link #DATABASE_PERMISSIONS}/{@link #COMPLIANCE_PERMISSIONS}
-     * ("compute/data") on the other. Exists because of a real, hard AWS ceiling this class's
-     * single flat list ran into: an IAM role's <i>combined</i> inline-policy size across every
-     * inline policy document it carries is capped at 10,240 bytes total -- not a separate budget
-     * per document, confirmed live the first time this class's flat list (212 actions, ~6.3KB on
-     * its own) was moved into its own named inline policy and the role's default policy plus this
-     * one together still exceeded the combined cap. {@link ManagerOperatorIamSupport} attaches
-     * each half as its own customer-managed policy instead of inline specifically to sidestep
-     * that combined-inline ceiling (a managed policy's size budget is independent of it), so the
-     * split point here only needs to keep each half comfortably under a managed policy's own
-     * (smaller, ~6,144-byte default) size limit -- confirmed live via the real synthesized byte
-     * counts per AWS service prefix, not guessed.
+     * ("compute/data") on the other. Exists because of a hard AWS ceiling: an IAM role's
+     * <i>combined</i> inline-policy size across every inline policy document it carries is
+     * capped at 10,240 bytes total, not a separate budget per document -- this class's flat list
+     * (212 actions, ~6.3KB on its own) exceeds that cap alongside the role's other inline
+     * policies. {@link ManagerOperatorIamSupport} attaches each half as its own customer-managed
+     * policy instead of inline specifically to sidestep that combined-inline ceiling (a managed
+     * policy's size budget is independent of it), so the split point here only needs to keep each
+     * half comfortably under a managed policy's own (smaller, ~6,144-byte default) size limit,
+     * measured against the real synthesized byte counts per AWS service prefix.
      */
     public static List<String> getNetworkPermissions(IAMProfile tier) {
         List<String> actions = new java.util.ArrayList<>();

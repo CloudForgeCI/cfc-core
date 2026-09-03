@@ -295,8 +295,15 @@ public class RdsFactory {
 
             .cloudwatchLogsExports(getCloudWatchLogsExports(requirement.engine()));
 
-        // Conditionally enable Performance Insights for PRODUCTION only
-        if (security == SecurityProfile.PRODUCTION) {
+        // Conditionally enable Performance Insights for PRODUCTION only — and only when the
+        // instance class actually supports it. RDS rejects EnablePerformanceInsights outright
+        // ("Performance Insights not supported for this configuration") on the smallest burstable
+        // sizes (db.t2/t3/t4g.micro) across every engine — confirmed live deploying
+        // cloudforge-manager's own PRODUCTION preset, which pins db.t3.micro. Falling through to
+        // the else branch for a micro instance keeps PRODUCTION's other monitoring knobs
+        // (autoMinorVersionUpgrade, iamAuthentication, deletion protection, backup retention)
+        // intact — only Performance Insights itself is unsupported at this size.
+        if (security == SecurityProfile.PRODUCTION && supportsPerformanceInsights(requirement.instanceClass())) {
             instanceBuilder
                 .enablePerformanceInsights(true)
                 .performanceInsightRetention(PerformanceInsightRetention.LONG_TERM)
@@ -500,6 +507,18 @@ public class RdsFactory {
             case "10.11" -> MariaDbEngineVersion.VER_10_11;
             default -> MariaDbEngineVersion.of(version, version);
         };
+    }
+
+    /**
+     * Whether RDS supports Performance Insights on this instance class. AWS rejects
+     * {@code EnablePerformanceInsights} outright on the smallest burstable size (micro) across
+     * every RDS engine — this is a hard RDS-side floor, not engine- or version-specific, so a
+     * plain string check on the size segment (the same "db.&lt;family&gt;.&lt;size&gt;" shape
+     * {@link #parseInstanceType} already parses) is enough; no need to enumerate the full set of
+     * supported instance classes.
+     */
+    private static boolean supportsPerformanceInsights(String instanceClass) {
+        return instanceClass != null && !instanceClass.toLowerCase(java.util.Locale.ROOT).endsWith(".micro");
     }
 
     /**

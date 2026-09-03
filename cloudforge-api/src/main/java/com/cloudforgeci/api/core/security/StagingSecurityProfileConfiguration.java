@@ -742,6 +742,12 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     @Override
+    public boolean isDatabaseProvisioningChoiceRequired() {
+        // Staging is allowed to default to an OPTIONAL app's embedded fallback, same as DEV
+        return false;
+    }
+
+    @Override
     public boolean isSecurityHubRemediationEnabled() {
         // Disabled by default - enable explicitly to test auto-remediation
         return false;

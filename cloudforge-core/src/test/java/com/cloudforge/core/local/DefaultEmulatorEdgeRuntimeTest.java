@@ -68,13 +68,13 @@ class DefaultEmulatorEdgeRuntimeTest {
         assertFalse(routes.containsKey("gitlab.cloudforge.localhost"));
     }
 
-    /** Real bug this guards: 17 of the CMS/e-commerce catalog's applications all listen on
-     *  container port 80 (see each's {@code applicationPort()}) — only drone/joomla/gitlab had
-     *  their own disambiguation, so every other one silently fell through to the port-80 default
-     *  (gitlab) and got routed under the wrong hostname, or — for a stack whose own name doesn't
-     *  contain "gitlab" either, like a generically-named leftover test stack — still resolved to
-     *  {@code gitlab.cloudforge.localhost} rather than its own vhost, leaving its real hostname
-     *  (e.g. {@code wordpress.cloudforge.localhost}) with no route at all. */
+    /** Guards against a port-80 collision: 17 of the CMS/e-commerce catalog's applications all
+     *  listen on container port 80 (see each's {@code applicationPort()}), so without per-app
+     *  disambiguation, every one but drone/joomla/gitlab would fall through to the port-80
+     *  default (gitlab) and route under the wrong hostname -- or, for a stack whose own name
+     *  doesn't contain "gitlab" either, still resolve to {@code gitlab.cloudforge.localhost}
+     *  rather than its own vhost, leaving its real hostname (e.g. {@code
+     *  wordpress.cloudforge.localhost}) with no route at all. */
     @Test
     void parseDockerPortPublishesDisambiguatesEveryPort80CmsApplication() {
         Map<String, Integer> routes = DefaultEmulatorEdgeRuntime.parseDockerPortPublishes(List.of(
@@ -188,15 +188,15 @@ class DefaultEmulatorEdgeRuntimeTest {
         assertTrue(conf.contains("proxy_pass http://host.docker.internal:48843;"));
     }
 
-    /** Real bug this guards: the /login redirect and the "inject the ALB prefix into every
-     *  request" rewrite are both Jenkins-specific workarounds — Jenkins's own --prefix flag makes
-     *  it expect requests to already carry that prefix, and an anonymous bare "/" under it gets a
-     *  403 + meta-refresh instead of a clean redirect. Both used to run for every path-prefixed
-     *  app regardless of hostname, harmless while Jenkins was the only one with a real vhost. Once
-     *  the rest of the CMS catalog got their own vhosts too (see hostnameForContainer), they
-     *  inherited both: a forced "/" → "/login" redirect to a route that doesn't exist for them,
-     *  and a forced-prefix request path their own webserver can't resolve to a real file (a
-     *  genuine 404, never even reaching the app) — breaking their real root path outright. */
+    /** Guards against Jenkins-specific rewrites leaking onto every other path-prefixed app: the
+     *  /login redirect and the "inject the ALB prefix into every request" rewrite are both
+     *  workarounds for Jenkins's own --prefix flag, which makes it expect requests to already
+     *  carry that prefix, so an anonymous bare "/" under it gets a 403 + meta-refresh instead of
+     *  a clean redirect. Applying both unconditionally to every path-prefixed app regardless of
+     *  hostname (see hostnameForContainer) would give a non-Jenkins app a forced "/" → "/login"
+     *  redirect to a route that doesn't exist for it, and a forced-prefix request path its own
+     *  webserver can't resolve to a real file (a genuine 404, never even reaching the app) —
+     *  breaking its real root path outright. */
     @Test
     void nonJenkinsPathPrefixedAppIsProxiedAtItsOwnRootWithNoLoginRedirect() {
         String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(

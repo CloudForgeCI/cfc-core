@@ -794,6 +794,16 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     }
 
     @Override
+    public boolean isDatabaseProvisioningChoiceRequired() {
+        // Unconditional, not compliance-gated: this is about a deliberate choice being made at
+        // all, not a specific control PCI-DSS/HIPAA/etc. calls for -- a PRODUCTION deployment
+        // silently landing on an OPTIONAL app's embedded fallback storage (never a real database)
+        // because provisionDatabase was left unset is wrong regardless of which compliance
+        // frameworks, if any, are in play.
+        return true;
+    }
+
+    @Override
     public boolean isSecurityHubRemediationEnabled() {
         // Enabled by default for production - required for compliance frameworks
         // Security Hub aggregates findings from GuardDuty, Inspector, Macie

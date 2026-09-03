@@ -291,6 +291,7 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                     .build());
 
             ManagerOperatorIamSupport.addOperatorBaselineToStatements(c, taskStatements);
+            ManagerOperatorIamSupport.addDeployCapabilitiesToStatements(c, taskStatements);
 
             ManagedPolicy taskPolicy = taskPolicyBuilder.statements(taskStatements).build();
 
@@ -299,6 +300,7 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
                     .assumedBy(new ServicePrincipal("ecs-tasks.amazonaws.com"))
                     .managedPolicies(List.of(taskPolicy))
                     .build();
+            ManagerOperatorIamSupport.attachDeployTargetInfrastructurePolicies(c, taskRole);
 
             // Add CDK-NAG suppressions for wildcards (PRODUCTION)
             NagSuppressions.addResourceSuppressions(

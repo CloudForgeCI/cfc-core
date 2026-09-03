@@ -135,16 +135,13 @@ class LocalStackDeployPreflightTest {
     }
 
     /**
-     * Real bug this test used to mask: it asserted the opposite of {@link
-     * LocalHostPortConflictChecker#validateAgainstOccupants}'s actual, documented behavior for
-     * {@code DeploymentTarget.LOCALSTACK} — that method returns immediately for LocalStack (see
-     * its own comment: LocalStack ECS publishes each task on an allocated host port, so a shared
-     * container port is never an exclusive host-port reservation the way MiniStack's is), so this
-     * test's {@code assertFalse(result.allowed(...))} could only ever pass if that exemption were
-     * accidentally removed — a regression, not the intended behavior. The MiniStack-blocks case is
-     * already covered by {@code LocalHostPortConflictCheckerTest.blocksWhenDifferentStackUsesPort}
-     * in cloudforge-core; this rewrite instead asserts the LocalStack exemption this test's own
-     * name/setup already assumed (matching cloudforge-core's own
+     * Asserts {@link LocalHostPortConflictChecker#validateAgainstOccupants}'s actual, documented
+     * behavior for {@code DeploymentTarget.LOCALSTACK}: that method returns immediately for
+     * LocalStack (see its own comment: LocalStack ECS publishes each task on an allocated host
+     * port, so a shared container port is never an exclusive host-port reservation the way
+     * MiniStack's is). The MiniStack-blocks case is covered separately by {@code
+     * LocalHostPortConflictCheckerTest.blocksWhenDifferentStackUsesPort} in cloudforge-core; this
+     * test asserts the LocalStack exemption specifically (matching cloudforge-core's own
      * {@code localstackAllowsDuplicateContainerPortsBecauseTasksUseAllocatedHostPorts}).
      */
     @Test

@@ -21,8 +21,8 @@ class ManagerAwsCapabilityCatalogTest {
         assertTrue(actions.contains("ecs:UpdateService"));
         assertTrue(actions.contains("cloudformation:DeleteStack"));
         assertTrue(actions.contains("cloudformation:GetTemplate"));
-        // "Cognito as the whole Users directory" -- confirmed live: not having ListUserPools at
-        // all meant even discovering the pool ID failed before the feature could do anything.
+        // "Cognito as the whole Users directory" -- without ListUserPools, even discovering the
+        // pool ID fails before the feature can do anything.
         assertTrue(actions.contains("cognito-idp:ListUserPools"));
         assertTrue(actions.contains("cognito-idp:AdminCreateUser"));
     }

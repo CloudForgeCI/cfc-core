@@ -51,14 +51,14 @@ class ManagerDeployIamSupportTest {
         assertEquals(12, statements.size());
     }
 
-    /** Confirmed live, twice, that DescribeChangeSet/ExecuteChangeSet/DeleteChangeSet can't
-     *  share a tag condition with CreateChangeSet at all -- aws:RequestTag never has a value
-     *  (those three don't accept a Tags parameter), and aws:ResourceTag fails for a CREATE-type
-     *  change set specifically, since CloudFormation only applies a change set's Tags to the
-     *  stack when it executes, not when it's merely created: a brand-new stack sits in
-     *  REVIEW_IN_PROGRESS with zero tags for as long as its first change set is pending. No
-     *  condition at all, matching this class's SC_PROVISION precedent -- CreateChangeSet's own
-     *  tag requirement already gates who can start a managed change set in the first place. */
+    /** DescribeChangeSet/ExecuteChangeSet/DeleteChangeSet can't share a tag condition with
+     *  CreateChangeSet at all -- aws:RequestTag never has a value (those three don't accept a
+     *  Tags parameter), and aws:ResourceTag fails for a CREATE-type change set specifically,
+     *  since CloudFormation only applies a change set's Tags to the stack when it executes, not
+     *  when it's merely created: a brand-new stack sits in REVIEW_IN_PROGRESS with zero tags for
+     *  as long as its first change set is pending. No condition at all, matching this class's
+     *  SC_PROVISION precedent -- CreateChangeSet's own tag requirement already gates who can
+     *  start a managed change set in the first place. */
     @Test
     void deployStatementsGrantsChangeSetLifecycleWithNoTagCondition() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -87,10 +87,9 @@ class ManagerDeployIamSupportTest {
         assertFalse(createStatement.getActions().contains("cloudformation:DescribeChangeSet"));
     }
 
-    /** Confirmed live: deploy:create's own template upload had no S3 grant at all before this --
-     *  AwsDirectDeployer puts the CloudFormation template into a bucket before CreateStack/
-     *  CreateChangeSet ever runs, and the three tag-conditioned statements above only ever
-     *  covered CloudFormation/IAM actions. */
+    /** deploy:create's own template upload needs an S3 grant beyond the three tag-conditioned
+     *  statements above, which only ever cover CloudFormation/IAM actions: AwsDirectDeployer puts
+     *  the CloudFormation template into a bucket before CreateStack/CreateChangeSet ever runs. */
     @Test
     void deployStatementsGrantsS3OnTheTemplateBucketPrefix() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -112,10 +111,10 @@ class ManagerDeployIamSupportTest {
             .anyMatch(r -> r.contains(com.cloudforgeci.api.deploy.aws.AwsDirectDeployer.TEMPLATE_BUCKET_PREFIX)));
     }
 
-    /** Confirmed live: fixing the template bucket alone wasn't enough -- a deploy against a real
-     *  AWS account also failed on S3 access for the standard CDK bootstrap asset bucket, which
-     *  AwsDirectDeployer.deploy() always publishes to via LocalStackCdkAssetPublisher (for real
-     *  AWS as much as a local emulator, despite the class name). */
+    /** The template bucket grant above isn't the only S3 access a real deploy needs: the standard
+     *  CDK bootstrap asset bucket also needs its own grant, since AwsDirectDeployer.deploy()
+     *  always publishes to it via LocalStackCdkAssetPublisher (for real AWS as much as a local
+     *  emulator, despite the class name). */
     @Test
     void deployStatementsGrantsS3OnTheCdkAssetBucketPrefix() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -137,9 +136,9 @@ class ManagerDeployIamSupportTest {
             .anyMatch(r -> r.contains("cdk-hnb659fds-assets-")));
     }
 
-    /** Confirmed live: even with both S3 grants in place, CloudFormation itself resolves the
-     *  synthesized template's BootstrapVersion dynamic reference using the deploying principal's
-     *  own credentials -- Manager's task role needs its own read access to that SSM parameter,
+    /** Even with both S3 grants in place, CloudFormation itself resolves the synthesized
+     *  template's BootstrapVersion dynamic reference using the deploying principal's own
+     *  credentials -- Manager's task role needs its own read access to that SSM parameter,
      *  regardless of whether the account has ever run a real cdk bootstrap. */
     @Test
     void deployStatementsGrantsSsmReadOnTheCdkBootstrapVersionParameter() {
@@ -162,11 +161,11 @@ class ManagerDeployIamSupportTest {
             .anyMatch(r -> r.contains("cdk-bootstrap/hnb659fds")));
     }
 
-    /** Confirmed live: iam:PassRole alone wasn't enough either -- CloudFormation creates and
-     *  manages the deployed application's own IAM roles (task role, task execution role) using
-     *  the deploying principal's own credentials, the same as every other resource type in the
-     *  template. Surfaced by a rollback that failed on iam:DeleteRole/iam:DetachRolePolicy after
-     *  an unrelated resource failure triggered an automatic rollback. */
+    /** iam:PassRole alone isn't enough: CloudFormation creates and manages the deployed
+     *  application's own IAM roles (task role, task execution role) using the deploying
+     *  principal's own credentials, the same as every other resource type in the template. An
+     *  automatic rollback triggered by an unrelated resource failure needs
+     *  iam:DeleteRole/iam:DetachRolePolicy on those same roles to tear them back down. */
     @Test
     void deployStatementsGrantsIamRoleLifecycleSplitByCreateVsManage() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -185,10 +184,10 @@ class ManagerDeployIamSupportTest {
             .orElseThrow();
         assertTrue(createStatement.getActions().contains("iam:CreateRole"));
         assertTrue(createStatement.getActions().contains("iam:TagRole"));
-        // Resource-name-scoped, not iam:RequestTag-conditioned -- confirmed live: a genuinely
-        // first-ever CreateRole call was denied by the RequestTag condition even though the
-        // synthesized template carried the correct inline tag, consistent with CloudFormation's
-        // IAM::Role provider not reliably surfacing template tags to iam:RequestTag evaluation.
+        // Resource-name-scoped, not iam:RequestTag-conditioned -- CloudFormation's IAM::Role
+        // provider doesn't reliably surface template tags to iam:RequestTag evaluation, so a
+        // genuinely first-ever CreateRole call can be denied by that condition even when the
+        // synthesized template carries the correct inline tag.
         assertTrue(createStatement.getResources().contains("arn:aws:iam::*:role/*SystemContextExtendedTask*"));
         assertTrue(createStatement.getResources().contains("arn:aws:iam::*:role/*LogRetention*"));
         assertFalse(createStatement.toJSON().toString().contains("iam:RequestTag"));
@@ -201,9 +200,9 @@ class ManagerDeployIamSupportTest {
         assertTrue(manageStatement.getActions().contains("iam:AttachRolePolicy"));
         assertTrue(manageStatement.getActions().contains("iam:DetachRolePolicy"));
         assertTrue(manageStatement.getActions().contains("iam:PutRolePolicy"));
-        // Resource-name-scoped, not iam:ResourceTag-conditioned -- a real IAM tag-propagation
-        // race, confirmed live: CloudFormation's automatic rollback deletes a just-created role
-        // faster than its own tags reliably propagate into tag-based condition evaluation.
+        // Resource-name-scoped, not iam:ResourceTag-conditioned -- CloudFormation's automatic
+        // rollback can delete a just-created role faster than its own tags reliably propagate
+        // into tag-based condition evaluation, a real IAM tag-propagation race.
         assertTrue(manageStatement.getResources().contains("arn:aws:iam::*:role/*SystemContextExtendedTask*"));
         // CDK's own builtin custom-resource Lambda service role -- see ManagerOperatorIamSupport's
         // own comment for why this pattern has no "ServiceRole" requirement (truncated away
@@ -212,9 +211,9 @@ class ManagerDeployIamSupportTest {
         assertFalse(manageStatement.toJSON().toString().contains("iam:ResourceTag"));
 
         // The LogRetention custom resource is a Lambda *function*, not just the IAM role above --
-        // confirmed live: lambda:CreateFunction was denied outright (no lambda:* grant existed at
-        // all), and the same gap then blocked the stack's own rollback on lambda:DeleteFunction,
-        // leaving a real stack stuck in ROLLBACK_FAILED.
+        // without a lambda:* grant, lambda:CreateFunction is denied outright, and the same gap
+        // then blocks the stack's own rollback on lambda:DeleteFunction, leaving it stuck in
+        // ROLLBACK_FAILED.
         PolicyStatement functionStatement = statements.stream()
             .filter(s -> "CloudForgeManagerDeployLogRetentionFunctionManage".equals(s.getSid()))
             .findFirst()
@@ -259,16 +258,14 @@ class ManagerDeployIamSupportTest {
 
         assertTrue(computeDataStatement.getActions().contains("ecs:CreateCluster"));
         assertTrue(computeDataStatement.getActions().contains("logs:CreateLogGroup"));
-        // Compliance dimension -- confirmed the finicky part in practice: account-level
-        // singleton services (Config, GuardDuty) need their own service-linked role the first
-        // time either is ever enabled in the account.
+        // Compliance dimension -- account-level singleton services (Config, GuardDuty) need
+        // their own service-linked role the first time either is ever enabled in the account.
         assertTrue(computeDataStatement.getActions().contains("config:PutConfigurationRecorder"));
         assertTrue(computeDataStatement.getActions().contains("guardduty:CreateDetector"));
         assertTrue(computeDataStatement.getActions().contains("wafv2:CreateWebACL"));
         assertTrue(computeDataStatement.getActions().contains("iam:CreateServiceLinkedRole"));
-        // Database dimension -- confirmed live on a real database-backed app deploy: KMS key
-        // creation for RDS encryption, and the auto-generated Secrets Manager credential
-        // RdsFactory always pairs with it, were both entirely missing before that deploy.
+        // Database dimension -- KMS key creation for RDS encryption, and the auto-generated
+        // Secrets Manager credential RdsFactory always pairs with it, both need their own grants.
         assertTrue(computeDataStatement.getActions().contains("rds:CreateDBInstance"));
         assertTrue(computeDataStatement.getActions().contains("rds:DescribeDBParameterGroups"));
         assertTrue(computeDataStatement.getActions().contains("rds:DescribeEngineDefaultParameters"));

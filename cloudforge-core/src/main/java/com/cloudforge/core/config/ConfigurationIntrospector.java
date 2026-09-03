@@ -144,10 +144,12 @@ public class ConfigurationIntrospector {
      * <ol>
      *   <li>basic - Essential configuration</li>
      *   <li>network - Domain, SSL, networking</li>
-     *   <li>security - Authentication, encryption, compliance</li>
+     *   <li>security - Authentication, encryption, general hardening</li>
      *   <li>database - RDS database provisioning</li>
      *   <li>resources - CPU, memory, scaling, instance sizing</li>
-     *   <li>monitoring - CloudWatch, GuardDuty, logging</li>
+     *   <li>monitoring - CloudWatch, generic ops alerting</li>
+     *   <li>compliance - AWS Config, GuardDuty, Security Hub, framework selection, and
+     *       every other compliance-specific setting</li>
      * </ol>
      */
     private static int getCategoryOrder(String category) {
@@ -161,6 +163,7 @@ public class ConfigurationIntrospector {
             case "database" -> 5;
             case "resources" -> 6;
             case "monitoring" -> 7;
+            case "compliance" -> 8;
             default -> 1000;  // Unknown categories go last
         };
     }

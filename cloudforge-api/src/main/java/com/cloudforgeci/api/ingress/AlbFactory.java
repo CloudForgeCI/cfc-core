@@ -180,8 +180,8 @@ public class AlbFactory extends BaseFactory {
                         public String produce(IResolveContext context) {
                             // STACK-SPECIFIC bucket name to avoid conflicts between stacks.
                             //
-                            // Real bug: calling .toLowerCase() on the WHOLE composite string — including
-                            // the embedded accountId token — corrupts CDK's token marker (e.g.
+                            // Calling .toLowerCase() on the WHOLE composite string — including
+                            // the embedded accountId token — would corrupt CDK's token marker (e.g.
                             // "${Token[AWS.AccountId.7]}" becomes "${token[aws.accountid.7]}"), which no
                             // longer matches anything in CDK's token registry. Instead of resolving back
                             // into a proper Fn::Sub/Ref against AWS::AccountId, the now-broken marker text

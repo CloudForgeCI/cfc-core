@@ -66,14 +66,13 @@ public class WordPressApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== Constants ==========
 
     protected static final String APPLICATION_ID = "wordpress";
-    // The fpm-alpine variant only speaks FastCGI on 9000 — nothing listens on
-    // APPLICATION_PORT (80) at all, so applicationSpec-driven single-container Fargate/MiniStack/
-    // LocalStack deploys were never actually reachable (confirmed live: CloudFormation reported
-    // CREATE_COMPLETE, but the container had nothing bound to port 80). The apache variant bakes
-    // in the same WordPress core files and listens on 80 directly — a pure drop-in swap, not an
-    // architecture change. (The EC2 runtime path is unaffected either way — see webServer()/the
-    // userData installCommands() below, which already correctly install and run nginx+php-fpm
-    // together on the instance regardless of this constant.)
+    // The fpm-alpine variant only speaks FastCGI on 9000 — nothing listens on APPLICATION_PORT
+    // (80) at all, so an applicationSpec-driven single-container Fargate/MiniStack/LocalStack
+    // deploy would never be reachable even though CloudFormation reports CREATE_COMPLETE. The
+    // apache variant bakes in the same WordPress core files and listens on 80 directly — a pure
+    // drop-in swap, not an architecture change. (The EC2 runtime path is unaffected either way —
+    // see webServer()/the userData installCommands() below, which already correctly install and
+    // run nginx+php-fpm together on the instance regardless of this constant.)
     protected static final String DEFAULT_IMAGE = "wordpress:php8.2-apache";
     protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";

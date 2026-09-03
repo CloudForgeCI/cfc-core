@@ -144,12 +144,12 @@ public final class DeploymentContextPreparer {
     private static void applyStructuralDefaults(
             DeploymentConfig config, ApplicationSpec appSpec, PrepareResult result) {
         if (config.topology == null) {
-            // Real bug this replaced: this unconditionally defaulted every application to
-            // APPLICATION_SERVICE, including CmsSpec implementers (WordPress, Drupal, etc.) that
-            // TopologyType.CMS_SERVICE exists specifically for ("auto-wires S3 media, Redis, CDN,
-            // RDS from CmsSpec" — see its javadoc) — so a CMS app's actual deployed topology never
-            // matched what the wizard showed/submitted. Still just a default: topology stays a
-            // genuinely selectable field (see DeploymentConfig.topology's allowedValues) so a
+            // Defaults to CMS_SERVICE for a CmsSpec implementer (WordPress, Drupal, etc.), not the
+            // generic APPLICATION_SERVICE every other app falls back to — TopologyType.CMS_SERVICE
+            // exists specifically for these ("auto-wires S3 media, Redis, CDN, RDS from CmsSpec" —
+            // see its javadoc), so a flat default would leave a CMS app's actual deployed topology
+            // mismatched with what the wizard shows/submits. Still just a default: topology stays
+            // a genuinely selectable field (see DeploymentConfig.topology's allowedValues) so a
             // future CmsSpec-implementing integration can still override it either direction.
             config.topology = appSpec instanceof com.cloudforge.core.interfaces.CmsSpec
                 ? TopologyType.CMS_SERVICE

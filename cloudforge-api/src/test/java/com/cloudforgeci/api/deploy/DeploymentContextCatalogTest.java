@@ -99,9 +99,9 @@ class DeploymentContextCatalogTest {
     }
 
     /**
-     * Regression test for a real crash found via an actual LocalStack deploy (not caught by any
-     * existing test — every other test here uses {@code tempDir.resolve(...)}, an absolute,
-     * multi-segment path that always has a parent). {@code InteractiveDeployer}'s default {@code
+     * Regression test for a bare, single-segment relative path — not caught by any other test
+     * here, which all use {@code tempDir.resolve(...)}, an absolute, multi-segment path that
+     * always has a parent. {@code InteractiveDeployer}'s default {@code
      * DeployOptions} passes {@code catalogDirectory = Path.of("deployment-contexts")} — a bare,
      * single-segment relative path. {@code Path.of("deployment-contexts").resolveSibling
      * ("panel-stacks.json")} has no parent ({@code Path.getParent()} is {@code null} for a

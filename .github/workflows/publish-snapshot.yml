@@ -1,8 +1,11 @@
 name: Publish Snapshot & Auto-Release
 
 # Continuous delivery for cfc-core's OSS deployment library (cfc-core's own root/BOM pom,
-# cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack,
-# cloudforge-synth-service). The pom.xml always carries a -SNAPSHOT version.
+# cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack). The pom.xml
+# always carries a -SNAPSHOT version.
+#
+# cloudforge-synth-service moved out to its own repo (CloudForgeCI/cloudforge-synth-service) and
+# is no longer published from here — see publish-maven-central.yml's own header comment for why.
 #
 #   1. build-test       — full build + test. Nothing downstream runs unless this passes.
 #   2. publish-snapshot — deploys the current -SNAPSHOT version to Central Portal's snapshots
@@ -11,16 +14,29 @@ name: Publish Snapshot & Auto-Release
 #      CI. Tied to a pull request being open against develop (opened/updated), not to merging —
 #      requesting review is what should make a snapshot available downstream, not waiting for the
 #      merge itself.
-#   3. auto-release     — develop only, i.e. only once a PR actually merges (a push, not a pull
-#      request event). Strips "-SNAPSHOT", builds/signs/publishes that as a real numbered release
-#      to Maven Central (no re-test — build-test already validated this exact code), tags
-#      vX.Y.Z, then bumps develop's pom to the next patch -SNAPSHOT and pushes that commit with
-#      "[skip ci]" so it doesn't re-trigger this workflow.
+#   3. release          — develop only, i.e. only once a PR actually merges (a push, not a pull
+#      request event). Strips "-SNAPSHOT" from whatever version this commit already carries,
+#      builds/signs/publishes that as a real numbered release to Maven Central (no re-test —
+#      build-test already validated this exact code), tags vX.Y.Z, and stops. Never writes to any
+#      pom.xml, never commits, never bumps anything — the version it releases is exactly whatever
+#      bump-develop (below) most recently landed, nothing more.
+#   4. bump-develop     — develop only, runs independently of and in parallel with release (they
+#      share no ordering dependency: release publishes THIS commit's current version, bump-develop
+#      advances develop to the NEXT one — unrelated operations that happen to fire off the same
+#      push). Bumps develop's pom to the next patch -SNAPSHOT and pushes that commit with
+#      "[skip ci]" so it doesn't re-trigger this workflow. No GPG, no Central, no macOS runner —
+#      pure version bookkeeping, so a lost push-race here (see its own "Bump develop" step comment)
+#      is a cheap, side-effect-free re-run, not entangled with a real publish the way it used to be
+#      when both lived in one job.
 #
-# Every merge to develop is therefore both a snapshot AND a real Central release — deliberate,
-# confirmed design (not a staged/manual release process). publish-maven-central.yml still exists
-# as a manual workflow_dispatch-only escape hatch; it never fires from a push under this flow
-# because the only commit this workflow ever pushes back to develop is a -SNAPSHOT bump.
+# No developer-maintained versioning at all: a feature branch never touches <version> anywhere, so
+# concurrent PRs never conflict with each other over it. The bump lives entirely at the merge
+# point — bump-develop is the only thing that ever advances it, one merge at a time, serialized by
+# git the same way any other push to develop already is. Every merge to develop is therefore both
+# a snapshot AND a real Central release — deliberate, confirmed design (not a staged/manual release
+# process). publish-maven-central.yml still exists as a manual workflow_dispatch-only escape hatch;
+# it never fires from a push under this flow because the only commit this workflow ever pushes back
+# to develop is bump-develop's own -SNAPSHOT bump.
 #
 # Required repo secrets (same four already configured for publish-maven-central.yml):
 #   GPG_PRIVATE_KEY, GPG_PASSPHRASE, CENTRAL_PORTAL_USERNAME, CENTRAL_PORTAL_PASSWORD
@@ -35,7 +51,6 @@ on:
       - 'cloudforge-api/**'
       - 'cloudforge-localstack/**'
       - 'cloudforge-ministack/**'
-      - 'cloudforge-synth-service/**'
       - '.github/workflows/publish-snapshot.yml'
   push:
     branches: [ develop ] # real release, on every push to develop (a PR merge, most commonly) —
@@ -65,7 +80,7 @@ jobs:
           cache: 'maven'
 
       - name: Build and test
-        run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean verify
+        run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean verify
 
   publish-snapshot:
     name: Publish SNAPSHOT to Central
@@ -172,7 +187,7 @@ jobs:
         # No re-test -- needs: build-test above already ran the real suite with -Pci and gates
         # whether this step runs at all; explicit here so it doesn't silently depend on the
         # skipTests=true default happening to be correct.
-        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
@@ -180,15 +195,15 @@ jobs:
           rm -f ~/.m2/settings.xml
           rm -rf "${GNUPGHOME:-$RUNNER_TEMP/gnupg}"
 
-  auto-release:
-    name: Auto-release and bump to next SNAPSHOT
+  release:
+    name: Release to Maven Central
     # macOS -- see the publish-snapshot job above for why.
     runs-on: macos-latest
     needs: publish-snapshot
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     timeout-minutes: 30
     concurrency:
-      group: publish-snapshot-cfc-core-auto-release
+      group: publish-snapshot-cfc-core-release
       cancel-in-progress: false
     steps:
       - name: Checkout code
@@ -203,32 +218,25 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Compute release and next-snapshot versions
+      - name: Compute release version
         id: versions
         run: |
           SNAPSHOT_VERSION="${{ needs.publish-snapshot.outputs.version }}"
           RELEASE_VERSION="${SNAPSHOT_VERSION%-SNAPSHOT}"
 
-          # Patch-level bump for the next in-progress version: 3.2.0 -> 3.2.1-SNAPSHOT
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
-          NEXT_SNAPSHOT="${MAJOR}.${MINOR}.$((PATCH + 1))-SNAPSHOT"
-
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "next_snapshot=$NEXT_SNAPSHOT" >> "$GITHUB_OUTPUT"
 
           if git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then
             # RELEASE_VERSION was derived from the SNAPSHOT this exact run just built and
             # validated, so an existing tag for it isn't a conflicting release -- it's the same
-            # one, already published, most likely by a prior run of this same job that released
-            # successfully but lost the race on its own final push (see the "Bump develop" step's
-            # own comment below). Nothing else in this job needs to run again -- Central won't
-            # accept a second publish of a version it's already holding -- so skip straight to
-            # bumping develop instead of failing outright.
-            echo "::warning::v$RELEASE_VERSION is already tagged -- treating this as a prior run that released successfully but didn't finish bumping develop. Skipping the release steps, bumping to $NEXT_SNAPSHOT anyway."
+            # one, already published, most likely by a prior run of this same job (e.g. a manual
+            # re-run) that already completed successfully. Central won't accept a second publish
+            # of a version it's already holding, so there's nothing left for this run to do.
+            echo "::warning::v$RELEASE_VERSION is already tagged -- treating this as an already-completed release. Nothing to do."
             echo "already_released=true" >> "$GITHUB_OUTPUT"
           else
             echo "already_released=false" >> "$GITHUB_OUTPUT"
-            echo "Releasing v$RELEASE_VERSION, next snapshot will be $NEXT_SNAPSHOT"
+            echo "Releasing v$RELEASE_VERSION"
           fi
 
       - name: Set release version
@@ -288,7 +296,7 @@ jobs:
         if: steps.versions.outputs.already_released == 'false'
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack,cloudforge-synth-service -am clean deploy -DskipTests -Djacoco.skip=true "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy -DskipTests -Djacoco.skip=true "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
@@ -301,33 +309,65 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.versions.outputs.release_version }}" -m "Publish v${{ steps.versions.outputs.release_version }} to Maven Central (cfc-core, cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack, cloudforge-synth-service)"
+          git tag -a "v${{ steps.versions.outputs.release_version }}" -m "Publish v${{ steps.versions.outputs.release_version }} to Maven Central (cfc-core, cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack)"
           git push origin "v${{ steps.versions.outputs.release_version }}"
-
-      - name: Bump develop to the next SNAPSHOT
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.next_snapshot }} -DprocessAllModules=true -DgenerateBackupPoms=false
-          git add -A
-          git commit -m "chore: bump to ${{ steps.versions.outputs.next_snapshot }} [skip ci]"
-          # Guards against the exact race that motivated this step's own resilience above: if
-          # anything else pushed to develop while this job was running (another workflow, a
-          # direct push), a plain push here would be rejected as non-fast-forward. Same pattern
-          # cloudforge-manager's sync-versions.yml already uses for its own bump-and-push.
-          git pull --rebase origin develop
-          git push origin HEAD:develop
 
       - name: Publish summary
         if: always()
         run: |
-          echo "## Snapshot & Auto-Release" >> $GITHUB_STEP_SUMMARY
+          echo "## Release to Maven Central" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Snapshot published:** ${{ needs.publish-snapshot.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.versions.outputs.already_released }}" = "true" ]; then
-            echo "**Release:** v${{ steps.versions.outputs.release_version }} was already published by a prior run -- release steps skipped this time, only the develop bump ran." >> $GITHUB_STEP_SUMMARY
+            echo "**Release:** v${{ steps.versions.outputs.release_version }} was already published by a prior run -- nothing to do this time." >> $GITHUB_STEP_SUMMARY
           else
             echo "**Release published:** ${{ steps.versions.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
           fi
-          echo "**Next snapshot:** ${{ steps.versions.outputs.next_snapshot }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack, cloudforge-synth-service" >> $GITHUB_STEP_SUMMARY
+          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack" >> $GITHUB_STEP_SUMMARY
+
+  bump-develop:
+    name: Bump develop to next SNAPSHOT
+    # ubuntu-latest, not macOS: this job never touches GPG/Central at all -- pure version
+    # bookkeeping (mvn versions:set + a git commit/push), so it carries none of the reasons the
+    # release job above needs a macOS runner. Runs independently of and in parallel with release
+    # (needs: publish-snapshot only, not release) -- release publishes THIS commit's current
+    # version, this job advances develop to the NEXT one; unrelated operations that happen to fire
+    # off the same push, with no ordering dependency on each other.
+    runs-on: ubuntu-latest
+    needs: publish-snapshot
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 10
+    concurrency:
+      group: publish-snapshot-cfc-core-bump-develop
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Bump develop to the next SNAPSHOT
+        run: |
+          SNAPSHOT_VERSION="${{ needs.publish-snapshot.outputs.version }}"
+          RELEASE_VERSION="${SNAPSHOT_VERSION%-SNAPSHOT}"
+          # Patch-level bump for the next in-progress version: 3.2.0 -> 3.2.1-SNAPSHOT
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
+          NEXT_SNAPSHOT="${MAJOR}.${MINOR}.$((PATCH + 1))-SNAPSHOT"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mvn -q -B versions:set -DnewVersion="$NEXT_SNAPSHOT" -DprocessAllModules=true -DgenerateBackupPoms=false
+          git add -A
+          git commit -m "chore: bump to $NEXT_SNAPSHOT [skip ci]"
+          # Guards against a genuine race (another push landing on develop between this job's
+          # checkout and its own push below) -- a plain push here would be rejected as
+          # non-fast-forward. Same pattern cloudforge-manager's sync-versions.yml already uses for
+          # its own bump-and-push. Isolated to this one cheap, side-effect-free operation now, not
+          # entangled with a real Central publish the way it was when both lived in one job.
+          git pull --rebase origin develop
+          git push origin HEAD:develop

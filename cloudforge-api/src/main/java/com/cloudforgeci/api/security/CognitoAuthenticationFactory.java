@@ -553,20 +553,19 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // Create user groups if enabled
         createUserGroups(userPool);
 
-        // cloudforge-manager's Users tab writes a role edit through to this pool's real group
-        // membership (AuthService.syncOidcRoleToCognito) instead of only updating its own local
-        // cache — Cognito stays the single source of truth for who's in which role regardless of
-        // whether that role's group membership changed via our own UI or directly in Cognito.
-        // Scoped to this one pool's ARN; harmless to grant even if that Manager feature is never
+        // An application whose runtime writes a role edit through to this pool's real group
+        // membership (e.g. AdminAddUserToGroup) instead of only updating its own local cache
+        // declares that via ApplicationSpec#requiresCognitoGroupManagementIam — see its own
+        // javadoc. Scoped to this one pool's ARN; harmless to grant even if the feature is never
         // exercised for a given deployment. onSet (not a direct getter) because IAM-profile
         // configuration (which creates fargateTaskRole) and Cognito provisioning have no fixed
         // ordering relative to each other.
-        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+        if (applicationSpec != null && applicationSpec.requiresCognitoGroupManagementIam()
                 && cognitoCreateGroups != null && cognitoCreateGroups) {
             String userPoolArn = userPool.getUserPoolArn();
             ctx.fargateTaskRole.onSet(taskRole -> taskRole.addToPrincipalPolicy(
                 PolicyStatement.Builder.create()
-                    .sid("AllowManagerCognitoRoleGroupSync")
+                    .sid("AllowCognitoRoleGroupSync")
                     .effect(software.amazon.awscdk.services.iam.Effect.ALLOW)
                     .actions(List.of(
                         "cognito-idp:AdminAddUserToGroup",
@@ -575,8 +574,15 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                     ))
                     .resources(List.of(userPoolArn))
                     .build()));
-            LOG.info("  ✅ Added IAM policy for Manager Cognito role-group sync (Users tab role edits)");
+            LOG.info("  ✅ Added IAM policy for Cognito role-group sync");
         }
+
+        // A prior grant here for cognito-idp:InitiateAuth/RespondToAuthChallenge (an application
+        // calling Cognito's own direct sign-in APIs) was removed — confirmed via
+        // `aws iam simulate-principal-policy` that Cognito's InitiateAuth/RespondToAuthChallenge
+        // are public, app-client-secret-authenticated operations that don't check IAM at all; a
+        // real "Cognito sign-in failed" incident traced to this call path had a different root
+        // cause entirely (an unrelated endpoint-resolution bug), not a missing IAM grant.
 
         // Create initial admin user if email provided (even if groups are disabled)
         if (cognitoInitialAdminEmail != null && !cognitoInitialAdminEmail.isEmpty() &&

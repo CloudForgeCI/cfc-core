@@ -477,6 +477,31 @@ public class ComplianceFactory extends BaseFactory {
                     .encryptionKey(cloudTrailLogsKmsKey)
                     .removalPolicy(RemovalPolicy.DESTROY)
                     .build();
+
+            // CDK's LogGroup#encryptionKey does NOT grant the CloudWatch Logs service permission
+            // to use the key — a customer-managed key defaults to an account-root-only policy, so
+            // without this explicit grant CreateLogGroup fails with AccessDenied the moment this
+            // path is actually exercised (PRODUCTION + HIPAA/PCI-DSS, or the optional hardening
+            // flag — DEV never hits it, which is why this went unnoticed).
+            //
+            // Resource is "*", not this key's own explicit ARN — confirmed live (via the
+            // synthesized template, not guessing) that spelling out the key's own ARN here creates
+            // a genuine CDK circular dependency: it's a self-reference (Ref to this same key's own
+            // logical id) inside this key's OWN resource policy, which CDK's dependency graph
+            // rejects as a self-loop. "*" in a resource-based policy on the key itself isn't a real
+            // wildcard grant — the policy is already scoped to this one key by being attached to
+            // it — it's the standard AWS pattern specifically to avoid this self-reference, and
+            // matches every other working KMS-log grant already in this codebase (the CloudTrail
+            // Trail's own KMS key grant just above, LoggingCwFactory's).
+            String region = software.amazon.awscdk.Stack.of(this).getRegion();
+            cloudTrailLogsKmsKey.addToResourcePolicy(PolicyStatement.Builder.create()
+                    .sid("Enable CloudWatch Logs encryption")
+                    .effect(Effect.ALLOW)
+                    .principals(List.of(new ServicePrincipal("logs." + region + ".amazonaws.com")))
+                    .actions(List.of("kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*", "kms:Describe*"))
+                    .resources(List.of("*"))
+                    .build());
         }
 
         // Create CloudTrail using high-level Trail construct

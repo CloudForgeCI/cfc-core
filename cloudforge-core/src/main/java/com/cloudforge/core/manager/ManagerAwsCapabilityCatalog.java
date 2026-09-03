@@ -48,7 +48,7 @@ public final class ManagerAwsCapabilityCatalog {
             // RDS instances created with CopyTagsToSnapshot enabled make AWS call this
             // transparently on the caller's behalf right after CreateDBSnapshot succeeds --
             // without it, snapshot creation itself succeeds but the automatic tag-copy step
-            // gets denied, confirmed live against a real deployed instance.
+            // gets denied.
             "rds:AddTagsToResource"),
         RDS_RESTORE("rds:RestoreDBInstanceFromDBSnapshot"),
         RDS_ENGINE_UPGRADE("rds:ModifyDBInstance"),
@@ -62,9 +62,9 @@ public final class ManagerAwsCapabilityCatalog {
          * "Cognito as the whole Users directory" -- the separate, admin-opted-in feature that
          * lets the Users page and its API manage a Cognito User Pool's users directly instead of
          * the local DB (see {@code CognitoUserManagementService}/{@code CognitoPoolLookupService}
-         * and {@code manager_auth_backend.cognito_enabled}). Confirmed live: not having this at
-         * all in the operator baseline meant even the pool-lookup step failed with
-         * {@code cognito-idp:ListUserPools} denied before the feature could do anything.
+         * and {@code manager_auth_backend.cognito_enabled}). Without this in the operator
+         * baseline, even the pool-lookup step fails with {@code cognito-idp:ListUserPools}
+         * denied before the feature can do anything.
          * {@code ListUserPools} itself has no per-pool resource to scope by (it's what
          * discovers the pool ID in the first place), so this whole group stays {@code
          * Resource: "*"} like every other operator-baseline capability in this catalog.

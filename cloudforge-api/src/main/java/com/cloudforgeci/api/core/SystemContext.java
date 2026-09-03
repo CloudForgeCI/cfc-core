@@ -162,6 +162,13 @@ public final class SystemContext extends Construct {
   // ContainerFactory's binding of this into CFC_MANAGER_LICENSESEAT_LICENSE_KEY.
   public final Slot<String> licenseKeySecretArn = new Slot<>();
 
+  // Auto-generated initial admin password (Secrets Manager) — populated for any application
+  // whose ApplicationSpec.autoAdminPasswordEnvVar() returns non-null (currently Joomla only, see
+  // ApplicationFactory's provisioning and ContainerFactory's binding of this into that spec's
+  // declared env var name). Lets an app's official image complete a non-interactive first-run
+  // install instead of stopping at the web installer's manual database-connection step.
+  public final Slot<String> autoAdminPasswordSecretArn = new Slot<>();
+
   // INTERNAL USE ONLY: Cognito client secret Custom Resource (for CDK dependency tracking)
   // This is used internally to ensure ECS tasks don't start before the secret is created in Secrets Manager.
   // Do not use this field directly - it is managed automatically by CognitoAuthenticationFactory.

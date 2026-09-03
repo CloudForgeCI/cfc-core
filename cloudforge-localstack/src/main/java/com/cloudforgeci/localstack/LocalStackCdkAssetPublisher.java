@@ -30,9 +30,9 @@ import java.util.zip.ZipOutputStream;
  *
  * <p><b>Resolves CDK's {@code ${AWS::AccountId}}/{@code ${AWS::Partition}} pseudo-parameter
  * tokens</b> in {@code bucketName}/{@code objectKey} before using them as literal S3 API values —
- * a real bug found and fixed here: an account-agnostic CDK synthesis (no concrete AWS account
- * known at synth time, e.g. {@code CloudForgeSynthesizer}'s deploy:create path) leaves these as
- * unresolved literal token strings in the asset manifest, which the S3 SDK then rejects outright
+ * an account-agnostic CDK synthesis (no concrete AWS account known at synth time, e.g. {@code
+ * CloudForgeSynthesizer}'s deploy:create path) leaves these as unresolved literal token strings
+ * in the asset manifest, which the S3 SDK then rejects outright
  * ({@code "Bucket name should not contain '$'"}) since a real S3 API call has no CloudFormation
  * pseudo-parameter evaluator to fall back on — CloudFormation resolves them fine <em>inside</em>
  * the template body itself, but never for values an S3 client uses directly. {@code ${AWS::Region}}
