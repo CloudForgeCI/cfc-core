@@ -178,7 +178,14 @@ public final class ManagerOperatorIamSupport {
         // it's as stable a match as "LogRetention" above; matched on a shortened prefix of it
         // since that's the portion that survives truncation.
         "arn:aws:iam::*:role/*AWS679f53fac002430cb0da5b798*",
-        "arn:aws:iam::*:role/*CustomS3AutoDeleteObjectsCus*"
+        "arn:aws:iam::*:role/*CustomS3AutoDeleteObjectsCus*",
+        // RDS Enhanced Monitoring role, built with an explicit roleName by RdsFactory precisely
+        // so this pattern can rely on it -- see RdsFactory#createMonitoringRole's own javadoc for
+        // why the auto-created default (a role CloudFormation names itself, nested deep enough
+        // under the database instance's own construct to get truncated away for a long enough
+        // stack/app name) isn't safe to pattern-match here the way the other entries in this list
+        // are.
+        "arn:aws:iam::*:role/*-CfcRdsMonitor"
     );
 
     public static List<PolicyStatement> deployStatements(SystemContext ctx) {
