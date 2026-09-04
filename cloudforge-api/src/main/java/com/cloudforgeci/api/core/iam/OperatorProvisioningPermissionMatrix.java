@@ -66,7 +66,15 @@ public final class OperatorProvisioningPermissionMatrix {
             "ec2:DescribeSecurityGroups",
             "ec2:DescribeAvailabilityZones",
             "ec2:DescribeAddresses",
-            "ec2:DescribeTags"
+            "ec2:DescribeTags",
+            // Every EFS mount target IS an ENI under the hood -- CreateMountTarget/
+            // DeleteMountTarget call these EC2 APIs on the caller's own identity to actually
+            // create/tear it down, AWS's own documented required permissions for those two EFS
+            // actions. Missing here surfaces as a generic EFS-side 403 ("User is not authorized to
+            // perform that action on the specified resource") with no EC2 action named anywhere
+            // in the error, since it's EFS relaying an authorization failure from its own
+            // downstream EC2 call, not this app's own EC2 call.
+            "ec2:DescribeNetworkInterfaces"
         ),
         IAMProfile.STANDARD, List.of(
             "ec2:CreateVpc",
@@ -98,7 +106,12 @@ public final class OperatorProvisioningPermissionMatrix {
             "ec2:RevokeSecurityGroupIngress",
             "ec2:RevokeSecurityGroupEgress",
             "ec2:CreateTags",
-            "ec2:DeleteTags"
+            "ec2:DeleteTags",
+            // See the MINIMAL tier's ec2:DescribeNetworkInterfaces comment above -- the create/
+            // delete/modify half of the same EFS-mount-target-is-an-ENI requirement.
+            "ec2:CreateNetworkInterface",
+            "ec2:DeleteNetworkInterface",
+            "ec2:ModifyNetworkInterfaceAttribute"
         )
     );
 
@@ -159,7 +172,14 @@ public final class OperatorProvisioningPermissionMatrix {
             "elasticloadbalancing:DescribeTargetHealth",
             "elasticloadbalancing:DescribeListeners",
             "elasticloadbalancing:DescribeRules",
-            "elasticloadbalancing:DescribeTags"
+            "elasticloadbalancing:DescribeTags",
+            // The ELB service itself calls this EC2 API under the deploying caller's own identity
+            // while handling elasticloadbalancing:CreateLoadBalancer, to check the account's
+            // supported EC2-Classic/VPC platforms -- AWS's own documented required-permission for
+            // CreateLoadBalancer, not something this app calls directly. Missing here surfaces as
+            // "ec2:DescribeAccountAttributes ... (Service: ElasticLoadBalancingV2 ...)" the moment
+            // a deploy actually tries to create an ALB, never earlier.
+            "ec2:DescribeAccountAttributes"
         ),
         IAMProfile.STANDARD, List.of(
             "elasticloadbalancing:CreateLoadBalancer",
@@ -218,7 +238,12 @@ public final class OperatorProvisioningPermissionMatrix {
     public static final Map<IAMProfile, List<String>> LOGS_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
             "logs:DescribeLogGroups",
-            "logs:ListTagsForResource"
+            "logs:ListTagsForResource",
+            // The Logs tab's actual event-fetching call (CloudWatchLogsStackOperations
+            // #fetchLogEvents) -- every other action here only describes/manages the log group
+            // itself, never reads what's actually in it, so this was missing entirely until a
+            // live Logs tab request against a real stack surfaced it.
+            "logs:FilterLogEvents"
         ),
         IAMProfile.STANDARD, List.of(
             "logs:CreateLogGroup",

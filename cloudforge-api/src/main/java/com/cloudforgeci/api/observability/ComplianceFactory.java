@@ -484,12 +484,11 @@ public class ComplianceFactory extends BaseFactory {
             // path is actually exercised (PRODUCTION + HIPAA/PCI-DSS, or the optional hardening
             // flag — DEV never hits it, which is why this went unnoticed).
             //
-            // Resource is "*", not this key's own explicit ARN — confirmed live (via the
-            // synthesized template, not guessing) that spelling out the key's own ARN here creates
-            // a genuine CDK circular dependency: it's a self-reference (Ref to this same key's own
-            // logical id) inside this key's OWN resource policy, which CDK's dependency graph
-            // rejects as a self-loop. "*" in a resource-based policy on the key itself isn't a real
-            // wildcard grant — the policy is already scoped to this one key by being attached to
+            // Resource is "*", not this key's own explicit ARN — spelling out the key's own ARN
+            // here creates a CDK circular dependency: it's a self-reference (Ref to this same
+            // key's own logical id) inside this key's OWN resource policy, which CDK's dependency
+            // graph rejects as a self-loop. "*" in a resource-based policy on the key itself isn't
+            // a wildcard grant — the policy is already scoped to this one key by being attached to
             // it — it's the standard AWS pattern specifically to avoid this self-reference, and
             // matches every other working KMS-log grant already in this codebase (the CloudTrail
             // Trail's own KMS key grant just above, LoggingCwFactory's).

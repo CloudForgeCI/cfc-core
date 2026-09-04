@@ -48,8 +48,40 @@ public final class ManagerOperatorIamSupport {
             .build());
     }
 
+    /** Every cross-account-connect role this app itself ever generates carries this exact name
+     *  prefix regardless of which AWS account it lives in (see {@code
+     *  CrossAccountRoleTemplateFactory#ROLE_NAME_PREFIX} in cloudforge-manager — duplicated here
+     *  rather than shared, since cloudforge-api can't depend on cloudforge-manager; keep the two
+     *  in sync by hand). Scoping {@link #crossAccountAssumeRoleStatement}'s resource to this
+     *  prefix instead of {@code Resource: "*"} is exactly as narrow as the actual capability
+     *  needs to be. */
+    private static final String CROSS_ACCOUNT_ROLE_NAME_PREFIX = "CloudForgeManagerAccess-";
+
+    /**
+     * Lets Manager's own task role actually CALL {@code sts:AssumeRole} against a connected
+     * account's {@code CloudForgeManagerAccess-*} role — the other half of the cross-account
+     * connect feature ({@code StsAssumeRoleService}/{@code CrossAccountRoleTemplateFactory}): a
+     * correct trust policy on the TARGET role means nothing if Manager's own IAM policy never
+     * grants it permission to make the call in the first place. Found live: a connected account's
+     * deployed trust policy matched byte-for-byte what Manager itself had generated, and {@code
+     * sts:AssumeRole} still came back {@code AccessDenied} — this grant had never actually existed
+     * anywhere in either repo, despite {@code CrossAccountRoleTemplateFactory}'s own javadoc
+     * claiming this class already provided it.
+     */
+    public static Optional<PolicyStatement> crossAccountAssumeRoleStatement(SystemContext ctx) {
+        if (!isCloudForgeManager(ctx)) {
+            return Optional.empty();
+        }
+        return Optional.of(PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerCrossAccountAssumeRole")
+            .actions(List.of("sts:AssumeRole"))
+            .resources(List.of("arn:aws:iam::*:role/" + CROSS_ACCOUNT_ROLE_NAME_PREFIX + "*"))
+            .build());
+    }
+
     public static void addOperatorBaselineToStatements(SystemContext ctx, List<PolicyStatement> statements) {
         operatorBaselineStatement(ctx).ifPresent(statements::add);
+        crossAccountAssumeRoleStatement(ctx).ifPresent(statements::add);
     }
 
     public static void attachOperatorBaselinePolicies(SystemContext ctx, Role role) {
@@ -68,6 +100,7 @@ public final class ManagerOperatorIamSupport {
                 ),
                 Boolean.TRUE);
         });
+        crossAccountAssumeRoleStatement(ctx).ifPresent(role::addToPolicy);
     }
 
     /** Same tag key {@code ApplicationFargateStack}/{@code ApplicationEc2Stack} apply via

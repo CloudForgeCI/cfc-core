@@ -41,19 +41,19 @@ public final class ManagerRuntimeBridge {
         }
 
         // ManagerProperties.Localstack#endpoint defaults to "http://localhost:4566" unconditionally
-        // (a Java field default, there for LocalStack-target convenience) — that default is NOT the
-        // same thing as a genuine "run against a local emulator" instruction, but folding it into
-        // `localstack` above (via the `if (localstack == null)` fallback, itself only reached when
-        // nothing else set it either) made it look like one by the time it got here. Both
+        // (a Java field default, there for LocalStack-target convenience) — that default is not
+        // the same thing as an explicit "run against a local emulator" instruction, but folding it
+        // into `localstack` above (via the `if (localstack == null)` fallback, itself only reached
+        // when nothing else set it either) made it look like one by the time it got here. Both
         // LOCALSTACK_ENDPOINT and AWS_ENDPOINT_URL (the AWS SDK's own globally-recognized endpoint
         // override — every AWS client built anywhere in this process, Cognito's included, see
-        // ApplicationOidcAuthenticator, honors the latter) have to be gated on genuinely targeting a
+        // ApplicationOidcAuthenticator, honors the latter) have to be gated on actually targeting a
         // local emulator (target=localstack/ministack), not just AWS_ENDPOINT_URL alone —
         // ApplicationOidcAuthenticator#resolveLocalEmulatorEndpoint checks LOCALSTACK_ENDPOINT
-        // FIRST, so gating only AWS_ENDPOINT_URL left that check-order completely unprotected:
-        // confirmed live, Cognito sign-in kept silently trying to reach localhost:4566 in a
-        // production ECS task with no LocalStack anywhere in sight even after the first attempt at
-        // this fix, because LOCALSTACK_ENDPOINT itself was still being bridged unconditionally here.
+        // FIRST, so gating only AWS_ENDPOINT_URL left that check-order unprotected: Cognito sign-in
+        // kept silently trying to reach localhost:4566 in a production ECS task with no LocalStack
+        // anywhere in sight, because LOCALSTACK_ENDPOINT itself was still being bridged
+        // unconditionally here.
         boolean targetingLocalEmulator = "localstack".equalsIgnoreCase(target) || "ministack".equalsIgnoreCase(target);
         if (targetingLocalEmulator) {
             setIfAbsent(ManagerEnvKeys.LOCALSTACK_ENDPOINT, localstack);

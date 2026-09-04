@@ -134,7 +134,7 @@ public final class LocalStackDeployer implements LocalDeployer {
         // LocalStack's fixed default-mode test account, regardless of which literal access key
         // string was used to authenticate — same account every manifest's ${AWS::AccountId}
         // token (when account-agnostic synthesis leaves one unresolved) needs to resolve to here.
-        LocalStackCdkAssetPublisher.publish(template.getParent(), contextStackName, s3, "000000000000");
+        LocalStackCdkAssetPublisher.publish(template.getParent(), contextStackName, s3, "000000000000", true);
 
         if (stackExists(stackName) && !stackIsDeployable(stackName)) {
             delete(stackName);

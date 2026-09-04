@@ -51,9 +51,27 @@ public final class LocalStackCdkAssetPublisher {
      *     {@code bucketName}/{@code objectKey} — the real account id for a real-AWS caller (e.g.
      *     via {@code sts:GetCallerIdentity}), or LocalStack's well-known fixed test account
      *     ({@code 000000000000}) for a local-emulator caller.
+     * @param createBucketIfMissing whether to self-create an asset destination bucket that
+     *     doesn't exist yet, rather than require it already exist. {@code true} for a local
+     *     emulator (LocalStack/MiniStack have no separate {@code cdk bootstrap} concept — this
+     *     class creating the bucket on first use IS the bootstrap, for that target). {@code
+     *     false} for real AWS: the destination bucket named here is CDK's own bootstrap staging
+     *     bucket ({@code cdk-hnb659fds-assets-<account>-<region>}), which {@code cdk bootstrap}
+     *     is supposed to create and own as a tracked CloudFormation resource (versioning,
+     *     encryption, lifecycle rules, an SSL-only bucket policy). Self-creating a bare, untracked
+     *     bucket with that exact name papers over an unbootstrapped account instead of surfacing
+     *     it, and then permanently blocks the real {@code cdk bootstrap} from ever creating its
+     *     own properly-configured copy of that bucket (CloudFormation's early-validation resource-
+     *     existence check refuses to "adopt" a bucket the stack doesn't already own) — found live
+     *     against a real connected account, whose first cross-account deploy attempt silently
+     *     pre-created this bucket before the account had ever been bootstrapped.
+     * @throws IOException if the destination bucket doesn't exist and {@code createBucketIfMissing}
+     *     is {@code false} — the actionable signal that the target account needs {@code cdk
+     *     bootstrap} run against it before this deploy can proceed
      */
     public static void publish(
-            Path cdkOutDirectory, String contextStackName, S3Client s3, String accountId)
+            Path cdkOutDirectory, String contextStackName, S3Client s3, String accountId,
+            boolean createBucketIfMissing)
             throws IOException {
         if (cdkOutDirectory == null || contextStackName == null || contextStackName.isBlank()) {
             return;
@@ -69,12 +87,13 @@ public final class LocalStackCdkAssetPublisher {
         Iterator<Map.Entry<String, JsonNode>> entries = files.properties().iterator();
         while (entries.hasNext()) {
             Map.Entry<String, JsonNode> entry = entries.next();
-            publishAsset(cdkOutDirectory, entry.getValue(), s3, accountId);
+            publishAsset(cdkOutDirectory, entry.getValue(), s3, accountId, createBucketIfMissing);
         }
     }
 
     private static void publishAsset(
-            Path cdkOutDirectory, JsonNode asset, S3Client s3, String accountId)
+            Path cdkOutDirectory, JsonNode asset, S3Client s3, String accountId,
+            boolean createBucketIfMissing)
             throws IOException {
         JsonNode source = asset.path("source");
         String packaging = source.path("packaging").asText("file");
@@ -98,7 +117,7 @@ public final class LocalStackCdkAssetPublisher {
             return;
         }
 
-        ensureBucket(s3, bucket);
+        ensureBucket(s3, bucket, createBucketIfMissing);
         byte[] payload = "zip".equals(packaging)
             ? zipDirectory(sourcePath)
             : Files.readAllBytes(sourcePath);
@@ -129,10 +148,19 @@ public final class LocalStackCdkAssetPublisher {
         return resolved.replace("${AWS::Partition}", "aws");
     }
 
-    private static void ensureBucket(S3Client s3, String bucket) {
+    private static void ensureBucket(S3Client s3, String bucket, boolean createIfMissing)
+            throws IOException {
         try {
             s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
         } catch (NoSuchBucketException e) {
+            if (!createIfMissing) {
+                throw new IOException(
+                    "Asset bucket \"" + bucket + "\" doesn't exist yet. This AWS account hasn't "
+                        + "been set up for AWS CDK deployments — someone with admin access to it "
+                        + "needs to run \"cdk bootstrap\" once, directly, with their own AWS "
+                        + "credentials. This is a one-time AWS CDK setup step, not a CloudForge "
+                        + "permission or configuration issue.", e);
+            }
             try {
                 s3.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
             } catch (BucketAlreadyExistsException | BucketAlreadyOwnedByYouException ignored) {

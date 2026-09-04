@@ -429,9 +429,8 @@ public interface SecurityProfileConfiguration {
      * only about whether leaving it unset is itself acceptable. DEV/STAGING's whole point of
      * being OPTIONAL is that they're allowed to default to the free, no-extra-infra fallback
      * without ceremony; a PRODUCTION deployment ending up there by omission rather than a
-     * deliberate choice is the actual problem this closes (confirmed live: cloudforge-manager's
-     * own PRODUCTION preset deployed against embedded H2 for hours with nobody having decided
-     * that on purpose).</p>
+     * deliberate choice is the problem this closes: cloudforge-manager's own PRODUCTION preset
+     * deployed against embedded H2 for hours with nobody having decided that on purpose.</p>
      *
      * <ul>
      *   <li>DEV: false - the default fallback is the point</li>

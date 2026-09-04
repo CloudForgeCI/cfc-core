@@ -337,7 +337,16 @@ public final class AwsDirectDeployer implements AutoCloseable {
         // call too, for real AWS as much as a local emulator. Without this, any asset-backed
         // resource (including aws-cdk-lib's own LogRetention custom resource) fails the instant a
         // real deploy reaches it, since nothing published its asset anywhere first.
-        LocalStackCdkAssetPublisher.publish(template.getParent(), stackName, s3, resolveAccountId());
+        //
+        // createBucketIfMissing = localEmulatorTarget: a local emulator has no separate "cdk
+        // bootstrap" step, so self-creating the asset bucket on first use IS its bootstrap. Real
+        // AWS must not self-create it — that bucket is CDK's own bootstrap-owned resource, and a
+        // bare, untracked bucket with its exact name permanently blocks the real `cdk bootstrap`
+        // from ever creating its own properly-configured copy. See this method's own IOException
+        // (surfaced as an actionable "run cdk bootstrap" message) when the account isn't
+        // bootstrapped yet.
+        LocalStackCdkAssetPublisher.publish(
+            template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
 
         boolean exists = stackExists(physical) && stackIsDeployable(physical);
         String templateBody = Files.readString(template);

@@ -296,10 +296,10 @@ public class RdsFactory {
             .cloudwatchLogsExports(getCloudWatchLogsExports(requirement.engine()));
 
         // Conditionally enable Performance Insights for PRODUCTION only — and only when the
-        // instance class actually supports it. RDS rejects EnablePerformanceInsights outright
+        // instance class supports it. RDS rejects EnablePerformanceInsights outright
         // ("Performance Insights not supported for this configuration") on the smallest burstable
-        // sizes (db.t2/t3/t4g.micro) across every engine — confirmed live deploying
-        // cloudforge-manager's own PRODUCTION preset, which pins db.t3.micro. Falling through to
+        // sizes (db.t2/t3/t4g.micro) across every engine — cloudforge-manager's own PRODUCTION
+        // preset pins db.t3.micro. Falling through to
         // the else branch for a micro instance keeps PRODUCTION's other monitoring knobs
         // (autoMinorVersionUpgrade, iamAuthentication, deletion protection, backup retention)
         // intact — only Performance Insights itself is unsupported at this size.

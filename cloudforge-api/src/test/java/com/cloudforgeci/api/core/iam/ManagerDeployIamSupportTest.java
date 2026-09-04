@@ -293,6 +293,86 @@ class ManagerDeployIamSupportTest {
         assertTrue(ManagerOperatorIamSupport.catalogProvisionStatement(builder.getSystemContext()).isEmpty());
     }
 
+    /** Real bug this locks in: a connected account's trust policy can match byte-for-byte what
+     *  Manager itself generated and {@code sts:AssumeRole} still comes back {@code AccessDenied}
+     *  if Manager's own task role was never granted permission to make the call at all — found
+     *  live, and this statement (unlike {@link #deployStatementsReturnsTwelveStatementsForManager}'s
+     *  twelve) had never existed anywhere in either repo despite {@code
+     *  CrossAccountRoleTemplateFactory}'s own javadoc claiming it did. */
+    @Test
+    void crossAccountAssumeRoleStatementIsScopedToTheConnectionRolePrefixForManager() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerCrossAccountAssumeRole", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        Optional<PolicyStatement> statement =
+            ManagerOperatorIamSupport.crossAccountAssumeRoleStatement(builder.getSystemContext());
+        assertTrue(statement.isPresent());
+        String json = statement.get().toJSON().toString();
+        assertTrue(json.contains("sts:AssumeRole"));
+        assertTrue(json.contains("arn:aws:iam::*:role/CloudForgeManagerAccess-*"));
+        assertFalse(json.contains("\"Resource\":\"*\""), "must not be a blanket assume-anything grant");
+    }
+
+    @Test
+    void crossAccountAssumeRoleStatementIsEmptyForNonManagerApplication() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "JenkinsCrossAccountAssumeRole", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId("jenkins")
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        assertTrue(ManagerOperatorIamSupport.crossAccountAssumeRoleStatement(builder.getSystemContext()).isEmpty());
+    }
+
+    /** {@code attachOperatorBaselinePolicies}/{@code addOperatorBaselineToStatements} are the two
+     *  call sites every IAM profile (Minimal/Standard/Extended, both the PRODUCTION single-policy
+     *  and DEV/STAGING incremental-role branches) already wires unconditionally — confirming the
+     *  grant lands via those, rather than needing every IAM profile class covered separately. */
+    @Test
+    void attachOperatorBaselinePoliciesIncludesTheCrossAccountAssumeRoleGrant() throws Exception {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerAttachBaselineAssumeRole", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        Role role = Role.Builder.create(builder.getStack(), "TestBaselineRole")
+            .assumedBy(new ServicePrincipal("ecs-tasks.amazonaws.com"))
+            .build();
+        ManagerOperatorIamSupport.attachOperatorBaselinePolicies(builder.getSystemContext(), role);
+
+        Template template = Template.fromStack(builder.getStack());
+        String templateJson = MAPPER.writeValueAsString(template.toJSON());
+        assertTrue(templateJson.contains("CloudForgeManagerCrossAccountAssumeRole"));
+        assertTrue(iamActions(template).contains("sts:AssumeRole"));
+    }
+
+    @Test
+    void addOperatorBaselineToStatementsIncludesTheCrossAccountAssumeRoleGrant() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerAddBaselineAssumeRole", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = new java.util.ArrayList<>();
+        ManagerOperatorIamSupport.addOperatorBaselineToStatements(builder.getSystemContext(), statements);
+
+        assertTrue(statements.stream().anyMatch(s ->
+            "CloudForgeManagerCrossAccountAssumeRole".equals(s.getSid())));
+    }
+
     @Test
     void catalogProvisionStatementIsPresentAndConditionFreeForManager() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(

@@ -459,16 +459,16 @@ public class ContainerFactory extends BaseFactory {
                         // auto-provision path (CognitoAuthenticationFactory) hands this value in
                         // as cognitoSecret.getSecretArn() — a CDK Token, i.e. an opaque unresolved
                         // placeholder string at this point in synthesis, not literally "arn:..."
-                        // yet. startsWith() on a Token silently returns false, sending a real ARN
-                        // down the fromSecretNameV2 (bare-name) branch — which then wraps the
-                        // eventual resolved ARN inside ANOTHER "arn:aws:secretsmanager:...:secret:"
-                        // prefix, producing a doubled ARN that fails at deploy time with
-                        // "unexpected ARN format" (confirmed live via the ECS deployment circuit
-                        // breaker). Token.isUnresolved() catches exactly this case — Cognito's own
-                        // getSecretArn() contract always resolves to a complete ARN, so a Token
-                        // here is routed the same way a literal "arn:" string already is; only a
-                        // genuinely resolved, non-ARN-shaped literal (a hand-typed bare name in
-                        // DeploymentContext) takes the fromSecretNameV2 branch.
+                        // yet. startsWith() on a Token silently returns false, sending an ARN down
+                        // the fromSecretNameV2 (bare-name) branch — which then wraps the eventual
+                        // resolved ARN inside ANOTHER "arn:aws:secretsmanager:...:secret:" prefix,
+                        // producing a doubled ARN that fails at deploy time with "unexpected ARN
+                        // format" (via the ECS deployment circuit breaker). Token.isUnresolved()
+                        // catches exactly this case — Cognito's own getSecretArn() contract always
+                        // resolves to a complete ARN, so a Token here is routed the same way a
+                        // literal "arn:" string already is; only a resolved, non-ARN-shaped
+                        // literal (a hand-typed bare name in DeploymentContext) takes the
+                        // fromSecretNameV2 branch.
                         boolean isCompleteArn = software.amazon.awscdk.Token.isUnresolved(clientSecretArn)
                             || clientSecretArn.startsWith("arn:");
                         ISecret clientSecret = isCompleteArn
