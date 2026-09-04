@@ -295,10 +295,10 @@ class ManagerDeployIamSupportTest {
 
     /** Real bug this locks in: a connected account's trust policy can match byte-for-byte what
      *  Manager itself generated and {@code sts:AssumeRole} still comes back {@code AccessDenied}
-     *  if Manager's own task role was never granted permission to make the call at all — found
-     *  live, and this statement (unlike {@link #deployStatementsReturnsTwelveStatementsForManager}'s
-     *  twelve) had never existed anywhere in either repo despite {@code
-     *  CrossAccountRoleTemplateFactory}'s own javadoc claiming it did. */
+     *  if Manager's own task role was never granted permission to make the call at all — this
+     *  statement (unlike {@link #deployStatementsReturnsTwelveStatementsForManager}'s twelve) had
+     *  never existed anywhere in either repo despite {@code CrossAccountRoleTemplateFactory}'s
+     *  own javadoc claiming it did. */
     @Test
     void crossAccountAssumeRoleStatementIsScopedToTheConnectionRolePrefixForManager() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(

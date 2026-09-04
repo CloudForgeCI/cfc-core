@@ -62,11 +62,11 @@ public final class ManagerOperatorIamSupport {
      * account's {@code CloudForgeManagerAccess-*} role — the other half of the cross-account
      * connect feature ({@code StsAssumeRoleService}/{@code CrossAccountRoleTemplateFactory}): a
      * correct trust policy on the TARGET role means nothing if Manager's own IAM policy never
-     * grants it permission to make the call in the first place. Found live: a connected account's
-     * deployed trust policy matched byte-for-byte what Manager itself had generated, and {@code
-     * sts:AssumeRole} still came back {@code AccessDenied} — this grant had never actually existed
-     * anywhere in either repo, despite {@code CrossAccountRoleTemplateFactory}'s own javadoc
-     * claiming this class already provided it.
+     * grants it permission to make the call in the first place. A connected account's deployed
+     * trust policy can match byte-for-byte what Manager itself generated and {@code
+     * sts:AssumeRole} still come back {@code AccessDenied} without this — the grant had never
+     * actually existed anywhere in either repo, despite {@code CrossAccountRoleTemplateFactory}'s
+     * own javadoc claiming this class already provided it.
      */
     public static Optional<PolicyStatement> crossAccountAssumeRoleStatement(SystemContext ctx) {
         if (!isCloudForgeManager(ctx)) {
