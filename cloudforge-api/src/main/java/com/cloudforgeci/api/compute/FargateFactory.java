@@ -244,8 +244,8 @@ public class FargateFactory extends BaseFactory {
     // Every built-in ApplicationSpec keeps that X86_64 default (their images are x86_64-only or
     // x86_64-primary); cloudforge-manager's own spec overrides it to ARM64, since its native-image
     // pipeline publishes arm64-only images now.
-    CpuArchitecture cpuArchitecture = applicationSpec.cpuArchitecture()
-        == com.cloudforge.core.enums.CpuArchitecture.ARM64
+    CpuArchitecture cpuArchitecture = (applicationSpec != null
+        && applicationSpec.cpuArchitecture() == com.cloudforge.core.enums.CpuArchitecture.ARM64)
         ? CpuArchitecture.ARM64
         : CpuArchitecture.X86_64;
 
@@ -285,7 +285,9 @@ public class FargateFactory extends BaseFactory {
     boolean enableContainerInsights = security != SecurityProfile.DEV;
     Cluster cluster = Cluster.Builder.create(this, "Cluster")
             .vpc(vpc)
-            .containerInsights(enableContainerInsights)
+            .containerInsightsV2(enableContainerInsights
+                ? software.amazon.awscdk.services.ecs.ContainerInsights.ENABLED
+                : software.amazon.awscdk.services.ecs.ContainerInsights.DISABLED)
             .build();
 
  

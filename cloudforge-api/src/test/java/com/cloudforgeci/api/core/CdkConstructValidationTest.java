@@ -36,7 +36,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When
         var vpcFactory = new VpcFactory(stack, "VpcFactory");
@@ -64,7 +64,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When
         var vpcFactory = new VpcFactory(stack, "VpcFactory");
@@ -101,7 +101,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, topology, runtime, security, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When
         var vpcFactory = new VpcFactory(stack, "VpcFactory");
@@ -128,7 +128,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -146,7 +146,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -164,7 +164,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -182,7 +182,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -209,7 +209,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -227,7 +227,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -245,7 +245,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -263,7 +263,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -281,7 +281,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {
@@ -299,7 +299,7 @@ class CdkConstructValidationTest {
         var cfc = DeploymentContext.from(stack);
 
         // Initialize SystemContext with FARGATE runtime (test creates FargateFactory)
-        var ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, com.cloudforge.core.enums.IAMProfile.MINIMAL, cfc);
 
         // When & Then
         assertDoesNotThrow(() -> {

@@ -2204,6 +2204,9 @@ class PciDssRulesTest {
         "private-with-nat,true",      // Compliant
         "public-no-nat,false"          // Non-compliant
     })
+    // codeql[java/unused-parameter] -- shouldPass documents CSV-row intent, but complianceMode is
+        // ADVISORY here (violations warn, never throw), so assertDoesNotThrow can't distinguish
+        // compliant from non-compliant rows; nothing in this method could consult it.
     void testPciDssNetworkModes(String networkMode, boolean shouldPass) {
         App app = new App();
         Map<String, Object> additionalContext = new HashMap<>();
@@ -2271,6 +2274,8 @@ class PciDssRulesTest {
         "PRODUCTION,ADVISORY,true",     // PRODUCTION should run PCI-DSS validation
         "PRODUCTION,ENFORCE,true"       // PRODUCTION with enforce mode
     })
+    // codeql[java/unused-parameter] -- shouldValidate documents CSV-row intent only; see the
+        // shouldPass note on testPciDssNetworkModes above for why.
     void testPciDssSecurityProfileBranches(String profile, String complianceMode, boolean shouldValidate) {
         App app = new App();
         Stack stack = new Stack(app, "TestPciProfile" + profile + complianceMode);
@@ -2553,6 +2558,8 @@ class PciDssRulesTest {
         "365,ADVISORY,true",    // Advisory mode with 1 year
         "90,ADVISORY,false"     // Advisory mode with 90 days
     })
+    // codeql[java/unused-parameter] -- isCompliant documents CSV-row intent only; see the
+        // shouldPass note on testPciDssNetworkModes above for why.
     void testPciDssRetentionCombinations(int retentionDays, String complianceMode, boolean isCompliant) {
         App app = new App();
         Stack stack = createPciDssStack(app, "TestPciRet" + retentionDays + complianceMode,
@@ -3646,7 +3653,7 @@ class PciDssRulesTest {
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TopologyType topologyType = TopologyType.valueOf(topology);
+        // topology/TopologyType is ignored for this test (all topologies use same validation)
 
         // Add baseline requirements for tests expected to pass
         if (!shouldFail) {

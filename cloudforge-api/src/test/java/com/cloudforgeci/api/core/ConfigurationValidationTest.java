@@ -42,6 +42,9 @@ class ConfigurationValidationTest {
     @ParameterizedTest
     @MethodSource("workingRuntimeTopologyCombinations")
     @DisplayName("Should validate working runtime and topology combinations")
+    // codeql[java/unused-parameter] -- see this method's own "Note" below: driving synthesis
+    // with these values needs a real CDK stack context, which unit-test-level DeploymentContext
+    // construction here doesn't attempt (TruthTableValidationTest covers that).
     void shouldValidateWorkingRuntimeTopologyCombinations(RuntimeType runtime, TopologyType topology, SecurityProfile security) {
         // Given
         var app = new software.amazon.awscdk.App();
@@ -62,6 +65,8 @@ class ConfigurationValidationTest {
     @ParameterizedTest
     @ValueSource(strings = {"dev", "staging", "production"})
     @DisplayName("Should validate all security profiles")
+    // codeql[java/unused-parameter] -- same limitation as
+    // shouldValidateWorkingRuntimeTopologyCombinations above.
     void shouldValidateAllSecurityProfiles(String securityProfile) {
         // Given
         var app = new software.amazon.awscdk.App();
@@ -78,6 +83,8 @@ class ConfigurationValidationTest {
     @ParameterizedTest
     @ValueSource(strings = {"public-no-nat", "private-with-nat"})
     @DisplayName("Should validate network modes")
+    // codeql[java/unused-parameter] -- same limitation as
+    // shouldValidateWorkingRuntimeTopologyCombinations above.
     void shouldValidateNetworkModes(String networkMode) {
         // Given
         var app = new software.amazon.awscdk.App();
@@ -94,6 +101,8 @@ class ConfigurationValidationTest {
     @ParameterizedTest
     @ValueSource(strings = {"alb", "nlb"})
     @DisplayName("Should validate load balancer types")
+    // codeql[java/unused-parameter] -- same limitation as
+    // shouldValidateWorkingRuntimeTopologyCombinations above.
     void shouldValidateLoadBalancerTypes(String lbType) {
         // Given
         var app = new software.amazon.awscdk.App();
@@ -110,6 +119,8 @@ class ConfigurationValidationTest {
     @ParameterizedTest
     @ValueSource(strings = {"none", "alb-oidc", "jenkins-oidc"})
     @DisplayName("Should validate authentication modes")
+    // codeql[java/unused-parameter] -- same limitation as
+    // shouldValidateWorkingRuntimeTopologyCombinations above.
     void shouldValidateAuthenticationModes(String authMode) {
         // Given
         var app = new software.amazon.awscdk.App();

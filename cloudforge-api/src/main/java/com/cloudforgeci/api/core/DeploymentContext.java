@@ -10,7 +10,6 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforgeci.api.compute.CmsLoader;
-import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
 
@@ -239,12 +238,11 @@ public final class DeploymentContext {
         validateOrThrow();
     }
 
-    /** Build from the 'cfc' context object on the App. */
-    public static DeploymentContext from(App app) {
-        return Util.createDeploymentContext(app.getNode().tryGetContext("cfc"));
-    }
-
-    /** Build from the 'cfc' context object on any Construct scope. */
+    /**
+     * Build from the 'cfc' context object on any Construct scope (App included -- App extends
+     * Construct, and this did nothing an App-specific overload wouldn't; that overload was
+     * removed since resolving to it depended on a caller's static type, not actual behavior).
+     */
     public static DeploymentContext from(Construct scope) {
         return Util.createDeploymentContext(scope.getNode().tryGetContext("cfc"));
     }
@@ -347,7 +345,17 @@ public final class DeploymentContext {
     public Boolean managerDirectDeployEnabled() { return config.managerDirectDeployEnabled; }
     public String complianceFrameworks() { return complianceFrameworks; }
     public ComplianceMode complianceMode() { return complianceMode; }
-    public Integer logRetentionDays() { return config.logRetentionDays != null ? Integer.parseInt(config.logRetentionDays) : null; }
+    public Integer logRetentionDays() {
+        if (config.logRetentionDays == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(config.logRetentionDays);
+        } catch (NumberFormatException e) {
+            throw new NumberFormatException("logRetentionDays: '" + config.logRetentionDays
+                + "' is not a valid number of days");
+        }
+    }
     public String instanceType() { return config.instanceType; }
     public Boolean provisionDatabase() { return config.provisionDatabase; }
     public String databaseEngine() { return config.databaseEngine; }

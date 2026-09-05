@@ -51,6 +51,7 @@ class BaseFactoryTest {
             super(scope, id);
         }
 
+        @Override
         public void create() {
             // Test implementation - does nothing
         }

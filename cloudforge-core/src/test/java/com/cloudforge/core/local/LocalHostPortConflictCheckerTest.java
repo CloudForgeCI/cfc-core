@@ -1,6 +1,5 @@
 package com.cloudforge.core.local;
 
-import com.cloudforge.core.config.DeploymentConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
@@ -23,7 +22,6 @@ class LocalHostPortConflictCheckerTest {
         LocalHostPortConflictChecker.validateAgainstOccupants(
             DeploymentTarget.MINISTACK,
             "Grafana-Stack-ministack",
-            new DeploymentConfig(),
             null,
             template,
             List.of(new LocalHostPortOccupant(
@@ -42,7 +40,6 @@ class LocalHostPortConflictCheckerTest {
         LocalHostPortConflictChecker.validateAgainstOccupants(
             DeploymentTarget.MINISTACK,
             "Gitea-Stack-ministack",
-            new DeploymentConfig(),
             null,
             template,
             List.of(new LocalHostPortOccupant(
@@ -65,7 +62,6 @@ class LocalHostPortConflictCheckerTest {
         LocalHostPortConflictChecker.validateAgainstOccupants(
             DeploymentTarget.LOCALSTACK,
             "CloudForgeManager-RDS-MySQL-localstack",
-            new DeploymentConfig(),
             null,
             template,
             List.of(new LocalHostPortOccupant(
@@ -84,7 +80,6 @@ class LocalHostPortConflictCheckerTest {
         LocalHostPortConflictChecker.validateAgainstOccupants(
             DeploymentTarget.MINISTACK,
             "Drone-Stack-localstack",
-            new DeploymentConfig(),
             null,
             template,
             List.of(),

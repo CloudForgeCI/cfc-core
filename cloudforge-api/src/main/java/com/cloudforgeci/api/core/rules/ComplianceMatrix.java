@@ -597,7 +597,7 @@ public final class ComplianceMatrix {
         }
 
         public Map<String, FrameworkRequirement> getFrameworkMappings() {
-            return frameworkMappings;
+            return Collections.unmodifiableMap(frameworkMappings);
         }
 
         public FrameworkRequirement getRequirement(String framework) {

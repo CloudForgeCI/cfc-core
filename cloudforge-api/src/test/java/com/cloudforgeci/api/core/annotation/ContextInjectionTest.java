@@ -101,6 +101,7 @@ public class ContextInjectionTest {
             super(scope, id);
         }
 
+        @Override
         public void create() {
             // Use the injected SystemContext
             if (ctx != null) {

@@ -9,7 +9,7 @@ import com.cloudforgeci.api.interfaces.Rule;
 import software.amazon.awscdk.services.cloudfront.BehaviorOptions;
 import software.amazon.awscdk.services.cloudfront.Distribution;
 import software.amazon.awscdk.services.cloudfront.ViewerProtocolPolicy;
-import software.amazon.awscdk.services.cloudfront.origins.S3Origin;
+import software.amazon.awscdk.services.cloudfront.origins.S3BucketOrigin;
 import software.amazon.awscdk.services.route53.ARecord;
 import software.amazon.awscdk.services.route53.ARecordProps;
 import software.amazon.awscdk.services.route53.AaaaRecord;
@@ -88,7 +88,10 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
     c.once("S3:Distribution", () -> {
       if (!Boolean.TRUE.equals(c.cfc.cloudfrontEnabled())) return;
 
-      var origin = new S3Origin(c.websiteBucket.get().orElseThrow(
+      // S3Origin (Origin Access Identity) is deprecated in favor of Origin Access Control --
+      // the CDK-recommended, more modern access mechanism CloudFront now provisions and grants
+      // the bucket policy for automatically, the same way S3Origin used to for OAI.
+      var origin = S3BucketOrigin.withOriginAccessControl(c.websiteBucket.get().orElseThrow(
               () -> new IllegalStateException("websiteBucket must exist before creating CloudFront Distribution")));
 
       Distribution dist = Distribution.Builder.create(c, "WebsiteDist")

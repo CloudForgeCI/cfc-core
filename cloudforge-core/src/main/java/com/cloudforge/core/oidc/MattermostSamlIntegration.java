@@ -405,6 +405,9 @@ public class MattermostSamlIntegration implements OidcIntegration {
             if (authEndpoint != null && authEndpoint.contains("/saml/")) {
                 return authEndpoint;
             }
+            if (authEndpoint == null) {
+                return null;
+            }
             // Derive SAML URL from OIDC endpoint (for tests using IdentityCenterOidcConfiguration)
             return authEndpoint.replace("/oauth2/authorize", "/saml/SSO");
         } else {
@@ -431,7 +434,7 @@ public class MattermostSamlIntegration implements OidcIntegration {
             }
             // Derive SAML metadata URL from OIDC endpoint
             String authEndpoint = config.getAuthorizationEndpoint();
-            return authEndpoint.replace("/oauth2/authorize", "/saml/metadata");
+            return authEndpoint != null ? authEndpoint.replace("/oauth2/authorize", "/saml/metadata") : null;
         } else {
             // External OIDC provider - try to derive metadata URL
             return config.getAuthorizationEndpoint().replace("/oauth2/authorize", "/saml/metadata");

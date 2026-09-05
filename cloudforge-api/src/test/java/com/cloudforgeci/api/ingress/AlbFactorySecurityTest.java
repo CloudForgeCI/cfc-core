@@ -60,8 +60,6 @@ public class AlbFactorySecurityTest {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbSecurityTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
 
-    Template t = Template.fromStack(builder.getStack());
-
     // Verify ALB security group exists
     assertNotNull(builder.getAlbSecurityGroup());
   }
@@ -70,8 +68,6 @@ public class AlbFactorySecurityTest {
   void createsAlbWithCorrectVpc() {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbVpcTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
-
-    Template t = Template.fromStack(builder.getStack());
 
     // Verify ALB is created in the correct VPC
     assertNotNull(builder.getVpc());

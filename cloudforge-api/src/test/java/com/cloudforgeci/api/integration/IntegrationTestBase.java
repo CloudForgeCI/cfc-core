@@ -119,6 +119,11 @@ public abstract class IntegrationTestBase {
     /**
      * Validates that an IAM role has a specific managed policy attached.
      */
+    // codeql[java/unused-parameter] -- roleLogicalId isn't used to scope the check below (CDK's
+    // Template.hasResourceProperties has no by-logical-ID matcher), so this actually asserts
+    // "some AWS::IAM::Role has this policy," not that THIS role does. Unused by any caller yet
+    // (kept as a documented gap rather than guessing at findResources()-based scoping unverified
+    // by a real caller).
     protected void assertRoleHasManagedPolicy(String roleLogicalId, String policyArn) {
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "ManagedPolicyArns", Match.arrayWith(List.of(policyArn))
@@ -128,6 +133,8 @@ public abstract class IntegrationTestBase {
     /**
      * Validates that an IAM role has a trust relationship with a specific service.
      */
+    // codeql[java/unused-parameter] -- same caveat as assertRoleHasManagedPolicy above: this
+    // checks "some role trusts servicePrincipal," not specifically roleLogicalId.
     protected void assertRoleTrustsService(String roleLogicalId, String servicePrincipal) {
         template.hasResourceProperties("AWS::IAM::Role", Match.objectLike(Map.of(
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
@@ -145,6 +152,8 @@ public abstract class IntegrationTestBase {
     /**
      * Validates that a role has permissions for specific actions on specific resources.
      */
+    // codeql[java/unused-parameter] -- same caveat as assertRoleHasManagedPolicy above: this
+    // checks "some role has these permissions," not specifically roleLogicalId.
     protected void assertRoleHasPermissions(
             String roleLogicalId,
             List<String> actions,
@@ -244,12 +253,14 @@ public abstract class IntegrationTestBase {
      * ComplianceFactory creates 40 rules total when all frameworks are enabled.
      */
     protected void assertConfigRulesDeployed(int minimumRuleCount) {
-        // Just verify that Config rules exist - don't check exact count
         template.hasResourceProperties("AWS::Config::ConfigRule", Match.objectLike(Map.of(
             "Source", Match.objectLike(Map.of(
                 "Owner", "AWS"
             ))
         )));
+        int actualRuleCount = template.findResources("AWS::Config::ConfigRule").size();
+        org.junit.jupiter.api.Assertions.assertTrue(actualRuleCount >= minimumRuleCount,
+            "Expected at least " + minimumRuleCount + " Config rules, found " + actualRuleCount);
     }
 
     /**
@@ -376,6 +387,9 @@ public abstract class IntegrationTestBase {
      * Validates that log retention is configured appropriately.
      * Note: Different log groups may have different retention periods.
      */
+    // codeql[java/unused-parameter] -- retentionDays isn't checked against a specific value:
+    // different log groups have different retention (CloudTrail=365, application logs vary, per
+    // this method's own javadoc), so there's no single number every log group should match.
     protected void assertLogRetentionConfigured(int retentionDays) {
         // Just verify that log groups exist with retention configured
         // Actual retention varies by log type (CloudTrail=365, application logs vary)

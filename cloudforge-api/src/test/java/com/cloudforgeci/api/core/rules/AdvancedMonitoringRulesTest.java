@@ -545,6 +545,9 @@ class AdvancedMonitoringRulesTest {
         "DEV,false,false,false,false,false,false",            // Minimal DEV - PASS (advisory)
         "DEV,true,true,true,false,false,false",               // SecurityHub DEV - PASS
     })
+    // codeql[java/unused-parameter] -- securityMonitoring is CSV-row documentation only: since
+        // the ComplianceMatrix refactor, Security Hub is advisory-only (never a hard FAIL) for every
+        // framework, so shouldFail below is unconditionally false regardless of this flag.
     void testAMExpandedSecurityHub(String profile, boolean securityMonitoring, boolean securityHubEnabled,
                                    boolean pciDss, boolean cis, boolean awsFoundational, boolean autoRemediation) {
         Map<String, Object> customContext = new HashMap<>();
@@ -608,6 +611,8 @@ class AdvancedMonitoringRulesTest {
         "DEV,false,false,false,false,false",                  // Minimal DEV - PASS (advisory)
         "DEV,true,true,true,true,true",                       // Full DEV - PASS
     })
+    // codeql[java/unused-parameter] -- same as testAMExpandedSecurityHub above: advisory-only
+        // post-refactor, so this flag no longer drives a pass/fail branch.
     void testAMExpandedInspector(String profile, boolean securityMonitoring, boolean inspectorEnabled,
                                  boolean ec2Scanning, boolean ecrScanning, boolean continuousScanning) {
         Map<String, Object> customContext = new HashMap<>();
@@ -759,6 +764,8 @@ class AdvancedMonitoringRulesTest {
         "DEV,false,false,false",                              // Minimal DEV - PASS
         "DEV,true,true,true",                                 // Full DEV - PASS
     })
+    // codeql[java/unused-parameter] -- same as testAMExpandedSecurityHub above: advisory-only
+        // post-refactor, so this flag no longer drives a pass/fail branch.
     void testAMExpandedCentralizedMonitoring(String profile, boolean securityMonitoring,
                                              boolean complianceDashboard, boolean securityAlerting) {
         Map<String, Object> customContext = new HashMap<>();
@@ -834,6 +841,8 @@ class AdvancedMonitoringRulesTest {
         // Scenario 12: PRODUCTION with compliance features but no centralized monitoring - FAIL
         "PRODUCTION,false,SOC2,true,true,true,true,true,true,true,true,false,false,false,false",
     })
+    // codeql[java/unused-parameter] -- same as testAMExpandedSecurityHub above: advisory-only
+        // post-refactor, so this flag no longer drives a pass/fail branch.
     void testAMExpandedComprehensiveScenarios(String profile, boolean securityMonitoring,
                                               String complianceFramework, boolean securityHubEnabled,
                                               boolean pciDss, boolean awsFoundational, boolean autoRemediation,

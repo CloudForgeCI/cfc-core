@@ -150,8 +150,8 @@ class StandardIAMConfigurationTest {
         // When: Getting rules
         var rules = config.rules(ctx);
 
-        // Then: Should return List
-        assertTrue(rules instanceof List);
+        // Then: Should return a (statically-typed) List, non-null
+        assertNotNull(rules);
     }
 
     @Test

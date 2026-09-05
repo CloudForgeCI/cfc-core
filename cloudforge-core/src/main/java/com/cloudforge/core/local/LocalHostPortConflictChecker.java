@@ -1,6 +1,5 @@
 package com.cloudforge.core.local;
 
-import com.cloudforge.core.config.DeploymentConfig;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -20,14 +19,12 @@ public final class LocalHostPortConflictChecker {
             DeploymentTarget target,
             URI endpoint,
             String deployingLocalStackName,
-            DeploymentConfig config,
             ApplicationSpec spec,
             JsonNode template,
             List<PreflightViolation> violations) throws IOException {
         validateAgainstOccupants(
             target,
             deployingLocalStackName,
-            config,
             spec,
             template,
             LocalEmulatorHostPortProbe.probe(endpoint, target),
@@ -37,7 +34,6 @@ public final class LocalHostPortConflictChecker {
     public static void validateAgainstOccupants(
             DeploymentTarget target,
             String deployingLocalStackName,
-            DeploymentConfig config,
             ApplicationSpec spec,
             JsonNode template,
             List<LocalHostPortOccupant> occupants,

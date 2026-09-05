@@ -88,9 +88,11 @@ class SecurityProfileExampleTest {
         @Test
         @DisplayName("Should extend BaseFactory")
         void shouldExtendBaseFactory() {
+            // SecurityProfileExample statically extends BaseFactory -- the compiler already
+            // guarantees this; an instanceof check on a statically-typed reference would be a
+            // tautology. What's actually worth verifying here is that construction succeeds.
             SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
-            assertTrue(example instanceof com.cloudforgeci.api.core.annotation.BaseFactory,
-                    "SecurityProfileExample should extend BaseFactory");
+            assertNotNull(example, "SecurityProfileExample should be created successfully");
         }
 
         @Test
@@ -114,28 +116,18 @@ class SecurityProfileExampleTest {
         @DisplayName("Should have required annotation fields")
         void shouldHaveRequiredAnnotationFields() {
             SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
-
-            // Verify that the class uses annotations properly
-            var fields = SecurityProfileExample.class.getDeclaredFields();
-            boolean hasSystemContextField = false;
-            boolean hasDeploymentContextField = false;
-            boolean hasSecurityProfileConfigField = false;
-
-            for (var field : fields) {
-                if (field.isAnnotationPresent(com.cloudforge.core.annotation.SystemContext.class)) {
-                    hasSystemContextField = true;
-                }
-                if (field.isAnnotationPresent(com.cloudforge.core.annotation.DeploymentContext.class)) {
-                    hasDeploymentContextField = true;
-                }
-                if (field.getType().equals(SecurityProfileConfiguration.class)) {
-                    hasSecurityProfileConfigField = true;
-                }
-            }
-
-            // Note: The actual injection mechanism would be tested in integration tests
-            // Here we just verify the structure is correct
             assertNotNull(example, "Example should be created");
+
+            // SecurityProfileExample declares no fields of its own (getDeclaredFields() on it
+            // is always empty) -- it relies entirely on BaseFactory's inherited ctx/cfc/config,
+            // populated directly in BaseFactory's constructor rather than via per-field
+            // annotations (those are for additional fields a subclass may optionally add).
+            // Verify the field this example's javadoc says it demonstrates actually exists there.
+            var baseFields = com.cloudforgeci.api.core.annotation.BaseFactory.class.getDeclaredFields();
+            boolean hasSecurityProfileConfigField = java.util.Arrays.stream(baseFields)
+                .anyMatch(f -> f.getType().equals(SecurityProfileConfiguration.class));
+            assertTrue(hasSecurityProfileConfigField,
+                "BaseFactory should provide a SecurityProfileConfiguration field");
         }
 
         @Test
@@ -168,8 +160,6 @@ class SecurityProfileExampleTest {
             // The example should demonstrate how to access security profile configuration
             // We verify the class structure rather than execution due to context injection requirements
             assertNotNull(example, "Example should be created");
-            assertTrue(example instanceof com.cloudforgeci.api.core.annotation.BaseFactory,
-                    "Should extend BaseFactory for context injection");
         }
 
         @Test
@@ -209,7 +199,7 @@ class SecurityProfileExampleTest {
         @Test
         @DisplayName("Should demonstrate meaningful configuration logging")
         void shouldDemonstrateMeaningfulConfigurationLogging() {
-            SecurityProfileExample example = new SecurityProfileExample(stack, "TestExample");
+            new SecurityProfileExample(stack, "TestExample");
 
             // The create method should log meaningful information about the security profile
             // We verify the logging framework is used rather than execution
@@ -268,8 +258,6 @@ class SecurityProfileExampleTest {
 
             // The example should show realistic usage of the security profile system
             assertNotNull(example, "Example should be instantiable");
-            assertTrue(example instanceof com.cloudforgeci.api.core.annotation.BaseFactory,
-                    "Should extend BaseFactory for practical usage");
         }
 
         @Test

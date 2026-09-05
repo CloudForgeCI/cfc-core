@@ -145,6 +145,8 @@ class Iso27001RulesTest {
         "STAGING,true",      // STAGING → ISO 27001 rules apply
         "DEV,false"          // DEV → ISO 27001 rules skipped
     })
+    // codeql[java/unused-parameter] -- rulesApply documents CSV-row intent only; the actual
+        // pass/fail decision is independently recomputed in the method body, not taken from this flag.
     void testIso27001ComplianceByProfile(String profile, boolean rulesApply) {
         // Given: A deployment with the specified profile
         Map<String, Object> customContext = new HashMap<>();

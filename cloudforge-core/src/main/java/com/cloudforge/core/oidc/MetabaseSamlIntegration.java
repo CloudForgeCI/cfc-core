@@ -257,6 +257,9 @@ public class MetabaseSamlIntegration implements OidcIntegration {
                 // Already a SAML URL
                 return authEndpoint;
             }
+            if (authEndpoint == null) {
+                return null;
+            }
             // Derive SAML URL from OIDC endpoint
             return authEndpoint.replace("/oauth2/authorize", "/saml/SSO");
         } else {

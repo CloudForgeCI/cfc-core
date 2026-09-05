@@ -244,6 +244,8 @@ public class ResourceValidationMatrix {
      * @param networkMode Network mode
      * @return Validation matrix with results
      */
+    // codeql[java/unused-parameter] -- securityProfile isn't consulted below (checks are keyed on
+    // runtime/domainConfig/sslConfig/authMode/networkMode only); unused by any caller yet.
     public static ResourceValidationMatrix validateConfiguration(
             Template template,
             String runtime,

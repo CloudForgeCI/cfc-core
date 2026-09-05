@@ -49,9 +49,8 @@ class ScalingFactoryBehavioralTest {
                 SecurityProfile.DEV, IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV), cfc);
 
         // When: Creating ScalingFactory
-        assertDoesNotThrow(() -> {
-            ScalingFactory factory = new ScalingFactory(stack, "ScalingFactory");
-        }, "ScalingFactory must create without errors");
+        assertDoesNotThrow(() -> new ScalingFactory(stack, "ScalingFactory"),
+            "ScalingFactory must create without errors");
     }
 
     @Test
@@ -518,7 +517,7 @@ class ScalingFactoryBehavioralTest {
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION), cfc);
 
         // When: Creating ScalingFactory in context

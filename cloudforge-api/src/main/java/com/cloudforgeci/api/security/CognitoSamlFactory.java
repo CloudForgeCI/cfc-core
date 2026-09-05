@@ -263,7 +263,7 @@ public class CognitoSamlFactory extends BaseFactory {
         // Pattern: arn:aws:secretsmanager:REGION:*:secret:STACKNAME/APP_ID/saml/*
         String secretArnPattern = "arn:aws:secretsmanager:" + region + ":*:secret:" + stackName + "/" + appId + "/saml/*";
 
-        AwsCustomResource samlConfigSecret = AwsCustomResource.Builder.create(this, "CognitoSamlIdpConfig")
+        AwsCustomResource.Builder.create(this, "CognitoSamlIdpConfig")
                 .onCreate(createSecretCall)
                 .onUpdate(updateSecretCall)
                 .onDelete(deleteSecretCall)

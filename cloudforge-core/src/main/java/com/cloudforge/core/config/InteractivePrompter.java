@@ -325,7 +325,15 @@ public class InteractivePrompter {
             Object enumValue = Enum.valueOf((Class<Enum>) type, ((String) value).toUpperCase());
             field.setValue(config, enumValue);
         } else if (isNumericType(type) && value instanceof String) {
-            field.setValue(config, parseNumber((String) value, type));
+            // Reachable from promptChoice with a non-numeric choice string for a numeric field
+            // (a data/config authoring mistake, not user input) -- degrade like every other
+            // invalid-input path in this class rather than crashing the whole prompter.
+            try {
+                field.setValue(config, parseNumber((String) value, type));
+            } catch (NumberFormatException e) {
+                output.println("❌ Invalid numeric choice '" + value + "' for " + field.displayName()
+                    + ", leaving unchanged");
+            }
         } else {
             field.setValue(config, value);
         }
@@ -345,15 +353,19 @@ public class InteractivePrompter {
      * Parses a string to a number of the specified type.
      */
     private Number parseNumber(String value, Class<?> type) {
-        if (type == int.class || type == Integer.class) {
+        try {
+            if (type == int.class || type == Integer.class) {
+                return Integer.parseInt(value);
+            } else if (type == long.class || type == Long.class) {
+                return Long.parseLong(value);
+            } else if (type == double.class || type == Double.class) {
+                return Double.parseDouble(value);
+            } else if (type == float.class || type == Float.class) {
+                return Float.parseFloat(value);
+            }
             return Integer.parseInt(value);
-        } else if (type == long.class || type == Long.class) {
-            return Long.parseLong(value);
-        } else if (type == double.class || type == Double.class) {
-            return Double.parseDouble(value);
-        } else if (type == float.class || type == Float.class) {
-            return Float.parseFloat(value);
+        } catch (NumberFormatException e) {
+            throw new NumberFormatException("'" + value + "' is not a valid " + type.getSimpleName());
         }
-        return Integer.parseInt(value);
     }
 }

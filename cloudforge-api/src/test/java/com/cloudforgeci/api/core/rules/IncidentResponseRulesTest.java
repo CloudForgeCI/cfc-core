@@ -708,6 +708,8 @@ class IncidentResponseRulesTest {
         "DEV,false,false,false,false,false,false",          // Minimal DEV - PASS (advisory)
         "DEV,true,true,true,true,true,true",                // Full DEV - PASS
     })
+    // codeql[java/unused-parameter] -- securityMonitoring is CSV-row documentation only; the
+        // actual pass/fail decision is independently recomputed in the method body.
     void testIRExpandedIncidentResponsePlan(String profile, boolean securityMonitoring,
                                             boolean incidentPlanDoc, boolean teamDefined,
                                             boolean tested, boolean gdpr, boolean breachNotification72) {
@@ -918,6 +920,8 @@ class IncidentResponseRulesTest {
         "DEV,true,true,true,true,true,true",                // Full DEV - PASS
     })
     void testIRExpandedForensicLogging(String profile, boolean cloudTrail, boolean logValidation,
+                                       // codeql[java/unused-parameter] -- securityMonitoring is CSV-row documentation only; the
+                                           // actual pass/fail decision is independently recomputed in the method body.
                                        boolean securityMonitoring, boolean guardDuty,
                                        boolean centralizedLogs, boolean automatedReview) {
         Map<String, Object> customContext = new HashMap<>();
@@ -1005,6 +1009,8 @@ class IncidentResponseRulesTest {
         // Scenario 12: PRODUCTION with organizational controls but weak infrastructure - FAIL
         "PRODUCTION,true,true,true,true,true,GDPR,true,false,false,true,true,true,true,false,false,false",
     })
+    // codeql[java/unused-parameter] -- securityMonitoring is CSV-row documentation only; the
+        // actual pass/fail decision is independently recomputed in the method body.
     void testIRExpandedComprehensiveScenarios(String profile, boolean securityMonitoring,
                                               boolean incidentPlanDoc, boolean teamDefined,
                                               boolean irTested, boolean businessContinuity,

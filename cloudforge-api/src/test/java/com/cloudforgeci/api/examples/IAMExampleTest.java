@@ -354,28 +354,18 @@ class IAMExampleTest {
         @Test
         @DisplayName("Should demonstrate all IAM profiles")
         void shouldDemonstrateAllIAMProfiles() {
-            // Verify that the example covers the main IAM profiles
-            var methods = IAMExample.class.getDeclaredMethods();
-            boolean hasMinimalExample = false;
-            boolean hasStandardExample = false;
-            boolean hasExtendedExample = false;
-
-            for (var method : methods) {
-                String methodName = method.getName().toLowerCase();
-                if (methodName.contains("minimal")) {
-                    hasMinimalExample = true;
-                }
-                if (methodName.contains("standard")) {
-                    hasStandardExample = true;
-                }
-                if (methodName.contains("extended")) {
-                    hasExtendedExample = true;
-                }
-            }
-
-            // Note: The actual profile usage is verified through the method calls
-            // Here we just check that the example structure covers different aspects
-            assertNotNull(IAMExample.class, "IAMExample class should exist");
+            // IAMExample demonstrates IAM configuration through these methods rather than
+            // profile-named ones (there's no "minimal"/"standard"/"extended" method) -- verify
+            // its actual API surface exists instead.
+            var methodNames = java.util.Arrays.stream(IAMExample.class.getDeclaredMethods())
+                .map(java.lang.reflect.Method::getName)
+                .collect(java.util.stream.Collectors.toSet());
+            assertTrue(methodNames.contains("createWithAutomaticIAM"),
+                "IAMExample should demonstrate automatic IAM configuration");
+            assertTrue(methodNames.contains("createWithExplicitIAM"),
+                "IAMExample should demonstrate explicit IAM configuration");
+            assertTrue(methodNames.contains("demonstrateIAMValidation"),
+                "IAMExample should demonstrate IAM validation");
         }
 
         @Test

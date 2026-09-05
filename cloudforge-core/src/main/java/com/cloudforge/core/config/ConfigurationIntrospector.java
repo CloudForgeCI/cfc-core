@@ -53,6 +53,9 @@ public class ConfigurationIntrospector {
      * @param category category to filter by, or null for all categories
      * @return list of discovered fields matching the category
      */
+    // codeql[java/unused-parameter] -- appSpec is unused here: per-appSpec visibility filtering
+    // happens in the sibling discoverVisibleFields(appSpec, config) instead, which calls this
+    // method first; appSpec is kept in this signature for symmetry with that sibling.
     public static List<ConfigFieldInfo> discoverFields(ApplicationSpec appSpec, String category) {
         List<ConfigFieldInfo> fields = new ArrayList<>();
 

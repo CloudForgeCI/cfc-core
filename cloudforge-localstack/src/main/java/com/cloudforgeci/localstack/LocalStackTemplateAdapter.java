@@ -396,7 +396,7 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                     "Wire Manager to LocalStack CFN endpoint " + endpoint,
                     com.fasterxml.jackson.databind.node.NullNode.instance
                 ));
-                grantDockerSocketAccess(resource, properties, container, entry.getKey(), i, adaptations);
+                grantDockerSocketAccess(properties, container, entry.getKey(), i, adaptations);
             }
         });
         configureManagerReplacementStrategy(resources, managerTaskDefinitions, adaptations);
@@ -414,7 +414,6 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
      * mount in the first place — never sees it either.
      */
     private static void grantDockerSocketAccess(
-            ObjectNode resource,
             ObjectNode properties,
             ObjectNode container,
             String logicalId,

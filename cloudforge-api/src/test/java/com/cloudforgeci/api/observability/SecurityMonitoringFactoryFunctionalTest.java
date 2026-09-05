@@ -88,7 +88,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             Stack stagingStack = new Stack(stagingApp, "StagingStack");
             DeploymentContext stagingCfc = DeploymentContext.from(stagingStack);
             IAMProfile stagingIamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-            SystemContext stagingCtx = SystemContext.start(stagingStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, stagingIamProfile, stagingCfc);
+            SystemContext.start(stagingStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING, stagingIamProfile, stagingCfc);
 
             SecurityMonitoringFactory stagingFactory = new SecurityMonitoringFactory(stagingStack, "StagingSecurityMonitoring");
 
@@ -105,7 +105,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             Stack productionStack = new Stack(productionApp, "ProductionStack");
             DeploymentContext productionCfc = DeploymentContext.from(productionStack);
             IAMProfile productionIamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-            SystemContext productionCtx = SystemContext.start(productionStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION, productionIamProfile, productionCfc);
+            SystemContext.start(productionStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION, productionIamProfile, productionCfc);
 
             SecurityMonitoringFactory productionFactory = new SecurityMonitoringFactory(productionStack, "ProductionSecurityMonitoring");
 
@@ -201,7 +201,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             Stack ec2Stack = new Stack(ec2App, "EC2Stack");
             DeploymentContext ec2Cfc = DeploymentContext.from(ec2Stack);
             IAMProfile ec2IamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-            SystemContext ec2Ctx = SystemContext.start(ec2Stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, ec2IamProfile, ec2Cfc);
+            SystemContext.start(ec2Stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, ec2IamProfile, ec2Cfc);
 
             SecurityMonitoringFactory ec2Factory = new SecurityMonitoringFactory(ec2Stack, "EC2SecurityMonitoring");
 
@@ -218,7 +218,7 @@ class SecurityMonitoringFactoryFunctionalTest {
             Stack topologyStack = new Stack(topologyApp, "TopologyStack");
             DeploymentContext topologyCfc = DeploymentContext.from(topologyStack);
             IAMProfile topologyIamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-            SystemContext topologyCtx = SystemContext.start(topologyStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, topologyIamProfile, topologyCfc);
+            SystemContext.start(topologyStack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, topologyIamProfile, topologyCfc);
 
             SecurityMonitoringFactory topologyFactory = new SecurityMonitoringFactory(topologyStack, "TopologySecurityMonitoring");
 

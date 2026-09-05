@@ -9,7 +9,6 @@ import com.cloudforgeci.api.application.JenkinsApplicationSpec;
 import com.cloudforgeci.api.interfaces.Rule;
 import com.cloudforgeci.api.interfaces.TopologyConfiguration;
 import com.cloudforge.core.interfaces.ApplicationSpec;
-import software.constructs.Node;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +42,7 @@ public final class TopologyRules {
     // For APPLICATION_SERVICE topology, applicationSpec must be provided by caller
     // It will be set in ApplicationFactory before calling createInfrastructureFactories()
 
-    Node.of(ctx).addValidation(() -> {
+    ctx.getNode().addValidation(() -> {
       List<String> errs = new ArrayList<>();
       for (Rule r : p.rules(ctx)) errs.addAll(r.check(ctx));
       return errs;

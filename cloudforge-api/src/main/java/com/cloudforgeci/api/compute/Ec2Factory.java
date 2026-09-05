@@ -461,13 +461,19 @@ public class Ec2Factory extends BaseFactory {
     // Parse instance type string (e.g., "t3.micro" -> InstanceClass.T3, InstanceSize.MICRO)
     InstanceType parsedInstanceType = parseInstanceType(instanceTypeStr);
 
+    // Fallback mirrors the encrypt fallback below: PRODUCTION/STAGING require it, DEV doesn't
+    // (matches every SecurityProfileConfiguration's own isImdsv2Required() implementation).
+    boolean requireImdsv2 = config != null
+        ? config.isImdsv2Required()
+        : (security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING);
+
     LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, appId + "Lt")
             .machineImage(MachineImage.latestAmazonLinux2023())
             .instanceType(parsedInstanceType)
             .securityGroup(instanceSg)
             .role(ec2Role)
             .userData(userData)
-            .requireImdsv2(config.isImdsv2Required());  // HIPAA: IMDSv2 controlled by SecurityProfileConfiguration
+            .requireImdsv2(requireImdsv2);  // HIPAA: IMDSv2 controlled by SecurityProfileConfiguration
 
     // Determine EBS retention policy based on retainStorage configuration
     // Root volume is always deleted (system disk), but data volume can be retained

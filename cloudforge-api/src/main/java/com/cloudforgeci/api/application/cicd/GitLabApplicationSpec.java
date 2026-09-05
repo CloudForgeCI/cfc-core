@@ -177,7 +177,11 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
      * <p>If database connection is provided, configures GitLab to use RDS PostgreSQL.
      * Otherwise, falls back to embedded PostgreSQL (single instance only).</p>
      */
+    // fqdn/sslEnabled/authMode go unused by this app, but ContainerFactory dispatches to this
+    // exact 4-arg signature via reflection (getMethod("containerEnvironmentVariables", String,
+    // boolean, String, DatabaseConnection)); dropping them here would break that lookup.
     public Map<String, String> containerEnvironmentVariables(
+            // codeql[java/unused-parameter]
             String fqdn, boolean sslEnabled, String authMode, DatabaseConnection dbConn) {
         Map<String, String> environment = new HashMap<>();
 
