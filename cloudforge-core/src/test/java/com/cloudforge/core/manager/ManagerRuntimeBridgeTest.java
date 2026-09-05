@@ -67,9 +67,16 @@ class ManagerRuntimeBridgeTest {
         assertEquals("http://aws.localhost:4566", System.getProperty(ManagerEnvKeys.MINISTACK_ENDPOINT));
     }
 
+    /** Predates the local-emulator-target gating fix below (see {@code ManagerRuntimeBridge.apply}'s
+     *  own comment: a production deploy kept resolving Cognito/AWS calls to LocalStack's default
+     *  {@code localhost:4566} because LOCALSTACK_ENDPOINT/AWS_ENDPOINT_URL used to bridge
+     *  unconditionally, independent of the actual deployment target) — must supply {@code
+     *  target=ministack} explicitly now, same as any other local-emulator scenario, or neither
+     *  property bridges at all. */
     @Test
     void ministackFallsBackToLocalstackWhenAwsEndpointAbsent() {
         Map<String, String> values = new HashMap<>();
+        values.put(ManagerEnvKeys.PROP_TARGET, "ministack");
         values.put(ManagerEnvKeys.PROP_LOCALSTACK_ENDPOINT, "http://localstack.localhost:4566");
 
         ManagerRuntimeBridge.apply(values::get);

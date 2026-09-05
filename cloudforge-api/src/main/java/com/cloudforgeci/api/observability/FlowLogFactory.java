@@ -52,8 +52,9 @@ public class FlowLogFactory extends BaseFactory {
                     .removalPolicy(config.getLogRemovalPolicy());
 
         // Add KMS encryption when enabled (required for PCI-DSS, HIPAA, SOC2 compliance)
+        Key flowLogsKmsKey = null;
         if (config.isCloudWatchLogsKmsEncryptionEnabled()) {
-            Key flowLogsKmsKey = Key.Builder.create(this, "FlowLogsKmsKey")
+            flowLogsKmsKey = Key.Builder.create(this, "FlowLogsKmsKey")
                     .description("KMS key for VPC Flow Logs encryption")
                     .enableKeyRotation(true)
                     .removalPolicy(config.getLogRemovalPolicy())
@@ -66,6 +67,36 @@ public class FlowLogFactory extends BaseFactory {
         }
 
         LogGroup logGroup = logGroupBuilder.build();
+
+        if (flowLogsKmsKey != null) {
+            // CDK's LogGroup#encryptionKey does NOT grant the CloudWatch Logs service permission
+            // to use the key — a customer-managed key defaults to an account-root-only policy, so
+            // without this explicit grant CreateLogGroup fails with AccessDenied the moment this
+            // path is actually exercised (see ComplianceFactory's identical CloudTrail-log-group
+            // fix for the full explanation).
+            //
+            // Resource is "*", not this key's own explicit ARN — verified that spelling out the key's own ARN here creates
+            // a CDK circular dependency: it's a self-reference (Ref to this same key's own
+            // logical id) inside this key's OWN resource policy, which CDK's dependency graph
+            // rejects as a self-loop (the kms:EncryptionContext condition referencing the log
+            // group's ARN was a red herring — removing just that changed nothing, this was the
+            // actual cause). "*" in a resource-based policy on the key itself isn't a real wildcard
+            // grant — the policy is already scoped to this one key by being attached to it — it's
+            // the standard AWS pattern specifically to avoid this self-reference, and matches every
+            // other working KMS-log grant already in this codebase (LoggingCwFactory's,
+            // ComplianceFactory's identical CloudTrail-log-group fix).
+            String region = software.amazon.awscdk.Stack.of(this).getRegion();
+            flowLogsKmsKey.addToResourcePolicy(
+                software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
+                    .sid("Enable CloudWatch Logs encryption")
+                    .effect(software.amazon.awscdk.services.iam.Effect.ALLOW)
+                    .principals(java.util.List.of(new software.amazon.awscdk.services.iam.ServicePrincipal(
+                        "logs." + region + ".amazonaws.com")))
+                    .actions(java.util.List.of("kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*", "kms:Describe*"))
+                    .resources(java.util.List.of("*"))
+                    .build());
+        }
 
         // Create flow log options with security profile-based traffic type
         FlowLogOptions flowLogOptions = FlowLogOptions.builder()

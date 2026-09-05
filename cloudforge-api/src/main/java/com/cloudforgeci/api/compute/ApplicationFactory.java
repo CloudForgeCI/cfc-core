@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection;
 import com.cloudforgeci.api.network.DomainFactory;
@@ -214,7 +215,21 @@ public class ApplicationFactory extends BaseFactory {
                     shouldProvisionDatabase = true;
                     LOG.info("Database is REQUIRED for " + applicationSpec.applicationId());
                 } else if (dbReq.type() == DatabaseRequirement.RequirementType.OPTIONAL) {
-                    // Application CAN use database if provisionDatabase flag is set
+                    // Application CAN use database if provisionDatabase flag is set. Some security
+                    // profiles (PRODUCTION) require that choice to be explicit rather than silently
+                    // defaulting to false — see SecurityProfileConfiguration#isDatabaseProvisioningChoiceRequired's
+                    // own javadoc for why.
+                    if (provisionDatabase == null && ctx.securityProfileConfig.get()
+                            .map(SecurityProfileConfiguration::isDatabaseProvisioningChoiceRequired)
+                            .orElse(false)) {
+                        throw new IllegalStateException(
+                            "securityProfile=" + ctx.security + " requires an explicit "
+                                + "provisionDatabase choice for " + applicationSpec.applicationId()
+                                + " (true: provision a real RDS " + dbReq.engine() + " instance; "
+                                + "false: accept its embedded fallback storage on purpose). Set "
+                                + "provisionDatabase in the deployment context rather than leaving "
+                                + "it unset.");
+                    }
                     shouldProvisionDatabase = Boolean.TRUE.equals(provisionDatabase);
                     LOG.info("Database is OPTIONAL for " + applicationSpec.applicationId() +
                             " (provisionDatabase=" + provisionDatabase + ")");
@@ -271,43 +286,40 @@ public class ApplicationFactory extends BaseFactory {
                 }
             }
 
-            // Provision an ElastiCache Redis cluster to back CloudForge Manager's own
-            // SessionStore (see ManagerRuntimeConfiguration.Sessions / SessionStoreConfiguration
-            // in cloudforge-manager). Deliberately scoped to applicationId == cloudforge-manager
-            // rather than a new marker interface — this is the one non-CMS caller of
-            // CmsObjectCacheConfiguration today, and gating it here (rather than adding a
-            // generic "any ApplicationSpec can request Redis" mechanism) avoids expanding scope
-            // beyond what was asked. MUST run AFTER createInfrastructureFactories() so VPC exists.
-            if ("cloudforge-manager".equals(applicationSpec.applicationId())
+            // Provision an ElastiCache Redis cluster for any application that declares it needs a
+            // session store (see ApplicationSpec#requiresSessionStore's own javadoc). MUST run
+            // AFTER createInfrastructureFactories() so VPC exists.
+            if (applicationSpec.requiresSessionStore()
                     && Boolean.TRUE.equals(provisionManagerRedisSessions)) {
                 try {
-                    LOG.info("Provisioning ElastiCache Redis session store for cloudforge-manager");
+                    LOG.info("Provisioning ElastiCache Redis session store for " + applicationSpec.applicationId());
                     software.amazon.awscdk.services.elasticache.CfnCacheCluster redisCluster =
                         com.cloudforgeci.api.core.topology.CmsObjectCacheConfiguration.createRedisCluster(
                             ctx, applicationSpec);
                     ctx.redisSessionStoreEndpoint.set(redisCluster.getAttrRedisEndpointAddress());
                     ctx.redisSessionStorePort.set(6379);
-                    LOG.info("Successfully provisioned Manager Redis session store: "
+                    LOG.info("Successfully provisioned Redis session store: "
                         + redisCluster.getAttrRedisEndpointAddress());
                 } catch (IllegalStateException e) {
                     // VPC not yet available — same tolerance CmsServiceTopologyConfiguration
                     // applies to CMS object-cache provisioning; log and skip rather than fail
-                    // the whole synth, since single-instance Manager works fine without this.
-                    LOG.warning("Skipping Manager Redis session store — VPC not yet available: "
+                    // the whole synth, since a single-instance app works fine without this.
+                    LOG.warning("Skipping Redis session store — VPC not yet available: "
                         + e.getMessage());
                 }
             }
 
-            // Provision the AES cipher key CloudForge Manager uses to encrypt cross-account
-            // connection secrets (external IDs) at rest — see SecretCipher/AesGcmSecretCipher in
-            // cloudforge-manager. Delivered as an ECS Secret bound to this Secrets Manager entry
-            // (ContainerFactory), mirroring CFC_MANAGER_DATABASE_PASSWORD's delivery. No VPC
-            // dependency, unlike Redis above, so this can run regardless of network readiness.
-            // Defaults to true (see DeploymentConfig.provisionManagerAccountCipherKey javadoc) —
-            // without it Manager silently falls back to PlaintextSecretCipher.
-            if ("cloudforge-manager".equals(applicationSpec.applicationId())
+            // Provision an AES cipher-key secret for any application that declares one (see
+            // ApplicationSpec#cipherKeySecretEnvVar's own javadoc). Delivered as an ECS Secret
+            // bound to that env var (ContainerFactory), mirroring CFC_MANAGER_DATABASE_PASSWORD's
+            // delivery. No VPC dependency, unlike Redis above, so this can run regardless of
+            // network readiness. Defaults to true (see DeploymentConfig.provisionManagerAccountCipherKey
+            // javadoc) — an application declaring this env var but not receiving the secret would
+            // otherwise silently fall back to whatever its own no-cipher-key default is.
+            String cipherKeySecretEnvVar = applicationSpec.cipherKeySecretEnvVar();
+            if (cipherKeySecretEnvVar != null && !cipherKeySecretEnvVar.isBlank()
                     && !Boolean.FALSE.equals(provisionManagerAccountCipherKey)) {
-                LOG.info("Provisioning account connection cipher key for cloudforge-manager");
+                LOG.info("Provisioning cipher key secret for " + applicationSpec.applicationId());
                 // 32 alphanumeric characters is valid, padding-free Base64 (32 % 4 == 0) that
                 // decodes to exactly 24 raw bytes — an accepted AES-192 key length for
                 // AesGcmSecretCipher (16/24/32). excludePunctuation keeps the generated string to
@@ -326,35 +338,64 @@ public class ApplicationFactory extends BaseFactory {
                         .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
                         .build();
                 ctx.accountCipherKeySecretArn.set(accountCipherKeySecret.getSecretArn());
-                LOG.info("Successfully provisioned Manager account cipher key secret: "
+                LOG.info("Successfully provisioned cipher key secret: "
                     + accountCipherKeySecret.getSecretName());
             }
 
-            // Provision a Secrets Manager entry for a deploy-time-supplied customer license key
-            // (DeploymentContext.managerLicenseKey) — delivered as an ECS Secret bound to
-            // CFC_MANAGER_LICENSESEAT_LICENSE_KEY (ContainerFactory), mirroring the account
-            // cipher key above. Unlike that key, this one is a fixed value the user supplies
-            // rather than a generated one, so it uses secretStringValue/unsafePlainText instead
-            // of generateSecretString — "unsafe" here just means the literal value round-trips
-            // through the CDK template the way any other deploy-time input does, same as a
-            // database name or stack name; it is still never a plaintext ECS task-definition
-            // environment variable. Opt-in: no license key configured, nothing is provisioned.
-            if ("cloudforge-manager".equals(applicationSpec.applicationId())
+            // Provision a Secrets Manager entry for a deploy-time-supplied license key, for any
+            // application that declares one (see ApplicationSpec#licenseKeySecretEnvVar's own
+            // javadoc). This one is a fixed value the user supplies rather than a generated one,
+            // so it uses secretStringValue/unsafePlainText instead of generateSecretString —
+            // "unsafe" here just means the literal value round-trips through the CDK template the
+            // way any other deploy-time input does, same as a database name or stack name; it is
+            // still never a plaintext ECS task-definition environment variable. Opt-in: no
+            // license key configured, nothing is provisioned.
+            String licenseKeySecretEnvVar = applicationSpec.licenseKeySecretEnvVar();
+            if (licenseKeySecretEnvVar != null && !licenseKeySecretEnvVar.isBlank()
                     && managerLicenseKey != null && !managerLicenseKey.isBlank()) {
-                LOG.info("Provisioning license key secret for cloudforge-manager");
+                LOG.info("Provisioning license key secret for " + applicationSpec.applicationId());
                 software.amazon.awscdk.services.secretsmanager.Secret licenseKeySecret =
                     software.amazon.awscdk.services.secretsmanager.Secret.Builder.create(
                             this, "LicenseKeySecret")
-                        .description("LicenseSeat license key for "
+                        .description("License key for "
                             + software.amazon.awscdk.Stack.of(this).getStackName()
-                            + " (CFC_MANAGER_LICENSESEAT_LICENSE_KEY)")
+                            + " (" + licenseKeySecretEnvVar + ")")
                         .secretStringValue(
                             software.amazon.awscdk.SecretValue.unsafePlainText(managerLicenseKey))
                         .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
                         .build();
                 ctx.licenseKeySecretArn.set(licenseKeySecret.getSecretArn());
-                LOG.info("Successfully provisioned Manager license key secret: "
+                LOG.info("Successfully provisioned license key secret: "
                     + licenseKeySecret.getSecretName());
+            }
+
+            // Provision a random initial admin password for any application spec declaring
+            // ApplicationSpec.autoAdminPasswordEnvVar() -- delivered as an ECS Secret bound to
+            // that env var name (ContainerFactory). Without it, an app that otherwise supports a
+            // fully non-interactive first-run install (site name/admin account already present
+            // via containerEnvironmentVariables) still leaves its web installer's wizard --
+            // including the database-connection step -- for a human to complete by hand, even
+            // though every value it asks for is already known to CDK.
+            String autoAdminPasswordEnvVar = applicationSpec.autoAdminPasswordEnvVar();
+            if (autoAdminPasswordEnvVar != null && !autoAdminPasswordEnvVar.isBlank()) {
+                LOG.info("Provisioning initial admin password secret for "
+                    + applicationSpec.applicationId() + " (" + autoAdminPasswordEnvVar + ")");
+                software.amazon.awscdk.services.secretsmanager.Secret adminPasswordSecret =
+                    software.amazon.awscdk.services.secretsmanager.Secret.Builder.create(
+                            this, "AutoAdminPasswordSecret")
+                        .description("Initial admin password for "
+                            + software.amazon.awscdk.Stack.of(this).getStackName()
+                            + " (" + autoAdminPasswordEnvVar + ")")
+                        .generateSecretString(
+                            software.amazon.awscdk.services.secretsmanager.SecretStringGenerator.builder()
+                                .passwordLength(24)
+                                .excludePunctuation(true)
+                                .build())
+                        .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
+                        .build();
+                ctx.autoAdminPasswordSecretArn.set(adminPasswordSecret.getSecretArn());
+                LOG.info("Successfully provisioned admin password secret: "
+                    + adminPasswordSecret.getSecretName());
             }
 
             // NOTE: WAF is created by security profile configurations (ProductionSecurityConfiguration, StagingSecurityConfiguration)

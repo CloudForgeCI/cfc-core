@@ -385,6 +385,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                     .build());
 
             ManagerOperatorIamSupport.addOperatorBaselineToStatements(c, taskStatements);
+            ManagerOperatorIamSupport.addDeployCapabilitiesToStatements(c, taskStatements);
 
             ManagedPolicy taskPolicy = ManagedPolicy.Builder.create(c, "StandardTaskPolicy")
                     .description("Standard ECS task permissions for application runtime")
@@ -395,6 +396,7 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
                     .assumedBy(new ServicePrincipal("ecs-tasks.amazonaws.com"))
                     .managedPolicies(List.of(taskPolicy))
                     .build();
+            ManagerOperatorIamSupport.attachDeployTargetInfrastructurePolicies(c, taskRole);
 
             // Add CDK-NAG suppressions for necessary wildcards
             NagSuppressions.addResourceSuppressions(

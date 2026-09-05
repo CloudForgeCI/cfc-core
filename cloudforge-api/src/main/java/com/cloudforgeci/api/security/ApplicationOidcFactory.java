@@ -548,10 +548,10 @@ public class ApplicationOidcFactory extends BaseFactory {
 
         // For external OIDC providers, use application-aware group defaults.
         // These can be overridden by providing cognitoAdminGroupName and cognitoUserGroupName.
-        boolean cloudForgeManager = applicationSpec != null
-            && "cloudforge-manager".equals(applicationSpec.applicationId());
-        String defaultAdminGroup = cloudForgeManager ? "ManagerAdmins" : "Admins";
-        String defaultDeveloperGroup = cloudForgeManager ? "ManagerUsers" : "Developers";
+        String[] defaultGroups = applicationSpec != null
+            ? applicationSpec.defaultOidcGroupNames() : new String[] {"Admins", "Developers"};
+        String defaultAdminGroup = defaultGroups[0];
+        String defaultDeveloperGroup = defaultGroups[1];
         String adminGroup = (cognitoAdminGroupName != null && !cognitoAdminGroupName.isEmpty())
                 ? cognitoAdminGroupName
                 : defaultAdminGroup;

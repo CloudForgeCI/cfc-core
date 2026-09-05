@@ -44,6 +44,14 @@
     <java.version>25</java.version>
     <build.version.suffix></build.version.suffix> <!-- Blank by default -->
 
+    <!-- Tests skip by default; this reactor's full suite (cloudforge-api alone runs ~6000
+         tests) takes 15-20+ minutes, too slow to be every contributor's default `mvn install`
+         experience. Real verification is one flag away: the "ci" profile below (`-Pci`), which
+         every CI job that actually needs tests to run passes explicitly. Keep it that way when
+         adding a new test-dependent CI step, since a bare `mvn install`/`verify` here is silently
+         a no-op for tests, unlike the Maven-wide convention this inverts. -->
+    <skipTests>true</skipTests>
+
     <!-- AWS CDK Versions -->
     <!-- Note: v2.197.0+ defaults to nodejs22.x for AwsCustomResource which isn't available in all regions -->
     <cdk.version>2.196.0</cdk.version>
@@ -104,16 +112,14 @@
         cloudforge-api          CloudForgeDeployment, ApplicationSpecs, CMS, CDK factories
         cloudforge-ministack    MiniStack adapter/deployer/pipeline (depends: core)
         cloudforge-localstack   LocalStack adapter/deployer/pipeline (depends: core)
-        cloudforge-synth-service  Thin HTTP wrapper around CloudForgeSynthesizer (depends: api) —
-          isolates jsii/AWS-CDK synthesis behind a same-task sidecar boundary so
-          cloudforge-manager itself can compile to a GraalVM native image without linking against
-          jsii. No proprietary content of its own (see its own pom.xml header) — public like every
-          other module here despite existing only for cloudforge-manager's benefit.
 
-        cloudforge-manager-deployment and cloudforge-manager are NOT managed here anymore — split
-        into their own private repos (CloudForgeCI/cloudforge-manager-deployment,
-        CloudForgeCI/cloudforge-manager) with independent versioning; a consumer that needs them
-        declares an explicit <version> for those coordinates directly.
+        cloudforge-synth-service, cloudforge-manager-deployment, and cloudforge-manager are NOT
+        managed here anymore — each split into its own repo (CloudForgeCI/cloudforge-synth-service,
+        CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager) with
+        independent versioning; a consumer that needs them declares an explicit <version> for
+        those coordinates directly. cloudforge-synth-service still declares this pom as its Maven
+        <parent> (resolved from the repository, not reactor membership — see its own pom.xml
+        comment), which is how it inherits everything below without being listed here.
 
         Consumer sample: docs/architecture/cloudforge-sample-bom.template.md
         Not in BOM: cfc-testing (monorepo entrypoint / cloudforge-sample reference)
@@ -138,11 +144,6 @@
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-localstack</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.cloudforgeci</groupId>
-        <artifactId>cloudforge-synth-service</artifactId>
         <version>${project.version}</version>
       </dependency>
 
@@ -293,23 +294,35 @@
     <module>cloudforge-ministack</module>
     <module>cloudforge-localstack</module>
     <module>cloudforge-api</module>
-    <module>cloudforge-synth-service</module>
-    <!-- cloudforge-manager-deployment / cloudforge-manager: split into their own private repos
-         (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager) — no longer
+    <!-- cloudforge-synth-service / cloudforge-manager-deployment / cloudforge-manager: split into
+         their own repos (CloudForgeCI/cloudforge-synth-service — public, like this reactor's other
+         modules; CloudForgeCI/cloudforge-manager-deployment and CloudForgeCI/cloudforge-manager —
+         private) — no longer
          reactor modules here (not listed as <module> above, so not part of this reactor's build
          order or default `mvn install`/`deploy` — each still builds via its own standalone
-         invocation, see either module's pom.xml). The directories stay in this working tree
-         (gitignored, not tracked by cfc-core's own history) for local development.
+         invocation, see either module's pom.xml). The manager/manager-deployment directories stay
+         in this working tree (gitignored, not tracked by cfc-core's own history) for local
+         development; cloudforge-synth-service moved out to a sibling directory entirely (own
+         repo, own top-level checkout) rather than staying nested here, since it existed only for
+         cloudforge-manager's benefit and its Docker/CI resolution logic needed to live next to
+         whatever consumes it, not inside cfc-core's own reactor — see
+         CloudForgeManagerDeploymentExtension#resolveSynthServiceImage's javadoc for the
+         staleness gap that move fixes.
 
-         cloudforge-manager-deployment DOES declare cfc-core (this pom) as its Maven <parent> —
-         resolved from the repository via an explicit empty <relativePath/>, never from this
-         local checkout, so it keeps building correctly once split into its own repo as long as
-         cfc-core:pom is resolvable from Central (or already `mvn install`ed locally, which any
-         CI build of it does first regardless). This is deliberately NOT the same as ordinary
-         reactor-membership parent inheritance — it's how that module inherits cfc-core's whole
-         release/GPG/Central-publishing profile for free instead of hand-duplicating it, since
-         cloudforge-manager-deployment has zero licensing-sensitive code and does publish to
-         Maven Central (see .github/workflows/publish-maven-central.yml). cloudforge-manager
+         cloudforge-manager-deployment and cloudforge-synth-service BOTH declare cfc-core (this
+         pom) as their Maven <parent> — resolved from the repository via an explicit empty
+         <relativePath/>, never from a local checkout, so each keeps building correctly as its own
+         standalone repo as long as cfc-core:pom is resolvable from Central/GitHub Packages (or
+         already `mvn install`ed locally, which any CI build of either does first regardless).
+         This is deliberately NOT the same as ordinary reactor-membership parent inheritance —
+         it's how each inherits cfc-core's whole dependencyManagement/release profile for free
+         instead of hand-duplicating it. cloudforge-manager-deployment has zero licensing-sensitive
+         code and does publish to Maven Central (see .github/workflows/publish-maven-central.yml);
+         cloudforge-synth-service deliberately does NOT publish there — its only Maven consumer is
+         cloudforge-manager's single test-scope dependency, resolved by cloudforge-manager's own CI
+         checking cloudforge-synth-service out as a sibling and `mvn install`-ing it locally rather
+         than through a publish pipeline (see cloudforge-synth-service's own pom.xml comment).
+         cloudforge-manager
          itself stays a genuinely standalone pom, no parent — it holds all the LicenseSeat/
          Checkpoint A/B logic and is deliberately NOT published to Central (distribution
          strategy still undecided; revisit separately, see the license-gate design discussion).
@@ -333,6 +346,15 @@
 
 
 
+    </profile>
+    <!-- Opt-in for CI jobs that genuinely need the real test run; pairs with the
+         skipTests=true default above. `mvn clean install -Pci` (or `verify -Pci`) instead of
+         scattering -DskipTests=false across individual workflow steps. -->
+    <profile>
+      <id>ci</id>
+      <properties>
+        <skipTests>false</skipTests>
+      </properties>
     </profile>
     <profile>
       <id>release</id>

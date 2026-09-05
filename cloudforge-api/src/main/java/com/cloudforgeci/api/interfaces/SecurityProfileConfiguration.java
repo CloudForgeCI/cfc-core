@@ -421,6 +421,31 @@ public interface SecurityProfileConfiguration {
     boolean isRdsDatabaseMultiAzEnabled();
 
     /**
+     * Whether an OPTIONAL {@link com.cloudforge.core.interfaces.DatabaseSpec} application must
+     * have an explicit {@code provisionDatabase} choice in its deployment context, rather than
+     * being allowed to silently fall through to that application's own embedded-storage default
+     * (whatever it degrades to when {@code provisionDatabase} is never set — {@code cloudforge-manager}
+     * falls back to an embedded H2 file, for example).
+     *
+     * <p>This isn't about which value {@code provisionDatabase} resolves to — {@code
+     * ApplicationFactory} still honors whatever the deployment context sets it to either way —
+     * only about whether leaving it unset is itself acceptable. DEV/STAGING's whole point of
+     * being OPTIONAL is that they're allowed to default to the free, no-extra-infra fallback
+     * without ceremony; a PRODUCTION deployment ending up there by omission rather than a
+     * deliberate choice is the problem this closes: cloudforge-manager's own PRODUCTION preset
+     * deployed against embedded H2 for hours with nobody having decided that on purpose.</p>
+     *
+     * <ul>
+     *   <li>DEV: false - the default fallback is the point</li>
+     *   <li>STAGING: false - same reasoning as DEV</li>
+     *   <li>PRODUCTION: true - must be set one way or the other</li>
+     * </ul>
+     *
+     * @return true if an unset provisionDatabase should fail synthesis for this profile
+     */
+    boolean isDatabaseProvisioningChoiceRequired();
+
+    /**
      * Whether Security Hub remediation should be enabled.
      * Automatically enables AWS Security Hub if not already enabled.
      * Security Hub aggregates security findings from GuardDuty, Inspector, Macie, and other services.

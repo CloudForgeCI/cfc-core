@@ -635,4 +635,180 @@ public interface ApplicationSpec {
     default int defaultHealthCheckGracePeriod() {
         return 300; // Default 5 minutes for most applications
     }
+
+    /**
+     * The container environment variable name a generated initial-admin-password secret should
+     * be bound to, or {@code null} (the default) if this application has no such variable.
+     *
+     * <p>Mirrors {@code CmsSpec.databaseEnvVars}'s existing pattern for the database password
+     * specifically: a database connection's host/port/name/user travel as plain strings through
+     * {@link #containerEnvironmentVariables}, but the password itself is never a plaintext value
+     * an app spec method returns — it's delivered as a Secrets Manager-backed ECS Secret, which
+     * needs a CDK construct only {@code cloudforge-api} can build. This method is the same shape,
+     * generalized to any application whose official image supports a fully non-interactive
+     * first-run install once its site name/admin account/admin password are all present (Joomla's
+     * own {@code docker-entrypoint.sh} is the first example — see {@code JoomlaApplicationSpec}),
+     * instead of a per-application name check hardcoded into {@code ApplicationFactory}/
+     * {@code ContainerFactory}.</p>
+     *
+     * @return the env var name (e.g. {@code "JOOMLA_ADMIN_PASSWORD"}), or {@code null}
+     */
+    default String autoAdminPasswordEnvVar() {
+        return null;
+    }
+
+    /**
+     * Whether this application needs a Redis-backed session store (ElastiCache), provisioned by
+     * {@code ApplicationFactory} and delivered as {@code redisSessionStoreEndpoint}/
+     * {@code redisSessionStorePort} in {@code SystemContext}. Same generalization shape as
+     * {@link #autoAdminPasswordEnvVar()} — an application declares the need through this contract
+     * rather than {@code ApplicationFactory} recognizing it by {@link #applicationId()}.
+     *
+     * @return true if a Redis session store should be provisioned
+     */
+    default boolean requiresSessionStore() {
+        return false;
+    }
+
+    /**
+     * The container environment variable name a generated AES cipher-key secret should be bound
+     * to, or {@code null} (the default) if this application has no such need. Same shape as
+     * {@link #autoAdminPasswordEnvVar()}: {@code ApplicationFactory} provisions the Secrets
+     * Manager entry and {@code ContainerFactory} binds it as an ECS Secret under this name,
+     * without either needing to recognize a specific {@link #applicationId()}.
+     *
+     * @return the env var name (e.g. {@code "CFC_MANAGER_ACCOUNT_SECRET_KEY"}), or {@code null}
+     */
+    default String cipherKeySecretEnvVar() {
+        return null;
+    }
+
+    /**
+     * The container environment variable name a deploy-time-supplied license key should be bound
+     * to, or {@code null} (the default) if this application has no license key concept. Same
+     * shape as {@link #cipherKeySecretEnvVar()} — the value itself still comes from whatever
+     * deployment-context field the application's own deployment contract declares; this only
+     * names the delivery env var.
+     *
+     * @return the env var name (e.g. {@code "CFC_MANAGER_LICENSESEAT_LICENSE_KEY"}), or {@code null}
+     */
+    default String licenseKeySecretEnvVar() {
+        return null;
+    }
+
+    /**
+     * Whether this application's persistence can't safely tolerate the brief two-task overlap a
+     * normal zero-downtime rolling ECS deployment creates (new task starts before the old one
+     * stops) — e.g. a single-writer embedded-file database with no real concurrent-access support.
+     * Only takes effect when this application also has no managed database connection provisioned
+     * (see {@code DatabaseSpec}) — once one is, a real database safely handles that overlap and
+     * this no longer applies regardless of what this method returns.
+     *
+     * @return true if this application needs a stop-then-start deployment replacement instead of
+     *     ECS's own rolling default, when running without a managed database
+     */
+    default boolean requiresSequentialDeploymentWithoutDatabase() {
+        return false;
+    }
+
+    /**
+     * The container environment variable name the ALB's own ARN should be bound to when this
+     * application is deployed with {@code authMode=alb-oidc}, or {@code null} (the default) if
+     * this application has no need to know it (e.g. to validate an ALB-signed OIDC token itself).
+     *
+     * @return the env var name, or {@code null}
+     */
+    default String albSignerArnEnvVar() {
+        return null;
+    }
+
+    /**
+     * The container environment variable name a "was this deployment's public endpoint reachable
+     * over a publicly-trusted TLS certificate" boolean signal should be bound to, or {@code null}
+     * (the default) if this application has no such need.
+     *
+     * @return the env var name, or {@code null}
+     * @see com.cloudforge.core.interfaces.OidcIntegration
+     */
+    default String publicTlsTrustedEnvVar() {
+        return null;
+    }
+
+    /**
+     * The container environment variable name the resolved deployment target
+     * ({@code aws}/{@code localstack}/{@code ministack}) should be bound to, or {@code null} (the
+     * default) if this application has no need to distinguish targets at runtime.
+     *
+     * @return the env var name, or {@code null}
+     */
+    default String deploymentTargetEnvVar() {
+        return null;
+    }
+
+    /**
+     * The four container environment variable names a provisioned Redis session-store connection
+     * should be bound to (mode/host/port/TLS-enabled, in that order), or {@code null} (the
+     * default) if this application has no session-store concept — same gate
+     * {@link #requiresSessionStore()} uses for whether to provision the cluster at all; this only
+     * names where its connection details land once provisioned. The TLS-enabled var is always
+     * told {@code "false"} — the cluster this provisions has no TLS listener.
+     *
+     * @return {@code [modeEnvVar, hostEnvVar, portEnvVar, tlsEnabledEnvVar]}, or {@code null}
+     */
+    default String[] sessionStoreEnvVars() {
+        return null;
+    }
+
+    /**
+     * The container environment variable name a provisioned database's password secret should be
+     * bound to, overriding {@code ContainerFactory}'s own per-{@link #applicationId()} switch
+     * (and its {@code DATABASE_PASSWORD} fallback for any application not in it) when non-null.
+     * Most built-in applications are covered by that switch already and don't need this — it
+     * exists for an application declared outside {@code cloudforge-api} entirely, which the
+     * switch can't have a case for.
+     *
+     * @return the env var name, or {@code null} to use the switch/fallback instead
+     */
+    default String databasePasswordEnvVar() {
+        return null;
+    }
+
+    /**
+     * The container environment variable name an application-OIDC client secret should be bound
+     * to, overriding {@code ContainerFactory}'s own per-{@link #applicationId()} switch (and its
+     * {@code <APP>_OIDC_CLIENT_SECRET} fallback naming for any application not in it) when
+     * non-null. Same reasoning as {@link #databasePasswordEnvVar()} — exists for an application
+     * declared outside {@code cloudforge-api} entirely, whose expected env var name doesn't match
+     * that generic {@code <APP>_} naming convention.
+     *
+     * @return the env var name, or {@code null} to use the switch/fallback instead
+     */
+    default String oidcClientSecretEnvVar() {
+        return null;
+    }
+
+    /**
+     * Whether this application writes a role edit through to its Cognito user pool's real group
+     * membership at runtime (e.g. {@code AdminAddUserToGroup}) rather than only updating its own
+     * local cache — {@code CognitoAuthenticationFactory} grants the corresponding IAM actions on
+     * the pool's task role only when this is true, since most applications never call those APIs
+     * at all and shouldn't carry the grant.
+     *
+     * @return true if the Cognito admin group-management IAM actions should be granted
+     */
+    default boolean requiresCognitoGroupManagementIam() {
+        return false;
+    }
+
+    /**
+     * Default admin/developer group names for an external-OIDC-provider deployment, used when the
+     * deployment context doesn't override them ({@code cognitoAdminGroupName}/
+     * {@code cognitoUserGroupName}).
+     *
+     * @return {@code [adminGroupName, developerGroupName]}, defaulting to {@code ["Admins",
+     *     "Developers"]}
+     */
+    default String[] defaultOidcGroupNames() {
+        return new String[] {"Admins", "Developers"};
+    }
 }

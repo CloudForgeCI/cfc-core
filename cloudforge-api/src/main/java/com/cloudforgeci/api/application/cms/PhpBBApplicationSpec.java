@@ -450,23 +450,16 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
             "  chmod -R 777 /var/www/html/cache /var/www/html/files /var/www/html/store /var/www/html/images/avatars/upload && " +
             "  echo 'phpBB installed successfully'; " +
             "fi && " +
-            // Autofill the installer's DB-connection form fields from env vars.
-            //
-            // Two earlier approaches here didn't actually work, both confirmed live:
-            // (1) A separate install/index.html landing page that set sessionStorage then
-            //     redirected to install/app.php — never reached, because phpBB's own root
-            //     index.php redirects straight to install/app.php when unconfigured, skipping
-            //     any custom landing page entirely.
-            // (2) Injecting the autofill <script> tag into
-            //     install/phpbb/style/installer_main.html — that path doesn't exist in phpBB
-            //     3.3.x's installer (a Symfony/Twig app since 3.2). The real page shell —
-            //     confirmed by grepping the installed tree for the one file with a `</head>` —
-            //     is adm/style/installer_header.html.
-            //
-            // Fix: set sessionStorage AND fill the current page's form in one script injected
-            // straight into that header template, so it runs on every installer page load
-            // regardless of entry URL — no separate landing page/redirect hop to skip.
-            // Password is intentionally excluded — never expose RDS secrets to the browser.
+            // Autofill the installer's DB-connection form fields from env vars, by injecting a
+            // script into the installer's page shell rather than a separate landing page: phpBB's
+            // own root index.php redirects straight to install/app.php when unconfigured, so a
+            // custom landing page is never reached. adm/style/installer_header.html is the one
+            // template phpBB 3.3.x's installer (a Symfony/Twig app since 3.2) renders on every
+            // installer page, so a script injected there runs regardless of entry URL — no
+            // separate landing page/redirect hop needed. Setting sessionStorage AND filling the
+            // current page's form in the same script covers both the first page load and every
+            // subsequent one. Password is intentionally excluded — never expose RDS secrets to
+            // the browser.
             "if [ -n \"$PHPBB_DB_HOST\" ]; then " +
             "  TEMPLATE=/var/www/html/adm/style/installer_header.html && " +
             "  if [ -f \"$TEMPLATE\" ] && ! grep -q 'phpbb_db_config' \"$TEMPLATE\"; then " +

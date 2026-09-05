@@ -43,14 +43,12 @@ import java.util.Map;
  * "someone else" until this class: CloudForge's 37 {@code ApplicationSpec}s were deployable via
  * {@code deploy:create} but never packageable for {@code deploy:catalog}'s more constrained lane.
  *
- * <p><b>Not exercised against real AWS or a real Service Catalog backend — there is no way to in
- * this environment.</b> Unlike {@code AwsDirectDeployer}/{@code ServiceCatalogDeployer}, which
- * eventually got proven against a live LocalStack instance this same session, LocalStack's own
- * {@code _localstack/health} service list has no {@code servicecatalog} entry at all here (see
- * the plan's notes on this) — so this class has never actually called any of these APIs against a
- * running backend, only been written to match the documented Service Catalog API shape. Treat a
- * real publish as the first true validation, the same caveat {@code AwsDirectDeployer}'s own
- * class javadoc carried before its real bugs surfaced.</p>
+ * <p><b>Not exercised against real AWS or a real Service Catalog backend.</b> LocalStack's own
+ * {@code _localstack/health} service list has no {@code servicecatalog} entry, unlike
+ * {@code AwsDirectDeployer}/{@code ServiceCatalogDeployer}, which run against a live LocalStack
+ * CloudFormation endpoint — so this class has never called any of these APIs against a running
+ * backend, only been written to match the documented Service Catalog API shape. Treat a real
+ * publish as the first true validation.</p>
  *
  * <p><b>Launch constraints are the caller's responsibility, not auto-created here</b>: Service
  * Catalog provisions under its own IAM role (a "launch constraint"), separate from whichever

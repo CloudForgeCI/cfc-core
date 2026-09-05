@@ -48,7 +48,7 @@ class AwsDirectDeployerTest {
             .build();
         return new AwsDirectDeployer(
             cloudFormation, s3, applicationId, AwsDirectDeployer.runtimeTag(runtime),
-            AwsDirectDeployer.templateBucketName("us-east-1"));
+            AwsDirectDeployer.templateBucketName("000000000000", "us-east-1"));
     }
 
     private static AwsDirectDeployer unreachableDeployer(boolean localEmulatorTarget) {
@@ -68,15 +68,15 @@ class AwsDirectDeployerTest {
             .build();
         return new AwsDirectDeployer(
             cloudFormation, s3, "jenkins", AwsDirectDeployer.runtimeTag(RuntimeType.FARGATE),
-            AwsDirectDeployer.templateBucketName("us-east-1"), localEmulatorTarget, Region.US_EAST_1);
+            AwsDirectDeployer.templateBucketName("000000000000", "us-east-1"), localEmulatorTarget, Region.US_EAST_1);
     }
 
     @Test
     void physicalStackNameAddsLocalstackSuffixOnlyForLocalEmulatorTargets() {
-        // The real bug this covers: StackListingPolicy.acceptsName requires a "-localstack"
-        // suffix for a stack to appear under Manager's LocalStack target view. A deploy:create
-        // stack redirected to a local emulator (see class javadoc) used to deploy successfully on
-        // CloudFormation's side yet never show up anywhere in Manager's own UI.
+        // StackListingPolicy.acceptsName requires a "-localstack" suffix for a stack to appear
+        // under Manager's LocalStack target view -- without it, a deploy:create stack redirected
+        // to a local emulator (see class javadoc) deploys successfully on CloudFormation's side
+        // yet never shows up anywhere in Manager's own UI.
         try (AwsDirectDeployer local = unreachableDeployer(true)) {
             assertEquals("cf-d-localstack", local.physicalStackName("cf-d"));
         }
@@ -118,10 +118,17 @@ class AwsDirectDeployerTest {
     }
 
     @Test
-    void templateBucketNameIncludesRegionAndDefaultsWhenBlank() {
-        assertEquals("cfc-cfn-templates-us-west-2", AwsDirectDeployer.templateBucketName("us-west-2"));
-        assertEquals("cfc-cfn-templates-us-east-1", AwsDirectDeployer.templateBucketName(null));
-        assertEquals("cfc-cfn-templates-us-east-1", AwsDirectDeployer.templateBucketName(""));
+    void templateBucketNameIncludesAccountAndRegionAndDefaultsRegionWhenBlank() {
+        // A bare "cfc-cfn-templates-<region>" name with no account ID would collide with
+        // whatever AWS account anywhere had already claimed it -- every headBucket/createBucket/
+        // putObject call against a bucket this account doesn't own comes back 403 Access Denied,
+        // not a friendlier "already exists".
+        assertEquals("cfc-cfn-templates-111111111111-us-west-2",
+            AwsDirectDeployer.templateBucketName("111111111111", "us-west-2"));
+        assertEquals("cfc-cfn-templates-111111111111-us-east-1",
+            AwsDirectDeployer.templateBucketName("111111111111", null));
+        assertEquals("cfc-cfn-templates-111111111111-us-east-1",
+            AwsDirectDeployer.templateBucketName("111111111111", ""));
     }
 
     @Test

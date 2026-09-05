@@ -96,10 +96,10 @@ final class LocalStackOidcClientSecretReconciler {
                 .build()) {
             // Discovered off each service's own currently-running task definition rather than the
             // stack's own AWS::ECS::TaskDefinition resources — DescribeStackResources doesn't
-            // reliably surface that resource type on LocalStack (verified live: absent entirely
-            // for a stack whose ECS::Service resource, and the task definition it points at, both
-            // demonstrably exist and just updated). The service is the one thing guaranteed to
-            // name a real, current revision.
+            // reliably surface that resource type on LocalStack, even for a stack whose
+            // ECS::Service resource, and the task definition it points at, both demonstrably
+            // exist and just updated. The service is the one thing guaranteed to name a real,
+            // current revision.
             List<String> taskDefinitionIds = services.stream()
                 .map(r -> currentTaskDefinitionArn(ecs, r))
                 .filter(Objects::nonNull)

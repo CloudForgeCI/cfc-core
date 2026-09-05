@@ -384,6 +384,12 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
     }
 
     @Override
+    public boolean isDatabaseProvisioningChoiceRequired() {
+        // Dev is allowed to default to an OPTIONAL app's embedded fallback without ceremony
+        return false;
+    }
+
+    @Override
     public boolean isSecurityHubRemediationEnabled() {
         // Disabled for dev - not needed in development
         return false;

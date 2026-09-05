@@ -195,11 +195,10 @@ public class DeploymentConfig {
     /** Topology type — genuinely selectable, not just an auto-derived display value, so a future
      *  topology (or an app implementing more than one applicable interface) isn't locked out of
      *  being chosen explicitly. No {@code allowedValues} override here on purpose: leaving it
-     *  unset lets the schema builder enumerate every {@link TopologyType} constant automatically
-     *  (real bug this replaced — a hardcoded single-value override silently hid CMS_SERVICE,
-     *  JENKINS_SERVICE, and S3_WEBSITE from the wizard entirely, so a CmsSpec app's actual
-     *  topology could never be selected even though {@link DeploymentContextPreparer} already
-     *  defaults to it correctly). */
+     *  unset lets the schema builder enumerate every {@link TopologyType} constant automatically —
+     *  a hardcoded single-value override would hide CMS_SERVICE/JENKINS_SERVICE/S3_WEBSITE from
+     *  the wizard entirely, locking out a CmsSpec app's actual topology even though {@link
+     *  DeploymentContextPreparer} already defaults to it correctly. */
     @ConfigField(
         displayName = "Topology",
         description = "Deployment topology pattern",
@@ -1132,6 +1131,7 @@ public class DeploymentConfig {
         description = "Enable automatic remediation of RDS deletion protection compliance violations",
         category = "compliance",
         visibleWhen = "provisionDatabase && awsConfigEnabled",
+        dependsOn = "awsConfigEnabled",
         order = 400
     )
     public Boolean enableRdsDeletionProtectionRemediation = false;
@@ -1142,6 +1142,7 @@ public class DeploymentConfig {
         description = "Enable automatic remediation of RDS auto minor version upgrade compliance violations",
         category = "compliance",
         visibleWhen = "provisionDatabase && awsConfigEnabled",
+        dependsOn = "awsConfigEnabled",
         order = 410
     )
     public Boolean enableRdsAutoMinorVersionUpgradeRemediation = false;
@@ -1160,7 +1161,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Compliance Frameworks",
         description = "Compliance frameworks to enable (soc2, pci-dss, hipaa, gdpr)",
-        category = "security",
+        category = "compliance",
         // Was free-text-only (no allowedValues) — the Manager UI's builder rendered this as a
         // bare "comma, separated, values" text box for an array field with real, fixed,
         // machine-checkable options, exactly the kind of field a typo silently corrupts. Adding
@@ -1180,7 +1181,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Compliance Mode",
         description = "How to handle compliance validation failures",
-        category = "security",
+        category = "compliance",
         allowedValues = {"enforce", "advisory", "disabled"},
         order = 310
     )
@@ -1220,7 +1221,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Enable AWS Config",
         description = "Enable AWS Config for configuration compliance monitoring",
-        category = "monitoring",
+        category = "compliance",
         order = 30
     )
     public Boolean awsConfigEnabled = false;
@@ -1229,7 +1230,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Create Config Infrastructure",
         description = "Create AWS Config recorder and delivery channel (only one per region)",
-        category = "monitoring",
+        category = "compliance",
         visibleWhen = "awsConfigEnabled == true",
         order = 40
     )
@@ -1239,7 +1240,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Enable GuardDuty",
         description = "Enable Amazon GuardDuty for threat detection",
-        category = "monitoring",
+        category = "compliance",
         order = 50
     )
     public Boolean guardDutyEnabled = false;
@@ -1248,7 +1249,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Create GuardDuty Detector",
         description = "Create GuardDuty detector (only one per account/region)",
-        category = "monitoring",
+        category = "compliance",
         visibleWhen = "guardDutyEnabled == true",
         order = 60
     )
@@ -1258,7 +1259,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Configure GuardDuty Alerts",
         description = "Configure EventBridge rules to forward GuardDuty findings to SNS/SIEM",
-        category = "monitoring",
+        category = "compliance",
         visibleWhen = "guardDutyEnabled == true",
         order = 65
     )
@@ -1278,7 +1279,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Enable CloudTrail",
         description = "Enable CloudTrail for API audit logging",
-        category = "monitoring",
+        category = "compliance",
         order = 70
     )
     public Boolean cloudTrailEnabled = false;
@@ -1287,7 +1288,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Security Monitoring",
         description = "Enable security monitoring features",
-        category = "monitoring",
+        category = "compliance",
         order = 72
     )
     public Boolean securityMonitoringEnabled = false;
@@ -1335,7 +1336,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Enable Macie",
         description = "Enable Amazon Macie for PII/PHI discovery (required for HIPAA/GDPR)",
-        category = "monitoring",
+        category = "compliance",
         tags = {FieldTag.BILLING_IMPACT},
         order = 80
     )
@@ -1345,8 +1346,9 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Macie Auto-Discovery",
         description = "Enable Macie automated discovery jobs for continuous scanning",
-        category = "monitoring",
+        category = "compliance",
         visibleWhen = "macieEnabled == true",
+        dependsOn = "macieEnabled",
         tags = {FieldTag.BILLING_IMPACT},
         order = 90
     )
@@ -1356,7 +1358,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Enable Security Hub",
         description = "Enable AWS Security Hub for centralized security findings",
-        category = "monitoring",
+        category = "compliance",
         order = 100
     )
     public Boolean securityHubEnabled = false;
@@ -1365,7 +1367,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Enable Inspector",
         description = "Enable Amazon Inspector for vulnerability scanning",
-        category = "monitoring",
+        category = "compliance",
         order = 110
     )
     public Boolean inspectorEnabled = false;
@@ -1374,7 +1376,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Anti-Malware Scanning",
         description = "Enable anti-malware scanning for uploaded files",
-        category = "monitoring",
+        category = "compliance",
         order = 120
     )
     public Boolean antiMalwareEnabled = false;
@@ -1383,7 +1385,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "File Integrity Monitoring",
         description = "Monitor critical files for unauthorized changes",
-        category = "monitoring",
+        category = "compliance",
         order = 130
     )
     public Boolean fileIntegrityMonitoring = false;
@@ -1392,7 +1394,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Container Runtime Security",
         description = "Monitor container runtime for suspicious activity",
-        category = "monitoring",
+        category = "compliance",
         order = 140
     )
     public Boolean containerRuntimeSecurity = false;
@@ -1401,7 +1403,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Container Image Scanning",
         description = "Scan container images for known vulnerabilities",
-        category = "monitoring",
+        category = "compliance",
         order = 150
     )
     public Boolean containerImageScanning = false;
@@ -1410,7 +1412,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Enable Audit Manager",
         description = "Enable AWS Audit Manager for compliance evidence collection",
-        category = "monitoring",
+        category = "compliance",
         tags = {FieldTag.BILLING_IMPACT},
         order = 160
     )
@@ -1420,7 +1422,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "CloudWatch Logs KMS Encryption",
         description = "Encrypt CloudWatch Logs with customer-managed KMS keys (required for PCI-DSS, HIPAA, SOC2)",
-        category = "monitoring",
+        category = "compliance",
         tags = {FieldTag.BILLING_IMPACT},
         order = 170
     )
@@ -1430,9 +1432,10 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "CloudTrail Insights",
         description = "Enable CloudTrail Insights for API activity anomaly detection (required for SOC2, NIST)",
-        category = "monitoring",
+        category = "compliance",
         tags = {FieldTag.BILLING_IMPACT},
         visibleWhen = "cloudTrailEnabled == true",
+        dependsOn = "cloudTrailEnabled",
         order = 180
     )
     public Boolean cloudTrailInsightsEnabled = false;
@@ -1441,7 +1444,7 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "Route53 Query Logging",
         description = "Enable DNS query logging for Route53 hosted zones (required for SOC2, NIST)",
-        category = "monitoring",
+        category = "compliance",
         order = 190
     )
     public Boolean route53QueryLoggingEnabled = false;
@@ -1571,8 +1574,9 @@ public class DeploymentConfig {
     @ConfigField(
         displayName = "GDPR Data Transfer Approved",
         description = "Confirm proper data transfer mechanisms (SCCs, BCRs) are in place for non-EU deployments with GDPR",
-        category = "security",
+        category = "compliance",
         visibleWhen = "complianceFrameworks contains gdpr",
+        dependsOn = "complianceFrameworks",
         order = 330
     )
     public Boolean gdprDataTransferApproved = false;

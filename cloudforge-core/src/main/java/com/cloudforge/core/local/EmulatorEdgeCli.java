@@ -58,11 +58,11 @@ public final class EmulatorEdgeCli {
      * existing caller — InteractiveDeployer, the deploy pipelines — since that's their own natural
      * cwd). {@code scripts/emulator-edge-*.sh} instead runs `mvn -pl cloudforge-core exec:java`
      * from the repo root — which also happens to contain its own {@code pom.xml}, so that shared
-     * heuristic silently resolved to a `.emulator-edge` directory AT the repo root instead of
-     * `cfc-testing/.emulator-edge` — nowhere near the path actually bind-mounted into the running
-     * nginx container. Real bug this fixed: reconcile computed and printed the correct answer but
-     * wrote it to a file nginx never reads, so nothing observable ever changed. Explicitly prefer
-     * a `cfc-testing` child directory when one exists (with the same {@code docker/emulator-edge}
+     * heuristic would silently resolve to a `.emulator-edge` directory AT the repo root instead
+     * of `cfc-testing/.emulator-edge` — nowhere near the path actually bind-mounted into the
+     * running nginx container, so reconcile would compute and print the correct answer but write
+     * it to a file nginx never reads, with nothing observable ever changing. Explicitly prefer a
+     * `cfc-testing` child directory when one exists (with the same {@code docker/emulator-edge}
      * marker {@link LocalEmulatorPaths} itself checks for) rather than trusting ambient cwd.
      */
     private static Path resolveWorkingDirectory() {

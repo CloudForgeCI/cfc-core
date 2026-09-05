@@ -200,9 +200,9 @@ final class LocalStackMysqlPortReconciler {
      *  alone (what {@code restartEcsServices} does for the other reconcilers) would just keep
      *  recreating tasks from whatever revision the service already had pinned. Passes full ARNs
      *  for both {@code cluster}/{@code service} rather than the bare names {@code
-     *  restartEcsServices} parses out — verified live: LocalStack's {@code UpdateService} silently
-     *  no-ops (no exception, service unchanged) on the bare-name form here, but sticks reliably
-     *  given the full ARNs. */
+     *  restartEcsServices} parses out — LocalStack's {@code UpdateService} silently no-ops (no
+     *  exception, service unchanged) on the bare-name form here, but applies reliably given the
+     *  full ARNs. */
     private static void redeployServicesOntoRevision(
             EcsClient ecs, List<StackResource> resources, String revisionArn) {
         for (StackResource resource : resources) {

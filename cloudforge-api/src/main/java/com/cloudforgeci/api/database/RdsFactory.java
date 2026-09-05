@@ -17,6 +17,9 @@ import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.IKey;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.RetentionDays;
@@ -295,13 +298,21 @@ public class RdsFactory {
 
             .cloudwatchLogsExports(getCloudWatchLogsExports(requirement.engine()));
 
-        // Conditionally enable Performance Insights for PRODUCTION only
-        if (security == SecurityProfile.PRODUCTION) {
+        // Conditionally enable Performance Insights for PRODUCTION only — and only when the
+        // instance class supports it. RDS rejects EnablePerformanceInsights outright
+        // ("Performance Insights not supported for this configuration") on the smallest burstable
+        // sizes (db.t2/t3/t4g.micro) across every engine — cloudforge-manager's own PRODUCTION
+        // preset pins db.t3.micro. Falling through to
+        // the else branch for a micro instance keeps PRODUCTION's other monitoring knobs
+        // (autoMinorVersionUpgrade, iamAuthentication, deletion protection, backup retention)
+        // intact — only Performance Insights itself is unsupported at this size.
+        if (security == SecurityProfile.PRODUCTION && supportsPerformanceInsights(requirement.instanceClass())) {
             instanceBuilder
                 .enablePerformanceInsights(true)
                 .performanceInsightRetention(PerformanceInsightRetention.LONG_TERM)
                 .performanceInsightEncryptionKey(encryptionKey)
                 .monitoringInterval(Duration.seconds(60))
+                .monitoringRole(createMonitoringRole(scope, stackName, instanceId))
                 .cloudwatchLogsRetention(RetentionDays.ONE_YEAR);
         } else {
             instanceBuilder
@@ -503,6 +514,18 @@ public class RdsFactory {
     }
 
     /**
+     * Whether RDS supports Performance Insights on this instance class. AWS rejects
+     * {@code EnablePerformanceInsights} outright on the smallest burstable size (micro) across
+     * every RDS engine — this is a hard RDS-side floor, not engine- or version-specific, so a
+     * plain string check on the size segment (the same "db.&lt;family&gt;.&lt;size&gt;" shape
+     * {@link #parseInstanceType} already parses) is enough; no need to enumerate the full set of
+     * supported instance classes.
+     */
+    private static boolean supportsPerformanceInsights(String instanceClass) {
+        return instanceClass != null && !instanceClass.toLowerCase(java.util.Locale.ROOT).endsWith(".micro");
+    }
+
+    /**
      * Parse instance type from instance class string.
      *
      * <p>Converts strings like "db.t3.medium" to InstanceType.</p>
@@ -668,5 +691,45 @@ public class RdsFactory {
         }
 
         return truncated;
+    }
+
+    /** Fixed suffix every RDS Enhanced Monitoring role this factory creates ends in — the one
+     *  thing {@link com.cloudforgeci.api.core.iam.OperatorProvisioningPermissionMatrix}'s
+     *  operator-role grant can reliably pattern-match on, since it has to be a wildcard (the
+     *  stack-name-derived prefix varies per deploy). See {@link #createMonitoringRole}'s own
+     *  javadoc for why an explicit name is needed here at all rather than letting {@code
+     *  DatabaseInstance} auto-create one. */
+    private static final String MONITORING_ROLE_SUFFIX = "-CfcRdsMonitor";
+
+    /**
+     * Without an explicit {@code monitoringRole}, {@code DatabaseInstance} auto-creates one as a
+     * child construct fixed literally at id {@code "MonitoringRole"} — normally a fine, stable
+     * name to grant Manager's operator role against, except this role nests several levels below
+     * the database instance's own construct, and CloudFormation's physical-name generator
+     * truncates the *middle* of an over-length id path to fit IAM's 64-character role-name limit.
+     * For a long enough stack/app name, the surviving fragment can cut off before "MonitoringRole"
+     * ever appears — exactly what happened live: {@code iam:CreateRole} denied on a physical name
+     * that had already been chewed down to an unrecognizable stack-name fragment plus a hash,
+     * with no stable substring left for the operator policy to have matched in the first place.
+     *
+     * <p>Building the role ourselves sidesteps the truncation problem instead of trying to out-
+     * guess it: an explicit {@code roleName} is never auto-generated from the construct path at
+     * all, so there's nothing for CloudFormation to truncate unpredictably. This method does its
+     * own truncation instead, front-to-back rather than CloudFormation's middle-cut, so the fixed
+     * {@link #MONITORING_ROLE_SUFFIX} this class actually grants permissions against always
+     * survives regardless of how long the stack/instance name is.</p>
+     */
+    private static Role createMonitoringRole(Construct scope, String stackName, String instanceId) {
+        String prefix = stackName + "-" + instanceId;
+        int maxPrefixLength = 64 - MONITORING_ROLE_SUFFIX.length();
+        if (prefix.length() > maxPrefixLength) {
+            prefix = prefix.substring(0, maxPrefixLength);
+        }
+        return Role.Builder.create(scope, instanceId + "MonitoringRole")
+            .roleName(prefix + MONITORING_ROLE_SUFFIX)
+            .assumedBy(new ServicePrincipal("monitoring.rds.amazonaws.com"))
+            .managedPolicies(List.of(
+                ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonRDSEnhancedMonitoringRole")))
+            .build();
     }
 }

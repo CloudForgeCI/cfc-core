@@ -22,7 +22,8 @@ public final class ManagerRuntimeBridge {
      */
     public static void apply(Function<String, String> lookup) {
         Objects.requireNonNull(lookup, "lookup");
-        setIfAbsent(ManagerEnvKeys.TARGET, first(lookup, ManagerEnvKeys.PROP_TARGET, ManagerEnvKeys.TARGET));
+        String target = first(lookup, ManagerEnvKeys.PROP_TARGET, ManagerEnvKeys.TARGET);
+        setIfAbsent(ManagerEnvKeys.TARGET, target);
         setIfAbsent(ManagerEnvKeys.AUTH_MODE, first(lookup, ManagerEnvKeys.PROP_AUTH_MODE, ManagerEnvKeys.AUTH_MODE));
         setIfAbsent(ManagerEnvKeys.PUBLIC_URL, first(lookup, ManagerEnvKeys.PROP_PUBLIC_URL, ManagerEnvKeys.PUBLIC_URL));
         setIfAbsent(ManagerEnvKeys.BIND, first(lookup, ManagerEnvKeys.PROP_BIND, "server.address", ManagerEnvKeys.BIND));
@@ -39,8 +40,31 @@ public final class ManagerRuntimeBridge {
             ministack = awsEndpoint != null ? awsEndpoint : localstack;
         }
 
-        setIfAbsent(ManagerEnvKeys.LOCALSTACK_ENDPOINT, localstack);
-        setIfAbsent(ManagerEnvKeys.AWS_ENDPOINT_URL, firstNonBlank(awsEndpoint, localstack));
+        // ManagerProperties.Localstack#endpoint defaults to "http://localhost:4566" unconditionally
+        // (a Java field default, there for LocalStack-target convenience) — that default is not
+        // the same thing as an explicit "run against a local emulator" instruction, but folding it
+        // into `localstack` above (via the `if (localstack == null)` fallback, itself only reached
+        // when nothing else set it either) made it look like one by the time it got here. Both
+        // LOCALSTACK_ENDPOINT and AWS_ENDPOINT_URL (the AWS SDK's own globally-recognized endpoint
+        // override — every AWS client built anywhere in this process, Cognito's included, see
+        // ApplicationOidcAuthenticator, honors the latter) have to be gated on actually targeting a
+        // local emulator (target=localstack/ministack), not just AWS_ENDPOINT_URL alone —
+        // ApplicationOidcAuthenticator#resolveLocalEmulatorEndpoint checks LOCALSTACK_ENDPOINT
+        // FIRST, so gating only AWS_ENDPOINT_URL left that check-order unprotected: Cognito sign-in
+        // kept silently trying to reach localhost:4566 in a production ECS task with no LocalStack
+        // anywhere in sight, because LOCALSTACK_ENDPOINT itself was still being bridged
+        // unconditionally here.
+        boolean targetingLocalEmulator = "localstack".equalsIgnoreCase(target) || "ministack".equalsIgnoreCase(target);
+        if (targetingLocalEmulator) {
+            setIfAbsent(ManagerEnvKeys.LOCALSTACK_ENDPOINT, localstack);
+            setIfAbsent(ManagerEnvKeys.AWS_ENDPOINT_URL, firstNonBlank(awsEndpoint, localstack));
+        } else {
+            // awsEndpoint only (never `localstack`, which may carry the inert convenience default)
+            // — a genuine, explicitly-set AWS_ENDPOINT_URL/its PROP_ counterpart still bridges
+            // normally outside a local-emulator target (e.g. a real custom VPC endpoint override).
+            setIfAbsent(ManagerEnvKeys.LOCALSTACK_ENDPOINT, awsEndpoint);
+            setIfAbsent(ManagerEnvKeys.AWS_ENDPOINT_URL, awsEndpoint);
+        }
         setIfAbsent(ManagerEnvKeys.AWS_DEFAULT_REGION,
             first(lookup, ManagerEnvKeys.PROP_AWS_REGION, ManagerEnvKeys.AWS_DEFAULT_REGION));
         if (System.getProperty(ManagerEnvKeys.AWS_DEFAULT_REGION) == null

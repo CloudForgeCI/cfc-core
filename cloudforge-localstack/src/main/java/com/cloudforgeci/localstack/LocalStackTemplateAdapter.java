@@ -184,8 +184,7 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                 databases.put(entry.getKey(), new LocalDatabaseEndpoint(
                     LocalStackPostgresCompanion.hostname(), LocalStackPostgresCompanion.PORT));
             } else if (engine.startsWith("mysql") || engine.startsWith("mariadb")) {
-                // 4510, not 4512 — verified live against a real RDS_MYSQL_DOCKER=1 instance:
-                // `awslocal rds describe-db-instances` reports Endpoint.Port 4510, matching the
+                // 4510, not 4512 — a real RDS_MYSQL_DOCKER=1 instance's Endpoint.Port matches the
                 // first port in LocalStack's own default EXTERNAL_SERVICE_PORTS_START..END range
                 // (4510-4559), which is where its dynamic-port-per-resource allocator starts.
                 // Known limitation this hardcoded value doesn't solve (pre-existing, not
@@ -1300,18 +1299,19 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                     Files.createDirectories(hostPath);
                     hostMountUsable = true;
                 } catch (IOException e) {
-                    // Real bug this replaced: this directory only means anything on the real host
-                    // filesystem that LocalStack's own Docker executor can see — a caller running
-                    // containerized itself (Manager's own Spring Boot process, doing deploy:create
-                    // against LocalStack) has no such access, so creation predictably fails (and
-                    // even where the mkdir itself *would* succeed inside that caller's own
-                    // container, the resulting SourcePath still wouldn't resolve to anything real
-                    // on the host — it'd just be a path inside that caller's own throwaway
-                    // filesystem). Previously this hard-aborted the whole deploy; degrading to an
-                    // ephemeral task-scoped Docker volume instead lets the deploy — and the
-                    // container's own expectation of *something* mounted at this path — still
-                    // succeed. The real tradeoff (this app's data won't survive a task replacement
-                    // when deployed this way) is real and worth knowing, not something to hide —
+                    // This directory only means anything on the real host filesystem that
+                    // LocalStack's own Docker executor can see — a caller running containerized
+                    // itself (Manager's own Spring Boot process, doing deploy:create against
+                    // LocalStack) has no such access, so creation predictably fails (and even
+                    // where the mkdir itself *would* succeed inside that caller's own container,
+                    // the resulting SourcePath still wouldn't resolve to anything real on the
+                    // host — it'd just be a path inside that caller's own throwaway filesystem).
+                    // Hard-aborting the whole deploy over this would be needlessly strict;
+                    // degrading to an ephemeral task-scoped Docker volume instead lets the
+                    // deploy — and the container's own expectation of *something* mounted at this
+                    // path — still succeed. The real tradeoff (this app's data won't survive a
+                    // task replacement when deployed this way) is real and worth knowing, not
+                    // something to hide —
                     // that's what the adaptation `reason` below surfaces.
                     hostMountUsable = false;
                 }
@@ -1384,16 +1384,16 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
     }
 
     /**
-     * Real bug this fixed: {@code defaultVolumeRoot()} falls back to {@code user.dir} whenever
-     * {@code LOCALSTACK_VOLUME_ROOT} isn't set — meaningful only when the JVM adapting the
-     * template is running directly on the real host (the interactive deployer, a CLI, a test).
-     * {@code deploy:create}/{@code deploy:catalog} run this exact same adapt pipeline from
-     * *inside Manager's own already-running container* — there {@code user.dir} is {@code /app}
-     * (the Dockerfile's WORKDIR), a path meaningless to the real Docker host. Every EFS-backed
-     * volume for every app deployed through Manager's UI (Jenkins, GitLab, Manager itself) got
-     * bind-mounted to a bogus {@code /app/.localstack-volumes/...} path, silently auto-created
-     * fresh and empty by Docker each time — so all of that app's persistent data was quietly
-     * reset on every redeploy, invisibly (the deploy still "succeeds").
+     * {@code defaultVolumeRoot()} falls back to {@code user.dir} whenever {@code
+     * LOCALSTACK_VOLUME_ROOT} isn't set — meaningful only when the JVM adapting the template is
+     * running directly on the real host (the interactive deployer, a CLI, a test). {@code
+     * deploy:create}/{@code deploy:catalog} run this exact same adapt pipeline from *inside
+     * Manager's own already-running container*, though, where {@code user.dir} is {@code /app}
+     * (the Dockerfile's WORKDIR), a path meaningless to the real Docker host — without this fix,
+     * every EFS-backed volume for every app deployed through Manager's UI (Jenkins, GitLab,
+     * Manager itself) would bind-mount to a bogus {@code /app/.localstack-volumes/...} path,
+     * silently auto-created fresh and empty by Docker each time, quietly resetting all of that
+     * app's persistent data on every redeploy while the deploy still "succeeds".
      *
      * <p>Fix: resolve the real value once, from a process where {@code user.dir} is trustworthy
      * (this method's own {@code defaultVolumeRoot()} fallback still does exactly that), and bake
@@ -1513,8 +1513,8 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
     }
 
     /**
-     * Plain HTTP, not HTTPS — verified live: LocalStack's edge (2026.7.2) completes a genuine TLS
-     * handshake with a valid cert on this port, but then 400s every {@code /_aws/elb/<name>/}
+     * Plain HTTP, not HTTPS — LocalStack's edge (2026.7.2) completes a genuine TLS handshake with
+     * a valid cert on this port, but then 400s every {@code /_aws/elb/<name>/}
      * path-style request over HTTPS regardless of hostname (bare {@code localhost} or {@code
      * localhost.localstack.cloud}), HTTP version, or trailing slash — a platform-level routing gap
      * for this specific proxy path, not a client/cert issue (same 400 for the subdomain-style
@@ -1581,8 +1581,8 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
         String prefix = "/_aws/elb/" + albLocalName;
         int gatewayPort = resolveGatewayPort();
         // Plain HTTP — see pathStyleBrowserUrl's javadoc for why: this exact path-style route
-        // 400s over HTTPS regardless of hostname/HTTP-version, verified live, a LocalStack
-        // edge-routing gap rather than anything client-side. Same URL shape apps embed in their
+        // 400s over HTTPS regardless of hostname/HTTP-version, a LocalStack edge-routing gap
+        // rather than anything client-side. Same URL shape apps embed in their
         // own config (WP_HOME/WP_SITEURL, JENKINS_URL, CFC_MANAGER_PUBLIC_URL), so it needs to
         // stay consistent with what OUTPUT_APPLICATION_URL actually hands back.
         String publicUrl = "http://localhost:" + gatewayPort + prefix + "/";
@@ -2232,10 +2232,10 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
      * might already be present (LocalStack's own reachable URL always wins there — a real fqdn
      * wouldn't resolve locally anyway).
      *
-     * <p>WP_HOME/WP_SITEURL alone aren't the whole fix, though — verified live: LocalStack's ALB
-     * emulation DOES strip {@code /_aws/elb/<name>} before forwarding to the container (unlike the
-     * javadoc above used to assume), so PHP's own {@code $_SERVER['REQUEST_URI']} never sees it
-     * either. Anything WordPress builds FROM the raw request rather than from {@code home_url()}/
+     * <p>WP_HOME/WP_SITEURL alone aren't the whole fix, though: LocalStack's ALB emulation strips
+     * {@code /_aws/elb/<name>} before forwarding to the container, so PHP's own {@code
+     * $_SERVER['REQUEST_URI']} never sees it either. Anything WordPress builds FROM the raw
+     * request rather than from {@code home_url()}/
      * {@code site_url()} — most importantly {@code wp-login.php}'s post-login {@code redirect_to}
      * target, generated from {@code REQUEST_URI} — comes out unprefixed. A browser following that
      * link lands on a bare path LocalStack's edge doesn't recognize as this app's ALB route, and

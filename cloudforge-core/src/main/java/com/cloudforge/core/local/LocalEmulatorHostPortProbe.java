@@ -99,12 +99,12 @@ public final class LocalEmulatorHostPortProbe {
         try {
             process = builder.start();
         } catch (IOException e) {
-            // This is a best-effort port-conflict warning, not a hard requirement — real bug this
-            // fixed: callers running where the `docker` binary itself isn't on PATH (e.g. Manager's
-            // own container, deploying to LocalStack via deploy:create — it has no Docker CLI or
-            // socket access, by design of its own image) had this checked exception propagate all
-            // the way up and hard-fail the entire deploy attempt, even though CloudFormation-side
-            // port info from probeCloudFormation() below is still fully available on its own.
+            // This is a best-effort port-conflict warning, not a hard requirement -- a caller
+            // running where the `docker` binary itself isn't on PATH (e.g. Manager's own
+            // container, deploying to LocalStack via deploy:create -- it has no Docker CLI or
+            // socket access, by design of its own image) shouldn't have this checked exception
+            // propagate up and hard-fail the entire deploy attempt, when CloudFormation-side port
+            // info from probeCloudFormation() below is still fully available on its own.
             // "Cannot run program" is exactly what ProcessBuilder#start throws for a missing
             // executable (as opposed to the command running and failing, which still throws IOException
             // during output reading below and should keep propagating — only absence is swallowed here).

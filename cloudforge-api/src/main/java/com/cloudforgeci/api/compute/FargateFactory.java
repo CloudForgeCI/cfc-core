@@ -319,7 +319,7 @@ public class FargateFactory extends BaseFactory {
 
     // ECS Exec is enabled unconditionally (see enableEcsExec above) -- not gated on bastionCidr;
     // access is IAM-controlled and CloudTrail-logged rather than restricted at the CDK level.
-    FargateService service = FargateService.Builder.create(this, "Service")
+    FargateService.Builder serviceBuilder = FargateService.Builder.create(this, "Service")
             .cluster(cluster)
             .securityGroups(List.of(serviceSg))
             .taskDefinition(taskDef)
@@ -331,8 +331,32 @@ public class FargateFactory extends BaseFactory {
             .circuitBreaker(DeploymentCircuitBreaker.builder()
                     .enable(true)
                     .rollback(true)
-                    .build())  // Prevents stuck deployments and enables automatic rollback
-            .build();
+                    .build());  // Prevents stuck deployments and enables automatic rollback
+
+    // An application whose persistence can't tolerate a normal rolling deployment's brief overlap
+    // (e.g. a single-writer embedded-file database) declares that via
+    // ApplicationSpec#requiresSequentialDeploymentWithoutDatabase — see its own javadoc. ECS's own
+    // default (minHealthyPercent=50/maxPercent=200) starts the new task BEFORE stopping the old
+    // one; two tasks briefly holding the same file open at once loses the lock race and crashes
+    // the new task on startup, tripping the deployment circuit breaker above and rolling the whole
+    // update back. Forcing a stop-then-start replacement (0%/100%) trades a few seconds of
+    // downtime per deploy for deploys actually succeeding. Only applies while this application has
+    // no managed database connection provisioned (see DatabaseSpec) — once it does, a real
+    // database safely handles the overlap and this no longer applies regardless of what the
+    // application declares.
+    //
+    // AvailabilityZoneRebalancing.DISABLED has to go with it: ECS rejects maxHealthyPercent<=100
+    // outright ("does not support maximumPercent <= 100% as deployment configuration" — confirmed
+    // live) while AZ Rebalancing is on, which is apparently ECS's own default for a new service.
+    // Rebalancing tasks across AZs is meaningless anyway for a desiredCount=1 singleton — there's
+    // only ever one task to place, nothing to rebalance.
+    if (applicationSpec != null && applicationSpec.requiresSequentialDeploymentWithoutDatabase()
+        && ctx.dbConnection.get().isEmpty()) {
+      serviceBuilder = serviceBuilder.minHealthyPercent(0).maxHealthyPercent(100)
+          .availabilityZoneRebalancing(software.amazon.awscdk.services.ecs.AvailabilityZoneRebalancing.DISABLED);
+    }
+
+    FargateService service = serviceBuilder.build();
 
     // Set health check grace period (critical for slow-starting apps like GitLab)
     // Must be set on the underlying CfnService after FargateService creation

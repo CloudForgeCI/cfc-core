@@ -10,6 +10,7 @@ import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
+import com.cloudforge.core.local.DeploymentTarget;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
@@ -80,6 +81,9 @@ public class ContainerFactory extends BaseFactory {
     @DeploymentContext("enableSentinel")
     private Boolean enableSentinel;
 
+    @DeploymentContext("managerTarget")
+    private DeploymentTarget managerTarget;
+
     @DeploymentContext("enableCluster")
     private Boolean enableCluster;
 
@@ -109,6 +113,9 @@ public class ContainerFactory extends BaseFactory {
 
     @SystemContext("licenseKeySecretArn")
     private String licenseKeySecretArn;
+
+    @SystemContext("autoAdminPasswordSecretArn")
+    private String autoAdminPasswordSecretArn;
 
     @SystemContext("applicationOidcConfig")
     private OidcConfiguration applicationOidcConfig;
@@ -177,44 +184,62 @@ public class ContainerFactory extends BaseFactory {
             }
         }
 
-        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
-                && authMode == AuthMode.ALB_OIDC && alb != null) {
-            environment.put("CFC_MANAGER_ALB_SIGNER_ARN", alb.getLoadBalancerArn());
+        if (applicationSpec != null) {
+            String albSignerArnEnvVar = applicationSpec.albSignerArnEnvVar();
+            if (albSignerArnEnvVar != null && !albSignerArnEnvVar.isBlank()
+                    && authMode == AuthMode.ALB_OIDC && alb != null) {
+                environment.put(albSignerArnEnvVar, alb.getLoadBalancerArn());
+            }
+
+            String publicTlsTrustedEnvVar = applicationSpec.publicTlsTrustedEnvVar();
+            if (publicTlsTrustedEnvVar != null && !publicTlsTrustedEnvVar.isBlank()) {
+                boolean publiclyTrusted = com.cloudforgeci.api.core.TlsTrustEvaluator.isPubliclyTrusted(
+                    sslEnabled, domain, fqdn, certificateArn);
+                environment.put(publicTlsTrustedEnvVar, String.valueOf(publiclyTrusted));
+            }
         }
 
-        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())) {
-            boolean publiclyTrusted = com.cloudforgeci.api.core.TlsTrustEvaluator.isPubliclyTrusted(
-                sslEnabled, domain, fqdn, certificateArn);
-            environment.put(com.cloudforge.core.manager.ManagerEnvKeys.PUBLIC_TLS_TRUSTED,
-                String.valueOf(publiclyTrusted));
-        }
+        // ManagerRuntimeConfiguration.Target's own defaultTarget() is null whenever this is
+        // unset -- until this was added, a real AWS self-deployment never set CFC_MANAGER_TARGET
+        // at all, so ManagerDatabase.open()'s AWS-only fail-closed guard (a missing remote DB
+        // host must never silently fall back to embedded H2 on a real deploy) could never
+        // actually fire on the one target it exists to protect. managerTarget has no default in
+        // DeploymentConfig (required = false) precisely so LocalStack/MiniStack's own explicit
+        // "localstack"/"ministack" opt-in stays the only way this resolves to anything other than
+        // null -- a real AWS deployment's deployment-context.json must set managerTarget: "aws"
+        // for itself, same as LocalStack/MiniStack already set their own value today.
+        if (applicationSpec != null) {
+            String deploymentTargetEnvVar = applicationSpec.deploymentTargetEnvVar();
+            if (deploymentTargetEnvVar != null && !deploymentTargetEnvVar.isBlank() && managerTarget != null) {
+                environment.put(deploymentTargetEnvVar, managerTarget.configKey());
+            }
 
-        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
-                && redisSessionStoreEndpoint != null && !redisSessionStoreEndpoint.isBlank()) {
-            // See ApplicationFactory's provisionManagerRedisSessions handling for where this
-            // cluster gets created, and ManagerRuntimeConfiguration.Sessions /
-            // SessionStoreConfiguration (cloudforge-manager) for how these are consumed.
-            environment.put("CFC_MANAGER_SESSION_MODE", "redis");
-            environment.put("CFC_MANAGER_REDIS_HOST", redisSessionStoreEndpoint);
-            environment.put("CFC_MANAGER_REDIS_PORT",
-                String.valueOf(redisSessionStorePort != null ? redisSessionStorePort : 6379));
-            // CmsObjectCacheConfiguration.createRedisCluster() builds a single-node
-            // CfnCacheCluster, which has no transitEncryptionEnabled property at all (unlike
-            // CfnReplicationGroup) — there is no TLS listener to point Jedis at, so this must
-            // stay false or RedisSessionStoreConfiguration's Jedis client will fail the TLS
-            // handshake against a plaintext port.
-            environment.put("CFC_MANAGER_REDIS_TLS", "false");
-            LOG.info("✅ Configured CFC_MANAGER_SESSION_MODE=redis (" + redisSessionStoreEndpoint + ")");
+            String[] sessionStoreEnvVars = applicationSpec.sessionStoreEnvVars();
+            if (sessionStoreEnvVars != null && sessionStoreEnvVars.length == 4
+                    && redisSessionStoreEndpoint != null && !redisSessionStoreEndpoint.isBlank()) {
+                // See ApplicationFactory's provisionManagerRedisSessions handling for where this
+                // cluster gets created. CmsObjectCacheConfiguration.createRedisCluster() builds a
+                // single-node CfnCacheCluster, which has no transitEncryptionEnabled property at
+                // all (unlike CfnReplicationGroup) — there is no TLS listener for a client to
+                // connect to, so the fourth env var is always told "false".
+                environment.put(sessionStoreEnvVars[0], "redis");
+                environment.put(sessionStoreEnvVars[1], redisSessionStoreEndpoint);
+                environment.put(sessionStoreEnvVars[2],
+                    String.valueOf(redisSessionStorePort != null ? redisSessionStorePort : 6379));
+                environment.put(sessionStoreEnvVars[3], "false");
+                LOG.info("✅ Configured session store: mode=redis (" + redisSessionStoreEndpoint + ")");
+            }
         }
 
         // Collect ECS secrets (from Secrets Manager) to be mounted as environment variables
         Map<String, software.amazon.awscdk.services.ecs.Secret> ecsSecrets = new HashMap<>();
 
-        // Bind the AES cipher key CloudForge Manager uses to encrypt cross-account connection
-        // secrets (see ApplicationFactory's provisionManagerAccountCipherKey handling and
-        // SecretCipher/AesGcmSecretCipher in cloudforge-manager). Independent of database
-        // provisioning — applies whenever the secret was provisioned, embedded H2 included.
-        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+        // Bind a provisioned AES cipher-key secret to whichever env var name the app's own
+        // ApplicationSpec declares (see ApplicationFactory's provisioning above). Independent of
+        // database provisioning — applies whenever the secret was provisioned, embedded storage
+        // included.
+        String cipherKeySecretEnvVar = applicationSpec != null ? applicationSpec.cipherKeySecretEnvVar() : null;
+        if (cipherKeySecretEnvVar != null && !cipherKeySecretEnvVar.isBlank()
                 && accountCipherKeySecretArn != null && !accountCipherKeySecretArn.isBlank()) {
             ISecret accountCipherKeySecret =
                 Secret.fromSecretCompleteArn(this, "AccountCipherKeySecret", accountCipherKeySecretArn);
@@ -234,15 +259,16 @@ public class ContainerFactory extends BaseFactory {
                 LOG.info("  ✅ Added IAM policy for account cipher key secret access");
             }
 
-            ecsSecrets.put(com.cloudforge.core.manager.ManagerEnvKeys.ACCOUNT_SECRET_KEY,
+            ecsSecrets.put(cipherKeySecretEnvVar,
                           software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(accountCipherKeySecret));
-            LOG.info("  ✅ Account cipher key mapped to CFC_MANAGER_ACCOUNT_SECRET_KEY");
+            LOG.info("  ✅ Account cipher key mapped to " + cipherKeySecretEnvVar);
         }
 
-        // Bind a deploy-time-supplied customer license key (see ApplicationFactory's
-        // provisioning above) to the exact env var ManagerRuntimeConfiguration's "stopgap" path
-        // already reads. Independent of database provisioning, same as the cipher key above.
-        if (applicationSpec != null && "cloudforge-manager".equals(applicationSpec.applicationId())
+        // Bind a provisioned deploy-time-supplied license key to whichever env var name the app's
+        // own ApplicationSpec declares (see ApplicationFactory's provisioning above). Independent
+        // of database provisioning, same as the cipher key above.
+        String licenseKeySecretEnvVar = applicationSpec != null ? applicationSpec.licenseKeySecretEnvVar() : null;
+        if (licenseKeySecretEnvVar != null && !licenseKeySecretEnvVar.isBlank()
                 && licenseKeySecretArn != null && !licenseKeySecretArn.isBlank()) {
             ISecret licenseKeySecret =
                 Secret.fromSecretCompleteArn(this, "LicenseKeySecret", licenseKeySecretArn);
@@ -262,9 +288,42 @@ public class ContainerFactory extends BaseFactory {
                 LOG.info("  ✅ Added IAM policy for license key secret access");
             }
 
-            ecsSecrets.put(com.cloudforge.core.manager.ManagerEnvKeys.LICENSE_KEY,
+            ecsSecrets.put(licenseKeySecretEnvVar,
                           software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(licenseKeySecret));
-            LOG.info("  ✅ License key mapped to CFC_MANAGER_LICENSESEAT_LICENSE_KEY");
+            LOG.info("  ✅ License key mapped to " + licenseKeySecretEnvVar);
+        }
+
+        // Bind an application's auto-generated initial admin password (see ApplicationFactory's
+        // provisioning above) to whichever env var name its own ApplicationSpec declares via
+        // autoAdminPasswordEnvVar() (e.g. JOOMLA_ADMIN_PASSWORD). Combined with the plain admin/
+        // site-name variables that spec's own containerEnvironmentVariables() already sets, this
+        // completes the full set an application's official image needs for a non-interactive
+        // install — without it, its web installer's wizard, including the database-connection
+        // step, is left for a human.
+        String autoAdminPasswordEnvVar = applicationSpec == null ? null : applicationSpec.autoAdminPasswordEnvVar();
+        if (autoAdminPasswordEnvVar != null && !autoAdminPasswordEnvVar.isBlank()
+                && autoAdminPasswordSecretArn != null && !autoAdminPasswordSecretArn.isBlank()) {
+            ISecret autoAdminPasswordSecret =
+                Secret.fromSecretCompleteArn(this, "AutoAdminPasswordSecret", autoAdminPasswordSecretArn);
+
+            if (fargateTaskDef.getExecutionRole() != null) {
+                fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
+                    PolicyStatement.Builder.create()
+                        .sid("AllowReadAutoAdminPassword")
+                        .effect(Effect.ALLOW)
+                        .actions(List.of(
+                            "secretsmanager:GetSecretValue",
+                            "secretsmanager:DescribeSecret"
+                        ))
+                        .resources(List.of(autoAdminPasswordSecretArn))
+                        .build()
+                );
+                LOG.info("  ✅ Added IAM policy for auto-admin password secret access");
+            }
+
+            ecsSecrets.put(autoAdminPasswordEnvVar,
+                          software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(autoAdminPasswordSecret));
+            LOG.info("  ✅ Admin password mapped to JOOMLA_ADMIN_PASSWORD");
         }
 
         // Add database password from Secrets Manager for applications with external database
@@ -295,7 +354,12 @@ public class ContainerFactory extends BaseFactory {
             // Map password to application-specific environment variable names
             // Different applications expect different env var names for the database password
             String appId = applicationSpec.applicationId();
-            switch (appId) {
+            String databasePasswordEnvVar = applicationSpec.databasePasswordEnvVar();
+            if (databasePasswordEnvVar != null && !databasePasswordEnvVar.isBlank()) {
+                ecsSecrets.put(databasePasswordEnvVar,
+                              software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
+                LOG.info("  ✅ Database password mapped to " + databasePasswordEnvVar);
+            } else switch (appId) {
                 case "gitlab":
                     ecsSecrets.put("GITLAB_DATABASE_PASSWORD",
                                   software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
@@ -320,11 +384,6 @@ public class ContainerFactory extends BaseFactory {
                     ecsSecrets.put("SUPERSET_DATABASE_PASSWORD",
                                   software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
                     LOG.info("  ✅ Database password mapped to SUPERSET_DATABASE_PASSWORD");
-                    break;
-                case "cloudforge-manager":
-                    ecsSecrets.put("CFC_MANAGER_DATABASE_PASSWORD",
-                                  software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(dbSecret, "password"));
-                    LOG.info("  ✅ Database password mapped to CFC_MANAGER_DATABASE_PASSWORD");
                     break;
                 case "joomla":
                     ecsSecrets.put("JOOMLA_DB_PASSWORD",
@@ -395,7 +454,24 @@ public class ContainerFactory extends BaseFactory {
                         // external-provider configuration supplies a Secrets Manager *name*.
                         // Support both forms so application OIDC can synthesize and deploy with
                         // managed or pre-existing secrets.
-                        ISecret clientSecret = clientSecretArn.startsWith("arn:")
+                        //
+                        // clientSecretArn.startsWith("arn:") alone is NOT enough: the Cognito
+                        // auto-provision path (CognitoAuthenticationFactory) hands this value in
+                        // as cognitoSecret.getSecretArn() — a CDK Token, i.e. an opaque unresolved
+                        // placeholder string at this point in synthesis, not literally "arn:..."
+                        // yet. startsWith() on a Token silently returns false, sending an ARN down
+                        // the fromSecretNameV2 (bare-name) branch — which then wraps the eventual
+                        // resolved ARN inside ANOTHER "arn:aws:secretsmanager:...:secret:" prefix,
+                        // producing a doubled ARN that fails at deploy time with "unexpected ARN
+                        // format" (via the ECS deployment circuit breaker). Token.isUnresolved()
+                        // catches exactly this case — Cognito's own getSecretArn() contract always
+                        // resolves to a complete ARN, so a Token here is routed the same way a
+                        // literal "arn:" string already is; only a resolved, non-ARN-shaped
+                        // literal (a hand-typed bare name in DeploymentContext) takes the
+                        // fromSecretNameV2 branch.
+                        boolean isCompleteArn = software.amazon.awscdk.Token.isUnresolved(clientSecretArn)
+                            || clientSecretArn.startsWith("arn:");
+                        ISecret clientSecret = isCompleteArn
                             ? Secret.fromSecretCompleteArn(this, "OidcClientSecret", clientSecretArn)
                             : Secret.fromSecretNameV2(this, "OidcClientSecret", clientSecretArn);
 
@@ -422,7 +498,12 @@ public class ContainerFactory extends BaseFactory {
                         // Map to application-specific environment variable names
                         // Different applications expect different env var names for OIDC client secret
                         String appId = applicationSpec.applicationId();
-                        switch (appId) {
+                        String oidcClientSecretEnvVar = applicationSpec.oidcClientSecretEnvVar();
+                        if (oidcClientSecretEnvVar != null && !oidcClientSecretEnvVar.isBlank()) {
+                            ecsSecrets.put(oidcClientSecretEnvVar,
+                                          software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
+                            LOG.info("  ✅ OIDC client secret mapped to " + oidcClientSecretEnvVar);
+                        } else switch (appId) {
                             case "mattermost-enterprise":
                                 // Mattermost Enterprise - native OpenID Connect
                                 ecsSecrets.put("MM_OPENIDSETTINGS_SECRET",
@@ -445,12 +526,6 @@ public class ContainerFactory extends BaseFactory {
                                 ecsSecrets.put("GITLAB_OIDC_CLIENT_SECRET",
                                               software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
                                 LOG.info("  ✅ OIDC client secret mapped to GITLAB_OIDC_CLIENT_SECRET");
-                                break;
-                            case "cloudforge-manager":
-                                ecsSecrets.put(com.cloudforge.core.manager.ManagerEnvKeys.OIDC_CLIENT_SECRET,
-                                              software.amazon.awscdk.services.ecs.Secret.fromSecretsManager(clientSecret));
-                                LOG.info("  ✅ OIDC client secret mapped to "
-                                    + com.cloudforge.core.manager.ManagerEnvKeys.OIDC_CLIENT_SECRET);
                                 break;
                             default:
                                 // Generic naming: <APP>_OIDC_CLIENT_SECRET
@@ -488,8 +563,22 @@ public class ContainerFactory extends BaseFactory {
                         .logGroup(logs)
                         .streamPrefix(logStreamPrefix).build()));
 
-        // Only set user if specified (some apps like GitLab need to run as root)
-        if (containerUser != null) {
+        // Only set user if specified (some apps like GitLab need to run as root) -- and never for
+        // a privileged port (<1024), regardless of what the ApplicationSpec declares. Forcing a
+        // non-root user at the ECS container level applies from PID 1 onward, bypassing the
+        // image's own normal root-then-drop-privileges startup (Apache's docker-entrypoint starts
+        // as root specifically so its master process can bind a privileged port, then forks
+        // www-data workers) -- without this, an app whose port is privileged fails outright with
+        // "Permission denied: could not bind to address" the moment containerUser forces it to
+        // start as a non-root UID from the beginning. Granting the Linux capability that would
+        // close this gap (NET_BIND_SERVICE) isn't an option: AWS Fargate flatly rejects it at
+        // CreateTaskDefinition ("NET_BIND_SERVICE is not allowed on Fargate"), a hard platform
+        // ceiling with no capability-grant path around it on the launch type every app in this
+        // catalog actually uses. So for a privileged port, root is the only working option here --
+        // which is also just letting the image run the way its own Dockerfile already intends
+        // (root-then-drop), not a step down in security posture from some other achievable state.
+        boolean privilegedPort = appPort < 1024;
+        if (containerUser != null && !privilegedPort) {
             containerOptionsBuilder.user(containerUser);
         }
 
@@ -594,12 +683,11 @@ public class ContainerFactory extends BaseFactory {
         // CmsSpec's own startup customization (e.g. phpBB reconfiguring Apache's listen port
         // and downloading its source on first run) — independent of OIDC, so it applies
         // regardless of authMode, but only when the OIDC branch above hasn't already claimed
-        // the container's command. Real bug this fixed: CmsSpec.containerCommand() has existed
-        // as an interface hook (and PhpBBApplicationSpec implemented it) with no caller anywhere
-        // in the synthesis path — every app relying on it silently got the stock image entrypoint
-        // instead, e.g. phpBB starting Apache on its image's default port 80 while every other
-        // part of the stack (ALB target group, container port mappings, generated URLs) assumed
-        // the app spec's declared applicationPort().
+        // the container's command. Without a caller for this hook, an app implementing
+        // CmsSpec.containerCommand() (e.g. PhpBBApplicationSpec) would silently get the stock
+        // image entrypoint instead, starting Apache on its image's default port 80 while every
+        // other part of the stack (ALB target group, container port mappings, generated URLs)
+        // assumes the app spec's declared applicationPort().
         if (!commandConfigured && applicationSpec instanceof CmsSpec cmsSpec) {
             List<String> command = cmsSpec.containerCommand();
             if (command != null && !command.isEmpty()) {
@@ -746,7 +834,7 @@ public class ContainerFactory extends BaseFactory {
                 .build());
 
         // Same-task sidecar containers (see ApplicationSpec.SidecarContainer's own javadoc) —
-        // empty for every app except cloudforge-manager today. Always-running, essential=true:
+        // empty by default, opt-in per application. Always-running, essential=true:
         // unlike the SAML init container above, a sidecar has no exit condition, so its own
         // death is treated the same as the main container's — ECS replaces the whole task.
         if (applicationSpec != null) {

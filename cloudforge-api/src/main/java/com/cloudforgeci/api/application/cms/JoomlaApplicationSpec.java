@@ -404,13 +404,29 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
     public Map<String, String> containerEnvironmentVariables(String fqdn, boolean sslEnabled, String authMode) {
         Map<String, String> env = new HashMap<>();
 
-        // Joomla settings
+        // Site name is always set, fqdn or not -- it (along with the four JOOMLA_ADMIN_* vars
+        // below) must be present and non-empty for the official image's entrypoint to run a
+        // fully non-interactive install instead of leaving its web installer wizard, including
+        // the database-connection step, for a human to complete by hand.
+        env.put("JOOMLA_SITE_NAME", fqdn != null && !fqdn.isBlank() ? fqdn : displayName());
         if (fqdn != null && !fqdn.isBlank()) {
-            env.put("JOOMLA_SITE_NAME", fqdn);
             env.put("JOOMLA_SITE_URL", (sslEnabled ? "https://" : "http://") + fqdn);
         }
 
+        // Initial admin account. JOOMLA_ADMIN_PASSWORD is deliberately absent here -- see
+        // autoAdminPasswordEnvVar() below; it's delivered as an ECS Secret, never a plaintext
+        // task-definition environment variable. Retrieve it the same way as the database
+        // password: `aws secretsmanager get-secret-value` against this stack's secret.
+        env.put("JOOMLA_ADMIN_USER", "Administrator");
+        env.put("JOOMLA_ADMIN_USERNAME", "admin");
+        env.put("JOOMLA_ADMIN_EMAIL", "admin@" + (fqdn != null && !fqdn.isBlank() ? fqdn : "example.com"));
+
         return env;
+    }
+
+    @Override
+    public String autoAdminPasswordEnvVar() {
+        return "JOOMLA_ADMIN_PASSWORD";
     }
 
     // ========== OIDC Support ==========

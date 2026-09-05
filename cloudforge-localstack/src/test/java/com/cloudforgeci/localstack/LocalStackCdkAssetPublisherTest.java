@@ -6,6 +6,9 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 import java.io.IOException;
 import java.net.URI;
@@ -15,6 +18,7 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@code resolveTokens} and the manifest-parsing/no-op paths — deterministic, no live S3 endpoint
@@ -31,6 +35,28 @@ class LocalStackCdkAssetPublisherTest {
             .credentialsProvider(StaticCredentialsProvider.create(
                 AwsBasicCredentials.create("test", "test")))
             .build();
+    }
+
+    /** A minimal {@link S3Client} standing in for "this bucket doesn't exist" — every operation
+     *  method on the SDK's client interfaces is a default method throwing {@code
+     *  UnsupportedOperationException} unless overridden, so only {@code headBucket} needs one
+     *  here; nothing else in the path under test calls anything else on this fake. */
+    private static S3Client bucketDoesNotExistClient() {
+        return new S3Client() {
+            @Override
+            public String serviceName() {
+                return "s3";
+            }
+
+            @Override
+            public void close() {
+            }
+
+            @Override
+            public HeadBucketResponse headBucket(HeadBucketRequest request) {
+                throw NoSuchBucketException.builder().message("The specified bucket does not exist").build();
+            }
+        };
     }
 
     @Test
@@ -67,7 +93,7 @@ class LocalStackCdkAssetPublisherTest {
     void publishIsANoOpWhenNoManifestExistsNextToTheTemplate(@TempDir Path cdkOut) {
         assertDoesNotThrow(() ->
             LocalStackCdkAssetPublisher.publish(
-                cdkOut, "NoAssetsStack", unreachableClient(), "000000000000"));
+                cdkOut, "NoAssetsStack", unreachableClient(), "000000000000", true));
     }
 
     @Test
@@ -91,6 +117,38 @@ class LocalStackCdkAssetPublisherTest {
         Files.writeString(cdkOut.resolve("Stack.assets.json"), manifest);
 
         assertThrows(IOException.class, () ->
-            LocalStackCdkAssetPublisher.publish(cdkOut, "Stack", unreachableClient(), "000000000000"));
+            LocalStackCdkAssetPublisher.publish(cdkOut, "Stack", unreachableClient(), "000000000000", true));
+    }
+
+    /** The real bug this closes: a real-AWS deploy against an account nobody ever ran {@code cdk
+     *  bootstrap} against must fail with an actionable message, never silently self-create CDK's
+     *  own bootstrap-owned asset bucket — doing so leaves a bare, untracked bucket with that exact
+     *  deterministic name sitting in the account, which then permanently blocks the real {@code
+     *  cdk bootstrap} from ever creating its own properly-configured copy of it. */
+    @Test
+    void publishRefusesToSelfCreateTheAssetBucketWhenCreateBucketIfMissingIsFalse(@TempDir Path cdkOut)
+            throws IOException {
+        String manifest = """
+            {
+              "files": {
+                "abc123": {
+                  "source": { "path": "asset.abc123.zip", "packaging": "zip" },
+                  "destinations": {
+                    "current_account-current_region": {
+                      "bucketName": "cdk-hnb659fds-assets-123456789012-us-east-1",
+                      "objectKey": "abc123.zip"
+                    }
+                  }
+                }
+              }
+            }
+            """;
+        Files.writeString(cdkOut.resolve("Stack.assets.json"), manifest);
+        Files.writeString(cdkOut.resolve("asset.abc123.zip"), "not a real zip, just needs to exist");
+
+        IOException thrown = assertThrows(IOException.class, () -> LocalStackCdkAssetPublisher.publish(
+            cdkOut, "Stack", bucketDoesNotExistClient(), "123456789012", false));
+
+        assertTrue(thrown.getMessage().contains("cdk bootstrap"), thrown.getMessage());
     }
 }

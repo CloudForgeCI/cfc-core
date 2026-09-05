@@ -210,11 +210,11 @@ class LocalStackTemplateAdapterTest {
         assertEquals("http://localhost:4566/_aws/elb/cfc-testalb/", jenkinsUrl);
     }
 
-    /** Real bug this guards: a LocalStack deploy typically has no {@code fqdn} configured
-     *  (authMode none), so {@code WORDPRESS_CONFIG_EXTRA} never got a WP_HOME/WP_SITEURL at all —
-     *  WordPress then had no way to know it's reached through a {@code /_aws/elb/<name>} path
-     *  prefix, so its own first-run "not installed" redirect came back rooted at {@code /} and
-     *  404'd. */
+    /** Guards against a missing WP_HOME/WP_SITEURL: a LocalStack deploy typically has no {@code
+     *  fqdn} configured (authMode none), so without this, {@code WORDPRESS_CONFIG_EXTRA} would
+     *  leave WordPress with no way to know it's reached through a {@code /_aws/elb/<name>} path
+     *  prefix, and its own first-run "not installed" redirect would come back rooted at {@code /}
+     *  and 404. */
     @Test
     void injectsWordPressSiteUrlForPathStyleElb() {
         ObjectNode canonical = MAPPER.createObjectNode();
@@ -380,12 +380,13 @@ class LocalStackTemplateAdapterTest {
     }
 
     /**
-     * Real bug this guards: without LOCALSTACK_VOLUME_ROOT baked into Manager's own container,
-     * {@code defaultVolumeRoot()} falls back to {@code user.dir} — meaningful only on a host-run
-     * process, not inside Manager's own already-containerized JVM (where deploy:create/
-     * deploy:catalog actually run, for every app deployed through Manager's UI, not just Manager
-     * itself). Every EFS-backed volume for every such app got bind-mounted to a bogus path inside
-     * that container's own WORKDIR, silently reset on every redeploy. Baking the resolved value
+     * Guards against a bogus volume-root path: without LOCALSTACK_VOLUME_ROOT baked into
+     * Manager's own container, {@code defaultVolumeRoot()} falls back to {@code user.dir} —
+     * meaningful only on a host-run process, not inside Manager's own already-containerized JVM
+     * (where deploy:create/deploy:catalog actually run, for every app deployed through Manager's
+     * UI, not just Manager itself). Without this, every EFS-backed volume for every such app
+     * would bind-mount to a bogus path inside that container's own WORKDIR, silently reset on
+     * every redeploy. Baking the resolved value
      * into Manager's container breaks the cycle: whatever resolves the value now (this test's own
      * process, standing in for the very first host-run deploy) becomes what every later
      * self-referential adapt() call reads back out of its own environment instead of re-deriving.
@@ -735,13 +736,14 @@ class LocalStackTemplateAdapterTest {
             .path("Properties").path("ContainerDefinitions").get(0).has("Secrets"));
     }
 
-    /** Real bug this guards: Manager's own Cognito CallbackURLs are built from the ALB's real DNS
-     *  name (an Fn::Join token, not a literal placeholder host like Jenkins/GitLab's
-     *  "jenkins.local.test"), so {@code findNamedLocalCallbackHost} never matches it and the base
-     *  URL fell back to {@code http://localhost:<containerPort>} — the container's own internal
-     *  port, unreachable from the browser and not stable across a LocalStack container respawn
-     *  either. Manager's redirect URI/CallbackURLs should use the emulator edge's stable vhost
-     *  instead, same as every other application-oidc app already gets via its named placeholder. */
+    /** Guards against falling back to the container's own internal port: Manager's own Cognito
+     *  CallbackURLs are built from the ALB's real DNS name (an Fn::Join token, not a literal
+     *  placeholder host like Jenkins/GitLab's "jenkins.local.test"), so {@code
+     *  findNamedLocalCallbackHost} never matches it, and without this the base URL would fall
+     *  back to {@code http://localhost:<containerPort>} — unreachable from the browser and not
+     *  stable across a LocalStack container respawn either. Manager's redirect URI/CallbackURLs
+     *  should use the emulator edge's stable vhost instead, same as every other application-oidc
+     *  app already gets via its named placeholder. */
     @Test
     void rewritesApplicationOidcManagerCallbacksToTheEmulatorEdgeVhost() {
         ObjectNode canonical = MAPPER.createObjectNode();
@@ -784,12 +786,13 @@ class LocalStackTemplateAdapterTest {
         assertEquals("http://manager.cloudforge.localhost/api/v1/auth/oidc/callback", callbacks.get(0).asText());
     }
 
-    /** Real bug this guards: WordPressApplicationSpec.databaseEnvVars builds WORDPRESS_DB_HOST as
-     *  {@code host + ":" + port} — CDK renders that Java string concatenation on tokens as an
-     *  Fn::Join wrapping a nested Fn::GetAtt, not a bare Fn::GetAtt like the plain DB_HOST env var
-     *  right next to it. Missing the Fn::Join case left WORDPRESS_DB_HOST pointing at LocalStack's
-     *  RDS-emulation hostname (unreachable from inside the ECS task's own Docker network) even
-     *  though DB_HOST was correctly rewritten — WordPress ran but reported "Database Error". */
+    /** Guards against WORDPRESS_DB_HOST staying unrewritten: WordPressApplicationSpec
+     *  .databaseEnvVars builds it as {@code host + ":" + port} — CDK renders that Java string
+     *  concatenation on tokens as an Fn::Join wrapping a nested Fn::GetAtt, not a bare Fn::GetAtt
+     *  like the plain DB_HOST env var right next to it. Without handling the Fn::Join case,
+     *  WORDPRESS_DB_HOST would still point at LocalStack's RDS-emulation hostname (unreachable
+     *  from inside the ECS task's own Docker network) even with DB_HOST correctly rewritten —
+     *  WordPress would run but report "Database Error". */
     @Test
     void rewritesGetAttEmbeddedInAJoinedHostPortEnvVarForLocalStackMysql() {
         ObjectNode canonical = MAPPER.createObjectNode();
@@ -824,12 +827,13 @@ class LocalStackTemplateAdapterTest {
         assertEquals(":4510", rewrittenJoinParts.get(1).asText());
     }
 
-    /** Real bug this guards: {@code DatabaseSpec.DatabaseConnection.port()} is a plain
-     *  {@code int}, never a CDK token — {@code PhpBBApplicationSpec}'s standalone
-     *  {@code PHPBB_DB_PORT} env var (unlike a combined "host:port" string) is therefore a bare
-     *  literal ("3306") from the moment the template is synthesized, with no Fn::GetAtt shape
-     *  for the adapter to key off at all. Left unrewritten, phpBB's installer autofill (and any
-     *  other direct use of the env var) pointed at the right host but the wrong port. */
+    /** Guards against a bare literal port staying unrewritten: {@code
+     *  DatabaseSpec.DatabaseConnection.port()} is a plain {@code int}, never a CDK token, so
+     *  {@code PhpBBApplicationSpec}'s standalone {@code PHPBB_DB_PORT} env var (unlike a combined
+     *  "host:port" string) is a bare literal ("3306") from the moment the template is
+     *  synthesized, with no Fn::GetAtt shape for the adapter to key off at all. Left unrewritten,
+     *  phpBB's installer autofill (and any other direct use of the env var) would point at the
+     *  right host but the wrong port. */
     @Test
     void rewritesBareLiteralStandardPortEnvVarForLocalStackMysql() {
         ObjectNode canonical = MAPPER.createObjectNode();
