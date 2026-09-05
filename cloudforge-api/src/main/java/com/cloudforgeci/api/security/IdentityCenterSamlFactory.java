@@ -278,6 +278,10 @@ public class IdentityCenterSamlFactory extends BaseFactory {
      *   <li>Assign users/groups</li>
      * </ol>
      */
+    // codeql[java/unused-parameter] -- applicationArn is unused: SAML config here is limited to
+    // logging manual-configuration values (see this method's own comment on why the grant/auth
+    // method API calls are skipped); it's part of the SAML integration's still-incomplete state
+    // (see configureApplicationGrant's TODO below).
     private void configureSamlAuthentication(String applicationArn, String siteUrl, String acsUrl) {
         // Note: For custom SAML applications, the grant types and authentication methods
         // are pre-configured by AWS when using ApplicationProviderArn = "arn:aws:sso::aws:applicationProvider/custom"
@@ -678,6 +682,9 @@ public class IdentityCenterSamlFactory extends BaseFactory {
      *                                SAML integration above is implemented)
      * @param cognitoClientId         Cognito app client ID (used as audience claim)
      */
+    // codeql[java/unused-parameter] -- applicationArn/trustedTokenIssuerArn are unused: this whole
+    // method is a stub (see its own TODO javadoc) so the module compiles ahead of the SAML
+    // integration actually being implemented.
     private void configureApplicationGrant(String applicationArn, String trustedTokenIssuerArn, String cognitoClientId) {
         LOG.warning("configureApplicationGrant() not yet implemented — SAML integration pending.");
         LOG.warning("  Application ARN: " + applicationArn);

@@ -117,6 +117,9 @@ public final class CmsObjectCacheConfiguration {
 
         String replicationGroupId = generateClusterId(ctx, spec, "-rg");
         String nodeType = determineNodeType(ctx);
+        // codeql[java/dereferenced-value-may-be-null] -- the only null-ctx caller
+        // (CmsObjectCacheConfigurationTest) always passes an out-of-range numReplicas, which the
+        // guard above always rejects first; ctx is never actually null here.
         boolean isProduction = ctx.cfc.securityProfile() == SecurityProfile.PRODUCTION;
 
         // Create subnet group
@@ -129,6 +132,8 @@ public final class CmsObjectCacheConfiguration {
         CfnParameterGroup parameterGroup = createRedisParameterGroup(ctx, spec);
 
         return CfnReplicationGroup.Builder.create(ctx, "CmsRedisReplicationGroup")
+            // codeql[java/dereferenced-value-may-be-null] -- same reasoning as isProduction
+            // above: the only null-spec caller always trips the numReplicas guard first.
             .replicationGroupDescription(String.format("CloudForge Redis for %s", spec.displayName()))
             .replicationGroupId(replicationGroupId)
             .engine("redis")

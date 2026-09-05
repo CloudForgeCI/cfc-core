@@ -46,7 +46,7 @@ class LoggingCwFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Creating LoggingCw factory
@@ -64,7 +64,7 @@ class LoggingCwFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Creating LoggingCw factory
@@ -89,7 +89,7 @@ class LoggingCwFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Creating LoggingCw factory with custom retention
@@ -107,7 +107,7 @@ class LoggingCwFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Creating two LoggingCw factories
@@ -129,7 +129,7 @@ class LoggingCwFactoryTest {
 
             DeploymentContext cfc = DeploymentContext.from(stack);
             IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(profile);
-            SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+            SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     profile, iamProfile, cfc);
 
             // When: Creating LoggingCw factory
@@ -155,7 +155,7 @@ class LoggingCwFactoryTest {
                 ? TopologyType.JENKINS_SERVICE
                 : TopologyType.JENKINS_SERVICE;
 
-            SystemContext ctx = SystemContext.start(stack, topology, runtime,
+            SystemContext.start(stack, topology, runtime,
                     SecurityProfile.DEV, iamProfile, cfc);
 
             // When: Creating LoggingCw factory
@@ -182,7 +182,7 @@ class LoggingCwFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // When: Creating LoggingCw factory with monitoring
@@ -200,7 +200,7 @@ class LoggingCwFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When/Then: Constructor should accept valid parameters
@@ -226,7 +226,7 @@ class LoggingCwFactoryTest {
 
             DeploymentContext cfc = DeploymentContext.from(stack);
             IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-            SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+            SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     SecurityProfile.DEV, iamProfile, cfc);
 
             // When: Creating LoggingCw factory with different retention

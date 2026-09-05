@@ -196,7 +196,7 @@ public class WafFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                                                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // Create VPC
@@ -257,7 +257,7 @@ public class WafFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                                                 SecurityProfile.STAGING, iamProfile, cfc);
 
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
@@ -315,7 +315,7 @@ public class WafFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                                                 SecurityProfile.STAGING, iamProfile, cfc);
 
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
@@ -373,7 +373,7 @@ public class WafFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                                                 SecurityProfile.STAGING, iamProfile, cfc);
 
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
@@ -431,7 +431,7 @@ public class WafFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                                                 SecurityProfile.STAGING, iamProfile, cfc);
 
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
@@ -522,7 +522,7 @@ public class WafFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                                                 SecurityProfile.STAGING, iamProfile, cfc);
 
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
@@ -566,7 +566,7 @@ public class WafFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                                                 SecurityProfile.STAGING, iamProfile, cfc);
 
         VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");

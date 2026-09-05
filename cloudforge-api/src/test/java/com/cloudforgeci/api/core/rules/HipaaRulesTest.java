@@ -1704,6 +1704,9 @@ class HipaaRulesTest {
         "STAGING,365,ENFORCE,false,FARGATE"          // Staging with 1 year
     })
     void testHipaaRetentionRequirementsCombinations(String profile, int retentionDays,
+                                                    // codeql[java/unused-parameter] -- shouldPass documents CSV-row intent, but the actual
+                                                        // pass/fail decision below is independently recomputed from retentionDays/complianceMode
+                                                        // (deliberately, to avoid the assertion silently trusting a possibly-stale CSV flag).
                                                     String complianceMode, boolean shouldPass, String runtime) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestHipaaRetention");
@@ -1784,6 +1787,8 @@ class HipaaRulesTest {
         "PRODUCTION,ADVISORY,true,FARGATE",     // PRODUCTION should run HIPAA validation
         "PRODUCTION,ENFORCE,true,FARGATE"       // PRODUCTION with enforce mode
     })
+    // codeql[java/unused-parameter] -- shouldValidate documents CSV-row intent only; see the
+        // shouldPass note on testHipaaRetentionRequirementsCombinations above for why.
     void testHipaaSecurityProfileBranches(String profile, String complianceMode, boolean shouldValidate, String runtime) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestHipaaProfile");

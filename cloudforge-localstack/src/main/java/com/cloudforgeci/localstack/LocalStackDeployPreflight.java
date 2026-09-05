@@ -68,7 +68,7 @@ public final class LocalStackDeployPreflight {
                         + " (tier=" + snapshot.tierProfile()
                         + ", edition=" + snapshot.edition()
                         + ", available=" + snapshot.capabilities() + ")",
-                    capabilitySuggestion(capability, snapshot)));
+                    capabilitySuggestion(capability)));
             }
         }
 
@@ -85,7 +85,6 @@ public final class LocalStackDeployPreflight {
             DeploymentTarget.LOCALSTACK,
             snapshot.endpoint(),
             localStackName,
-            config,
             spec,
             template,
             violations);
@@ -149,9 +148,7 @@ public final class LocalStackDeployPreflight {
         }
     }
 
-    private static String capabilitySuggestion(
-            LocalStackServiceCapability capability,
-            LocalStackCapabilitySnapshot snapshot) {
+    private static String capabilitySuggestion(LocalStackServiceCapability capability) {
         return switch (capability) {
             case RDS -> "Enable RDS on your LocalStack tier, or set LOCALSTACK_CAPABILITIES=rds when health JSON is sparse.";
             case EC2, AUTOSCALING -> "EC2 runtime requires LocalStack EC2/Auto Scaling support (Base tier when probed).";

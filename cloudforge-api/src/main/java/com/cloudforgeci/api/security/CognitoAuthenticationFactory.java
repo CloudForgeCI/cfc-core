@@ -476,8 +476,11 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .accountRecovery(AccountRecovery.EMAIL_ONLY)
                 // Advanced security features - profile-aware (enabled for CDK-nag COG3 compliance)
                 // Note: Requires Cognito Plus tier for production deployments
-                .advancedSecurityMode(securityProfileConfig.isAdvancedSecurityEnabled() ?
-                    AdvancedSecurityMode.ENFORCED : AdvancedSecurityMode.OFF)
+                // advancedSecurityMode is deprecated in favor of user pool feature plans; this is
+                // its replacement (standardThreatProtectionMode) for the equivalent ENFORCED/OFF
+                // choice this file has always made based on securityProfileConfig.
+                .standardThreatProtectionMode(securityProfileConfig.isAdvancedSecurityEnabled() ?
+                    StandardThreatProtectionMode.FULL_FUNCTION : StandardThreatProtectionMode.NO_ENFORCEMENT)
                 // Feature plan - Plus tier required when Advanced Security is enabled
                 // CDK validates this, so we must set it even though we'll remove it from CloudFormation
                 .featurePlan(securityProfileConfig.isAdvancedSecurityEnabled() ?
@@ -560,7 +563,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // exercised for a given deployment. onSet (not a direct getter) because IAM-profile
         // configuration (which creates fargateTaskRole) and Cognito provisioning have no fixed
         // ordering relative to each other.
-        if (applicationSpec != null && applicationSpec.requiresCognitoGroupManagementIam()
+        if (ctx != null && applicationSpec != null && applicationSpec.requiresCognitoGroupManagementIam()
                 && cognitoCreateGroups != null && cognitoCreateGroups) {
             String userPoolArn = userPool.getUserPoolArn();
             ctx.fargateTaskRole.onSet(taskRole -> taskRole.addToPrincipalPolicy(
@@ -685,10 +688,15 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         exportOidcEndpoints(userPool.getUserPoolId(), appClient.getUserPoolClientId(), cognitoDomainPrefix, secretName);
 
         // Export CDK objects for native ALB Cognito authentication
-        ctx.cognitoUserPool.set(userPool);
-        ctx.cognitoUserPoolClient.set(appClient);
-        ctx.cognitoUserPoolDomain.set(userPoolDomain);
-        LOG.info("Exported Cognito CDK objects to SystemContext for native ALB Cognito authentication");
+        if (ctx != null) {
+            ctx.cognitoUserPool.set(userPool);
+            ctx.cognitoUserPoolClient.set(appClient);
+            ctx.cognitoUserPoolDomain.set(userPoolDomain);
+            LOG.info("Exported Cognito CDK objects to SystemContext for native ALB Cognito authentication");
+        } else {
+            LOG.warning("SystemContext unavailable - skipped exporting Cognito CDK objects "
+                + "(native ALB Cognito authentication factories won't see this pool)");
+        }
 
         // Store User Pool ARN in SSM Parameter Store for compliance tracking (PRODUCTION only)
         storeUserPoolArnInSSM(userPool);
@@ -825,7 +833,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      */
     private String getApplicationCallbackPath() {
         // Try to get from SystemContext.applicationSpec if available
-        if (ctx != null && ctx.applicationSpec != null && ctx.applicationSpec.get().isPresent()) {
+        // ctx.applicationSpec is a Slot, always constructed non-null -- only its .get() Optional
+        // content can be absent.
+        if (ctx != null && ctx.applicationSpec.get().isPresent()) {
             var appSpec = ctx.applicationSpec.get().orElse(null);
             if (appSpec != null && appSpec.supportsOidcIntegration()) {
                 var integration = appSpec.getOidcIntegration();
@@ -958,7 +968,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .build();
 
         // Create user group
-        CfnUserPoolGroup userGroup = CfnUserPoolGroup.Builder.create(this, "UserGroup")
+        CfnUserPoolGroup.Builder.create(this, "UserGroup")
                 .userPoolId(userPool.getUserPoolId())
                 .groupName(userGroupName)
                 .description("Jenkins users with standard access")

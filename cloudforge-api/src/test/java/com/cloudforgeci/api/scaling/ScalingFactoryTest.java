@@ -25,7 +25,7 @@ public class ScalingFactoryTest {
     Stack stack = new Stack(app, "Test");
     var cfc = DeploymentContext.from(stack);
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-    SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
+    SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV, iamProfile, cfc);
 
     VpcFactory vpc = new VpcFactory(stack, "Vpc");
     vpc.create();

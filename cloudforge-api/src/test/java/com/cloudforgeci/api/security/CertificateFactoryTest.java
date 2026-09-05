@@ -53,7 +53,7 @@ class CertificateFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Creating Certificate factory
@@ -71,7 +71,7 @@ class CertificateFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, iamProfile, cfc);
 
         // When: Creating Certificate factory without SSL
@@ -90,7 +90,7 @@ class CertificateFactoryTest {
 
             DeploymentContext cfc = DeploymentContext.from(stack);
             IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(profile);
-            SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+            SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                     profile, iamProfile, cfc);
 
             // When: Creating Certificate factory
@@ -110,7 +110,7 @@ class CertificateFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         // When: Creating Certificate factory
@@ -138,7 +138,7 @@ class CertificateFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.STAGING, iamProfile, cfc);
 
         // When: Creating Certificate factory with subdomain

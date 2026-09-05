@@ -205,10 +205,18 @@ public final class ApplicationPropertyLoader {
             return Boolean.parseBoolean(value);
         }
         if (type == Integer.class || type == int.class) {
-            return Integer.parseInt(value);
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException e) {
+                throw new NumberFormatException("'" + value + "' is not a valid Integer");
+            }
         }
         if (type == Long.class || type == long.class) {
-            return Long.parseLong(value);
+            try {
+                return Long.parseLong(value);
+            } catch (NumberFormatException e) {
+                throw new NumberFormatException("'" + value + "' is not a valid Long");
+            }
         }
         // DeploymentTarget's own case-insensitive parsing (blank -> AWS, garbage -> a real
         // IllegalArgumentException) is the one already established elsewhere in this codebase for

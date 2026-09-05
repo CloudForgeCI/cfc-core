@@ -5,7 +5,6 @@ import com.cloudforgeci.api.interfaces.Rule;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.core.runtime.Ec2RuntimeConfiguration;
 import com.cloudforgeci.api.core.runtime.FargateRuntimeConfiguration;
-import software.constructs.Node;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +25,7 @@ public final class RuntimeRules {
       };
 
 
-    Node.of(ctx).addValidation(() -> {
+    ctx.getNode().addValidation(() -> {
         List<String> errs = new ArrayList<>();
         for (Rule r : p.rules(ctx)) errs.addAll(r.check(ctx));
         if (!errs.isEmpty()) {

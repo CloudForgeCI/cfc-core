@@ -191,7 +191,11 @@ public class MattermostApplicationSpec implements ApplicationSpec, DatabaseSpec 
      * <p>Configures Mattermost to use RDS PostgreSQL. Mattermost REQUIRES a database
      * and does not support embedded databases.</p>
      */
+    // fqdn/sslEnabled/authMode go unused by this app, but ContainerFactory dispatches to this
+    // exact 4-arg signature via reflection (getMethod("containerEnvironmentVariables", String,
+    // boolean, String, DatabaseConnection)); dropping them here would break that lookup.
     public Map<String, String> containerEnvironmentVariables(
+            // codeql[java/unused-parameter]
             String fqdn, boolean sslEnabled, String authMode, DatabaseConnection dbConn) {
         Map<String, String> environment = new HashMap<>();
 

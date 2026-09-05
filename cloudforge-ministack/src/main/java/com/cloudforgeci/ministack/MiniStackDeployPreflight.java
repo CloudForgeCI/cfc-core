@@ -65,7 +65,6 @@ public final class MiniStackDeployPreflight {
             DeploymentTarget.MINISTACK,
             endpoint,
             localStackName,
-            config,
             spec,
             template,
             violations);

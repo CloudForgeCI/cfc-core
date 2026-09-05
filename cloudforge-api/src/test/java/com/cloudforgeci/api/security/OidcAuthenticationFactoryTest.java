@@ -38,6 +38,7 @@ class OidcAuthenticationFactoryTest {
 
         // Set OIDC configuration in context BEFORE creating DeploymentContext
         Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("runtime", runtime.toString());
         cfcContext.put("authMode", "alb-oidc");
         cfcContext.put("ssoInstanceArn", "arn:aws:sso:::instance/ssoins-1234567890abcdef");
         cfcContext.put("ssoGroupId", "90d67f97-1234-5678-9abc-def012345678");

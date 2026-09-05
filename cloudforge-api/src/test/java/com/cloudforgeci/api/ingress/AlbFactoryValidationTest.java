@@ -26,7 +26,7 @@ public class AlbFactoryValidationTest {
 
     var cfc = DeploymentContext.from(stack);
     IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-    SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
+    SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV, iamProfile, cfc);
 
     VpcFactory vpc = new VpcFactory(stack, "Vpc");
     vpc.create();

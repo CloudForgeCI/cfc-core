@@ -101,7 +101,7 @@ final class LocalStackOidcClientSecretReconciler {
             // exist and just updated. The service is the one thing guaranteed to name a real,
             // current revision.
             List<String> taskDefinitionIds = services.stream()
-                .map(r -> currentTaskDefinitionArn(ecs, resources, r))
+                .map(r -> currentTaskDefinitionArn(ecs, r))
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
@@ -259,7 +259,7 @@ final class LocalStackOidcClientSecretReconciler {
     /** The task definition a service is *actually* running right now, per ECS itself — see the
      *  class javadoc on why this is queried instead of trusted from the CFN stack resources. */
     private static String currentTaskDefinitionArn(
-            EcsClient ecs, List<StackResource> resources, StackResource serviceResource) {
+            EcsClient ecs, StackResource serviceResource) {
         String serviceArn = serviceResource.physicalResourceId();
         String clusterArn = clusterArnForService(serviceArn);
         if (clusterArn == null) {

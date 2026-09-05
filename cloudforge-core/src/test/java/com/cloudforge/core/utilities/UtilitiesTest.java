@@ -98,40 +98,32 @@ class UtilitiesTest {
         assertTrue(longDomain.length() < 253);
     }
 
-    // OneOf Tests
-    @Test
-    void testOneOfConcept() {
-        // OneOf ensures exactly one field is set
-        // Simulating OneOf behavior with simple logic
-        String option1 = "value1";
-        String option2 = null;
+    // OneOf Tests -- @OneOf constrains a String to an allowed value set (Bean Validation), not
+    // "exactly one of several fields set"; these exercise the real Validator instead of a
+    // same-named simulation that tested unrelated made-up logic.
+    @OneOf({"a", "b", "c"})
+    private String annotatedField;
 
-        int setCount = 0;
-        if (option1 != null) setCount++;
-        if (option2 != null) setCount++;
-
-        assertEquals(1, setCount); // Exactly one should be set
+    private OneOf.Validator newValidator() throws NoSuchFieldException {
+        OneOf.Validator validator = new OneOf.Validator();
+        validator.initialize(UtilitiesTest.class.getDeclaredField("annotatedField").getAnnotation(OneOf.class));
+        return validator;
     }
 
     @Test
-    void testOneOfValidation() {
-        // Both null - invalid
-        String opt1 = null;
-        String opt2 = null;
-        int count1 = (opt1 != null ? 1 : 0) + (opt2 != null ? 1 : 0);
-        assertEquals(0, count1);
+    void testOneOfAcceptsAnAllowedValue() throws NoSuchFieldException {
+        assertTrue(newValidator().isValid("b", null));
+    }
 
-        // Both set - invalid
-        opt1 = "a";
-        opt2 = "b";
-        int count2 = (opt1 != null ? 1 : 0) + (opt2 != null ? 1 : 0);
-        assertEquals(2, count2);
+    @Test
+    void testOneOfRejectsADisallowedValue() throws NoSuchFieldException {
+        assertFalse(newValidator().isValid("z", null));
+    }
 
-        // Exactly one set - valid
-        opt1 = "a";
-        opt2 = null;
-        int count3 = (opt1 != null ? 1 : 0) + (opt2 != null ? 1 : 0);
-        assertEquals(1, count3);
+    @Test
+    void testOneOfTreatsNullAsValid() throws NoSuchFieldException {
+        // Bean Validation convention: null is left to a separate @NotNull, not this constraint.
+        assertTrue(newValidator().isValid(null, null));
     }
 
     // General utility tests

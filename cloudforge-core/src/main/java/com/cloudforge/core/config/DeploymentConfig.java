@@ -1624,7 +1624,9 @@ public class DeploymentConfig {
                 .enable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING)
                 .enable(DeserializationFeature.READ_ENUMS_USING_TO_STRING)
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .serializationInclusion(JsonInclude.Include.NON_NULL)
+                // serializationInclusion(Include) is deprecated since Jackson 2.20 in favor of
+                // defaultPropertyInclusion(Value); ALL_NON_NULL is the equivalent Value constant.
+                .defaultPropertyInclusion(JsonInclude.Value.ALL_NON_NULL)
                 .visibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
                 .visibility(PropertyAccessor.GETTER, JsonAutoDetect.Visibility.NONE)
                 .build();

@@ -61,7 +61,6 @@ class EnumsTest {
     void testTopologyTypeValues() {
         TopologyType[] types = TopologyType.values();
 
-        assertTrue(types.length >= 1);
         // At least one topology type should exist
         assertTrue(types.length > 0);
     }

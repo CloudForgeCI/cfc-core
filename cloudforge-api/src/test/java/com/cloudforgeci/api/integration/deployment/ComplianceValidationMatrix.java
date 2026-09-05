@@ -207,6 +207,9 @@ public class ComplianceValidationMatrix {
      * - Regular monitoring and testing
      * - WAF deployment
      */
+    // codeql[java/unused-parameter] -- PCI-DSS requirements below are checked the same way
+    // regardless of security profile (once the framework is enabled, its controls apply
+    // uniformly); kept for symmetry with sibling validate*Compliance methods.
     private void validatePciDssCompliance(SecurityProfile securityProfile) {
         // 1. WAF - Required for PCI-DSS
         try {
@@ -275,6 +278,8 @@ public class ComplianceValidationMatrix {
      * - Breach notification mechanisms
      * - Threat detection (GuardDuty) - REQUIRED per §164.308(a)(1)(ii)(D)
      */
+    // codeql[java/unused-parameter] -- same as validatePciDssCompliance above: checked uniformly
+    // regardless of security profile.
     private void validateHipaaCompliance(SecurityProfile securityProfile) {
         // 1. EFS Encryption (for PHI storage)
         try {
@@ -403,23 +408,10 @@ public class ComplianceValidationMatrix {
             violations.add(complianceFramework + ": AWS Config DeliveryChannel not found");
         }
 
-        // Count Config rules deployed
-        int configRuleCount = 0;
-        try {
-            // Try to find at least one Config rule
-            template.hasResourceProperties("AWS::Config::ConfigRule",
-                Match.objectLike(Collections.emptyMap()));
-
-            // If we get here, at least one rule exists
-            // Note: CDK Template API doesn't provide easy way to count resources
-            // So we just verify at least one rule exists
-            configRuleCount = 1;
-        } catch (Exception e) {
-            violations.add(complianceFramework + ": No AWS::Config::ConfigRule resources found " +
-                "(expected rules for framework)");
-            return;
-        }
-
+        // Count Config rules deployed -- Template.findResources(type).size() gives a real count,
+        // unlike hasResourceProperties which only proves "at least one" via a thrown/not-thrown
+        // Exception.
+        int configRuleCount = template.findResources("AWS::Config::ConfigRule").size();
         if (configRuleCount == 0) {
             violations.add(complianceFramework + ": No Config rules deployed (expected " +
                 requiredRules.size() + " rules)");
@@ -434,8 +426,9 @@ public class ComplianceValidationMatrix {
      */
     public boolean hasConfigRule(String ruleNamePattern) {
         try {
-            template.hasResourceProperties("AWS::Config::ConfigRule",
-                Match.objectLike(Collections.emptyMap()));
+            template.hasResourceProperties("AWS::Config::ConfigRule", Match.objectLike(Map.of(
+                "ConfigRuleName", Match.stringLikeRegexp(ruleNamePattern)
+            )));
             return true;
         } catch (Exception e) {
             return false;

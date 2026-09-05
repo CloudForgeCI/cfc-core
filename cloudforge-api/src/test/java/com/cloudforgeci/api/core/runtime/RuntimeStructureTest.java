@@ -55,7 +55,7 @@ class RuntimeStructureTest {
         @DisplayName("Should have rules method that accepts SystemContext")
         void shouldHaveRulesMethodThatAcceptsSystemContext() {
             assertDoesNotThrow(() -> {
-                FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
+                new FargateRuntimeConfiguration();
                 // Just verify the method exists and has correct signature
                 var method = FargateRuntimeConfiguration.class.getMethod("rules", com.cloudforgeci.api.core.SystemContext.class);
                 assertNotNull(method, "Rules method should exist");
@@ -114,7 +114,7 @@ class RuntimeStructureTest {
         @DisplayName("Should have rules method that accepts SystemContext")
         void shouldHaveRulesMethodThatAcceptsSystemContext() {
             assertDoesNotThrow(() -> {
-                Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
+                new Ec2RuntimeConfiguration();
                 // Just verify the method exists and has correct signature
                 var method = Ec2RuntimeConfiguration.class.getMethod("rules", com.cloudforgeci.api.core.SystemContext.class);
                 assertNotNull(method, "Rules method should exist");
@@ -173,8 +173,8 @@ class RuntimeStructureTest {
         @DisplayName("Both runtime configurations should have rules methods")
         void bothRuntimeConfigurationsShouldHaveRulesMethods() {
             assertDoesNotThrow(() -> {
-                FargateRuntimeConfiguration fargateConfig = new FargateRuntimeConfiguration();
-                Ec2RuntimeConfiguration ec2Config = new Ec2RuntimeConfiguration();
+                new FargateRuntimeConfiguration();
+                new Ec2RuntimeConfiguration();
 
                 // Verify both have rules methods
                 var fargateMethod = FargateRuntimeConfiguration.class.getMethod("rules", com.cloudforgeci.api.core.SystemContext.class);

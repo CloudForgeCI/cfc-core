@@ -160,7 +160,6 @@ class LocalStackDeployPreflightTest {
         LocalHostPortConflictChecker.validateAgainstOccupants(
             DeploymentTarget.LOCALSTACK,
             "Metabase-Stack-localstack",
-            new DeploymentConfig(),
             null,
             TemplateResourceScanner.readTemplate(canonical),
             List.of(new LocalHostPortOccupant(

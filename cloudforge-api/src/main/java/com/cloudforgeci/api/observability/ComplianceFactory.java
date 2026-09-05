@@ -244,7 +244,7 @@ public class ComplianceFactory extends BaseFactory {
                 // We just created the infrastructure - add CloudFormation dependencies for ordering
                 LOG.info("  Config infrastructure created in this stack - adding CloudFormation dependencies");
                 createConfigRules(configInfra.recorder, configInfra.starterResource);
-                createAllFrameworkConfigRules(configInfra.recorder, configInfra.starterResource);
+                createAllFrameworkConfigRules(configInfra.recorder);
             } else {
                 // Infrastructure already exists or wasn't created - rules still work, just no CF dependency
                 LOG.info("  Config Recorder referenced by name 'cloudforge-config-recorder'");
@@ -2057,7 +2057,9 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createAllFrameworkConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    // starterResource dropped: unused by this method and the four create*ConfigRules methods
+    // below (unlike createConfigRules, which does wire CloudFormation dependencies from it).
+    private void createAllFrameworkConfigRules(CfnConfigurationRecorder recorder) {
         List<String> frameworks = determineFrameworks();
 
         if (frameworks.isEmpty()) {
@@ -2069,16 +2071,16 @@ public class ComplianceFactory extends BaseFactory {
         // Always create ALL framework rules, using conditions to control deployment
         // This allows CloudFormation to track and DELETE rules when frameworks are removed
         LOG.info("Creating PCI-DSS Config rules (condition-controlled)");
-        createPciDssConfigRules(recorder, starterResource);
+        createPciDssConfigRules(recorder);
 
         LOG.info("Creating SOC 2 Config rules (condition-controlled)");
-        createSoc2ConfigRules(recorder, starterResource);
+        createSoc2ConfigRules(recorder);
 
         LOG.info("Creating HIPAA Config rules (condition-controlled)");
-        createHipaaConfigRules(recorder, starterResource);
+        createHipaaConfigRules(recorder);
 
         LOG.info("Creating GDPR Config rules (condition-controlled)");
-        createGdprConfigRules(recorder, starterResource);
+        createGdprConfigRules(recorder);
 
         LOG.info("All framework-specific Config rules created with conditions");
     }
@@ -2089,7 +2091,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createPciDssConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createPciDssConfigRules(CfnConfigurationRecorder recorder) {
         LOG.info("Creating PCI-DSS AWS Config rules (condition-controlled)");
 
         // Requirement 1: Network Segmentation
@@ -2266,7 +2268,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createSoc2ConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createSoc2ConfigRules(CfnConfigurationRecorder recorder) {
         LOG.info("Creating SOC 2 AWS Config rules (condition-controlled)");
 
         // CC6.1: Logical Access Controls
@@ -2505,7 +2507,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createHipaaConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createHipaaConfigRules(CfnConfigurationRecorder recorder) {
         LOG.info("Creating HIPAA AWS Config rules (condition-controlled)");
 
         // §164.308(a)(1): Security Management Process
@@ -2694,7 +2696,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createGdprConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createGdprConfigRules(CfnConfigurationRecorder recorder) {
         LOG.info("Creating GDPR AWS Config rules (condition-controlled)");
 
         // Article 25: Data Protection by Design
@@ -3881,6 +3883,11 @@ public class ComplianceFactory extends BaseFactory {
      * @param frameworkName Framework name for data source naming
      * @return Control property map for CfnAssessment
      */
+    // codeql[java/unused-parameter] -- frameworkName isn't consulted below (sourceName uses only
+    // control.controlId()), despite the javadoc's "for data source naming". Each CfnAssessment
+    // is already built per-framework (its caller's own frameworkName parameter), so the
+    // control-id-only naming here doesn't collide across frameworks in practice; kept for the
+    // caller's convenience/symmetry rather than a fix that would change these labels.
     private Map<String, Object> buildControlProperty(
         AuditManagerControl control,
         AuditManagerControl.FrameworkControl frameworkControl,

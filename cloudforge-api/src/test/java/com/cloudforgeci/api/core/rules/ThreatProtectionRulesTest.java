@@ -1055,13 +1055,11 @@ class ThreatProtectionRulesTest {
         builder.createMinimalInfrastructure();
         new ThreatProtectionRules().install(builder.getSystemContext());
 
-        // Determine if this scenario should pass or fail
         // Container runtime security is ADVISORY (non-blocking) even for GDPR
         // (it contains "runtime security monitoring" which is excluded at line 466)
         // Immutable infrastructure is also advisory
-        // Therefore, all container security tests should PASS
-        boolean shouldFail = false;
-        // No container security requirements are blocking
+        // Therefore, all container security tests should PASS -- unconditionally, no
+        // shouldFail branch needed.
 
         // Trigger synthesis to execute validations
         assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),

@@ -106,8 +106,6 @@ public class EfsFactorySecurityTest {
     TestInfrastructureBuilder builder = new TestInfrastructureBuilder("EfsDescriptionTest", SecurityProfile.DEV, RuntimeType.FARGATE);
     builder.createCompleteInfrastructure();
 
-    Template t = Template.fromStack(builder.getStack());
-
     // Verify EFS security group exists
     assertNotNull(builder.getEfsSecurityGroup());
   }

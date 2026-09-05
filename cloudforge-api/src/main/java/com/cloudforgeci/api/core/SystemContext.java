@@ -38,7 +38,6 @@ import software.amazon.awscdk.services.ecs.TaskDefinition;
 import software.amazon.awscdk.services.efs.AccessPoint;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
-import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
 import software.amazon.awscdk.services.elasticloadbalancingv2.TargetType;
 import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
@@ -563,7 +562,10 @@ public final class SystemContext extends Construct {
       }
 
       // Create target group for EC2 runtime (standard HTTP mode)
-      ApplicationLoadBalancer alb = this.alb.get().orElseThrow(() ->
+      // Fail fast if the ALB slot isn't populated -- the target group itself doesn't reference
+      // it directly (it's attached to a listener below instead), but creating one when there's
+      // no ALB to attach it to would be a silent no-op worth catching here.
+      this.alb.get().orElseThrow(() ->
         new IllegalStateException("ALB not found when creating target groups"));
 
       ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(scope, idPrefix + "Tg")
@@ -747,6 +749,9 @@ public final class SystemContext extends Construct {
   /**
    * Creates S3 and CloudFront factories for static web applications.
    */
+  // codeql[java/unused-parameter] -- scope/id are unused: S3_WEBSITE topology isn't implemented
+  // yet (see the TODOs below -- S3BucketFactory/CloudFrontFactory don't exist), so this stub
+  // returns placeholders rather than actually constructing anything scoped to them.
   private S3CloudFrontFactories createS3CloudFrontFactories(Construct scope, String id) {
 
     // Create S3 bucket factory

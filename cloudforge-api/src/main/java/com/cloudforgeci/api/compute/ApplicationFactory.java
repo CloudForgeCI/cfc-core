@@ -510,7 +510,7 @@ public class ApplicationFactory extends BaseFactory {
             TopologyType topology = TopologyType.APPLICATION_SERVICE;
 
             // Start SystemContext (or get existing one)
-            SystemContext ctx = SystemContext.start(scope, topology, RuntimeType.FARGATE, security, iamProfile, cfc);
+            SystemContext.start(scope, topology, RuntimeType.FARGATE, security, iamProfile, cfc);
 
             // Create ApplicationFactory and invoke create()
             ApplicationFactory factory = new ApplicationFactory(scope, id + "Application", RuntimeType.FARGATE, applicationSpec);

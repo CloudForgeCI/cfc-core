@@ -135,6 +135,8 @@ public class DefaultValueResolver {
      * a method like {@code getDefaultForField(String fieldName)} that returns compliance-driven
      * defaults.</p>
      */
+    // codeql[java/unused-parameter] -- fieldInfo/framework are unused: this whole method is a
+    // placeholder, per its own javadoc, pending the Phase 2 FrameworkRules.getDefaultForField().
     private static Object resolveFromFramework(ConfigFieldInfo fieldInfo, FrameworkRules<?> framework) {
         // TODO: Implement FrameworkRules.getDefaultForField() in Phase 2
         // For now, frameworks can only apply defaults via applyDefaults(DeploymentConfig)

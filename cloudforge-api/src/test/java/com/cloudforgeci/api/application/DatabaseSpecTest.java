@@ -43,17 +43,21 @@ public class DatabaseSpecTest {
     /**
      * Provides all applications implementing DatabaseSpec with their expected configurations.
      */
+    // Trailing supportsDb/requiresDb columns were removed: supportsDb was always true across
+    // every case here (nothing to regress-test), and requiresDb was exactly
+    // (expectedType == RequirementType.REQUIRED), already covered by testDatabaseRequirementType's
+    // own expectedType assertion -- neither was ever actually consumed by a test.
     static Stream<Arguments> databaseApplicationProvider() {
         return Stream.of(
             // OPTIONAL databases (can use embedded fallback)
-            Arguments.of(new MetabaseApplicationSpec(), RequirementType.OPTIONAL, "postgres", "15", "metabase", 7, true, false),
-            Arguments.of(new GrafanaApplicationSpec(), RequirementType.OPTIONAL, "postgres", "14", "grafana", 7, true, false),
+            Arguments.of(new MetabaseApplicationSpec(), RequirementType.OPTIONAL, "postgres", "15", "metabase", 7),
+            Arguments.of(new GrafanaApplicationSpec(), RequirementType.OPTIONAL, "postgres", "14", "grafana", 7),
 
             // REQUIRED databases (must have external RDS)
-            Arguments.of(new GitLabApplicationSpec(), RequirementType.REQUIRED, "postgres", "16", "gitlabhq_production", 30, true, true),
-            Arguments.of(new MattermostApplicationSpec(), RequirementType.REQUIRED, "postgres", "14", "mattermost", 14, true, true),
-            Arguments.of(new SupersetApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "superset", 14, true, true),
-            Arguments.of(new HarborApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "registry", 30, true, true)
+            Arguments.of(new GitLabApplicationSpec(), RequirementType.REQUIRED, "postgres", "16", "gitlabhq_production", 30),
+            Arguments.of(new MattermostApplicationSpec(), RequirementType.REQUIRED, "postgres", "14", "mattermost", 14),
+            Arguments.of(new SupersetApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "superset", 14),
+            Arguments.of(new HarborApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "registry", 30)
         );
     }
 
@@ -72,9 +76,12 @@ public class DatabaseSpecTest {
     @ParameterizedTest(name = "{index}: {0} should have {1} database requirement")
     @MethodSource("databaseApplicationProvider")
     @DisplayName("Database requirement type should match expected configuration")
+    // expectedBackupDays (the source tuple's trailing column, used only by the sibling
+    // testBackupRetentionDays below) is deliberately not declared here -- JUnit binds
+    // @MethodSource arguments by position up to the test method's own parameter count, so a
+    // shorter parameter list simply ignores the source's remaining values.
     void testDatabaseRequirementType(ApplicationSpec app, RequirementType expectedType, String expectedEngine,
-                                      String expectedVersion, String expectedDbName, int expectedBackupDays,
-                                      boolean expectedSupportsDb, boolean expectedRequiresDb) {
+                                      String expectedVersion, String expectedDbName) {
         // Cast to DatabaseSpec
         assertTrue(app instanceof DatabaseSpec, app.getClass().getSimpleName() + " should implement DatabaseSpec");
         DatabaseSpec dbSpec = (DatabaseSpec) app;
@@ -110,9 +117,11 @@ public class DatabaseSpecTest {
     @ParameterizedTest(name = "{index}: {0} backup retention should be {5} days")
     @MethodSource("databaseApplicationProvider")
     @DisplayName("Backup retention days should match application data criticality")
-    void testBackupRetentionDays(ApplicationSpec app, RequirementType expectedType, String expectedEngine,
-                                  String expectedVersion, String expectedDbName, int expectedBackupDays,
-                                  boolean expectedSupportsDb, boolean expectedRequiresDb) {
+    // codeql[java/unused-parameter] -- expectedType/expectedEngine/expectedVersion/expectedDbName
+    // are unused here (see testDatabaseRequirementType above for those), but expectedBackupDays
+    // is the tuple's LAST column and JUnit binds @MethodSource arguments by position, so the
+    // leading ones can't be dropped without shifting expectedBackupDays out of alignment.
+    void testBackupRetentionDays(ApplicationSpec app, RequirementType expectedType, String expectedEngine, String expectedVersion, String expectedDbName, int expectedBackupDays) {
         DatabaseSpec dbSpec = (DatabaseSpec) app;
 
         int backupDays = dbSpec.backupRetentionDays();

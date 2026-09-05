@@ -87,7 +87,6 @@ class MiniStackDeployPreflightTest {
         LocalHostPortConflictChecker.validateAgainstOccupants(
             DeploymentTarget.MINISTACK,
             "Gitea-Stack-ministack",
-            new DeploymentConfig(),
             null,
             TemplateResourceScanner.readTemplate(canonical),
             List.of(new LocalHostPortOccupant(
@@ -117,7 +116,6 @@ class MiniStackDeployPreflightTest {
         LocalHostPortConflictChecker.validateAgainstOccupants(
             DeploymentTarget.MINISTACK,
             "Grafana-Stack-ministack",
-            new DeploymentConfig(),
             null,
             TemplateResourceScanner.readTemplate(canonical),
             List.of(new LocalHostPortOccupant(

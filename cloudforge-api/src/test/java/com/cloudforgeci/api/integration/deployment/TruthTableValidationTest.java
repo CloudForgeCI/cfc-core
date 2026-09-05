@@ -42,7 +42,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 /**
  * Comprehensive truth table validation test suite.
@@ -106,10 +105,9 @@ class TruthTableValidationTest {
      *
      * @param template the CDK template
      * @param configName the configuration name (used for filename)
-     * @param complianceFramework the compliance framework
      * @return the path to the written file, or null if writing failed
      */
-    private Path writeCloudFormationTemplate(Template template, String configName, String complianceFramework) {
+    private Path writeCloudFormationTemplate(Template template, String configName) {
         if (template == null || cfnTemplatesOutputDir == null) {
             return null;
         }
@@ -141,10 +139,9 @@ class TruthTableValidationTest {
      *
      * @param template the CDK template
      * @param configName the configuration name (used for filename)
-     * @param complianceFramework the compliance framework
      * @return the path to the written file, or null if writing failed
      */
-    private Path writeCloudFormationTemplateYaml(Template template, String configName, String complianceFramework) {
+    private Path writeCloudFormationTemplateYaml(Template template, String configName) {
         if (template == null || cfnTemplatesOutputDir == null) {
             return null;
         }
@@ -157,7 +154,7 @@ class TruthTableValidationTest {
 
             // Get template as JSON map and convert to YAML format
             Map<String, Object> templateMap = template.toJSON();
-            String yamlContent = convertJsonToYaml(templateMap, 0);
+            String yamlContent = convertJsonToYaml(templateMap);
 
             // Write to file
             Files.writeString(outputPath, yamlContent);
@@ -183,7 +180,7 @@ class TruthTableValidationTest {
      * Convert a JSON-like map structure to YAML format using Jackson.
      * Jackson handles all YAML special characters and edge cases properly.
      */
-    private String convertJsonToYaml(Object obj, int indent) {
+    private String convertJsonToYaml(Object obj) {
         try {
             return YAML_MAPPER.writeValueAsString(obj);
         } catch (Exception e) {
@@ -267,10 +264,9 @@ class TruthTableValidationTest {
     static Stream<Arguments> truthTableConfigurations() {
         JsonNode configurations = truthTable.get("configurations");
 
-        return StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(configurations.fields(), Spliterator.ORDERED),
-            false
-        )
+        // properties() replaces the deprecated fields() and returns a real Set, so it can stream
+        // directly without the Spliterators/StreamSupport wrapping fields()'s Iterator needed.
+        return configurations.properties().stream()
         .filter(entry -> entry.getValue().get("valid").asBoolean())
         // Note: All configurations in truth table CSV are pre-validated
         // Invalid combinations (e.g., alb-oidc without domain) are excluded from the CSV
@@ -394,7 +390,7 @@ class TruthTableValidationTest {
 
         // Validate specific resource properties based on configuration
         validateConfigurationSpecificResources(
-            template, domainConfig, sslConfig, authMode, networkMode, configName
+            template, domainConfig, sslConfig, authMode, networkMode
         );
 
         System.out.println("   ✅ Configuration validated successfully");
@@ -1001,13 +997,16 @@ class TruthTableValidationTest {
                 System.out.println("   " + "=".repeat(70) + "\n");
             } else {
                 // This is a cdk-nag or other synthesis failure (Layer 1)
-                String error = "Layer 1 (cdk-nag) synthesis failed: " + errorMessage;
+                // e.getMessage() can be null (an exception constructed without one); the
+                // isFrameworkRulesFailure check above doesn't guard this branch too.
+                String safeErrorMessage = errorMessage != null ? errorMessage : "(no message)";
+                String error = "Layer 1 (cdk-nag) synthesis failed: " + safeErrorMessage;
                 layer1Failures.add(error);
                 System.out.println("   ❌ Layer 1 (cdk-nag): Synthesis failed");
                 System.out.println("\n   📋 cdk-nag Failure Details:");
                 System.out.println("   " + "=".repeat(70));
                 // Print detailed error message with proper indentation
-                String[] errorLines = errorMessage.split("\n");
+                String[] errorLines = safeErrorMessage.split("\n");
                 int maxLines = Math.min(errorLines.length, 50); // Limit to first 50 lines
                 for (int i = 0; i < maxLines; i++) {
                     System.out.println("   " + errorLines[i]);
@@ -1066,8 +1065,8 @@ class TruthTableValidationTest {
         // This ensures cfn-guard validates the actual generated template files
         Path templateJsonPath = null;
         if (template != null) {
-            templateJsonPath = writeCloudFormationTemplate(template, configName, complianceFramework);
-            writeCloudFormationTemplateYaml(template, configName, complianceFramework);  // YAML for download
+            templateJsonPath = writeCloudFormationTemplate(template, configName);
+            writeCloudFormationTemplateYaml(template, configName);  // YAML for download
         }
 
         // Layer 3: cfn-guard validation (only if synthesis succeeded)
@@ -1108,8 +1107,13 @@ class TruthTableValidationTest {
                 Object conditionsObj = templateMap.get("Conditions");
                 Set<String> activeConditions = new java.util.HashSet<>();
 
-                // Normalize framework string for matching
-                String normalizedFramework = complianceFramework.toUpperCase().replace("-", "").replace("_", "");
+                // Normalize framework string for matching -- complianceFrameworkConfigurations()
+                // always supplies a real framework name, but this parameter is treated as
+                // nullable elsewhere in this method (see the != null checks above), so guard
+                // here too for consistency.
+                String normalizedFramework = complianceFramework != null
+                    ? complianceFramework.toUpperCase().replace("-", "").replace("_", "")
+                    : "";
 
                 // Parse which conditions are true based on the compliance framework
                 if (conditionsObj instanceof Map) {
@@ -1928,8 +1932,7 @@ class TruthTableValidationTest {
             String domainConfig,
             String sslConfig,
             String authMode,
-            String networkMode,
-            String configName) {
+            String networkMode) {
 
         // Validate SSL/TLS configuration
         if ("ssl-enabled".equals(sslConfig) && "with-domain".equals(domainConfig)) {
@@ -2015,7 +2018,7 @@ class TruthTableValidationTest {
         final int[] configsWithResources = {0};
         final int[] configsWithoutResources = {0};
 
-        configurations.fields().forEachRemaining(entry -> {
+        configurations.properties().forEach(entry -> {
             if (entry.getValue().get("valid").asBoolean()) {
                 JsonNode expectedResources = entry.getValue().get("expected_resources");
                 if (expectedResources != null && expectedResources.size() > 0) {

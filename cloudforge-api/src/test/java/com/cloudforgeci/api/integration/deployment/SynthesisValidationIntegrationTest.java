@@ -238,6 +238,8 @@ class SynthesisValidationIntegrationTest {
      */
     @ParameterizedTest
     @MethodSource("sslConfigurationTestCases")
+    // codeql[java/unused-parameter] -- description is a display-only column (readability for the
+    // test-case table), never consulted by the assertions below.
     void testSslConfiguration(
             boolean enableSsl,
             boolean createZone,
@@ -312,6 +314,8 @@ class SynthesisValidationIntegrationTest {
      */
     @ParameterizedTest
     @MethodSource("networkConfigurationTestCases")
+    // codeql[java/unused-parameter] -- expectPrivateSubnets documents intent but isn't asserted
+    // below; only the NAT gateway and WAF expectations are checked for this configuration.
     void testNetworkConfiguration(
             String networkMode,
             boolean wafEnabled,
@@ -439,6 +443,8 @@ class SynthesisValidationIntegrationTest {
      */
     @ParameterizedTest
     @MethodSource("storageConfigurationTestCases")
+    // codeql[java/unused-parameter] -- enableEfs is unused: EFS is enabled by default in
+    // ApplicationFactory and can't be toggled off here, so this table only varies encryption.
     void testStorageConfiguration(
             boolean enableEfs,
             boolean efsEncrypted,
@@ -494,6 +500,8 @@ class SynthesisValidationIntegrationTest {
      */
     @ParameterizedTest
     @MethodSource("monitoringConfigurationTestCases")
+    // codeql[java/unused-parameter] -- expectCloudWatch is unused: log groups are always created
+    // for ECS tasks regardless of enableMonitoring, so this check below is unconditional now.
     void testMonitoringConfiguration(
             boolean enableMonitoring,
             boolean enableFlowLogs,

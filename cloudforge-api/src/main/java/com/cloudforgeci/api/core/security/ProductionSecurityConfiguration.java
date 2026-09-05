@@ -142,7 +142,9 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
             } else {
                 // For EC2, allow NFS from instance security group
                 if (c.instanceSg.get().isPresent()) {
-                    String appId = (c.applicationSpec != null && c.applicationSpec.get().isPresent())
+                    // c.applicationSpec is a Slot, always constructed non-null -- only its
+                    // .get() Optional content can be absent.
+                    String appId = c.applicationSpec.get().isPresent()
                         ? c.applicationSpec.get().orElseThrow().applicationId()
                         : "app";
                     efsSg.addIngressRule(

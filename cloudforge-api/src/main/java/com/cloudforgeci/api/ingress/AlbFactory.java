@@ -557,6 +557,9 @@ public class AlbFactory extends BaseFactory {
         return null; // Validation passed
     }
 
+    // codeql[java/unused-parameter] -- alb is unused: a target group isn't scoped to a specific
+    // ALB at creation (it's attached later via a listener rule); kept for signature symmetry with
+    // the listener-creation methods below, which do need it.
     private ApplicationTargetGroup createTargetGroup(ApplicationLoadBalancer alb) {
         // Use configurable health check settings from annotated fields
         int interval = healthCheckInterval != null ? healthCheckInterval : 30;
@@ -594,6 +597,9 @@ public class AlbFactory extends BaseFactory {
                 .build());
     }
 
+    // codeql[java/unused-parameter] -- sslEnabled is unused: SSL redirect logic is centralized in
+    // SecurityProfile.wire() (see createHttpListenerWithoutTargetGroup's identical note below),
+    // not decided per-listener here.
     private ApplicationListener createFargateHttpListener(ApplicationLoadBalancer alb, boolean sslEnabled) {
         String appId = applicationSpec != null ? applicationSpec.applicationId() : "Application";
         String startupMessage = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + " is starting up...";
@@ -609,6 +615,8 @@ public class AlbFactory extends BaseFactory {
                 .build());
     }
 
+    // codeql[java/unused-parameter] -- sslEnabled is unused; see this method's own comment below
+    // on why (SSL redirect logic is centralized in SecurityProfile.wire()).
     private ApplicationListener createHttpListenerWithoutTargetGroup(ApplicationLoadBalancer alb, boolean sslEnabled) {
         String appId = applicationSpec != null ? applicationSpec.applicationId() : "Application";
         String startupMessage = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + " is starting up...";

@@ -176,7 +176,7 @@ class SecurityExampleTest {
             // Create a fresh app and stack for this test to avoid SystemContext conflicts
             App testApp = new App();
             testApp.getNode().setContext("cfc", createTestConfig());
-            Stack testStack = new Stack(testApp, "TestNullScopeStack");
+            new Stack(testApp, "TestNullScopeStack");
             DeploymentContext testCfc = DeploymentContext.from(testApp);
 
             // These tests verify that the methods handle null parameters appropriately
@@ -207,7 +207,7 @@ class SecurityExampleTest {
             App testApp = new App();
             testApp.getNode().setContext("cfc", createTestConfig());
             Stack testStack = new Stack(testApp, "TestNullContextStack");
-            DeploymentContext testCfc = DeploymentContext.from(testApp);
+            DeploymentContext.from(testApp);
 
             assertThrows(Exception.class, () -> {
                 SecurityExample.createDevJenkins(testStack, "TestDev", null);

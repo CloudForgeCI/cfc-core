@@ -24,6 +24,13 @@ class CdkSynthesisValidationTest {
     @ParameterizedTest
     @MethodSource("workingSynthesisCombinations")
     @DisplayName("Should synthesize successfully for working combinations")
+    // codeql[java/unused-parameter] -- config (the JSON blob workingSynthesisCombinations()
+    // supplies per case) is never actually parsed below; every parameterized invocation
+    // synthesizes the same hardcoded JENKINS_SERVICE/EC2/DEV combination regardless of testName.
+    // A known simplification (see "In a real test, we would call cdk synth with the config"
+    // below), not something this sweep should silently paper over by inventing new synthesis
+    // wiring -- TruthTableValidationTest/SynthesisValidationIntegrationTest are the real
+    // per-combination coverage for this.
     void shouldSynthesizeSuccessfullyForWorkingCombinations(String testName, String config) {
         // Given
         var app = new software.amazon.awscdk.App();

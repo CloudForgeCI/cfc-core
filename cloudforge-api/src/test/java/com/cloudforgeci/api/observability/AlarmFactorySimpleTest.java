@@ -74,17 +74,9 @@ class AlarmFactorySimpleTest {
         assertNotSame(props2, props3);
     }
 
-    @Test
-    void testPropsToStringDoesNotThrow() {
-        // Given: Props instance
-        AlarmFactory.Props props = new AlarmFactory.Props();
-
-        // When/Then: toString should work
-        assertDoesNotThrow(() -> {
-            String str = props.toString();
-            assertNotNull(str);
-        });
-    }
+    // No testPropsToStringDoesNotThrow: Props has no fields (reserved for future extensibility,
+    // see its own comment) and doesn't override toString(), so that assertion only proved
+    // Object.toString() never throws or returns null -- true of every object, not a real check.
 
     @Test
     void testPropsHashCodeIsConsistent() {

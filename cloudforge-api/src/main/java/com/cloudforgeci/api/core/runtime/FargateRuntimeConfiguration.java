@@ -98,7 +98,9 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
       final String importedCertArn = norm(c.cfc != null ? c.cfc.certificateArn() : null);
 
       final boolean haveHost   = (domain != null && !domain.isBlank()) || (fqdn != null && !fqdn.isBlank());
-      final boolean wantDns    = haveHost;           // publish A/AAAA when a host is provided
+      // wantDns (publish A/AAAA when a host is provided) is unused: that block below is
+      // commented out -- DNS record creation is handled by topology configurations instead,
+      // to avoid conflicts.
       final boolean wantSslDns = ssl && haveHost;    // SSL mode with host → cert + HTTPS + redirect
 
     // ── 0) DNS A/AAAA for ALB (works with or without SSL) ──────────────────────

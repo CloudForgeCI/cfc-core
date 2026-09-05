@@ -1173,6 +1173,8 @@ class Soc2RulesTest {
         "PRODUCTION,ADVISORY,true",     // PRODUCTION runs SOC2 validation
         "PRODUCTION,ENFORCE,true"       // PRODUCTION with enforce mode
     })
+    // codeql[java/unused-parameter] -- shouldValidate documents CSV-row intent only; the actual
+        // pass/fail decision is independently recomputed in the method body, not taken from this flag.
     void testSoc2SecurityProfileBranches(String profile, String complianceMode, boolean shouldValidate) {
         Map<String, Object> customContext = new HashMap<>();
         customContext.put("stackName", "TestSoc2Profile");
