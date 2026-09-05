@@ -105,7 +105,6 @@ class TruthTableValidationTest {
      *
      * @param template the CDK template
      * @param configName the configuration name (used for filename)
-     * @param complianceFramework the compliance framework
      * @return the path to the written file, or null if writing failed
      */
     private Path writeCloudFormationTemplate(Template template, String configName) {
@@ -140,7 +139,6 @@ class TruthTableValidationTest {
      *
      * @param template the CDK template
      * @param configName the configuration name (used for filename)
-     * @param complianceFramework the compliance framework
      * @return the path to the written file, or null if writing failed
      */
     private Path writeCloudFormationTemplateYaml(Template template, String configName) {
