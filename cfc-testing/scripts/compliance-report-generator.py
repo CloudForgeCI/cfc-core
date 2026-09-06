@@ -171,6 +171,13 @@ class ComplianceReportGenerator:
                         "mvn", "test",
                         f"-Dtest=TruthTableValidationTest#{method}",
                         "--batch-mode",
+                        # The root pom now defaults skipTests=true (the repo's own -Pci profile is
+                        # what flips it back, per that pom's own comment on why -- not scattering
+                        # -DskipTests=false across individual steps). Without it, this silently
+                        # no-ops: exit 0, zero actual test execution, nothing to parse from
+                        # stdout -- every "✓ ... passed" this script printed was only ever true in
+                        # the sense that skipping never fails.
+                        "-Pci",
                         "-Dsurefire.useSystemClassLoader=false",  # Prevent classloader issues
                         "-Dsurefire.useFile=true",  # Force XML output
                         "-Dsurefire.trimStackTrace=false",  # Full stack traces in XML
