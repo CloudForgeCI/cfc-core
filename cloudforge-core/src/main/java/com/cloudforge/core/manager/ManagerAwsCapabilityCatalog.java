@@ -153,7 +153,8 @@ public final class ManagerAwsCapabilityCatalog {
             Capability.RDS_SNAPSHOT,
             Capability.RDS_RESTORE,
             Capability.RDS_ENGINE_UPGRADE,
-            Capability.COGNITO_USER_MANAGEMENT);
+            Capability.COGNITO_USER_MANAGEMENT,
+            Capability.LOGS_READ);
     }
 
     /**
