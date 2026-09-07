@@ -5,12 +5,12 @@
   <parent>
     <groupId>com.cloudforgeci</groupId>
     <artifactId>cfc-core</artifactId>
-    <version>3.2.9-SNAPSHOT</version>
+    <version>3.2.10-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>cloudforge-ministack</artifactId>
-  <version>3.2.9-SNAPSHOT</version>
+  <version>3.2.10-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>CloudForge MiniStack</name>
   <description>MiniStack local deployment adapter, deployer, and pipeline for CloudForge templates</description>
