@@ -236,6 +236,111 @@ public final class OperatorProvisioningPermissionMatrix {
         )
     );
 
+    /**
+     * {@link com.cloudforgeci.api.network.DomainFactory}'s {@code HostedZone} L2 construct --
+     * another real, live-surfaced gap in the same family as {@link #ACM_PERMISSIONS} above.
+     * MINIMAL covers {@code CloudForgeSynthesizer#seedHostedZoneContext}'s own
+     * {@code ListHostedZonesByName} lookup (that call runs under this same operator role, not a
+     * deployed app's -- see that method's own javadoc for why it exists at all) plus the
+     * read-only calls {@code HostedZone.fromLookup}'s existing-zone path needs; STANDARD covers
+     * {@code createZone=true}'s own hosted-zone lifecycle, and the {@code ARecord}/similar record
+     * sets {@code FargateRuntimeConfiguration}/the CMS and Jenkins topology configurations point
+     * at the app's ALB or CloudFront distribution once a zone is in hand either way.
+     */
+    public static final Map<IAMProfile, List<String>> ROUTE53_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "route53:ListHostedZonesByName",
+            "route53:GetHostedZone",
+            "route53:ListResourceRecordSets",
+            "route53:ListTagsForResource"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "route53:CreateHostedZone",
+            "route53:DeleteHostedZone",
+            "route53:ChangeTagsForResource",
+            "route53:ChangeResourceRecordSets",
+            "route53:GetChange"
+        )
+    );
+
+    /** {@link com.cloudforgeci.api.core.runtime.FargateRuntimeConfiguration}'s Path B private-CA
+     *  fallback ({@code CfnCertificateAuthority}/{@code CfnCertificateAuthorityActivation}) — SSL
+     *  enabled with no custom domain, the ALB-DNS-name-only branch alongside {@link
+     *  #ACM_PERMISSIONS}'s own Path A. A separate category, not folded into ACM_PERMISSIONS,
+     *  since {@code acm-pca:*} is its own action prefix, distinct from {@code acm:*} even though
+     *  both are certificate management. */
+    public static final Map<IAMProfile, List<String>> ACM_PCA_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "acm-pca:DescribeCertificateAuthority",
+            "acm-pca:GetCertificateAuthorityCertificate",
+            "acm-pca:GetCertificate",
+            "acm-pca:ListTags"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "acm-pca:CreateCertificateAuthority",
+            "acm-pca:DeleteCertificateAuthority",
+            "acm-pca:UpdateCertificateAuthority",
+            "acm-pca:IssueCertificate",
+            "acm-pca:ImportCertificateAuthorityCertificate",
+            "acm-pca:TagCertificateAuthority",
+            "acm-pca:UntagCertificateAuthority"
+        )
+    );
+
+    /** {@link com.cloudforgeci.api.core.topology.CmsCdnConfiguration}/{@link
+     *  com.cloudforgeci.api.core.topology.S3WebsiteTopologyConfiguration}'s {@code Distribution}
+     *  L2 construct — CDN in front of an app's ALB origin or an S3-hosted static site. */
+    public static final Map<IAMProfile, List<String>> CLOUDFRONT_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "cloudfront:GetDistribution",
+            "cloudfront:GetDistributionConfig",
+            "cloudfront:ListDistributions",
+            "cloudfront:ListTagsForResource",
+            // OriginAccessControl (CachePolicy/origin config needs this to describe an existing
+            // S3-origin OAC) — the read half of the create/manage pair below.
+            "cloudfront:GetOriginAccessControl",
+            "cloudfront:ListOriginAccessControls"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "cloudfront:CreateDistribution",
+            "cloudfront:UpdateDistribution",
+            "cloudfront:DeleteDistribution",
+            "cloudfront:TagResource",
+            "cloudfront:UntagResource",
+            "cloudfront:CreateOriginAccessControl",
+            "cloudfront:DeleteOriginAccessControl",
+            "cloudfront:UpdateOriginAccessControl",
+            "cloudfront:CreateInvalidation"
+        )
+    );
+
+    /** {@link com.cloudforgeci.api.core.topology.S3WebsiteTopologyConfiguration}'s {@code Bucket}
+     *  L2 construct (a static-site origin) — distinct from {@code ManagerOperatorIamSupport}'s
+     *  own S3 grants, which are scoped to Manager's own fixed-prefix template/CDK-asset buckets,
+     *  never an arbitrary bucket a deployed app's own template declares. */
+    public static final Map<IAMProfile, List<String>> S3_APP_BUCKET_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "s3:GetBucketLocation",
+            "s3:GetBucketPolicy",
+            "s3:GetEncryptionConfiguration",
+            "s3:GetBucketPublicAccessBlock",
+            "s3:ListBucket"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "s3:CreateBucket",
+            "s3:DeleteBucket",
+            "s3:PutBucketPolicy",
+            "s3:DeleteBucketPolicy",
+            "s3:PutEncryptionConfiguration",
+            "s3:PutBucketPublicAccessBlock",
+            "s3:PutBucketOwnershipControls",
+            "s3:PutBucketAcl",
+            "s3:PutObject",
+            "s3:DeleteObject",
+            "s3:PutBucketTagging"
+        )
+    );
+
     /** {@link com.cloudforgeci.api.compute.FargateFactory}'s {@code Cluster}/
      *  {@code FargateService}/{@code FargateTaskDefinition} L2 constructs -- registering and
      *  running the task definition, not the workload permissions the running task itself needs
@@ -384,7 +489,12 @@ public final class OperatorProvisioningPermissionMatrix {
             "ssm:DescribeDocument",
             "ssm:GetDocument",
             "ssm:ListDocuments",
-            "auditmanager:GetAssessment"
+            "auditmanager:GetAssessment",
+            // ComplianceFactory's own CloudTrail Trail -- same "compliance mode toggle" grouping
+            // as Config/GuardDuty/WAF above, not a category of its own.
+            "cloudtrail:GetTrailStatus",
+            "cloudtrail:GetEventSelectors",
+            "cloudtrail:ListTags"
         ),
         IAMProfile.STANDARD, List.of(
             "config:PutConfigurationRecorder",
@@ -422,11 +532,143 @@ public final class OperatorProvisioningPermissionMatrix {
             "auditmanager:DeleteAssessment",
             "auditmanager:UpdateAssessment",
             "auditmanager:TagResource",
+            "cloudtrail:CreateTrail",
+            "cloudtrail:DeleteTrail",
+            "cloudtrail:UpdateTrail",
+            "cloudtrail:PutEventSelectors",
+            "cloudtrail:StartLogging",
+            "cloudtrail:StopLogging",
+            "cloudtrail:AddTags",
+            "cloudtrail:RemoveTags",
             // Account-level singleton services (Config, GuardDuty) need their own service-linked
             // role created the first time either is ever enabled in the account -- restricted to
             // exactly those two AWS service names, not a bare iam:CreateServiceLinkedRole grant.
             "iam:CreateServiceLinkedRole",
             "iam:GetServiceLinkedRoleDeletionStatus"
+        )
+    );
+
+    /** {@link com.cloudforgeci.api.scaling.ScalingFactory}'s Fargate service {@code
+     *  scaleOnCpuUtilization}/{@code EnableScalingProps} and {@link
+     *  com.cloudforgeci.api.compute.Ec2Factory}'s {@code AutoScalingGroup#scaleOnCpuUtilization} --
+     *  two distinct AWS services (Application Auto Scaling registers the ECS service as a
+     *  scalable target; EC2 Auto Scaling owns the ASG directly), both genuinely "scaling," so kept
+     *  as one category rather than two near-empty ones. */
+    public static final Map<IAMProfile, List<String>> SCALING_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "application-autoscaling:DescribeScalableTargets",
+            "application-autoscaling:DescribeScalingPolicies",
+            "autoscaling:DescribeAutoScalingGroups",
+            "autoscaling:DescribeScalingActivities",
+            "autoscaling:DescribePolicies"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "application-autoscaling:RegisterScalableTarget",
+            "application-autoscaling:DeregisterScalableTarget",
+            "application-autoscaling:PutScalingPolicy",
+            "application-autoscaling:DeleteScalingPolicy",
+            "autoscaling:CreateAutoScalingGroup",
+            "autoscaling:DeleteAutoScalingGroup",
+            "autoscaling:UpdateAutoScalingGroup",
+            "autoscaling:PutScalingPolicy",
+            "autoscaling:DeletePolicy",
+            "autoscaling:CreateOrUpdateTags",
+            "autoscaling:DeleteTags"
+        )
+    );
+
+    /** {@link com.cloudforgeci.api.security.CognitoAuthenticationFactory}/{@link
+     *  com.cloudforgeci.api.security.CognitoSamlFactory}'s {@code UserPool}/{@code
+     *  UserPoolClient}/{@code UserPoolDomain} L2 constructs (application-oidc's own identity
+     *  provider) -- the {@code AwsCustomResource} calls both classes also make (SAML IdP config,
+     *  client-secret retrieval) carry their own dedicated, narrowly-scoped IAM policy per AWS CDK's
+     *  own custom-resource convention, so those don't need anything added here. */
+    public static final Map<IAMProfile, List<String>> COGNITO_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "cognito-idp:DescribeUserPool",
+            "cognito-idp:DescribeUserPoolClient",
+            "cognito-idp:DescribeUserPoolDomain",
+            "cognito-idp:DescribeIdentityProvider",
+            "cognito-idp:GetUserPoolMfaConfig",
+            "cognito-idp:ListTagsForResource"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "cognito-idp:CreateUserPool",
+            "cognito-idp:DeleteUserPool",
+            "cognito-idp:UpdateUserPool",
+            "cognito-idp:CreateUserPoolClient",
+            "cognito-idp:DeleteUserPoolClient",
+            "cognito-idp:UpdateUserPoolClient",
+            "cognito-idp:CreateUserPoolDomain",
+            "cognito-idp:DeleteUserPoolDomain",
+            "cognito-idp:UpdateUserPoolDomain",
+            "cognito-idp:CreateIdentityProvider",
+            "cognito-idp:DeleteIdentityProvider",
+            "cognito-idp:UpdateIdentityProvider",
+            "cognito-idp:SetUserPoolMfaConfig",
+            "cognito-idp:CreateGroup",
+            "cognito-idp:DeleteGroup",
+            "cognito-idp:TagResource",
+            "cognito-idp:UntagResource"
+        )
+    );
+
+    /** {@link com.cloudforgeci.api.observability.AlarmFactory}/{@link
+     *  com.cloudforgeci.api.observability.SecurityMonitoringFactory}'s {@code Alarm}/{@code
+     *  Metric}/{@code Topic} constructs -- CloudWatch alarms and their SNS notification target,
+     *  one category since neither is useful without the other here (every alarm this platform
+     *  creates wires an {@code SnsAction}). Distinct from {@link #LOGS_PERMISSIONS}: CloudWatch
+     *  Logs and CloudWatch metrics/alarms are different action prefixes ({@code logs:*} vs
+     *  {@code cloudwatch:*}) despite sharing a console. */
+    public static final Map<IAMProfile, List<String>> MONITORING_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "cloudwatch:DescribeAlarms",
+            "cloudwatch:GetMetricData",
+            "cloudwatch:GetMetricStatistics",
+            "cloudwatch:ListTagsForResource",
+            "sns:GetTopicAttributes",
+            "sns:ListTagsForResource",
+            "sns:ListSubscriptionsByTopic"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "cloudwatch:PutMetricAlarm",
+            "cloudwatch:DeleteAlarms",
+            "cloudwatch:TagResource",
+            "cloudwatch:UntagResource",
+            "sns:CreateTopic",
+            "sns:DeleteTopic",
+            "sns:SetTopicAttributes",
+            "sns:Subscribe",
+            "sns:Unsubscribe",
+            "sns:TagResource",
+            "sns:UntagResource"
+        )
+    );
+
+    /** {@link com.cloudforgeci.api.storage.BackupFactory}'s {@code BackupVault}/{@code
+     *  BackupPlan}/{@code BackupSelection} L2 constructs -- {@code BackupSelection} also creates
+     *  its own IAM role (see {@code ManagerOperatorIamSupport#IAM_ROLE_MANAGE_RESOURCES}'s
+     *  {@code -CfcRdsMonitor}-style pattern list and its own "known gap" note for
+     *  {@code BackupSelectionRole} specifically -- that role's own create/manage permissions live
+     *  there, not here). */
+    public static final Map<IAMProfile, List<String>> BACKUP_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "backup:DescribeBackupVault",
+            "backup:GetBackupPlan",
+            "backup:GetBackupSelection",
+            "backup:ListTags"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "backup:CreateBackupVault",
+            "backup:DeleteBackupVault",
+            "backup:PutBackupVaultAccessPolicy",
+            "backup:CreateBackupPlan",
+            "backup:DeleteBackupPlan",
+            "backup:UpdateBackupPlan",
+            "backup:CreateBackupSelection",
+            "backup:DeleteBackupSelection",
+            "backup:TagResource",
+            "backup:UntagResource"
         )
     );
 
@@ -443,9 +685,17 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(EFS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ALB_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ACM_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(ACM_PCA_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(ROUTE53_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(CLOUDFRONT_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(S3_APP_BUCKET_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ECS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(LOGS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(DATABASE_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(SCALING_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(COGNITO_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(MONITORING_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(BACKUP_PERMISSIONS.get(IAMProfile.MINIMAL));
         if (includeCompliance) {
             actions.addAll(COMPLIANCE_PERMISSIONS.get(IAMProfile.MINIMAL));
         }
@@ -456,9 +706,17 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(EFS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ALB_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ACM_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(ACM_PCA_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(ROUTE53_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(CLOUDFRONT_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(S3_APP_BUCKET_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ECS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(LOGS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(DATABASE_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(SCALING_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(COGNITO_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(MONITORING_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(BACKUP_PERMISSIONS.get(IAMProfile.STANDARD));
         if (includeCompliance) {
             actions.addAll(COMPLIANCE_PERMISSIONS.get(IAMProfile.STANDARD));
         }
@@ -490,6 +748,10 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(EFS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ALB_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ACM_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(ACM_PCA_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(ROUTE53_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(CLOUDFRONT_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(S3_APP_BUCKET_PERMISSIONS.get(IAMProfile.MINIMAL));
         if (tier == IAMProfile.MINIMAL) {
             return List.copyOf(actions);
         }
@@ -497,6 +759,10 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(EFS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ALB_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ACM_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(ACM_PCA_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(ROUTE53_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(CLOUDFRONT_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(S3_APP_BUCKET_PERMISSIONS.get(IAMProfile.STANDARD));
         if (tier == IAMProfile.STANDARD) {
             return List.copyOf(actions);
         }
@@ -510,6 +776,10 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(ECS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(LOGS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(DATABASE_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(SCALING_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(COGNITO_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(MONITORING_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(BACKUP_PERMISSIONS.get(IAMProfile.MINIMAL));
         if (includeCompliance) {
             actions.addAll(COMPLIANCE_PERMISSIONS.get(IAMProfile.MINIMAL));
         }
@@ -519,6 +789,10 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(ECS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(LOGS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(DATABASE_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(SCALING_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(COGNITO_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(MONITORING_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(BACKUP_PERMISSIONS.get(IAMProfile.STANDARD));
         if (includeCompliance) {
             actions.addAll(COMPLIANCE_PERMISSIONS.get(IAMProfile.STANDARD));
         }
