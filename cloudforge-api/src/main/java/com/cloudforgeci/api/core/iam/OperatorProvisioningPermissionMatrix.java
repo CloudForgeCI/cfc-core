@@ -205,6 +205,37 @@ public final class OperatorProvisioningPermissionMatrix {
         )
     );
 
+    /**
+     * {@link com.cloudforgeci.api.core.runtime.FargateRuntimeConfiguration}'s public ACM {@code
+     * Certificate} L2 construct (SSL + a domain this deployment controls, DNS-validated against
+     * the target app's Route53 hosted zone) -- a real, live-surfaced gap: every other category in
+     * this file has always covered the resource it names, but nothing ever granted the ACM
+     * actions CloudFormation's {@code AWS::CertificateManager::Certificate} handler calls under
+     * the caller's own identity, so any app requesting SSL with a custom domain failed outright
+     * the moment it reached certificate creation ("not authorized to perform: acm:RequestCertificate").
+     * Grouped with the network category ({@link #getNetworkPermissions}), not compute/data --
+     * this certificate exists to become the ALB's HTTPS listener cert, alongside the same
+     * {@code FargateRuntimeConfiguration} pass that also creates the ALB's private-CA fallback
+     * path (an {@code AWS::ACMPCA::CertificateAuthority}, its own resource type with its own
+     * `acm-pca:*` action prefix -- not covered here, since Manager's own deployments never
+     * exercise Path B, and adding an unused permission for a codepath nothing has ever needed
+     * would be exactly the kind of narrower-than-it-should-be JSON byte spend {@link
+     * #getNetworkPermissions}'s own javadoc explains this file has to budget carefully).
+     */
+    public static final Map<IAMProfile, List<String>> ACM_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "acm:DescribeCertificate",
+            "acm:ListCertificates",
+            "acm:ListTagsForCertificate"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "acm:RequestCertificate",
+            "acm:DeleteCertificate",
+            "acm:AddTagsToCertificate",
+            "acm:RemoveTagsFromCertificate"
+        )
+    );
+
     /** {@link com.cloudforgeci.api.compute.FargateFactory}'s {@code Cluster}/
      *  {@code FargateService}/{@code FargateTaskDefinition} L2 constructs -- registering and
      *  running the task definition, not the workload permissions the running task itself needs
@@ -411,6 +442,7 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(VPC_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(EFS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ALB_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(ACM_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ECS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(LOGS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(DATABASE_PERMISSIONS.get(IAMProfile.MINIMAL));
@@ -423,6 +455,7 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(VPC_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(EFS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ALB_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(ACM_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ECS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(LOGS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(DATABASE_PERMISSIONS.get(IAMProfile.STANDARD));
@@ -456,12 +489,14 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(VPC_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(EFS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ALB_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(ACM_PERMISSIONS.get(IAMProfile.MINIMAL));
         if (tier == IAMProfile.MINIMAL) {
             return List.copyOf(actions);
         }
         actions.addAll(VPC_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(EFS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ALB_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(ACM_PERMISSIONS.get(IAMProfile.STANDARD));
         if (tier == IAMProfile.STANDARD) {
             return List.copyOf(actions);
         }
