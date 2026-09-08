@@ -13,6 +13,10 @@ import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.cxapi.CloudAssembly;
 import software.amazon.awscdk.cxapi.CloudFormationStackArtifact;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.route53.Route53Client;
+import software.amazon.awssdk.services.route53.model.HostedZone;
+import software.amazon.awssdk.services.route53.model.ListHostedZonesByNameRequest;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -52,6 +56,12 @@ import java.util.Objects;
  * silently return its built-in dummy values ({@code dummy1a}/{@code dummy1b}) baked straight into
  * the template, which then fails at CloudFormation. Whenever an account is pinned, {@link
  * #synthesize} seeds that context key itself first — see {@link #seedAvailabilityZoneContext}.</p>
+ *
+ * <p><b>Hosted-zone resolution:</b> the same exposure, a different context provider —
+ * {@code DomainFactory}'s {@code HostedZone.fromLookup} for an SSL+custom-domain deploy has no
+ * CloudFormation-intrinsic fallback the way AZs do, so it always resolves through CDK's
+ * synth-time {@code hosted-zone} context provider once a domain is set, and would otherwise
+ * silently bake in CDK's dummy zone id. See {@link #seedHostedZoneContext}.</p>
  */
 public final class CloudForgeSynthesizer {
 
@@ -142,6 +152,14 @@ public final class CloudForgeSynthesizer {
             if (account != null && !account.isBlank()) {
                 envBuilder.account(account);
                 seedAvailabilityZoneContext(app, account, region, config.availabilityZones);
+                // See seedHostedZoneContext's own javadoc -- DomainFactory only calls
+                // HostedZone.fromLookup (a context-provider lookup, same dummy-fallback exposure
+                // as availability-zones above) when a domain is set and this deploy isn't creating
+                // a brand-new zone itself.
+                if (config.domain != null && !config.domain.isBlank()
+                        && !Boolean.TRUE.equals(config.createZone)) {
+                    seedHostedZoneContext(app, account, region, config.domain);
+                }
             }
             StackProps props = StackProps.builder().env(envBuilder.build()).build();
 
@@ -186,5 +204,45 @@ public final class CloudForgeSynthesizer {
             .toList();
         app.getNode().setContext(
             "availability-zones:account=" + account + ":region=" + region, zones);
+    }
+
+    /**
+     * Seeds CDK's {@code hosted-zone} synth-time context provider — {@link DomainFactory}'s
+     * {@code HostedZone.fromLookup} for an SSL+custom-domain deploy hits the exact same dummy-
+     * fallback exposure {@link #seedAvailabilityZoneContext} exists to close for AZs, and until
+     * this existed, nothing closed it: a real production incident, caught live — every
+     * {@code deploy:create} of an application requesting SSL with a custom domain synthesized a
+     * template with a literal {@code "DUMMY"} hosted zone id baked in, which then failed at
+     * CloudFormation ("No hosted zone found with ID: DUMMY") for every single deploy, not just an
+     * edge case.
+     *
+     * <p>Unlike AZs, there's no way to construct the answer from the account/region alone — a
+     * domain's hosted zone id is only knowable by actually asking Route53, so this makes one real
+     * {@code ListHostedZonesByName} call (Route53 is a global service; the account/region in the
+     * cache key below are purely what CDK's own context-provider key format requires, confirmed
+     * against a real key an actual {@code cdk deploy} of this same domain already cached in
+     * {@code cfc-testing}'s {@code cdk.context.json} — {@code hosted-zone:account=<id>:domainName=
+     * <domain>:privateZone=false:region=<region>} mapping to {@code {"Id": "/hostedzone/<ZONEID>",
+     * "Name": "<domain>."}}, exactly what's built here).
+     *
+     * @throws IllegalArgumentException when no hosted zone for this exact domain exists in the
+     *     account being deployed into — the same failure CloudFormation would eventually report,
+     *     just surfaced immediately instead of after minutes of provisioning other resources first
+     */
+    private static void seedHostedZoneContext(App app, String account, String region, String domain) {
+        String zoneName = domain.endsWith(".") ? domain : domain + ".";
+        try (Route53Client route53 = Route53Client.builder().region(Region.AWS_GLOBAL).build()) {
+            List<HostedZone> zones = route53.listHostedZonesByName(
+                ListHostedZonesByNameRequest.builder().dnsName(zoneName).maxItems("1").build())
+                .hostedZones();
+            if (zones.isEmpty() || !zones.getFirst().name().equals(zoneName)) {
+                throw new IllegalArgumentException(
+                    "No Route53 hosted zone found for domain \"" + domain + "\" in account " + account
+                        + " -- create one first, or set createZone to have this deploy create it.");
+            }
+            app.getNode().setContext(
+                "hosted-zone:account=" + account + ":domainName=" + domain + ":privateZone=false:region=" + region,
+                Map.of("Id", zones.getFirst().id(), "Name", zoneName));
+        }
     }
 }
