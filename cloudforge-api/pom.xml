@@ -73,6 +73,14 @@
       <artifactId>servicecatalog</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
+    <!-- Resolves the real hosted-zone id for CloudForgeSynthesizer's own seedHostedZoneContext —
+         same reasoning as the sts dependency above, one context provider over (DomainFactory's
+         HostedZone.fromLookup, not an AZ list). -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>route53</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
     <!-- Local emulator pipelines (api orchestrates; mechanics stay in target modules) -->
     <dependency>
       <groupId>com.cloudforgeci</groupId>
