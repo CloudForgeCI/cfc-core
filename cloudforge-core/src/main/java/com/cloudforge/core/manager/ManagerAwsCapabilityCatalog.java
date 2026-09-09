@@ -15,7 +15,7 @@ import java.util.Set;
  */
 public final class ManagerAwsCapabilityCatalog {
 
-    public static final String CATALOG_VERSION = "1.4.0";
+    public static final String CATALOG_VERSION = "1.5.0";
 
     private ManagerAwsCapabilityCatalog() {
     }
@@ -109,6 +109,12 @@ public final class ManagerAwsCapabilityCatalog {
          * provisioning against pre-published products only; no CFN/IAM/EC2 permissions on
          * Manager's own role for this path at all. Also not part of {@link #operatorBaseline()}.
          */
+        // The last three actions manage a connected account's own
+        // AWS::ServiceCatalog::PortfolioPrincipalAssociation (see CrossAccountRoleTemplateFactory's
+        // own ServiceCatalogPortfolioId parameter) -- a placeholder, opt-in resource: CloudFormation
+        // needs these to create/update/delete/read that association at all, but the association
+        // itself only ever gets created once a caller fills in a real portfolio ID (Manager sharing
+        // a portfolio with a connected account is not automated yet, see that class's own javadoc).
         SC_PROVISION(
             "servicecatalog:ProvisionProduct",
             "servicecatalog:UpdateProvisionedProduct",
@@ -118,7 +124,10 @@ public final class ManagerAwsCapabilityCatalog {
             "servicecatalog:SearchProvisionedProducts",
             "servicecatalog:DescribeProduct",
             "servicecatalog:DescribeProductView",
-            "servicecatalog:ListLaunchPaths"),
+            "servicecatalog:ListLaunchPaths",
+            "servicecatalog:AssociatePrincipalWithPortfolio",
+            "servicecatalog:DisassociatePrincipalFromPortfolio",
+            "servicecatalog:ListPrincipalsForPortfolio"),
         /**
          * Lets a cross-account connection's role verify its own effective permissions via {@code
          * iam:SimulatePrincipalPolicy} — this is how {@code AccountsController}'s "Validate

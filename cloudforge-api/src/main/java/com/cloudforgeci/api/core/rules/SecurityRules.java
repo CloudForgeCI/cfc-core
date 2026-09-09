@@ -46,7 +46,6 @@ public final class SecurityRules {
 
 
   public static void install(SystemContext ctx) {
-
     // Create and set the SecurityProfileConfiguration in SystemContext
     // Pass deployment context so security profiles can override defaults
     final SecurityProfileConfiguration profileConfig = switch (ctx.security) {
@@ -183,7 +182,14 @@ public final class SecurityRules {
    * @since 3.1.0
    */
   private static NagPack mapFrameworkToNagPack(String framework, boolean enforce) {
-    // Report formats for compliance auditing
+    // Report formats for compliance auditing -- also what actually makes ComplianceMode.ENFORCE
+    // block anything: cdk-nag's own Annotations calls alone never do (app.synth() doesn't throw
+    // for them), so CloudForgeSynthesizer reads the generated <Pack>-<Stack>-NagReport.json file
+    // back off disk after synth instead (see NagReportReader). Deliberately NOT additionalLoggers
+    // -- registering a second INagLogger alongside cdk-nag's own default AnnotationsLogger
+    // triggers a jsii/cdk-nag runtime bug (a StackOverflowError from reentrant kernel calls,
+    // independent of what the extra logger's callbacks do). The built-in report logger these
+    // formats enable doesn't go through that path.
     var reportFormats = List.of(NagReportFormat.JSON, NagReportFormat.CSV);
 
     return switch (framework) {

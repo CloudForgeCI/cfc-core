@@ -3,6 +3,7 @@ package com.cloudforgeci.api.deploy.catalog;
 import com.cloudforge.core.local.DeploymentTarget;
 import com.cloudforge.core.manager.ManagerEndpointSupport;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -84,16 +85,30 @@ public final class ServiceCatalogDeployer implements AutoCloseable {
      * from env vars here — see that method's own javadoc for why).
      */
     public ServiceCatalogDeployer(String region, DeploymentTarget target) {
-        this(client(region, target));
+        this(client(region, target, null));
     }
 
-    private static ServiceCatalogClient client(String region, DeploymentTarget target) {
+    /**
+     * Same as the 2-arg constructor, plus an optional credentials override for a connected
+     * cross-account target (Manager's own {@link DefaultCredentialsProvider} otherwise) — see
+     * {@code CatalogDeployService}'s own cross-account handling for how this gets built. {@code
+     * credentialsOverride} is ignored for a local-emulator target (see {@link #client}): a
+     * connected AWS account is never a real thing there, only Manager's own emulator credentials
+     * are.
+     */
+    public ServiceCatalogDeployer(String region, DeploymentTarget target, AwsCredentialsProvider credentialsOverride) {
+        this(client(region, target, credentialsOverride));
+    }
+
+    private static ServiceCatalogClient client(
+            String region, DeploymentTarget target, AwsCredentialsProvider credentialsOverride) {
         Region resolvedRegion = Region.of(region == null || region.isBlank() ? "us-east-1" : region);
         String localEndpoint = ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target);
         if (localEndpoint == null) {
             return ServiceCatalogClient.builder()
                 .region(resolvedRegion)
-                .credentialsProvider(DefaultCredentialsProvider.create())
+                .credentialsProvider(credentialsOverride != null
+                    ? credentialsOverride : DefaultCredentialsProvider.create())
                 .build();
         }
         return ServiceCatalogClient.builder()

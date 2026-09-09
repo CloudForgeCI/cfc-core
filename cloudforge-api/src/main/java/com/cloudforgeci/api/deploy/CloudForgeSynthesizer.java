@@ -1,11 +1,14 @@
 package com.cloudforgeci.api.deploy;
 
 import com.cloudforge.core.config.DeploymentConfig;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforgeci.api.compute.ApplicationLoader;
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.core.rules.NagReportReader;
+import com.cloudforgeci.api.core.rules.NagReportReader.ComplianceFinding;
 import com.cloudforgeci.api.launch.ApplicationEc2Stack;
 import com.cloudforgeci.api.launch.ApplicationFargateStack;
 import software.amazon.awscdk.App;
@@ -175,6 +178,25 @@ public final class CloudForgeSynthesizer {
                 assembly = app.synth();
             } catch (RuntimeException e) {
                 throw new IOException("CDK synthesis failed for " + config.stackName + ": " + e.getMessage(), e);
+            }
+
+            // ComplianceMode.ENFORCE's real implementation -- see NagReportReader's own javadoc
+            // for why this reads cdk-nag's generated report file back off disk post-synth rather
+            // than relying on cdk-nag's own Annotations calls. ADVISORY mode (the default outside
+            // PRODUCTION) leaves the findings uninspected here -- SecurityRules.
+            // applyCdkNagValidation already gates which packs even run.
+            // Same null -> profile-default resolution DeploymentContext's own constructor uses --
+            // config.complianceMode is frequently left unset, relying on that default (ENFORCE
+            // for PRODUCTION, ADVISORY otherwise), not literally set to ENFORCE.
+            ComplianceMode effectiveComplianceMode = config.complianceMode != null
+                ? config.complianceMode
+                : ComplianceMode.defaultForProfile(config.securityProfile);
+            if (effectiveComplianceMode == ComplianceMode.ENFORCE) {
+                List<ComplianceFinding> errors = NagReportReader.readErrors(
+                    Path.of(assembly.getDirectory()), config.stackName);
+                if (!errors.isEmpty()) {
+                    throw new ComplianceViolationException(config.stackName, errors);
+                }
             }
 
             CloudFormationStackArtifact artifact = assembly.getStackByName(config.stackName);
