@@ -15,7 +15,7 @@ import java.util.Set;
  */
 public final class ManagerAwsCapabilityCatalog {
 
-    public static final String CATALOG_VERSION = "1.5.0";
+    public static final String CATALOG_VERSION = "1.6.0";
 
     private ManagerAwsCapabilityCatalog() {
     }
@@ -116,6 +116,7 @@ public final class ManagerAwsCapabilityCatalog {
         // itself only ever gets created once a caller fills in a real portfolio ID (Manager sharing
         // a portfolio with a connected account is not automated yet, see that class's own javadoc).
         SC_PROVISION(
+            "servicecatalog:ListPortfolios",
             "servicecatalog:ProvisionProduct",
             "servicecatalog:UpdateProvisionedProduct",
             "servicecatalog:TerminateProvisionedProduct",
@@ -129,6 +130,24 @@ public final class ManagerAwsCapabilityCatalog {
             "servicecatalog:DisassociatePrincipalFromPortfolio",
             "servicecatalog:ListPrincipalsForPortfolio"),
         /**
+         * {@code deploy:catalog-publish} (admin-only, {@code CATALOG_PUBLISH}) — authoring
+         * Service Catalog portfolios/products themselves, backing {@code
+         * ServiceCatalogProductPublisher}. Distinct from {@link #SC_PROVISION}: that capability
+         * only lets a caller provision an already-published product, this one lets Manager
+         * publish new ones. Deliberately separate rather than folded together, matching {@code
+         * CatalogPublishController}'s own javadoc on why {@code CATALOG_PUBLISH} is a materially
+         * more consequential policy than {@code DEPLOY_CATALOG}.
+         */
+        SC_PUBLISH(
+            "servicecatalog:ListPortfolios",
+            "servicecatalog:CreatePortfolio",
+            "servicecatalog:CreateProduct",
+            "servicecatalog:CreateProvisioningArtifact",
+            "servicecatalog:AssociateProductWithPortfolio",
+            "servicecatalog:CreateConstraint",
+            "servicecatalog:SearchProductsAsAdmin",
+            "servicecatalog:DescribeProductAsAdmin"),
+        /**
          * Lets a cross-account connection's role verify its own effective permissions via {@code
          * iam:SimulatePrincipalPolicy} — this is how {@code AccountsController}'s "Validate
          * connection" surfaces a real least-privilege report (which of
@@ -138,7 +157,26 @@ public final class ManagerAwsCapabilityCatalog {
          * whose role predates this capability simply report "unable to verify" rather than
          * failing validation outright; see {@code StsAssumeRoleService#checkPermissions}.
          */
-        SELF_PERMISSION_CHECK("iam:SimulatePrincipalPolicy");
+        SELF_PERMISSION_CHECK("iam:SimulatePrincipalPolicy"),
+        /**
+         * Backs {@code StackEventObservabilityService#enable}/{@code #disable} and the poller
+         * that drains captured events ({@code StackEventPoller}) -- the real EventBridge rule +
+         * SQS queue this feature provisions per pipeline (see that class's own javadoc). Manager-
+         * self-only like {@link #COGNITO_USER_MANAGEMENT}, so it belongs in {@link
+         * #operatorBaseline()} rather than a separately-gated capability: the feature's own
+         * license entitlement check (not IAM) is what actually gates who can call it.
+         */
+        STACK_EVENT_OBSERVABILITY(
+            "events:PutRule",
+            "events:PutTargets",
+            "events:RemoveTargets",
+            "events:DeleteRule",
+            "sqs:CreateQueue",
+            "sqs:DeleteQueue",
+            "sqs:GetQueueAttributes",
+            "sqs:SetQueueAttributes",
+            "sqs:ReceiveMessage",
+            "sqs:DeleteMessage");
 
         private final List<String> iamActions;
 
@@ -163,7 +201,8 @@ public final class ManagerAwsCapabilityCatalog {
             Capability.RDS_RESTORE,
             Capability.RDS_ENGINE_UPGRADE,
             Capability.COGNITO_USER_MANAGEMENT,
-            Capability.LOGS_READ);
+            Capability.LOGS_READ,
+            Capability.STACK_EVENT_OBSERVABILITY);
     }
 
     /**
