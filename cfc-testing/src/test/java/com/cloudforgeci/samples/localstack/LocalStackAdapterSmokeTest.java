@@ -1,6 +1,7 @@
 package com.cloudforgeci.samples.localstack;
 
 import com.cloudforgeci.localstack.LocalStackTemplateAdapter;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -52,7 +53,14 @@ class LocalStackAdapterSmokeTest {
         ArrayNode adaptedActions = (ArrayNode) adaptedResources
             .path("Http").path("Properties").path("DefaultActions");
         assertEquals(1, adaptedActions.size());
-        assertEquals("forward", adaptedActions.get(0).path("Type").asText());
+        // redirectAlbToLocalhostPort rewrites the surviving forward action into a redirect to
+        // localhost:<container port> -- LocalStack's ELB hostname breaks browser asset loading,
+        // this is the deliberate browser-compatibility path, not the auth-stripping this test's
+        // name is actually about. The task definition above maps ContainerPort 8080, so that's
+        // the port this rewrite targets.
+        JsonNode remaining = adaptedActions.get(0);
+        assertEquals("redirect", remaining.path("Type").asText());
+        assertEquals("8080", remaining.path("RedirectConfig").path("Port").asText());
         assertTrue(result.template().path("Outputs").has("LocalStackApplicationUrl"));
     }
 }

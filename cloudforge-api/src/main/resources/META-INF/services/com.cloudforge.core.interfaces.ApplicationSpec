@@ -6,6 +6,9 @@ com.cloudforgeci.api.application.JenkinsApplicationSpec
 com.cloudforgeci.api.application.cicd.GitLabApplicationSpec
 com.cloudforgeci.api.application.cicd.DroneApplicationSpec
 
+# Code Quality
+com.cloudforgeci.api.application.cicd.SonarQubeApplicationSpec
+
 # Version Control
 com.cloudforgeci.api.application.vcs.GiteaApplicationSpec
 

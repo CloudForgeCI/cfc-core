@@ -1,4 +1,4 @@
-package com.cloudforgeci.samples.plugins.application;
+package com.cloudforgeci.api.application.cicd;
 
 import com.cloudforge.core.annotation.ApplicationPlugin;
 import com.cloudforge.core.interfaces.ApplicationSpec;
@@ -11,43 +11,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * SonarQube ApplicationSpec - Example Custom Application Plugin.
+ * SonarQube ApplicationSpec -- continuous code quality and security analysis.
  *
- * <p>This demonstrates how to create a custom application plugin that integrates
- * seamlessly with CloudForge infrastructure. SonarQube is a code quality and security
- * analysis platform.</p>
- *
- * <h2>Features:</h2>
+ * <p><strong>Deployment:</strong></p>
  * <ul>
- *   <li>Continuous code quality inspection</li>
- *   <li>Security vulnerability detection</li>
- *   <li>Code smell and technical debt tracking</li>
- *   <li>Multi-language support</li>
+ *   <li>Fargate: {@code sonarqube:lts-community} Docker image</li>
+ *   <li>EC2: installs SonarQube from the official ZIP distribution</li>
  * </ul>
  *
- * <h2>Plugin Registration:</h2>
- * <p>This plugin demonstrates the {@link ApplicationPlugin} annotation system for
- * auto-discovery via ServiceLoader. Simply register this class in your
- * {@code META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec} file.</p>
- *
- * <h2>Deployment:</h2>
- * <ul>
- *   <li><b>Fargate:</b> Uses sonarqube:lts-community Docker image</li>
- *   <li><b>EC2:</b> Installs SonarQube from ZIP distribution</li>
- * </ul>
- *
- * <h2>Usage via ApplicationLoader:</h2>
- * <pre>{@code
- * // Auto-discovery via ApplicationLoader
- * Optional<ApplicationSpec> sonarQube = ApplicationLoader.findById("sonarqube");
- *
- * // Or use in InteractiveDeployer (automatically discovered)
- * mvn clean package
- * cdk deploy --context cfc=@deployment-context.json
- * }</pre>
- *
- * @since 1.0.0
- * @author CloudForge Community
+ * @see <a href="https://docs.sonarsource.com/sonarqube/">SonarQube Documentation</a>
  */
 @ApplicationPlugin(
     value = "sonarqube",
@@ -83,10 +55,10 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
     }
 
     @Override
-    public java.util.List<OptionalPort> optionalPorts() {
-        // SonarQube typically doesn't need additional ports exposed
-        // Metrics are available on primary port /api/system/health and /api/monitoring/*
-        return java.util.List.of();
+    public List<OptionalPort> optionalPorts() {
+        // Metrics are available on the primary port (/api/system/health, /api/monitoring/*) --
+        // no additional ports needed.
+        return List.of();
     }
 
     @Override
@@ -106,7 +78,7 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
 
     @Override
     public String containerUser() {
-        return "1000:1000";  // SonarQube runs as user 1000
+        return "1000:1000"; // SonarQube runs as user 1000
     }
 
     @Override
@@ -123,18 +95,14 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
     public Map<String, String> containerEnvironmentVariables(String fqdn, boolean sslEnabled, String authMode) {
         Map<String, String> environment = new HashMap<>();
 
-        // SonarQube server configuration
         if (fqdn != null && !fqdn.isBlank()) {
             String serverUrl = (sslEnabled ? "https://" : "http://") + fqdn;
             environment.put("SONAR_WEB_CONTEXT", "/");
             environment.put("SONAR_WEB_HOST", "0.0.0.0");
             environment.put("SONAR_WEB_PORT", String.valueOf(applicationPort()));
-
-            // Set public URL for webhooks and links
             environment.put("SONAR_WEB_PUBLIC_URL", serverUrl);
         }
 
-        // JVM options for performance
         environment.put("SONAR_WEB_JAVAADDITIONALOPTS", "-XX:+UseG1GC -Xmx2g -Xms512m");
         environment.put("SONAR_CE_JAVAADDITIONALOPTS", "-XX:+UseG1GC -Xmx1g -Xms256m");
 
@@ -166,10 +134,8 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
 
     @Override
     public void configureUserData(UserDataBuilder builder, Ec2Context context) {
-        // System updates
         builder.addSystemUpdate();
 
-        // Install Java 17 (required for SonarQube LTS)
         builder.addCommands(
             "# Install Java 17",
             "command -v dnf >/dev/null && dnf -y install java-17-amazon-corretto-headless unzip || " +
@@ -177,8 +143,7 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
             "echo 'Java 17 installed' >> /var/log/userdata.log"
         );
 
-        // Download and install SonarQube
-        String sonarVersion = "10.3.0.82913";  // LTS version
+        String sonarVersion = "10.3.0.82913"; // LTS version
         builder.addCommands(
             "# Download SonarQube",
             "cd /tmp",
@@ -188,21 +153,18 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
             "echo 'SonarQube downloaded and extracted' >> /var/log/userdata.log"
         );
 
-        // Create SonarQube user
         builder.addCommands(
             "# Create SonarQube user",
             "useradd -r -s /bin/bash sonarqube || true",
             "echo 'SonarQube user created' >> /var/log/userdata.log"
         );
 
-        // Install and configure CloudWatch Agent
         String logGroupName = String.format("/aws/%s/%s/%s",
             context.stackName(),
             context.runtimeType(),
             context.securityProfile());
         builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
 
-        // Mount storage (EFS or EBS)
         String[] userParts = containerUser().split(":");
         String uid = userParts[0];
         String gid = userParts[1];
@@ -224,7 +186,6 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
             );
         }
 
-        // Configure SonarQube
         builder.addCommands(
             "# Configure SonarQube",
             "mkdir -p /opt/sonarqube/data/es7",
@@ -234,7 +195,6 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
             "echo 'SonarQube directories configured' >> /var/log/userdata.log"
         );
 
-        // Configure SonarQube properties
         builder.addCommands(
             "# Configure SonarQube properties",
             "cat > /opt/sonarqube/conf/sonar.properties <<'EOF'",
@@ -262,7 +222,6 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
             "echo 'SonarQube properties configured' >> /var/log/userdata.log"
         );
 
-        // Create systemd service
         builder.addCommands(
             "# Create SonarQube systemd service",
             "cat > /etc/systemd/system/sonarqube.service <<'EOF'",
@@ -289,9 +248,8 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
             "echo 'SonarQube systemd service created' >> /var/log/userdata.log"
         );
 
-        // Set system limits for SonarQube (Elasticsearch requirements)
         builder.addCommands(
-            "# Set system limits for SonarQube",
+            "# Set system limits for SonarQube (Elasticsearch requirements)",
             "echo 'sonarqube - nofile 65536' >> /etc/security/limits.conf",
             "echo 'sonarqube - nproc 4096' >> /etc/security/limits.conf",
             "echo 'vm.max_map_count=262144' >> /etc/sysctl.conf",
@@ -299,7 +257,6 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
             "echo 'System limits configured for SonarQube' >> /var/log/userdata.log"
         );
 
-        // Start SonarQube
         builder.addCommands(
             "# Start SonarQube",
             "systemctl daemon-reload",
@@ -326,7 +283,7 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
 
     @Override
     public boolean supportsOidcIntegration() {
-        return false;  // SonarQube Community Edition doesn't support OIDC (Enterprise feature)
+        return false; // SonarQube Community Edition doesn't support OIDC (Enterprise feature)
     }
 
     @Override
