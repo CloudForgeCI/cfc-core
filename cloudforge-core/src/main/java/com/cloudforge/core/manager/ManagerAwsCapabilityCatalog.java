@@ -15,7 +15,7 @@ import java.util.Set;
  */
 public final class ManagerAwsCapabilityCatalog {
 
-    public static final String CATALOG_VERSION = "1.6.0";
+    public static final String CATALOG_VERSION = "1.6.1";
 
     private ManagerAwsCapabilityCatalog() {
     }
@@ -146,7 +146,19 @@ public final class ManagerAwsCapabilityCatalog {
             "servicecatalog:AssociateProductWithPortfolio",
             "servicecatalog:CreateConstraint",
             "servicecatalog:SearchProductsAsAdmin",
-            "servicecatalog:DescribeProductAsAdmin"),
+            "servicecatalog:DescribeProductAsAdmin",
+            // A freshly created provisioning artifact starts CREATING, not AVAILABLE --
+            // ServiceCatalogProductPublisher polls this action to wait for Service Catalog's own
+            // template fetch-and-validate step to finish before handing the artifact back to a
+            // caller that may provision it immediately (see CatalogDeployService#runProvision).
+            "servicecatalog:DescribeProvisioningArtifact",
+            // Not called directly anywhere in this codebase -- Service Catalog's own
+            // CreateProduct/CreateProvisioningArtifact validates the submitted CloudFormation
+            // template server-side, and that internal AWS-side call runs as the same caller
+            // identity that invoked CreateProduct, not a service-linked role. Without this
+            // grant, publishing fails AccessDenied on cloudformation:ValidateTemplate even with
+            // every other SC_PUBLISH action already granted.
+            "cloudformation:ValidateTemplate"),
         /**
          * Lets a cross-account connection's role verify its own effective permissions via {@code
          * iam:SimulatePrincipalPolicy} — this is how {@code AccountsController}'s "Validate
@@ -212,7 +224,7 @@ public final class ManagerAwsCapabilityCatalog {
      * {@code ManagerPolicyCatalog} policy.
      */
     public static Set<Capability> deployCapabilities() {
-        return EnumSet.of(Capability.CFN_DEPLOY, Capability.SC_PROVISION);
+        return EnumSet.of(Capability.CFN_DEPLOY, Capability.SC_PROVISION, Capability.SC_PUBLISH);
     }
 
     public static Set<String> iamActions(Iterable<Capability> capabilities) {

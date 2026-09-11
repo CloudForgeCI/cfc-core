@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.servicecatalog.model.ProvisioningParamete
 import software.amazon.awssdk.services.servicecatalog.model.RecordDetail;
 import software.amazon.awssdk.services.servicecatalog.model.RecordError;
 import software.amazon.awssdk.services.servicecatalog.model.RecordStatus;
+import software.amazon.awssdk.services.servicecatalog.model.Tag;
 import software.amazon.awssdk.services.servicecatalog.model.TerminateProvisionedProductRequest;
 import software.amazon.awssdk.services.servicecatalog.model.TerminateProvisionedProductResponse;
 import software.amazon.awssdk.services.servicecatalog.model.UpdateProvisionedProductRequest;
@@ -138,12 +139,23 @@ public final class ServiceCatalogDeployer implements AutoCloseable {
             .map(entry -> ProvisioningParameter.builder().key(entry.getKey()).value(entry.getValue()).build())
             .toList();
 
+        // cloudforge:managed=true is passed as a REQUEST tag here, not just on the published
+        // product. With no launch constraint role configured, Service Catalog creates the
+        // underlying stack (SC-<account>-pp-<hash>) using this same caller's credentials, and
+        // Manager's own CreateStack grant is conditioned on aws:RequestTag/cloudforge:managed=true
+        // (the same condition deploy:create's own AwsDirectDeployer already satisfies on its own
+        // CreateStack calls). Without the request tag, ProvisionProduct fails with
+        // CloudFormation's own cloudformation:CreateStack AccessDenied: a tag already present on
+        // the resource once Service Catalog finishes propagating the product's own tags onto it
+        // doesn't help, since that's aws:ResourceTag, evaluated after creation, not aws:RequestTag
+        // on the CreateStack call itself.
         ProvisionProductResponse response = client.provisionProduct(ProvisionProductRequest.builder()
             .productId(input.productId())
             .provisioningArtifactId(input.provisioningArtifactId())
             .provisionedProductName(input.provisionedProductName())
             .provisioningParameters(parameters)
             .provisionToken(idempotencyToken)
+            .tags(Tag.builder().key("cloudforge:managed").value("true").build())
             .build());
 
         return waitForTerminal(response.recordDetail().recordId());

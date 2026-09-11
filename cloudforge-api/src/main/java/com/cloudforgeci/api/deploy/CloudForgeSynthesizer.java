@@ -69,14 +69,14 @@ import java.util.Objects;
 public final class CloudForgeSynthesizer {
 
     /**
-     * Serializes every {@link #synthesize} call process-wide. Discovered the hard way: aws-cdk-lib
-     * is a jsii-wrapped library backed by a single shared Node.js kernel child process per JVM,
-     * and its Java↔jsii communication channel is not safe for concurrent use from multiple
-     * threads — two overlapping {@code app.synth()} calls (or one interrupted mid-call) corrupted
-     * kernel state badly enough that unrelated, previously-passing synthesis calls in the *same*
-     * JVM started failing with nonsensical NPEs ({@code Node.getId()} returning null,
+     * Serializes every {@link #synthesize} call process-wide. aws-cdk-lib is a jsii-wrapped
+     * library backed by a single shared Node.js kernel child process per JVM, and its Java↔jsii
+     * communication channel is not safe for concurrent use from multiple threads — two
+     * overlapping {@code app.synth()} calls (or one interrupted mid-call) can corrupt kernel
+     * state badly enough that unrelated, previously-passing synthesis calls in the *same* JVM
+     * start failing with nonsensical NPEs ({@code Node.getId()} returning null,
      * {@code Tags.of(...)} returning null) deep inside {@code ApplicationFactory}, for stacks that
-     * had nothing to do with the call that corrupted things. A single static lock is the
+     * have nothing to do with the call that corrupted things. A single static lock is the
      * conservative fix — this is not a hot path (interactive deploys, not a request-per-second
      * API), so serializing it costs nothing that matters and removes an entire class of
      * hard-to-reproduce cross-request corruption. If a caller (e.g. Manager's async job pool)
@@ -231,21 +231,19 @@ public final class CloudForgeSynthesizer {
     /**
      * Seeds CDK's {@code hosted-zone} synth-time context provider — {@link DomainFactory}'s
      * {@code HostedZone.fromLookup} for an SSL+custom-domain deploy hits the exact same dummy-
-     * fallback exposure {@link #seedAvailabilityZoneContext} exists to close for AZs, and until
-     * this existed, nothing closed it: a real production incident, caught live — every
-     * {@code deploy:create} of an application requesting SSL with a custom domain synthesized a
-     * template with a literal {@code "DUMMY"} hosted zone id baked in, which then failed at
-     * CloudFormation ("No hosted zone found with ID: DUMMY") for every single deploy, not just an
-     * edge case.
+     * fallback exposure {@link #seedAvailabilityZoneContext} exists to close for AZs. Without it,
+     * every {@code deploy:create} of an application requesting SSL with a custom domain
+     * synthesizes a template with a literal {@code "DUMMY"} hosted zone id baked in, which then
+     * fails at CloudFormation ("No hosted zone found with ID: DUMMY") for every single deploy, not
+     * just an edge case.
      *
      * <p>Unlike AZs, there's no way to construct the answer from the account/region alone — a
      * domain's hosted zone id is only knowable by actually asking Route53, so this makes one real
      * {@code ListHostedZonesByName} call (Route53 is a global service; the account/region in the
-     * cache key below are purely what CDK's own context-provider key format requires, confirmed
-     * against a real key an actual {@code cdk deploy} of this same domain already cached in
-     * {@code cfc-testing}'s {@code cdk.context.json} — {@code hosted-zone:account=<id>:domainName=
-     * <domain>:privateZone=false:region=<region>} mapping to {@code {"Id": "/hostedzone/<ZONEID>",
-     * "Name": "<domain>."}}, exactly what's built here).
+     * cache key below are purely what CDK's own context-provider key format requires). The key
+     * format matches {@code hosted-zone:account=<id>:domainName=<domain>:privateZone=false:region=
+     * <region>} mapping to {@code {"Id": "/hostedzone/<ZONEID>", "Name": "<domain>."}}, exactly
+     * what's built here.
      *
      * @throws IllegalArgumentException when no hosted zone for this exact domain exists in the
      *     account being deployed into — the same failure CloudFormation would eventually report,
