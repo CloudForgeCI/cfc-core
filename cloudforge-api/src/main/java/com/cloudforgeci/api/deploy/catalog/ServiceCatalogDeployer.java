@@ -3,6 +3,7 @@ package com.cloudforgeci.api.deploy.catalog;
 import com.cloudforge.core.local.DeploymentTarget;
 import com.cloudforge.core.manager.ManagerEndpointSupport;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -15,6 +16,7 @@ import software.amazon.awssdk.services.servicecatalog.model.ProvisioningParamete
 import software.amazon.awssdk.services.servicecatalog.model.RecordDetail;
 import software.amazon.awssdk.services.servicecatalog.model.RecordError;
 import software.amazon.awssdk.services.servicecatalog.model.RecordStatus;
+import software.amazon.awssdk.services.servicecatalog.model.Tag;
 import software.amazon.awssdk.services.servicecatalog.model.TerminateProvisionedProductRequest;
 import software.amazon.awssdk.services.servicecatalog.model.TerminateProvisionedProductResponse;
 import software.amazon.awssdk.services.servicecatalog.model.UpdateProvisionedProductRequest;
@@ -84,16 +86,30 @@ public final class ServiceCatalogDeployer implements AutoCloseable {
      * from env vars here — see that method's own javadoc for why).
      */
     public ServiceCatalogDeployer(String region, DeploymentTarget target) {
-        this(client(region, target));
+        this(client(region, target, null));
     }
 
-    private static ServiceCatalogClient client(String region, DeploymentTarget target) {
+    /**
+     * Same as the 2-arg constructor, plus an optional credentials override for a connected
+     * cross-account target (Manager's own {@link DefaultCredentialsProvider} otherwise) — see
+     * {@code CatalogDeployService}'s own cross-account handling for how this gets built. {@code
+     * credentialsOverride} is ignored for a local-emulator target (see {@link #client}): a
+     * connected AWS account is never a real thing there, only Manager's own emulator credentials
+     * are.
+     */
+    public ServiceCatalogDeployer(String region, DeploymentTarget target, AwsCredentialsProvider credentialsOverride) {
+        this(client(region, target, credentialsOverride));
+    }
+
+    private static ServiceCatalogClient client(
+            String region, DeploymentTarget target, AwsCredentialsProvider credentialsOverride) {
         Region resolvedRegion = Region.of(region == null || region.isBlank() ? "us-east-1" : region);
         String localEndpoint = ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target);
         if (localEndpoint == null) {
             return ServiceCatalogClient.builder()
                 .region(resolvedRegion)
-                .credentialsProvider(DefaultCredentialsProvider.create())
+                .credentialsProvider(credentialsOverride != null
+                    ? credentialsOverride : DefaultCredentialsProvider.create())
                 .build();
         }
         return ServiceCatalogClient.builder()
@@ -123,12 +139,23 @@ public final class ServiceCatalogDeployer implements AutoCloseable {
             .map(entry -> ProvisioningParameter.builder().key(entry.getKey()).value(entry.getValue()).build())
             .toList();
 
+        // cloudforge:managed=true is passed as a REQUEST tag here, not just on the published
+        // product. With no launch constraint role configured, Service Catalog creates the
+        // underlying stack (SC-<account>-pp-<hash>) using this same caller's credentials, and
+        // Manager's own CreateStack grant is conditioned on aws:RequestTag/cloudforge:managed=true
+        // (the same condition deploy:create's own AwsDirectDeployer already satisfies on its own
+        // CreateStack calls). Without the request tag, ProvisionProduct fails with
+        // CloudFormation's own cloudformation:CreateStack AccessDenied: a tag already present on
+        // the resource once Service Catalog finishes propagating the product's own tags onto it
+        // doesn't help, since that's aws:ResourceTag, evaluated after creation, not aws:RequestTag
+        // on the CreateStack call itself.
         ProvisionProductResponse response = client.provisionProduct(ProvisionProductRequest.builder()
             .productId(input.productId())
             .provisioningArtifactId(input.provisioningArtifactId())
             .provisionedProductName(input.provisionedProductName())
             .provisioningParameters(parameters)
             .provisionToken(idempotencyToken)
+            .tags(Tag.builder().key("cloudforge:managed").value("true").build())
             .build());
 
         return waitForTerminal(response.recordDetail().recordId());

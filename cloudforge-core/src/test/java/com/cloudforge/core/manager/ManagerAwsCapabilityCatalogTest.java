@@ -13,9 +13,8 @@ class ManagerAwsCapabilityCatalogTest {
         assertTrue(actions.contains("rds:CreateDBSnapshot"));
         assertTrue(actions.contains("rds:DeleteDBSnapshot"));
         // AWS calls this transparently on the caller's behalf right after CreateDBSnapshot
-        // succeeds, for any RDS instance created with CopyTagsToSnapshot enabled -- confirmed
-        // live: snapshot creation itself succeeded, but the automatic tag-copy step was denied
-        // without this grant.
+        // succeeds, for any RDS instance created with CopyTagsToSnapshot enabled -- without it,
+        // snapshot creation succeeds but the automatic tag-copy step is denied.
         assertTrue(actions.contains("rds:AddTagsToResource"));
         assertTrue(actions.contains("rds:RestoreDBInstanceFromDBSnapshot"));
         assertTrue(actions.contains("ecs:UpdateService"));

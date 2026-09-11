@@ -4,6 +4,7 @@ import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.manager.ManagerAwsCapabilityCatalog;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.deploy.aws.AwsDirectDeployer;
+import com.cloudforgeci.api.deploy.catalog.ServiceCatalogProductPublisher;
 import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
@@ -388,21 +389,52 @@ public final class ManagerOperatorIamSupport {
     }
 
     /**
-     * {@code SC_PROVISION} capability backing {@code deploy:catalog} — deliberately no
+     * {@code SC_PROVISION} (provisioning already-published products, backing {@code
+     * deploy:catalog}) and {@code SC_PUBLISH} (authoring the portfolios/products themselves,
+     * backing {@code deploy:catalog-publish}/{@code CatalogPublishController}) — deliberately no
      * conditions: Service Catalog's own portfolio/product/launch-constraint model is the
      * guardrail here (a caller can only provision products actually shared with them), not a
-     * tag condition on Manager's role. No CFN/IAM permissions appear in this statement at all.
+     * tag condition on Manager's role. The one non-{@code servicecatalog:} action, {@code
+     * cloudformation:ValidateTemplate}, is required by {@code SC_PUBLISH} itself — see that
+     * capability's own comment for why.
      */
     public static Optional<PolicyStatement> catalogProvisionStatement(SystemContext ctx) {
         if (!isCloudForgeManager(ctx)) {
             return Optional.empty();
         }
         List<String> actions = new ArrayList<>(ManagerAwsCapabilityCatalog.iamActions(
-            List.of(ManagerAwsCapabilityCatalog.Capability.SC_PROVISION)));
+            List.of(ManagerAwsCapabilityCatalog.Capability.SC_PROVISION,
+                ManagerAwsCapabilityCatalog.Capability.SC_PUBLISH)));
         return Optional.of(PolicyStatement.Builder.create()
             .sid("CloudForgeManagerDeployCatalog")
             .actions(actions)
             .resources(List.of("*"))
+            .build());
+    }
+
+    /**
+     * SC_PUBLISH's actual first write -- {@code ServiceCatalogProductPublisher.uploadTemplate}
+     * puts the synthesized template into this bucket, then hands Service Catalog a presigned URL
+     * signed by this same role, before {@code CreateProduct}/{@code CreateProvisioningArtifact}
+     * ever runs. {@link #catalogProvisionStatement} covers the Service Catalog API actions
+     * themselves but grants no S3 access: a presigned URL is still evaluated against the signing
+     * principal's actual permissions when fetched, so without this grant Service Catalog's fetch
+     * fails with a generic "Invalid templateBody" error (its own wrapper for an unauthenticated
+     * fetch, not a real template syntax problem). Same fixed-prefix-match reasoning as {@code
+     * templateBucket} above
+     * (a different bucket, {@code AwsDirectDeployer.TEMPLATE_BUCKET_PREFIX} -- deploy:create's
+     * own, not deploy:catalog-publish's).
+     */
+    public static Optional<PolicyStatement> catalogTemplateBucketStatement(SystemContext ctx) {
+        if (!isCloudForgeManager(ctx)) {
+            return Optional.empty();
+        }
+        return Optional.of(PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerDeployCatalogTemplateBucket")
+            .actions(List.of("s3:*"))
+            .resources(List.of(
+                "arn:aws:s3:::" + ServiceCatalogProductPublisher.CATALOG_TEMPLATE_BUCKET_PREFIX + "*",
+                "arn:aws:s3:::" + ServiceCatalogProductPublisher.CATALOG_TEMPLATE_BUCKET_PREFIX + "*/*"))
             .build());
     }
 
@@ -432,6 +464,7 @@ public final class ManagerOperatorIamSupport {
             }
         }
         catalogProvisionStatement(ctx).ifPresent(role::addToPolicy);
+        catalogTemplateBucketStatement(ctx).ifPresent(role::addToPolicy);
         addDeployCapabilitiesNagSuppressions(role);
     }
 
@@ -458,6 +491,7 @@ public final class ManagerOperatorIamSupport {
             }
         }
         catalogProvisionStatement(ctx).ifPresent(statements::add);
+        catalogTemplateBucketStatement(ctx).ifPresent(statements::add);
     }
 
     /**

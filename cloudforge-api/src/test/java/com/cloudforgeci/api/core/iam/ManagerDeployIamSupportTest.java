@@ -387,7 +387,12 @@ class ManagerDeployIamSupportTest {
             ManagerOperatorIamSupport.catalogProvisionStatement(builder.getSystemContext());
         assertTrue(statement.isPresent());
         assertTrue(statement.get().toJSON().toString().contains("servicecatalog:ProvisionProduct"));
-        assertFalse(statement.get().toJSON().toString().contains("cloudformation:"));
+        // SC_PUBLISH's one deliberate non-servicecatalog: action -- see ManagerAwsCapabilityCatalog's
+        // own comment on it for why publishing needs cloudformation:ValidateTemplate.
+        assertTrue(statement.get().toJSON().toString().contains("cloudformation:ValidateTemplate"));
+        // "ConditionFree" is what this test name actually promises -- no Condition block at all,
+        // regardless of which actions the statement carries.
+        assertFalse(statement.get().toJSON().toString().contains("\"Condition\""));
     }
 
     @Test

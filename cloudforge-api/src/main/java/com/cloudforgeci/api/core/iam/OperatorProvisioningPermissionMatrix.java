@@ -418,7 +418,18 @@ public final class OperatorProvisioningPermissionMatrix {
             "kms:GetKeyPolicy",
             "kms:GetKeyRotationStatus",
             "secretsmanager:DescribeSecret",
-            "secretsmanager:ListSecrets"
+            "secretsmanager:ListSecrets",
+            // RdsFactory's own StringParameter (a distroless app with no shell can't do variable
+            // substitution, so its datasource URL -- including dynamic references CloudFormation
+            // resolves -- is stored here instead, see ContainerFactory's mattermost-* case) and
+            // SharedResourceRegistry's own general-purpose parameter storage. Distinct from
+            // COMPLIANCE_PERMISSIONS' ssm:*Document actions (SSM Documents, a different resource
+            // type under the same service prefix) and ManagerOperatorIamSupport's own
+            // ssm:GetParameters grant (fixed to the CDK bootstrap-version parameter specifically).
+            "ssm:GetParameter",
+            "ssm:GetParameters",
+            "ssm:DescribeParameters",
+            "ssm:ListTagsForResource"
         ),
         IAMProfile.STANDARD, List.of(
             "rds:CreateDBInstance",
@@ -455,7 +466,11 @@ public final class OperatorProvisioningPermissionMatrix {
             "secretsmanager:PutSecretValue",
             "secretsmanager:UpdateSecret",
             "secretsmanager:TagResource",
-            "secretsmanager:UntagResource"
+            "secretsmanager:UntagResource",
+            "ssm:PutParameter",
+            "ssm:DeleteParameter",
+            "ssm:AddTagsToResource",
+            "ssm:RemoveTagsFromResource"
         )
     );
 

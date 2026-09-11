@@ -245,15 +245,14 @@ public final class CloudForgeDeployment {
                     request.options().managerVolumeRoots());
             } catch (IOException | RuntimeException e) {
                 // Must never abort the deploy — reconcileEmulatorEdge below depends on reaching
-                // this point. Broadened beyond IOException: a real NullPointerException from
-                // DeploymentContextCatalog.registerKnownStack (a null-parent Path — fixed there
-                // now, but this catch stays broad as a second line of defense) escaped an
-                // IOException-only catch here, silently skipping emulator-edge reconciliation for
-                // every local deploy afterward in that run — the new stack's route never got
-                // added to nginx, surfacing as "CloudForge application route not found" in a
-                // browser hitting its hostname. Discovered via a real LocalStack deploy, not a
-                // test — nothing in the test suite exercises this catalog-persist call chain
-                // against a real filesystem layout where catalogDirectory is a bare relative path.
+                // this point. Broadened beyond IOException: DeploymentContextCatalog.registerKnownStack
+                // can throw a NullPointerException for a null-parent Path (fixed there too, but this
+                // catch stays broad as a second line of defense). An IOException-only catch here would
+                // let that escape and silently skip emulator-edge reconciliation for every local deploy
+                // afterward in that run — the new stack's route never gets added to nginx, surfacing as
+                // "CloudForge application route not found" in a browser hitting its hostname. Nothing in
+                // the test suite exercises this catalog-persist call chain against a real filesystem
+                // layout where catalogDirectory is a bare relative path.
                 messages.add("Could not write deployment-contexts catalog: " + e.getMessage());
             }
         }

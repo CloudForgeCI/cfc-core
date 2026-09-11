@@ -54,7 +54,7 @@ reset_localstack() {
     java -cp "$STARTER_CP" StartLocalStack start
     wait_for_health || echo "⚠️  LocalStack didn't report healthy within 90s after restart"
     # Postgres/MySQL RDS emulation needs this on arm64 hosts (missing from the base image) --
-    # see LocalStackRdsSupportTest / the session notes on the libpython3.14 gap.
+    # see LocalStackRdsSupportTest for details on the libpython3.14 gap.
     docker exec cfc-localstack apt-get install -y libpython3.14 >/dev/null 2>&1 || true
   fi
 }
