@@ -1,7 +1,10 @@
 package com.cloudforge.core.manager.auth;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * CloudForge Manager's Users-page CRUD, abstracted over whichever directory of accounts is
@@ -33,6 +36,39 @@ import java.util.Optional;
 public interface AuthBackend {
 
     List<AuthAccount> listAccounts();
+
+    /**
+     * Same as {@link #listAccounts()}, narrowed by two optional filters: {@code search} (matches
+     * {@link AuthAccount#username()}/{@link AuthAccount#email()}/{@link
+     * AuthAccount#displayName()}, case-insensitive substring) and {@code role} (exact match).
+     * Both {@code null}/blank mean "unfiltered" — equivalent to {@link #listAccounts()}.
+     *
+     * <p>The default implementation filters in Java over {@link #listAccounts()} — correct for
+     * any backend, but only moves the filtering server-side (out of the Angular Users page)
+     * without reducing the underlying account-directory calls. {@code LocalH2AuthBackend}
+     * overrides this with a database-level query. {@code CognitoAuthBackend} keeps this default
+     * deliberately: Cognito's own {@code ListUsers} {@code Filter} syntax has no concept of role
+     * (role lives in group membership, not a filterable user attribute), so even an override
+     * there couldn't push the {@code role} filter down — only {@code search} could move, with no
+     * reduction in Cognito API calls either, the same trade-off {@code
+     * CloudFormationInventory#listInstances(String, String)}'s {@code search} parameter
+     * documents for AWS's own {@code ListStacks}.</p>
+     */
+    default List<AuthAccount> listAccounts(String search, String role) {
+        String searchLower = search == null || search.isBlank() ? null : search.trim().toLowerCase(Locale.ROOT);
+        String roleFilter = role == null || role.isBlank() ? null : role;
+        return listAccounts().stream()
+            .filter(account -> roleFilter == null || roleFilter.equalsIgnoreCase(account.role()))
+            .filter(account -> searchLower == null || matchesSearch(account, searchLower))
+            .toList();
+    }
+
+    private static boolean matchesSearch(AuthAccount account, String searchLower) {
+        return Stream.of(account.username(), account.email(), account.displayName())
+            .filter(Objects::nonNull)
+            .map(value -> value.toLowerCase(Locale.ROOT))
+            .anyMatch(value -> value.contains(searchLower));
+    }
 
     AuthAccount createAccount(AuthAccountRequest request);
 
