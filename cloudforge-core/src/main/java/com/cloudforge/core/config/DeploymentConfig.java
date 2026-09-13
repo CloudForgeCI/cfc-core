@@ -1829,14 +1829,13 @@ public class DeploymentConfig {
 
     /**
      * Opt-in: grants CloudForge Manager's own task/instance role the direct-deploy IAM
-     * capabilities ({@code CFN_DEPLOY}/{@code SC_PROVISION} — see
-     * {@code ManagerAwsCapabilityCatalog}), condition-scoped to CloudForge-tagged resources.
+     * capability ({@code CFN_DEPLOY} — see {@code ManagerAwsCapabilityCatalog}),
+     * condition-scoped to CloudForge-tagged resources.
      * Only has any effect when this deployment's {@code applicationId} is
      * {@code cloudforge-manager}; a no-op for every other application. Defaults to false — Manager
-     * deploying AWS infrastructure on a caller's behalf (via {@code deploy:create}/
-     * {@code deploy:catalog}) is a materially broader permission grant than Manager's normal
-     * inventory/operator role, so it must be explicitly requested per deployment, not inherited
-     * automatically from IAM profile.
+     * deploying AWS infrastructure on a caller's behalf (via {@code deploy:create}) is a
+     * materially broader permission grant than Manager's normal inventory/operator role, so it
+     * must be explicitly requested per deployment, not inherited automatically from IAM profile.
      */
     @ConfigField(
         displayName = "Manager Direct Deploy",

@@ -105,61 +105,6 @@ public final class ManagerAwsCapabilityCatalog {
             "cloudformation:DeleteChangeSet",
             "iam:PassRole"),
         /**
-         * {@code deploy:catalog} (constrained, manager+admin) routes here — Service Catalog
-         * provisioning against pre-published products only; no CFN/IAM/EC2 permissions on
-         * Manager's own role for this path at all. Also not part of {@link #operatorBaseline()}.
-         */
-        // The last three actions manage a connected account's own
-        // AWS::ServiceCatalog::PortfolioPrincipalAssociation (see CrossAccountRoleTemplateFactory's
-        // own ServiceCatalogPortfolioId parameter) -- a placeholder, opt-in resource: CloudFormation
-        // needs these to create/update/delete/read that association at all, but the association
-        // itself only ever gets created once a caller fills in a real portfolio ID (Manager sharing
-        // a portfolio with a connected account is not automated yet, see that class's own javadoc).
-        SC_PROVISION(
-            "servicecatalog:ListPortfolios",
-            "servicecatalog:ProvisionProduct",
-            "servicecatalog:UpdateProvisionedProduct",
-            "servicecatalog:TerminateProvisionedProduct",
-            "servicecatalog:DescribeProvisionedProduct",
-            "servicecatalog:DescribeRecord",
-            "servicecatalog:SearchProvisionedProducts",
-            "servicecatalog:DescribeProduct",
-            "servicecatalog:DescribeProductView",
-            "servicecatalog:ListLaunchPaths",
-            "servicecatalog:AssociatePrincipalWithPortfolio",
-            "servicecatalog:DisassociatePrincipalFromPortfolio",
-            "servicecatalog:ListPrincipalsForPortfolio"),
-        /**
-         * {@code deploy:catalog-publish} (admin-only, {@code CATALOG_PUBLISH}) — authoring
-         * Service Catalog portfolios/products themselves, backing {@code
-         * ServiceCatalogProductPublisher}. Distinct from {@link #SC_PROVISION}: that capability
-         * only lets a caller provision an already-published product, this one lets Manager
-         * publish new ones. Deliberately separate rather than folded together, matching {@code
-         * CatalogPublishController}'s own javadoc on why {@code CATALOG_PUBLISH} is a materially
-         * more consequential policy than {@code DEPLOY_CATALOG}.
-         */
-        SC_PUBLISH(
-            "servicecatalog:ListPortfolios",
-            "servicecatalog:CreatePortfolio",
-            "servicecatalog:CreateProduct",
-            "servicecatalog:CreateProvisioningArtifact",
-            "servicecatalog:AssociateProductWithPortfolio",
-            "servicecatalog:CreateConstraint",
-            "servicecatalog:SearchProductsAsAdmin",
-            "servicecatalog:DescribeProductAsAdmin",
-            // A freshly created provisioning artifact starts CREATING, not AVAILABLE --
-            // ServiceCatalogProductPublisher polls this action to wait for Service Catalog's own
-            // template fetch-and-validate step to finish before handing the artifact back to a
-            // caller that may provision it immediately (see CatalogDeployService#runProvision).
-            "servicecatalog:DescribeProvisioningArtifact",
-            // Not called directly anywhere in this codebase -- Service Catalog's own
-            // CreateProduct/CreateProvisioningArtifact validates the submitted CloudFormation
-            // template server-side, and that internal AWS-side call runs as the same caller
-            // identity that invoked CreateProduct, not a service-linked role. Without this
-            // grant, publishing fails AccessDenied on cloudformation:ValidateTemplate even with
-            // every other SC_PUBLISH action already granted.
-            "cloudformation:ValidateTemplate"),
-        /**
          * Lets a cross-account connection's role verify its own effective permissions via {@code
          * iam:SimulatePrincipalPolicy} — this is how {@code AccountsController}'s "Validate
          * connection" surfaces a real least-privilege report (which of
@@ -224,7 +169,7 @@ public final class ManagerAwsCapabilityCatalog {
      * {@code ManagerPolicyCatalog} policy.
      */
     public static Set<Capability> deployCapabilities() {
-        return EnumSet.of(Capability.CFN_DEPLOY, Capability.SC_PROVISION, Capability.SC_PUBLISH);
+        return EnumSet.of(Capability.CFN_DEPLOY);
     }
 
     public static Set<String> iamActions(Iterable<Capability> capabilities) {

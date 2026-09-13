@@ -23,9 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * CDK-synthesis coverage for {@link ManagerOperatorIamSupport}'s deploy-capability methods
- * ({@code deployStatements}/{@code catalogProvisionStatement}/{@code attachDeployCapabilities}).
+ * ({@code deployStatements}/{@code attachDeployCapabilities}).
  *
- * <p>{@code deployStatements}/{@code catalogProvisionStatement} are pure catalog queries gated
+ * <p>{@code deployStatements} is a pure query gated
  * only by {@link ManagerOperatorIamSupport#isCloudForgeManager} — what the capabilities would
  * look like, independent of whether this deployment actually grants them. {@code
  * attachDeployCapabilities} is the one CDK side-effect method, gated additionally behind {@code
@@ -56,9 +56,8 @@ class ManagerDeployIamSupportTest {
      *  Tags parameter), and aws:ResourceTag fails for a CREATE-type change set specifically,
      *  since CloudFormation only applies a change set's Tags to the stack when it executes, not
      *  when it's merely created: a brand-new stack sits in REVIEW_IN_PROGRESS with zero tags for
-     *  as long as its first change set is pending. No condition at all, matching this class's
-     *  SC_PROVISION precedent -- CreateChangeSet's own tag requirement already gates who can
-     *  start a managed change set in the first place. */
+     *  as long as its first change set is pending. No condition at all -- CreateChangeSet's own
+     *  tag requirement already gates who can start a managed change set in the first place. */
     @Test
     void deployStatementsGrantsChangeSetLifecycleWithNoTagCondition() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -290,7 +289,6 @@ class ManagerDeployIamSupportTest {
             .createFargate();
 
         assertTrue(ManagerOperatorIamSupport.deployStatements(builder.getSystemContext()).isEmpty());
-        assertTrue(ManagerOperatorIamSupport.catalogProvisionStatement(builder.getSystemContext()).isEmpty());
     }
 
     /** Real bug this locks in: a connected account's trust policy can match byte-for-byte what
@@ -374,28 +372,6 @@ class ManagerDeployIamSupportTest {
     }
 
     @Test
-    void catalogProvisionStatementIsPresentAndConditionFreeForManager() {
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
-                "ManagerCatalogProvision", SecurityProfile.DEV, RuntimeType.FARGATE)
-            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
-            .createVpc()
-            .createAlb()
-            .createEfs()
-            .createFargate();
-
-        Optional<PolicyStatement> statement =
-            ManagerOperatorIamSupport.catalogProvisionStatement(builder.getSystemContext());
-        assertTrue(statement.isPresent());
-        assertTrue(statement.get().toJSON().toString().contains("servicecatalog:ProvisionProduct"));
-        // SC_PUBLISH's one deliberate non-servicecatalog: action -- see ManagerAwsCapabilityCatalog's
-        // own comment on it for why publishing needs cloudformation:ValidateTemplate.
-        assertTrue(statement.get().toJSON().toString().contains("cloudformation:ValidateTemplate"));
-        // "ConditionFree" is what this test name actually promises -- no Condition block at all,
-        // regardless of which actions the statement carries.
-        assertFalse(statement.get().toJSON().toString().contains("\"Condition\""));
-    }
-
-    @Test
     void attachDeployCapabilitiesAddsAllFourSidsWithExpectedActionsAndConditionsWhenFlagEnabled()
             throws Exception {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -418,7 +394,6 @@ class ManagerDeployIamSupportTest {
         assertTrue(templateJson.contains("CloudForgeManagerDeployCreate"));
         assertTrue(templateJson.contains("CloudForgeManagerDeployUpdate"));
         assertTrue(templateJson.contains("CloudForgeManagerDeployPassRole"));
-        assertTrue(templateJson.contains("CloudForgeManagerDeployCatalog"));
         assertTrue(templateJson.contains("CloudForgeManagerDeployTemplateBucket"));
         assertTrue(templateJson.contains("CloudForgeManagerDeployCdkAssetBucket"));
         assertTrue(templateJson.contains("CloudForgeManagerDeployCdkBootstrapParameter"));
@@ -431,7 +406,6 @@ class ManagerDeployIamSupportTest {
         assertTrue(actions.contains("cloudformation:CreateStack"));
         assertTrue(actions.contains("cloudformation:UpdateStack"));
         assertTrue(actions.contains("iam:PassRole"));
-        assertTrue(actions.contains("servicecatalog:ProvisionProduct"));
 
         assertTrue(templateJson.contains("aws:RequestTag/cloudforge:managed"));
         assertTrue(templateJson.contains("aws:ResourceTag/cloudforge:managed"));
@@ -456,7 +430,6 @@ class ManagerDeployIamSupportTest {
         Template template = Template.fromStack(builder.getStack());
         String templateJson = MAPPER.writeValueAsString(template.toJSON());
         assertFalse(templateJson.contains("CloudForgeManagerDeployCreate"));
-        assertFalse(templateJson.contains("CloudForgeManagerDeployCatalog"));
     }
 
     @Test
@@ -478,7 +451,6 @@ class ManagerDeployIamSupportTest {
         Template template = Template.fromStack(builder.getStack());
         String templateJson = MAPPER.writeValueAsString(template.toJSON());
         assertFalse(templateJson.contains("CloudForgeManagerDeployCreate"));
-        assertFalse(templateJson.contains("CloudForgeManagerDeployCatalog"));
     }
 
     private static Set<String> iamActions(Template template) throws Exception {
