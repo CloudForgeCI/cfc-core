@@ -129,6 +129,16 @@
       </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- The JVM's default thread stack size is too small once enough real CDK synthesis
+               (jsii's own background-process bookkeeping, not this codebase's own call depth)
+               accumulates across a full, reused-fork test run. Bumped rather than disabling fork
+               reuse, to keep the existing (fast) default test-run behavior otherwise. -->
+          <!-- @{argLine}, not a literal — jacoco:prepare-agent injects its own javaagent flag
+               into that property; overwriting it outright would silently disable coverage
+               instrumentation whenever jacoco.skip isn't set. -->
+          <argLine>@{argLine} -Xss8m</argLine>
+        </configuration>
       </plugin>
       <!-- Diagnostic-only, not wired into any lifecycle phase — run explicitly via
            `mvn org.pitest:pitest-maven:mutationCoverage`. Scoped to core.rules (compliance

@@ -580,12 +580,11 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             LOG.info("  ✅ Added IAM policy for Cognito role-group sync");
         }
 
-        // A prior grant here for cognito-idp:InitiateAuth/RespondToAuthChallenge (an application
-        // calling Cognito's own direct sign-in APIs) was removed — confirmed via
-        // `aws iam simulate-principal-policy` that Cognito's InitiateAuth/RespondToAuthChallenge
-        // are public, app-client-secret-authenticated operations that don't check IAM at all; a
-        // real "Cognito sign-in failed" incident traced to this call path had a different root
-        // cause entirely (an unrelated endpoint-resolution bug), not a missing IAM grant.
+        // No IAM grant is issued here for cognito-idp:InitiateAuth/RespondToAuthChallenge (an
+        // application calling Cognito's own direct sign-in APIs): those are public,
+        // app-client-secret-authenticated operations that don't check IAM at all, so a grant would
+        // be a no-op. A "Cognito sign-in failed" failure on this call path is not an IAM issue —
+        // look at endpoint resolution instead.
 
         // Create initial admin user if email provided (even if groups are disabled)
         if (cognitoInitialAdminEmail != null && !cognitoInitialAdminEmail.isEmpty() &&

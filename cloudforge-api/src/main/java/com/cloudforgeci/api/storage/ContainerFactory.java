@@ -197,6 +197,7 @@ public class ContainerFactory extends BaseFactory {
                     sslEnabled, domain, fqdn, certificateArn);
                 environment.put(publicTlsTrustedEnvVar, String.valueOf(publiclyTrusted));
             }
+
         }
 
         // ManagerRuntimeConfiguration.Target's own defaultTarget() is null whenever this is

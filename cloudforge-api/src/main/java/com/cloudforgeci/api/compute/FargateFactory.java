@@ -346,10 +346,10 @@ public class FargateFactory extends BaseFactory {
     // application declares.
     //
     // AvailabilityZoneRebalancing.DISABLED has to go with it: ECS rejects maxHealthyPercent<=100
-    // outright ("does not support maximumPercent <= 100% as deployment configuration" — confirmed
-    // live) while AZ Rebalancing is on, which is apparently ECS's own default for a new service.
-    // Rebalancing tasks across AZs is meaningless anyway for a desiredCount=1 singleton — there's
-    // only ever one task to place, nothing to rebalance.
+    // outright ("does not support maximumPercent <= 100% as deployment configuration") while AZ
+    // Rebalancing is on, which is ECS's own default for a new service. Rebalancing tasks across
+    // AZs is meaningless anyway for a desiredCount=1 singleton — there's only ever one task to
+    // place, nothing to rebalance.
     if (applicationSpec != null && applicationSpec.requiresSequentialDeploymentWithoutDatabase()
         && ctx.dbConnection.get().isEmpty()) {
       serviceBuilder = serviceBuilder.minHealthyPercent(0).maxHealthyPercent(100)

@@ -217,11 +217,10 @@ public final class ManagerOperatorIamSupport {
         //      only applies a change set's Tags to the stack when it EXECUTES, not when it's
         //      merely created. A brand-new stack sits in REVIEW_IN_PROGRESS with zero tags for as
         //      long as its first change set is still pending, with no tag to match against yet.
-        // No condition at all, matching this class's own SC_PROVISION precedent below ("the
-        // underlying service's own model is the guardrail, not a tag condition on Manager's
-        // role") -- CreateChangeSet's own tag requirement already gates who can start a managed
-        // change set in the first place; once one exists, finishing what Manager itself just
-        // started doesn't need a second gate that these actions can't structurally satisfy.
+        // No condition at all -- CreateChangeSet's own tag requirement already gates who can
+        // start a managed change set in the first place; once one exists, finishing what Manager
+        // itself just started doesn't need a second gate that these actions can't structurally
+        // satisfy.
         PolicyStatement changeSetLifecycle = PolicyStatement.Builder.create()
             .sid("CloudForgeManagerDeployChangeSetLifecycle")
             .actions(List.of(
@@ -388,26 +387,7 @@ public final class ManagerOperatorIamSupport {
     }
 
     /**
-     * {@code SC_PROVISION} capability backing {@code deploy:catalog} — deliberately no
-     * conditions: Service Catalog's own portfolio/product/launch-constraint model is the
-     * guardrail here (a caller can only provision products actually shared with them), not a
-     * tag condition on Manager's role. No CFN/IAM permissions appear in this statement at all.
-     */
-    public static Optional<PolicyStatement> catalogProvisionStatement(SystemContext ctx) {
-        if (!isCloudForgeManager(ctx)) {
-            return Optional.empty();
-        }
-        List<String> actions = new ArrayList<>(ManagerAwsCapabilityCatalog.iamActions(
-            List.of(ManagerAwsCapabilityCatalog.Capability.SC_PROVISION)));
-        return Optional.of(PolicyStatement.Builder.create()
-            .sid("CloudForgeManagerDeployCatalog")
-            .actions(actions)
-            .resources(List.of("*"))
-            .build());
-    }
-
-    /**
-     * Attaches {@link #deployStatements} and {@link #catalogProvisionStatement} to the role.
+     * Attaches {@link #deployStatements} to the role.
      * Unlike {@link #attachOperatorBaselinePolicies} (always attached as the operator baseline),
      * this is gated behind {@link com.cloudforge.core.config.DeploymentConfig#managerDirectDeployEnabled}
      * — it is a materially higher-privilege tier and must be explicitly requested per deployment,
@@ -431,7 +411,6 @@ public final class ManagerOperatorIamSupport {
                 role.addToPolicy(statement);
             }
         }
-        catalogProvisionStatement(ctx).ifPresent(role::addToPolicy);
         addDeployCapabilitiesNagSuppressions(role);
     }
 
@@ -457,7 +436,6 @@ public final class ManagerOperatorIamSupport {
                 statements.add(statement);
             }
         }
-        catalogProvisionStatement(ctx).ifPresent(statements::add);
     }
 
     /**

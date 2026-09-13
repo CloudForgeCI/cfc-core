@@ -1,6 +1,8 @@
 package com.cloudforgeci.api.deploy;
 
 import com.cloudforge.core.config.DeploymentConfig;
+import com.cloudforge.core.enums.ComplianceFrameworkType;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -47,6 +49,50 @@ class CloudForgeSynthesizerTest {
         JsonNode template = MAPPER.readTree(result.templateFile().toFile());
         assertTrue(template.has("Resources"));
         assertTrue(template.get("Resources").size() > 0);
+    }
+
+    private DeploymentConfig wordpressFargateConfig(String stackName) {
+        DeploymentConfig config = new DeploymentConfig();
+        config.stackName = stackName;
+        config.applicationId = "wordpress";
+        config.runtime = RuntimeType.FARGATE;
+        config.securityProfile = SecurityProfile.PRODUCTION;
+        config.authMode = com.cloudforge.core.enums.AuthMode.NONE;
+        return config;
+    }
+
+    /**
+     * WordPress-on-Fargate's own real infrastructure carries a genuine {@code AwsSolutions-RDS3}
+     * finding (its RDS instance isn't Multi-AZ), so this exercises {@code ComplianceMode.ENFORCE}
+     * against a real violation rather than a synthetic one.
+     */
+    @Test
+    void enforceModeBlocksSynthesisWhenComplianceFrameworkFindsARealViolation() {
+        DeploymentConfig config = wordpressFargateConfig("SynthTestEnforce");
+        config.complianceFrameworks = java.util.List.of(ComplianceFrameworkType.SOC2);
+        config.complianceMode = ComplianceMode.ENFORCE;
+
+        ComplianceViolationException ex = assertThrows(ComplianceViolationException.class,
+            () -> CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out")));
+
+        assertTrue(!ex.findings().isEmpty(), "expected at least one real cdk-nag finding");
+        assertTrue(ex.getMessage().contains("SynthTestEnforce"), ex.getMessage());
+        assertTrue(ex.getMessage().contains(ex.findings().get(0).ruleId()), ex.getMessage());
+    }
+
+    /** Same setup, ADVISORY instead of ENFORCE -- the same real violation exists (cdk-nag itself
+     *  doesn't behave differently), but synthesis must still succeed; nothing should block a
+     *  deploy just because a caller chose not to enforce. */
+    @Test
+    void advisoryModeNeverBlocksSynthesisEvenWithRealFindings() throws IOException {
+        DeploymentConfig config = wordpressFargateConfig("SynthTestAdvisory");
+        config.complianceFrameworks = java.util.List.of(ComplianceFrameworkType.SOC2);
+        config.complianceMode = ComplianceMode.ADVISORY;
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        assertEquals("SynthTestAdvisory", result.stackName());
     }
 
     @Test

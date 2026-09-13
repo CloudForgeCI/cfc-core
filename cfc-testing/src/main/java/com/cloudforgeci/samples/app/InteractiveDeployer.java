@@ -1799,7 +1799,7 @@ public class InteractiveDeployer {
         // Execute deployment based on choice
         switch (choice) {
             case "2" -> {
-                runCdkDeploy();
+                runCdkDeploy("--require-approval", "never");
                 maybePrintManagerHint(config, null, DeploymentTarget.AWS);
             }
             case "3" -> {
@@ -3096,11 +3096,10 @@ public class InteractiveDeployer {
      * — a target-aware override any {@code ApplicationSpec} can provide (default: same as the
      * no-arg list; {@code CloudForgeManagerApplicationSpec} overrides it) — that
      * {@code collectConfiguration()} can't apply when the auth-mode prompt runs, since the
-     * deploy target isn't chosen until later in the flow (menu option 6/7/8/2/3). This is the
-     * decision-tree gap from the plan surfaced as a runtime check instead of docs alone: laptop/
-     * MiniStack/LocalStack vs AWS support different auth-mode sets, and picking one during
-     * config that the eventual target doesn't fully support previously deployed silently instead
-     * of telling the operator.
+     * deploy target isn't chosen until later in the flow (menu option 6/7/8/2/3). This runtime
+     * check exists because laptop/MiniStack/LocalStack and AWS support different auth-mode sets:
+     * without it, an auth mode unsupported on the eventual target would deploy silently instead
+     * of surfacing to the operator.
      */
     private static void warnIfAuthModeUnsupportedOnTarget(DeploymentConfig config, DeploymentTarget target) {
         if (config.applicationSpec == null || config.authMode == null) {

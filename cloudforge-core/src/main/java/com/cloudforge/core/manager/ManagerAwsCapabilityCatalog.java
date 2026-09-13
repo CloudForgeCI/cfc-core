@@ -15,7 +15,7 @@ import java.util.Set;
  */
 public final class ManagerAwsCapabilityCatalog {
 
-    public static final String CATALOG_VERSION = "1.4.0";
+    public static final String CATALOG_VERSION = "1.6.1";
 
     private ManagerAwsCapabilityCatalog() {
     }
@@ -105,21 +105,6 @@ public final class ManagerAwsCapabilityCatalog {
             "cloudformation:DeleteChangeSet",
             "iam:PassRole"),
         /**
-         * {@code deploy:catalog} (constrained, manager+admin) routes here — Service Catalog
-         * provisioning against pre-published products only; no CFN/IAM/EC2 permissions on
-         * Manager's own role for this path at all. Also not part of {@link #operatorBaseline()}.
-         */
-        SC_PROVISION(
-            "servicecatalog:ProvisionProduct",
-            "servicecatalog:UpdateProvisionedProduct",
-            "servicecatalog:TerminateProvisionedProduct",
-            "servicecatalog:DescribeProvisionedProduct",
-            "servicecatalog:DescribeRecord",
-            "servicecatalog:SearchProvisionedProducts",
-            "servicecatalog:DescribeProduct",
-            "servicecatalog:DescribeProductView",
-            "servicecatalog:ListLaunchPaths"),
-        /**
          * Lets a cross-account connection's role verify its own effective permissions via {@code
          * iam:SimulatePrincipalPolicy} — this is how {@code AccountsController}'s "Validate
          * connection" surfaces a real least-privilege report (which of
@@ -129,7 +114,26 @@ public final class ManagerAwsCapabilityCatalog {
          * whose role predates this capability simply report "unable to verify" rather than
          * failing validation outright; see {@code StsAssumeRoleService#checkPermissions}.
          */
-        SELF_PERMISSION_CHECK("iam:SimulatePrincipalPolicy");
+        SELF_PERMISSION_CHECK("iam:SimulatePrincipalPolicy"),
+        /**
+         * Backs {@code StackEventObservabilityService#enable}/{@code #disable} and the poller
+         * that drains captured events ({@code StackEventPoller}) -- the real EventBridge rule +
+         * SQS queue this feature provisions per pipeline (see that class's own javadoc). Manager-
+         * self-only like {@link #COGNITO_USER_MANAGEMENT}, so it belongs in {@link
+         * #operatorBaseline()} rather than a separately-gated capability: the feature's own
+         * license entitlement check (not IAM) is what actually gates who can call it.
+         */
+        STACK_EVENT_OBSERVABILITY(
+            "events:PutRule",
+            "events:PutTargets",
+            "events:RemoveTargets",
+            "events:DeleteRule",
+            "sqs:CreateQueue",
+            "sqs:DeleteQueue",
+            "sqs:GetQueueAttributes",
+            "sqs:SetQueueAttributes",
+            "sqs:ReceiveMessage",
+            "sqs:DeleteMessage");
 
         private final List<String> iamActions;
 
@@ -154,7 +158,8 @@ public final class ManagerAwsCapabilityCatalog {
             Capability.RDS_RESTORE,
             Capability.RDS_ENGINE_UPGRADE,
             Capability.COGNITO_USER_MANAGEMENT,
-            Capability.LOGS_READ);
+            Capability.LOGS_READ,
+            Capability.STACK_EVENT_OBSERVABILITY);
     }
 
     /**
@@ -164,7 +169,7 @@ public final class ManagerAwsCapabilityCatalog {
      * {@code ManagerPolicyCatalog} policy.
      */
     public static Set<Capability> deployCapabilities() {
-        return EnumSet.of(Capability.CFN_DEPLOY, Capability.SC_PROVISION);
+        return EnumSet.of(Capability.CFN_DEPLOY);
     }
 
     public static Set<String> iamActions(Iterable<Capability> capabilities) {
