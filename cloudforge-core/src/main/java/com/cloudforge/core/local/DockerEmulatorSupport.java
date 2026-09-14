@@ -181,6 +181,40 @@ public final class DockerEmulatorSupport {
         }
     }
 
+    public static void waitForReachable(URI uri) throws IOException {
+        waitForReachable(uri, DEFAULT_HEALTH_TIMEOUT);
+    }
+
+    public static void waitForReachable(URI uri, Duration timeout) throws IOException {
+        Instant deadline = Instant.now().plus(timeout);
+        while (Instant.now().isBefore(deadline)) {
+            if (isHttpReachable(uri)) {
+                return;
+            }
+            sleep(Duration.ofMillis(500));
+        }
+        throw new IOException("Timed out waiting for a response at " + uri);
+    }
+
+    /**
+     * Whether {@code uri} answers with any HTTP response at all -- unlike {@link #isHttpHealthy},
+     * a 4xx/5xx still counts. For a plain reverse proxy (the emulator edge) with no default vhost,
+     * an unmatched request 404s the moment nginx itself is up and serving, before any application
+     * route has been reconciled in; requiring 2xx there (as isHttpHealthy does) reports the
+     * container unhealthy indefinitely on a cold start with nothing deployed yet, even though it's
+     * already serving traffic correctly.
+     */
+    public static boolean isHttpReachable(URI uri) {
+        try {
+            HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(3)).GET().build(),
+                HttpResponse.BodyHandlers.discarding());
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     public static void run(List<String> command, Duration timeout) throws IOException {
         Process process = startOrExplain(command);
         String output;
