@@ -1946,11 +1946,7 @@ public class InteractiveDeployer {
         }
         String url = com.cloudforge.core.local.PreferredUrlResolver.preferredUrl(outputs);
         if (url == null || url.isBlank()) {
-            ApplicationPropertyLoader.applyPropertyDefaults(config);
-            url = config.managerUrl;
-            if (url == null || url.isBlank()) {
-                url = ApplicationPropertyLoader.resolve("cfc.manager.url");
-            }
+            url = ApplicationPropertyLoader.resolve("cfc.manager.url");
         }
         if (url == null || url.isBlank()) {
             return;
