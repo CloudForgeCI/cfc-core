@@ -85,7 +85,7 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         } else {
             DockerEmulatorSupport.runDetached(dockerCreateArgs(nginxConf, confDir));
         }
-        DockerEmulatorSupport.waitForHealthy(browserUrl());
+        DockerEmulatorSupport.waitForReachable(browserUrl());
         System.out.println("Emulator edge started: " + browserUrl());
         System.out.println("  Hostnames: docs/guides/LOCAL_EMULATOR_HOSTS.md "
             + "(./scripts/setup-cloudforge-local-hosts.sh)");
@@ -149,9 +149,16 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         return DockerEmulatorSupport.isContainerRunning(containerName());
     }
 
+    /**
+     * {@link DockerEmulatorSupport#isHttpReachable}, not {@code isHttpHealthy} -- this is a plain
+     * reverse proxy with no default vhost, so an unmatched {@code GET /} 404s correctly the moment
+     * nginx itself is up, before any application route exists. Requiring 2xx here would report
+     * this container unhealthy on every cold start with nothing deployed yet, even though it's
+     * already serving traffic correctly.
+     */
     @Override
     public boolean isHealthy() {
-        return DockerEmulatorSupport.isHttpHealthy(browserUrl());
+        return DockerEmulatorSupport.isHttpReachable(browserUrl());
     }
 
     /**
