@@ -1939,7 +1939,10 @@ public class InteractiveDeployer {
      * structured result to resolve a URL from here — that gap is tracked, not silently masked
      * by falling back to a possibly-stale config URL.
      */
-    private static void maybePrintManagerHint(
+    // Package-private, not private: InteractiveDeployerTest exercises this directly rather than
+    // through the full interactive-menu/subprocess flow the other choices in this class go
+    // through.
+    static void maybePrintManagerHint(
             DeploymentConfig config, java.util.Map<String, String> outputs, DeploymentTarget target) {
         if (config == null || !"cloudforge-manager".equals(config.applicationId)) {
             return;
