@@ -8,7 +8,9 @@ import com.cloudforge.core.enums.SecurityProfile;
 import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.backup.BackupPlan;
 import software.amazon.awscdk.services.backup.BackupPlanRule;
 import software.amazon.awscdk.services.backup.BackupResource;
@@ -93,7 +95,20 @@ public class BackupFactory extends BaseFactory {
      * Vault name must be 2-50 characters, alphanumeric with hyphens and underscores only.
      */
     private BackupVault createBackupVault() {
-        String vaultName = sanitizeResourceName(stackName, "-vault");
+        // Vault lock/retention (below) is gated by the compliance matrix, not the security
+        // profile alone -- see isBackupVaultLockEnabled()'s own javadoc. Only that path needs a
+        // stack-id-derived suffix instead of a bare stackName-derived name: AWS Backup refuses to
+        // ever delete a locked vault, so a full teardown of this stack leaves it behind under the
+        // exact name a future redeploy of the same stackName would otherwise try to reuse --
+        // CloudFormation CREATE then fails outright on that collision. Stack IDs are fresh UUIDs
+        // even when the stack name repeats, and stay fixed for the life of one running stack (no
+        // churn across ordinary updates), so this only changes across a genuine
+        // teardown-then-recreate -- exactly the case that needs it. Every non-locked vault keeps
+        // the plain stackName-derived name, since it can always be deleted and freely reused.
+        boolean lockEnabled = config.isBackupVaultLockEnabled();
+        String vaultName = lockEnabled
+            ? sanitizeResourceName(stackName, "-vault-" + Fn.select(0, Fn.split("-", Stack.of(this).getStackId())))
+            : sanitizeResourceName(stackName, "-vault");
 
         // Determine removal policy based on security profile configuration
         RemovalPolicy removalPolicy = config.isBackupVaultRetentionEnabled()
@@ -107,7 +122,7 @@ public class BackupFactory extends BaseFactory {
                 .removalPolicy(removalPolicy);
 
         // Add vault lock based on security profile configuration
-        if (config.isBackupVaultLockEnabled()) {
+        if (lockEnabled) {
             int retentionDays = config.getBackupRetentionDays();
             builder.lockConfiguration(software.amazon.awscdk.services.backup.LockConfiguration.builder()
                 .minRetention(Duration.days(retentionDays))
