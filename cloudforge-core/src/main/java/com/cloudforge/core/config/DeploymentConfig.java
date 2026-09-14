@@ -8,7 +8,6 @@ import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.LoadBalancerType;
 import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
-import com.cloudforge.core.local.DeploymentTarget;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
 import com.cloudforge.core.interfaces.ApplicationSpec;
@@ -27,14 +26,10 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Universal deployment configuration for CloudForge applications.
@@ -1779,53 +1774,7 @@ public class DeploymentConfig {
         return complianceFrameworks != null && !complianceFrameworks.isEmpty();
     }
 
-    // ========== CloudForge Manager (deploy history client) ==========
-
-    /**
-     * Base URL of a running CloudForge Manager (e.g. http://127.0.0.1:1958).
-     * Optional — when unset/unreachable, deploy history POSTs are skipped.
-     */
-    @ConfigField(
-        displayName = "Manager URL",
-        description = "Shared CloudForge Manager base URL for deploy-history posts after option 2/8",
-        category = "operations",
-        required = false,
-        example = "http://127.0.0.1:1958",
-        propertyKey = "cfc.manager.url",
-        order = 9000
-    )
-    public String managerUrl;
-
-    /**
-     * Default inventory target for Manager clients (ministack | aws).
-     */
-    @ConfigField(
-        displayName = "Manager Target",
-        description = "Deployment target recorded in history entries",
-        category = "operations",
-        required = false,
-        allowedValues = {"aws", "ministack", "localstack"},
-        example = "ministack",
-        propertyKey = "cfc.manager.target",
-        order = 9010
-    )
-    @JsonSerialize(using = DeploymentTargetConverter.Serializer.class)
-    @JsonDeserialize(using = DeploymentTargetConverter.Deserializer.class)
-    public DeploymentTarget managerTarget;
-
-    /**
-     * Bearer token for POST /api/v1/history. Prefer CFC_MANAGER_HISTORY_TOKEN env — do not commit.
-     */
-    @ConfigField(
-        displayName = "Manager History Token",
-        description = "Bearer token for append-only deploy history API (prefer env CFC_MANAGER_HISTORY_TOKEN)",
-        category = "operations",
-        required = false,
-        sensitive = true,
-        propertyKey = "cfc.manager.history-token",
-        order = 9020
-    )
-    public String managerHistoryToken;
+    // ========== CloudForge Manager ==========
 
     /**
      * Opt-in: grants CloudForge Manager's own task/instance role the direct-deploy IAM
@@ -1844,6 +1793,7 @@ public class DeploymentConfig {
             + "ProvisionProduct), scoped to CloudForge-tagged resources. Only applies when "
             + "applicationId is cloudforge-manager.",
         category = "operations",
+        visibleWhen = "applicationId == cloudforge-manager",
         required = false,
         tags = {FieldTag.REQUIRES_APPROVAL, FieldTag.EXPERIMENTAL},
         propertyKey = "cfc.manager.direct-deploy-enabled",
@@ -1875,40 +1825,4 @@ public class DeploymentConfig {
         return context;
     }
 
-    /**
-     * Context map safe for durable deploy history.
-     *
-     * <p>Same shape as {@link #toContextMap()}, but omits fields annotated with
-     * {@code @ConfigField(sensitive = true)} (and their {@link JsonAlias} names).
-     * New non-sensitive {@code @ConfigField}s appear automatically.</p>
-     *
-     * @return redacted map suitable for Manager history {@code detail.deploymentContext}
-     */
-    public Map<String, Object> toHistoryContextMap() {
-        Map<String, Object> context = new LinkedHashMap<>(toContextMap());
-        for (String key : sensitiveContextKeys()) {
-            context.remove(key);
-        }
-        return context;
-    }
-
-    private static Set<String> sensitiveContextKeys() {
-        Set<String> keys = new HashSet<>();
-        for (Field field : DeploymentConfig.class.getDeclaredFields()) {
-            ConfigField annotation = field.getAnnotation(ConfigField.class);
-            if (annotation == null || !annotation.sensitive()) {
-                continue;
-            }
-            keys.add(field.getName());
-            JsonAlias alias = field.getAnnotation(JsonAlias.class);
-            if (alias != null) {
-                keys.addAll(List.of(alias.value()));
-            }
-            // toContextMap renames environment → env
-            if ("environment".equals(field.getName())) {
-                keys.add("env");
-            }
-        }
-        return keys;
-    }
 }

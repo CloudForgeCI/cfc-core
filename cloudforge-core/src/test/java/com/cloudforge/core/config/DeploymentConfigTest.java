@@ -6,7 +6,6 @@ import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
-import com.cloudforge.core.local.DeploymentTarget;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -136,24 +135,6 @@ class DeploymentConfigTest {
         assertEquals("cloudforge.localhost", loaded.domain);
         assertEquals("jenkins", loaded.subdomain);
         assertEquals(RuntimeType.FARGATE, loaded.runtime);
-    }
-
-    /** managerTarget round-trips through its own DeploymentTargetConverter (lower-case wire
-     *  format, not the enum's own upper-case name()) -- real deploy submissions carry this
-     *  field, so a broken converter here is a broken deploy, not just a style nit. */
-    @Test
-    void deserializesAndSerializesManagerTargetThroughItsConverter() throws Exception {
-        DeploymentConfig loaded = DeploymentConfig.fromJson("""
-            {
-              "stackName": "jtest",
-              "applicationId": "jenkins",
-              "runtime": "FARGATE",
-              "managerTarget": "localstack"
-            }
-            """);
-
-        assertEquals(DeploymentTarget.LOCALSTACK, loaded.managerTarget);
-        assertTrue(loaded.toJson().contains("\"managerTarget\" : \"localstack\""));
     }
 
     @Test
@@ -592,25 +573,4 @@ class DeploymentConfigTest {
         assertEquals(35, config.databaseBackupRetentionDays);
     }
 
-    @Test
-    void toHistoryContextMapIncludesNonSensitiveFieldsAndRedactsSensitive() {
-        config.stackName = "CloudForgeManager-Dev";
-        config.applicationId = "cloudforge-manager";
-        config.environment = "development";
-        config.region = "us-east-1";
-        config.oidcClientSecretName = "my/oidc/secret";
-        config.managerHistoryToken = "super-secret-token";
-        config.managerUrl = "http://127.0.0.1:1958";
-
-        var history = config.toHistoryContextMap();
-
-        assertEquals("CloudForgeManager-Dev", history.get("stackName"));
-        assertEquals("cloudforge-manager", history.get("applicationId"));
-        assertEquals("development", history.get("env"));
-        assertEquals("us-east-1", history.get("region"));
-        assertEquals("http://127.0.0.1:1958", history.get("managerUrl"));
-        assertFalse(history.containsKey("oidcClientSecretName"));
-        assertFalse(history.containsKey("managerHistoryToken"));
-        assertFalse(history.containsKey("environment"));
-    }
 }

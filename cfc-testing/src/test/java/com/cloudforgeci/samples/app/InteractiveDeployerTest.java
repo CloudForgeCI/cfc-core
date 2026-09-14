@@ -502,4 +502,43 @@ class InteractiveDeployerTest {
         assertEquals(900, resolvedDefault,
             "DefaultValueResolver should resolve GitLab health check grace period to 900s");
     }
+
+    /**
+     * {@link InteractiveDeployer#maybePrintManagerHint} falls through to {@code
+     * ApplicationPropertyLoader.resolve("cfc.manager.url")} whenever {@code
+     * PreferredUrlResolver.preferredUrl(outputs)} can't resolve one from the deploy's own CFN
+     * outputs (empty/null {@code outputs} — the real case for the AWS {@code cdk deploy}
+     * subprocess paths, per that method's own javadoc). Uses the system-property precedence tier
+     * ({@code resolve()}'s own doc: env → system property → classpath file) rather than the env
+     * tier, since {@code ApplicationPropertyLoader}'s env-override test hook is package-private to
+     * cloudforge-core and this test lives in a different module/package.
+     */
+    @Test
+    void maybePrintManagerHintFallsBackToResolvedManagerUrlWithNoPreferredOutput() {
+        System.setProperty("cfc.manager.url", "http://127.0.0.1:1958");
+        java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream original = System.out;
+        try {
+            System.setOut(new java.io.PrintStream(captured));
+
+            DeploymentConfig config = new DeploymentConfig();
+            config.applicationId = "cloudforge-manager";
+            config.authMode = com.cloudforge.core.enums.AuthMode.NONE;
+
+            InteractiveDeployer.maybePrintManagerHint(
+                config, Map.of(), com.cloudforge.core.local.DeploymentTarget.AWS);
+        } finally {
+            System.setOut(original);
+            System.clearProperty("cfc.manager.url");
+        }
+
+        String printed = captured.toString();
+        assertTrue(printed.contains("Open:   http://127.0.0.1:1958"),
+            "Should print the resolved Manager URL: " + printed);
+        assertTrue(printed.contains("Health: http://127.0.0.1:1958/api/v1/health"),
+            "Should derive the health-check URL from the same resolved base: " + printed);
+        assertTrue(printed.contains("First-run setup requires loopback access"),
+            "AuthMode.NONE on a non-local-emulator target should print the AWS-specific "
+                + "first-run-setup note: " + printed);
+    }
 }

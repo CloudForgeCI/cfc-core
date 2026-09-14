@@ -10,7 +10,6 @@ import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
-import com.cloudforge.core.local.DeploymentTarget;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
@@ -80,9 +79,6 @@ public class ContainerFactory extends BaseFactory {
 
     @DeploymentContext("enableSentinel")
     private Boolean enableSentinel;
-
-    @DeploymentContext("managerTarget")
-    private DeploymentTarget managerTarget;
 
     @DeploymentContext("enableCluster")
     private Boolean enableCluster;
@@ -200,21 +196,7 @@ public class ContainerFactory extends BaseFactory {
 
         }
 
-        // ManagerRuntimeConfiguration.Target's own defaultTarget() is null whenever this is
-        // unset -- until this was added, a real AWS self-deployment never set CFC_MANAGER_TARGET
-        // at all, so ManagerDatabase.open()'s AWS-only fail-closed guard (a missing remote DB
-        // host must never silently fall back to embedded H2 on a real deploy) could never
-        // actually fire on the one target it exists to protect. managerTarget has no default in
-        // DeploymentConfig (required = false) precisely so LocalStack/MiniStack's own explicit
-        // "localstack"/"ministack" opt-in stays the only way this resolves to anything other than
-        // null -- a real AWS deployment's deployment-context.json must set managerTarget: "aws"
-        // for itself, same as LocalStack/MiniStack already set their own value today.
         if (applicationSpec != null) {
-            String deploymentTargetEnvVar = applicationSpec.deploymentTargetEnvVar();
-            if (deploymentTargetEnvVar != null && !deploymentTargetEnvVar.isBlank() && managerTarget != null) {
-                environment.put(deploymentTargetEnvVar, managerTarget.configKey());
-            }
-
             String[] sessionStoreEnvVars = applicationSpec.sessionStoreEnvVars();
             if (sessionStoreEnvVars != null && sessionStoreEnvVars.length == 4
                     && redisSessionStoreEndpoint != null && !redisSessionStoreEndpoint.isBlank()) {
