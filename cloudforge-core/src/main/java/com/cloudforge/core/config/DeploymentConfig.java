@@ -1802,6 +1802,34 @@ public class DeploymentConfig {
     public Boolean managerDirectDeployEnabled = false;
 
     /**
+     * AWS Marketplace product code for this Manager installation — set only when this deployment
+     * was launched through an AWS Marketplace CloudFormation listing, never manually. Gates two
+     * independent things, both opt-in the same way {@link #managerDirectDeployEnabled} already
+     * is: whether {@code MarketplaceEntitlementService} (cloudforge-manager) runs at all (no
+     * product code means this installation wasn't deployed through Marketplace, the overwhelming
+     * majority of installs), and whether Manager's own task role gets the {@code
+     * aws-marketplace:GetEntitlements} grant that service needs — see {@code
+     * ManagerOperatorIamSupport#marketplaceEntitlementStatement}. Blank by default: a real
+     * customer-facing capability (calling a billing-adjacent AWS API) must be explicitly present,
+     * not inherited automatically from IAM profile or applicationId the way {@link
+     * #managerDirectDeployEnabled} isn't either.
+     */
+    @ConfigField(
+        displayName = "AWS Marketplace Product Code",
+        description = "AWS Marketplace product code for this installation, set only when "
+            + "deployed through an AWS Marketplace CloudFormation listing. Grants Manager's task "
+            + "role aws-marketplace:GetEntitlements, scoped to this product code, and starts its "
+            + "periodic entitlement check. Only applies when applicationId is cloudforge-manager.",
+        category = "operations",
+        visibleWhen = "applicationId == cloudforge-manager",
+        required = false,
+        tags = {FieldTag.EXPERIMENTAL},
+        propertyKey = "cfc.manager.marketplace-product-code",
+        order = 9040
+    )
+    public String marketplaceProductCode;
+
+    /**
      * Convert this DeploymentConfig to a Map for CDK context.
      *
      * <p>Special handling:

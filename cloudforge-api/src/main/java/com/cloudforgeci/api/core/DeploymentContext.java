@@ -343,6 +343,7 @@ public final class DeploymentContext {
     public Boolean createConfigInfrastructure() { return config.createConfigInfrastructure; }
     public Boolean auditManagerEnabled() { return config.auditManagerEnabled; }
     public Boolean managerDirectDeployEnabled() { return config.managerDirectDeployEnabled; }
+    public String marketplaceProductCode() { return config.marketplaceProductCode; }
     public String complianceFrameworks() { return complianceFrameworks; }
     public ComplianceMode complianceMode() { return complianceMode; }
     public Integer logRetentionDays() {

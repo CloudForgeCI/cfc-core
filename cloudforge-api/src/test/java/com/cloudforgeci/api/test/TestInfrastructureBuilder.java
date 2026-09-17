@@ -365,6 +365,11 @@ public class TestInfrastructureBuilder {
         return this;
     }
 
+    public TestInfrastructureBuilder withMarketplaceProductCode(String productCode) {
+        updateContext("marketplaceProductCode", productCode);
+        return this;
+    }
+
     /**
      * Updates the CDK context. Must be called BEFORE any infrastructure is created.
      */

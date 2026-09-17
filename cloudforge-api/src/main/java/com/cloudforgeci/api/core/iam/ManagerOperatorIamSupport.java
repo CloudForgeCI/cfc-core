@@ -79,9 +79,41 @@ public final class ManagerOperatorIamSupport {
             .build());
     }
 
+    /**
+     * Lets Manager's own task role call {@code aws-marketplace:GetEntitlements} — the API
+     * {@code MarketplaceEntitlementService} (cloudforge-manager) self-checks against on a
+     * schedule, using this same task role's own default credentials (no separate seller-side
+     * credentials involved). Opt-in via {@link
+     * com.cloudforge.core.config.DeploymentConfig#marketplaceProductCode}, same reasoning as
+     * {@link #attachDeployCapabilities}'s own gate: a customer-facing capability that calls a
+     * billing-adjacent AWS API must be explicitly present, not inherited automatically —
+     * installations not deployed through an AWS Marketplace listing (the overwhelming majority)
+     * get no grant at all. Scoped to the exact product code rather than {@code Resource: "*"}:
+     * {@code GetEntitlements} takes the product code as a request parameter, not a resource ARN,
+     * so a {@code aws:marketplace:ProductCode} condition key is how this narrows to it (confirmed
+     * against AWS's own published condition-key reference for this action).
+     */
+    public static Optional<PolicyStatement> marketplaceEntitlementStatement(SystemContext ctx) {
+        if (!isCloudForgeManager(ctx)) {
+            return Optional.empty();
+        }
+        String productCode = ctx.cfc.marketplaceProductCode();
+        if (productCode == null || productCode.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerMarketplaceEntitlement")
+            .actions(List.of("aws-marketplace:GetEntitlements"))
+            .resources(List.of("*"))
+            .conditions(Map.of("StringEquals",
+                Map.of("aws:marketplace:ProductCode", productCode)))
+            .build());
+    }
+
     public static void addOperatorBaselineToStatements(SystemContext ctx, List<PolicyStatement> statements) {
         operatorBaselineStatement(ctx).ifPresent(statements::add);
         crossAccountAssumeRoleStatement(ctx).ifPresent(statements::add);
+        marketplaceEntitlementStatement(ctx).ifPresent(statements::add);
     }
 
     public static void attachOperatorBaselinePolicies(SystemContext ctx, Role role) {
@@ -101,6 +133,7 @@ public final class ManagerOperatorIamSupport {
                 Boolean.TRUE);
         });
         crossAccountAssumeRoleStatement(ctx).ifPresent(role::addToPolicy);
+        marketplaceEntitlementStatement(ctx).ifPresent(role::addToPolicy);
     }
 
     /** Same tag key {@code ApplicationFargateStack}/{@code ApplicationEc2Stack} apply via
