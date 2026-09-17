@@ -517,8 +517,26 @@ public class ComplianceFactory extends BaseFactory {
             trailBuilder.cloudWatchLogGroup(cloudTrailLogGroup);
             trailBuilder.sendToCloudWatchLogs(true);
         } else {
+            // Trail's own cloudWatchLogsRetention(...) shortcut has CDK create this log group
+            // internally with CDK's own default removal policy (RETAIN), entirely outside
+            // config.getLogRemovalPolicy()'s own securityProfile-driven decision -- an explicit
+            // name plus that default RETAIN is the same class of redeploy-time collision the
+            // backup vault fix (BackupFactory's own vaultName comment) already closed once: a
+            // PRODUCTION/STAGING teardown leaves this log group behind under a name a future
+            // redeploy of the same stackName can't reuse. Building the LogGroup ourselves, same
+            // conditional-name pattern LoggingCwFactory/FlowLogFactory already use, makes the
+            // policy actually ours instead of an accidental CDK default: explicit name only under
+            // DESTROY (always freely reusable), CDK's own generated unique name under RETAIN (so
+            // a real production trail's audit history keeps accumulating log groups instead of
+            // colliding with itself).
+            LogGroup.Builder plainCloudTrailLogGroupBuilder = LogGroup.Builder.create(this, "CloudTrailLogGroupPlain")
+                    .retention(config.getLogRetentionDays())
+                    .removalPolicy(config.getLogRemovalPolicy());
+            if (config.getLogRemovalPolicy() == RemovalPolicy.DESTROY) {
+                plainCloudTrailLogGroupBuilder.logGroupName("/aws/cloudtrail/" + this.trailName);
+            }
+            trailBuilder.cloudWatchLogGroup(plainCloudTrailLogGroupBuilder.build());
             trailBuilder.sendToCloudWatchLogs(true);
-            trailBuilder.cloudWatchLogsRetention(config.getLogRetentionDays());
         }
 
         // Apply KMS encryption for HIPAA/PCI-DSS compliance in PRODUCTION
