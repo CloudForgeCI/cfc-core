@@ -1813,13 +1813,20 @@ public class DeploymentConfig {
      * customer-facing capability (calling a billing-adjacent AWS API) must be explicitly present,
      * not inherited automatically from IAM profile or applicationId the way {@link
      * #managerDirectDeployEnabled} isn't either.
+     *
+     * <p>Only enables the IAM grant, doesn't scope it: {@code aws-marketplace:GetEntitlements}
+     * supports no resource-level permissions or condition keys at all (per AWS's own
+     * service-authorization reference), so the grant is always {@code Resource: "*"} once
+     * present. This value is instead passed as the runtime {@code GetEntitlements} request's own
+     * {@code ProductCode} parameter — that's where the actual scoping to one product happens.
      */
     @ConfigField(
         displayName = "AWS Marketplace Product Code",
         description = "AWS Marketplace product code for this installation, set only when "
             + "deployed through an AWS Marketplace CloudFormation listing. Grants Manager's task "
-            + "role aws-marketplace:GetEntitlements, scoped to this product code, and starts its "
-            + "periodic entitlement check. Only applies when applicationId is cloudforge-manager.",
+            + "role aws-marketplace:GetEntitlements and starts its periodic entitlement check "
+            + "(the product code itself scopes that check's own request, not the IAM grant). "
+            + "Only applies when applicationId is cloudforge-manager.",
         category = "operations",
         visibleWhen = "applicationId == cloudforge-manager",
         required = false,

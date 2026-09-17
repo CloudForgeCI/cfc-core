@@ -24,7 +24,7 @@ class ManagerMarketplaceEntitlementIamTest {
     private static final String SID = "CloudForgeManagerMarketplaceEntitlement";
 
     @Test
-    void managerStackWithProductCodeGetsScopedEntitlementGrant() throws Exception {
+    void managerStackWithProductCodeGetsEntitlementGrant() throws Exception {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "ManagerMarketplaceIam", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
@@ -40,8 +40,12 @@ class ManagerMarketplaceEntitlementIamTest {
         assertTrue(statement != null, "Expected a policy statement with sid " + SID);
         assertTrue(statement.path("Action").asText().equals("aws-marketplace:GetEntitlements")
             || contains(statement.path("Action"), "aws-marketplace:GetEntitlements"));
-        assertTrue(statement.path("Condition").path("StringEquals")
-            .path("aws:marketplace:ProductCode").asText().equals("prod-abc123"));
+        // GetEntitlements supports no resource-level permissions or condition keys at all (per
+        // AWS's own service-authorization reference) — Resource: "*" with no Condition is the
+        // correct, and only possible, shape. The product code instead scopes the runtime
+        // GetEntitlements request itself, not this IAM grant.
+        assertTrue(statement.path("Resource").asText().equals("*"));
+        assertTrue(statement.path("Condition").isMissingNode());
     }
 
     @Test

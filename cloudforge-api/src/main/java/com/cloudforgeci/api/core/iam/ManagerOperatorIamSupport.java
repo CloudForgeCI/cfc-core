@@ -88,10 +88,11 @@ public final class ManagerOperatorIamSupport {
      * {@link #attachDeployCapabilities}'s own gate: a customer-facing capability that calls a
      * billing-adjacent AWS API must be explicitly present, not inherited automatically —
      * installations not deployed through an AWS Marketplace listing (the overwhelming majority)
-     * get no grant at all. Scoped to the exact product code rather than {@code Resource: "*"}:
-     * {@code GetEntitlements} takes the product code as a request parameter, not a resource ARN,
-     * so a {@code aws:marketplace:ProductCode} condition key is how this narrows to it (confirmed
-     * against AWS's own published condition-key reference for this action).
+     * get no grant at all. {@code Resource: "*"} because {@code GetEntitlements} supports no
+     * resource-level permissions at all (AWS's own service-authorization reference for this
+     * service lists none) — there's no condition key to scope this to the configured product
+     * code with either, so the product code drives only the runtime {@code GetEntitlements}
+     * request's own {@code ProductCode} parameter, not this IAM grant.
      */
     public static Optional<PolicyStatement> marketplaceEntitlementStatement(SystemContext ctx) {
         if (!isCloudForgeManager(ctx)) {
@@ -105,8 +106,6 @@ public final class ManagerOperatorIamSupport {
             .sid("CloudForgeManagerMarketplaceEntitlement")
             .actions(List.of("aws-marketplace:GetEntitlements"))
             .resources(List.of("*"))
-            .conditions(Map.of("StringEquals",
-                Map.of("aws:marketplace:ProductCode", productCode)))
             .build());
     }
 
