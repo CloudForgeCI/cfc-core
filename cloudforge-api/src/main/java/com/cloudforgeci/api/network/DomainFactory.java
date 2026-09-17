@@ -4,7 +4,9 @@ import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
+import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.Key;
@@ -110,8 +112,18 @@ public class DomainFactory extends BaseFactory {
         LOG.info("Enabling Route53 query logging for " + domainName + " (SOC2/NIST compliance)");
 
         // Create CloudWatch Log Group for DNS query logs
-        // Note: Route53 requires the log group name to start with /aws/route53/
-        String logGroupName = "/aws/route53/" + domainName.replace(".", "-");
+        // Note: Route53 requires the log group name to start with /aws/route53/, so (unlike
+        // ComplianceFactory's plain CloudTrail log group) this can't just fall back to CDK's own
+        // auto-generated name under RETAIN -- Route53 would refuse to write to a log group
+        // outside that prefix. Same fix BackupFactory's own vaultName comment already documents
+        // for its locked vault: append a stack-id-derived suffix (fresh on every real
+        // teardown-and-recreate, fixed across ordinary updates to a live stack) only on the
+        // RETAIN path, so a PRODUCTION teardown's retained log group never collides with a
+        // future redeploy of the same domain under the same stack name.
+        String logGroupName = "/aws/route53/" + domainName.replace(".", "-")
+            + (removalPolicy == RemovalPolicy.RETAIN
+                ? "-" + Fn.select(0, Fn.split("-", Stack.of(this).getStackId()))
+                : "");
 
         // Create KMS key for log encryption (HIPAA/PCI-DSS compliance requirement)
         Key queryLogsKmsKey = Key.Builder.create(this, "Route53QueryLogsKmsKey")
