@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * CDK-synthesis coverage for {@link ManagerOperatorIamSupport#marketplaceEntitlementStatement} —
  * the opt-in {@code aws-marketplace:GetEntitlements} grant gated behind {@code
- * DeploymentConfig.marketplaceProductCode}.
+ * DeploymentConfig.marketplaceDeploymentEnabled}.
  */
 class ManagerMarketplaceEntitlementIamTest {
 
@@ -24,11 +24,11 @@ class ManagerMarketplaceEntitlementIamTest {
     private static final String SID = "CloudForgeManagerMarketplaceEntitlement";
 
     @Test
-    void managerStackWithProductCodeGetsEntitlementGrant() throws Exception {
+    void managerStackWithFlagEnabledGetsEntitlementGrant() throws Exception {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "ManagerMarketplaceIam", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
-            .withMarketplaceProductCode("prod-abc123")
+            .withMarketplaceDeploymentEnabled(true)
             .createVpc()
             .createAlb()
             .createEfs()
@@ -42,14 +42,14 @@ class ManagerMarketplaceEntitlementIamTest {
             || contains(statement.path("Action"), "aws-marketplace:GetEntitlements"));
         // GetEntitlements supports no resource-level permissions or condition keys at all (per
         // AWS's own service-authorization reference) — Resource: "*" with no Condition is the
-        // correct, and only possible, shape. The product code instead scopes the runtime
-        // GetEntitlements request itself, not this IAM grant.
+        // correct, and only possible, shape. This flag carries no product code to scope it with
+        // either way: the actual product checked is a constant compiled into cloudforge-manager.
         assertTrue(statement.path("Resource").asText().equals("*"));
         assertTrue(statement.path("Condition").isMissingNode());
     }
 
     @Test
-    void managerStackWithoutProductCodeOmitsGrant() throws Exception {
+    void managerStackWithFlagUnsetOmitsGrant() throws Exception {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "ManagerMarketplaceIamUnset", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
@@ -63,11 +63,11 @@ class ManagerMarketplaceEntitlementIamTest {
     }
 
     @Test
-    void nonManagerStackOmitsGrantEvenWithProductCodeSet() throws Exception {
+    void nonManagerStackOmitsGrantEvenWithFlagEnabled() throws Exception {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "JenkinsMarketplaceIam", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId("jenkins")
-            .withMarketplaceProductCode("prod-abc123")
+            .withMarketplaceDeploymentEnabled(true)
             .createVpc()
             .createAlb()
             .createEfs()

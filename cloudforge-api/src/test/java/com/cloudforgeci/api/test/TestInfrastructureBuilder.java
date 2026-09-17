@@ -365,8 +365,8 @@ public class TestInfrastructureBuilder {
         return this;
     }
 
-    public TestInfrastructureBuilder withMarketplaceProductCode(String productCode) {
-        updateContext("marketplaceProductCode", productCode);
+    public TestInfrastructureBuilder withMarketplaceDeploymentEnabled(boolean enabled) {
+        updateContext("marketplaceDeploymentEnabled", enabled);
         return this;
     }
 

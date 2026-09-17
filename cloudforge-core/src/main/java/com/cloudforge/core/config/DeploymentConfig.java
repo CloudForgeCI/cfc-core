@@ -1802,39 +1802,37 @@ public class DeploymentConfig {
     public Boolean managerDirectDeployEnabled = false;
 
     /**
-     * AWS Marketplace product code for this Manager installation — set only when this deployment
-     * was launched through an AWS Marketplace CloudFormation listing, never manually. Gates two
-     * independent things, both opt-in the same way {@link #managerDirectDeployEnabled} already
-     * is: whether {@code MarketplaceEntitlementService} (cloudforge-manager) runs at all (no
-     * product code means this installation wasn't deployed through Marketplace, the overwhelming
-     * majority of installs), and whether Manager's own task role gets the {@code
-     * aws-marketplace:GetEntitlements} grant that service needs — see {@code
-     * ManagerOperatorIamSupport#marketplaceEntitlementStatement}. Blank by default: a real
-     * customer-facing capability (calling a billing-adjacent AWS API) must be explicitly present,
-     * not inherited automatically from IAM profile or applicationId the way {@link
-     * #managerDirectDeployEnabled} isn't either.
+     * Whether this Manager installation was launched through the AWS Marketplace CloudFormation
+     * listing — set only by that listing's own template, never manually. Gates two independent
+     * things, both opt-in the same way {@link #managerDirectDeployEnabled} already is: whether
+     * {@code MarketplaceEntitlementService} (cloudforge-manager) runs at all, and whether
+     * Manager's own task role gets the {@code aws-marketplace:GetEntitlements} grant that service
+     * needs — see {@code ManagerOperatorIamSupport#marketplaceEntitlementStatement}. {@code false}
+     * by default: a real customer-facing capability (calling a billing-adjacent AWS API) must be
+     * explicitly present, not inherited automatically, same as {@link #managerDirectDeployEnabled}.
      *
-     * <p>Only enables the IAM grant, doesn't scope it: {@code aws-marketplace:GetEntitlements}
-     * supports no resource-level permissions or condition keys at all (per AWS's own
-     * service-authorization reference), so the grant is always {@code Resource: "*"} once
-     * present. This value is instead passed as the runtime {@code GetEntitlements} request's own
-     * {@code ProductCode} parameter — that's where the actual scoping to one product happens.
+     * <p>Deliberately a boolean, not the product code itself: the code
+     * {@code MarketplaceEntitlementService} actually checks against is a constant compiled into
+     * cloudforge-manager, never sourced from deploy-time config — this flag only turns the check
+     * on, it never selects what gets checked. See {@code MarketplaceConfiguration}'s javadoc for
+     * the reasoning.
      */
     @ConfigField(
-        displayName = "AWS Marketplace Product Code",
-        description = "AWS Marketplace product code for this installation, set only when "
-            + "deployed through an AWS Marketplace CloudFormation listing. Grants Manager's task "
-            + "role aws-marketplace:GetEntitlements and starts its periodic entitlement check "
-            + "(the product code itself scopes that check's own request, not the IAM grant). "
-            + "Only applies when applicationId is cloudforge-manager.",
+        displayName = "AWS Marketplace Deployment",
+        description = "Whether this installation was launched through the AWS Marketplace "
+            + "CloudFormation listing, set only by that listing's own template. Grants Manager's "
+            + "task role aws-marketplace:GetEntitlements and starts its periodic entitlement "
+            + "check against CloudForgeCI's own compiled-in product code — this flag only turns "
+            + "the check on, it never selects which product is checked. Only applies when "
+            + "applicationId is cloudforge-manager.",
         category = "operations",
         visibleWhen = "applicationId == cloudforge-manager",
         required = false,
         tags = {FieldTag.EXPERIMENTAL},
-        propertyKey = "cfc.manager.marketplace-product-code",
+        propertyKey = "cfc.manager.marketplace-deployment",
         order = 9040
     )
-    public String marketplaceProductCode;
+    public Boolean marketplaceDeploymentEnabled = false;
 
     /**
      * Convert this DeploymentConfig to a Map for CDK context.
