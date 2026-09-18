@@ -1832,7 +1832,10 @@ public class DeploymentConfig {
         propertyKey = "cfc.manager.marketplace-deployment",
         order = 9040
     )
-    public Boolean marketplaceDeploymentEnabled = false;
+    // No Java default: ApplicationPropertyLoader.applyPropertyDefaults only fills null fields, so
+    // a non-null default here would block the propertyKey above from ever taking effect. Every
+    // consumer treats null and false identically (Boolean.TRUE.equals).
+    public Boolean marketplaceDeploymentEnabled;
 
     /**
      * Convert this DeploymentConfig to a Map for CDK context.
