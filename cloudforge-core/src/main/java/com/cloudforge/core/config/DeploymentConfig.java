@@ -1802,6 +1802,42 @@ public class DeploymentConfig {
     public Boolean managerDirectDeployEnabled = false;
 
     /**
+     * Whether this Manager installation was launched through the AWS Marketplace CloudFormation
+     * listing — set only by that listing's own template, never manually. Gates two independent
+     * things, both opt-in the same way {@link #managerDirectDeployEnabled} already is: whether
+     * {@code MarketplaceEntitlementService} (cloudforge-manager) runs at all, and whether
+     * Manager's own task role gets the {@code aws-marketplace:GetEntitlements} grant that service
+     * needs — see {@code ManagerOperatorIamSupport#marketplaceEntitlementStatement}. {@code false}
+     * by default: a real customer-facing capability (calling a billing-adjacent AWS API) must be
+     * explicitly present, not inherited automatically, same as {@link #managerDirectDeployEnabled}.
+     *
+     * <p>Deliberately a boolean, not the product code itself: the code
+     * {@code MarketplaceEntitlementService} actually checks against is a constant compiled into
+     * cloudforge-manager, never sourced from deploy-time config — this flag only turns the check
+     * on, it never selects what gets checked. See {@code MarketplaceConfiguration}'s javadoc for
+     * the reasoning.
+     */
+    @ConfigField(
+        displayName = "AWS Marketplace Deployment",
+        description = "Whether this installation was launched through the AWS Marketplace "
+            + "CloudFormation listing, set only by that listing's own template. Grants Manager's "
+            + "task role aws-marketplace:GetEntitlements and starts its periodic entitlement "
+            + "check against CloudForgeCI's own compiled-in product code — this flag only turns "
+            + "the check on, it never selects which product is checked. Only applies when "
+            + "applicationId is cloudforge-manager.",
+        category = "operations",
+        visibleWhen = "applicationId == cloudforge-manager",
+        required = false,
+        tags = {FieldTag.EXPERIMENTAL},
+        propertyKey = "cfc.manager.marketplace-deployment",
+        order = 9040
+    )
+    // No Java default: ApplicationPropertyLoader.applyPropertyDefaults only fills null fields, so
+    // a non-null default here would block the propertyKey above from ever taking effect. Every
+    // consumer treats null and false identically (Boolean.TRUE.equals).
+    public Boolean marketplaceDeploymentEnabled;
+
+    /**
      * Convert this DeploymentConfig to a Map for CDK context.
      *
      * <p>Special handling:
