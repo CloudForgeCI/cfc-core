@@ -365,6 +365,11 @@ public class TestInfrastructureBuilder {
         return this;
     }
 
+    public TestInfrastructureBuilder withMarketplaceDeploymentEnabled(boolean enabled) {
+        updateContext("marketplaceDeploymentEnabled", enabled);
+        return this;
+    }
+
     /**
      * Updates the CDK context. Must be called BEFORE any infrastructure is created.
      */
