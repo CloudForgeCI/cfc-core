@@ -107,7 +107,7 @@ public final class ManagerAwsCapabilityCatalog {
         /**
          * Lets a cross-account connection's role verify its own effective permissions via {@code
          * iam:SimulatePrincipalPolicy} — this is how {@code AccountsController}'s "Validate
-         * connection" surfaces a real least-privilege report (which of
+         * connection" surfaces a least-privilege report (which of
          * {@code CrossAccountRoleTemplateFactory}'s granted actions
          * actually evaluate to Allow) instead of just proving {@code sts:AssumeRole} works.
          * Simulate-only — never executes anything, so this is safe to grant broadly. Connections
@@ -117,11 +117,11 @@ public final class ManagerAwsCapabilityCatalog {
         SELF_PERMISSION_CHECK("iam:SimulatePrincipalPolicy"),
         /**
          * Backs {@code StackEventObservabilityService#enable}/{@code #disable} and the poller
-         * that drains captured events ({@code StackEventPoller}) -- the real EventBridge rule +
+         * that drains captured events ({@code StackEventPoller}) -- the EventBridge rule +
          * SQS queue this feature provisions per pipeline (see that class's own javadoc). Manager-
          * self-only like {@link #COGNITO_USER_MANAGEMENT}, so it belongs in {@link
          * #operatorBaseline()} rather than a separately-gated capability: the feature's own
-         * license entitlement check (not IAM) is what actually gates who can call it.
+         * license entitlement check (not IAM) gates who can call it.
          */
         STACK_EVENT_OBSERVABILITY(
             "events:PutRule",

@@ -749,9 +749,9 @@ public final class SystemContext extends Construct {
   /**
    * Creates S3 and CloudFront factories for static web applications.
    */
-  // codeql[java/unused-parameter] -- scope/id are unused: S3_WEBSITE topology isn't implemented
-  // yet (see the TODOs below -- S3BucketFactory/CloudFrontFactory don't exist), so this stub
-  // returns placeholders rather than actually constructing anything scoped to them.
+  // codeql[java/unused-parameter] -- scope/id are unused: this S3_WEBSITE factory path is a stub
+  // (S3BucketFactory/CloudFrontFactory do not exist yet; see the TODOs below) that returns
+  // placeholders.
   private S3CloudFrontFactories createS3CloudFrontFactories(Construct scope, String id) {
 
     // Create S3 bucket factory
@@ -1071,12 +1071,9 @@ public final class SystemContext extends Construct {
                 "Applications using database credentials can enable rotation through deployment config.")
         .build());
 
-    // Same finding as HIPAA.Security-SecretsManagerRotationEnabled above, under the generic
-    // AWS Solutions pack's own rule ID rather than a framework-specific one — that pack loads
-    // whenever any compliance framework is enabled (it isn't gated by complianceMode the way the
-    // framework-specific packs' violations are), so a stack with frameworks enabled but no HIPAA
-    // suppression coverage (e.g. SOC2/PCI-DSS/GDPR only) would otherwise hard-fail synthesis on
-    // this exact same non-issue.
+    // Same finding as HIPAA.Security-SecretsManagerRotationEnabled above, under the AWS Solutions
+    // pack's rule ID. That pack loads whenever any compliance framework is enabled, so stacks with
+    // only SOC2/PCI-DSS/GDPR would otherwise fail synthesis on this finding.
     suppressions.add(NagPackSuppression.builder()
         .id("AwsSolutions-SMG4")
         .reason("Secrets rotation is application-dependent and configured per deployment requirements. " +

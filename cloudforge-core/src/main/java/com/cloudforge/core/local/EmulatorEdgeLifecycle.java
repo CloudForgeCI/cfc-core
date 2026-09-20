@@ -8,8 +8,9 @@ import java.util.Map;
 /**
  * Applies {@link EmulatorEdgeLifecycleAction} to the shared nginx emulator edge.
  *
- * <p>Preferred entry for Maven goals and programmatic callers. Emulator start/stop also
- * drives this via {@link EmulatorLifecycle} companion orchestration.</p>
+ * <p>Entry point for programmatic callers and {@link EmulatorEdgeCli} (which backs
+ * {@code scripts/emulator-edge-*.sh}). Emulator start/stop also drives this via
+ * {@link EmulatorLifecycle} companion orchestration.</p>
  */
 public final class EmulatorEdgeLifecycle {
 

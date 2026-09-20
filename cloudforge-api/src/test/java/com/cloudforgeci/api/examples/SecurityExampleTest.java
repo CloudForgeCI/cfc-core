@@ -41,7 +41,7 @@ class SecurityExampleTest {
         config.put("authMode", "none");
         config.put("enableSsl", false);
         config.put("minInstanceCapacity", 1);
-        config.put("maxInstanceCapacity", 3);
+        config.put("maxInstanceCapacity", 1); // Jenkins has no clustering/HA support; ScalingFactory rejects >1.
         config.put("cpuTargetUtilization", 70);
         config.put("desiredCapacity", 1);
         config.put("instanceType", "t3.micro");
@@ -72,7 +72,7 @@ class SecurityExampleTest {
         config.put("authMode", "none");
         config.put("enableSsl", false);
         config.put("minInstanceCapacity", 1);
-        config.put("maxInstanceCapacity", 3);
+        config.put("maxInstanceCapacity", 1); // Jenkins has no clustering/HA support; ScalingFactory rejects >1.
         config.put("cpuTargetUtilization", 70);
         config.put("desiredCapacity", 1);
         config.put("instanceType", "t3.micro");

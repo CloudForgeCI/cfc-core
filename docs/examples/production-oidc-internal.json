@@ -1,6 +1,6 @@
 {
-  "description": "Production OIDC for internal applications - no domain required, full compliance",
   "stackName": "CloudForge-Prod-Internal",
+  "applicationId": "jenkins",
   "runtime": "ec2",
   "topology": "jenkins-service",
   "securityProfile": "production",
@@ -17,7 +17,7 @@
   "cognitoMfaEnabled": true,
   "cognitoCreateGroups": true,
   "cognitoAdminGroupName": "Administrators",
-  "cognitoViewerGroupName": "Users",
+  "cognitoUserGroupName": "Users",
 
   "complianceFrameworks": "SOC2,HIPAA",
   "complianceMode": "enforce",
@@ -25,7 +25,7 @@
   "scopeConfigRulesToDeployment": false,
   "guardDutyEnabled": true,
   "cloudTrailEnabled": true,
-  "flowLogsEnabled": true,
+  "enableFlowlogs": true,
   "auditManagerEnabled": true,
   "logRetentionDays": 730,
 
@@ -36,12 +36,5 @@
 
   "enableMonitoring": true,
   "enableEncryption": true,
-  "retainStorage": true,
-
-  "_comments": {
-    "use_case": "Internal production applications where browser warnings are acceptable",
-    "private_ca": "Uses AWS Private CA - fully compliant (TLS encryption meets all framework requirements)",
-    "compliance": "HIPAA, PCI-DSS, SOC2 all pass with Private CA (they require encryption, not public trust)",
-    "cost": "Private CA ~$400/month - consider public domain for customer-facing apps"
-  }
+  "retainStorage": true
 }

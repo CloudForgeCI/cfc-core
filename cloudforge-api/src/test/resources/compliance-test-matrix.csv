@@ -414,10 +414,7 @@ PASS_PCI-DSS_EC2_with-WAF-implied,EC2,PRODUCTION,with-domain,ssl-enabled,no-subd
 PASS_PCI-DSS_FARGATE_with-WAF-implied,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,,PASS,jenkins,,,
 PASS_ALL_EC2_valid-config-all-rules,EC2,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
 PASS_ALL_FARGATE_valid-config-all-rules,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,PCI-DSS,HIPAA,GDPR",2190,true,PASS,jenkins,,eu-west-1,
-# COMPLIANCE TEST MATRIX EXPANSION - PHASE 2
-# Additional comprehensive edge cases
-# Generated: 2025-12-28
-# Target: Expand from 1,297 to 1,500+ test cases
+# ADDITIONAL EDGE CASES
 # ========================================
 
 # Network Mode Edge Cases (private-with-nat vs public-no-nat)

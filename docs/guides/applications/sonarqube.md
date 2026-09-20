@@ -1,10 +1,10 @@
 # SonarQube Application Guide
 
-SonarQube is an open-source platform for continuous code quality and security inspection, detecting bugs, vulnerabilities, and code smells across 30+ programming languages.
+SonarQube performs static analysis of source code to report bugs, vulnerabilities, and maintainability issues.
 
-**Status**: Plugin Example (Community Contribution)
+**Status**: Available (not yet verified end to end)
 
-**Note**: SonarQube is implemented as a **plugin example** in `cfc-testing` to demonstrate the ApplicationSpec plugin system. It serves as a template for creating custom application plugins.
+SonarQube is a built-in application in `cloudforge-api` (`com.cloudforgeci.api.application.cicd.SonarQubeApplicationSpec`). Because it is a compact spec, it is also a useful reference when writing your own ApplicationSpec plugin.
 
 ---
 
@@ -23,38 +23,22 @@ SonarQube is an open-source platform for continuous code quality and security in
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | No (Community Edition) |
-| **Database Required** | No (embedded H2) |
+| **Supported Auth Modes** | `none` |
+| **Database Required** | No (embedded H2, evaluation only) |
 
 ---
 
 ## Editions
 
-**Important**: Unlike Mattermost and Metabase, SonarQube editions are separate products:
-
-| Edition | License | OIDC/SAML | Features |
-|---------|---------|-----------|----------|
-| **Community** | Free | No | Basic analysis, 15+ languages |
-| **Developer** | Paid | Yes | Branch analysis, PR decoration |
-| **Enterprise** | Paid | Yes | Portfolio management, security reports |
-| **Data Center** | Paid | Yes | High availability, horizontal scaling |
-
-CloudForge deploys **Community Edition** by default. Enterprise features require purchasing and deploying a different image.
+SonarQube is distributed as separate editions (Community, Developer, Enterprise, Data Center). CloudForge deploys the Community Edition image `sonarqube:lts-community` by default. Other editions require a license and a different image (set `containerImage`). See the SonarQube documentation for the features of each edition.
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Static code analysis
-- Security vulnerability detection (OWASP Top 10, CWE)
-- Code smell detection
-- Technical debt tracking
-- Quality gates
-- Multi-language support (30+ languages)
-- CI/CD integration
-- IDE integration (SonarLint)
-- Quality profiles
-- Custom rules
+- Static analysis for bugs, vulnerabilities, and maintainability issues
+- Quality profiles and quality gates
+- CI/CD and IDE integration
 
 ---
 
@@ -66,42 +50,41 @@ SonarQube does not have optional ports. All traffic flows through port 9000.
 
 ## Authentication
 
-### Supported Auth Modes
+| Mode | Description |
+|------|-------------|
+| `none` | SonarQube local accounts |
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | Available | ALB-level authentication |
-| `none` | Available | Local accounts only |
+SonarQube declares only the `none` auth mode. When a context is prepared for a deployment target (the interactive deployer or `CloudForgeDeployment`), an unsupported `authMode` such as `alb-oidc` is replaced with `none` and a warning is printed. Compliance frameworks that require CloudForge-managed authentication, such as the SOC 2 CC6.2 rule, report a failure when `authMode` is `none`.
 
-**Note:** Native OIDC/SAML requires Developer Edition or higher.
+Native SAML in SonarQube requires a commercial edition; CloudForge does not configure it.
 
 ---
 
 ## Environment Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SONAR_WEB_CONTEXT` | Context path | `/` |
-| `SONAR_WEB_HOST` | Bind address | `0.0.0.0` |
-| `SONAR_WEB_PORT` | Application port | `9000` |
-| `SONAR_WEB_PUBLIC_URL` | External URL | `https://sonar.example.com` |
-| `SONAR_WEB_JAVAADDITIONALOPTS` | Web JVM options | `-XX:+UseG1GC -Xmx2g` |
-| `SONAR_CE_JAVAADDITIONALOPTS` | Compute Engine JVM options | `-XX:+UseG1GC -Xmx1g` |
+| Variable | Value |
+|----------|-------|
+| `SONAR_WEB_CONTEXT` | `/` (set when a domain is configured) |
+| `SONAR_WEB_HOST` | `0.0.0.0` (set when a domain is configured) |
+| `SONAR_WEB_PORT` | `9000` (set when a domain is configured) |
+| `SONAR_WEB_PUBLIC_URL` | `https://<fqdn>` or `http://<fqdn>` (set when a domain is configured) |
+| `SONAR_WEB_JAVAADDITIONALOPTS` | `-XX:+UseG1GC -Xmx2g -Xms512m` |
+| `SONAR_CE_JAVAADDITIONALOPTS` | `-XX:+UseG1GC -Xmx1g -Xms256m` |
 
 ---
 
 ## System Requirements
 
-SonarQube has specific system requirements for Elasticsearch:
+SonarQube's embedded Elasticsearch has these host requirements:
 
 | Requirement | Value |
 |-------------|-------|
 | `vm.max_map_count` | 262144 |
 | `nofile` limit | 65536 |
 | `nproc` limit | 4096 |
-| Java | 17+ |
+| Java | 17 or later |
 
-CloudForge automatically configures these for EC2 deployments.
+On EC2, the user data installs Java 17, sets the limits in `/etc/security/limits.conf`, and sets `vm.max_map_count`. On Fargate, kernel parameters cannot be changed.
 
 ---
 
@@ -134,14 +117,13 @@ CloudForge automatically configures these for EC2 deployments.
   "stackName": "SonarQube-Dev",
   "applicationId": "sonarqube",
   "applicationName": "SonarQube Dev",
-  "description": "SonarQube code quality server",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -154,17 +136,14 @@ CloudForge automatically configures these for EC2 deployments.
 }
 ```
 
-**Cost estimate:** ~$60/month
-
-### Production - With ALB Authentication
+### Production
 
 ```json
 {
   "stackName": "SonarQube-Production",
   "applicationId": "sonarqube",
   "applicationName": "SonarQube",
-  "description": "Production code quality server",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -177,18 +156,12 @@ CloudForge automatically configures these for EC2 deployments.
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "sonarqube-prod-yourcompany",
-  "cognitoMfaEnabled": true,
-  "cognitoMfaMethod": "totp",
+  "authMode": "none",
 
   "instanceType": "t3.medium",
   "minInstanceCapacity": 1,
-  "maxInstanceCapacity": 2,
+  "maxInstanceCapacity": 1,
 
-  "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "wafEnabled": true,
@@ -201,78 +174,22 @@ CloudForge automatically configures these for EC2 deployments.
 }
 ```
 
-**Cost estimate:** ~$250/month
+### External Database
 
-### Production - With External Database
-
-For high availability, use PostgreSQL instead of embedded H2:
-
-```json
-{
-  "stackName": "SonarQube-HA",
-  "applicationId": "sonarqube",
-  "applicationName": "SonarQube HA",
-  "description": "High availability SonarQube",
-  "environment": "production",
-
-  "runtime": "ec2",
-  "securityProfile": "production",
-  "topology": "application-service",
-
-  "domain": "example.com",
-  "subdomain": "sonar",
-  "enableSsl": true,
-
-  "networkMode": "private-with-nat",
-  "region": "us-east-1",
-
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "sonarqube-ha-yourcompany",
-  "cognitoMfaEnabled": true,
-
-  "instanceType": "t3.large",
-  "minInstanceCapacity": 2,
-  "maxInstanceCapacity": 4,
-  "enableAutoScaling": true,
-
-  "provisionDatabase": true,
-  "databaseEngine": "postgres",
-  "databaseVersion": "15",
-  "databaseInstanceClass": "db.t3.medium",
-  "databaseAllocatedStorageGB": 50,
-  "databaseMultiAz": true,
-  "databaseName": "sonarqube",
-  "databaseBackupRetentionDays": 30,
-
-  "complianceFrameworks": "SOC2",
-  "awsConfigEnabled": true,
-  "guardDutyEnabled": true,
-  "wafEnabled": true,
-
-  "enableMonitoring": true,
-  "enableEncryption": true,
-  "logRetentionDays": "730",
-  "retainStorage": true
-}
-```
-
-**Note:** When using external database, update `sonar.properties` with JDBC connection.
-
-**Cost estimate:** ~$400/month
+SonarQube does not implement CloudForge's database integration, so CloudForge does not pass JDBC settings to it even when `provisionDatabase` is set. The embedded H2 database is intended for evaluation and supports a single instance only. To use PostgreSQL, configure `sonar.jdbc.url`, `sonar.jdbc.username`, and `sonar.jdbc.password` yourself.
 
 ---
 
 ## Plugin Development Reference
 
-SonarQube in CloudForge demonstrates the ApplicationSpec plugin pattern:
+The SonarQube spec shows the minimal ApplicationSpec pattern:
 
 ```java
 @ApplicationPlugin(
     value = "sonarqube",
     category = "code-quality",
     displayName = "SonarQube",
-    description = "Continuous code quality inspection",
+    description = "Continuous code quality and security inspection platform",
     defaultCpu = 2048,
     defaultMemory = 4096,
     defaultInstanceType = "t3.medium",
@@ -285,7 +202,7 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
 }
 ```
 
-**Location:** `cfc-testing/src/main/java/com/cloudforgeci/samples/plugins/application/`
+**Location:** `cloudforge-api/src/main/java/com/cloudforgeci/api/application/cicd/SonarQubeApplicationSpec.java`
 
 ---
 
@@ -293,9 +210,9 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
 
 ### 1. Initial Login
 
-1. Navigate to `https://sonar.your-domain.com`
-2. Default credentials: `admin` / `admin`
-3. **Immediately change password**
+1. Open `https://sonar.example.com` (your configured FQDN).
+2. Sign in with SonarQube's default credentials, `admin` / `admin`.
+3. Change the password when prompted.
 
 ### 2. Create Quality Profiles
 
@@ -327,7 +244,7 @@ mvn sonar:sonar \
 
 **Gradle:**
 ```bash
-./gradlew sonarqube \
+./gradlew sonar \
   -Dsonar.host.url=https://sonar.example.com \
   -Dsonar.token=your-token
 ```
@@ -338,7 +255,7 @@ mvn sonar:sonar \
 
 ### SonarQube won't start
 
-**Check Elasticsearch requirements:**
+**Check Elasticsearch requirements (EC2):**
 ```bash
 # Verify vm.max_map_count
 sysctl vm.max_map_count
@@ -351,7 +268,7 @@ tail -f /opt/sonarqube/logs/es.log
 
 ### Out of memory
 
-Increase JVM heap:
+Increase task resources (Fargate):
 ```json
 {
   "cpu": 4096,
@@ -370,7 +287,7 @@ Or for EC2:
 
 1. Check Compute Engine logs
 2. Increase CE workers in settings
-3. Consider dedicated database
+3. Consider an external PostgreSQL database (see External Database)
 
 ---
 

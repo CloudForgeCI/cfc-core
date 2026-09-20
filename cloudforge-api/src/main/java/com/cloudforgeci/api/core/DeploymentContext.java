@@ -307,13 +307,8 @@ public final class DeploymentContext {
     public Boolean cloudfrontEnabled() { return config.cloudfrontEnabled; }
     public LoadBalancerType lbType() { return config.lbType; }
 
-    // oidcProvider itself was never exposed here despite years of @DeploymentContext("oidcProvider")
-    // usage (ApplicationOidcFactory, ApplicationSamlFactory, CognitoSamlFactory, KeycloakFactory) --
-    // silently no-op the whole time (see ContextInjector's own "no field or getter found" fallback),
-    // just never noticed because none of those call sites' actual branching logic reads its value
-    // (they all key off other fields like cognitoAutoProvision/oidcIssuer instead). The
-    // cloudforge-manager provider branch is the first one that actually needs its value, which is
-    // what surfaced the gap.
+    // Every @DeploymentContext("x") field needs a matching x() getter here; without one,
+    // ContextInjector silently leaves the field unset (its "no field or getter found" fallback).
     public String oidcProvider() { return config.oidcProvider; }
     public String cloudforgeManagerIssuerUrl() { return config.cloudforgeManagerIssuerUrl; }
 

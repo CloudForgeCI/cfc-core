@@ -1,172 +1,180 @@
 # CloudForge Application Guides
 
-Guides for deploying applications with CloudForge include configuration options and deployment-context examples.
+These guides describe how CloudForge deploys each built-in application: its image, ports, storage, supported authentication modes, and example deployment contexts.
 
 ## Available Applications
 
 ### CI/CD & Automation
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **Jenkins** | Verified | [Jenkins Guide](jenkins.md) |
-| **GitLab** | Available | [GitLab Guide](gitlab.md) |
-| **Drone** | Available | [Drone Guide](drone.md) |
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **Jenkins** | `jenkins` | Verified | [Jenkins Guide](jenkins.md) |
+| **GitLab** | `gitlab` | Available | [GitLab Guide](gitlab.md) |
+| **Drone** | `drone` | Available | [Drone Guide](drone.md) |
 
 ### Team Collaboration
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **Mattermost Team** | Verified | [Mattermost Guide](mattermost.md) |
-| **Mattermost Enterprise** | Verified | [Mattermost Guide](mattermost.md) |
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **Mattermost Team** | `mattermost-team` | Verified | [Mattermost Guide](mattermost.md) |
+| **Mattermost Enterprise** | `mattermost-enterprise` | Verified | [Mattermost Guide](mattermost.md) |
 
-> **Mattermost Editions:** Team Edition is free (uses GitLab OAuth, no single logout). Enterprise Edition requires a license for full features (native OIDC with single logout). See the [Mattermost Guide](mattermost.md) for details.
+> **Mattermost editions:** `mattermost-team` needs no license and signs users in through Mattermost's GitLab OAuth provider, without single logout. `mattermost-enterprise` uses Mattermost's native OpenID Connect with single logout and requires a Mattermost license. See the [Mattermost Guide](mattermost.md).
 
 ### Analytics & Business Intelligence
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **Metabase** | Verified | [Metabase Guide](metabase.md) |
-| **Superset** | Available | [Superset Guide](superset.md) |
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **Metabase** | `metabase` | Verified | [Metabase Guide](metabase.md) |
+| **Superset** | `superset` | Available | [Superset Guide](superset.md) |
 
 ### Monitoring & Observability
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **Grafana** | Available | [Grafana Guide](grafana.md) |
-| **Prometheus** | Available | [Prometheus Guide](prometheus.md) |
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **Grafana** | `grafana` | Available | [Grafana Guide](grafana.md) |
+| **Prometheus** | `prometheus` | Available | [Prometheus Guide](prometheus.md) |
 
 ### Artifact Registries
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **Harbor** | Available | [Harbor Guide](harbor.md) |
-| **Nexus** | Available | [Nexus Guide](nexus.md) |
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **Harbor** | `harbor` | Available | [Harbor Guide](harbor.md) |
+| **Nexus** | `nexus` | Available | [Nexus Guide](nexus.md) |
 
 ### Version Control
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **Gitea** | Available | [Gitea Guide](gitea.md) |
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **Gitea** | `gitea` | Available | [Gitea Guide](gitea.md) |
+
+### Code Quality
+
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **SonarQube** | `sonarqube` | Available | [SonarQube Guide](sonarqube.md) |
 
 ### Databases
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **PostgreSQL** | Available | [PostgreSQL Guide](postgresql.md) |
-| **Redis** | Available | [Redis Guide](redis.md) |
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **PostgreSQL** | `postgresql` | Available | [PostgreSQL Guide](postgresql.md) |
+| **Redis** | `redis` | Available | [Redis Guide](redis.md) |
 
 ### Secrets Management
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **Vault** | Available | [Vault Guide](vault.md) |
+| Application | Application ID | Status | Guide |
+|-------------|----------------|--------|-------|
+| **Vault** | `vault` | Available | [Vault Guide](vault.md) |
 
-### Operations
+### CMS, E-commerce, Forums, and Other Web Applications
 
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **CloudForge Manager** | Available | [CloudForge Manager Guide](cloudforge-manager.md) |
+CloudForge also includes PHP-based applications that use the `cms-service` topology: WordPress, WooCommerce, Drupal, Joomla, TYPO3, Concrete CMS, October CMS, Magento, PrestaShop, OpenCart, Sylius, Bagisto, phpBB, Flarum, MyBB, SuiteCRM, MediaWiki, Moodle, and Dolphin (UNA). They do not have dedicated guides yet. The full list of built-in application specs is registered in `cloudforge-api/src/main/resources/META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec`.
 
-### Code Quality (Plugin Example)
-
-| Application | Status | Guide |
-|-------------|--------|-------|
-| **SonarQube** | Plugin | [SonarQube Guide](sonarqube.md) |
-
-**Status Legend:**
-- **Verified**: Fully tested and production-ready
-- **Available**: Built-in, functional, awaiting verification
-- **Plugin**: Community plugin example
+**Status legend:**
+- **Verified**: deployed and exercised end to end by maintainers.
+- **Available**: built in and covered by unit tests, but not yet verified end to end.
 
 ## Quick Start
 
-### 1. Choose Your Application
+### 1. Choose an Application
 
-Browse the guides above to find detailed documentation for each application.
+Use the guides above to choose an application and review its requirements.
 
 ### 2. Copy a Deployment Context
 
-Each guide includes ready-to-use `deployment-context.json` examples that you can copy directly:
+The CDK app in `cfc-testing` synthesizes `cfc-testing/deployment-context.json`. Start from an example:
 
 ```bash
-# Copy an example from the docs/examples directory
-cp docs/examples/applications/jenkins-dev.json deployment-context.json
+cd cfc-testing
+cp ../docs/examples/applications/jenkins-dev.json deployment-context.json
 
-# Customize required fields
+# Edit the required fields
 vim deployment-context.json
 
 # Deploy
 cdk deploy
 ```
 
+You can also run the Interactive Deployer, which prompts for these values and writes `deployment-context.json` for you. See the [root README](https://github.com/CloudForgeCI/cfc-core/blob/develop/readme.md).
+
 ### 3. Customize for Your Environment
 
 At minimum, update these fields:
-- `stackName`: Unique name for your CloudFormation stack
-- `domain` / `subdomain`: Your DNS configuration (production)
-- `cognitoDomainPrefix`: Globally unique Cognito domain (if using OIDC)
-- `region`: Target AWS region
+- `stackName`: a unique CloudFormation stack name
+- `domain` / `subdomain`: your DNS configuration (when using TLS or a custom domain)
+- `cognitoDomainPrefix`: a globally unique Cognito domain prefix (when using OIDC)
+- `region`: the target AWS region
 
 ## Guide Structure
 
-Each application guide includes:
+Each application guide covers the relevant subset of:
 
-1. **Overview** - What the application does and key features
-2. **Quick Reference** - Ports, images, resource requirements at a glance
-3. **Configuration Options** - All available settings
-4. **Optional Ports** - Additional services you can enable
-5. **Authentication** - OIDC/SAML integration details
-6. **Deployment Context Examples** - Ready-to-use JSON configurations
-7. **Environment Variables** - Application-specific variables
-8. **Health Checks** - Monitoring configuration
-9. **Compliance Considerations** - Security and compliance notes
+1. **Quick Reference**: application ID, image, port, resource defaults, and supported auth modes
+2. **Optional Ports**: additional ports and the deployment-context flags that open them
+3. **Database Requirements**: engine, defaults, and how CloudForge connects the application
+4. **Authentication**: supported auth modes and OIDC integration details
+5. **Environment Variables**: variables CloudForge sets in the container
+6. **Storage Configuration**: container and EC2 data paths
+7. **Deployment Context Examples**: example JSON configurations
+8. **Compliance Considerations**: infrastructure controls CloudForge configures and controls you configure yourself
+9. **Post-Deployment Tasks** and **Troubleshooting**
 
 ## Deployment Context Examples
 
-The `docs/examples/applications/` directory contains application-specific examples:
+The `docs/examples/applications/` directory contains application-specific examples, including:
 
 ```
 docs/examples/applications/
 ├── jenkins-dev.json           # Jenkins development
-├── jenkins-production.json    # Jenkins production with SOC2
+├── jenkins-production.json    # Jenkins production with SOC 2 rules
 ├── mattermost-dev.json        # Mattermost development
-├── mattermost-production.json # Mattermost production with database
+├── mattermost-production.json # Mattermost production with PostgreSQL
 ├── metabase-dev.json          # Metabase development
-├── metabase-production.json   # Metabase production
-├── gitlab-production.json     # GitLab with registry
-├── grafana-production.json    # Grafana with database
-├── cloudforge-manager-dev.json
-├── cloudforge-manager-production.json  # optional Postgres
-└── ... more examples
+├── metabase-production.json   # Metabase production with PostgreSQL
+├── gitlab-production.json     # GitLab production with PostgreSQL
+├── grafana-production.json    # Grafana production with PostgreSQL
+├── harbor-production.json
+├── sonarqube-production.json
+└── compliance-*.json          # Framework-focused examples
 ```
 
 ## Authentication Modes
 
-CloudForge supports three authentication modes:
+CloudForge supports three authentication modes (`authMode`):
 
-| Mode | Description | Applications |
-|------|-------------|--------------|
-| `none` | No authentication | All (not recommended for production) |
-| `alb-oidc` | ALB-level authentication | All applications |
-| `application-oidc` | Native app authentication | Jenkins, GitLab, Grafana, Mattermost |
+| Mode | Description |
+|------|-------------|
+| `none` | No CloudForge-managed authentication. Not recommended for production. |
+| `alb-oidc` | The Application Load Balancer authenticates users with OIDC before forwarding requests. |
+| `application-oidc` | The application itself signs users in through OIDC (or SAML, for Metabase). |
+
+Each application declares which modes it supports. The interactive deployer and `CloudForgeDeployment` replace an unsupported mode with the application's recommended mode and print a warning.
+
+| Supported modes | Applications |
+|-----------------|--------------|
+| `application-oidc`, `alb-oidc`, `none` | Jenkins, GitLab, Grafana, Mattermost Team, Mattermost Enterprise, Metabase (SAML), WordPress, WooCommerce, Drupal, Joomla, Magento, PrestaShop, Moodle |
+| `alb-oidc`, `none` | Other CMS, e-commerce, forum, and wiki applications |
+| `none` | Drone, Gitea, SonarQube, Superset, Prometheus, Harbor, Nexus, Vault, PostgreSQL, Redis |
 
 **Recommendation:**
-- **Development**: `none` or `alb-oidc` for quick setup
-- **Production**: `application-oidc` where available for best user experience
+- **Development**: `none`, or `alb-oidc` where supported.
+- **Production**: `application-oidc` where supported, so the application has per-user identities.
 
 ## Runtime Options
 
-| Runtime | Best For | Pros | Cons |
-|---------|----------|------|------|
-| **Fargate** | Dev/Staging, Auto-scaling | No EC2 management, Pay-per-use | Higher cost at scale |
-| **EC2** | Production, Cost-sensitive | Lower cost, More control | Requires management |
+| Runtime | Characteristics |
+|---------|-----------------|
+| **Fargate** (`fargate`) | No instances to manage; data on EFS. Billed per task. |
+| **EC2** (`ec2`) | Instances you can access through SSM Session Manager; data on EBS or EFS depending on the application. Requires instance patching and management. |
 
 ## Related Documentation
 
-- [Deployment Context Reference](../../examples/README.md) - Complete configuration options
-- [Plugin System](../../plugins/PLUGIN-SYSTEM.md) - Create custom applications
-- [Compliance Guide](../../compliance/README.md) - Security frameworks
-- [OIDC Integration](../../applications/OIDC.md) - Authentication details
+- [Deployment Context Reference](../../examples/README.md)
+- [Configuration Reference and Advanced Commands](../../ADVANCED.md)
+- [Plugin System](../../plugins/PLUGIN-SYSTEM.md): create custom applications
+- [Compliance Guide](../../compliance/README.md)
+- [OIDC Integration](../../applications/OIDC.md)
 
 ## Support
 

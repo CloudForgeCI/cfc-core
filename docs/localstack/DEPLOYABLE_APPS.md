@@ -1,35 +1,39 @@
 # LocalStack Deployable Applications
 
-Summary of CloudForge apps on LocalStack (Interactive Deployer option **8**). For MiniStack-only apps and shared commands, see the **[full catalog](../guides/LOCAL_EMULATOR_APP_CATALOG.md)**.
+Which CloudForge applications deploy on LocalStack (Interactive Deployer option **8**). For MiniStack and shared commands, see the **[full catalog](../guides/LOCAL_EMULATOR_APP_CATALOG.md)**.
 
-Requires `LOCALSTACK_AUTH_TOKEN` and a running LocalStack selected from `InteractiveDeployer --platform`.
+Requires `LOCALSTACK_AUTH_TOKEN` and a LocalStack container started from `InteractiveDeployer --platform`.
 
 ---
 
-## All discovered applications (37+)
+## Capability requirements
 
-LocalStack supports **every** ServiceLoader plugin when the probed tier exposes required capabilities:
+LocalStack can deploy every discovered application plugin when the probed tier exposes the capabilities the deployment needs:
 
 | Capability | Required for |
 |------------|--------------|
-| ECS + ELBV2 | All Fargate stacks (default) |
-| RDS | `provisionDatabase: true`, `requiresDatabase()`, or `AWS::RDS::*` in template |
-| EC2 + Auto Scaling | `runtime: ec2` |
-| EFS / Backup (Ultimate) | Native resources; Base tier adapts EFS to bind mounts and strips Backup |
+| ECS + ELBv2 | All Fargate stacks |
+| RDS | `provisionDatabase: true`, applications that require a database, or `AWS::RDS::*` in the template |
+| EC2 + Auto Scaling | `runtime: EC2` |
+| EFS / Backup (Ultimate) | Native resources; on Base tier the adapter uses bind mounts for EFS and removes Backup resources |
 
-Preflight: `LOCALSTACK_PREFLIGHT=enforce` (default). Details are in the [README preflight](README.md#deploy-preflight-option-8).
+Preflight runs with `LOCALSTACK_PREFLIGHT=enforce` by default. See [Deploy preflight](README.md#deploy-preflight-option-8).
+
+Sample contexts are in `cfc-testing/deployment-contexts/`.
 
 ---
 
-## Without RDS (same 13 as MiniStack)
+## Without RDS
+
+The same 12 applications MiniStack supports:
 
 | Application ID | Port | Sample context |
 |----------------|------|----------------|
-| `cloudforge-manager` | 1958 | Extend `CloudForgeManager-Dev.json` |
-| `jenkins` | 8080 | `Jenkins-Stack-LocalStack.json` (domain/Cognito example) |
+| `cloudforge-manager` | 1958 | `CloudForgeManager-Dev.json` (also provisions RDS; on LocalStack the Manager container uses its embedded H2 store) |
+| `jenkins` | 8080 | `Jenkins-Stack-LocalStack.json` (domain, TLS, Cognito `application-oidc`) |
 | `grafana` | 3000 | `Grafana-Stack.json` |
 | `prometheus` | 9090 | `Prometheus-Stack.json` |
-| `metabase` | 3000 | `Metabase-Stack.json` |
+| `metabase` | 3000 | `Metabase-Stack-LocalStack.json` |
 | `gitea` | 3000 | `Gitea-Stack.json` |
 | `drone` | 80 | `Drone-Stack.json` |
 | `vault` | 8200 | `Vault-Stack.json` |
@@ -38,34 +42,31 @@ Preflight: `LOCALSTACK_PREFLIGHT=enforce` (default). Details are in the [README 
 | `postgresql` | 5432 | `PostgreSQL-Stack.json` |
 | `sonarqube` | 9000 | `SonarQube-Stack.json` |
 
-LocalStack keeps ALB→ECS **forward** (MiniStack redirects to `localhost:<port>`).
+The adapter redirects ALB listeners to `http://localhost:<appPort>`, so only one stack can hold a host port at a time. Applications on port 80 (Drone and most CMS images) keep the ALB forward and are reached through the path-style URL instead, because the emulator edge holds host port 80.
 
 ---
 
 ## With RDS (LocalStack only among local emulators)
 
-Set `provisionDatabase: true` and use full deployment context (boolean fields, `authMode`, etc.).
+These applications require a database, so `provisionDatabase` is enabled automatically in the interactive flow; set `provisionDatabase: true` in a saved context.
 
 | Application ID | Port | Notes |
 |----------------|------|-------|
 | `gitlab` | 80 | Long startup |
-| `harbor` | 80 | Heavy stack |
+| `harbor` | 80 | |
 | `superset` | 8088 | |
 | `mattermost-enterprise` | 8065 | Sample: `Mattermost-Stack-LocalStack.json` |
 | `mattermost-team` | 8065 | |
-| **All CMS plugins** | mostly 80 | WordPress, Drupal, Magento, WooCommerce, Joomla, Typo3, phpBB, Moodle, MediaWiki, OpenCart, PrestaShop, Sylius, Bagisto, Flarum, MyBB, SuiteCRM, Concrete, October, Dolphin UNA, Craft CMS (sample) |
+| CMS and commerce plugins | 80 (phpBB: 8080) | WordPress, WooCommerce, Drupal, Joomla (`Joomla-Stack-LocalStack.json`), Magento, TYPO3, Concrete CMS, October CMS, MediaWiki, Moodle, OpenCart, PrestaShop, Sylius, Bagisto, Flarum, MyBB, phpBB, SuiteCRM, UNA (`dolphin-una`), and the Craft CMS sample plugin in `cfc-testing` |
 
-Verify container images exist locally; some enterprise tags may fail to pull.
+Check that the container images pull on your machine before deploying; some tags are large or may be unavailable.
 
----
-
-## Blocked on MiniStack only
-
-Apps in the RDS/CMS tables above are **blocked on MiniStack option 6** by preflight but deploy here on option **8**.
+These applications are blocked on MiniStack (option **6**) by preflight.
 
 ---
 
 ## Related
 
 - [LocalStack README](README.md)
+- [MiniStack deployable applications](../ministack/DEPLOYABLE_APPS.md)
 - [Full emulator app catalog](../guides/LOCAL_EMULATOR_APP_CATALOG.md)

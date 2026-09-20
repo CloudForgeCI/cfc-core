@@ -173,7 +173,7 @@ public class KeycloakFactory extends BaseFactory {
     private void deployKeycloak() {
         LOG.info("Deploying Keycloak ECS service...");
 
-        // TODO: Implementation in next step
+        // TODO: Implement Keycloak deployment:
         // 1. Create Keycloak database schema
         // 2. Create ECS task definition with Keycloak container
         // 3. Configure environment variables for:

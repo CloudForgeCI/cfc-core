@@ -281,10 +281,9 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                 return "gitlab.cloudforge.localhost";
             }
             // The rest of the CMS/e-commerce catalog (ApplicationSpec#applicationPort) also
-            // listens on 80 — without its own case here each one silently fell through to
-            // CONTAINER_PORT_TO_HOST's gitlab default below. "woocommerce" is checked before
-            // "wordpress" purely for readability; WooCommerceApplicationSpec's own stack naming
-            // never contains "wordpress" so the order doesn't actually matter.
+            // listens on 80 — without its own case here each one would fall through to
+            // CONTAINER_PORT_TO_HOST's gitlab default below. WooCommerceApplicationSpec's stack
+            // naming never contains "wordpress", so the order of these checks doesn't matter.
             if (name.contains("wordpress")) {
                 return "wordpress.cloudforge.localhost";
             }
@@ -418,12 +417,9 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                 sb.append("    }\n\n");
                 // Jenkins-specific: an anonymous request to bare "/" under the ELB prefix gets a
                 // 403 + meta-refresh instead of a clean redirect, so /login is preferred instead.
-                // This block used to run for every path-prefixed app regardless of hostname —
-                // harmless while Jenkins was the only one with a real vhost, but once the rest of
-                // the CMS catalog (WordPress etc., see hostnameForContainer) got their own vhosts
-                // too, they inherited a forced "/" → "/login" redirect to a route that doesn't
-                // exist for them, breaking their real root path. "/login" itself is also Jenkins-
-                // specific (its actual login URL) — not a generic app convention.
+                // Applied to Jenkins only: other path-prefixed apps (WordPress etc., see
+                // hostnameForContainer) have no /login route, and the redirect would break their
+                // root path.
                 if (hostname.contains("jenkins")) {
                     sb.append("    location = / {\n")
                         .append("        return 302 /login;\n")
@@ -441,11 +437,10 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             } else if (pathPrefix != null) {
                 // Everything else (WordPress etc.) expects to be hit at its own root — it fakes
                 // the ALB-prefix illusion itself, purely for asset-URL generation (e.g.
-                // WordPress's WORDPRESS_CONFIG_EXTRA env var), not for request routing. Forcing
-                // the prefix into the request path here turned a valid "/" into a literal
-                // sub-path the app's own webserver can't resolve to a real file (a genuine 404,
-                // not proxied at all) — same root cause as the /login redirect above, this
-                // block used to run unconditionally too. Response-side rewrites still apply: the
+                // WordPress's WORDPRESS_CONFIG_EXTRA env var), not for request routing, so the
+                // prefix is not injected into the request path (that would turn "/" into a
+                // sub-path the app's webserver can't resolve, returning 404). Response-side
+                // rewrites still apply: the
                 // backend's own redirects/asset links legitimately carry that prefix regardless
                 // of whether it's injected into the request, and still need translating back to
                 // the friendly hostname's root.
@@ -589,7 +584,7 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
 
     /**
      * From {@code docker ps} lines, collect per-container overrides via a single {@code docker
-     * inspect} pass each: ALB path prefix (hostPort-keyed, as before) and the edge hostname
+     * inspect} pass each: ALB path prefix (hostPort-keyed) and the edge hostname
      * derived from that stack's {@code subdomain} (container-name-keyed — see {@link
      * #parseDockerPortPublishes(List, Map)}).
      */
@@ -723,7 +718,7 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         body.append("  http://").append(LocalEmulatorDefaults.HOST_MANAGER).append("/\\n");
         body.append("  http://").append(LocalEmulatorDefaults.HOST_NGINX).append("/\\n\\n");
         body.append("Set up hosts: ./scripts/setup-cloudforge-local-hosts.sh\\n");
-        body.append("Reconcile: mvn -f cfc-testing cloudforge:emulator-edge-reconcile\\n\\n");
+        body.append("Reconcile: ./scripts/emulator-edge-reconcile.sh\\n\\n");
         if (routes.isEmpty()) {
             body.append("No app vhosts yet - deploy an app, then reconcile.\\n");
         } else {

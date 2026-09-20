@@ -943,8 +943,7 @@ public class ConfigRulesDeploymentIntegrationTest {
 
     @Test
     public void testProductionOnlyDatabaseRulesNotDeployedInDev() {
-        // This test would require creating a DEV security profile builder
-        // Since the test base uses PRODUCTION profile, we note this as a TODO
+        // TODO: requires a DEV security profile builder; the test base uses PRODUCTION.
         // In practice, RDS_MULTI_AZ_SUPPORT and RDS_ENHANCED_MONITORING_ENABLED
         // should only deploy in PRODUCTION for SOC2 and GDPR
     }

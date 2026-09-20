@@ -96,8 +96,8 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
 
     // ── URL output: stable "ApplicationUrl" key + per-app alias, mirroring
     // FargateFactory.createApplicationUrlOutput() so CloudFormationInventory.preferredUrl
-    // resolves an "Open" link/health URL for EC2 apps the same way it does for Fargate —
-    // previously EC2 emitted no application-URL output at all. Fires once ALB is available
+    // resolves an "Open" link/health URL for EC2 apps the same way it does for Fargate.
+    // Fires once ALB is available
     // (works for both the SSL and non-SSL branches below). Guarded with tryFindChild because
     // wire() can re-enter for the same SystemContext (see the scalingPoliciesApplied guard
     // further down) and CfnOutput construct IDs must stay unique.

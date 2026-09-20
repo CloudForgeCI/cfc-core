@@ -14,7 +14,7 @@ import java.lang.annotation.Target;
  * <p>Enforced by {@code AuthorizationInterceptor} against
  * {@code com.cloudforgeci.manager.web.AccessGuard#requireCaller} followed by
  * {@code com.cloudforgeci.manager.auth.AuthService#requireAdminCaller(Caller)}. See
- * {@link RequiresAccess} for the "every method must carry exactly one of these four annotations"
+ * {@link RequiresAccess} for the "every method must carry exactly one of these annotations"
  * contract.</p>
  */
 @Retention(RetentionPolicy.RUNTIME)

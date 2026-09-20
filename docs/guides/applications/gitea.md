@@ -1,8 +1,8 @@
 # Gitea Application Guide
 
-Gitea is a lightweight, self-hosted Git service written in Go. It provides a simple, fast, and painless way to set up a self-hosted code hosting solution.
+Gitea is a self-hosted Git service written in Go.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -14,7 +14,7 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 | **Category** | Version Control |
 | **Default Image** | `gitea/gitea:latest` |
 | **Application Port** | `3000` |
-| **SSH Port** | `22` (remapped to 2222) |
+| **SSH Port** | `2222` (optional, see below) |
 | **Default CPU** | 512 (Fargate) |
 | **Default Memory** | 1024 MB (Fargate) |
 | **Default Instance** | t3.micro (EC2) |
@@ -22,23 +22,17 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | No (use ALB-OIDC) |
+| **Supported Auth Modes** | `none` |
 | **Database Required** | No (embedded SQLite) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Git repository hosting
-- Pull request workflow
-- Issue tracking
-- Wiki documentation
-- Organizations and teams
-- Webhooks
-- Git LFS support
-- Repository mirroring
-- Package registry (npm, Maven, Container, etc.)
-- Actions (CI/CD, GitHub Actions compatible)
+- Git repository hosting, pull requests, issues, and wikis
+- Organizations, teams, and webhooks
+- Git LFS and repository mirroring
+- Package registry and Gitea Actions
 
 ---
 
@@ -47,6 +41,8 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 | Port | Protocol | Direction | Feature Flag | Description |
 |------|----------|-----------|--------------|-------------|
 | 2222 | TCP | Inbound | `enableSsh` | Git SSH |
+
+On EC2, the container's SSH port 22 is published on host port 2222 (`GITEA__server__SSH_PORT=2222`) to avoid a conflict with the host's SSH daemon.
 
 **Example enabling SSH:**
 ```json
@@ -59,12 +55,13 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 
 ## Authentication
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | Available | ALB-level authentication |
-| `none` | Available | Local accounts only |
+| Mode | Description |
+|------|-------------|
+| `none` | Gitea local accounts |
 
-**Note:** Gitea supports OIDC natively but CloudForge integration is pending.
+Gitea declares only the `none` auth mode. When a context is prepared for a deployment target (the interactive deployer or `CloudForgeDeployment`), an unsupported `authMode` such as `alb-oidc` is replaced with `none` and a warning is printed. Compliance frameworks that require CloudForge-managed authentication, such as the SOC 2 CC6.2 rule, report a failure when `authMode` is `none`.
+
+Gitea supports OpenID Connect natively, but CloudForge does not configure it.
 
 ---
 
@@ -79,6 +76,8 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 | Container User | `1000:1000` |
 | EFS Permissions | `755` |
 
+On EC2, data is stored under `/var/lib/gitea`.
+
 ---
 
 ## Deployment Context Examples
@@ -90,14 +89,13 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
   "stackName": "Gitea-Dev",
   "applicationId": "gitea",
   "applicationName": "Gitea Dev",
-  "description": "Gitea development git server",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -112,8 +110,6 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 }
 ```
 
-**Cost estimate:** ~$30/month
-
 ### Production
 
 ```json
@@ -121,8 +117,7 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
   "stackName": "Gitea-Production",
   "applicationId": "gitea",
   "applicationName": "Gitea",
-  "description": "Production Gitea git server",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -135,10 +130,7 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "gitea-prod-yourcompany",
-  "cognitoMfaEnabled": true,
+  "authMode": "none",
 
   "instanceType": "t3.small",
   "minInstanceCapacity": 1,
@@ -146,7 +138,6 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 
   "enableSsh": true,
 
-  "complianceFrameworks": "SOC2",
   "awsConfigEnabled": true,
   "wafEnabled": true,
 
@@ -157,20 +148,17 @@ Gitea is a lightweight, self-hosted Git service written in Go. It provides a sim
 }
 ```
 
-**Cost estimate:** ~$150/month
-
 ---
 
 ## Post-Deployment Tasks
 
-1. Navigate to Gitea URL
-2. Complete initial setup wizard
-3. Create admin account
-4. Configure SSH (if enabled)
-5. Create organizations and repositories
+1. Open the Gitea URL.
+2. Complete the initial setup wizard and create the administrator account.
+3. Configure SSH clone URLs if `enableSsh` is set.
+4. Create organizations and repositories.
 
 ---
 
 ## Related Documentation
 
-- [Gitea Documentation](https://docs.gitea.io/)
+- [Gitea Documentation](https://docs.gitea.com/)

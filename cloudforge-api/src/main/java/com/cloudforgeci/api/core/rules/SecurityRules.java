@@ -77,12 +77,28 @@ public final class SecurityRules {
     String frameworksConfig = ctx.cfc.complianceFrameworks();
 
     // Parse enabled frameworks into a set for fast lookup
-    Set<String> enabledFrameworks = (frameworksConfig == null || frameworksConfig.trim().isEmpty())
-        ? Collections.emptySet()
-        : Arrays.stream(frameworksConfig.split(","))
-            .map(String::trim)
-            .map(String::toUpperCase)
-            .collect(java.util.stream.Collectors.toSet());
+    Set<String> enabledFrameworks = new LinkedHashSet<>(
+        (frameworksConfig == null || frameworksConfig.trim().isEmpty())
+            ? Collections.emptySet()
+            : Arrays.stream(frameworksConfig.split(","))
+                .map(String::trim)
+                .map(String::toUpperCase)
+                .collect(java.util.stream.Collectors.toSet()));
+
+    // See DeploymentConfig#complianceFrameworksRawOverride's own javadoc -- an on-demand advisory
+    // check's escape hatch for tokens with no ComplianceFrameworkType entry at all (e.g.
+    // "ISO-27001", or "AWS-BEST-PRACTICES" for cdk-nag's own generic fallback pack below), read
+    // directly off the construct tree rather than through DeploymentContext/DeploymentConfig
+    // since it deliberately can't round-trip through either.
+    Object rawOverride = ctx.getNode().tryGetContext("complianceFrameworksRawOverride");
+    if (rawOverride instanceof String rawOverrideText && !rawOverrideText.isBlank()) {
+        for (String token : rawOverrideText.split(",")) {
+            String trimmed = token.trim();
+            if (!trimmed.isEmpty()) {
+                enabledFrameworks.add(trimmed.toUpperCase());
+            }
+        }
+    }
 
     // CDK-nag validation only runs for PRODUCTION with enabled frameworks
     if (ctx.security == SecurityProfile.PRODUCTION && !enabledFrameworks.isEmpty()) {
@@ -182,14 +198,11 @@ public final class SecurityRules {
    * @since 3.1.0
    */
   private static NagPack mapFrameworkToNagPack(String framework, boolean enforce) {
-    // Report formats for compliance auditing -- also what actually makes ComplianceMode.ENFORCE
-    // block anything: cdk-nag's own Annotations calls alone never do (app.synth() doesn't throw
-    // for them), so CloudForgeSynthesizer reads the generated <Pack>-<Stack>-NagReport.json file
-    // back off disk after synth instead (see NagReportReader). Deliberately NOT additionalLoggers
-    // -- registering a second INagLogger alongside cdk-nag's own default AnnotationsLogger
-    // triggers a jsii/cdk-nag runtime bug (a StackOverflowError from reentrant kernel calls,
-    // independent of what the extra logger's callbacks do). The built-in report logger these
-    // formats enable doesn't go through that path.
+    // Report formats for compliance auditing. These reports are also how ComplianceMode.ENFORCE
+    // blocks: app.synth() does not throw on cdk-nag annotations, so CloudForgeSynthesizer reads
+    // <Pack>-<Stack>-NagReport.json after synthesis (see NagReportReader). additionalLoggers is
+    // not used because registering a second INagLogger triggers a jsii/cdk-nag StackOverflowError
+    // from reentrant kernel calls; the built-in report logger avoids that path.
     var reportFormats = List.of(NagReportFormat.JSON, NagReportFormat.CSV);
 
     return switch (framework) {
@@ -209,7 +222,7 @@ public final class SecurityRules {
           .reportFormats(reportFormats)
           .build();
       // FEDRAMP: Handled by existing FedRampRules.java plugin only
-      // Not integrated with cdk-nag to avoid conflicts (future epic)
+      // Not integrated with cdk-nag to avoid conflicts with FedRampRules.
       case "FEDRAMP", "FEDRAMPHIGH" -> {
         LOG.info("  - Skipping cdk-nag for " + framework + " (uses existing FedRampRules.java)");
         yield null;

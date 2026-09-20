@@ -228,10 +228,18 @@ public class GrafanaApplicationSpec implements ApplicationSpec, DatabaseSpec {
             );
         }
 
+        // Read the admin password from the secret ApplicationFactory provisions (see
+        // autoAdminPasswordEnvVar()) when one exists; otherwise generate one locally.
+        String adminPasswordArn = context.autoAdminPasswordSecretArn();
+        String adminPasswordLine = adminPasswordArn != null && !adminPasswordArn.isBlank()
+            ? "GF_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id " + adminPasswordArn
+                + " --query SecretString --output text)"
+            : "GF_ADMIN_PASSWORD=$(openssl rand -base64 16)";
+
         // Run Grafana container
         builder.addCommands(
-            "# Generate secure admin password",
-            "GF_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-grafana}/admin-password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
+            "# Retrieve Grafana's admin password (real secret if provisioned, generated otherwise)",
+            adminPasswordLine,
             "echo \"Generated Grafana admin password (save this): $GF_ADMIN_PASSWORD\" >> /var/log/userdata.log",
             "",
             "# Run Grafana container",
@@ -259,6 +267,15 @@ public class GrafanaApplicationSpec implements ApplicationSpec, DatabaseSpec {
     @Override
     public OidcIntegration getOidcIntegration() {
         return new GrafanaOidcIntegration();
+    }
+
+    /** Names the shell variable {@link #configureUserData} assigns the admin password to, so
+     *  {@code ApplicationFactory} provisions a Secrets Manager secret for it. This is the local
+     *  UserData variable; Grafana's own {@code GF_SECURITY_ADMIN_PASSWORD} is set only on the
+     *  {@code docker run} invocation. */
+    @Override
+    public String autoAdminPasswordEnvVar() {
+        return "GF_ADMIN_PASSWORD";
     }
 
     @Override

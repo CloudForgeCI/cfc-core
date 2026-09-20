@@ -676,15 +676,12 @@ public class IdentityCenterSamlFactory extends BaseFactory {
      * Implement once Identity Center SAML flow is ready.</p>
      *
      * @param applicationArn          Identity Center application ARN
-     * @param trustedTokenIssuerArn   ARN of the Cognito trusted token issuer (not used currently —
-     *                                its value is deliberately kept out of logs, see the log line
-     *                                below; reserved for the actual grant configuration once the
-     *                                SAML integration above is implemented)
+     * @param trustedTokenIssuerArn   ARN of the Cognito trusted token issuer (currently unused and
+     *                                kept out of logs; reserved for the grant configuration)
      * @param cognitoClientId         Cognito app client ID (used as audience claim)
      */
-    // codeql[java/unused-parameter] -- applicationArn/trustedTokenIssuerArn are unused: this whole
-    // method is a stub (see its own TODO javadoc) so the module compiles ahead of the SAML
-    // integration actually being implemented.
+    // codeql[java/unused-parameter] -- applicationArn/trustedTokenIssuerArn are unused: this
+    // method is a stub until the SAML integration is implemented (see TODO above).
     private void configureApplicationGrant(String applicationArn, String trustedTokenIssuerArn, String cognitoClientId) {
         LOG.warning("configureApplicationGrant() not yet implemented — SAML integration pending.");
         LOG.warning("  Application ARN: " + applicationArn);

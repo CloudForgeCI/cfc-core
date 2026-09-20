@@ -10,7 +10,7 @@
 
 ## Document Purpose
 
-This living document provides a comprehensive analysis of CloudForge CI's SOC 2 Trust Services Criteria (TSC) implementation, identifying:
+This document analyzes CloudForge CI's SOC 2 Trust Services Criteria (TSC) implementation, identifying:
 - ✅ Controls that are fully automated via infrastructure
 - ⚠️ Controls that are partially automated
 - ❌ Controls that require manual implementation
@@ -18,6 +18,8 @@ This living document provides a comprehensive analysis of CloudForge CI's SOC 2 
 - Gap remediation roadmap
 
 **Audience**: Security teams, compliance officers, auditors, and engineering leadership
+
+**Scope note**: This analysis maps infrastructure controls to SOC 2 criteria. It distinguishes three things: controls CloudForge configures, validation that checks those controls at synthesis time (`Soc2Rules`, enabled with `auditManagerEnabled` and `complianceFrameworks: soc2`), and SOC 2 attestation, which only an independent CPA firm can provide. Procedure documents referenced here are templates that an organization must adopt, operate, and evidence itself.
 
 ---
 
@@ -45,32 +47,32 @@ CloudForge CI implements **SOC 2 Trust Services Criteria** controls at the infra
 | **Metric** | **Value** | **Status** |
 |-----------|----------|-----------|
 | **Total TSC Criteria** | ~64 criteria (2017 AICPA Framework) | - |
-| **Automated Controls** | 17 criteria (~27%) | ✅ Strong |
-| **Partially Automated** | 0 criteria (0%) | ✅ All Enhanced |
+| **Automated Controls** | 17 criteria (~27%) | ✅ Infrastructure |
+| **Partially Automated** | 0 criteria (0%) | - |
 | **Manual Controls Required** | 47 criteria (~73%) | ❌ Organizational |
-| **Infrastructure Coverage** | ~70-80% of automatable technical controls | ✅ Excellent |
+| **Infrastructure Coverage** | Estimated ~70-80% of automatable technical controls | ✅ Infrastructure |
 | **Production Tested** | Infrastructure controls only | ⚠️ Auth not tested |
 
-> **Note (2025-12-16)**: CC4, CC5, C1.2, and PI1.4 upgraded from "Partially Automated" to "Fully Documented" with new procedure documents:
-> - `SOC2_CC4_MONITORING_PROCEDURES.md` - Security monitoring review procedures
-> - `SOC2_CC5_OPERATIONAL_PROCEDURES.md` - Control activities and operational procedures
-> - `SOC2_C1.2_DATA_DISPOSAL_PROCEDURES.md` - Information disposal procedures
-> - `SOC2_PI1.4_ERROR_DETECTION.md` - Error detection and correction guidance
+Procedure templates are provided for CC4, CC5, C1.2, and PI1.4:
+- [`SOC2_CC4_MONITORING_PROCEDURES.md`](SOC2_CC4_MONITORING_PROCEDURES.md) - Security monitoring review procedures
+- [`SOC2_CC5_OPERATIONAL_PROCEDURES.md`](SOC2_CC5_OPERATIONAL_PROCEDURES.md) - Control activities and operational procedures
+- [`SOC2_C1.2_DATA_DISPOSAL_PROCEDURES.md`](SOC2_C1.2_DATA_DISPOSAL_PROCEDURES.md) - Information disposal procedures
+- [`SOC2_PI1.4_ERROR_DETECTION.md`](SOC2_PI1.4_ERROR_DETECTION.md) - Error detection and correction guidance
 
-### Key Strengths
+### Infrastructure Controls
 
-- ✅ **All mandatory Security (CC) technical controls** fully implemented
-- ✅ **Multi-layer enforcement**: Validation rules, Guard policies, AWS Config, Security Profiles
-- ✅ **Comprehensive audit evidence**: CloudTrail, Config, Audit Manager integration
-- ✅ **Strong Availability (A) coverage**: Multi-AZ, auto-scaling, automated backups
-- ✅ **Excellent Confidentiality (C) coverage**: Encryption at rest/transit, key management
+- ✅ **Security (CC) technical controls**: encryption, network segmentation, logging, and monitoring configured by the security profile
+- ✅ **Layered checks**: validation rules, cfn-guard policies, AWS Config, and security profiles
+- ✅ **Evidence sources**: CloudTrail, AWS Config, and Audit Manager integration
+- ✅ **Availability (A)**: Multi-AZ, auto-scaling, automated backups
+- ✅ **Confidentiality (C)**: Encryption at rest and in transit, key management
 
 ### Critical Gaps
 
-- ✅ **Organizational Controls**: CC1, CC2, CC3 documented (see `SOC2_CC1_CONTROL_ENVIRONMENT.md`, `SOC2_CC2_COMMUNICATION.md`, `SOC2_CC3_RISK_ASSESSMENT.md`)
-- ✅ **Incident Response**: CC7.4/7.5 documented (see `SOC2_CC7_INCIDENT_RESPONSE.md`)
+- ⚠️ **Organizational Controls**: CC1, CC2, CC3 procedure templates provided (see [`SOC2_CC1_CONTROL_ENVIRONMENT.md`](SOC2_CC1_CONTROL_ENVIRONMENT.md), [`SOC2_CC2_COMMUNICATION.md`](SOC2_CC2_COMMUNICATION.md), [`SOC2_CC3_RISK_ASSESSMENT.md`](SOC2_CC3_RISK_ASSESSMENT.md)); the organization must operate them
+- ⚠️ **Incident Response**: CC7.4/7.5 procedure template provided (see [`SOC2_CC7_INCIDENT_RESPONSE.md`](SOC2_CC7_INCIDENT_RESPONSE.md))
 - ❌ **Processing Integrity (PI)**: Application-level validation required (PI1.1-PI1.3)
-- ✅ **Privacy (P)**: Policy documentation created (see `SOC2_PRIVACY_PROCEDURES.md`)
+- ⚠️ **Privacy (P)**: Policy template provided (see [`SOC2_PRIVACY_PROCEDURES.md`](SOC2_PRIVACY_PROCEDURES.md))
 - ⚠️ **Authentication**: Cognito/OIDC implemented but not production-tested
 
 ---
@@ -97,7 +99,7 @@ CloudForge CI implements SOC 2 controls through **4 enforcement layers**:
 
 ### Layer 1: Validation Rules (Pre-Synthesis)
 
-**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java)
+**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java)
 
 - Java-based validation executed during CDK synthesis
 - Validates security profile configuration against SOC 2 requirements
@@ -115,7 +117,7 @@ CloudForge CI implements SOC 2 controls through **4 enforcement layers**:
 
 ### Layer 2: CloudFormation Guard Policies (Pre-Deployment)
 
-**File**: [`cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard`](../../cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard)
+**File**: [`cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard)
 
 - Policy-as-Code validation of CloudFormation templates
 - Enforces security controls before infrastructure creation
@@ -131,7 +133,7 @@ CloudForge CI implements SOC 2 controls through **4 enforcement layers**:
 
 ### Layer 3: AWS Config Rules (Runtime Monitoring)
 
-**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java)
+**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java)
 
 - Continuous compliance monitoring via AWS Config
 - **16 AWS Config managed rules** for SOC 2
@@ -144,7 +146,7 @@ CloudForge CI implements SOC 2 controls through **4 enforcement layers**:
 
 ### Layer 4: Security Profile Configuration (Infrastructure Defaults)
 
-**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java)
+**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java)
 
 - Production-grade security defaults
 - Enforces encryption, monitoring, backups, high availability
@@ -160,14 +162,14 @@ CloudForge CI implements SOC 2 controls through **4 enforcement layers**:
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| CC6.1.1 | Restrict logical access | IAM policies, security groups, NACLs | ✅ Automated | [`Soc2Rules.java:119-167`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L119-L167) |
+| CC6.1.1 | Restrict logical access | IAM policies, security groups, NACLs | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
 | CC6.1.2 | Identify and authenticate users | IAM password policy, MFA | ✅ Automated | AWS Config: `iam-password-policy`, `iam-user-mfa-enabled` |
 | CC6.1.3 | Remove access when no longer required | Access key rotation (90 days) | ✅ Automated | AWS Config: `access-keys-rotated` |
 | CC6.1.4 | Restrict access to data | S3 bucket policies, encryption | ✅ Automated | AWS Config: `s3-bucket-public-read-prohibited` |
 
 **Infrastructure Implementation**:
 ```java
-// Soc2Rules.java:130-140 - IAM access controls validation
+// Soc2Rules.java - IAM access controls validation
 if (ctx.iamProfile == null) {
     rules.add(ComplianceRule.fail(
         "SOC2-CC6.1-IAM",
@@ -190,14 +192,14 @@ if (ctx.iamProfile == null) {
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| CC6.2.1 | User authentication | OIDC, Cognito, MFA | ⚠️ Implemented, not tested | [`Soc2Rules.java:142-152`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L142-L152) |
-| CC6.2.2 | MFA for privileged access | IAM MFA, Cognito MFA | ⚠️ Implemented, not tested | [`ProductionSecurityProfileConfiguration.java:418`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java#L418) |
+| CC6.2.1 | User authentication | OIDC, Cognito, MFA | ⚠️ Implemented, not tested | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| CC6.2.2 | MFA for privileged access | IAM MFA, Cognito MFA | ⚠️ Implemented, not tested | [`ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) |
 
 **Infrastructure Implementation**:
 ```java
-// Soc2Rules.java:143-152 - Authentication validation
-String authMode = ctx.cfc.authMode();
-if ("none".equals(authMode)) {
+// Soc2Rules.java - Authentication validation
+AuthMode authMode = ctx.cfc.authMode();
+if (authMode == AuthMode.NONE) {
     rules.add(ComplianceRule.fail(
         "SOC2-CC6.2-Auth",
         "User authentication required for customer-facing systems",
@@ -206,11 +208,13 @@ if ("none".equals(authMode)) {
 }
 ```
 
-**Authentication Options**:
-- `alb-oidc`: ALB-integrated OIDC (AWS Identity Center, Google, Okta)
-- `cognito`: AWS Cognito User Pools with MFA
-- `jenkins-oidc`: Jenkins-native OIDC integration
-- `application-oidc`: Application-level OIDC
+**Authentication Options** (`authMode`):
+- `alb-oidc`: ALB-integrated OIDC (Amazon Cognito, AWS IAM Identity Center, or another OIDC provider)
+- `application-oidc`: Application-level OIDC, for applications that support it natively
+
+Cognito user pools with MFA are provisioned with `cognitoAutoProvision` and `cognitoMfaEnabled`. SAML federation is an incomplete feature and is not selectable through `authMode`.
+
+The validator's remediation message still lists `jenkins-oidc`, which is not an `authMode` value.
 
 **Action Required**: Test Cognito and OIDC integrations in production environment
 
@@ -220,8 +224,8 @@ if ("none".equals(authMode)) {
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| CC6.6.1 | Network segmentation | VPC, private subnets, security groups | ✅ Automated | [`Soc2Rules.java:180-199`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L180-L199) |
-| CC6.6.2 | Firewall protection | WAF, security groups | ✅ Automated | [`Soc2Rules.java:234-242`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L234-L242) |
+| CC6.6.1 | Network segmentation | VPC, private subnets, security groups | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| CC6.6.2 | Firewall protection | WAF, security groups | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
 
 **Infrastructure Implementation**:
 - VPC with public/private subnet isolation
@@ -240,12 +244,12 @@ if ("none".equals(authMode)) {
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| CC6.7.1 | Encryption in transit | TLS 1.2+, HTTPS | ✅ Automated | [`Soc2Rules.java:201-221`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L201-L221) |
-| CC6.7.2 | Certificate management | ACM, auto-renewal | ✅ Automated | [`AuditManagerControlRegistry.java:266-277`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java#L266-L277) |
+| CC6.7.1 | Encryption in transit | TLS 1.2+, HTTPS | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| CC6.7.2 | Certificate management | ACM, auto-renewal | ✅ Automated | [`AuditManagerControlRegistry.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java) |
 
 **Infrastructure Implementation**:
 ```java
-// Soc2Rules.java:202-210 - SSL/TLS enforcement
+// Soc2Rules.java - SSL/TLS enforcement
 if (!ctx.cfc.enableSsl()) {
     rules.add(ComplianceRule.fail(
         "SOC2-CC6.7-SSL",
@@ -269,10 +273,10 @@ if (!ctx.cfc.enableSsl()) {
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| CC7.2.1 | Security monitoring | CloudWatch, GuardDuty, Config | ✅ Automated | [`Soc2Rules.java:260-268`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L260-L268) |
-| CC7.2.2 | Threat detection | GuardDuty | ✅ Automated | [`Soc2Rules.java:271-279`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L271-L279) |
-| CC7.2.3 | Audit logging | CloudTrail, Flow Logs, ALB logs | ✅ Automated | [`Soc2Rules.java:282-301`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L282-L301) |
-| CC7.2.4 | Configuration monitoring | AWS Config | ✅ Automated | [`Soc2Rules.java:304-312`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L304-L312) |
+| CC7.2.1 | Security monitoring | CloudWatch, GuardDuty, Config | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| CC7.2.2 | Threat detection | GuardDuty | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| CC7.2.3 | Audit logging | CloudTrail, Flow Logs, ALB logs | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| CC7.2.4 | Configuration monitoring | AWS Config | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
 
 **Infrastructure Implementation**:
 - **CloudTrail**: All API calls logged to S3 (2-year retention)
@@ -296,9 +300,9 @@ if (!ctx.cfc.enableSsl()) {
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| CC8.1.1 | Change tracking | CloudTrail, Git version control | ✅ Automated | [`Soc2Rules.java:330-340`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L330-L340) |
-| CC8.1.2 | Configuration change detection | AWS Config | ✅ Automated | [`Soc2Rules.java:343-351`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L343-L351) |
-| CC8.1.3 | Infrastructure as Code | CDK (CloudFormation) | ✅ Automated | [`Soc2Rules.java:354`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L354) |
+| CC8.1.1 | Change tracking | CloudTrail, Git version control | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| CC8.1.2 | Configuration change detection | AWS Config | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| CC8.1.3 | Infrastructure as Code | CDK (CloudFormation) | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
 
 **Infrastructure Implementation**:
 - Git repository provides version control and audit trail
@@ -349,12 +353,12 @@ if (!ctx.cfc.enableSsl()) {
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| A1.2.1 | High availability architecture | Multi-AZ deployment | ✅ Automated | [`Soc2Rules.java:378-386`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L378-L386) |
-| A1.2.2 | Auto-scaling | Auto-scaling groups | ✅ Automated | [`Soc2Rules.java:389-397`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L389-L397) |
+| A1.2.1 | High availability architecture | Multi-AZ deployment | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| A1.2.2 | Auto-scaling | Auto-scaling groups | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
 
 **Infrastructure Implementation**:
 ```java
-// ProductionSecurityProfileConfiguration.java:296-312
+// ProductionSecurityProfileConfiguration.java
 public boolean isMultiAzEnforced() {
     return true; // Always enforced for production
 }
@@ -378,9 +382,9 @@ public int getMinInstanceCount() {
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| A1.3.1 | Automated backups | EBS snapshots, RDS backups | ✅ Automated | [`Soc2Rules.java:400-408`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L400-L408) |
-| A1.3.2 | Cross-region backup | S3 cross-region replication | ✅ Automated | [`Soc2Rules.java:410-418`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L410-L418) |
-| A1.3.3 | Backup retention | 90-day retention | ✅ Automated | [`ProductionSecurityProfileConfiguration.java:251`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java#L251) |
+| A1.3.1 | Automated backups | EBS snapshots, RDS backups | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| A1.3.2 | Cross-region backup | S3 cross-region replication | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| A1.3.3 | Backup retention | 90-day retention | ✅ Automated | [`ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) |
 
 **Infrastructure Implementation**:
 - Automated backups always enabled for production
@@ -413,9 +417,9 @@ public int getMinInstanceCount() {
 
 | **Sub-Control** | **Requirement** | **Implementation** | **Status** | **Evidence** |
 |----------------|----------------|-------------------|-----------|-------------|
-| C1.1.1 | Encryption at rest | EBS, EFS, S3 encryption (AES-256) | ✅ Automated | [`Soc2Rules.java:435-466`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L435-L466) |
-| C1.1.2 | Key management | KMS key rotation | ✅ Automated | [`AuditManagerControlRegistry.java:251-263`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java#L251-L263) |
-| C1.1.3 | Access restrictions | Private network mode | ✅ Automated | [`Soc2Rules.java:469-477`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java#L469-L477) |
+| C1.1.1 | Encryption at rest | EBS, EFS, S3 encryption (AES-256) | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
+| C1.1.2 | Key management | KMS key rotation | ✅ Automated | [`AuditManagerControlRegistry.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java) |
+| C1.1.3 | Access restrictions | Private network mode | ✅ Automated | [`Soc2Rules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) |
 
 **Infrastructure Implementation**:
 - All storage encrypted by default (EBS, EFS, S3, RDS)
@@ -444,7 +448,7 @@ public int getMinInstanceCount() {
 |----------------|----------------|-------------------|-----------|-------------|
 | C1.2.1 | Secure data deletion | S3 lifecycle policies + procedures | ✅ Documented | `SOC2_C1.2_DATA_DISPOSAL_PROCEDURES.md` |
 
-**Implementation**: S3 lifecycle policies automate data disposal. Comprehensive procedures documented including manual disposal, key destruction, and verification.
+**Implementation**: S3 lifecycle policies automate data disposal. The procedure template covers manual disposal, key destruction, and verification.
 
 **Documentation**: See `SOC2_C1.2_DATA_DISPOSAL_PROCEDURES.md` for complete disposal procedures
 
@@ -516,78 +520,76 @@ public int getMinInstanceCount() {
 
 **Total Rules**: 16 (9 base + 7 SOC2-specific)
 
-**Deployment Logic**: See [`ComplianceFactory.java:246-300`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java#L246-L300)
+**Deployment Logic**: See [`ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java)
 
 ---
 
 ### CloudFormation Guard Policies
 
-**File**: [`soc2-trust-services.guard`](../../cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard)
+**File**: [`soc2-trust-services.guard`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard)
 
 **Validation Rules** (15 total):
 
 #### Access Control Rules
-- `soc2_s3_block_public` (lines 27-31) - CC6.1: S3 public access blocks
-- `soc2_rds_no_public` (lines 34-37) - CC6.1: RDS not publicly accessible
-- `soc2_kms_key_rotation` (lines 40-42) - C1.1: KMS key rotation enabled
+- `soc2_s3_block_public` - CC6.1: S3 public access blocks
+- `soc2_rds_no_public` - CC6.1: RDS not publicly accessible
+- `soc2_kms_key_rotation` - C1.1: KMS key rotation enabled
 
 #### Encryption at Rest Rules
-- `soc2_s3_encryption` (lines 49-51) - C1.1: S3 BucketEncryption exists
-- `soc2_rds_encryption` (lines 54-56) - C1.1: RDS StorageEncrypted = true
-- `soc2_rds_cluster_encryption` (lines 59-61) - C1.1: RDS Cluster encrypted
-- `soc2_ebs_encryption` (lines 64-66) - C1.1: EBS Encrypted = true
-- `soc2_dynamodb_encryption` (lines 69-72) - C1.1: DynamoDB SSEEnabled = true
+- `soc2_s3_encryption` - C1.1: S3 BucketEncryption exists
+- `soc2_rds_encryption` - C1.1: RDS StorageEncrypted = true
+- `soc2_rds_cluster_encryption` - C1.1: RDS Cluster encrypted
+- `soc2_ebs_encryption` - C1.1: EBS Encrypted = true
+- `soc2_dynamodb_encryption` - C1.1: DynamoDB SSEEnabled = true
 
 #### Encryption in Transit Rules
-- `soc2_alb_https` (lines 80-82) - CC6.7: ALB HTTPS/TLS protocol
+- `soc2_alb_https` - CC6.7: ALB HTTPS/TLS protocol
 
 #### Monitoring Rules
-- `soc2_cloudtrail_enabled` (lines 89-91) - CC7.2: CloudTrail IsLogging = true
-- `soc2_cloudwatch_log_retention` (lines 94-97) - CC7.2: Retention ≥ 365 days
+- `soc2_cloudtrail_enabled` - CC7.2: CloudTrail IsLogging = true
+- `soc2_cloudwatch_log_retention` - CC7.2: Retention ≥ 365 days
 
 #### Backup and Recovery Rules
-- `soc2_s3_versioning` (lines 104-107) - A1.3: S3 versioning enabled
-- `soc2_rds_backups` (lines 110-113) - A1.3: RDS backup retention ≥ 7 days
-- `soc2_dynamodb_pitr` (lines 116-119) - A1.3: DynamoDB PITR enabled
+- `soc2_s3_versioning` - A1.3: S3 versioning enabled
+- `soc2_rds_backups` - A1.3: RDS backup retention ≥ 7 days
+- `soc2_dynamodb_pitr` - A1.3: DynamoDB PITR enabled
 
 ---
 
 ### Security Profile Enforcement
 
-**File**: [`ProductionSecurityProfileConfiguration.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java)
+**File**: [`ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java)
 
 **Production Defaults**:
 
-| **Control** | **Configuration** | **Line** | **TSC** | **Overridable** |
-|-----------|------------------|---------|---------|----------------|
-| Log Retention | 2 years (730 days) | 55 | CC7.2 | Yes (via `logRetentionDays`) |
-| Flow Logs | Enabled (all traffic) | 80 | CC7.2 | Yes (via `flowLogsEnabled`) |
-| CloudTrail | Always enabled | 114 | CC7.2, CC8.1 | Yes (via `cloudTrailEnabled`) |
-| GuardDuty | Always enabled | 125 | CC7.2 | Yes (via `guardDutyEnabled`) |
-| AWS Config | Always enabled | 134 | CC7.2, CC8.1 | No |
-| Audit Manager | Always enabled | 142 | All | No |
-| EBS Encryption | Mandatory | 148 | C1.1 | No |
-| EFS Encryption (transit) | Mandatory | 162 | CC6.7 | Yes (via `efsEncryptionInTransitEnabled`) |
-| EFS Encryption (rest) | Mandatory | 167 | C1.1 | No |
-| S3 Encryption | Mandatory | 172 | C1.1 | No |
-| Multi-AZ | Enforced | 296 | A1.2 | No |
-| Auto-scaling | Enabled | 301 | A1.2 | No |
-| Min Instances | 2 (HA) | 306 | A1.2 | No |
-| Max Instances | 20 (scale) | 311 | A1.2 | No |
-| Automated Backup | Enabled | 246 | A1.3 | Yes (via `automatedBackupEnabled`) |
-| Backup Retention | 90 days | 251 | A1.3 | No |
-| Cross-region Backup | Enabled | 265 | A1.3 | Yes (via `crossRegionBackupEnabled`) |
-| MFA Required | Always | 418 | CC6.2 | No |
-| Password Length | 14 chars | 449 | CC6.2 | No |
-| Password Rotation | 90 days | 443 | CC6.2 | No |
-| Access Token Validity | 1 hour | 430 | CC6.2 | No |
+With `soc2` selected and `complianceMode` other than `disabled`, controls that `ComplianceMatrix` marks as REQUIRED for SOC2 are enabled regardless of the deployment context value.
+
+| **Control** | **Configuration** | **TSC** | **Overridable** |
+|-----------|------------------|---------|----------------|
+| Log Retention | Profile default 6 years; `Soc2Rules` requires at least 365 days | CC7.2 | Yes (via `logRetentionDays`, minimum 365) |
+| Flow Logs | Enabled (all traffic) | CC7.2 | No (REQUIRED) |
+| CloudTrail | Enabled | CC7.2, CC8.1 | No (REQUIRED) |
+| GuardDuty | Enabled by profile default | CC7.2 | Yes (via `guardDutyEnabled`; ADVISORY for SOC2) |
+| AWS Config | Validated by `Soc2Rules` | CC7.2, CC8.1 | Via `awsConfigEnabled` |
+| Audit Manager | REQUIRED for SOC2 in `ComplianceMatrix` | All | Assessments and validators are created only when `auditManagerEnabled` is `true` |
+| EBS Encryption | Mandatory | C1.1 | No |
+| EFS Encryption (transit) | Mandatory | CC6.7 | No (REQUIRED) |
+| EFS Encryption (rest) | Mandatory | C1.1 | No |
+| S3 Encryption | Mandatory | C1.1 | No |
+| Multi-AZ | Enforced | A1.2 | No |
+| Auto-scaling | Enabled | A1.2 | No |
+| Automated Backup | Enabled | A1.3 | No (REQUIRED) |
+| Cross-region Backup | Enabled | A1.3 | No (REQUIRED) |
+| MFA Required | Always | CC6.2 | No |
+| Password Length | 14 characters (profile); IAM account policy 12 characters for SOC2 | CC6.2 | No |
+| Password Rotation | 90 days | CC6.2 | No |
 | Session Timeout | 1 day | 443 | CC6.2 | No |
 
 ---
 
 ### Control Registry & Evidence Mapping
 
-**File**: [`AuditManagerControlRegistry.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java)
+**File**: [`AuditManagerControlRegistry.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java)
 
 **20 Infrastructure Controls** mapped to SOC 2:
 
@@ -1002,21 +1004,21 @@ Tasks:
 
 ### Document Review Schedule
 
-| **Review Type** | **Frequency** | **Next Review** |
-|----------------|-------------|----------------|
-| **Gap Analysis Update** | Quarterly | 2026-03-14 |
-| **Control Mapping Verification** | Quarterly | 2026-03-14 |
-| **Testing Status Update** | Monthly | 2026-01-14 |
-| **Remediation Roadmap Progress** | Monthly | 2026-01-14 |
-| **TSC Framework Updates** | Annually | 2027-01-01 |
+| **Review Type** | **Frequency** |
+|----------------|-------------|
+| **Gap Analysis Update** | Quarterly |
+| **Control Mapping Verification** | Quarterly |
+| **Testing Status Update** | Monthly |
+| **Remediation Roadmap Progress** | Monthly |
+| **TSC Framework Updates** | Annually |
 
 ### Change Log
 
 | **Version** | **Date** | **Changes** | **Author** |
 |-----------|---------|-----------|-----------|
-| 1.0 | 2025-12-14 | Initial comprehensive gap analysis | Claude (AI-assisted) |
-| 1.1 | 2025-12-16 | Upgraded CC4, CC5, C1.2, PI1.4 from partial to fully documented | Claude (AI-assisted) |
-| 1.2 | 2025-12-19 | Updated coverage metrics to reflect documented procedures; corrected inconsistencies | Claude (AI-assisted) |
+| 1.0 | 2025-12-14 | Initial gap analysis | CloudForge CI maintainers |
+| 1.1 | 2025-12-16 | Upgraded CC4, CC5, C1.2, PI1.4 from partial to fully documented | CloudForge CI maintainers |
+| 1.2 | 2025-12-19 | Updated coverage metrics to reflect documented procedures; corrected inconsistencies | CloudForge CI maintainers |
 
 ### Maintenance Procedures
 
@@ -1080,11 +1082,11 @@ Tasks:
 
 ### Code References
 
-- [Soc2Rules.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) - Validation rules
-- [soc2-trust-services.guard](../../cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard) - Guard policies
-- [ComplianceFactory.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - AWS Config deployment
-- [ProductionSecurityProfileConfiguration.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) - Security defaults
-- [AuditManagerControlRegistry.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java) - Control mapping
+- [Soc2Rules.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java) - Validation rules
+- [soc2-trust-services.guard](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/resources/cfn-guard/frameworks/soc2-trust-services.guard) - Guard policies
+- [ComplianceFactory.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - AWS Config deployment
+- [ProductionSecurityProfileConfiguration.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) - Security defaults
+- [AuditManagerControlRegistry.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java) - Control mapping
 
 ---
 

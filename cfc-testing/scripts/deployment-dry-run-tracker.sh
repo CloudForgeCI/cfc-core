@@ -276,7 +276,7 @@ EOF
     echo "     - Synthesis: ${synth_duration}s" | tee -a "$REPORT_FILE"
     echo "     - Analysis: ${changeset_duration}s" | tee -a "$REPORT_FILE"
 
-    # Record success - now writes actual analysis time instead of count
+    # Record success with the measured analysis time
     echo "$RUN_ID,$(date '+%Y-%m-%d %H:%M:%S'),$stack_name,$runtime,$security_profile,$auth_mode,$network_mode,$compliance_frameworks,$synth_duration,$changeset_duration,$resource_count,SUCCESS," >> "$METRICS_CSV"
 
     echo "" | tee -a "$REPORT_FILE"

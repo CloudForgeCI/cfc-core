@@ -2,113 +2,82 @@
 
 ## Overview
 
-SSM parameters used to track shared resources are now **stack-scoped** to prevent conflicts when deploying multiple independent CloudFormation stacks in the same AWS region.
+CloudForge records the identifiers of some shared resources (log buckets, Cognito user pools, AWS Config resources) in SSM Parameter Store. Most parameters are **stack-scoped**, so that several independent stacks can be deployed in the same account and region without overwriting each other's parameters.
 
-## Motivation
+## Naming Convention
 
-Previously, SSM parameters were region-scoped only, using paths like:
-```
-/cloudforge/shared/{region}/alb-logs/bucket-arn
-/cloudforge/shared/{region}/cognito/user-pool-arn
-/cloudforge/shared/{region}/cloudtrail/bucket-arn
-```
-
-This caused conflicts when multiple stacks were deployed in the same region, as they would overwrite each other's parameters.
-
-## New Naming Convention
-
-### Stack-Scoped Resources
-Most resources are now stack-scoped to allow independent stacks:
+### Stack-Scoped Parameters
 
 ```
 /cloudforge/shared/{region}/stack/{stackName}/{resource}
 ```
 
-**Examples:**
-- `/cloudforge/shared/us-east-1/stack/MyApp-Prod/alb-logs/bucket-arn`
-- `/cloudforge/shared/us-east-1/stack/MyApp-Prod/cognito/user-pool-arn`
-- `/cloudforge/shared/us-east-1/stack/MyApp-Prod/cloudtrail/bucket-arn`
-- `/cloudforge/shared/us-east-1/stack/MyApp-Prod/config/bucket-arn`
-- `/cloudforge/shared/us-east-1/stack/MyApp-Prod/audit-manager/bucket-arn`
-- `/cloudforge/shared/us-east-1/stack/MyApp-Prod/s3/{purpose}/name`
-- `/cloudforge/shared/us-east-1/stack/MyApp-Prod/cognito/{poolName}/id`
+| Parameter | Written by |
+|-----------|-----------|
+| `/cloudforge/shared/{region}/stack/{stackName}/alb-logs/bucket-arn` | `AlbFactory` |
+| `/cloudforge/shared/{region}/stack/{stackName}/cognito/user-pool-arn` | `CognitoAuthenticationFactory` |
+| `/cloudforge/shared/{region}/stack/{stackName}/cloudtrail/bucket-arn` | `ComplianceFactory` |
+| `/cloudforge/shared/{region}/stack/{stackName}/config/bucket-arn` | `ComplianceFactory` |
+| `/cloudforge/shared/{region}/stack/{stackName}/audit-manager/bucket-arn` | `ComplianceFactory` |
 
-### Region-Scoped Resources (Exceptions)
+`ComplianceFactory` also records the CloudTrail trail ARN at `/cloudforge/{stackName}/{region}/cloudtrail/arn`.
 
-AWS Config Recorder and Delivery Channel remain region-scoped because **AWS only allows one per region**:
+`SharedResourceRegistry` builds names in the same layout:
 
-```
-/cloudforge/shared/{region}/config/recorder-name
-/cloudforge/shared/{region}/config/delivery-channel-name
-```
+| Method | Parameter |
+|--------|-----------|
+| `getCloudTrailParameterName()` | `/cloudforge/shared/{region}/stack/{stackName}/cloudtrail/arn` |
+| `getBucketParameterName(purpose)` | `/cloudforge/shared/{region}/stack/{stackName}/s3/{purpose}/name` |
+| `getCognitoUserPoolParameterName(poolName)` | `/cloudforge/shared/{region}/stack/{stackName}/cognito/{poolName}/id` |
 
-## Benefits
+### Region-Scoped Parameters
 
-1. **Stack Isolation**: Each stack has its own SSM parameters
-2. **No Conflicts**: Multiple stacks can coexist in the same region
-3. **Independent Lifecycles**: Stacks can be created/destroyed independently
-4. **Clear Ownership**: Parameter names clearly indicate which stack owns the resource
+The AWS Config recorder and delivery channel are region-scoped because AWS allows only one of each per account and region:
 
-## Implementation Details
+| Parameter | Source |
+|-----------|--------|
+| `/cloudforge/shared/{region}/config/recorder-arn` | Written by `ComplianceFactory` when it creates the recorder |
+| `/cloudforge/shared/{region}/config/channel-arn` | Written by `ComplianceFactory` when it creates the delivery channel |
+| `/cloudforge/shared/{region}/config/recorder-name` | `SharedResourceRegistry.getConfigRecorderParameterName()` |
+| `/cloudforge/shared/{region}/config/delivery-channel-name` | `SharedResourceRegistry.getConfigDeliveryChannelParameterName()` |
 
-### Code Changes
+See [AWS Config Multi-Stack](compliance/AWS_CONFIG_MULTI_STACK.md).
 
-**SharedResourceRegistry.java:**
-- Constructor now requires `stackName` parameter
-- All resource parameter names (except Config Recorder/Delivery Channel) include stack name
+## Behavior
 
-**Factory Classes:**
-- `AlbFactory`: ALB logs bucket ARN is stack-scoped
-- `CognitoAuthenticationFactory`: User Pool ARN is stack-scoped
-- `ComplianceFactory`: CloudTrail, Config, and Audit Manager buckets are stack-scoped
+1. **Stack isolation**: Each stack has its own SSM parameters.
+2. **No conflicts**: Multiple stacks can coexist in the same region.
+3. **Independent lifecycles**: Stacks can be created and destroyed independently.
+4. **Clear ownership**: Parameter names identify the owning stack.
 
-### Example Usage
+## Example Usage
 
 ```java
-// Create registry with stack name
 String stackName = Stack.of(this).getStackName();
 SharedResourceRegistry registry = new SharedResourceRegistry(scope, region, stackName);
 
-// Get stack-scoped parameter name
 String bucketParam = registry.getBucketParameterName("alb-logs");
-// Returns: /cloudforge/shared/us-east-1/stack/MyStack/s3/alb-logs/name
+// /cloudforge/shared/us-east-1/stack/MyStack/s3/alb-logs/name
 
-// Get region-scoped parameter name (Config only)
 String recorderParam = registry.getConfigRecorderParameterName();
-// Returns: /cloudforge/shared/us-east-1/config/recorder-name
+// /cloudforge/shared/us-east-1/config/recorder-name
 ```
 
-## Migration Notes
+## Multi-Stack Environments
 
-### For Existing Deployments
+Give each stack a distinct `stackName` in its deployment context. Each stack then has its own set of parameters:
 
-Existing stacks will automatically adopt the new naming convention on next deployment. The stack name from the CloudFormation stack will be used in the parameter path.
-
-### For Multi-Stack Environments
-
-You can now safely deploy multiple independent stacks in the same region:
-
-```bash
-# Deploy production stack
-cdk deploy MyApp-Prod --context stackName=MyApp-Prod
-
-# Deploy staging stack (no conflicts!)
-cdk deploy MyApp-Staging --context stackName=MyApp-Staging
-```
-
-Each stack will have its own set of SSM parameters:
 - `/cloudforge/shared/us-east-1/stack/MyApp-Prod/...`
 - `/cloudforge/shared/us-east-1/stack/MyApp-Staging/...`
 
+Set `createConfigInfrastructure` on only one of them.
+
 ## Testing
 
-All tests have been updated to reflect the new naming convention. Run the test suite to verify:
-
 ```bash
-mvn test -Dtest=SharedResourceRegistryTest
+mvn -pl cloudforge-api test -Dtest=SharedResourceRegistryTest
 ```
 
 ## See Also
 
-- [SharedResourceRegistry.java](../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/SharedResourceRegistry.java)
-- [SHARED_RESOURCES.md](./SHARED_RESOURCES.md)
+- [SharedResourceRegistry.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/SharedResourceRegistry.java)

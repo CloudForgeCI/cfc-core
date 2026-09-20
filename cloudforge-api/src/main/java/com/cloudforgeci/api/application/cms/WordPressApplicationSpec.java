@@ -66,13 +66,10 @@ public class WordPressApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== Constants ==========
 
     protected static final String APPLICATION_ID = "wordpress";
-    // The fpm-alpine variant only speaks FastCGI on 9000 — nothing listens on APPLICATION_PORT
-    // (80) at all, so an applicationSpec-driven single-container Fargate/MiniStack/LocalStack
-    // deploy would never be reachable even though CloudFormation reports CREATE_COMPLETE. The
-    // apache variant bakes in the same WordPress core files and listens on 80 directly — a pure
-    // drop-in swap, not an architecture change. (The EC2 runtime path is unaffected either way —
-    // see webServer()/the userData installCommands() below, which already correctly install and
-    // run nginx+php-fpm together on the instance regardless of this constant.)
+    // Apache variant: the fpm-alpine variant only speaks FastCGI on 9000, so nothing would listen
+    // on APPLICATION_PORT (80) in a single-container Fargate deploy. The apache variant ships the
+    // same WordPress core and serves port 80 directly. The EC2 runtime is unaffected: its UserData
+    // installs and runs nginx + php-fpm on the instance independently of this constant.
     protected static final String DEFAULT_IMAGE = "wordpress:php8.2-apache";
     protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";
@@ -409,6 +406,10 @@ public class WordPressApplicationSpec implements CmsSpec, DatabaseSpec {
             env.put("WORDPRESS_CONFIG_EXTRA",
                 String.format("define('WP_HOME', '%s'); define('WP_SITEURL', '%s'); define('FORCE_SSL_ADMIN', %s);",
                     siteUrl, siteUrl, sslEnabled ? "true" : "false"));
+            // Plain shell-readable copies of the same URL for containerCommand()'s WP-CLI
+            // install wrapper -- WORDPRESS_CONFIG_EXTRA above is PHP source, not shell-readable.
+            env.put("WORDPRESS_SITE_URL", siteUrl);
+            env.put("WORDPRESS_ADMIN_EMAIL", "admin@" + fqdn);
         }
 
         // Disable WP-Cron (use system cron)
@@ -464,5 +465,58 @@ public class WordPressApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public List<String> getSupportedAuthModes() {
         return List.of("application-oidc", "alb-oidc", "none");
+    }
+
+    // ========== Admin Password / First-Run Install ==========
+
+    /** {@code wordpress:php8.2-apache} has no bundled WP-CLI and cannot create the admin account
+     *  non-interactively (unlike Joomla, which accepts admin credentials as env vars). This app
+     *  therefore uses the full {@link #containerCommand()} hook rather than the banner-only wrapper
+     *  driven by {@code ApplicationSpec#defaultContainerCommand()}: it installs WP-CLI at boot,
+     *  waits for the entrypoint to generate {@code wp-config.php}, then installs the site with the
+     *  generated password. Restarts are a no-op because {@code core is-installed} short-circuits
+     *  the install. */
+    @Override
+    public String autoAdminPasswordEnvVar() {
+        return "WORDPRESS_ADMIN_PASSWORD";
+    }
+
+    @Override
+    public String autoAdminEmailEnvVar() {
+        return "WORDPRESS_ADMIN_EMAIL";
+    }
+
+    @Override
+    public List<String> containerCommand() {
+        String script = String.join("\n",
+            "echo '----------------------------------------------------------------'",
+            "echo 'CloudForge: initial admin password (printed once at container start)'",
+            "echo \"  WORDPRESS_ADMIN_PASSWORD=$WORDPRESS_ADMIN_PASSWORD\"",
+            "echo '----------------------------------------------------------------'",
+            "",
+            "# Run the image's entrypoint explicitly with its expected first arg so its",
+            "# own first-run setup (copying WordPress core, generating wp-config.php) still",
+            "# runs -- CMD is replaced here, but that setup gates on argv[1] == apache2*, which",
+            "# a shell-wrapped CMD alone would never satisfy.",
+            "/usr/local/bin/docker-entrypoint.sh apache2-foreground &",
+            "APACHE_PID=$!",
+            "",
+            "curl -fsS -o /tmp/wp-cli.phar https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar",
+            "WP=\"php /tmp/wp-cli.phar --allow-root --path=/var/www/html\"",
+            "",
+            "until [ -f /var/www/html/wp-config.php ]; do sleep 2; done",
+            "",
+            "until $WP core is-installed || $WP core install " +
+                "--url=\"${WORDPRESS_SITE_URL:-http://localhost}\" " +
+                "--title=\"CloudForge WordPress\" " +
+                "--admin_user=\"admin\" " +
+                "--admin_password=\"$WORDPRESS_ADMIN_PASSWORD\" " +
+                "--admin_email=\"${WORDPRESS_ADMIN_EMAIL:-admin@example.com}\" " +
+                "--skip-email; do sleep 2; done",
+            "echo 'WordPress site is installed (admin / the password logged above).'",
+            "",
+            "wait $APACHE_PID"
+        );
+        return List.of("/bin/sh", "-c", script);
     }
 }

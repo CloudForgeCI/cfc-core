@@ -110,10 +110,9 @@ class ManagerDeployIamSupportTest {
             .anyMatch(r -> r.contains(com.cloudforgeci.api.deploy.aws.AwsDirectDeployer.TEMPLATE_BUCKET_PREFIX)));
     }
 
-    /** The template bucket grant above isn't the only S3 access a real deploy needs: the standard
-     *  CDK bootstrap asset bucket also needs its own grant, since AwsDirectDeployer.deploy()
-     *  always publishes to it via LocalStackCdkAssetPublisher (for real AWS as much as a local
-     *  emulator, despite the class name). */
+    /** Deploys also need access to the CDK bootstrap asset bucket: AwsDirectDeployer.deploy()
+     *  always publishes assets via LocalStackCdkAssetPublisher (for AWS as well as emulators,
+     *  despite the class name). */
     @Test
     void deployStatementsGrantsS3OnTheCdkAssetBucketPrefix() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -135,10 +134,9 @@ class ManagerDeployIamSupportTest {
             .anyMatch(r -> r.contains("cdk-hnb659fds-assets-")));
     }
 
-    /** Even with both S3 grants in place, CloudFormation itself resolves the synthesized
-     *  template's BootstrapVersion dynamic reference using the deploying principal's own
-     *  credentials -- Manager's task role needs its own read access to that SSM parameter,
-     *  regardless of whether the account has ever run a real cdk bootstrap. */
+    /** CloudFormation resolves the template's BootstrapVersion dynamic reference with the
+     *  deploying principal's credentials, so Manager's task role needs read access to that SSM
+     *  parameter. */
     @Test
     void deployStatementsGrantsSsmReadOnTheCdkBootstrapVersionParameter() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -184,9 +182,8 @@ class ManagerDeployIamSupportTest {
         assertTrue(createStatement.getActions().contains("iam:CreateRole"));
         assertTrue(createStatement.getActions().contains("iam:TagRole"));
         // Resource-name-scoped, not iam:RequestTag-conditioned -- CloudFormation's IAM::Role
-        // provider doesn't reliably surface template tags to iam:RequestTag evaluation, so a
-        // genuinely first-ever CreateRole call can be denied by that condition even when the
-        // synthesized template carries the correct inline tag.
+        // provider doesn't reliably surface template tags to iam:RequestTag evaluation, so
+        // CreateRole can be denied by that condition even when the template carries the tag.
         assertTrue(createStatement.getResources().contains("arn:aws:iam::*:role/*SystemContextExtendedTask*"));
         assertTrue(createStatement.getResources().contains("arn:aws:iam::*:role/*LogRetention*"));
         assertFalse(createStatement.toJSON().toString().contains("iam:RequestTag"));
@@ -201,18 +198,16 @@ class ManagerDeployIamSupportTest {
         assertTrue(manageStatement.getActions().contains("iam:PutRolePolicy"));
         // Resource-name-scoped, not iam:ResourceTag-conditioned -- CloudFormation's automatic
         // rollback can delete a just-created role faster than its own tags reliably propagate
-        // into tag-based condition evaluation, a real IAM tag-propagation race.
+        // into tag-based condition evaluation (eventual consistency).
         assertTrue(manageStatement.getResources().contains("arn:aws:iam::*:role/*SystemContextExtendedTask*"));
-        // CDK's own builtin custom-resource Lambda service role -- see ManagerOperatorIamSupport's
-        // own comment for why this pattern has no "ServiceRole" requirement (truncated away
-        // before that point in a real observed physical name).
+        // CDK's built-in log-retention Lambda role. The pattern omits "ServiceRole" because
+        // physical-name truncation can remove it.
         assertTrue(manageStatement.getResources().contains("arn:aws:iam::*:role/*LogRetention*"));
         assertFalse(manageStatement.toJSON().toString().contains("iam:ResourceTag"));
 
         // The LogRetention custom resource is a Lambda *function*, not just the IAM role above --
-        // without a lambda:* grant, lambda:CreateFunction is denied outright, and the same gap
-        // then blocks the stack's own rollback on lambda:DeleteFunction, leaving it stuck in
-        // ROLLBACK_FAILED.
+        // without a lambda:* grant, lambda:CreateFunction is denied and rollback then fails on
+        // lambda:DeleteFunction (ROLLBACK_FAILED).
         PolicyStatement functionStatement = statements.stream()
             .filter(s -> "CloudForgeManagerDeployLogRetentionFunctionManage".equals(s.getSid()))
             .findFirst()
@@ -222,9 +217,8 @@ class ManagerDeployIamSupportTest {
         assertTrue(functionStatement.getResources().contains("arn:aws:lambda:*:*:function:*LogRetention*"));
     }
 
-    /** The layer {@link PermissionMatrix} does not cover: Manager's own role actually creating a
-     *  target app's VPC/EFS/ALB/ECS-cluster resources, not the deployed app's own workload
-     *  permissions once running. */
+    /** The layer {@link PermissionMatrix} does not cover: Manager's role creating a target app's
+     *  VPC/EFS/ALB/ECS-cluster resources, as opposed to the deployed app's runtime permissions. */
     @Test
     void deployStatementsGrantsTargetInfrastructureProvisioning() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -236,10 +230,8 @@ class ManagerDeployIamSupportTest {
             .createFargate();
 
         List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
-        // Split across two statements/managed policies -- see ManagerOperatorIamSupport's own
-        // comment on why: a role's combined inline-policy size is capped at 10,240 bytes total,
-        // which the flat 212-action single statement this used to be blew past the moment the
-        // database/KMS/secrets permissions were added.
+        // Split across two statements/managed policies because a role's combined inline-policy
+        // size is capped at 10,240 bytes (see ManagerOperatorIamSupport).
         PolicyStatement networkStatement = statements.stream()
             .filter(s -> "CloudForgeManagerDeployTargetInfrastructureNetwork".equals(s.getSid()))
             .findFirst()
@@ -270,10 +262,9 @@ class ManagerDeployIamSupportTest {
         assertTrue(computeDataStatement.getActions().contains("rds:DescribeEngineDefaultParameters"));
         assertTrue(computeDataStatement.getActions().contains("kms:CreateKey"));
         assertTrue(computeDataStatement.getActions().contains("secretsmanager:GetRandomPassword"));
-        // Deliberately unconditioned -- see OperatorProvisioningPermissionMatrix's own javadoc:
-        // these resources have no stable name pattern to scope by the way IAM roles do, and
-        // individually splitting ~150 actions by RequestTag/ResourceTag would reproduce the same
-        // tag-propagation race iamRoleManage was fixed for above.
+        // Deliberately unconditioned (see OperatorProvisioningPermissionMatrix): these resources
+        // have no stable name pattern, and tag conditions would hit the same tag-propagation
+        // race as iamRoleManage above.
         assertFalse(networkStatement.toJSON().toString().contains("cloudforge:managed"));
         assertFalse(computeDataStatement.toJSON().toString().contains("cloudforge:managed"));
     }
@@ -291,12 +282,9 @@ class ManagerDeployIamSupportTest {
         assertTrue(ManagerOperatorIamSupport.deployStatements(builder.getSystemContext()).isEmpty());
     }
 
-    /** Real bug this locks in: a connected account's trust policy can match byte-for-byte what
-     *  Manager itself generated and {@code sts:AssumeRole} still comes back {@code AccessDenied}
-     *  if Manager's own task role was never granted permission to make the call at all — this
-     *  statement (unlike {@link #deployStatementsReturnsTwelveStatementsForManager}'s twelve) had
-     *  never existed anywhere in either repo despite {@code CrossAccountRoleTemplateFactory}'s
-     *  own javadoc claiming it did. */
+    /** Without this grant, {@code sts:AssumeRole} returns {@code AccessDenied} even when the
+     *  connected account's trust policy is correct. This statement is separate from the twelve
+     *  in {@link #deployStatementsReturnsTwelveStatementsForManager}. */
     @Test
     void crossAccountAssumeRoleStatementIsScopedToTheConnectionRolePrefixForManager() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(

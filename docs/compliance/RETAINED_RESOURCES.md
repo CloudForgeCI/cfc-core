@@ -2,10 +2,10 @@
 
 CloudForge deliberately protects certain resources from accidental deletion depending on
 security profile and compliance framework. A plain `DeleteStack` (or `cdk destroy`) will not
-remove them — CloudFormation either leaves the stack in `DELETE_FAILED` (deletion-protected
-resources) or the resource just outlives the stack (`RemovalPolicy.RETAIN`). This is correct,
-intentional behavior for real AWS environments; for LocalStack testing/cleanup it means every
-one of these needs an explicit extra step before a stack can be fully torn down.
+remove them: CloudFormation either leaves the stack in `DELETE_FAILED` (deletion-protected
+resources) or the resource outlives the stack (`RemovalPolicy.RETAIN`). This is intentional
+for AWS environments; for LocalStack testing and cleanup, each of these needs an explicit extra
+step before a stack can be fully torn down.
 
 All commands below target LocalStack (`--endpoint-url=http://localhost:4566`). Drop that flag
 for real AWS (and add proper `--region`/credentials).
@@ -15,12 +15,11 @@ for real AWS (and add proper `--region`/credentials).
 **Where:** `RdsFactory.java` (`.deletionProtection(...)`), condition in
 `{Dev,Staging,Production}SecurityProfileConfiguration#isRdsDeletionProtectionEnabled()`.
 **When:** DEV — never. STAGING/PRODUCTION — whenever *any* selected compliance framework marks
-`DELETION_PROTECTION` as a required control (`ComplianceMatrix.isControlRequired`). This fires
-under **both ADVISORY and ENFORCE** compliance mode — mode only ever excludes `DISABLED`, it
-does not distinguish ADVISORY from ENFORCE for this check. ENFORCE's real effect is elsewhere:
-it's what makes `cfn-guard` (L3) block the deploy outright when a framework's rules are
-violated (e.g. `HIPAA/PRODUCTION` fails to deploy at all under ENFORCE) — a separate mechanism
-from which resources get retained.
+`DELETION_PROTECTION` as a required control (`ComplianceMatrix.isControlRequired`). This applies
+under both ADVISORY and ENFORCE compliance mode; only `DISABLED` turns it off. ENFORCE instead
+controls whether validation failures (framework validators, cdk-nag, and the Interactive
+Deployer's `cfn-guard` step) block the deployment, which is independent of which resources are
+retained.
 **Remove:**
 ```bash
 aws --endpoint-url=http://localhost:4566 rds modify-db-instance \
@@ -28,8 +27,8 @@ aws --endpoint-url=http://localhost:4566 rds modify-db-instance \
 aws --endpoint-url=http://localhost:4566 rds delete-db-instance \
   --db-instance-identifier <db-id> --skip-final-snapshot --region us-east-1
 ```
-**Caveat:** if AWS Config auto-remediation is active for this stack (see "SSM auto-remediation"
-below), it can silently re-enable deletion protection shortly after you disable it. Delete the
+**Caveat:** if AWS Config auto-remediation is active for this stack (see "AWS Config
+auto-remediation" below), it can re-enable deletion protection shortly after you disable it. Delete the
 Config remediation rule first, or delete the DB instance immediately after disabling protection.
 
 ## ALB — `deletionProtection`
@@ -45,13 +44,13 @@ aws --endpoint-url=http://localhost:4566 elbv2 modify-load-balancer-attributes \
 
 ## S3 Buckets — `RemovalPolicy.RETAIN`
 
-Several buckets retain on PRODUCTION; none of these are deletion-*protected* (no API call
-blocks deleting them), they just outlive the stack and need manual cleanup + delete:
+Several buckets are retained in PRODUCTION. None of these are deletion-*protected* (no API call
+blocks deleting them); they outlive the stack and need to be emptied and deleted manually:
 | Bucket | Where | Condition |
 |---|---|---|
 | ALB access-log bucket | `AlbFactory.java` | PRODUCTION |
 | CMS media storage bucket | `CmsMediaStorageConfiguration.java#determineRemovalPolicy` | PRODUCTION |
-| Compliance/audit bucket (e.g. CloudTrail) | `ComplianceFactory.java` ~line 4289 | `security == PRODUCTION \|\| enableObjectLock` (also disables `autoDeleteObjects`, separate from this) |
+| Compliance/audit bucket (e.g. CloudTrail) | `ComplianceFactory.java#getOrCreateBucket` | `security == PRODUCTION \|\| enableObjectLock` (also disables `autoDeleteObjects`) |
 
 **Remove:**
 ```bash
@@ -59,13 +58,13 @@ aws --endpoint-url=http://localhost:4566 s3 rm s3://<bucket-name> --recursive --
 aws --endpoint-url=http://localhost:4566 s3api delete-bucket --bucket <bucket-name> --region us-east-1
 ```
 Object Lock buckets (`enableObjectLock=true`) may refuse deletion until retained objects'
-retain-until dates pass — not overridable, by design.
+retain-until dates pass. This cannot be overridden.
 
 ## EFS FileSystem — `RemovalPolicy.RETAIN`
 
 **Where:** `EfsFactory.java#createFileSystem`.
-**When:** only when the deployment context explicitly sets `retainStorage: true` — not
-profile-driven, purely a user opt-in.
+**When:** only when the deployment context sets `retainStorage: true`. This is an explicit
+opt-in and does not depend on the security profile.
 **Remove:**
 ```bash
 aws --endpoint-url=http://localhost:4566 efs delete-file-system \
@@ -111,9 +110,11 @@ aws --endpoint-url=http://localhost:4566 route53 delete-hosted-zone --id <zone-i
 aws --endpoint-url=http://localhost:4566 logs delete-log-group --log-group-name <name> --region us-east-1
 ```
 
-## Cognito User Pool (+ SAML identity provider) — `RemovalPolicy.RETAIN`
+## Cognito User Pool — `RemovalPolicy.RETAIN`
 
-**Where:** `CognitoAuthenticationFactory.java`, `CognitoSamlFactory.java`.
+**Where:** `CognitoAuthenticationFactory.java`. `CognitoSamlFactory.java` applies the same policy
+to a SAML identity provider, but SAML federation is an incomplete feature that is not reachable
+through `authMode` yet.
 **When:** PRODUCTION only.
 **Remove:**
 ```bash
@@ -123,11 +124,11 @@ aws --endpoint-url=http://localhost:4566 cognito-idp delete-user-pool \
 
 ## AWS Config infrastructure (Recorder, Delivery Channel, IAM Role) — `RemovalPolicy.RETAIN`
 
-**Where:** `ComplianceFactory.java` (~lines 884/899/909).
-**When:** always, unconditionally — these are account-level singletons (only one recorder per
-region per account is allowed), retained deliberately so a second stack in the same region
-doesn't try to recreate them (see `createConfigInfrastructure` / `awsConfigEnabled` split
-documented in that class).
+**Where:** `ComplianceFactory.java#createConfigInfrastructure`.
+**When:** whenever the stack creates them (`awsConfigEnabled` and `createConfigInfrastructure`
+both `true`). These are account-level singletons (one recorder per account and region), and are
+retained so that other stacks in the region that rely on them keep working after this stack is
+deleted. See [AWS Config Multi-Stack](AWS_CONFIG_MULTI_STACK.md).
 **Remove:**
 ```bash
 aws --endpoint-url=http://localhost:4566 configservice stop-configuration-recorder \
@@ -135,44 +136,43 @@ aws --endpoint-url=http://localhost:4566 configservice stop-configuration-record
 aws --endpoint-url=http://localhost:4566 configservice delete-configuration-recorder \
   --configuration-recorder-name cloudforge-config-recorder --region us-east-1
 aws --endpoint-url=http://localhost:4566 configservice delete-delivery-channel \
-  --delivery-channel-name cloudforge-config-delivery-channel --region us-east-1
+  --delivery-channel-name cloudforge-config-channel --region us-east-1
 # IAM role deletion needs its attached policies detached first.
 aws --endpoint-url=http://localhost:4566 iam delete-role --role-name <config-role-name>
 ```
 
-## AWS Config auto-remediation — all 9 actions
+## AWS Config auto-remediation
 
-`ComplianceFactory.java` wires 9 `CfnRemediationConfiguration`s as AWS Config auto-remediation
-actions (`automatic(true)`, 3-5 retries). Each one watches a specific Config rule and, if AWS
-Config finds a non-compliant resource, runs an SSM Automation document to fix it automatically —
-independent of anything CloudFormation itself does. Manually undoing any of these by hand (like
-`modify-db-instance --no-deletion-protection` above) can get silently reverted a few minutes
-later if the remediation is still active. Two use AWS-managed SSM documents directly; the other
-seven use a custom document authored in this codebase.
+`ComplianceFactory.java` defines 9 `CfnRemediationConfiguration`s as AWS Config automatic
+remediation actions (`automatic(true)`, 3-5 retries). Each one watches a specific Config rule
+and, when AWS Config finds a non-compliant resource, runs an SSM Automation document to fix it,
+independently of CloudFormation. Changes made by hand (like
+`modify-db-instance --no-deletion-protection` above) can be reverted a few minutes later while
+the remediation is active. Two use AWS-managed SSM documents; the other seven use custom
+documents defined in `ComplianceFactory`.
 
-| Remediation | SSM Document | Kind | Targets | Line |
+| Remediation | SSM Document | Kind | Targets | Method |
 |---|---|---|---|---|
-| Set IAM account password policy | `AWSConfigRemediation-SetIAMPasswordPolicy` | AWS-managed | Account found without the required password policy | ~1264 |
-| Enable S3 bucket versioning | `AWS-ConfigureS3BucketVersioning` | AWS-managed | Bucket found with versioning disabled | ~1332 |
-| Fix CloudTrail bucket policy | `cloudTrailFixDocument` | custom | CloudTrail S3 bucket with an incorrect/insecure policy | ~1526 |
-| Enable RDS deletion protection | `rdsDeletionProtectionDocument` | custom | RDS instance found without `DeletionProtection` | ~1642 |
-| Enable RDS auto minor-version upgrade | `rdsAutoUpgradeDocument` | custom | RDS instance found without `AutoMinorVersionUpgrade` | ~1753 |
-| Enable Security Hub | `securityHubDocument` | custom | Account found with Security Hub disabled | ~4675 |
-| Enable Inspector | `inspectorDocument` | custom | Account found with Inspector disabled | ~4749 |
-| Enable Macie | `macieDocument` | custom | Account found with Macie disabled | ~4822 |
-| Enable GuardDuty | `guardDutyDocument` | custom | Account found with GuardDuty disabled | ~4936 |
+| Set IAM account password policy | `AWSConfigRemediation-SetIAMPasswordPolicy` | AWS-managed | Account without the required password policy | `createPasswordPolicyRemediation` |
+| Enable S3 bucket versioning | `AWS-ConfigureS3BucketVersioning` | AWS-managed | Bucket with versioning disabled | `createS3VersioningRemediation` |
+| Fix CloudTrail bucket policy | custom | custom | CloudTrail S3 bucket with an incorrect policy | `addCloudTrailBucketAccessRemediation` |
+| Enable RDS deletion protection | custom | custom | RDS instance without `DeletionProtection` | `createRdsDeletionProtectionRemediation` |
+| Enable RDS auto minor-version upgrade | custom | custom | RDS instance without `AutoMinorVersionUpgrade` | `createRdsAutoMinorVersionUpgradeRemediation` |
+| Enable Security Hub | custom | custom | Account with Security Hub disabled | `createSecurityHubRemediation` |
+| Enable Inspector | custom | custom | Account with Inspector disabled | `createInspectorRemediation` |
+| Enable Macie | custom | custom | Account with Macie disabled | `createMacieRemediation` |
+| Enable GuardDuty | custom | custom | Account with GuardDuty disabled | `createGuardDutyRemediation` |
 
-The IAM password policy, S3 versioning, RDS, and CloudTrail-bucket ones are stack-scoped (only
-relevant to that one deployment's resources). The Security Hub / Inspector / Macie / GuardDuty
-ones are **account-level service toggles** — remediation re-enables the service for the whole
-account/region, not just this stack, which matters if you're trying to disable these services
-broadly on a shared test account rather than clean up one specific deployment.
+The IAM password policy, S3 versioning, RDS, and CloudTrail bucket remediations affect this
+deployment's resources and the account password policy. The Security Hub, Inspector, Macie, and
+GuardDuty remediations are **account-level service toggles**: they re-enable the service for the
+whole account and region, which matters when disabling these services on a shared test account.
+They are created by default for PRODUCTION stacks, and the `enable*Remediation` keys that
+`ComplianceFactory` reads to override that are not yet exposed through `DeploymentContext`.
 
-Which of the 9 actually apply to a given configuration depends on which Config rules that
-config deploys (framework/profile-driven, same as everything else in this doc) — see the
-"Remediation" tab of the 🚀 LocalStack button on any row of the
-[compliance dashboard](../../cfc-testing/scripts/validation-results/compliance-validation-dashboard.html)
-for the real, per-configuration list.
+Which remediations apply to a given configuration depends on which Config rules it deploys
+(framework- and profile-driven). The compliance dashboard generated by
+`cfc-testing/scripts/compliance-report-generator.py` lists them per configuration.
 
 **Remove a remediation configuration** (stops it from re-applying, does not undo what it already
 changed):
@@ -183,12 +183,10 @@ aws --endpoint-url=http://localhost:4566 configservice delete-remediation-config
 Find `<rule-name>` from the stack's `AWS::Config::ConfigRule` resources
 (`aws configservice describe-config-rules --region us-east-1`).
 
-## The pragmatic alternative: don't clean up individual resources at all
+## Alternative for LocalStack: reset the container
 
-For LocalStack testing specifically, none of the above is actually necessary — LocalStack has
-no real persistence, so restarting the container is a guaranteed clean slate regardless of what
-any individual stack retained. `deploy-localstack-compliance-matrix.sh` restarts LocalStack
-between every config for exactly this reason. Only use the commands in this file when you need
-to clean up a *specific* retained resource without a full reset (e.g. investigating one config's
-real output), or when working against real AWS where a full reset isn't an option and these
-commands are what you'd actually run in production too.
+For LocalStack testing, restarting the container (without persistence enabled) discards all
+state, including retained resources. `cfc-testing/scripts/deploy-localstack-compliance-matrix.sh`
+restarts LocalStack between configurations for this reason. Use the commands in this file when
+you need to remove a specific retained resource without a full reset, or when working against
+AWS.

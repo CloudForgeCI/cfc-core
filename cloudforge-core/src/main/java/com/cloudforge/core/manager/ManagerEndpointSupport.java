@@ -18,18 +18,16 @@ public final class ManagerEndpointSupport {
      * emulator instead of real AWS" — {@code null} immediately for {@link DeploymentTarget#AWS}
      * OR an unresolved/{@code null} target, without even reading the env vars, otherwise the same
      * {@code LOCALSTACK_ENDPOINT} then {@code AWS_ENDPOINT_URL} fallback chain {@link
-     * #resolveLocalStackEndpoint} already used. {@code null} target fails closed to "real AWS"
+     * #resolveLocalStackEndpoint} uses. {@code null} target fails closed to "real AWS"
      * rather than falling through to the env-var chain — an installation that never explicitly
-     * chose a local target shouldn't have its calls silently redirected just because some env var
+     * chose a local target shouldn't have its calls redirected just because some env var
      * happens to be present, same fail-closed shape as this codebase's other target-based gates
      * (see {@code StripeConfiguration}).
      *
-     * <p>Exists because, before this method, several call sites across cloudforge-api and
-     * cloudforge-manager each independently re-derived "are we local" from env-var presence
-     * alone, with no target check at all — so a real {@code target=aws} production install would
-     * happily route Cognito/STS/Service Catalog SDK calls to whatever {@code AWS_ENDPOINT_URL}
-     * happened to be set to, an SSRF-adjacent risk on the customer's own AWS credentials.
-     * {@code target} should always be the caller's own already-known, validated {@link
+     * <p>Deriving "is this local" from env-var presence alone would let a {@code target=aws}
+     * production install route Cognito/STS/Service Catalog SDK calls to whatever
+     * {@code AWS_ENDPOINT_URL} happens to be set to, an SSRF-adjacent risk to the installation's
+     * AWS credentials. {@code target} should always be the caller's own already-known, validated {@link
      * DeploymentTarget} (the per-request target for a deploy, or the installation's own {@code
      * ManagerRuntimeConfiguration.Target} for Manager's own dev/test-loop calls) — never
      * re-derived from these same env vars, or this gate would just move one level up instead of
@@ -38,7 +36,7 @@ public final class ManagerEndpointSupport {
      * <p>{@code MINISTACK} and {@code LOCALSTACK} deliberately check different dedicated env vars
      * first ({@code MINISTACK_ENDPOINT} / {@code LOCALSTACK_ENDPOINT} respectively) before the
      * shared {@code AWS_ENDPOINT_URL} fallback — an installation running both emulators side by
-     * side needs a {@code MINISTACK}-targeted call to reach MiniStack, not silently fall through
+     * side needs a {@code MINISTACK}-targeted call to reach MiniStack, not fall through
      * to whichever one {@code LOCALSTACK_ENDPOINT} happens to point at.
      */
     public static String resolveLocalEmulatorEndpoint(DeploymentTarget target) {

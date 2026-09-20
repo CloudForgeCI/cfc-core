@@ -2,9 +2,9 @@
 
 Deploy CloudForge-generated CloudFormation to [LocalStack](https://localstack.cloud/) without an AWS account. A trial or paid `LOCALSTACK_AUTH_TOKEN` is required to start the emulator container.
 
-LocalStack support lives in **`cloudforge-localstack`**. Canonical AWS templates stay unchanged in the libraries; local deployment adaptations are applied and audited downstream.
+LocalStack support lives in **`cloudforge-localstack`**. Canonical AWS templates stay unchanged in the libraries; local deployment adaptations are applied downstream and recorded in an adaptation report (`cdk.out/<stackName>.localstack-adaptations.json`).
 
-MiniStack and LocalStack both bind gateway port **4566**. Start one emulator at a time from the Interactive Deployer's **platform lifecycle** menu; starting either target stops a conflicting emulator.
+CloudForge runs `localstack/localstack:latest` as the `cfc-localstack` container, with emulator state under `.localstack-volumes/` (override with `CFC_LOCALSTACK_VOLUME_DIR`). MiniStack and LocalStack both bind gateway port **4566**. Start one emulator at a time from the Interactive Deployer's **platform lifecycle** menu; starting either target stops the other.
 
 ---
 
@@ -16,65 +16,48 @@ MiniStack and LocalStack both bind gateway port **4566**. Start one emulator at 
 mvn clean install -DskipTests
 mvn -f cfc-testing package -Dmaven.test.skip=true
 export LOCALSTACK_AUTH_TOKEN=...
+
+# Start LocalStack: choose the localstack platform, then the `start` action
 cd cfc-testing
 java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.samples.app.InteractiveDeployer --platform
 curl -s http://localhost:4566/_localstack/health
+
+# Configure and deploy; choose option 8 (Deploy to LocalStack)
+java -cp "target/classes:target/dependency/*" \
+  com.cloudforgeci.samples.app.InteractiveDeployer
 ```
 
-Deploy from `cfc-testing` — Interactive Deployer option **8**, or `LocalDeploymentShell` / `CloudForgeDeployment` after `CFC_DEPLOYING=1 cdk synth`. CloudForge Manager uses target **LocalStack** (`?target=localstack` or `CFC_MANAGER_TARGET=localstack`).
+Option **8** synthesizes the canonical template, runs [preflight](#deploy-preflight-option-8), adapts the template, and deploys the `<stackName>-localstack` stack. It is not a raw `cdk deploy`, which targets AWS. Pass `--context <file>` and a trailing option number to skip prompts, for example `--context deployment-contexts/Jenkins-Stack-LocalStack.json 8`.
 
-### CloudForge Manager in five minutes (local panel)
+### Run CloudForge Manager locally against LocalStack
 
-This runs the CloudForge Manager panel on your laptop against LocalStack; it does **not**
-deploy CloudForge Manager as a Fargate application first. After the initial Maven and npm
-dependency download, the sequence is intended to take about five minutes.
+CloudForge Manager lives in its own repository. With a `cloudforge-manager` checkout at the repository root, you can run the Manager panel on your host against LocalStack without deploying it into the emulator:
 
 ```bash
-# Repository root — build the Angular panel and package the CloudForge Manager server.
-mvn -pl cloudforge-manager -am -Pui package -DskipTests
+# Build the Angular panel and package the Manager server
+mvn -f cloudforge-manager/pom.xml -Pui package -DskipTests
 
-# Start exactly one emulator from the platform menu. LocalStack requires its token.
-export LOCALSTACK_AUTH_TOKEN=...
-cd cfc-testing
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer --platform
-cd ..
-
-# Point the locally running CloudForge Manager at LocalStack and start it on :1958.
-mvn -pl cloudforge-manager spring-boot:run -Dspring-boot.run.profiles=local \
+# Start LocalStack from the platform menu (see Quick Start), then:
+mvn -f cloudforge-manager/pom.xml spring-boot:run -Dspring-boot.run.profiles=local \
   -Dspring-boot.run.arguments="--cfc.manager.target=localstack"
 ```
 
-Open `http://127.0.0.1:1958`, complete the first-run local-admin setup, and
-choose **LocalStack** in the target selector. To deploy CloudForge Manager as
-an application inside LocalStack later, use `cfc-testing` Interactive Deployer
-option **8** — option **6** is MiniStack only.
+Open `http://127.0.0.1:1958`, complete the first-run local-admin setup, and choose **LocalStack** in the target selector (or set `CFC_MANAGER_TARGET=localstack`).
 
-### Deploy CloudForge Manager *into* LocalStack
+### Deploy CloudForge Manager into LocalStack
 
-The laptop panel above inspects LocalStack from your host. To deploy CloudForge Manager as
-a CloudForge Fargate application inside the emulator, use the same
-`cfc-testing → CDK synth → LocalStack adapter` path as every other application.
-The Manager-owned deployment extension builds the custom image, reconciles the edge,
-and validates canonical Manager health. Select the CloudForge Manager deployment context
-and option **8**:
+To run CloudForge Manager as a Fargate application inside the emulator, use the same `cfc-testing → CDK synth → LocalStack adapter` path as every other application. The Manager deployment extension (`CloudForgeManagerDeploymentExtension`, from `cloudforge-manager-deployment`) resolves the container image (a local build when a `cloudforge-manager` checkout is present, otherwise the published image), reconciles the emulator edge, and waits for Manager health at `http://manager.cloudforge.localhost`.
 
 ```bash
 # Repository root
 mvn -f cfc-testing package -Dmaven.test.skip=true
 
 cd cfc-testing
-export AWS_ENDPOINT_URL=http://localhost:4566
-export AWS_DEFAULT_REGION=us-east-1
 java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.samples.app.InteractiveDeployer \
   --context deployment-contexts/CloudForgeManager-Dev.json 8
 ```
-
-Option **8** synthesizes the canonical CDK template for
-`applicationId: cloudforge-manager`, adapts it for LocalStack, and deploys it.
-It is not a raw `cdk deploy`; raw CDK deploy targets real AWS.
 
 ---
 
@@ -82,20 +65,13 @@ It is not a raw `cdk deploy`; raw CDK deploy targets real AWS.
 
 There is no AWS Console for LocalStack. [StackPort](https://github.com/DaviReisVieira/stackport) is an optional third-party Docker image (`davireis/stackport`) that reads `AWS_ENDPOINT_URL` and serves a web UI on port **8888**.
 
-CloudForge starts `cfc-localstack-stackport` on the same Docker network as the running LocalStack container (typically `cfc-network`, or the compose project network if LocalStack was started via `docker-compose`). StackPort talks to LocalStack using the Docker DNS name `http://cfc-localstack:4566` **from inside the network only**. On your host (browser, `curl`, AWS CLI, Interactive Deployer), use **`http://localhost:4566`**.
+The platform `start` action launches `cfc-localstack-stackport` on the same Docker network as LocalStack (`cfc-network`), together with the shared nginx emulator edge. Set `CFC_EMULATOR_COMPANIONS=false` (or `CFC_STACKPORT_AUTOSTART=false` / `CFC_EDGE_AUTOSTART=false`) to skip them. StackPort reaches LocalStack at `http://cfc-localstack:4566`, which resolves **only inside the Docker network**. On your host (browser, `curl`, AWS CLI, Interactive Deployer), use **`http://localhost:4566`**.
 
 ```bash
-# LocalStack must already be running. Choose `reconcile_edge` from the platform menu
-# when a manual edge refresh is needed.
-java -cp "cfc-testing/target/classes:cfc-testing/target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer --platform
 curl -s http://localhost:8888/api/endpoints
 ```
 
-StackPort is started with the platform. Use the platform menu for target status, restart,
-or edge reconciliation; it owns the target's companion lifecycle.
-
-Override the in-container endpoint with `CFC_STACKPORT_AWS_ENDPOINT_URL` or `STACKPORT_ENDPOINTS` when needed.
+Use the platform menu (`status`, `restart`, `reconcile_edge`) to manage the emulator and its companions. Override StackPort's endpoint with `CFC_STACKPORT_AWS_ENDPOINT_URL` or `STACKPORT_ENDPOINTS` when needed.
 
 ---
 
@@ -107,18 +83,37 @@ Override the in-container endpoint with `CFC_STACKPORT_AWS_ENDPOINT_URL` or `STA
 | Emulator, StackPort, edge lifecycle | `cloudforge-localstack` via `PlatformRuntimeProvider` |
 | Shared contracts | `cloudforge-core` (`local.*`, `StackPortRuntimes`) |
 
-The adapter keeps ALB→ECS forward, strips ALB `authenticate-*` on Base tier, maps EFS to bind mounts under `.localstack-volumes/`, and strips `AWS::Backup::*` unless Ultimate-tier capabilities are detected. Stack names use the `-localstack` suffix.
+`LocalStackTemplateAdapter` changes the canonical template only where LocalStack requires it:
 
-**Deployable applications:** [LocalStack app catalog](DEPLOYABLE_APPS.md) and [full emulator catalog](../guides/LOCAL_EMULATOR_APP_CATALOG.md) — all 37+ plugins; RDS/CMS apps require option **8** and Base-tier RDS capability.
+- strips ALB `authenticate-oidc` / `authenticate-cognito` actions (use `application-oidc` or `authMode: none`)
+- pins the ECS host port to the container port and redirects ALB listeners to `http://localhost:<appPort>`; when the app port is 80, 4566, or 8888 (held by the edge, gateway, or StackPort) the ALB forward is kept instead
+- replaces EFS with host bind mounts under `.localstack-volumes/` and removes `AWS::Backup::*`, unless the probed tier keeps them (Ultimate)
+- keeps Application Auto Scaling
+- rewrites database endpoints, OIDC URLs, and path-style URLs so tasks and browsers can reach them locally
+
+Stack names use the `-localstack` suffix. Each change is recorded in the adaptation report.
+
+**Deployable applications:** [LocalStack app catalog](DEPLOYABLE_APPS.md) and the [full emulator catalog](../guides/LOCAL_EMULATOR_APP_CATALOG.md).
 
 ### Deploy preflight (option 8)
 
-Before adapt/deploy, option **8** probes LocalStack health and tier capabilities (ECS, ELBV2, RDS, EC2, etc.).
+Before adapt/deploy, option **8** probes LocalStack health and tier capabilities (ECS, ELBv2, RDS, EC2, Auto Scaling, EFS, Backup) and checks host-port conflicts with other LocalStack stacks.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `LOCALSTACK_PREFLIGHT` | `enforce` | `enforce` blocks missing capabilities; `warn` prints warnings; `off` skips |
 | `CFC_LOCALSTACK_SKIP_PREFLIGHT` | `false` | Set `true` to skip (same as `LOCALSTACK_PREFLIGHT=off`) |
+| `LOCALSTACK_TIER_PROFILE` | probed | Override the probed tier (for example `ultimate` to keep native EFS) |
+| `LOCALSTACK_CAPABILITIES` | probed | Declare capabilities (for example `rds`) when the health response is sparse |
+
+### Other settings
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LOCALSTACK_AUTH_TOKEN` | none (required) | LocalStack auth token passed to the container at start |
+| `LOCALSTACK_ENDPOINT` / `AWS_ENDPOINT_URL` | `http://localhost:4566` | Gateway used by `LocalStackDeployer` (`LOCALSTACK_ENDPOINT` wins) |
+| `CFC_LOCALSTACK_VOLUME_DIR` | `.localstack-volumes` | Host directory for emulator state |
+| `CFC_LOCALSTACK_REPLACE_SAME_APP` | enabled | Set `false` or `0` to keep earlier LocalStack stacks for the same `applicationId` |
 
 ---
 
@@ -126,10 +121,10 @@ Before adapt/deploy, option **8** probes LocalStack health and tier capabilities
 
 ```bash
 mvn -pl cloudforge-localstack -P localstack test
-mvn -pl cfc-testing -P localstack test
+mvn -f cfc-testing/pom.xml -P localstack test
 ```
 
-Default PR CI excludes `@Tag("localstack")` tests (no token required). Unit tests for adapter and capability contracts run without a running LocalStack.
+Default builds exclude `@Tag("localstack")` tests, so CI needs no token. Unit tests for the adapter and capability contracts run without a running LocalStack.
 
 ---
 
@@ -143,12 +138,12 @@ LocalStack path-style URLs look like:
 
 Jenkins serves static assets at `/static/...`. Without a `--prefix`, the browser requests `http://localhost.localstack.cloud:4566/static/...` (404) instead of under `/_aws/elb/cfc-xxxxx/static/...`.
 
-The adapter injects `JENKINS_OPTS --prefix=/_aws/elb/{name}` on adapt+deploy. Redeploy after adapter changes, or use the direct ECS port from `docker ps` (for example `http://localhost:27994/login`).
+The adapter adds `--prefix=/_aws/elb/{name}` to `JENKINS_OPTS` when it adapts the template. Redeploy to pick up adapter changes, or use `LocalStackApplicationUrl` (`http://localhost:8080/` for Jenkins) instead of the path-style URL.
 
 ### Hostname ELB URL loads but has no styling (Chrome)
 
 Example: `http://cfc-xxxxx.elb.localhost.localstack.cloud:4566/login`
 
-Chrome Local Network Access rules can block stylesheets and scripts (`403`) while `curl` returns `200`. Prefer the direct ECS port from `docker ps`, Safari, or Chrome site settings → allow **Local network access**.
+Chrome Local Network Access rules can block stylesheets and scripts (`403`) while `curl` returns `200`. Prefer `LocalStackApplicationUrl` (the direct ECS port), Safari, or Chrome site settings → allow **Local network access**.
 
-For day-to-day UI testing, the direct ECS port is the supported application entry point. ELB hostname URLs are for ALB/routing fidelity checks.
+For day-to-day UI testing, `LocalStackApplicationUrl` is the supported entry point. `LocalStackElbHostnameUrl` is for ALB/routing checks.

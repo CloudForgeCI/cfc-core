@@ -56,41 +56,32 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Creates and incrementally updates CloudFormation stacks on real AWS via change sets.
+ * Creates and incrementally updates CloudFormation stacks on AWS via change sets.
  *
- * <p>Backs {@code CloudForgeDeployment}'s {@code AWS} case — the direct-deploy counterpart to
- * {@code LocalStackDeployer}/{@code MiniStackDeployer}, minus everything specific to emulating
- * AWS locally (no LocalStack Cognito/RDS-secret reconciliation, no ECS-restart-after-secret-sync —
- * real AWS Cognito/RDS integrate through CDK's own Secrets Manager wiring and need none of
- * that).</p>
+ * <p>Backs {@code CloudForgeDeployment}'s {@code AWS} case: the direct-deploy counterpart to
+ * {@code LocalStackDeployer}/{@code MiniStackDeployer}, without the emulator-specific steps
+ * (Cognito/RDS secret reconciliation, ECS restarts after secret sync), which AWS handles through
+ * CDK's Secrets Manager integration.</p>
  *
- * <p><b>Targets real AWS by default, but transparently redirects to a local emulator when
- * *Manager itself* is running inside one</b> — same {@code LOCALSTACK_ENDPOINT}/
- * {@code AWS_ENDPOINT_URL} env-var detection {@link
- * com.cloudforgeci.localstack.LocalStackDeployer#resolveEndpoint()} already uses, deliberately
- * mirrored here rather than left real-AWS-only — without an endpoint override, a {@code
- * deploy:create} click from a Manager instance hosted on LocalStack would try to reach
- * {@code cloudformation.us-east-1.amazonaws.com} instead of the local emulator it's actually
- * running against.</p>
+ * <p><b>Targets AWS by default, but redirects to a local emulator when Manager itself runs
+ * inside one</b>, using the same {@code LOCALSTACK_ENDPOINT}/{@code AWS_ENDPOINT_URL} detection
+ * as {@link com.cloudforgeci.localstack.LocalStackDeployer#resolveEndpoint()}. Without the
+ * endpoint override, a Manager instance hosted on LocalStack would call the public
+ * CloudFormation endpoint instead of the emulator.</p>
  *
- * <p>Every stack this deployer creates or updates is tagged with the same
- * {@code cloudforge:managed}/{@code cloudforge:application}/{@code cloudforge:runtime}
- * convention {@code ApplicationFargateStack}/{@code ApplicationEc2Stack} apply via
- * {@code Tags.of(this).add(...)} at synthesis time — required both for Manager's own AWS
- * inventory (see {@code StackListingPolicy}) and for the {@code aws:RequestTag}/
- * {@code aws:ResourceTag} IAM conditions {@code ManagerOperatorIamSupport.deployStatements}
- * scopes {@code CreateStack}/{@code UpdateStack} to. Those conditions evaluate the stack-level
- * {@code Tags} parameter on the CloudFormation API call itself, not any resource-level tags
- * already baked into the template by the CDK {@code Tags} aspect — the two are separate
- * CloudFormation tagging mechanisms, and only the former is what this class controls.</p>
+ * <p>Every stack created or updated is tagged with the {@code cloudforge:managed}/
+ * {@code cloudforge:application}/{@code cloudforge:runtime} convention that
+ * {@code ApplicationFargateStack}/{@code ApplicationEc2Stack} apply via
+ * {@code Tags.of(this).add(...)}. The tags are required by Manager's inventory
+ * ({@code StackListingPolicy}) and by the {@code aws:RequestTag}/{@code aws:ResourceTag}
+ * conditions in {@code ManagerOperatorIamSupport.deployStatements}. Those conditions evaluate the
+ * stack-level {@code Tags} parameter on the API call, not resource-level tags in the template;
+ * this class controls the former.</p>
  *
- * <p><b>Not exercised against real AWS in this repo's test suite</b> — no AWS credentials are
- * available in CI/dev sandboxes for that. {@code AwsDirectDeployerTest} instead points this class
- * at a real LocalStack instance via the injectable-client constructor (LocalStack is
- * CloudFormation-API-compatible), which exercises every code path except real AWS's actual
- * network/auth surface. Treat a real AWS deploy as the first true end-to-end validation of this
- * class specifically — the underlying changeset create/execute/wait sequence is otherwise a
- * close copy of {@code LocalStackDeployer}'s, which has been exercised that way for a while.</p>
+ * <p><b>Test coverage:</b> {@code AwsDirectDeployerTest} runs this class against LocalStack via
+ * the injectable-client constructor, which exercises every code path except AWS's own network
+ * and authentication. The change-set create/execute/wait sequence mirrors
+ * {@code LocalStackDeployer}'s.</p>
  */
 public final class AwsDirectDeployer implements AutoCloseable {
 
@@ -98,14 +89,11 @@ public final class AwsDirectDeployer implements AutoCloseable {
     private static final Duration OPERATION_TIMEOUT = Duration.ofMinutes(30);
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
     /**
-     * Caps how long the stack create/update waiter below ({@code
-     * cloudFormation.waiter().waitUntilStackCreateComplete(...)}) will wait for a LocalStack
-     * target specifically — real AWS keeps the SDK's own default waiter config (up to ~60
-     * minutes; a genuinely large stack can legitimately take a while), but a LocalStack resource
-     * that hangs (a common emulation gap) is not a real deploy taking a long time, and shouldn't
-     * leave the journal entry — and the UI polling it — showing "RUNNING" for the better part of
-     * an hour with no indication anything is wrong. A LocalStack deploy that hasn't finished in
-     * 5 minutes is hung, not slow.
+     * Caps how long the stack create/update waiter ({@code
+     * cloudFormation.waiter().waitUntilStackCreateComplete(...)}) waits for a LocalStack target.
+     * AWS targets keep the SDK's default waiter configuration (up to about 60 minutes, since large
+     * stacks can take that long). A LocalStack resource that hangs is an emulation gap, so a
+     * deploy that has not finished in 5 minutes is treated as hung rather than left "RUNNING".
      */
     private static final Duration LOCAL_EMULATOR_WAITER_TIMEOUT = Duration.ofMinutes(5);
     /** CloudFormation inline template body limit (same on real AWS as LocalStack). */
@@ -141,14 +129,11 @@ public final class AwsDirectDeployer implements AutoCloseable {
 
     /**
      * Same as {@link #AwsDirectDeployer(DeploymentConfig, DeploymentTarget)}, but with an
-     * explicit credentials provider to use for real-AWS calls instead of the default chain — e.g.
-     * a caller that assumed a cross-account IAM role and wants this deployer to act as that
-     * principal. {@code null} means "use the default credential chain," exactly {@link
-     * #AwsDirectDeployer(DeploymentConfig, DeploymentTarget)}'s only prior behavior.
+     * explicit credentials provider for AWS calls instead of the default chain, e.g. for a caller
+     * that assumed a cross-account IAM role. {@code null} means the default credential chain.
      *
-     * <p>Ignored when {@code target} resolves to a local emulator — a real AssumeRole against
-     * LocalStack/MiniStack is meaningless, so the fixed {@code test}/{@code test} static
-     * credentials still win in that case, unchanged from before this overload existed.</p>
+     * <p>Ignored when {@code target} resolves to a local emulator, which always uses the fixed
+     * {@code test}/{@code test} static credentials.</p>
      */
     public AwsDirectDeployer(
             DeploymentConfig config, DeploymentTarget target, AwsCredentialsProvider credentialsOverride) {
@@ -157,9 +142,8 @@ public final class AwsDirectDeployer implements AutoCloseable {
             s3Client(config, target, credentialsOverride),
             config.applicationId,
             runtimeTag(config.runtime),
-            // null, not an eagerly-computed name -- resolvedTemplateBucket() fills in the
-            // account-scoped name lazily (see its own javadoc for why: same "no network call in
-            // the constructor" rule resolveAccountId() already follows).
+            // null: resolvedTemplateBucket() computes the account-scoped name lazily so the
+            // constructor makes no network call (see resolveAccountId()).
             null,
             ManagerEndpointSupport.resolveLocalEmulatorEndpoint(target) != null,
             Region.of(config.region == null ? "us-east-1" : config.region),
@@ -208,16 +192,12 @@ public final class AwsDirectDeployer implements AutoCloseable {
     }
 
     /**
-     * LocalStack's fixed test account needs no network call; real AWS resolves the caller's
-     * actual account via {@code sts:GetCallerIdentity} — needed to substitute CDK's
-     * {@code ${AWS::AccountId}} pseudo-parameter token in asset-manifest bucket names (see
-     * {@code LocalStackCdkAssetPublisher}'s class javadoc). Deliberately called lazily from
-     * {@link #deploy} rather than eagerly in the constructor: constructing a client is not itself
-     * a network call for any other client this class builds, and {@code
-     * realAwsConstructorDefaultsRegionWhenConfigOmitsIt} in the test suite specifically relies on
-     * construction alone never reaching the network — an eager STS call here would have broken
-     * that invariant (and made every construction pay real-AWS latency even for a dry run that
-     * never actually deploys).
+     * Returns the target account ID: LocalStack's fixed test account without a network call, or
+     * the caller's account via {@code sts:GetCallerIdentity} on AWS. Used to substitute CDK's
+     * {@code ${AWS::AccountId}} token in asset-manifest bucket names (see
+     * {@code LocalStackCdkAssetPublisher}). Called lazily from {@link #deploy} so that
+     * construction never reaches the network (relied on by
+     * {@code realAwsConstructorDefaultsRegionWhenConfigOmitsIt}).
      */
     private String resolveAccountId() {
         if (localEmulatorTarget) {
@@ -285,13 +265,10 @@ public final class AwsDirectDeployer implements AutoCloseable {
     }
 
     /**
-     * S3 bucket names are globally unique across every AWS account, not just this one — the
-     * previous {@code "cfc-cfn-templates-" + region} name (no account ID) collided with whatever
-     * account anywhere happened to have claimed it first, and every {@code headBucket}/
-     * {@code createBucket}/{@code putObject} call against a bucket this account doesn't own comes
-     * back 403 Access Denied, not a friendlier "already exists" error. {@code accountId} makes
-     * the name as unique as CDK's own bootstrap bucket convention ({@code
-     * cdk-hnb659fds-assets-<account>-<region>}) already relies on.
+     * Template bucket name, including the account ID because S3 bucket names are global: a name
+     * owned by another account returns 403 Access Denied on every call rather than an
+     * "already exists" error. Mirrors CDK's bootstrap bucket convention ({@code
+     * cdk-hnb659fds-assets-<account>-<region>}).
      */
     static String templateBucketName(String accountId, String region) {
         return TEMPLATE_BUCKET_PREFIX + accountId + "-"
@@ -299,17 +276,12 @@ public final class AwsDirectDeployer implements AutoCloseable {
     }
 
     /**
-     * The actual CloudFormation stack name every AWS/S3 API call in this class uses —
-     * {@code stackName} plus a {@code -localstack} suffix when targeting a local emulator, the
-     * exact same convention {@code LocalStackDeployer}'s caller already applies for its own
-     * deploys. {@code StackListingPolicy.acceptsName} requires that suffix for a stack to appear
-     * under Manager's LocalStack target view — without it, a {@code deploy:create} stack
-     * redirected to a local emulator (see class javadoc) deploys successfully on CloudFormation's
-     * side but stays invisible in both Manager's Instances list and its Catalog list. Every
-     * public method on this class still deals exclusively in the
-     * logical, unsuffixed name — both what callers pass in and what
-     * {@link AwsStackDeployResult#stackName()} reports back — this conversion is applied once,
-     * internally, and never leaks out.
+     * The CloudFormation stack name used for AWS/S3 API calls: {@code stackName} plus a
+     * {@code -localstack} suffix when targeting a local emulator, matching the
+     * {@code LocalStackDeployer} convention. Manager's {@code StackListingPolicy.acceptsName}
+     * requires the suffix to list the stack under its LocalStack target. Public methods accept
+     * and return only the logical, unsuffixed name (including
+     * {@link AwsStackDeployResult#stackName()}).
      */
     String physicalStackName(String stackName) {
         return localEmulatorTarget ? stackName + "-localstack" : stackName;
@@ -329,22 +301,17 @@ public final class AwsDirectDeployer implements AutoCloseable {
      */
     public AwsStackDeployResult deploy(String stackName, Path template) throws IOException {
         String physical = physicalStackName(stackName);
-        // stackName here (not physical) deliberately — the manifest file is named after the CDK
-        // construct id CloudForgeSynthesizer actually synthesized with, which is always the
-        // logical name; only the CloudFormation-facing stack name below gets suffixed.
+        // The logical stackName, not the physical one: the asset manifest is named after the
+        // construct id CloudForgeSynthesizer used.
         //
-        // Unconditional — real cdk deploy always publishes assets before its own CloudFormation
-        // call too, for real AWS as much as a local emulator. Without this, any asset-backed
-        // resource (including aws-cdk-lib's own LogRetention custom resource) fails the instant a
-        // real deploy reaches it, since nothing published its asset anywhere first.
+        // Assets are always published before the CloudFormation call, as `cdk deploy` does;
+        // otherwise asset-backed resources (including CDK's LogRetention custom resource) fail.
         //
-        // createBucketIfMissing = localEmulatorTarget: a local emulator has no separate "cdk
-        // bootstrap" step, so self-creating the asset bucket on first use IS its bootstrap. Real
-        // AWS must not self-create it — that bucket is CDK's own bootstrap-owned resource, and a
-        // bare, untracked bucket with its exact name permanently blocks the real `cdk bootstrap`
-        // from ever creating its own properly-configured copy. See this method's own IOException
-        // (surfaced as an actionable "run cdk bootstrap" message) when the account isn't
-        // bootstrapped yet.
+        // createBucketIfMissing = localEmulatorTarget: emulators have no separate bootstrap
+        // step, so creating the asset bucket on first use serves as bootstrap. On AWS the bucket
+        // belongs to `cdk bootstrap`; creating a bare bucket with that name would block bootstrap
+        // from creating a correctly configured one, so an unbootstrapped account instead gets an
+        // IOException telling the user to run `cdk bootstrap`.
         LocalStackCdkAssetPublisher.publish(
             template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
 
@@ -494,19 +461,13 @@ public final class AwsDirectDeployer implements AutoCloseable {
 
     /**
      * CDK injects {@code BootstrapVersion} as {@code AWS::SSM::Parameter::Value<String>}, whose
-     * default resolves dynamically from {@code /cdk-bootstrap/hnb659fds/version} in SSM Parameter
-     * Store — populated by a real {@code cdk bootstrap} run, which nothing in this deploy path
-     * ever performs. A real, bootstrapped AWS account has that path unrelated to this deployer;
-     * a local emulator's account never does, and CloudFormation rejects the dynamic reference
-     * outright: {@code "Parameter BootstrapVersion should either have input value or default
-     * value"} — hit for real the first time this ran against LocalStack after the endpoint-
-     * override fix above got far enough to actually talk to it. Same rewrite
-     * {@code LocalStackTemplateAdapter.resolveCdkBootstrapParameters} already applies on the
-     * {@code deploy:catalog}-adjacent local-target path — duplicated here rather than shared
-     * because {@code cloudforge-api} cannot depend on {@code cloudforge-localstack} (the
-     * dependency runs the other way), and this is the only piece of that adapter this class
-     * needs. Only ever called when {@link #localEmulatorTarget} is true — real AWS keeps its
-     * template completely untouched.
+     * default resolves from {@code /cdk-bootstrap/hnb659fds/version} in SSM Parameter Store. That
+     * parameter exists in a bootstrapped AWS account but never in a local emulator, where
+     * CloudFormation rejects the reference ({@code "Parameter BootstrapVersion should either have
+     * input value or default value"}). Applies the same rewrite as
+     * {@code LocalStackTemplateAdapter.resolveCdkBootstrapParameters}, duplicated because
+     * {@code cloudforge-api} cannot depend on {@code cloudforge-localstack}. Called only when
+     * {@link #localEmulatorTarget} is true; AWS templates are left unchanged.
      */
     static String resolveCdkBootstrapParameters(String templateBody) throws IOException {
         JsonNode root = MAPPER.readTree(templateBody);
@@ -645,11 +606,9 @@ public final class AwsDirectDeployer implements AutoCloseable {
     }
 
     /**
-     * The production constructor leaves {@link #templateBucket} {@code null} rather than eagerly
-     * computing a name at construction time — same "no network call in the constructor" rule
-     * {@link #resolveAccountId} already documents, since the caller's own account ID is now part
-     * of the name (see that method's own account-ID-collision fix). Test-visible constructors that
-     * inject an explicit bucket name still win outright, unchanged.
+     * Resolves the template bucket name lazily, because it includes the account ID and the
+     * constructor must not make network calls (see {@link #resolveAccountId}). An explicit bucket
+     * name injected through a test constructor takes precedence.
      */
     private String resolvedTemplateBucket() {
         return templateBucket != null ? templateBucket : templateBucketName(resolveAccountId(), region.id());

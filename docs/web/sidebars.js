@@ -24,6 +24,7 @@ const sidebars = {
       label: 'Quick Start',
       items: [
         'ONBOARDING_QUICK_START',
+        'ADVANCED',
         'compliance/QUICK_START_GUIDE',
         'guides/INTERACTIVE_DEPLOYER',
       ],

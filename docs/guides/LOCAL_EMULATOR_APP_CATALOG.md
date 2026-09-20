@@ -1,107 +1,115 @@
 # Local Emulator Application Catalog
 
-Which CloudForge applications can deploy to **MiniStack** (option **6**) and **LocalStack** (option **8**), and why others are blocked.
+Which CloudForge applications can deploy to **MiniStack** (Interactive Deployer option **6**) and **LocalStack** (option **8**), and why others are blocked.
 
-Discovery: Interactive Deployer loads plugins via `ServiceLoader` (`META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec`). Built-in apps live in **cloudforge-api**; sample plugins in **cfc-testing** (SonarQube, Craft CMS).
+The Interactive Deployer discovers applications with `ServiceLoader` (`META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec`). Built-in applications live in **cloudforge-api**; `cloudforge-manager` comes from the **cloudforge-manager-deployment** dependency; **cfc-testing** adds the sample Craft CMS plugin (`craft-cms`).
 
 Example contexts: `cfc-testing/deployment-contexts/*.json`
 
 ---
 
-## Quick reference
+## Quick Reference
 
 | Target | Deploy option | Preflight | RDS-backed apps |
 |--------|---------------|-----------|-----------------|
-| **MiniStack** | **6** | Strict (`MINISTACK_PREFLIGHT=enforce`) | **Blocked** — no `AWS::RDS::*` |
-| **LocalStack** | **8** | Tier/capability probe (`LOCALSTACK_PREFLIGHT=enforce`) | **Supported** on Base tier when RDS capability is probed |
+| **MiniStack** | **6** (option **7** runs synthesis, validation, deploy, and verification in one pipeline) | `MINISTACK_PREFLIGHT` (default `enforce`) | **Blocked**: no `AWS::RDS::*` support |
+| **LocalStack** | **8** | Tier/capability probe, `LOCALSTACK_PREFLIGHT` (default `enforce`) | **Supported** when the RDS capability is available |
 
-Use **`authMode: none`** in deployment context for simplest local smoke tests unless you are explicitly testing Cognito/ALB auth on LocalStack.
+Use `authMode: none` in the deployment context for local smoke tests unless you are testing Cognito or application OIDC on LocalStack.
 
 ---
 
-## MiniStack — deployable applications
+## MiniStack: Deployable Applications
 
-Preflight blocks deploys when:
+Preflight blocks a deploy when:
 
-- `provisionDatabase: true`, or the app **`requiresDatabase()`** (from `@ApplicationPlugin` / `@CmsPlugin`)
-- The canonical template contains unsupported CFN types (`AWS::RDS::*`, `AWS::WAF*`, `AWS::Config::*`, `AWS::CloudTrail::*`, `AWS::Backup::*`, `AWS::GuardDuty::*`)
+- `topology` is set to anything other than `application-service` or `jenkins-service` (so `cms-service` is blocked)
+- `provisionDatabase` is `true`, or the application's `requiresDatabase()` is `true` (from `@ApplicationPlugin` / `@CmsPlugin`)
+- The canonical template contains unsupported CloudFormation types: `AWS::RDS::*`, `AWS::WAF::*`, `AWS::WAFv2::*`, `AWS::Config::*`, `AWS::CloudTrail::*`, `AWS::Backup::*`, or `AWS::GuardDuty::*`
+- Another MiniStack stack already uses the same host port
 
-Override: `MINISTACK_PREFLIGHT=warn|off` (not recommended for CI).
+EFS, Application Auto Scaling, and `AWS::EC2::SecurityGroupIngress` resources are adapted rather than blocked.
 
-### Supported (13 apps)
+Override with `MINISTACK_PREFLIGHT=warn` or `MINISTACK_PREFLIGHT=off` (not recommended for CI).
 
-These deploy with `provisionDatabase: false` and pass preflight. Set `authMode: none` for local smoke.
+### Supported
 
-| Application ID | Display name | Default port | Category | Notes |
-|----------------|--------------|--------------|----------|-------|
-| `cloudforge-manager` | CloudForge Manager | 1958 | operations | Operations panel; first-run setup wizard for login |
-| `jenkins` | Jenkins | 8080 | cicd | Unlock via `initialAdminPassword` in container |
-| `grafana` | Grafana | 3000 | monitoring | Default login `admin` / `admin` (image default) |
+These deploy with `provisionDatabase: false` and pass preflight. Set `authMode: none` for local smoke tests.
+
+| Application ID | Display name | Container port | Category | Notes |
+|----------------|--------------|----------------|----------|-------|
+| `cloudforge-manager` | CloudForge Manager | 1958 | operations | First-run setup wizard for sign-in |
+| `jenkins` | Jenkins | 8080 | cicd | Unlock with `secrets/initialAdminPassword` in the Jenkins home |
+| `grafana` | Grafana | 3000 | monitoring | Container image default login `admin` / `admin` |
 | `prometheus` | Prometheus | 9090 | monitoring | |
-| `metabase` | Metabase | 3000 | analytics | Embedded H2 when RDS not provisioned |
-| `drone` | Drone | 80 | cicd | Host port **80** may need elevated bind on some macOS setups |
+| `metabase` | Metabase | 3000 | analytics | Embedded H2 database when RDS is not provisioned |
+| `drone` | Drone | 80 | cicd | Host port 80 is a privileged port and may need elevated bind permissions |
 | `gitea` | Gitea | 3000 | vcs | |
-| `vault` | HashiCorp Vault | 8200 | secrets | Requires init/unseal after deploy |
-| `redis` | Redis | 6379 | database | TCP cache, not HTTP |
-| `nexus` | Nexus Repository | 8081 | artifactregistry | Default 4 GiB Fargate memory in plugin metadata |
-| `postgresql` | PostgreSQL | 5432 | database | **Container** Postgres (not RDS); not the same as `provisionDatabase` |
-| `sonarqube` | SonarQube | 9000 | code-quality | **cfc-testing** sample plugin; 4 GiB memory recommended |
+| `vault` | HashiCorp Vault | 8200 | secrets | Initialize and unseal after deploy |
+| `redis` | Redis | 6379 | database | TCP service, not HTTP |
+| `nexus` | Nexus Repository | 8081 | artifactregistry | Set `memory: 4096` (plugin recommendation) |
+| `postgresql` | PostgreSQL | 5432 | database | Container PostgreSQL, not RDS; unrelated to `provisionDatabase` |
+| `sonarqube` | SonarQube | 9000 | code-quality | Set `memory: 4096` (plugin recommendation) |
 
-**Sample context files** (repo): `CloudForgeManager-Dev.json`, `Jenkins-Stack.json`, `Grafana-Stack.json`, `Prometheus-Stack.json`, `Metabase-Stack.json`, `Drone-Stack.json`, `Gitea-Stack.json`, `Vault-Stack.json`, `Redis-Stack.json`, `Nexus-Stack.json`, `PostgreSQL-Stack.json`, `SonarQube-Stack.json`.
+Sample context files: `CloudForgeManager-Fresh.json`, `Jenkins-Stack.json`, `Grafana-Stack.json`, `Prometheus-Stack.json`, `Metabase-Stack.json`, `Drone-Stack.json`, `Gitea-Stack.json`, `Vault-Stack.json`, `Redis-Stack.json`, `Nexus-Stack.json`, `PostgreSQL-Stack.json`, `SonarQube-Stack.json`.
 
-### MiniStack host-port constraint
+### Host-Port Constraint
 
-The adapter maps **`localhost:<containerPort>`** to the ECS task (`MiniStackApplicationUrl`). Only **one stack per host port** at a time.
+The MiniStack adapter maps `localhost:<containerPort>` to the ECS task and reports it in the `MiniStackApplicationUrl` stack output. Only one stack per host port can run at a time.
 
-| Port | Apps (pick one at a time) |
-|------|-----------------------------|
+| Port | Applications (one at a time) |
+|------|------------------------------|
 | **3000** | Grafana, Gitea, Metabase |
-| **80** | Drone (GitLab/Harbor/CMS use 80 on AWS but are RDS-blocked on MiniStack) |
+| **80** | Drone (GitLab, Harbor, and most CMS applications also use 80 but are blocked on MiniStack) |
 | **8080** | Jenkins |
 
-Other ports are unique in the supported set (1958, 6379, 8081, 8200, 9090, 9000, 5432).
+The other ports in the supported set are unique: 1958, 5432, 6379, 8081, 8200, 9000, 9090.
 
-### Blocked on MiniStack (24+ apps) — use LocalStack or AWS
+### Blocked on MiniStack
+
+Use LocalStack (option 8) or AWS (option 2) for these.
 
 | Reason | Application IDs |
 |--------|-----------------|
-| **Requires RDS** (`requiresDatabase: true`) | `gitlab`, `harbor`, `superset`, `mattermost-enterprise`, `mattermost-team`, **all CMS/e-commerce/forum/CRM/LMS** (see below) |
-| **CMS / `@CmsPlugin`** (MySQL/MariaDB RDS in template) | `wordpress`, `woocommerce`, `drupal`, `joomla`, `typo3`, `concrete-cms`, `october-cms`, `magento`, `prestashop`, `opencart`, `sylius`, `bagisto`, `phpbb`, `flarum`, `mybb`, `suitecrm`, `mediawiki`, `moodle`, `dolphin-una`, `craft-cms` (sample plugin) |
+| **Requires RDS** (`requiresDatabase: true`) | `gitlab`, `harbor`, `superset`, `mattermost-enterprise`, `mattermost-team` |
+| **CMS applications** (`cms-service` topology and required RDS) | `wordpress`, `woocommerce`, `drupal`, `joomla`, `typo3`, `concrete-cms`, `october-cms`, `magento`, `prestashop`, `opencart`, `sylius`, `bagisto`, `phpbb`, `flarum`, `mybb`, `suitecrm`, `mediawiki`, `moodle`, `dolphin-una`, `craft-cms` (sample plugin) |
 
-Preflight message points to **Interactive Deployer option 8** (LocalStack) or AWS option **2**.
+The preflight message suggests Interactive Deployer option 8 (LocalStack).
 
 ---
 
-## LocalStack — deployable applications
+## LocalStack: Deployable Applications
 
-Preflight probes `/_localstack/health`, edition/tier, and required capabilities:
+Preflight probes `/_localstack/health`, the edition/tier, and the capabilities the deployment needs:
 
 | Requirement | When |
 |-------------|------|
-| **ECS + ELBV2** | All Fargate stacks (default) |
-| **RDS** | `provisionDatabase: true`, `requiresDatabase()`, or `AWS::RDS::*` in template |
-| **EC2 + Auto Scaling** | `runtime: ec2` in deployment context |
-| **Warnings (non-blocking on Base)** | `AWS::EFS::*` → bind mounts; `AWS::Backup::*` → stripped unless Ultimate |
+| **ECS + ELBV2** | All deployments |
+| **RDS** | `provisionDatabase: true`, `requiresDatabase()`, or `AWS::RDS::*` in the template |
+| **EC2 + Auto Scaling** | `runtime: ec2` |
+| **Warnings** | `AWS::EFS::*` is adapted to bind mounts unless native EFS is available (`LOCALSTACK_TIER_PROFILE=ultimate`); `AWS::Backup::*` is removed unless the tier supports it |
 
-Override: `LOCALSTACK_PREFLIGHT=warn|off` or `CFC_LOCALSTACK_SKIP_PREFLIGHT=true`.
+Preflight also checks for host-port conflicts with other LocalStack stacks. Override with `LOCALSTACK_PREFLIGHT=warn|off` or `CFC_LOCALSTACK_SKIP_PREFLIGHT=true`. When the health response does not list RDS, `LOCALSTACK_CAPABILITIES=rds` declares it explicitly.
 
-Requires `LOCALSTACK_AUTH_TOKEN` and a running LocalStack selected from `InteractiveDeployer --platform`. MiniStack and LocalStack share port **4566** — only one emulator at a time.
+LocalStack requires `LOCALSTACK_AUTH_TOKEN`. Start it from the platform menu (`InteractiveDeployer --platform`, select `localstack`, action `start`). MiniStack and LocalStack both listen on port **4566**, so run only one emulator at a time.
 
-### Supported — all discovered applications (37+)
+### Supported
 
-Every application the Interactive Deployer lists can deploy to LocalStack **when**:
+Every application the Interactive Deployer lists (the 35 built into cloudforge-api, CloudForge Manager, and the Craft CMS sample plugin) can deploy to LocalStack when:
 
-1. **Base (trial) tier** exposes ECS, ELBV2, and (for RDS apps) RDS.
-2. Deployment context matches the app (e.g. `provisionDatabase: true` for GitLab/Mattermost/CMS).
-3. Container images are pullable on the host (some enterprise images may 404 locally).
-4. Fargate CPU/memory meet plugin defaults (Nexus, SonarQube, GitLab need larger tasks).
+1. The LocalStack tier provides ECS, ELBV2, and (for database-backed apps) RDS.
+2. The deployment context matches the app (for example, `provisionDatabase: true` for GitLab, Mattermost, and CMS applications).
+3. The container images can be pulled on the host.
+4. Fargate `cpu` and `memory` meet the application's needs (Nexus, SonarQube, and GitLab need larger tasks).
 
-#### Fargate without RDS (same 13 as MiniStack, plus auth/domain variants)
+#### Fargate Without RDS
 
-| Application ID | Port | LocalStack notes |
-|----------------|------|------------------|
-| `cloudforge-manager` | 1958 | `CFC_MANAGER_TARGET=localstack` |
-| `jenkins` | 8080 | ALB forward kept (unlike MiniStack redirect) |
+The same applications as MiniStack:
+
+| Application ID | Port | Notes |
+|----------------|------|-------|
+| `cloudforge-manager` | 1958 | The LocalStack adapter sets `CFC_MANAGER_TARGET=localstack` |
+| `jenkins` | 8080 | |
 | `grafana` | 3000 | |
 | `prometheus` | 9090 | |
 | `metabase` | 3000 | Embedded H2 when `provisionDatabase: false` |
@@ -110,59 +118,64 @@ Every application the Interactive Deployer lists can deploy to LocalStack **when
 | `vault` | 8200 | |
 | `redis` | 6379 | |
 | `nexus` | 8081 | |
-| `postgresql` | 5432 | Container Postgres spec |
-| `sonarqube` | 9000 | Sample plugin |
+| `postgresql` | 5432 | Container PostgreSQL |
+| `sonarqube` | 9000 | |
 
-#### Fargate with RDS (LocalStack only among local emulators)
+#### Fargate With RDS
 
 | Application ID | Port | Notes |
 |----------------|------|-------|
-| `gitlab` | 80 | Long startup; RDS Postgres |
-| `harbor` | 80 | RDS + heavy stack |
+| `gitlab` | 80 | Long startup; RDS PostgreSQL |
+| `harbor` | 80 | RDS |
 | `superset` | 8088 | RDS |
-| `mattermost-enterprise` | 8065 | RDS; verify image tag and EFS tier behavior |
+| `mattermost-enterprise` | 8065 | RDS |
 | `mattermost-team` | 8065 | RDS |
-| **CMS / e-commerce / forums** | mostly **80** | All `@CmsPlugin` apps: WordPress, WooCommerce, Drupal, Joomla, Typo3, Concrete, October, Magento, PrestaShop, OpenCart, Sylius, Bagisto, phpBB, Flarum, MyBB, SuiteCRM, MediaWiki, Moodle, Dolphin UNA, Craft CMS (sample) |
+| CMS, e-commerce, and forum applications | 80 (`craft-cms`: 8080) | All `@CmsPlugin` applications listed above |
 
-Set `provisionDatabase: true` (or rely on `requiresDatabase: true`) and use a context with full boolean fields (`wafEnabled`, `enableMonitoring`, etc.).
+Set `provisionDatabase: true` (it is also enabled automatically for applications that require a database).
 
-**Sample context:** `Mattermost-Stack-LocalStack.json`, `Jenkins-Stack-LocalStack.json` (domain + Cognito example).
+Sample contexts: `Mattermost-Stack-LocalStack.json`, `Metabase-Stack-LocalStack.json`, `Joomla-Stack-LocalStack.json` (CMS with RDS), and `Jenkins-Stack-LocalStack.json` (domain with `application-oidc`).
 
-#### EC2 runtime
+#### EC2 Runtime
 
-Any app with `supportsEc2: true` can use `runtime: ec2` when LocalStack probes **EC2 + Auto Scaling**. Smoke fidelity only — UserData/AMI behavior differs from AWS.
+Applications that support EC2 can use `runtime: ec2` when LocalStack provides EC2 and Auto Scaling. UserData and AMI behavior differ from AWS, so treat these deployments as smoke tests.
 
-#### Compliance-heavy AWS templates
+#### Compliance Resources
 
-WAF, AWS Config, CloudTrail, GuardDuty, and AWS Backup resources appear in **STAGING/PRODUCTION** profiles on real AWS. On LocalStack **Base** tier, Backup is stripped and EFS is adapted; Ultimate tier may retain native EFS/Backup when probed. MiniStack strips or blocks these types entirely.
+WAF, AWS Config, CloudTrail, GuardDuty, and AWS Backup resources are added by the `staging` and `production` security profiles and by compliance settings. On LocalStack, Backup resources are removed and EFS is adapted unless the tier supports them natively. MiniStack blocks these resource types.
 
 ---
 
-## Deploy commands
+## Deploy Commands
+
+Build `cfc-testing` first so that `target/classes` and `target/dependency` exist. The trailing number selects the menu option.
 
 ```bash
 cd cfc-testing
 export AWS_ENDPOINT_URL=http://localhost:4566
 export AWS_DEFAULT_REGION=us-east-1
-unset CFC_DEPLOYING   # required for option 6/8 (not synth-only)
 
-# MiniStack
+# MiniStack (option 6)
 java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.samples.app.InteractiveDeployer \
-  --context deployment-contexts/Jenkins-Stack.json 8
+  --context deployment-contexts/Jenkins-Stack.json 6
 
-# LocalStack (token + localstack-start first)
+# LocalStack (option 8); start LocalStack first
 java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.samples.app.InteractiveDeployer \
-  --context deployment-contexts/Mattermost-Stack-LocalStack.json 10
+  --context deployment-contexts/Mattermost-Stack-LocalStack.json 8
 ```
 
-Batch MiniStack deploy (supported apps only): `cfc-testing/scripts/deploy-ministack-apps.sh`
+Batch scripts (they skip stacks that are already `CREATE_COMPLETE`):
+
+- `cfc-testing/scripts/deploy-ministack-apps.sh`: MiniStack-compatible applications
+- `cfc-testing/scripts/deploy-localstack-apps.sh`: LocalStack applications with non-conflicting host ports
 
 ---
 
-## Related documentation
+## Related Documentation
 
-- [MiniStack overview](../ministack/README.md) — preflight, architecture, StackPort
-- [LocalStack overview](../localstack/README.md) — token, StackPort, tier adapter
-- [Interactive Deployer](INTERACTIVE_DEPLOYER.md) — options 8 and 10
+- [MiniStack overview](../ministack/README.md): preflight, architecture, StackPort
+- [LocalStack overview](../localstack/README.md): token, StackPort, tier adapter
+- [Interactive Deployer](INTERACTIVE_DEPLOYER.md): deployment options 6, 7, and 8
+- [CMS Guides](cms/README.md)

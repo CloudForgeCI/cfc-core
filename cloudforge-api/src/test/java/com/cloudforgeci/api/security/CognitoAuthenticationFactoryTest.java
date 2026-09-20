@@ -103,7 +103,7 @@ class CognitoAuthenticationFactoryTest {
     }
 
     /** Managed Login branding (Cognito's own default styling, not the classic Hosted UI's plain
-     *  look) — real regression this guards: the domain's own managedLoginVersion=2 has to be set
+     *  look). The domain's managedLoginVersion=2 has to be set
      *  via the L1 escape hatch (the L2 UserPoolDomain construct doesn't surface that property
      *  yet). Inspects the construct tree directly rather than {@code Template.fromStack} — full
      *  synthesis here trips SystemContext's own cross-factory validation (real VPC/ALB/Fargate

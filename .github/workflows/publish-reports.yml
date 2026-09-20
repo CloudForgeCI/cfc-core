@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# In-progress runs are not cancelled, so a started Pages deployment always completes.
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -293,14 +293,14 @@ jobs:
           echo "Running full validation to generate truth tables for GitHub Pages..."
           bash scripts/master-validation-system.sh full 2>&1 | tee validation-run.log
 
-      # Real LocalStack deploy verification (localstack-compliance-verification.yml) runs
+      # LocalStack deploy verification (localstack-compliance-verification.yml) runs
       # separately -- it's slow (13 representative configs, plus ~260 individual templates
       # split across 8 parallel batches) and needs a paid LOCALSTACK_AUTH_TOKEN, so it isn't
       # part of this job's own build. Pull its most recent successful output in instead:
       # compliance-report-generator.py's build_localstack_detail looks for exactly these files
-      # to show real PASS/FAIL and what LocalStackTemplateAdapter changed, alongside the
+      # to show deploy PASS/FAIL and what LocalStackTemplateAdapter changed, alongside the
       # synth-only data this job always has. Same download-last-successful-artifact pattern
-      # already used below for metrics-dashboards.
+      # as metrics-dashboards below.
       - name: Download LocalStack compliance verification artifact
         id: download-localstack-results
         uses: dawidd6/action-download-artifact@v6
@@ -314,7 +314,7 @@ jobs:
           search_artifacts: true
         continue-on-error: true
 
-      # The template sweep is the one that actually matters for row-level verification (see
+      # The template sweep drives row-level verification (see
       # build_localstack_detail's exact config_name match) -- it deploys each of the individual
       # templates this dashboard's rows link to, not just the 13 representative configs above.
       - name: Download LocalStack template sweep artifact

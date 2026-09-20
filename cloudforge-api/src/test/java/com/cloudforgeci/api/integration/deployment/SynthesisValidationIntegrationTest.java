@@ -2,6 +2,7 @@ package com.cloudforgeci.api.integration.deployment;
 
 import com.cloudforgeci.api.compute.ApplicationFactory;
 import com.cloudforgeci.api.application.JenkinsApplicationSpec;
+import com.cloudforgeci.api.application.cms.WordPressApplicationSpec;
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.enums.RuntimeType;
@@ -115,8 +116,11 @@ class SynthesisValidationIntegrationTest {
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
 
-        // When: Creating application infrastructure
-        ApplicationFactory.createFargate(stack, "TestApp", cfc, SecurityProfile.DEV, iamProfile, new JenkinsApplicationSpec());
+        // When: Creating application infrastructure -- WordPress, not Jenkins: Jenkins doesn't
+        // support running more than one instance (see JenkinsApplicationSpec#supportsAutoScaling),
+        // so a multi-instance request against it is now correctly rejected at synthesis time
+        // rather than silently producing scaling resources it can't actually support.
+        ApplicationFactory.createFargate(stack, "TestApp", cfc, SecurityProfile.DEV, iamProfile, new WordPressApplicationSpec());
 
         // Then: Synthesize template
         Template template = Template.fromStack(stack);
@@ -820,8 +824,11 @@ class SynthesisValidationIntegrationTest {
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
 
-        // When: Creating application infrastructure
-        ApplicationFactory.createFargate(stack, "TestApp", cfc, SecurityProfile.STAGING, iamProfile, new JenkinsApplicationSpec());
+        // When: Creating application infrastructure -- WordPress, not Jenkins: Jenkins doesn't
+        // support running more than one instance (see JenkinsApplicationSpec#supportsAutoScaling),
+        // so a multi-instance request against it is now correctly rejected at synthesis time
+        // rather than silently producing scaling resources it can't actually support.
+        ApplicationFactory.createFargate(stack, "TestApp", cfc, SecurityProfile.STAGING, iamProfile, new WordPressApplicationSpec());
 
         // Then: Synthesize template
         Template template = Template.fromStack(stack);

@@ -1,8 +1,8 @@
 # Metabase Application Guide
 
-Metabase is an open-source business intelligence and analytics platform that enables non-technical users to ask questions about their data and visualize the answers.
+Metabase is an open-source business intelligence tool for querying data and building dashboards.
 
-**Status**: Verified
+**Status**: Verified (deployed and exercised end to end by maintainers)
 
 ---
 
@@ -17,29 +17,23 @@ Metabase is an open-source business intelligence and analytics platform that ena
 | **Default CPU** | 1024 (Fargate) |
 | **Default Memory** | 2048 MB (Fargate) |
 | **Default Instance** | t3.small (EC2) |
-| **Health Check Path** | `/api/health` |
+| **Health Check Path** | `/` |
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | Via SAML (Verified) |
-| **Database Required** | Optional (recommended for production) |
+| **Supported Auth Modes** | `application-oidc` (SAML, default), `alb-oidc`, `none` |
+| **Database Required** | No (H2 by default; PostgreSQL optional) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Self-service business intelligence
-- SQL and visual query builder
-- Interactive dashboards
-- Automated reports and alerts
-- Embedded analytics
-- Data exploration with filters
-- Support for 20+ data sources
-- Question sharing and collaboration
-- Row-level security
-- Cached queries
+- Visual query builder and SQL editor
+- Dashboards, alerts, and scheduled reports
+- Connectors for many databases
+- Query result caching
 
-**Note:** The Enterprise Edition image runs in "Open Source" mode without a license. Enterprise features (SAML, advanced permissions, audit logging) require a license token.
+CloudForge deploys the `metabase/metabase-enterprise` image. Without a license token it runs with open-source features only; SAML, advanced permissions, and audit logging require a Metabase Pro or Enterprise license.
 
 ---
 
@@ -57,13 +51,12 @@ Metabase can use two types of databases:
 
 Stores Metabase configuration, questions, dashboards, and users.
 
-**Development:** H2 embedded database (single instance only)
-**Production:** PostgreSQL or MySQL
+Without `provisionDatabase`, Metabase uses an embedded H2 database at `/metabase-data/metabase.db`, which supports a single instance only. With `provisionDatabase`, CloudForge provisions PostgreSQL:
 
 | Property | Value |
 |----------|-------|
-| Engine | PostgreSQL 15+ (recommended) |
-| Instance Class | db.t3.small (default) |
+| Engine | PostgreSQL 15 or later |
+| Instance Class | `db.t3.small` (default) |
 | Storage | 20 GB (default) |
 | Database Name | `metabase` |
 
@@ -77,50 +70,44 @@ Separate databases containing your business data that Metabase queries. Configur
 
 ### Supported Auth Modes
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | **Verified** | ALB-level authentication |
-| `application-oidc` | Via SAML | Requires Enterprise license for native SAML |
-| `none` | Available | Local accounts only |
+| Mode | Description |
+|------|-------------|
+| `application-oidc` | Metabase SAML configuration (`MB_SAML_*`); requires a Metabase Pro or Enterprise license |
+| `alb-oidc` | The load balancer authenticates users before requests reach Metabase |
+| `none` | Metabase local accounts only |
 
 ### Authentication Notes
 
-**Important:** Metabase does **not** support native OpenID Connect. For SSO:
+Metabase does not support OpenID Connect natively. The options are:
 
-1. **ALB-OIDC (Recommended):** Use ALB-level authentication, which works without Metabase Enterprise license
-2. **SAML (Enterprise):** Requires Metabase Pro/Enterprise license and uses SAML 2.0
+1. **`alb-oidc`:** the load balancer authenticates users. No Metabase license is required.
+2. **`application-oidc`:** CloudForge sets Metabase's SAML variables. This requires a Metabase license, and the SAML-based integrations are incomplete (see [OIDC Integration](../../applications/OIDC.md)).
 
-For most deployments, **ALB-OIDC** provides the best balance of security and simplicity without requiring a license.
+`application-oidc` is listed first in Metabase's supported modes, so it is the recommended mode the interactive deployer offers. Choose `alb-oidc` unless you have a license and have validated the SAML setup.
 
 ### ALB-OIDC Details
 
-When using `authMode: "alb-oidc"`:
-- Authentication happens at the load balancer
-- Users are automatically created in Metabase on first access
-- User email is passed from Cognito to Metabase
-- No additional Metabase configuration required
+With `authMode: "alb-oidc"`, authentication happens at the load balancer. Metabase does not read the load balancer's identity headers, so users still sign in to Metabase with their Metabase accounts.
 
 ---
 
 ## Environment Variables
 
-CloudForge automatically configures these environment variables:
+CloudForge sets these environment variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `MB_SITE_URL` | External URL (critical for OAuth) | `https://analytics.example.com` |
+| `MB_SITE_URL` | External URL (set when an FQDN is configured) | `https://analytics.example.com` |
 | `MB_JETTY_HOST` | Bind address | `0.0.0.0` |
 | `MB_DB_TYPE` | Application database type | `postgres` or `h2` |
+| `MB_DB_FILE` | H2 database file (without RDS) | `/metabase-data/metabase.db` |
 | `MB_DB_HOST` | Database host | RDS endpoint |
 | `MB_DB_PORT` | Database port | `5432` |
 | `MB_DB_DBNAME` | Database name | `metabase` |
 | `MB_DB_USER` | Database user | `metabase` |
 | `MB_DB_PASS` | Database password | Injected via ECS secret |
 
-**Enterprise License (if provided):**
-| Variable | Description |
-|----------|-------------|
-| `MB_PREMIUM_EMBEDDING_TOKEN` | License token for Enterprise features |
+Metabase reads a license token from `MB_PREMIUM_EMBEDDING_TOKEN`. CloudForge does not currently create or inject a license secret; see Enterprise Features.
 
 ---
 
@@ -146,23 +133,22 @@ CloudForge automatically configures these environment variables:
 
 ## Deployment Context Examples
 
-### Development - Minimal Setup
+### Development
 
-Quick Metabase for testing with embedded H2 database.
+Metabase with the embedded H2 database.
 
 ```json
 {
   "stackName": "Metabase-Dev",
   "applicationId": "metabase",
   "applicationName": "Metabase Dev",
-  "description": "Metabase development environment",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -175,21 +161,17 @@ Quick Metabase for testing with embedded H2 database.
 }
 ```
 
-**Warning:** H2 database doesn't support multiple instances or auto-scaling.
+H2 does not support multiple instances or auto scaling.
 
-**Cost estimate:** ~$35/month
 
-### Development - With Authentication
-
-Metabase with ALB-OIDC for team access.
+### Development with ALB Authentication
 
 ```json
 {
   "stackName": "Metabase-Dev-Auth",
   "applicationId": "metabase",
   "applicationName": "Metabase Dev",
-  "description": "Metabase with Cognito authentication",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -215,18 +197,15 @@ Metabase with ALB-OIDC for team access.
 }
 ```
 
-**Cost estimate:** ~$90/month
+### Staging with PostgreSQL
 
-### Staging - With PostgreSQL Database
-
-Pre-production with RDS for metadata storage.
+RDS stores Metabase's application data.
 
 ```json
 {
   "stackName": "Metabase-Staging",
   "applicationId": "metabase",
   "applicationName": "Metabase Staging",
-  "description": "Metabase staging with PostgreSQL",
   "environment": "staging",
 
   "runtime": "fargate",
@@ -261,7 +240,6 @@ Pre-production with RDS for metadata storage.
   "databaseBackupRetentionDays": 7,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": true,
   "awsConfigEnabled": true,
   "wafEnabled": true,
 
@@ -271,19 +249,14 @@ Pre-production with RDS for metadata storage.
 }
 ```
 
-**Cost estimate:** ~$170/month
-
-### Production - SOC2 Compliance
-
-Full production deployment for business analytics.
+### Production with SOC 2 Controls
 
 ```json
 {
   "stackName": "Metabase-Production",
   "applicationId": "metabase",
   "applicationName": "Metabase Analytics",
-  "description": "Production Metabase with SOC2 compliance",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -321,7 +294,6 @@ Full production deployment for business analytics.
   "databaseBackupRetentionDays": 30,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "createConfigInfrastructure": true,
   "guardDutyEnabled": true,
@@ -337,19 +309,16 @@ Full production deployment for business analytics.
 }
 ```
 
-**Cost estimate:** ~$400/month
+### Production in an EU Region
 
-### Production - GDPR (EU Data)
-
-For European organizations with GDPR requirements.
+The same configuration deployed to `eu-west-1`. GDPR obligations depend on your data and processes; see the Compliance Considerations section.
 
 ```json
 {
   "stackName": "Metabase-EU",
   "applicationId": "metabase",
   "applicationName": "Metabase Analytics EU",
-  "description": "Metabase for EU data with GDPR compliance",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -384,7 +353,6 @@ For European organizations with GDPR requirements.
   "databaseBackupRetentionDays": 30,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "wafEnabled": true,
@@ -398,25 +366,22 @@ For European organizations with GDPR requirements.
 }
 ```
 
-**Cost estimate:** ~$400/month
+### Production with PCI DSS Controls
 
-### Production - Fintech (PCI-DSS)
-
-For financial analytics with payment data.
+An Aurora PostgreSQL database with longer backup retention.
 
 ```json
 {
   "stackName": "Metabase-Fintech",
   "applicationId": "metabase",
   "applicationName": "Metabase Financial Analytics",
-  "description": "PCI-DSS compliant analytics platform",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "application-service",
 
-  "domain": "secure.fintech.com",
+  "domain": "secure.example.com",
   "subdomain": "analytics",
   "enableSsl": true,
 
@@ -446,7 +411,6 @@ For financial analytics with payment data.
   "databaseBackupRetentionDays": 90,
 
   "complianceFrameworks": "PCI-DSS,SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "createConfigInfrastructure": true,
   "guardDutyEnabled": true,
@@ -462,15 +426,13 @@ For financial analytics with payment data.
 }
 ```
 
-**Cost estimate:** ~$700/month
-
 ---
 
 ## Health Check Configuration
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| Path | `/api/health` | Health check endpoint |
+| Path | `/` | Health check endpoint |
 | Grace Period | 300 seconds | Time before health checks start |
 | Interval | 30 seconds | Time between checks |
 | Timeout | 5 seconds | Response timeout |
@@ -481,41 +443,36 @@ For financial analytics with payment data.
 
 ## Compliance Considerations
 
-### SOC2
+Setting `complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for those frameworks. It does not certify the deployment.
 
-**Automatic Controls:**
-- Encryption at rest (EBS/EFS/RDS)
-- Encryption in transit (TLS)
-- Network isolation (Security Groups)
+### SOC 2
+
+**Infrastructure controls CloudForge can configure:**
+- Encryption at rest (EBS, EFS, RDS) and in transit (TLS)
+- Network isolation with security groups
 - CloudWatch logging
 - Database backup retention
 
-**Use Cases:**
-- Audit log analytics
-- Security metrics dashboards
-- Compliance reporting
-
-**User Responsibilities:**
-- [ ] Configure data source permissions
-- [ ] Enable audit logging (Enterprise)
-- [ ] Set up row-level security
-- [ ] Configure collection permissions
+**Controls you configure in Metabase:**
+- Data source and collection permissions
+- Row-level security (a licensed feature)
+- Audit logging (a licensed feature)
 
 ### GDPR
 
-**User Responsibilities:**
-- [ ] Configure data retention policies
-- [ ] Enable user data export
-- [ ] Document data processing activities
-- [ ] Implement data subject access requests
+Controls you configure in Metabase and your processes:
+- Data retention policies
+- User data export
+- Records of processing activities
+- Data subject access requests
 
-### PCI-DSS
+### PCI DSS
 
-**User Responsibilities:**
-- [ ] Restrict access to cardholder data
-- [ ] Enable query logging
-- [ ] Configure data masking for sensitive fields
-- [ ] Document data flows
+Controls you configure in Metabase and your processes:
+- Restricted access to cardholder data
+- Query logging
+- Masking of sensitive fields
+- Documented data flows
 
 ---
 
@@ -525,16 +482,16 @@ For financial analytics with payment data.
 
 After deployment:
 
-1. Navigate to `https://analytics.your-domain.com`
-2. If using ALB-OIDC, authenticate with Cognito
-3. First user becomes admin
+1. Open `https://analytics.example.com` (your configured FQDN).
+2. With `alb-oidc`, authenticate with Cognito first.
+3. Complete Metabase's setup wizard, which creates the first administrator account.
 
 ### 2. Configure Data Sources
 
-1. Go to **Admin** > **Databases**
-2. Click **Add database**
-3. Select database type (PostgreSQL, MySQL, etc.)
-4. Enter connection details
+1. Go to **Admin** > **Databases**.
+2. Choose **Add database**.
+3. Select the database type.
+4. Enter the connection details.
 
 **Example PostgreSQL connection:**
 ```
@@ -547,23 +504,19 @@ Password: ********
 
 ### 3. Create Questions and Dashboards
 
-1. Click **New** > **Question**
-2. Select data source
-3. Use visual query builder or SQL
-4. Save and organize in collections
+1. Choose **New** > **Question**.
+2. Select a data source.
+3. Use the query builder or SQL.
+4. Save the question to a collection.
 
 ### 4. Set Up Permissions
 
-1. **Admin** > **People**
-2. Create groups (Analysts, Viewers, etc.)
-3. **Admin** > **Permissions**
-4. Configure data access per group
+1. In **Admin** > **People**, create groups.
+2. In **Admin** > **Permissions**, configure data access per group.
 
 ### 5. Configure Caching (Optional)
 
-1. **Admin** > **Caching**
-2. Set default caching duration
-3. Configure query result caching
+In **Admin** > **Performance** (or **Caching** in older versions), configure query result caching.
 
 ---
 
@@ -573,57 +526,47 @@ Password: ********
 
 **Check logs:**
 ```bash
-# Fargate
-aws logs tail /aws/ecs/metabase --follow
+# Fargate (log group name when storage is not retained; otherwise find the
+# stack's log group in the CloudWatch console)
+aws logs tail /aws/ecs/<stack-name>/fargate/<security-profile> --follow
 
-# EC2
-ssh ec2-user@instance 'tail -f /opt/metabase/logs/metabase.log'
+# EC2 (via SSM Session Manager)
+aws ssm start-session --target <instance-id>
+# then: tail -f /opt/metabase/logs/metabase.log
 ```
 
 ### Database connection fails (metadata DB)
 
-1. Verify security group allows port 5432
-2. Check RDS endpoint in SSM parameters
-3. Verify database credentials in Secrets Manager
+1. Verify the security group allows port 5432 from the application.
+2. Check the `MB_DB_HOST` value against the RDS endpoint.
+3. Verify the database credentials in Secrets Manager.
 
 ### Data source connection fails
 
-1. Ensure VPC security groups allow outbound connection
-2. Check data source credentials
-3. Test connection from Metabase admin UI
+1. Ensure security groups allow the outbound connection.
+2. Check the data source credentials.
+3. Test the connection from the Metabase admin UI.
 
 ### Slow queries
 
-1. Enable query caching
-2. Check database indexes
-3. Use native queries for complex analytics
-4. Consider read replicas for data sources
+1. Enable query caching.
+2. Check database indexes.
+3. Use native queries for complex analytics.
+4. Consider read replicas for data sources.
 
 ### SSO issues with ALB-OIDC
 
-1. Verify Cognito domain prefix is globally unique
-2. Check ALB listener rules
-3. Verify user attributes are passed correctly
+1. Verify the Cognito domain prefix is globally unique.
+2. Check the ALB listener rules.
+3. Check the Cognito app client's callback URLs.
 
 ---
 
 ## Enterprise Features
 
-With a Metabase Pro/Enterprise license:
+A Metabase Pro or Enterprise license enables SAML SSO, advanced permissions, audit logging, and other features. Metabase reads the token from the `MB_PREMIUM_EMBEDDING_TOKEN` environment variable, or you can enter it in **Admin** > **Settings** > **License**.
 
-- **SAML SSO**: Native SAML 2.0 support
-- **Advanced Permissions**: Granular access controls
-- **Audit Logging**: Track user actions
-- **Content Verification**: Mark trusted answers
-- **Official Collections**: Verified content organization
-- **Embedded Analytics**: White-label embedding
-
-To activate, set the license token in Secrets Manager:
-```bash
-aws secretsmanager put-secret-value \
-  --secret-id Metabase-Production/metabase/license-token \
-  --secret-string "your-license-token"
-```
+`MetabaseApplicationSpec` defines a secret name (`<stack name>/metabase/license-token`) and the variable name, but CloudForge does not currently create that secret or inject it into the container. Enter the token in the admin UI instead.
 
 ---
 

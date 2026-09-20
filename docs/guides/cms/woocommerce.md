@@ -1,8 +1,6 @@
 # WooCommerce Application Guide
 
-WooCommerce is a WordPress plugin that adds a full e-commerce storefront to WordPress. It is the most widely deployed e-commerce platform on the web. CloudForge deploys WooCommerce as a first-class application — it is pre-configured with the WooCommerce plugin, Storefront theme, and higher default resources than plain WordPress.
-
-**Status**: Available
+WooCommerce is a WordPress plugin that adds an e-commerce storefront to WordPress. The `woocommerce` application extends the [WordPress](wordpress.md) specification with larger recommended resources, additional PHP extensions (`gmp`, `sodium`), and e-commerce-oriented WordPress settings.
 
 ---
 
@@ -12,32 +10,18 @@ WooCommerce is a WordPress plugin that adds a full e-commerce storefront to Word
 |----------|-------|
 | **Application ID** | `woocommerce` |
 | **Category** | E-Commerce |
-| **Base Image** | `wordpress:php8.2-fpm-alpine` + WooCommerce pre-installed |
+| **Default Image** | `wordpress:php8.2-apache` (same as WordPress) |
 | **PHP Version** | 8.2 |
 | **Application Port** | `80` |
-| **Default CPU** | 2048 (Fargate) |
-| **Default Memory** | 4096 MB (Fargate) |
+| **Recommended CPU / Memory (Fargate)** | 2048 / 4096 MB |
+| **Recommended Instance Type (EC2)** | `t3.medium` |
 | **Health Check Path** | `/wp-admin/install.php` |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **Authentication** | ALB-OIDC (Cognito) |
-| **Database Required** | Yes (MySQL 8.0) |
+| **Authentication Modes** | `alb-oidc`, `application-oidc` (OpenID Connect Generic plugin), `none` |
+| **Database** | Required (MySQL 8.0 default; MariaDB supported; default database name `woocommerce`) |
 
-WooCommerce requires more CPU and memory than plain WordPress due to cart/checkout operations, product catalog queries, and order processing.
-
----
-
-## Capabilities
-
-- Full WordPress + WooCommerce stack
-- Product catalog with variants and attributes
-- Cart, checkout, and order management
-- Payment gateway integrations (Stripe, PayPal, etc.)
-- Shipping rate calculations
-- Coupon and discount engine
-- Customer accounts and order history
-- REST API for headless storefronts
-- S3 media offloading for product images
+The container installs WordPress on first start, as described in the [WordPress guide](wordpress.md#first-run-install-and-admin-password). The WooCommerce plugin itself is **not** installed automatically; install it after the first sign-in.
 
 ---
 
@@ -46,41 +30,33 @@ WooCommerce requires more CPU and memory than plain WordPress due to cart/checko
 | Resource | Provisioned | Purpose |
 |----------|-------------|---------|
 | S3 bucket | Yes | Product images and downloadable products |
-| ElastiCache Redis | Yes | Session storage, cart persistence, object cache |
-| CloudFront CDN | Yes | Product image delivery |
+| ElastiCache Redis | Yes | Object cache and session storage |
+| CloudFront CDN | Yes | Product image and static asset delivery |
 | EFS | Yes | `/var/www/html` (themes, plugins, uploads) |
-| Route53 records | When domain configured | A + AAAA records to ALB |
-
-Redis session storage is particularly important for WooCommerce — it ensures cart contents persist across Fargate task replacements.
+| Route53 records | When a hosted zone and domain are configured | A + AAAA alias records |
 
 ---
 
 ## Authentication
 
-The storefront (public product pages, checkout) is typically unauthenticated. The WordPress admin (`/wp-admin`) and any protected store pages are protected by Cognito at the ALB.
-
-For a **public storefront** (no login required to browse and buy), use `authMode: "none"` and restrict only the admin path:
-
-```json
-{
-  "authMode": "alb-oidc",
-  "publicPaths": ["/", "/shop/*", "/product/*", "/cart/*", "/checkout/*", "/my-account/*", "/wp-json/*"]
-}
-```
+| Mode | Description |
+|------|-------------|
+| `alb-oidc` | Cognito at the ALB. Protects `/wp-admin/*` and `/wp-login.php`; the storefront, cart, and checkout stay public. |
+| `application-oidc` | WordPress handles OIDC through the OpenID Connect Generic plugin. |
+| `none` | No authentication in front of the store. |
 
 ---
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `WORDPRESS_DB_HOST` | RDS endpoint |
-| `WORDPRESS_DB_USER` | Database user |
-| `WORDPRESS_DB_NAME` | Database name |
-| `WORDPRESS_DB_PASSWORD` | From Secrets Manager |
-| `REDIS_HOST` | ElastiCache endpoint |
-| `REDIS_PORT` | `6379` |
-| `WC_CART_SESSION_HANDLER` | `WC_Session_Handler_Redis` (when Redis provisioned) |
+WooCommerce uses the same variables as [WordPress](wordpress.md#environment-variables), including `WORDPRESS_DB_PASSWORD` from Secrets Manager and the generated `WORDPRESS_ADMIN_PASSWORD`. `WORDPRESS_CONFIG_EXTRA` additionally defines:
+
+- `FORCE_SSL_LOGIN` and `FORCE_SSL_ADMIN` (when `enableSsl` is `true`)
+- `DISABLE_WP_CRON`
+- `WP_MEMORY_LIMIT` and `WP_MAX_MEMORY_LIMIT` (`512M`)
+- `WC_LOG_HANDLER` (`WC_Log_Handler_File`)
+
+The Redis endpoint and S3 bucket name are not injected.
 
 ---
 
@@ -88,11 +64,13 @@ For a **public storefront** (no login required to browse and buy), use `authMode
 
 ### Container (Fargate)
 
+WooCommerce inherits the WordPress storage settings:
+
 | Property | Value |
 |----------|-------|
 | Data Path | `/var/www/html` |
-| EFS Path | `/woocommerce` |
-| Volume Name | `woocommerceData` |
+| EFS Path | `/wordpress` |
+| Volume Name | `wordpressData` |
 | Container User | `33:33` (www-data) |
 | EFS Permissions | `755` |
 
@@ -100,7 +78,9 @@ For a **public storefront** (no login required to browse and buy), use `authMode
 
 ## Deployment Context Examples
 
-### Development - Minimal Storefront
+Set `cpu` and `memory` (Fargate) or `instanceType` (EC2) explicitly; otherwise the framework defaults (`1024`, `2048`, `t3.micro`) apply.
+
+### Development - Minimal
 
 ```json
 {
@@ -110,7 +90,7 @@ For a **public storefront** (no login required to browse and buy), use `authMode
   "topology": "cms-service",
   "applicationId": "woocommerce",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -129,9 +109,7 @@ For a **public storefront** (no login required to browse and buy), use `authMode
 }
 ```
 
-**Cost estimate:** ~$80/month
-
-### Production - Full E-Commerce
+### Production
 
 ```json
 {
@@ -153,7 +131,6 @@ For a **public storefront** (no login required to browse and buy), use `authMode
   "cognitoDomainPrefix": "shop-prod-yourcompany",
   "cognitoMfaEnabled": true,
   "cognitoMfaMethod": "totp",
-  "publicPaths": ["/", "/shop/*", "/product/*", "/cart/*", "/checkout/*", "/my-account/*", "/wp-json/*"],
 
   "cpu": 2048,
   "memory": 4096,
@@ -181,11 +158,9 @@ For a **public storefront** (no login required to browse and buy), use `authMode
 }
 ```
 
-**Cost estimate:** ~$500-800/month
+### Production - With PCI DSS and SOC 2 Controls
 
-### Production - PCI-DSS (Payment Processing)
-
-WooCommerce handles payment tokens but relies on third-party gateways (Stripe, PayPal) for card processing. PCI-DSS scope is reduced but not eliminated.
+`complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for the listed frameworks. It does not make the store PCI DSS compliant. A hosted payment gateway reduces, but does not eliminate, PCI DSS scope.
 
 ```json
 {
@@ -221,7 +196,7 @@ WooCommerce handles payment tokens but relies on third-party gateways (Stripe, P
   "databaseMultiAz": true,
   "databaseBackupRetentionDays": 90,
 
-  "complianceFrameworks": "PCI-DSS,SOC2",
+  "complianceFrameworks": "pci-dss,soc2",
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "auditManagerEnabled": true,
@@ -231,68 +206,61 @@ WooCommerce handles payment tokens but relies on third-party gateways (Stripe, P
 
   "enableMonitoring": true,
   "enableEncryption": true,
-  "logRetentionDays": "730",
+  "logRetentionDays": "731",
   "retainStorage": true
 }
 ```
-
-**Cost estimate:** ~$700-1000/month
 
 ---
 
 ## Post-Deployment Tasks
 
-### 1. Complete WooCommerce Setup Wizard
+### 1. Install WooCommerce
 
-1. Navigate to `https://your-domain.com`
-2. Complete the WordPress install, then activate WooCommerce
-3. Run the WooCommerce setup wizard: store country, currency, payment methods, shipping zones
+1. Sign in at `https://<your-domain>/wp-admin/` as `admin` (password from the `CloudForgeAutoAdminPasswordSecretArn` stack output).
+2. **Plugins** > **Add New**: install and activate **WooCommerce**, or use the WP-CLI copy that the container downloads at startup: `php /tmp/wp-cli.phar --allow-root --path=/var/www/html plugin install woocommerce --activate`.
+3. Run the WooCommerce setup wizard: store country, currency, payment methods, shipping zones.
 
-### 2. Configure Payment Gateway
+### 2. Configure a Payment Gateway
 
-WooCommerce does not include a payment gateway by default. Install one:
+WooCommerce does not include a card payment gateway by default. Common options:
 
-- **Stripe** — `WooCommerce Stripe Payment Gateway` (recommended)
-- **PayPal** — `WooCommerce PayPal Payments`
-- **Square** — `WooCommerce Square`
+- **WooCommerce Stripe Payment Gateway**
+- **WooCommerce PayPal Payments**
+- **WooCommerce Square**
 
-Store API keys in AWS Secrets Manager and inject via environment variables — never commit them to `wp-config.php`.
+Store gateway API keys in AWS Secrets Manager rather than in `wp-config.php`.
 
-### 3. Configure Redis Sessions
+### 3. Configure Redis
 
-Install **WooCommerce Redis Session Handler** or **Redis Object Cache** plugin:
-
-1. **Plugins** > **Add New** > search `Redis Object Cache`
-2. Install and activate
-3. The `REDIS_HOST` env var is pre-set — click **Enable Object Cache**
-
-This prevents cart loss when Fargate replaces tasks.
+Follow [Configure Redis Object Cache](wordpress.md#4-configure-redis-object-cache) in the WordPress guide, using the cluster named `woocommerce-<env>-cache`.
 
 ### 4. Configure S3 Product Images
 
-1. Install **WP Offload Media Lite**
-2. Point to the S3 bucket provisioned by CloudForge (`{stackName}-media`)
-3. CloudFront is already pointed at this bucket
+Follow [Configure S3 Media Offloading](wordpress.md#3-configure-s3-media-offloading) in the WordPress guide, using the bucket with logical ID prefix `woocommercemedia`.
+
+### 5. Scheduled Tasks
+
+`DISABLE_WP_CRON` is set. Schedule `wp-cron.php` and the Action Scheduler (`wp action-scheduler run`) externally.
 
 ---
 
 ## Compliance Considerations
 
-### PCI-DSS
+### PCI DSS
 
-Using a hosted payment gateway (Stripe, PayPal) reduces PCI-DSS scope significantly — card data never touches your servers. User responsibilities:
+With a hosted payment gateway, card data does not reach your servers, which reduces PCI DSS scope. Application-level items to review:
 
-- [ ] Use only PCI-compliant payment gateways
-- [ ] Enable TLS 1.2+ only (ALB default)
-- [ ] Enable WAF with OWASP ruleset
-- [ ] Store no card data in the database
-- [ ] Enable audit logging for order events
-- [ ] Quarterly vulnerability scans
+- Use only PCI DSS compliant payment gateways
+- Enable WAF (`wafEnabled`)
+- Store no card data in the database
+- Enable audit logging for order events
+- Schedule quarterly vulnerability scans
 
 ---
 
 ## Related Documentation
 
-- [WordPress Guide](wordpress.md) — WordPress without WooCommerce
+- [WordPress Guide](wordpress.md)
 - [CMS Guides Index](README.md)
 - [CMS Topology Reference](../../applications/CMS.md)

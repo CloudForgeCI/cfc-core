@@ -2,7 +2,7 @@
 
 ## IMPORTANT: Scope
 
-**This guide covers application controls only. Infrastructure + application controls ≠ full PCI-DSS compliance.**
+**This guide covers application controls only. Infrastructure and application controls together do not constitute PCI DSS compliance.**
 
 You still need:
 - Organizational policies (security, incident response, acceptable use)
@@ -11,7 +11,7 @@ You still need:
 - Third-party assessment (Qualified Security Assessor validation)
 - Documentation (risk assessments, network diagrams)
 
-Infrastructure (CloudForge CI) + Application (this guide) + Organizational controls + QSA = Compliance
+PCI DSS compliance requires infrastructure controls (CloudForge CI), application controls (this guide), organizational controls, and assessment by a QSA.
 
 ## Overview
 
@@ -785,10 +785,10 @@ A: Use test card numbers provided by payment processors (Stripe, PayPal test mod
 ## Additional Resources
 
 - [Jenkins Security Best Practices](https://www.jenkins.io/doc/book/security/)
-- [OWASP Jenkins Hardening Guide](https://owasp.org/www-project-jenkins-hardening/)
+- [Securing Jenkins](https://www.jenkins.io/doc/book/security/securing-jenkins/)
 - [AWS Secrets Manager Integration](https://plugins.jenkins.io/aws-secrets-manager-credentials-provider/)
 - [Jenkins Configuration as Code](https://github.com/jenkinsci/configuration-as-code-plugin)
 
 ---
 
-**Remember**: Infrastructure + application controls = technical foundation only. PCI-DSS compliance requires organizational policies, procedures, and QSA validation.
+Infrastructure and application controls are a technical foundation only. PCI DSS compliance also requires organizational policies, procedures, and QSA validation.

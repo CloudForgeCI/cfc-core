@@ -8,9 +8,35 @@ These controls can contribute infrastructure evidence to a compliance program, b
 
 **Capabilities:**
 - **Framework-based configuration** - Selected frameworks determine applicable infrastructure settings
+- **Synthesis-time validation** - cdk-nag packs and CloudForge framework validators check the synthesized stack
 - **Continuous evaluation** - AWS Config evaluates supported resources after deployment
 - **Supported remediation** - Some findings can invoke configured SSM remediation actions
 - **Evidence sources** - CloudTrail, AWS Config, and related services record infrastructure activity
+
+### Framework status
+
+| Framework | `complianceFrameworks` value | Status |
+|-----------|------------------------------|--------|
+| HIPAA Security Rule | `hipaa` | Supported |
+| SOC 2 Trust Services Criteria | `soc2` | Supported |
+| PCI DSS v4.0.1 | `pci-dss` | Supported |
+| GDPR | `gdpr` | Supported |
+| ISO/IEC 27001 | not accepted | A validator class (`Iso27001Rules`) and cfn-guard rules exist, but the value is not accepted by `complianceFrameworks` yet |
+| FedRAMP Moderate / High | not accepted | In development; see [FedRAMP Controls Mapping](FEDRAMP_CONTROLS_MAPPING.md) |
+
+Values are case-insensitive and may be separated by commas, spaces, or `+`. Any other value fails configuration parsing.
+
+### Configuration flags
+
+Selecting a framework alone does not create AWS Config or Audit Manager resources. The relevant flags default to `false`:
+
+| Property | Effect |
+|----------|--------|
+| `securityProfile` | `dev`, `staging`, or `production`. CloudTrail is created for `staging` and `production`. cdk-nag packs run only for `production` with at least one framework selected. |
+| `complianceMode` | `enforce`, `advisory`, or `disabled`. Defaults to `enforce` for `production` and `advisory` otherwise. |
+| `awsConfigEnabled` | Deploys AWS Config rules, conformance packs, and remediation configurations. |
+| `createConfigInfrastructure` | Creates the Config recorder and delivery channel. AWS allows one of each per account and region, so set this on only one stack. |
+| `auditManagerEnabled` | Creates Audit Manager assessments and installs the CloudForge framework validators (`FrameworkRules`). |
 
 ---
 
@@ -27,9 +53,8 @@ These controls can contribute infrastructure evidence to a compliance program, b
 - **[PCI-DSS Compliance](PCI_DSS_COMPLIANCE.md)** - PCI-DSS specific requirements
 - **[Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md)** - Detailed framework mapping
 
-### For Customers
-- **[This README](#features)** - Feature overview and benefits
-- **[Cost Breakdown](#example-cost-estimate)** - Transparent pricing information
+### Cost Planning
+- **[Example Cost Estimate](#example-cost-estimate)** - Illustrative service usage for a production deployment
 
 ---
 
@@ -37,24 +62,22 @@ These controls can contribute infrastructure evidence to a compliance program, b
 
 ### 1. S3 Lifecycle Management
 
-**Problem:** Compliance requires years of log retention, but storing everything in S3 Standard is expensive.
-
-**Solution:** Automatic lifecycle policies transition data through cost-effective storage tiers:
+Compliance log buckets receive lifecycle rules that transition objects to colder storage classes and expire them after the retention period of the strictest selected framework:
 
 ```
-Day 0-90    → S3 Standard      ($23/TB/month)  - Immediate availability
-Day 90-365  → Glacier          ($4/TB/month)   - Infrequent access
-Day 365+    → Glacier Deep Archive ($1/TB/month) - Long-term compliance
+Day 0-90    → S3 Standard           - Immediate availability
+Day 90-365  → S3 Glacier            - Infrequent access
+Day 365+    → S3 Glacier Deep Archive (when retention exceeds one year)
 ```
 
 **Retention by Framework:**
-| Framework | Retention Period | Annual Cost per TB* |
-|-----------|------------------|---------------------|
-| HIPAA | 6 years | $246 |
-| SOC2 | 2 years | $132 |
-| PCI-DSS | 1 year | $96 |
+| Framework | Retention Period |
+|-----------|------------------|
+| HIPAA | 6 years (2190 days) |
+| SOC2 | 2 years (730 days) |
+| PCI-DSS | 1 year (365 days) |
 
-*Compared to $276/year for S3 Standard
+Without a selected framework, retention follows the security profile: 6 years for `production`, 2 years for `staging`, and 1 year for `dev`.
 
 **What's Included:**
 - CloudTrail audit logs
@@ -66,13 +89,11 @@ Day 365+    → Glacier Deep Archive ($1/TB/month) - Long-term compliance
 
 ### 2. Automatic IAM Password Policy Enforcement
 
-**Problem:** Compliance frameworks require strict password policies, but manual enforcement is error-prone.
-
-**Solution:** AWS Config continuously monitors password policy and automatically fixes non-compliance.
+When `awsConfigEnabled` is `true`, an AWS Config rule evaluates the account password policy. When the stack also creates the Config recorder (`createConfigInfrastructure: true`), an automatic remediation applies the `AWSConfigRemediation-SetIAMPasswordPolicy` SSM document when the policy is missing or weaker than required.
 
 **How It Works:**
-1. Config detects missing/weak password policy
-2. SSM Automation immediately applies correct policy
+1. Config detects a missing or weak password policy
+2. SSM Automation applies the required policy
 3. Config re-evaluates and confirms compliance
 4. All actions logged to CloudTrail
 
@@ -83,39 +104,31 @@ Day 365+    → Glacier Deep Archive ($1/TB/month) - Long-term compliance
 | SOC2 | 12 characters | 90 days | 12 passwords |
 | PCI-DSS | 8 characters | 90 days | 4 passwords |
 
-All frameworks require uppercase, lowercase, numbers, and symbols.
+All frameworks require uppercase, lowercase, numbers, and symbols. PCI DSS v4.0.1 Req 8.3.6 requires 12 characters; the 8-character IAM account policy for PCI-DSS alone predates v4.0 and is a known gap. Select an additional framework or adjust the policy if IAM users access the cardholder data environment. Without a selected framework, the minimum length is 14 characters for `production` and 12 otherwise.
 
 ---
 
-### 3. Immutable Audit Trail
+### 3. Audit Log Protection
 
-**Problem:** Audit logs must be tamper-proof to meet compliance requirements.
-
-**Solution:** S3 versioning prevents deletion or modification of audit logs.
-
-**Behavior:**
-- **Immutability**: Cannot overwrite previous versions
-- **Recovery**: Restore accidentally deleted files
-- **Evidence support**: Preserves prior object versions for review
+S3 versioning is enabled on compliance log buckets so that overwritten or deleted objects keep their prior versions. CloudTrail log file validation detects modification of delivered log files. Versioning alone does not prevent deletion; set `s3ObjectLockEnabled` when write-once retention is required.
 
 **Applied To:**
-- ✅ CloudTrail logs
-- ✅ Config snapshots
-- ✅ ALB access logs
-- ✅ Audit Manager evidence
+- CloudTrail logs
+- Config snapshots
+- ALB access logs
+- Audit Manager evidence
 
 ---
 
 ### 4. Multi-Framework Support
 
-**Problem:** Many organizations must meet multiple compliance frameworks simultaneously.
-
-**Solution:** Enable multiple frameworks and the system automatically applies the **strictest requirement**.
+When several frameworks are selected, CloudForge applies the strictest requirement for each setting.
 
 **Example:**
-```java
-// Enable HIPAA + PCI-DSS + SOC2
-cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
+```json
+{
+  "complianceFrameworks": "hipaa,pci-dss,soc2"
+}
 ```
 
 **Result:**
@@ -136,10 +149,10 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
 - Breach notification procedures
 
 **CloudForge Implementation:**
-- ✅ 6-year S3 lifecycle policies
-- ✅ 14-character passwords with complexity
-- ✅ Complete audit trail via CloudTrail
-- ✅ Encryption using S3-managed keys (SSE-S3)
+- 6-year S3 lifecycle policies
+- 14-character passwords with complexity
+- API activity logging via CloudTrail
+- Encryption using S3-managed keys (SSE-S3)
 
 ---
 
@@ -148,13 +161,13 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
 **Key Requirements:**
 - Security, availability, processing integrity
 - Confidentiality and privacy controls
-- Annual audits required
+- Periodic independent audits
 
 **CloudForge Implementation:**
-- ✅ 2-year log retention for audit evidence
-- ✅ 12-character passwords
-- ✅ Continuous monitoring via AWS Config
-- ✅ Automated evidence collection (Audit Manager)
+- 2-year log retention for audit evidence
+- 12-character passwords
+- Continuous monitoring via AWS Config
+- Evidence collection through AWS Audit Manager (when `auditManagerEnabled` is `true`)
 
 ---
 
@@ -167,10 +180,10 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
 - Incident response procedures
 
 **CloudForge Implementation:**
-- ✅ 1-year retention, 90 days in S3 Standard
-- ✅ 8-character minimum passwords
-- ✅ WAF protection on ALB
-- ✅ CloudWatch alarms for security events
+- 1-year retention, 90 days in S3 Standard
+- 8-character minimum passwords
+- WAF protection on the ALB
+- CloudWatch alarms for security events
 
 ---
 
@@ -183,10 +196,10 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
 - Privacy by design
 
 **CloudForge Implementation:**
-- ✅ Configurable retention periods
-- ✅ S3 versioning for data recovery
-- ✅ Access controls and encryption
-- ✅ CloudWatch alarms for breach detection
+- Data residency validation for the deployment region
+- S3 versioning for data recovery
+- Access controls and encryption
+- CloudWatch alarms for security events
 
 ---
 
@@ -232,9 +245,13 @@ cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
 
 ### Deployment Flow
 
-1. **Developer configures frameworks**
-   ```java
-   cfc.put("complianceFrameworks", "HIPAA,SOC2");
+1. **Configure frameworks in the deployment context**
+   ```json
+   {
+     "securityProfile": "production",
+     "complianceFrameworks": "hipaa,soc2",
+     "awsConfigEnabled": true
+   }
    ```
 
 2. **CDK synthesizes CloudFormation**
@@ -283,23 +300,22 @@ This example is not a quote or savings projection. Actual charges depend on regi
 
 ### Prerequisites
 
-- AWS Account with admin access
-- AWS CDK installed
-- Java 17+ and Maven
+- AWS account with permissions to deploy CloudFormation, IAM, AWS Config, and CloudTrail resources
+- AWS CDK CLI
+- The JDK version set in the root `pom.xml`, and Maven
 
 ### Initial Setup
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/cloudforgeci/cfc-core.git
+git clone https://github.com/CloudForgeCI/cfc-core.git
 cd cfc-core
 
-# 2. Build
-cd cloudforge-api
-mvn clean install
+# 2. Build all modules
+mvn -DskipTests install
 
-# 3. Deploy (Interactive Deployer will prompt for configuration)
-cd ../cfc-testing
+# 3. Deploy with the Interactive Deployer, which prompts for configuration
+cd cfc-testing
 cdk deploy
 
 # When prompted, select:
@@ -308,13 +324,13 @@ cdk deploy
 # - Enable AWS Config: Yes
 # - Enable ALB Access Logging: Yes
 
-# 4. Verify compliance
+# 4. Review Config rule evaluations
 aws configservice describe-compliance-by-config-rule \
   --query 'ComplianceByConfigRules[*].[ConfigRuleName,Compliance.ComplianceType]' \
   --output table
 ```
 
-**Example Output:**
+**Example output** (rule names vary by stack):
 ```
 ----------------------------------------
 |  DescribeComplianceByConfigRule       |
@@ -337,7 +353,7 @@ aws configservice describe-compliance-by-config-rule \
 
 ### CloudWatch Dashboard
 
-Create a compliance dashboard to monitor all metrics:
+CloudForge does not ship a compliance dashboard definition. To create one, write a dashboard body and publish it:
 
 ```bash
 aws cloudwatch put-dashboard \
@@ -345,7 +361,7 @@ aws cloudwatch put-dashboard \
   --dashboard-body file://compliance-dashboard.json
 ```
 
-**Includes:**
+**Suggested widgets:**
 - Config rule compliance status
 - S3 bucket sizes and costs
 - CloudTrail event counts
@@ -412,16 +428,16 @@ A: Organization-wide deployment requires separate StackSets or account-provision
 A: Continuously for configuration changes, plus periodic evaluations every 24 hours.
 
 **Q: Can I disable auto-remediation?**
-A: Yes, set `.automatic(false)` in the remediation configuration. Manual approval will be required.
+A: The optional remediations (`enableS3VersioningRemediation`, `enableCloudTrailBucketAccessRemediation`, `enableRdsDeletionProtectionRemediation`, `enableRdsAutoMinorVersionUpgradeRemediation`) are off by default. The password-policy remediation is attached automatically when the stack creates the Config recorder. For `production` stacks where the stack also creates the Config recorder, the framework Config rules add account-level remediations that re-enable GuardDuty (PCI-DSS), Security Hub, Inspector, and Macie (SOC2). `ComplianceFactory` reads `enableGuardDutyRemediation`, `enableSecurityHubRemediation`, `enableInspectorRemediation`, and `enableMacieRemediation` to control these, but the keys are not yet exposed through `DeploymentContext`, so they cannot be turned off from configuration. Changing either behavior currently requires a code change in `ComplianceFactory`.
 
 **Q: What if remediation fails?**
-A: Config will retry up to 5 times with 60-second intervals. Check SSM Automation execution history for errors.
+A: The password-policy and S3-versioning remediations retry up to 5 times at 60-second intervals; the CloudTrail bucket-access and RDS remediations retry up to 3 times at 120-second intervals. Check the SSM Automation execution history for errors.
 
 **Q: How do I provide infrastructure evidence to auditors?**
 A: Configure AWS Audit Manager and the relevant logging services, then review exported evidence with your compliance team or auditor.
 
 **Q: Can I add custom compliance rules?**
-A: Yes! Add custom Config rules in `ComplianceFactory.java`. Follow existing patterns.
+A: Yes. Add Config rules in `ComplianceFactory.java`, or add a `FrameworkRules` implementation as described in [Validation Architecture](VALIDATION_ARCHITECTURE.md).
 
 ---
 
@@ -436,7 +452,7 @@ A: Yes! Add custom Config rules in `ComplianceFactory.java`. Follow existing pat
 **Fix:** Check SSM Automation role has `iam:UpdateAccountPasswordPolicy` permission
 
 **Issue:** S3 lifecycle not applied
-**Fix:** Verify `complianceFrameworks` is set in deployment context
+**Fix:** Verify `complianceFrameworks` is set in the deployment context
 
 **Issue:** High AWS costs
 **Fix:** Review S3 storage class distributions. Ensure lifecycle transitions are working.
@@ -449,41 +465,36 @@ For more troubleshooting, see **[Deployment Guide - Troubleshooting](DEPLOYMENT_
 
 ### Getting Started
 - [README](README.md) - This file
-- [Quick Start Guide](QUICK_START_GUIDE.md) - Fast path to compliance
+- [Quick Start Guide](QUICK_START_GUIDE.md) - Initial configuration
 - [Deployment Guide](DEPLOYMENT_GUIDE.md) - Detailed deployment
 
 ### Technical Documentation
 - [Automated Compliance](AUTOMATED_COMPLIANCE.md) - Feature deep-dive
 - [Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md) - Multiple frameworks
-- [AWS Config Multi-Stack](AWS_CONFIG_MULTI_STACK.md) - Multi-account setup
+- [AWS Config Multi-Stack](AWS_CONFIG_MULTI_STACK.md) - Several stacks in one account and region
+- [Validation Architecture](VALIDATION_ARCHITECTURE.md) - Validation layers
+- [CSV Parameterized Testing](CSV_PARAMETERIZED_TESTING.md) - Compliance test matrix
+- [Validator Exceptions](VALIDATOR_EXCEPTIONS.md) - Documented validator exceptions
 
 ### Framework-Specific
 - [PCI-DSS Compliance](PCI_DSS_COMPLIANCE.md) - PCI-DSS requirements
 - [PCI-DSS Application Security](PCI_DSS_APPLICATION_SECURITY.md) - App security
 - [Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md) - Framework mapping
+- [FedRAMP Controls Mapping](FEDRAMP_CONTROLS_MAPPING.md) - In development
 
 ---
 
 ## Support & Contributing
 
 ### Get Help
-- **Issues**: [GitHub Issues](https://github.com/cloudforgeci/cfc-core/issues)
+- **Issues**: [GitHub Issues](https://github.com/CloudForgeCI/cfc-core/issues)
 - **Email**: support@cloudforgeci.com
 - **Documentation**: [docs/compliance/](.)
 
 ### Contributing
-We welcome contributions! See CONTRIBUTING.md in the project root for guidelines.
+See [CONTRIBUTING.md](https://github.com/CloudForgeCI/cfc-core/blob/develop/CONTRIBUTING.md) for guidelines.
 
 ### License
-Apache 2.0 - See LICENSE file in the project root for details
+Apache 2.0 - See [LICENSE](https://github.com/CloudForgeCI/cfc-core/blob/develop/LICENSE) for details.
 
----
-
-## Changelog
-
-Release history is maintained in the project changelog and Git history.
-
----
-
-*Last Updated: 2025*
-*CloudForge CI compliance-control documentation*
+Release history is maintained in [CHANGELOG.md](https://github.com/CloudForgeCI/cfc-core/blob/develop/CHANGELOG.md).

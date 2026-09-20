@@ -1,7 +1,7 @@
 # SOC2 C1.2 - Data Disposal Procedures
 
 **Control**: C1.2 - Information Disposal
-**Status**: Fully Documented
+**Status**: Procedure template
 **Last Updated**: 2025-12-16
 **Owner**: Infrastructure Administrator
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document defines procedures for secure disposal of confidential information in CloudForge CI infrastructure. These procedures satisfy SOC2 C1.2 (Information Disposal) requirements.
+This document defines procedures for secure disposal of confidential information in CloudForge CI infrastructure. These procedures are a template for addressing SOC2 C1.2 (Information Disposal) requirements.
 
 ---
 
@@ -32,7 +32,7 @@ CloudForge CI implements automated data disposal through S3 lifecycle policies:
 #### CloudTrail Logs (6-Year Retention)
 
 ```java
-// AlbFactory and ComplianceFactory implement:
+// AlbFactory and ComplianceFactory implement (simplified; HIPAA shown):
 .lifecycleRules(List.of(
     LifecycleRule.builder()
         .transitions(List.of(
@@ -73,16 +73,17 @@ Trail.Builder.create(this, "CloudTrail")
     .cloudWatchLogsRetention(config.getLogRetentionDays())
     .build();
 
-// Security profiles define:
-// - DEV: 30 days
-// - STAGING: 90 days
-// - PRODUCTION: 365 days (CloudWatch), 6 years (S3)
+// Security profile defaults (override with logRetentionDays):
+// - DEV: 7 days
+// - STAGING: 3 months
+// - PRODUCTION: 6 years
+// S3 lifecycle expiration follows the selected frameworks (see AUTOMATED_COMPLIANCE.md)
 ```
 
 ### Database Snapshot Disposal
 
 ```java
-// RdsFactory configures backup retention:
+// RdsFactory configures backup retention (override with databaseBackupRetentionDays):
 .backupRetention(Duration.days(backupRetention))
 // - PRODUCTION: 30 days
 // - STAGING: 14 days

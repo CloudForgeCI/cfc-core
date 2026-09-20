@@ -1,274 +1,105 @@
-# Security
+# Security Policy
 
-## Supported Versions
+## Supported versions
 
-Security patches are provided for the current 3.2.x release series.
+Security fixes are released for the current 3.2.x series.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 3.2.x   | :white_check_mark: |
-| < 3.2   | :x:                |
+| Version | Supported |
+|---|---|
+| 3.2.x | Yes |
+| < 3.2 | No |
 
-## Found a Security Issue?
+Every merge to `develop` is published as a new patch release, so upgrading to the latest
+3.2.x version is the way to pick up fixes.
 
-Please don't open a public issue. Instead:
+## Reporting a vulnerability
 
-**Preferred:** Use [GitHub Security Advisories](https://github.com/CloudForgeCI/cfc-core/security/advisories/new)
+Do not open a public issue for a security problem.
 
-**Alternative:** Email security@cloudforgeci.com with "SECURITY" in the subject
+- **Preferred:** [open a private security advisory](https://github.com/CloudForgeCI/cfc-core/security/advisories/new)
+  on GitHub.
+- **Alternative:** email security@cloudforgeci.com with "SECURITY" in the subject.
 
-Include whatever helps us reproduce and fix it:
-- What's broken and why it matters
-- Steps to reproduce
-- Your environment (version, region, config)
-- Ideas for fixing it (if you have any)
+Include what is affected and why it matters, steps to reproduce, your environment (version,
+deployment target, region, relevant configuration with secrets removed), and a suggested fix if
+you have one.
 
-**Response times:**
-- We'll acknowledge within 48 hours
-- Update you within a week
-- Critical issues (RCE, creds exposed): 1-3 days
-- High severity (privilege escalation, data leaks): 1-2 weeks
-- Medium/Low: 30-90 days depending on impact
+Response targets:
 
-## What's Built In
+- Acknowledgement within 48 hours, and a status update within a week.
+- Critical issues (remote code execution, credential exposure): fix targeted within 1-3 days.
+- High severity (privilege escalation, data exposure): 1-2 weeks.
+- Medium and low severity: 30-90 days, depending on impact.
 
-### Infrastructure
+Published advisories are listed under the repository's
+[Security Advisories](https://github.com/CloudForgeCI/cfc-core/security/advisories). To be
+notified, watch the repository and enable security alerts.
 
-- VPC with public/private subnets
-- Security groups following least privilege
-- Encryption everywhere (EFS, S3, EBS at rest; TLS in transit)
-- IAM roles scoped to what they actually need
+## Security model
 
-### Authentication
+CloudForge generates AWS infrastructure from a deployment context. What it provides:
 
-Pick what works for your setup:
-- **ALB OIDC**: Authentication at the load balancer (before traffic hits Jenkins)
-- **Cognito**: Managed user pools with password policies
-- **AWS Identity Center**: SSO with your existing IdP
-- **MFA**: Optional but recommended for production
-
-### Security Profiles
-
-We've got three profiles you can pick based on your environment:
-
-| Profile | When to Use | What You Get |
-|---------|-------------|--------------|
-| **DEV** | Local/dev environments | Loose restrictions, fast iteration |
-| **STAGING** | Pre-prod testing | Moderate hardening |
-| **PRODUCTION** | Production workloads | Full hardening, compliance ready |
-
-Check [SECURITY_RULES_README.md](SECURITY_RULES_README.md) for the full breakdown.
+- **Network**: VPCs with public, private-with-NAT, or isolated subnets, and security groups
+  scoped to the ports each application declares. No inbound SSH: EC2 instances are reached
+  through SSM Session Manager and Fargate tasks through ECS Exec.
+- **Encryption**: encryption at rest for EFS, EBS, S3, and RDS is on by default; TLS on the
+  load balancer when `enableSsl` is set.
+- **Authentication**: ALB-level or application-level OIDC with Amazon Cognito, an external OIDC
+  provider, or IAM Identity Center, with optional MFA.
+- **Secrets**: database credentials and OIDC client secrets are stored in AWS Secrets Manager
+  and referenced at runtime, not written into templates. CloudForge does not ship default
+  passwords.
+- **IAM**: roles are generated per deployment from the security profile's IAM profile. Review
+  the synthesized template to confirm the permissions fit your organization's requirements.
+- **Security profiles**: `dev`, `staging`, and `production` set defaults for logging, flow
+  logs, WAF, backups, and compliance enforcement. See
+  [Security Profiles](docs/guides/SECURITY_RULES_README.md) for the exact defaults.
 
 ### Compliance
 
-CloudForge automates infrastructure-level technical controls for compliance frameworks:
+CloudForge implements and validates infrastructure controls mapped to SOC 2, PCI DSS, HIPAA,
+and GDPR, using synthesis-time rules, cdk-nag, cfn-guard, and AWS Config. These are technical
+controls only. Organizational controls (training, incident response procedures, risk
+assessments, vendor agreements, physical security, privacy notices, and data subject rights)
+are outside its scope, and a passing validation does not by itself make a deployment
+compliant. See [Auditor Compliance Mapping](docs/AUDITOR_COMPLIANCE_MAPPING.md) for which
+controls are supported, partially supported, or not covered.
 
-- **SOC2**: 16 AWS Config rules (9 base + 7 SOC2-specific) - ~17% of TSC criteria
-- **HIPAA**: 17 AWS Config rules (9 base + 8 HIPAA-specific) - ~38% of implementation specs
-- **PCI-DSS**: 17 AWS Config rules (9 base + 8 PCI-specific) - ~48% of technical requirements
-- **GDPR**: 17 AWS Config rules (9 base + 8 GDPR-specific) - Technical measures only (~7% of total GDPR)
+### Resources retained on deletion
 
-**What's Automated:**
-- Encryption at rest (EBS, RDS, S3) and in transit (TLS 1.2+)
-- IAM password policies, MFA enforcement, access key rotation
-- Audit logging (CloudTrail, VPC Flow Logs) with tamper protection
-- Network security (security groups, SSH restrictions)
-- Continuous compliance monitoring with AWS Config
+Some resources are kept when a stack is deleted, to prevent data loss:
 
-**What's Not Automated (Requires Organizational Policies):**
-- Employee training and awareness programs
-- Incident response procedures and breach notification
-- Risk assessments and data protection impact assessments (DPIAs)
-- Vendor management and business associate agreements
-- Physical security controls
-- Privacy notices and data subject rights workflows
+- Cognito user pools created with the `production` profile.
+- EFS and EBS volumes when `retainStorage` is `true`.
+- Log groups and compliance buckets with a `RETAIN` removal policy in `staging` and
+  `production`.
 
-**⚠️ Important:** Passing technical controls does not constitute full regulatory compliance. Organizational controls must be implemented by your security/compliance team. See [docs/AUDITOR_COMPLIANCE_MAPPING.md](docs/AUDITOR_COMPLIANCE_MAPPING.md) for a complete matrix of supported, partially supported, and unsupported controls across all frameworks.
+Delete these manually once you no longer need them.
 
-### Monitoring & Logging
+## Recommendations for deployments
 
-Everything's logged and monitored:
-- **CloudTrail**: Every API call (enabled by default)
-- **AWS Config**: Continuous compliance checks (enabled by default for PRODUCTION/STAGING)
-- **CloudWatch**: Centralized security event logs (enabled by default)
-- **VPC Flow Logs**: Network traffic (enabled by default)
-- **Audit Manager**: Automated evidence collection (optional - set `auditManagerEnabled: true`)
-- **GuardDuty**: Threat detection (enabled by default for PRODUCTION profile)
-- **WAF**: Web Application Firewall (enabled by default for PRODUCTION profile)
-- **Security Hub**: Centralized security findings (deployed via SOC2-specific Config rule)
+- Use the `production` profile for production workloads, with `enableSsl`, an OIDC
+  `authMode`, `cognitoMfaEnabled`, and `networkMode: "private-with-nat"`.
+- Grant the minimum IAM permissions needed to deploy, and use roles instead of long-lived
+  access keys.
+- Never commit `deployment-context.json` files that contain secrets or account-specific
+  identifiers; reference secrets by Secrets Manager name.
+- Enable CloudTrail, GuardDuty, and AWS Config (`cloudTrailEnabled`, `guardDutyEnabled`,
+  `awsConfigEnabled`) where your account does not already provide them centrally.
 
-**Service Enablement by Security Profile:**
+## Dependency and supply-chain scanning
 
-| Service | DEV | STAGING | PRODUCTION |
-|---------|-----|---------|------------|
-| CloudTrail | ✅ | ✅ | ✅ |
-| AWS Config | ❌ | ✅ | ✅ |
-| CloudWatch Logs | ✅ | ✅ | ✅ |
-| VPC Flow Logs | ❌ | ✅ | ✅ |
-| WAF | ❌ | ❌ | ✅ |
-| GuardDuty | ❌ | ❌ | ✅ |
-| ALB Access Logs | ❌ | ✅ | ✅ |
-
-To customize these settings, modify your deployment configuration:
-```json
-{
-  "securityProfile": "PRODUCTION",
-  "enableMonitoring": true,
-  "guardDutyEnabled": true,
-  "wafEnabled": true,
-  "auditManagerEnabled": false,
-  "awsConfigEnabled": true
-}
-```
-
-### Secrets
-
-No secrets in code. Period.
-- Everything goes in **AWS Secrets Manager**
-- Automatic rotation supported
-- Reference secrets at runtime via environment
-
-## Best Practices
-
-### Deploying Securely
-
-Production checklist:
-
-```json
-{
-  "securityProfile": "PRODUCTION",
-  "enableSsl": true,
-  "domain": "jenkins.yourcompany.com",
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoMfaEnabled": true,
-  "enableMonitoring": true,
-  "enableLogging": true,
-  "networkMode": "private-with-nat"
-}
-```
-
-### Access Control
-
-- Grant minimum required permissions
-- Use IAM roles, not access keys
-- Enable MFA on privileged accounts
-- Audit permissions regularly
-
-### Secrets
-
-- Never commit secrets to git (seriously, never)
-- Store everything in Secrets Manager
-- Rotate credentials regularly
-- Use environment variables for config, not secrets
-
-### Network
-
-- SSH through bastion or VPN only
-- HTTPS everywhere in production
-- Least privilege on security groups
-- Use VPC endpoints for AWS services
-
-### Monitoring
-
-- Turn on CloudTrail (enabled by default)
-- Set up CloudWatch alarms (automated for key security events)
-- Review logs regularly (automated compliance checks via AWS Config)
-- Have an incident response plan (**required but not automated** - see [docs/AUDITOR_COMPLIANCE_MAPPING.md](docs/AUDITOR_COMPLIANCE_MAPPING.md#guidance-for-auditors-management-letter-language) for incident response guidance)
-
-## Staying Updated
-
-Security patches come as patch versions (2.0.1 → 2.0.2) and are documented in the [CHANGELOG](CHANGELOG.md).
-
-**Security Patch Lifecycle:**
-- **Critical vulnerabilities** (CVE with CVSS 9.0+): Patched within 7 days
-- **High severity** (CVSS 7.0-8.9): Patched within 30 days
-- **Medium/Low**: Addressed in next scheduled release
-
-**Vulnerability Disclosure:**
-- CVE references and security advisories: [GitHub Security Advisories](https://github.com/CloudForgeCI/cfc-core/security/advisories)
-- Release notes with security fixes: [CHANGELOG.md](CHANGELOG.md)
-- Subscribe for notifications: Watch this repo → Custom → Security alerts
-
-To stay in the loop:
-- Watch this repo (releases only)
-- Subscribe to GitHub Security Advisories (critical for CVE notifications)
-- Check the CHANGELOG before upgrading
-- Review [GitHub Security tab](https://github.com/CloudForgeCI/cfc-core/security) for dependency alerts
-
-## Things to Know
-
-### Stack Deletion
-
-Some resources are kept around when you delete stacks (safety first):
-
-- **Cognito User Pools**: Retained to prevent data loss
-- **EFS/S3**: Depends on your config
-
-Clean these up manually once you're sure they're not needed.
-
-### No Default Credentials
-
-We don't ship default passwords. You create all credentials yourself and store them in Secrets Manager.
-
-### IAM Policies
-
-We create IAM roles with tight permissions. Review the generated CloudFormation templates to make sure they fit your org's requirements.
-
-### Network Exposure
-
-- **DEV**: More open for convenience
-- **STAGING**: Moderate restrictions
-- **PRODUCTION**: Locked down, SSH via bastion/VPN only
-
-Pick the right profile for your environment.
-
-## Dependencies
-
-We use AWS CDK, AWS SDK for Java, and various Maven deps (see [pom.xml](pom.xml)).
-
-Check for vulnerable dependencies:
+The `security-scan.yml` workflow generates a CycloneDX SBOM and runs OWASP Dependency-Check on
+pushes and pull requests to `develop` and weekly. To run the checks locally:
 
 ```bash
+mvn clean package                            # SBOM in target/cfc-core-sbom.json
+mvn dependency-check:check -Psecurity-scan   # report in target/dependency-check-report.html
 mvn versions:display-dependency-updates
-mvn versions:display-plugin-updates
 ```
 
-## Security Testing
+## Questions
 
-Run the security checks:
-
-```bash
-# Static analysis
-mvn clean verify
-
-# Check dependencies
-mvn dependency:analyze
-
-# Validate CloudFormation
-cd cfc-testing
-cdk synth
-```
-
-## Resources
-
-- [AWS Security Best Practices](https://aws.amazon.com/security/best-practices/)
-- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- [CIS AWS Foundations Benchmark](https://www.cisecurity.org/benchmark/amazon_web_services)
-- [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
-
-## Questions?
-
-General security questions (not vulnerabilities):
-- [GitHub Discussions](https://github.com/CloudForgeCI/cfc-core/discussions/categories/security)
-- security@cloudforgeci.com
-
-Urgent security issues: see [Found a Security Issue?](#found-a-security-issue) above.
-
-## Thanks
-
-Security is important to us. If you find a vulnerability, please report it responsibly and we'll work to address it promptly.
-
----
-
-**Last Updated**: 2025-11-20 | **Version**: 2.0.6
+For general security questions that are not vulnerabilities, open a
+[GitHub Discussion](https://github.com/CloudForgeCI/cfc-core/discussions) or email
+security@cloudforgeci.com.

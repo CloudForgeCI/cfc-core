@@ -1,77 +1,75 @@
 # Local Emulator Hostnames (`*.cloudforge.localhost`)
 
-Friendly browser names for CloudForge apps on **MiniStack** or **LocalStack**. Both emulators publish ECS tasks on the Docker host at `127.0.0.1`, so one `/etc/hosts` block works for either target.
+Readable browser names for CloudForge applications running on **MiniStack** or
+**LocalStack**. Both emulators publish ECS task ports on the Docker host (`127.0.0.1`), so
+the same names work with either one.
 
-See also: [Local Emulator Quick Start](LOCAL_EMULATOR_QUICK_START.md) · [MiniStack Setup](../ministack/SETUP.md) · [LocalStack README](../localstack/README.md)
+See also: [Local Emulator Quick Start](LOCAL_EMULATOR_QUICK_START.md) · [Local Emulator Edge (nginx)](LOCAL_EMULATOR_EDGE.md) · [MiniStack Setup](../ministack/SETUP.md) · [LocalStack README](../localstack/README.md)
 
 ---
 
-## Why this works for both emulators
+## How It Works
 
 | Fact | Implication |
 |------|-------------|
-| MiniStack and LocalStack both bind gateway **`:4566`** | Run **one** emulator at a time |
-| App containers publish ports on the **Docker host** | Browser traffic goes to `127.0.0.1:<app-port>` |
-| `/etc/hosts` maps **name → IP only** | You still include the **port** in the URL |
+| MiniStack and LocalStack both use gateway port **4566** | Run one emulator at a time |
+| Application containers publish ports on the Docker host | Browser traffic goes to `127.0.0.1:<app-port>` |
+| A hostname maps to an IP address only | Without the nginx edge, include the port in the URL |
 
 ```text
   Browser
-     │
      │  http://jenkins.cloudforge.localhost:8080
      ▼
-  /etc/hosts  →  127.0.0.1
+  name resolves to 127.0.0.1
      │
      ▼
-  Docker host port (ECS task)   ← MiniStack OR LocalStack
+  Docker host port (ECS task on MiniStack or LocalStack)
 ```
 
-You do **not** need separate hosts entries per emulator. Switch emulator with Maven stop/start; keep the same URLs when host ports match.
+With the [nginx edge](LOCAL_EMULATOR_EDGE.md) running, `http://jenkins.cloudforge.localhost/`
+works without a port.
+
+You do not need separate names per emulator. When you switch emulators from the platform
+menu, the URLs stay the same as long as the applications publish the same host ports.
 
 ---
 
-## Recommended scheme
+## Hostnames
 
-Use short **`*.localhost`** names (RFC 6761). Always type **`http://`** — Safari/Chrome often treat bare multi-label names as a **Google search**.
+The canonical names are `<name>.cloudforge.localhost`. The nginx edge routes only these names.
 
-| Hostname | Typical port | Role |
-|----------|--------------|------|
-| `localstack.localhost` | 4566 | LocalStack gateway |
-| `ministack.localhost` | 4566 | MiniStack gateway |
-| `emulator.localhost` | 4566 | Shared alias for whichever emulator owns `:4566` |
-| `stackport.localhost` | 8888 | StackPort (simulated AWS console) |
-| `nginx.localhost` | 80 | nginx edge status page |
-| `manager.localhost` | 1958 | CloudForge Manager |
-| `jenkins.localhost` | 8080 | Jenkins |
-| `grafana.localhost` | 3000 | Grafana |
-| `prometheus.localhost` | 9090 | Prometheus |
-| `vault.localhost` | 8200 | Vault |
-| `nexus.localhost` | 8081 | Nexus |
-| `sonarqube.localhost` | 9000 | SonarQube |
-| `redis.localhost` | 6379 | Redis (TCP) |
-| `postgres.localhost` | 5432 | PostgreSQL (TCP) |
+| Hostname | Port | Role |
+|----------|------|------|
+| `localstack.cloudforge.localhost` | 4566 | LocalStack gateway |
+| `ministack.cloudforge.localhost` | 4566 | MiniStack gateway |
+| `emulator.cloudforge.localhost` | 4566 | Whichever emulator owns port 4566 |
+| `stackport.cloudforge.localhost` | 8888 | StackPort resource browser |
+| `nginx.cloudforge.localhost` | 80 | Edge status page |
+| `manager.cloudforge.localhost` | 1958 | CloudForge Manager |
+| `jenkins.cloudforge.localhost` | 8080 | Jenkins |
+| `grafana.cloudforge.localhost` | 3000 | Grafana |
+| `prometheus.cloudforge.localhost` | 9090 | Prometheus |
+| `vault.cloudforge.localhost` | 8200 | Vault |
+| `nexus.cloudforge.localhost` | 8081 | Nexus |
+| `sonarqube.cloudforge.localhost` | 9000 | SonarQube |
 
-With the **nginx edge** running:
+The example hosts file also defines short names (`jenkins.localhost`, `redis.localhost`,
+`postgres.localhost`, `gitea.localhost`, and others). They resolve to `127.0.0.1` but are not
+routed by the edge, so use them only with an explicit port, for example
+`http://jenkins.localhost:8080`.
 
-```bash
-open "http://nginx.localhost/"
-open "http://localstack.localhost/"
-open "http://stackport.localhost/"
-```
-
-Longer aliases (`*.cloudforge.localhost`) resolve to the same edge routes. Do **not** use `*.local` (macOS mDNS hang).
-
-**Optional app aliases** (same IPs — useful when docs mention emulator-specific names):
-
-| Alias | Same as |
-|-------|---------|
-| `jenkins.ministack.local` | Prefer `jenkins.localhost` instead |
-| `jenkins.localstack.local` | Prefer `jenkins.localhost` instead |
+Always type `http://`; browsers may treat a bare name as a search. Do not use `*.local`
+names: macOS resolves them through mDNS, which causes lookup delays.
 
 ---
 
-## One-time setup (macOS / Linux)
+## Setup
 
-### Option A — helper script (recommended)
+`*.localhost` is reserved for loopback (RFC 6761). macOS and most modern Linux systems resolve
+it to `127.0.0.1` without configuration. Windows and older Linux resolvers (without
+systemd-resolved or nss-mdns) need hosts entries.
+
+### Option A: helper script
 
 From the repository root:
 
@@ -79,114 +77,87 @@ From the repository root:
 ./scripts/setup-cloudforge-local-hosts.sh
 ```
 
-This installs the marked block from [`docs/guides/examples/cloudforge.localhost.hosts`](examples/cloudforge.localhost.hosts) into `/etc/hosts` (prompts for `sudo`). Re-run safely — it replaces the previous CloudForge block (including legacy `*.cfc.local` / `*.cloudforge.local` blocks).
-
-Uninstall:
+The script writes the marked block from
+[`docs/guides/examples/cloudforge.localhost.hosts`](examples/cloudforge.localhost.hosts) into
+`/etc/hosts` (using `sudo` when needed). If the edge container is running, it also adds a
+second block with the per-instance hostnames the edge currently routes (for example
+`jenkins1.cloudforge.localhost`); re-run it after deploying or removing stacks to refresh that
+block. Re-running replaces both blocks.
 
 ```bash
-./scripts/setup-cloudforge-local-hosts.sh --remove
+./scripts/setup-cloudforge-local-hosts.sh --dry-run   # print the blocks without writing
+./scripts/setup-cloudforge-local-hosts.sh --remove    # remove both blocks
 ```
 
-### Option B — manual copy
+Set `CFC_HOSTS_FILE` to write to a file other than `/etc/hosts`.
+
+### Option B: manual copy
 
 ```bash
-# Preview
 cat docs/guides/examples/cloudforge.localhost.hosts
-
-# Append (once)
 sudo sh -c 'cat docs/guides/examples/cloudforge.localhost.hosts >> /etc/hosts'
 ```
+
+### Windows
+
+Edit `C:\Windows\System32\drivers\etc\hosts` as Administrator and paste the `127.0.0.1` lines
+from [`cloudforge.localhost.hosts`](examples/cloudforge.localhost.hosts). Run
+`ipconfig /flushdns` if names do not resolve.
 
 ### Verify
 
 ```bash
-ping -c 1 jenkins.cloudforge.localhost
-# should resolve to 127.0.0.1
+ping -c 1 jenkins.cloudforge.localhost    # resolves to 127.0.0.1
 
+# With CloudForge Manager deployed to the emulator
 curl -s -o /dev/null -w "%{http_code}\n" http://manager.cloudforge.localhost:1958/api/v1/health
 ```
 
 ---
 
-## Day-to-day usage
+## Day-to-Day Usage
 
-1. Start **one** emulator from `InteractiveDeployer --platform` — it also starts StackPort + nginx edge.
-2. Deploy an app (Interactive Deployer option 6** or **8**).
-3. Open the friendly URL with the **app port**:
+1. Start one emulator from `InteractiveDeployer --platform`. This also starts StackPort and the nginx edge.
+2. Deploy an application (Interactive Deployer option **6** for MiniStack or **8** for LocalStack).
+3. Open the application through the edge, or directly with its port:
 
 ```bash
-open "http://jenkins.cloudforge.localhost:8080"
-open "http://manager.cloudforge.localhost:1958"
-open "http://grafana.cloudforge.localhost:3000"
+open "http://jenkins.cloudforge.localhost/"        # through the edge
+open "http://jenkins.cloudforge.localhost:8080"    # direct to the host port
 ```
 
-Find the live port when unsure:
+To find an application's host port, check the stack outputs (`MiniStackApplicationUrl` or
+`LocalStackApplicationUrl`), or Docker:
 
 ```bash
-# Stack output (MiniStack / LocalStack)
-# MiniStackApplicationUrl / LocalStackApplicationUrl often look like http://localhost:8080/
-
-# Or Docker host mappings
 docker ps --format '{{.Names}}\t{{.Ports}}' | grep -i jenkins
 ```
 
-### LocalStack Jenkins note
+### LocalStack Jenkins
 
-LocalStack may inject a Jenkins `--prefix` for path-style ELB URLs. Prefer the **direct ECS host port** from `docker ps` (or `LocalStackApplicationUrl`). If the root path 404s, try the prefixed path shown in adaptations, or use the ELB local URL from stack outputs.
-
-Chrome may also treat `*.localhost.localstack.cloud` under Local Network Access rules; Safari + `*.cloudforge.localhost` on the ECS port is usually simpler for UI testing.
-
----
-
-## Port collisions
-
-Several apps default to **3000** (Grafana, Gitea, Metabase). Hostnames do not fix that — only one process can bind a host port.
-
-- Deploy one of those apps at a time, **or**
-- Override the published port in the deployment context / compose when you need several.
-
-See [Local Emulator App Catalog — port collisions](LOCAL_EMULATOR_APP_CATALOG.md).
+LocalStack may run Jenkins with a `--prefix` so that it works behind a path-style ELB URL.
+The direct host port (from `docker ps` or `LocalStackApplicationUrl`) and the edge hostname
+both work. If the root path returns 404 on the direct port, use the ELB URL from the stack
+outputs.
 
 ---
 
-## What this does *not* replace
+## Port Collisions
+
+Several applications use the same container port, for example **3000** (Grafana, Gitea,
+Metabase). Hostnames do not change that: only one container can publish a given host port.
+Deploy one of those applications at a time. See the
+[MiniStack host-port constraint](LOCAL_EMULATOR_APP_CATALOG.md#host-port-constraint).
+
+---
+
+## What Hostnames Do Not Replace
 
 | Still use | Why |
 |-----------|-----|
-| Stack outputs (`*ApplicationUrl`, `*LocalUrl`) | Source of truth for port and ELB path |
-| `AWS_ENDPOINT_URL=http://localhost:4566` | CLI / SDK / deploy path |
-| Route53 records inside the emulator | Canonical AWS fidelity — not your Mac DNS |
+| Stack outputs (`*ApplicationUrl`, `*LocalUrl`) | Authoritative host port and ELB path |
+| `AWS_ENDPOINT_URL=http://localhost:4566` | AWS CLI, SDK, and deploy path |
+| Route53 records inside the emulator | DNS as CloudFormation defines it; not used by your host resolver |
 
-Hosts entries are **browser convenience** only. CI and verification should assert CloudFormation / stack outputs, not `/etc/hosts`.
-
-### Port-free URLs (nginx edge)
-
-After hostnames are installed, run the optional **nginx edge** so you can open `http://jenkins.cloudforge.localhost/` **without** a port:
-
-```bash
-./scripts/emulator-edge-start.sh
-# or: mvn -f cfc-testing cloudforge:emulator-edge-start
-# After deploy, CloudForgeDeployment reconciles automatically; manual:
-./scripts/emulator-edge-reconcile.sh
-```
-
-Full guide: [Local Emulator Edge (nginx)](LOCAL_EMULATOR_EDGE.md). Use [StackPort](../localstack/README.md#resource-browser-stackport) for AWS resource deep-dives — nginx has no app console.
-
----
-
-## Optional: emulator-specific names only
-
-If you prefer names that say which emulator you intend (same IP still):
-
-```text
-127.0.0.1 jenkins.ministack.local grafana.ministack.local manager.ministack.local
-127.0.0.1 jenkins.localstack.local grafana.localstack.local manager.localstack.local
-```
-
-These are included as aliases in the example file. They do not create separate Docker networks — they only change the address bar label.
-
----
-
-## Windows
-
-Edit `C:\Windows\System32\drivers\etc\hosts` as Administrator and paste the same `127.0.0.1` lines from [`cloudforge.localhost.hosts`](examples/cloudforge.localhost.hosts) (ignore the `# BEGIN/END` markers if you prefer). Flush DNS if needed: `ipconfig /flushdns`.
+Hosts entries are a browser convenience. Tests and verification should check CloudFormation
+stack outputs, not name resolution.

@@ -10,10 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@link OidcAuthenticationFactory#publicPatternShadowsProtectedPattern}, tested directly against
  * the pure glob-overlap logic rather than through a full CDK stack synthesis (see {@code
- * OidcAuthenticationFactoryTest}'s own {@code @Disabled} tests for why that path is avoided here —
- * this is the same regression the review flagged: a broad public pattern registered at higher ALB
- * listener priority than a protected one silently shadows it, exposing an "authenticated" route
- * without auth. {@code calculateEffectiveProtectedPaths}' own public-path removal is an exact-
+ * OidcAuthenticationFactoryTest}'s {@code @Disabled} tests for why that path is avoided here).
+ * A broad public pattern registered at higher ALB listener priority than a protected one shadows
+ * it, exposing an "authenticated" route without auth. {@code calculateEffectiveProtectedPaths}' own public-path removal is an exact-
  * string {@code Set.removeAll}, which does not catch this glob-containment case on its own.
  */
 class OidcPathShadowingTest {

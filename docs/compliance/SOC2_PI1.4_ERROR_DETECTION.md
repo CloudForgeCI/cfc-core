@@ -1,7 +1,7 @@
 # SOC2 PI1.4 - Error Detection and Correction
 
 **Control**: PI1.4 - Error Detection and Correction
-**Status**: Fully Documented
+**Status**: Procedure template
 **Last Updated**: 2025-12-16
 **Owner**: Infrastructure Administrator
 
@@ -9,24 +9,27 @@
 
 ## Overview
 
-This document defines infrastructure-level error detection capabilities and application-level error handling requirements for CloudForge CI. These procedures satisfy SOC2 PI1.4 (Error Detection and Correction) requirements.
+This document defines infrastructure-level error detection capabilities and application-level error handling requirements for CloudForge CI. These procedures are a template for addressing SOC2 PI1.4 (Error Detection and Correction) requirements.
 
 ---
 
 ## Infrastructure Error Detection (Automated)
 
-CloudForge CI provides comprehensive infrastructure monitoring:
+CloudForge CI configures the following infrastructure monitoring:
 
 ### CloudWatch Alarms
 
-| Alarm Type | Metric | Threshold | Action |
-|------------|--------|-----------|--------|
-| **High CPU** | CPUUtilization | > 80% for 5 min | SNS notification |
-| **High Memory** | MemoryUtilization | > 85% for 5 min | SNS notification |
-| **Unhealthy Hosts** | UnHealthyHostCount | > 0 for 2 min | SNS notification |
-| **5xx Errors** | HTTPCode_ELB_5XX_Count | > 10 per min | SNS notification |
-| **4xx Errors** | HTTPCode_ELB_4XX_Count | > 100 per min | SNS notification (warning) |
-| **Target Response Time** | TargetResponseTime | > 5s avg | SNS notification |
+Thresholds depend on the security profile (production / staging / dev):
+
+| Alarm Type | Metric | Threshold | Created by | Action |
+|------------|--------|-----------|-----------|--------|
+| **High CPU** | CPUUtilization | 70% / 80% / 90%, two 5-minute periods | `SecurityMonitoringFactory` | SNS notification |
+| **High Memory** | MemoryUtilization | 80% / 85% / 90%, two 5-minute periods | `SecurityMonitoringFactory` | SNS notification |
+| **5xx Errors** | HTTPCode_ELB_5XX_Count | 5 / 7 / 10 per minute | `AlarmFactory` | SNS notification |
+| **4xx Errors** | HTTPCode_ELB_4XX_Count | 20 / 30 / 50 per 5 minutes, two periods | `AlarmFactory` | SNS notification |
+| **Target Response Time** | TargetResponseTime | 2s / 3s / 5s, two 5-minute periods | `AlarmFactory` | SNS notification |
+
+Unhealthy target detection relies on the load balancer health checks below.
 
 ### Health Checks
 

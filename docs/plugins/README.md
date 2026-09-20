@@ -1,56 +1,50 @@
-# CloudForge Plugin System Documentation
+# Plugin Documentation
 
-This directory contains documentation for the CloudForge plugin system, enabling extensibility for applications and compliance frameworks.
+CloudForge can be extended with application plugins and compliance framework plugins, both
+discovered through Java `ServiceLoader`.
 
-## Plugin System Overview
+- [Plugin System](PLUGIN-SYSTEM.md): plugin types, discovery, and development workflow
+- [Built-in Plugins](PLUGIN-ECOSYSTEM.md): the 35 application specs and 18 compliance
+  frameworks registered by `cloudforge-api`, and the sample plugins
+- [Application Plugin Guide](APPLICATION-PLUGIN-GUIDE.md): implement `ApplicationSpec`,
+  `CmsSpec`, and `DatabaseSpec`
+- [Compliance Plugin Guide](COMPLIANCE-PLUGIN-GUIDE.md): implement `FrameworkRules`
 
-- **[Plugin Ecosystem](PLUGIN-ECOSYSTEM.md)** - Overview of 33 built-in applications and the plugin architecture
-- **[Plugin System Guide](PLUGIN-SYSTEM.md)** - Core architecture and development patterns
+## Built-in applications
 
-## Plugin Development Guides
+| Category | Applications |
+|----------|--------------|
+| CI/CD | Jenkins, GitLab, Drone |
+| Code quality | SonarQube |
+| Version control | Gitea |
+| Monitoring | Grafana, Prometheus |
+| Analytics | Metabase, Superset |
+| Databases | PostgreSQL, Redis |
+| Artifact registries | Nexus, Harbor |
+| Secrets | Vault |
+| Collaboration | Mattermost Enterprise, Mattermost Team |
+| CMS | WordPress, Drupal, Joomla, TYPO3, Concrete CMS, October CMS |
+| E-commerce | WooCommerce, Magento 2, PrestaShop, OpenCart, Sylius, Bagisto |
+| Forum | phpBB, Flarum, MyBB |
+| CRM | SuiteCRM |
+| Wiki | MediaWiki |
+| LMS | Moodle |
+| Social | UNA (Dolphin) |
 
-### Application Plugins
-- **[Application Plugin Guide](APPLICATION-PLUGIN-GUIDE.md)** - Build custom application deployment plugins
+See the [application catalog](../applications/README.md) for per-application documentation.
 
-### Compliance Plugins
-- **[Compliance Plugin Guide](COMPLIANCE-PLUGIN-GUIDE.md)** - Build custom compliance framework validators
+## Sample plugins
 
-## Built-in Plugins
+The [`cfc-testing`](https://github.com/CloudForgeCI/cfc-core/tree/develop/cfc-testing) module contains working plugins:
 
-CloudForge includes 33 pre-built application plugins across 14 categories:
-
-- **CI/CD**: Jenkins, GitLab, Drone
-- **Version Control**: Gitea
-- **Monitoring**: Grafana, Prometheus
-- **Databases**: PostgreSQL, Redis
-- **Secrets Management**: Vault
-- **Artifact Registry**: Nexus, Harbor
-- **Collaboration**: Mattermost
-- **Analytics**: Metabase, Superset
-- **CMS**: WordPress, WooCommerce, Drupal, Joomla, TYPO3, Concrete CMS, October CMS
-- **E-commerce**: Magento 2, PrestaShop, OpenCart, Sylius, Bagisto
-- **Forum**: phpBB, Flarum, MyBB
-- **CRM**: SuiteCRM
-- **Wiki**: MediaWiki
-- **LMS**: Moodle
-- **Social**: UNA / Dolphin
-
-See the [Application Catalog](../applications/README.md) for detailed documentation on each application.
-
-## Plugin Examples
-
-For practical examples of plugin development, see:
-- **[Plugin Examples](../../cfc-testing/PLUGIN-EXAMPLES.md)** - SonarQube application plugin and custom compliance framework examples
+- [`CraftCmsApplicationSpec`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/src/main/java/com/cloudforgeci/samples/plugins/cms/CraftCmsApplicationSpec.java): a `CmsSpec` + `DatabaseSpec` application plugin
+- [`CustomSecurityPolicyRules`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/src/main/java/com/cloudforgeci/samples/plugins/compliance/CustomSecurityPolicyRules.java) and
+  [`OpenSourceSecurityPolicyRules`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/src/main/java/com/cloudforgeci/samples/plugins/compliance/OpenSourceSecurityPolicyRules.java): compliance framework plugins
 
 ## Contributing
 
-To contribute a plugin to the CloudForge ecosystem:
+To add a plugin to this repository, follow the relevant guide and the
+[contribution guidelines](../CONTRIBUTING.md#adding-an-application). To distribute a plugin
+separately, publish it as a JAR and have consumers add it as a Maven dependency.
 
-1. Follow the appropriate plugin guide above
-2. Package your plugin as a standalone JAR
-3. Submit to the [CloudForge Plugin Registry](https://github.com/CloudForgeCI/plugin-registry)
-
-## Support
-
-- GitHub Issues: https://github.com/CloudForgeCI/cfc-core/issues
-- Documentation: https://github.com/CloudForgeCI/cfc-core/tree/main/docs
+Report issues at https://github.com/CloudForgeCI/cfc-core/issues.

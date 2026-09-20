@@ -2,47 +2,48 @@
 
 ## Quick Start
 
-This guide walks you through deploying CloudForge CI with automated compliance features.
+This guide describes deploying CloudForge CI with its compliance-related features enabled.
 
 ### Prerequisites
 
-1. **AWS Account** with administrator access
-2. **AWS CDK** installed (`npm install -g aws-cdk`)
-3. **Java 17+** and Maven installed
+1. **AWS account** with permissions to deploy CloudFormation, IAM, AWS Config, CloudTrail, and S3 resources
+2. **AWS CDK CLI** (`npm install -g aws-cdk`)
+3. **JDK** matching the version in the root `pom.xml`, and Maven
 4. **AWS CLI** configured with credentials
 
 ### Step 1: Configure Compliance Frameworks
 
-Edit your deployment context to enable desired frameworks:
+Set the compliance properties in your deployment context. With the sample project in `cfc-testing`, this is `deployment-context.json`, which the Interactive Deployer writes for you:
 
-```java
-// Example: HIPAA + PCI-DSS compliance
-DeploymentContext cfc = new DeploymentContext();
-cfc.put("complianceFrameworks", "HIPAA,PCI-DSS");
-cfc.put("security", "PRODUCTION");
-cfc.put("awsConfigEnabled", true);
-cfc.put("albAccessLogging", true);
+```json
+{
+  "securityProfile": "production",
+  "complianceFrameworks": "hipaa,pci-dss",
+  "awsConfigEnabled": true,
+  "createConfigInfrastructure": true,
+  "albAccessLogging": true
+}
 ```
 
-**Available Frameworks:**
-- `HIPAA` - Healthcare (6-year retention)
-- `SOC2` - Service organizations (2-year retention)
-- `PCI-DSS` - Payment cards (1-year retention)
-- `GDPR` - EU data protection
+Set `createConfigInfrastructure` to `true` on only one stack per account and region; see [AWS Config Multi-Stack](AWS_CONFIG_MULTI_STACK.md).
+
+**Available Frameworks** (case-insensitive):
+- `hipaa` - Healthcare (6-year retention)
+- `soc2` - Service organizations (2-year retention)
+- `pci-dss` - Payment cards (1-year retention)
+- `gdpr` - EU data protection
 
 ### Step 2: Build the Project
 
 ```bash
-cd cloudforge-api
-mvn clean install
+mvn -DskipTests install
 ```
 
 ### Step 3: Deploy the Stack
 
 ```bash
-cdk deploy jenkinsTSoc \
-  --context security=PRODUCTION \
-  --context complianceFrameworks=HIPAA,PCI-DSS
+cd cfc-testing
+cdk deploy
 ```
 
 ### Step 4: Verify Deployment
@@ -55,9 +56,10 @@ aws configservice describe-config-rules \
   --query 'ConfigRules[*].[ConfigRuleName,ComplianceType]' \
   --output table
 
-# Verify password policy remediation
+# Verify password policy remediation (Config rule names are generated
+# by CloudFormation from the IAMPasswordPolicyRule logical ID)
 aws configservice describe-remediation-configurations \
-  --config-rule-names IAMPasswordPolicyRule
+  --config-rule-names <password-policy-rule-name>
 
 # Verify S3 lifecycle policies
 aws s3api list-buckets --query 'Buckets[*].Name' --output text | \
@@ -76,23 +78,25 @@ aws s3api list-buckets --query 'Buckets[*].Name' --output text | \
 **Requirements:**
 - 6-year data retention
 - Strict password policy (14 chars, complexity required)
-- Complete audit trail
+- Audit logging
 - Encryption at rest and in transit
 
 **Configuration:**
-```java
-cfc.put("complianceFrameworks", "HIPAA");
-cfc.put("security", "PRODUCTION");
-cfc.put("awsConfigEnabled", true);
-cfc.put("auditManagerEnabled", true);
-cfc.put("albAccessLogging", true);
+```json
+{
+  "complianceFrameworks": "hipaa",
+  "securityProfile": "production",
+  "awsConfigEnabled": true,
+  "auditManagerEnabled": true,
+  "albAccessLogging": true
+}
 ```
 
 **Expected Results:**
 - S3 buckets: 6-year retention, versioning enabled
 - IAM password: 14 chars minimum, 24 password reuse prevention
-- CloudTrail: All S3 data events logged
-- Config: Continuous compliance monitoring
+- CloudTrail: management events and S3 data events logged
+- Config: Continuous evaluation of supported resources
 
 **Verification:**
 ```bash
@@ -123,17 +127,19 @@ aws iam get-account-password-policy | jq '.PasswordPolicy'
 - Change management controls
 
 **Configuration:**
-```java
-cfc.put("complianceFrameworks", "SOC2");
-cfc.put("security", "PRODUCTION");
-cfc.put("awsConfigEnabled", true);
-cfc.put("auditManagerEnabled", true);
+```json
+{
+  "complianceFrameworks": "soc2",
+  "securityProfile": "production",
+  "awsConfigEnabled": true,
+  "auditManagerEnabled": true
+}
 ```
 
 **Expected Results:**
 - S3 buckets: 2-year retention
 - IAM password: 12 chars minimum, 12 password reuse prevention
-- Automated compliance reports via Audit Manager
+- Audit Manager assessment for evidence collection
 
 ---
 
@@ -146,16 +152,18 @@ cfc.put("auditManagerEnabled", true);
 - Regular vulnerability scanning
 
 **Configuration:**
-```java
-cfc.put("complianceFrameworks", "PCI-DSS");
-cfc.put("security", "PRODUCTION");
-cfc.put("awsConfigEnabled", true);
-cfc.put("enableWaf", true);  // WAF for network protection
+```json
+{
+  "complianceFrameworks": "pci-dss",
+  "securityProfile": "production",
+  "awsConfigEnabled": true,
+  "wafEnabled": true
+}
 ```
 
 **Expected Results:**
 - S3 buckets: 1-year retention, 90 days in S3 Standard
-- IAM password: 8 chars minimum (PCI-DSS minimum)
+- IAM password: 8 chars minimum (see the PCI DSS v4.0.1 note in [Automated Compliance](AUTOMATED_COMPLIANCE.md#iam-password-policy-auto-remediation))
 - WAF enabled on ALB for attack protection
 
 ---
@@ -165,13 +173,16 @@ cfc.put("enableWaf", true);  // WAF for network protection
 **Use Case:** Organization must meet HIPAA, SOC2, and PCI-DSS simultaneously
 
 **Configuration:**
-```java
-cfc.put("complianceFrameworks", "HIPAA,SOC2,PCI-DSS");
-cfc.put("security", "PRODUCTION");
+```json
+{
+  "complianceFrameworks": "hipaa,soc2,pci-dss",
+  "securityProfile": "production",
+  "awsConfigEnabled": true
+}
 ```
 
 **How It Works:**
-The system automatically selects the **strictest requirement** from all frameworks:
+CloudForge selects the strictest requirement from the selected frameworks:
 
 | Setting | HIPAA | SOC2 | PCI-DSS | **Selected** |
 |---------|-------|------|---------|--------------|
@@ -198,22 +209,21 @@ aws sns subscribe \
 
 ### Enable AWS Audit Manager (Optional)
 
-1. Navigate to AWS Audit Manager console
-2. Click **Enable Audit Manager**
-3. Configure data sources:
-   - CloudTrail: ✅
-   - AWS Config: ✅
-   - Security Hub: ✅
+Audit Manager must be enabled in the account before `auditManagerEnabled` can create assessments. See [AWS Audit Manager Integration](../AUDIT_MANAGER.md). To enable it manually:
 
-4. Create assessment:
+1. Navigate to the AWS Audit Manager console
+2. Choose **Enable Audit Manager**
+3. Confirm the data sources: CloudTrail, AWS Config, and Security Hub
+4. Create an assessment:
    - Framework: Select your compliance framework (HIPAA/SOC2/PCI-DSS)
    - Scope: Select your AWS account
    - Evidence collection: Automatic
 
 ### Configure GuardDuty (Recommended)
 
+Set `guardDutyEnabled: true`. If no detector exists in the account and region, also set `createGuardDutyDetector: true`, or create one manually:
+
 ```bash
-# Enable GuardDuty for threat detection
 aws guardduty create-detector --enable
 ```
 
@@ -223,9 +233,10 @@ aws guardduty create-detector --enable
 
 ### Daily Checks
 
+Example script:
+
 ```bash
 #!/bin/bash
-# daily-compliance-check.sh
 
 echo "=== Daily Compliance Check ==="
 echo ""
@@ -240,14 +251,14 @@ aws configservice describe-compliance-by-config-rule \
 echo ""
 echo "Recent Remediation Executions:"
 aws configservice describe-remediation-execution-status \
-  --config-rule-name IAMPasswordPolicyRule \
+  --config-rule-name <password-policy-rule-name> \
   --query 'RemediationExecutionStatuses[0:5].[ResourceKey.ResourceId,State,StepExecutions[0].State]' \
   --output table
 
 # 3. Check CloudTrail status
 echo ""
 echo "CloudTrail Status:"
-aws cloudtrail get-trail-status --name cloudforge-trail \
+aws cloudtrail get-trail-status --name cloudforge-cloudtrail-<stack-name> \
   --query '[IsLogging,LatestDeliveryTime]' \
   --output table
 ```
@@ -285,16 +296,10 @@ ErrorMessage: Access Denied
 ```
 
 **Solution:**
+Check the SSM Automation role created from the `PasswordPolicyRemediationRole` logical ID (its physical name is generated by CloudFormation). Its policy should include `iam:UpdateAccountPasswordPolicy` and `iam:GetAccountPasswordPolicy`. If it is missing, redeploy the stack:
+
 ```bash
-# Check SSM Automation role permissions
-aws iam get-role --role-name PasswordPolicyRemediationRole
-
-# Expected policy should include:
-# - iam:UpdateAccountPasswordPolicy
-# - iam:GetAccountPasswordPolicy
-
-# If missing, redeploy the stack
-cdk deploy jenkinsTSoc
+cdk deploy <stack-name>
 ```
 
 ---
@@ -304,14 +309,10 @@ cdk deploy jenkinsTSoc
 **Symptom:** Buckets don't show lifecycle rules
 
 **Solution:**
-```bash
-# Check if compliance frameworks are configured
-aws cloudformation describe-stacks --stack-name jenkinsTSoc \
-  --query 'Stacks[0].Parameters[?ParameterKey==`complianceFrameworks`].ParameterValue'
+Lifecycle rules are applied to compliance buckets created by `ComplianceFactory`. Confirm that `complianceFrameworks` is set in the deployment context and look for `Lifecycle:` lines in the synthesis log, then redeploy:
 
-# If empty, update stack with frameworks:
-cdk deploy jenkinsTSoc \
-  --context complianceFrameworks=HIPAA,SOC2
+```bash
+cdk deploy <stack-name>
 ```
 
 ---
@@ -324,12 +325,12 @@ cdk deploy jenkinsTSoc \
 ```bash
 # Trigger manual evaluation
 aws configservice start-config-rules-evaluation \
-  --config-rule-names IAMPasswordPolicyRule
+  --config-rule-names <password-policy-rule-name>
 
 # Wait 60 seconds, then check status
 sleep 60
 aws configservice describe-compliance-by-config-rule \
-  --config-rule-names IAMPasswordPolicyRule
+  --config-rule-names <password-policy-rule-name>
 ```
 
 ---
@@ -338,12 +339,10 @@ aws configservice describe-compliance-by-config-rule \
 
 ### Changing Frameworks
 
-To add or remove frameworks:
+To add or remove frameworks, update `complianceFrameworks` in the deployment context (for example from `hipaa` to `hipaa,gdpr`) and redeploy:
 
 ```bash
-# Add GDPR to existing HIPAA deployment
-cdk deploy jenkinsTSoc \
-  --context complianceFrameworks=HIPAA,GDPR
+cdk deploy <stack-name>
 
 # This will:
 # 1. Update Config rule parameters (if needed)
@@ -353,16 +352,15 @@ cdk deploy jenkinsTSoc \
 
 ### Upgrading Security Profile
 
+Change `securityProfile` from `staging` to `production` in the deployment context and redeploy:
+
 ```bash
-# Upgrade from STAGING to PRODUCTION
-cdk deploy jenkinsTSoc \
-  --context security=PRODUCTION \
-  --context complianceFrameworks=HIPAA
+cdk deploy <stack-name>
 
 # This will:
-# 1. Change S3 removal policy to RETAIN
-# 2. Apply stricter password requirements
-# 3. Enable additional monitoring
+# 1. Change removal policies to RETAIN for the resources listed in RETAINED_RESOURCES.md
+# 2. Apply stricter defaults (for example, a 14-character password minimum when no framework is selected)
+# 3. Enable cdk-nag validation and additional monitoring
 ```
 
 ---
@@ -373,7 +371,7 @@ cdk deploy jenkinsTSoc \
 
 ```bash
 # Delete the CloudFormation stack
-cdk destroy jenkinsTSoc
+cdk destroy <stack-name>
 ```
 
 **What Gets Deleted:**
@@ -383,44 +381,31 @@ cdk destroy jenkinsTSoc
 
 **What Persists:**
 - **IAM password policy** (account-level setting)
-- **S3 buckets** (if RemovalPolicy is RETAIN in PRODUCTION)
-- **EBS encryption by default** (account-level setting)
+- **S3 buckets and other resources** retained in `production`; see [Retained Resources](RETAINED_RESOURCES.md)
+- **Config recorder and delivery channel**, if other stacks still reference them
 
 ### Complete Cleanup
 
 To remove all compliance settings:
 
 ```bash
-# 1. Delete Config rules
-./cleanup-config-rules.sh
+# 1. Delete any remaining Config rules
+aws configservice delete-config-rule --config-rule-name <rule-name>
 
-# 2. Delete S3 buckets (if retained)
-aws s3 ls | grep -E "(cloudtrail|config|audit)" | \
-  awk '{print $3}' | \
-  xargs -I {} aws s3 rb s3://{} --force
+# 2. Empty and delete retained buckets (review the list before deleting)
+aws s3 rb s3://<bucket-name> --force
 
 # 3. Reset IAM password policy (optional)
 aws iam delete-account-password-policy
-
-# 4. Disable EBS encryption by default (optional)
-aws ec2 disable-ebs-encryption-by-default
 ```
+
+Deleting retained buckets permanently removes audit evidence. Confirm your retention obligations first.
 
 ---
 
-## Cost Estimation
+## Cost Considerations
 
-### Monthly Costs (Typical PRODUCTION Deployment)
-
-| Service | Usage | Monthly Cost |
-|---------|-------|--------------|
-| **AWS Config** | 10 rules, 50 resources | $25 |
-| **CloudTrail** | All events | $5 |
-| **S3 Storage** | 100 GB logs/month | $30 |
-| **S3 Lifecycle Transitions** | 10,000 objects/month | $1 |
-| **Systems Manager** | 50 automation executions | $2 |
-| **CloudWatch Alarms** | 10 alarms | $1 |
-| **Total** | | **~$64/month** |
+The compliance features add charges for AWS Config (configuration items and rule evaluations), CloudTrail data events, S3 storage and lifecycle transitions, SSM Automation executions, and CloudWatch alarms. Charges depend on region, resource count, and log volume; use the [AWS Pricing Calculator](https://calculator.aws.amazon.com/) for an estimate.
 
 **Cost Reduction Tips:**
 - Use S3 Intelligent-Tiering for unpredictable access patterns
@@ -431,17 +416,17 @@ aws ec2 disable-ebs-encryption-by-default
 
 ## Next Steps
 
-1. ✅ Review [AUTOMATED_COMPLIANCE.md](AUTOMATED_COMPLIANCE.md) for feature details
-2. ✅ Set up monitoring dashboards in CloudWatch
-3. ✅ Subscribe to SNS topics for alerts
-4. ✅ Schedule weekly compliance reviews
-5. ✅ Document your compliance procedures for auditors
+1. Review [AUTOMATED_COMPLIANCE.md](AUTOMATED_COMPLIANCE.md) for feature details
+2. Set up monitoring dashboards in CloudWatch
+3. Subscribe to SNS topics for alerts
+4. Schedule weekly compliance reviews
+5. Document your compliance procedures for auditors
 
 ---
 
 ## Support
 
 For deployment assistance:
-- GitHub Issues: [cfc-core/issues](https://github.com/cloudforgeci/cfc-core/issues)
+- GitHub Issues: [cfc-core/issues](https://github.com/CloudForgeCI/cfc-core/issues)
 - Documentation: [docs/compliance/](.)
 - Email: support@cloudforgeci.com

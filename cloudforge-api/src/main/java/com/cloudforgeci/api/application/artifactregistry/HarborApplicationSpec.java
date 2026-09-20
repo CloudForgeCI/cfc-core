@@ -284,11 +284,19 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
             );
         }
 
+        // Read the admin password from the secret ApplicationFactory provisions (see
+        // autoAdminPasswordEnvVar()) when one exists; otherwise generate one locally.
+        String adminPasswordArn = context.autoAdminPasswordSecretArn();
+        String adminPasswordLine = adminPasswordArn != null && !adminPasswordArn.isBlank()
+            ? "HARBOR_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id " + adminPasswordArn
+                + " --query SecretString --output text)"
+            : "HARBOR_ADMIN_PASSWORD=$(openssl rand -base64 16)";
+
         // Download and configure Harbor
         builder.addCommands(
-            "# Retrieve Harbor passwords from Secrets Manager or generate secure defaults",
-            "HARBOR_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-harbor}/admin-password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
-            "HARBOR_DB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-harbor}/db-password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
+            "# Retrieve Harbor's admin password (real secret if provisioned, generated otherwise)",
+            adminPasswordLine,
+            "HARBOR_DB_PASSWORD=$(openssl rand -base64 16)",
             "echo \"Generated Harbor admin password (save this): $HARBOR_ADMIN_PASSWORD\" >> /var/log/userdata.log",
             "",
             "# Download Harbor installer",
@@ -360,6 +368,14 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
         // Harbor has built-in OIDC support
         // TODO: Implement HarborOidcIntegration to configure harbor.yml with OIDC settings
         return null;
+    }
+
+    /** Names the shell variable {@link #configureUserData} assigns the admin password to, so
+     *  {@code ApplicationFactory} provisions a Secrets Manager secret for it rather than relying
+     *  on a locally generated, unpersisted value. */
+    @Override
+    public String autoAdminPasswordEnvVar() {
+        return "HARBOR_ADMIN_PASSWORD";
     }
 
     @Override

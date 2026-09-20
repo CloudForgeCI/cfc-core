@@ -1,658 +1,198 @@
-# CloudForge CI - Quick Start Guide
+# Onboarding Quick Start
 
-This guide provides example configurations for development and production deployments. Deployment duration and AWS service costs depend on the selected resources, region, account state, and AWS service availability. The compliance configurations implement and validate technical controls; they do not certify an environment.
+This guide deploys one of the example configurations in [`docs/examples/`](examples/README.md)
+to AWS, starting with a minimal development stack and moving to production profiles with
+compliance controls. To try CloudForge without an AWS account, use the
+[Local Emulator Quick Start](guides/LOCAL_EMULATOR_QUICK_START.md) instead.
+
+Deployment time and AWS cost depend on the resources you enable, the region, and your
+account. The compliance configurations enable and validate technical controls; they do not
+certify an environment.
 
 ## Prerequisites
 
-- AWS Account with admin access
-- AWS CLI configured (`aws configure`)
-- Node.js 18+ and npm
-- AWS CDK installed (`npm install -g aws-cdk`)
-- Java 21 (for building from source)
+- An AWS account and credentials with permission to create the resources (`aws configure`)
+- Java 25 and Maven 3.9+
+- Node.js and the AWS CDK CLI (`npm install -g aws-cdk`)
+- Optional: `jq` for editing JSON from the command line, and `cfn-guard` for template
+  validation in `enforce` mode
 
-## Path 1: Minimal Development Deployment
-
-**Goal**: Get Jenkins running with minimal configuration for evaluation/development.
-
-### Step 1: Clone and Setup
+## Build
 
 ```bash
 git clone https://github.com/CloudForgeCI/cfc-core.git
 cd cfc-core
-mvn clean install -DskipTests
+mvn clean install
+mvn -f cfc-testing/pom.xml package -Dmaven.test.skip=true
 cd cfc-testing
+cdk bootstrap        # once per account and region
 ```
 
-### Step 2: Use Minimal Dev Template
+All commands below run from `cfc-testing`. `cdk.json` runs the Interactive Deployer, which
+synthesizes `deployment-context.json` without prompting when the CDK CLI invokes it.
+
+## Path 1: Minimal development deployment
 
 ```bash
 cp ../docs/examples/dev-minimal.json deployment-context.json
-```
-
-### Step 3: Bootstrap CDK (First Time Only)
-
-```bash
-cdk bootstrap
-```
-
-### Step 4: Deploy
-
-```bash
 cdk deploy
 ```
 
-**Note**: The Interactive Deployer will automatically prompt you to configure if `deployment-context.json` doesn't exist.
+This deploys Jenkins on Fargate with the `dev` profile: public subnets, no authentication, no
+TLS, and no compliance controls. Use it only for evaluation.
 
-### Step 5: Access Jenkins
-
-After the deployment completes:
+Find the application URL in the stack outputs:
 
 ```bash
-# Get ALB DNS name
 aws cloudformation describe-stacks \
   --stack-name CloudForge-Dev \
-  --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
+  --query "Stacks[0].Outputs[?OutputKey=='ApplicationUrl'].OutputValue" \
   --output text
 ```
 
-Navigate to the DNS name in your browser. **No authentication required** for dev-minimal.
-
-### What You Get
-
-- ✅ Application on Fargate (no server management)
-- ✅ Public ALB (internet accessible)
-- ✅ EFS storage (persistent data)
-- ✅ Auto-scaling (1 task)
-- ✅ CloudWatch monitoring
-- ❌ No encryption
-- ❌ No authentication
-- ❌ No compliance controls
-- **Cost**: ~$35/month
-
-**⚠️ WARNING**: This setup is for **development/evaluation only**. Do not use for production.
-
----
-
-## Path 2: Standard Development
-
-**Goal**: Team development environment with basic security.
-
-### Step 1: Setup
+## Path 2: Development with Cognito sign-in
 
 ```bash
-cd cfc-testing
-cp docs/examples/dev-standard.json deployment-context.json
+cp ../docs/examples/dev-standard.json deployment-context.json
 ```
 
-### Step 2: Customize Configuration
-
-Edit `deployment-context.json`:
-
-```json
-{
-  "stackName": "MyTeam-Jenkins-Dev",
-  "cognitoDomainPrefix": "myteam-jenkins-dev-unique123"  // Must be globally unique
-}
-```
-
-### Step 3: Deploy
+Edit `stackName`, and set `cognitoDomainPrefix` to a value that is unique across all AWS
+accounts in the region, then deploy:
 
 ```bash
 cdk deploy
+aws cloudformation describe-stacks --stack-name <stackName> --query 'Stacks[0].Outputs'
 ```
 
-### Step 4: Access Jenkins
+## Path 3: Production with SOC 2 controls
 
 ```bash
-# Get ALB DNS and Cognito info
-aws cloudformation describe-stacks \
-  --stack-name MyTeam-Jenkins-Dev \
-  --query 'Stacks[0].Outputs'
-```
-
-Navigate to ALB DNS, authenticate with Cognito (you'll create an account on first access).
-
-### What You Get
-
-- ✅ Application on Fargate with auto-scaling (1-2 tasks)
-- ✅ Private subnets with NAT
-- ✅ Cognito authentication (no MFA)
-- ✅ Encryption at rest
-- ✅ CloudWatch monitoring
-- ❌ No compliance controls
-- **Cost**: ~$95/month
-
----
-
-## Path 3: Production with SOC 2 Controls
-
-**Goal**: Production deployment with infrastructure controls mapped to SOC 2.
-
-### Step 1: Prepare Configuration
-
-```bash
-cd cfc-testing
 cp ../docs/examples/production-soc2.json deployment-context.json
 ```
 
-### Step 2: Customize for Your Environment
-
-Edit `deployment-context.json`:
-
-```json
-{
-  "stackName": "MyCompany-Jenkins-Prod",
-  "region": "us-east-1",
-  "domain": "mycompany.com",
-  "subdomain": "jenkins",
-  "createZone": false,  // Set true if Route53 zone doesn't exist
-  "cognitoDomainPrefix": "mycompany-jenkins-prod",  // Must be globally unique
-  "enableS3VersioningRemediation": true,
-  "enableCloudTrailBucketAccessRemediation": true
-}
-```
-
-### Step 3: Verify Prerequisites
+Edit at least `stackName`, `region`, `domain`, `subdomain`, and `cognitoDomainPrefix`. Then
+check the prerequisites:
 
 ```bash
-# Verify Route53 hosted zone exists (if createZone=false)
-aws route53 list-hosted-zones-by-name --dns-name mycompany.com
+# A Route 53 hosted zone must exist for the domain unless createZone is true.
+aws route53 list-hosted-zones-by-name --dns-name example.com
 
-# Verify AWS Config is not already configured (or set createConfigInfrastructure=false)
+# Only one AWS Config recorder can exist per account and region. If one exists,
+# set "createConfigInfrastructure": false.
 aws configservice describe-configuration-recorders
 ```
 
-### Step 4: Review Template
+Review and deploy:
 
 ```bash
-# Synthesize and review CloudFormation template
-cdk synth > /tmp/template.yaml
-
-# Check resource counts
-grep "Type: AWS::" /tmp/template.yaml | wc -l
-```
-
-### Step 5: Deploy
-
-```bash
-cdk deploy --require-approval never
-```
-
-The deployment provisions:
-1. VPC, subnets, and NAT gateways
-2. Security groups
-3. ALB and target groups
-4. EFS file system
-5. EC2 Auto Scaling Group
-6. Cognito User Pool
-7. AWS Config, CloudTrail, and GuardDuty
-8. Config rules and auto-remediation
-
-### Step 6: Verify Deployment
-
-```bash
-# Get outputs
-aws cloudformation describe-stacks \
-  --stack-name MyCompany-Jenkins-Prod \
-  --query 'Stacks[0].Outputs' \
-  --output table
-
-# Verify Config Recorder is running
-aws configservice describe-configuration-recorder-status
-
-# Check compliance status
-aws configservice describe-compliance-by-config-rule \
-  --compliance-types COMPLIANT NON_COMPLIANT \
-  --output table
-```
-
-### Step 7: Initial Admin Setup
-
-```bash
-# Create Cognito admin user
-aws cognito-idp admin-create-user \
-  --user-pool-id <pool-id-from-outputs> \
-  --username admin@mycompany.com \
-  --user-attributes Name=email,Value=admin@mycompany.com \
-  --temporary-password TempPassword123! \
-  --message-action SUPPRESS
-```
-
-### Step 8: Access Application
-
-Navigate to `https://jenkins.mycompany.com` (or ALB DNS if domain not configured).
-
-1. Authenticate with Cognito
-2. Complete MFA setup (TOTP - use Google Authenticator, Authy, etc.)
-3. Complete application-specific setup (varies by application)
-
-### What You Get
-
-- ✅ Application on EC2 with auto-scaling (2-6 instances)
-- ✅ Private subnets with NAT
-- ✅ Custom domain with SSL/TLS
-- ✅ Cognito authentication with MFA
-- ✅ Encryption at rest and in transit
-- ✅ **20+ AWS Config rules** (SOC 2)
-- ✅ **Auto-remediation** (S3 versioning, CloudTrail logging, RDS security)
-- ✅ CloudTrail audit logging
-- ✅ GuardDuty threat detection
-- ✅ WAF web application firewall
-- ✅ VPC Flow Logs
-- ✅ AWS Audit Manager
-- ✅ 2-year log retention
-- **Cost**: ~$400/month
-
-**Compliance scope:** This configuration enables the listed technical controls mapped to SOC 2. It does not establish SOC 2 Type II certification or replace an audit.
-
----
-
-## Path 4: HIPAA-Mapped Controls
-
-**For healthcare applications handling PHI/ePHI.**
-
-### Configuration
-
-```bash
-cd cfc-testing
-cp docs/examples/production-hipaa.json deployment-context.json
-
-# Customize (same as SOC 2 Path 3 above)
-vim deployment-context.json
-
-# Deploy
+cdk synth
+cdk diff
 cdk deploy
 ```
 
-### What's Different from SOC 2?
+The `production` profile defaults `complianceMode` to `enforce`, so synthesis fails if a
+selected framework's rules are violated. With `cfn-guard` installed, the synthesized template
+is also checked against the framework's guard rules.
 
-- ✅ **30+ Config rules** (HIPAA + SOC 2)
-- ✅ **6-year log retention** (HIPAA §164.316(b)(2)(i))
-- ✅ Enhanced encryption validation
-- ✅ Additional audit controls
-- **Cost**: ~$550/month
-
----
-
-## Path 5: PCI DSS-Mapped Controls
-
-**For payment card processing systems.**
-
-### Configuration
+After deployment:
 
 ```bash
-cd cfc-testing
-cp docs/examples/production-pci-dss.json deployment-context.json
-
-# Customize
-vim deployment-context.json
-
-# Deploy
-cdk deploy
+aws cloudformation describe-stacks --stack-name <stackName> --query 'Stacks[0].Outputs' --output table
+aws configservice describe-compliance-by-config-rule --compliance-types NON_COMPLIANT --output table
 ```
 
-### What's Different?
+Sign in through Cognito and complete MFA setup with an authenticator app. If
+`cognitoInitialAdminEmail` is set, the first admin user receives an invitation at that
+address.
 
-- ✅ **40+ Config rules** (PCI-DSS + HIPAA + SOC 2)
-- ✅ Certificate expiration monitoring
-- ✅ Enhanced WAF rules
-- ✅ CloudFront access logging (if enabled)
-- ✅ Network segmentation validation
-- **Cost**: ~$710/month
-
----
-
-## Path 6: Applications with Databases
-
-**Goal**: Deploy applications that require RDS databases (GitLab, Mattermost, Metabase, etc.)
-
-### Configuration
+## Path 4: HIPAA and PCI DSS examples
 
 ```bash
-cd cfc-testing
-# Create deployment context for application with database
-cat > deployment-context.json <<EOF
-{
-  "stackName": "MyCompany-GitLab",
-  "context": {
-    "applicationId": "gitlab",
-    "securityProfile": "production",
-    "runtime": "FARGATE",
-    "domain": "mycompany.com",
-    "subdomain": "gitlab",
-    "enableSsl": true,
-    "cognitoDomainPrefix": "mycompany-gitlab-unique123"
-  }
-}
-EOF
-
-# Deploy (database automatically provisioned)
-cdk deploy
+cp ../docs/examples/production-hipaa.json deployment-context.json     # HIPAA and SOC 2
+cp ../docs/examples/production-pci-dss.json deployment-context.json   # PCI DSS, HIPAA, and SOC 2
 ```
 
-### What's Different?
+Edit and deploy them the same way as Path 3. Compared with SOC 2 alone, these enable longer log
+retention, private networking, and additional monitoring such as WAF, GuardDuty, and
+certificate expiry alarms. See [Multi-Framework Compliance](compliance/MULTI_FRAMEWORK_COMPLIANCE.md).
 
-- ✅ **RDS PostgreSQL** automatically provisioned
-- ✅ **Secrets Manager** for database credentials
-- ✅ **Encryption** at rest with KMS
-- ✅ **Automated backups** (7-30 days based on profile)
-- ✅ **Multi-AZ** for production environments
-- ✅ **Auto-remediation** for database compliance (deletion protection, auto-upgrades)
+## Path 5: Applications with a database
 
-### Optional Database Provisioning
-
-For applications that support both RDS and embedded databases (Metabase, Grafana):
+Applications such as GitLab, Mattermost, and Superset require a database, and CloudForge
+provisions Amazon RDS for them automatically. Deployment contexts are flat JSON objects:
 
 ```json
 {
-  "applicationId": "metabase",
+  "stackName": "gitlab",
+  "applicationId": "gitlab",
+  "runtime": "fargate",
   "securityProfile": "production",
-  "provisionDatabase": true  // ← Optional: use RDS instead of H2
+  "domain": "example.com",
+  "subdomain": "gitlab",
+  "enableSsl": true
 }
 ```
 
-**Cost**: Add ~$15-80/month for RDS (depending on instance size)
+Grafana and Metabase can use RDS or an embedded database; set `"provisionDatabase": true` to
+use RDS. Credentials are stored in AWS Secrets Manager. See the
+[Database Deployment Guide](databases/DATABASE-DEPLOYMENT-GUIDE.md).
 
----
+## Common changes
 
-## Common Customizations
+| Change | Properties |
+|---|---|
+| Instance size | `instanceType` (EC2) or `cpu` and `memory` (Fargate) |
+| Scaling | `minInstanceCapacity`, `maxInstanceCapacity`, `cpuTargetUtilization` |
+| CloudFront | `"cloudfrontEnabled": true` |
+| Log retention | `logRetentionDays` |
+| AWS Config remediation | `enableS3VersioningRemediation`, `enableCloudTrailBucketAccessRemediation`, `enableRdsDeletionProtectionRemediation`, `enableRdsAutoMinorVersionUpgradeRemediation` (with `awsConfigEnabled`) |
 
-### Change Instance Type
+The full list is in the [Advanced Guide](ADVANCED.md#configuration-reference).
 
-```json
-{
-  "instanceType": "t3.large"  // t3.small, t3.medium, t3.large, m5.xlarge
-}
-```
+### Moving from staging to production
 
-### Adjust Auto-Scaling
-
-```json
-{
-  "minInstanceCapacity": 3,
-  "maxInstanceCapacity": 10,
-  "cpuTargetUtilization": 50
-}
-```
-
-### Scope Config Rules to Stack Only
-
-```json
-{
-  "scopeConfigRulesToDeployment": true  // Only monitor this stack's resources
-}
-```
-
-### Enable Automated Remediation
-
-```json
-{
-  "awsConfigEnabled": true,
-  "complianceFrameworks": "SOC2,HIPAA",
-  "enableS3VersioningRemediation": true,
-  "enableCloudTrailBucketAccessRemediation": true,
-  "enableRdsDeletionProtectionRemediation": true,
-  "enableRdsAutoMinorVersionUpgradeRemediation": true
-}
-```
-
-### Enable CloudFront CDN
-
-```json
-{
-  "cloudfront": true
-}
-```
-
-### Access Running Instances
-
-CloudForge does not open port 22. All instance and container access goes through AWS Systems Manager — no SSH keys, no open ports, and every session is CloudTrail-logged.
-
-**EC2 instances** (e.g. Jenkins):
 ```bash
+jq '.stackName = "jenkins-prod"
+    | .securityProfile = "production"
+    | .runtime = "ec2"
+    | .instanceType = "t3.medium"
+    | .minInstanceCapacity = 2
+    | .maxInstanceCapacity = 4' \
+  deployment-context.json > deployment-context-prod.json
+CFC_CONTEXT_FILE=deployment-context-prod.json cdk deploy
+```
+
+## Accessing instances and containers
+
+CloudForge does not open port 22. Use AWS Systems Manager:
+
+```bash
+# EC2 instances
 aws ssm start-session --target <instance-id>
+
+# Fargate tasks (ECS Exec)
+aws ecs execute-command --cluster <cluster> --task <task-id> \
+  --container <container> --interactive --command "/bin/sh"
 ```
 
-**Fargate tasks** (ECS Exec, enabled on all tasks):
-```bash
-aws ecs execute-command \
-  --cluster <cluster-name> \
-  --task <task-id> \
-  --container <container-name> \
-  --interactive \
-  --command "/bin/sh"
-```
-
-Both require the caller's IAM identity to have `ssm:StartSession` or `ecs:ExecuteCommand` permission respectively. The `bastionCidr` deployment context field is retained for backwards compatibility but no longer gates access.
-
----
-
-## Upgrading Between Environments
-
-### Dev → Staging
-
-```bash
-# Start with dev config
-cat deployment-context.json > deployment-context-staging.json
-
-# Add compliance
-cat > patch.json <<EOF
-{
-  "stackName": "MyCompany-Jenkins-Staging",
-  "securityProfile": "staging",
-  "awsConfigEnabled": true,
-  "complianceFrameworks": "SOC2",
-  "guardDutyEnabled": true,
-  "wafEnabled": true,
-  "cognitoMfaEnabled": true,
-  "logRetentionDays": 365
-}
-EOF
-
-# Merge configurations
-jq -s '.[0] * .[1]' deployment-context-staging.json patch.json > temp.json
-mv temp.json deployment-context-staging.json
-
-# Deploy
-cdk deploy
-```
-
-### Staging → Production
-
-```bash
-# Copy staging config
-cp deployment-context-staging.json deployment-context-prod.json
-
-# Update for production
-jq '.stackName = "MyCompany-Jenkins-Prod" |
-    .securityProfile = "production" |
-    .runtime = "ec2" |
-    .instanceType = "t3.medium" |
-    .minInstanceCapacity = 2 |
-    .auditManagerEnabled = true |
-    .scopeConfigRulesToDeployment = false |
-    .logRetentionDays = 730' \
-  deployment-context-prod.json > temp.json
-mv temp.json deployment-context-prod.json
-
-# Deploy
-cdk deploy
-```
-
----
+Your IAM identity needs `ssm:StartSession` or `ecs:ExecuteCommand` respectively.
 
 ## Troubleshooting
 
-### Error: "Cognito domain prefix already in use"
+| Error | Resolution |
+|---|---|
+| Cognito domain prefix already in use | Choose another `cognitoDomainPrefix`, for example with a random suffix: `jq ".cognitoDomainPrefix = \"myapp-$(openssl rand -hex 4)\"" deployment-context.json` |
+| Route 53 hosted zone not found | Set `"createZone": true`, or remove `domain` and `subdomain` |
+| Config recorder already exists | Set `"createConfigInfrastructure": false` |
+| Synthesis fails in `enforce` mode | Read the reported rule, fix the configuration, or set `"complianceMode": "advisory"` to review all findings |
+| Stack creation failed | `aws cloudformation describe-stack-events --stack-name <stackName> --max-items 20` |
 
-```bash
-# Generate unique prefix
-UNIQUE_PREFIX="mycompany-jenkins-$(openssl rand -hex 4)"
-jq ".cognitoDomainPrefix = \"$UNIQUE_PREFIX\"" deployment-context.json > temp.json
-mv temp.json deployment-context.json
-```
+To remove a stack: `cdk destroy <stackName>`. Some resources are retained on deletion; see
+[SECURITY.md](https://github.com/CloudForgeCI/cfc-core/blob/develop/SECURITY.md#resources-retained-on-deletion).
 
-### Error: "Route53 hosted zone not found"
+## Next steps
 
-```bash
-# Option 1: Create zone automatically
-jq '.createZone = true' deployment-context.json > temp.json
-mv temp.json deployment-context.json
-
-# Option 2: Remove domain requirement
-jq 'del(.domain, .subdomain)' deployment-context.json > temp.json
-mv temp.json deployment-context.json
-```
-
-### Error: "Config recorder already exists"
-
-```bash
-# Use existing recorder
-jq '.createConfigInfrastructure = false' deployment-context.json > temp.json
-mv temp.json deployment-context.json
-```
-
-### Deployment Stuck or Failed
-
-```bash
-# Check CloudFormation events
-aws cloudformation describe-stack-events \
-  --stack-name YourStackName \
-  --max-items 20
-
-# Rollback if needed
-cdk destroy
-```
-
----
-
-## Post-Deployment Tasks
-
-### 1. Configure Jenkins
-
-```bash
-# Access Jenkins via ALB DNS or custom domain
-# Install recommended plugins
-# Configure:
-# - GitHub integration
-# - Pipeline libraries
-# - Build agents
-# - Credentials
-```
-
-### 2. Set Up Monitoring
-
-```bash
-# Subscribe to SNS topics for alerts
-aws sns subscribe \
-  --topic-arn <guardduty-topic-arn> \
-  --protocol email \
-  --notification-endpoint security@mycompany.com
-```
-
-### 3. Verify Compliance
-
-```bash
-# Run compliance check
-aws configservice describe-compliance-by-config-rule \
-  --compliance-types NON_COMPLIANT \
-  --output table
-
-# Fix any non-compliant resources
-# Auto-remediation will handle some automatically
-```
-
-### 4. Backup Configuration
-
-```bash
-# Export deployment context
-aws s3 cp deployment-context.json \
-  s3://my-backup-bucket/jenkins/deployment-context-$(date +%Y%m%d).json
-
-# Export CloudFormation template
-aws cloudformation get-template \
-  --stack-name YourStackName \
-  --query 'TemplateBody' > template-backup.yaml
-```
-
----
-
-## Cost Optimization Tips
-
-1. **Use Fargate Spot** where interruption-tolerant workloads permit:
-   ```json
-   {
-     "runtime": "fargate",
-     "capacityProviderStrategy": [{"capacityProvider": "FARGATE_SPOT", "weight": 1}]
-   }
-   ```
-
-2. **Reduce NAT Gateway costs** (dev only):
-   ```json
-   {
-     "networkMode": "public-no-nat"  // Only for dev!
-   }
-   ```
-
-3. **Scope Config rules**:
-   ```json
-   {
-     "scopeConfigRulesToDeployment": true  // Fewer evaluations
-   }
-   ```
-
-4. **Adjust log retention**:
-   ```json
-   {
-     "logRetentionDays": 30  // Instead of 730 for non-production
-   }
-   ```
-
-5. **Evaluate Reserved Instances** for stable production EC2 usage
-
-6. **Enable S3 lifecycle policies** for log archival
-
----
-
-## Related Guides
-
-- **Development**: [Extended Testing Guide](guides/EXTENDED-TESTING.md)
-- **Production**: [Deployment Guide](compliance/DEPLOYMENT_GUIDE.md)
-- **Compliance**: [Quick Start Compliance Guide](compliance/QUICK_START_GUIDE.md)
-- **Auditing**: [Audit Readiness Guide](AUDIT_READINESS_GUIDE.md)
-- **Security**: [IAM Rules Guide](guides/IAM_RULES.md)
-
----
-
-## Support
-
-- **Documentation**: `/docs` directory
-- **Issues**: [GitHub Issues](https://github.com/CloudForgeCI/cfc-core/issues)
-- **AWS Support**: [AWS Support Center](https://console.aws.amazon.com/support)
-- **Compliance**: See [Auditor Compliance Mapping](AUDITOR_COMPLIANCE_MAPPING.md)
-
----
-
-## Quick Reference Commands
-
-```bash
-# Deploy
-cdk deploy
-
-# Check status
-aws cloudformation describe-stacks --stack-name StackName
-
-# Get outputs
-aws cloudformation describe-stacks \
-  --stack-name StackName \
-  --query 'Stacks[0].Outputs'
-
-# Check compliance
-aws configservice describe-compliance-by-config-rule
-
-# View logs
-aws logs tail /aws/ecs/jenkins --follow
-
-# Destroy stack
-cdk destroy
-```
+- [Advanced Guide](ADVANCED.md): configuration reference and command-line reference
+- [Application guides](guides/applications/README.md) and [CMS guides](guides/cms/README.md)
+- [Compliance Deployment Guide](compliance/DEPLOYMENT_GUIDE.md)
+- [Audit Readiness Guide](AUDIT_READINESS_GUIDE.md)

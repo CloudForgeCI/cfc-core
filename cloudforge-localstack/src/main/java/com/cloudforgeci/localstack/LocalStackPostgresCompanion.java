@@ -107,9 +107,9 @@ final class LocalStackPostgresCompanion {
     }
 
     /**
-     * The original manual LocalStack workaround used the application user as the
-     * initial PostgreSQL superuser. Prefer the managed companion's {@code postgres}
-     * account, but adopt that predecessor so a developer can migrate in place.
+     * Prefers the managed companion's {@code postgres} account, but falls back to the
+     * application user, which older manually created LocalStack PostgreSQL setups used as the
+     * initial superuser, so those can be migrated in place.
      */
     private static String resolveAdministrativeUser(String applicationUser) throws IOException {
         java.util.LinkedHashSet<String> candidates = new java.util.LinkedHashSet<>();

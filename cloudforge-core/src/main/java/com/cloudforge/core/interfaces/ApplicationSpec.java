@@ -114,7 +114,7 @@ public interface ApplicationSpec {
      *
      * <p>Defaults to {@code X86_64} -- almost every built-in application image (Jenkins, GitLab,
      * Grafana, etc.) is x86_64-only or x86_64-primary today. Override only when the image is
-     * confirmed to actually support the declared architecture; a mismatch fails the task at
+     * known to support the declared architecture; a mismatch fails the task at
      * startup with no fallback, since Fargate provisions the underlying compute from this value
      * before it ever pulls the image.</p>
      *
@@ -471,11 +471,20 @@ public interface ApplicationSpec {
      *     required, since the main container's startup dependency needs a {@code HEALTHY} signal
      *     to wait on. The port in that example is the {@code cloudforge-synth-service} sidecar's
      *     own default — see {@link com.cloudforge.core.manager.ManagerEnvKeys#SYNTH_SERVICE_DEFAULT_PORT}
-     *     for the one place that port is actually declared
+     *     for the one place that port is declared
      * @param environment environment variables for the sidecar container
+     * @param memoryLimitMiB a hard memory ceiling for this one container, or {@code null} to leave
+     *     it unset (every container in the task then draws from the shared task-level memory pool
+     *     with no guaranteed floor for any of them). Matters most for a sidecar running its own
+     *     JVM, or (as {@code cloudforge-synth-service} does) a JVM that itself spawns a full
+     *     Node.js + bundled {@code aws-cdk-lib} child process for jsii: without a floor, that
+     *     child process can be silently OOM-killed under memory pressure from the main container,
+     *     surfacing as {@code JsiiError: Child process exited unexpectedly!} with every synth
+     *     request failing until the whole task is restarted
      */
     record SidecarContainer(String containerName, String image, int containerPort,
-                             List<String> healthCheckCommand, java.util.Map<String, String> environment) {
+                             List<String> healthCheckCommand, java.util.Map<String, String> environment,
+                             Integer memoryLimitMiB) {
     }
 
     /**
@@ -658,6 +667,67 @@ public interface ApplicationSpec {
     }
 
     /**
+     * The container environment variable name this application's own {@code containerEnvironmentVariables}
+     * already uses for the initial admin account's notification email (e.g. {@code
+     * "WORDPRESS_ADMIN_EMAIL"}), or {@code null} (the default) if this application has no such
+     * variable.
+     *
+     * <p>{@code containerEnvironmentVariables} itself only ever has a synthetic {@code
+     * admin@<fqdn>} to fall back to. When the deployer already named an admin up front --
+     * {@code cognitoInitialAdminEmail}, set on an {@code alb-oidc} deployment gated by Cognito --
+     * {@code ContainerFactory} uses this hook to override that synthetic default with that address,
+     * the same opt-in shape as {@link #autoAdminPasswordEnvVar()}.</p>
+     *
+     * @return the env var name (e.g. {@code "WORDPRESS_ADMIN_EMAIL"}), or {@code null}
+     */
+    default String autoAdminEmailEnvVar() {
+        return null;
+    }
+
+    /**
+     * The image's own default {@code CMD} (its normal startup process, e.g. {@code
+     * ["apache2-foreground"]} for the official Joomla image) — only meaningful alongside {@link
+     * #autoAdminPasswordEnvVar()}, and only when this is non-null does {@code ContainerFactory}
+     * wrap the container's command to print the generated admin password once at startup
+     * (CloudWatch Logs then becomes the retrieval path, no AWS Secrets Manager access needed —
+     * the same convention CloudForge Manager's own initial setup token already uses).
+     *
+     * <p>Deliberately opt-in per application, not inferred: getting an image's default
+     * {@code CMD} wrong replaces it with something that fails to start the application at all,
+     * so this stays {@code null} (no wrapper attempted, {@code autoAdminPasswordEnvVar()}'s
+     * secret is still generated and still only retrievable via the AWS CLI/console) until each
+     * application's default command has been verified against its image.</p>
+     *
+     * @return the image's default {@code CMD} args, or {@code null} if not verified
+     */
+    default List<String> defaultContainerCommand() {
+        return null;
+    }
+
+    /**
+     * Absolute path to the image's own entrypoint script (e.g. {@code "/entrypoint.sh"} for the
+     * official Joomla image), when that script gates its first-run setup (copying application
+     * files, generating config) on its {@code $1} literally matching {@link
+     * #defaultContainerCommand()} (e.g. Joomla's and WordPress's own entrypoints both only run
+     * that setup when invoked as {@code entrypoint.sh apache2-foreground}, not as an arbitrary
+     * wrapped command).
+     *
+     * <p>{@code ContainerFactory}'s admin-password banner wrapper always replaces the container's
+     * {@code CMD}, but never touches {@code ENTRYPOINT} — so the image's real entrypoint still
+     * runs first with {@code $1} set to the wrapper's own {@code /bin/sh}, failing that gate and
+     * silently skipping setup. When this is non-null, the wrapper instead re-invokes the entrypoint
+     * script explicitly with {@link #defaultContainerCommand()} as its argument, so the gate passes
+     * and setup still runs, before handing off to the real process.</p>
+     *
+     * @return the entrypoint script's absolute path, or {@code null} if the image has no such
+     *         gated first-run setup (a plain {@code exec} of {@link #defaultContainerCommand()}
+     *         is then correct on its own)
+     */
+    default String defaultContainerEntrypoint() {
+        return null;
+    }
+
+    /**
      * Whether this application needs a Redis-backed session store (ElastiCache), provisioned by
      * {@code ApplicationFactory} and delivered as {@code redisSessionStoreEndpoint}/
      * {@code redisSessionStorePort} in {@code SystemContext}. Same generalization shape as
@@ -709,6 +779,27 @@ public interface ApplicationSpec {
      */
     default boolean requiresSequentialDeploymentWithoutDatabase() {
         return false;
+    }
+
+    /**
+     * Whether this application can run as more than one instance at all — {@code false} for an
+     * application whose upstream image/edition has no clustering or high-availability support
+     * (e.g. Jenkins' controller process, or the Community edition of a tool whose clustering is a
+     * paid-tier-only feature), regardless of how {@code minInstanceCapacity}/{@code
+     * maxInstanceCapacity}/{@code enableAutoScaling} are configured.
+     *
+     * <p>Enforced by {@code ScalingFactory} — requesting more than one instance for an application
+     * that returns {@code false} here fails synthesis outright; this server-side check is the
+     * authoritative boundary, since client-side input can't be trusted. Also
+     * surfaced through {@code ApplicationInfo} so a deploy-time UI/CLI (the deploy wizard,
+     * InteractiveDeployer) can skip or disable the autoscaling prompt/fields for such an
+     * application up front, rather than letting a user configure something that can only fail
+     * later.</p>
+     *
+     * @return true (the default) if this application supports running more than one instance
+     */
+    default boolean supportsAutoScaling() {
+        return true;
     }
 
     /**

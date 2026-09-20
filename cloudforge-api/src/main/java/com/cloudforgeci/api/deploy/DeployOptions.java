@@ -27,10 +27,8 @@ public record DeployOptions(
         } else {
             managerVolumeRoots = List.copyOf(managerVolumeRoots);
         }
-        // credentialsOverride intentionally left as-is (nullable) — null means "use the default
-        // credential chain," exactly today's only behavior. See AwsDirectDeployer's javadoc for
-        // where this is actually consumed; this class stays ignorant of *why* a caller would
-        // supply one (cross-account deploy, or anything else) — it's just a pass-through slot.
+        // credentialsOverride is nullable; null means the default credential chain. It is passed
+        // through to AwsDirectDeployer.
     }
 
     public static DeployOptions defaults() {
@@ -47,7 +45,7 @@ public record DeployOptions(
     }
 
     /**
-     * Credentials to use instead of the default chain for real-AWS calls — any caller needing to
+     * Credentials to use instead of the default chain for AWS calls — any caller needing to
      * act as a different principal (e.g. an assumed cross-account role) can supply one. Ignored
      * for local-emulator targets (LocalStack/MiniStack always use their fixed test credentials —
      * see {@code AwsDirectDeployer.resolveLocalEmulatorEndpoint()}).

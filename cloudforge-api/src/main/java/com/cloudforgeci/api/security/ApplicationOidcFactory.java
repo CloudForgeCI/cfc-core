@@ -595,18 +595,17 @@ public class ApplicationOidcFactory extends BaseFactory {
     /**
      * Build OIDC configuration for CloudForge Manager acting as this app's OIDC provider.
      *
-     * <p>Manager's own OIDC-provider endpoints are at fixed paths relative to its issuer URL
-     * (Spring Authorization Server's own layout: {@code /oauth2/authorize}, {@code /oauth2/token},
-     * {@code /userinfo}, {@code /oauth2/jwks}) — so unlike Option 3 (External IdP), only {@link
-     * #cloudforgeManagerIssuerUrl} needs entering, not each endpoint separately. The client
-     * id/secret still come from {@link #oidcClientId}/{@link #oidcClientSecretName}, populated by
-     * hand from Manager's own Trusted Apps settings page (see {@code
-     * com.cloudforgeci.manager.auth.oidcprovider.TrustedAppStore#issue}) — Phase 1 has no
-     * push-based sync, matching the "manual reconfiguration on drift" design.</p>
+     * <p>Manager's OIDC-provider endpoints are at fixed paths relative to its issuer URL (the
+     * Spring Authorization Server layout: {@code /oauth2/authorize}, {@code /oauth2/token},
+     * {@code /userinfo}, {@code /oauth2/jwks}), so unlike the external-IdP option only
+     * {@link #cloudforgeManagerIssuerUrl} is required. The client id/secret come from
+     * {@link #oidcClientId}/{@link #oidcClientSecretName}, copied from Manager's Trusted Apps
+     * settings page; there is no automatic sync, so changes on either side must be re-entered
+     * manually.</p>
      *
-     * <p>No groups claim: Manager's Phase 1 id_token carries only {@code sub} —
+     * <p>No groups claim: Manager's id_token carries only {@code sub}, so
      * {@code isGroupBasedAccessEnabled() == false} tells consuming apps to grant full access to
-     * any authenticated user rather than expect group membership that doesn't exist yet.</p>
+     * any authenticated user.</p>
      */
     private OidcConfiguration buildCloudForgeManagerConfiguration(OidcIntegration oidcIntegration) {
         String issuer = cloudforgeManagerIssuerUrl.endsWith("/")
@@ -947,11 +946,10 @@ public class ApplicationOidcFactory extends BaseFactory {
     }
 
     /**
-     * OIDC configuration for CloudForge Manager as this app's identity provider — see {@link
-     * #buildCloudForgeManagerConfiguration}'s own javadoc for why this isn't just another {@link
-     * SimplifiedOidcConfiguration} call: that class's {@code getJwksUri()} hardcodes the generic
-     * {@code /.well-known/jwks.json} suffix, which is wrong for Manager's own {@code /oauth2/jwks}
-     * path (Spring Authorization Server's layout, not the generic OIDC-discovery convention).
+     * OIDC configuration for CloudForge Manager as this app's identity provider (see {@link
+     * #buildCloudForgeManagerConfiguration}). Not a {@link SimplifiedOidcConfiguration} because
+     * that class's {@code getJwksUri()} hardcodes {@code /.well-known/jwks.json}, while Manager
+     * (Spring Authorization Server) serves keys at {@code /oauth2/jwks}.
      */
     private static class CloudForgeManagerOidcConfiguration implements OidcConfiguration {
         private final String issuerUrl;

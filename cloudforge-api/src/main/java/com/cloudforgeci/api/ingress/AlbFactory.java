@@ -180,16 +180,10 @@ public class AlbFactory extends BaseFactory {
                         public String produce(IResolveContext context) {
                             // STACK-SPECIFIC bucket name to avoid conflicts between stacks.
                             //
-                            // Calling .toLowerCase() on the WHOLE composite string — including
-                            // the embedded accountId token — would corrupt CDK's token marker (e.g.
-                            // "${Token[AWS.AccountId.7]}" becomes "${token[aws.accountid.7]}"), which no
-                            // longer matches anything in CDK's token registry. Instead of resolving back
-                            // into a proper Fn::Sub/Ref against AWS::AccountId, the now-broken marker text
-                            // leaks straight through into the synthesized template as a literal string —
-                            // producing bucket names like "teset-alb-logs-${token[aws.accountid.7]}-us-east-1"
-                            // that both real S3 and LocalStack reject as invalid. Account IDs are always
-                            // numeric digits (case has no effect on them), so only the literal parts need
-                            // lowercasing — the token itself must pass through untouched.
+                            // Lowercase only the literal parts. Lowercasing the whole string would
+                            // corrupt the embedded accountId token marker (e.g. "${Token[AWS.AccountId.7]}"
+                            // -> "${token[aws.accountid.7]}"), which CDK then emits verbatim as an invalid
+                            // bucket name. Account IDs are numeric, so they need no lowercasing.
                             return stackName.toLowerCase() + "-alb-logs-" + accountId + "-" + effectiveRegion.toLowerCase();
                         }
                     },

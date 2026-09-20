@@ -94,7 +94,7 @@ class CmsOidcIntegrationsTest {
     }
 
     /** {@code getConfigurationFilePath()} is documented as optional on {@code OidcIntegration}
-     *  itself (defaults to {@code null}) — genuinely null for an ALB-OIDC-primary integration
+     *  itself (defaults to {@code null}) — null for an ALB-OIDC-primary integration
      *  like Bagisto's, which writes no application-level config file at all. Only validate shape
      *  when the integration actually returns one. */
     @ParameterizedTest
@@ -129,7 +129,7 @@ class CmsOidcIntegrationsTest {
     }
 
     /** {@code getConfigurationFile()} is documented as optional (defaults to {@code null}) —
-     *  genuinely null for an ALB-OIDC-primary integration that writes no application-level config
+     *  null for an ALB-OIDC-primary integration that writes no application-level config
      *  file. Only validate content when the integration actually returns one. */
     @ParameterizedTest
     @MethodSource("allIntegrations")
@@ -153,13 +153,11 @@ class CmsOidcIntegrationsTest {
         assertFalse(commands.isEmpty(), name + " must return user data commands");
     }
 
-    /** A real length floor, not the redundant-with-{@link #userDataCommandsAreNonEmpty} check
-     *  this used to be — 100 chars only held for the original file-config-heavy integrations
-     *  (WordPress/Drupal/etc.); an ALB-OIDC-primary integration like Bagisto's legitimately
-     *  returns one short explanatory comment ("no in-app config required") rather than a setup
-     *  script, and that's still a meaningful, real command list, not a degenerate placeholder. 30
-     *  chars catches an actually-degenerate single-character/empty-string entry while allowing a
-     *  real short comment through. */
+    /** A length floor distinct from {@link #userDataCommandsAreNonEmpty}. File-config-heavy
+     *  integrations (WordPress/Drupal/etc.) produce long scripts, but an ALB-OIDC-primary
+     *  integration like Bagisto's legitimately returns one short explanatory comment ("no in-app
+     *  config required"). 30 chars rejects a degenerate single-character/empty-string entry while
+     *  allowing such a short comment through. */
     @ParameterizedTest
     @MethodSource("allIntegrations")
     void userDataCommandsAreMeaningfulNotDegenerate(Object integration, String name) {
@@ -171,7 +169,7 @@ class CmsOidcIntegrationsTest {
     }
 
     /** {@code getPostDeploymentInstructions()} is documented as optional (defaults to {@code
-     *  null}) — genuinely null for an integration needing no manual post-deployment step. Only
+     *  null}) — null for an integration needing no manual post-deployment step. Only
      *  validate content when the integration actually returns some. */
     @ParameterizedTest
     @MethodSource("allIntegrations")

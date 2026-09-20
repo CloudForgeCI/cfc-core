@@ -15,10 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Regression coverage for the stable {@code ApplicationUrl} CFN output.
  *
  * <p>{@code CloudFormationInventory.preferredUrl} (cloudforge-manager) looks for the literal
- * output key {@code "ApplicationUrl"} — before this fix, {@link FargateFactory} only emitted a
- * per-app key like {@code "JenkinsUrl"}/{@code "Cloudforge-managerUrl"}, so AWS deployments never
- * resolved an "Open" link or health-check URL through CloudFormation outputs; only LocalStack/
- * MiniStack (which emit their own fixed-name outputs from a different code path) worked.</p>
+ * output key {@code "ApplicationUrl"} to resolve an "Open" link or health-check URL. Stacks emit
+ * it alongside the per-app key (e.g. {@code "JenkinsUrl"}).</p>
  */
 class ApplicationUrlOutputTest {
 
@@ -38,7 +36,7 @@ class ApplicationUrlOutputTest {
         JsonNode outputs = MAPPER.valueToTree(template.toJSON()).path("Outputs");
 
         // Created directly on the Stack, so its OutputKey is exactly "ApplicationUrl" — no
-        // CDK-generated disambiguation hash (that's the whole point of the fix).
+        // CDK-generated disambiguation hash.
         assertTrue(outputs.has("ApplicationUrl"), "Missing stable ApplicationUrl output: " + outputs);
 
         // The pre-existing per-app output is nested under the FargateFactory construct, so its
@@ -78,8 +76,8 @@ class ApplicationUrlOutputTest {
 
     @Test
     void ec2StackEmitsAStableApplicationUrlOutputToo() throws Exception {
-        // EC2 previously emitted NO application-URL output at all — Ec2RuntimeConfiguration.wire()
-        // now creates the same stable + per-app pair Fargate does, once its ALB slot is set.
+        // Ec2RuntimeConfiguration.wire() creates the same stable + per-app pair as Fargate, once
+        // its ALB slot is set.
         //
         // Unlike FargateFactory (which calls createApplicationUrlOutput() directly inside
         // create()), Ec2RuntimeConfiguration.wire() only runs as a *deferred* action registered

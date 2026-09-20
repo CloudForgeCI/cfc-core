@@ -1,8 +1,8 @@
 # Nexus Repository Application Guide
 
-Nexus Repository is a universal artifact repository manager supporting Maven, npm, Docker, PyPI, and many other formats.
+Sonatype Nexus Repository is an artifact repository manager for Maven, npm, Docker, PyPI, and other formats.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -21,22 +21,17 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | No (Nexus Pro feature) |
-| **Database Required** | No (embedded OrientDB) |
+| **Supported Auth Modes** | `none` |
+| **Database Required** | No (embedded database) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Universal repository manager
-- Maven, Gradle, npm, NuGet, PyPI, RubyGems, Docker
-- Proxy repositories (cache remote artifacts)
-- Hosted repositories (store internal artifacts)
-- Group repositories (aggregate multiple repos)
-- Component analysis and security
+- Maven, npm, NuGet, PyPI, RubyGems, and Docker formats
+- Proxy, hosted, and group repositories
+- File and S3 blob stores
 - REST API
-- Blob stores (local, S3)
-- Repository health check
 
 ---
 
@@ -59,14 +54,13 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
 
 ## Authentication
 
-### Supported Auth Modes
+| Mode | Description |
+|------|-------------|
+| `none` | Nexus local accounts |
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | Available | ALB-level authentication |
-| `none` | Available | Local accounts only |
+Nexus declares only the `none` auth mode. When a context is prepared for a deployment target (the interactive deployer or `CloudForgeDeployment`), an unsupported `authMode` such as `alb-oidc` is replaced with `none` and a warning is printed. Compliance frameworks that require CloudForge-managed authentication, such as the SOC 2 CC6.2 rule, report a failure when `authMode` is `none`.
 
-**Note:** Native OIDC/SAML requires Nexus Pro license.
+Native SAML in Nexus requires a Nexus Pro license; CloudForge does not configure it.
 
 ---
 
@@ -74,7 +68,7 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
 
 | Variable | Description |
 |----------|-------------|
-| `INSTALL4J_ADD_VM_PARAMS` | JVM memory tuning |
+| `INSTALL4J_ADD_VM_PARAMS` | JVM heap settings. Set only by the EC2 user data (`-Xms2703m -Xmx2703m -XX:MaxDirectMemorySize=2703m`). |
 
 ---
 
@@ -107,14 +101,13 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
   "stackName": "Nexus-Dev",
   "applicationId": "nexus",
   "applicationName": "Nexus Dev",
-  "description": "Nexus development repository",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -127,15 +120,14 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
 }
 ```
 
-### Production - With Docker Registry
+### Production with Docker Registry Ports
 
 ```json
 {
   "stackName": "Nexus-Production",
   "applicationId": "nexus",
   "applicationName": "Nexus Repository",
-  "description": "Production artifact repository",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -148,10 +140,7 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "nexus-prod-yourcompany",
-  "cognitoMfaEnabled": true,
+  "authMode": "none",
 
   "instanceType": "t3.large",
   "minInstanceCapacity": 1,
@@ -159,7 +148,6 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
 
   "enableDockerRegistry": true,
 
-  "complianceFrameworks": "SOC2",
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "wafEnabled": true,
@@ -171,15 +159,11 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
 }
 ```
 
-**Cost estimate:** ~$350/month
-
 ---
 
 ## Compliance Use Cases
 
-- **SOC2**: Software bill of materials (SBOM) tracking
-- **PCI-DSS**: Secure artifact storage for payment processing
-- **HIPAA**: Audit trail for healthcare application deployments
+A private artifact repository can support controls such as tracking which build artifacts were deployed and restricting where dependencies are fetched from. Deploying Nexus does not by itself satisfy any framework's requirements.
 
 ---
 
@@ -194,10 +178,10 @@ Nexus Repository is a universal artifact repository manager supporting Maven, np
    # EC2
    ssh ec2-user@instance 'cat /opt/nexus-data/admin.password'
    ```
-2. **Change Admin Password**: First login prompts password change
-3. **Create Repositories**: Maven, npm, Docker as needed
-4. **Configure Blob Stores**: S3 for scalable storage
-5. **Set Up Cleanup Policies**: Manage storage growth
+2. **Change the admin password** when prompted at first sign-in.
+3. **Create repositories** for the formats you use. Docker repositories must be bound to ports 5000-5002 to match the optional security-group rules.
+4. **Configure blob stores**, for example an S3 blob store.
+5. **Set up cleanup policies** to manage storage growth.
 
 ---
 

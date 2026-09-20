@@ -1,8 +1,8 @@
 # Drone Application Guide
 
-Drone is a container-native, continuous delivery platform that uses a simple YAML configuration to define and execute pipelines.
+Drone is a container-native continuous integration platform that defines pipelines in a YAML file stored with the repository.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -21,22 +21,17 @@ Drone is a container-native, continuous delivery platform that uses a simple YAM
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | No (use source control OAuth) |
+| **Supported Auth Modes** | `none` (Drone authenticates users through its source-control provider) |
 | **Database Required** | No (embedded SQLite) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Pipeline as code (.drone.yml)
-- Container-native builds
-- GitHub, GitLab, Bitbucket integration
-- Multi-platform builds (Linux, Windows, ARM)
-- Plugin ecosystem
-- Secrets management
-- Cron scheduling
-- Parallelized steps
-- Matrix builds
+- Pipelines defined in `.drone.yml`
+- Container-based build steps
+- GitHub, GitLab, Gitea, and Bitbucket integration
+- Secrets, cron schedules, parallel steps, and matrix builds
 
 ---
 
@@ -51,6 +46,8 @@ Drone is a container-native, continuous delivery platform that uses a simple YAM
 | Container User | `1000:1000` |
 | EFS Permissions | `755` |
 
+On EC2, data is stored under `/var/lib/drone`.
+
 ---
 
 ## Deployment Context Examples
@@ -62,14 +59,13 @@ Drone is a container-native, continuous delivery platform that uses a simple YAM
   "stackName": "Drone-Dev",
   "applicationId": "drone",
   "applicationName": "Drone CI",
-  "description": "Drone CI development server",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -82,8 +78,6 @@ Drone is a container-native, continuous delivery platform that uses a simple YAM
 }
 ```
 
-**Cost estimate:** ~$50/month
-
 ### Production
 
 ```json
@@ -91,8 +85,7 @@ Drone is a container-native, continuous delivery platform that uses a simple YAM
   "stackName": "Drone-Production",
   "applicationId": "drone",
   "applicationName": "Drone CI",
-  "description": "Production Drone CI",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -105,16 +98,12 @@ Drone is a container-native, continuous delivery platform that uses a simple YAM
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "drone-prod-yourcompany",
-  "cognitoMfaEnabled": true,
+  "authMode": "none",
 
   "instanceType": "t3.small",
   "minInstanceCapacity": 1,
   "maxInstanceCapacity": 2,
 
-  "complianceFrameworks": "SOC2",
   "awsConfigEnabled": true,
   "wafEnabled": true,
 
@@ -125,16 +114,24 @@ Drone is a container-native, continuous delivery platform that uses a simple YAM
 }
 ```
 
-**Cost estimate:** ~$150/month
+---
+
+## Authentication
+
+Drone declares only the `none` auth mode. When a context is prepared for a deployment target (the interactive deployer or `CloudForgeDeployment`), an unsupported `authMode` such as `alb-oidc` is replaced with `none` and a warning is printed.
+
+Drone signs users in through its source-control provider (GitHub, GitLab, Gitea, or Bitbucket OAuth). Compliance frameworks that require CloudForge-managed authentication, such as the SOC 2 CC6.2 rule, report a failure when `authMode` is `none`.
 
 ---
 
 ## Post-Deployment Tasks
 
-1. Configure OAuth with GitHub/GitLab
-2. Set environment variables for OAuth credentials
-3. Activate repositories
-4. Add `.drone.yml` to repositories
+CloudForge does not set Drone's source-control provider variables (for example `DRONE_GITHUB_CLIENT_ID` and `DRONE_GITHUB_CLIENT_SECRET`). On EC2 the server is started with `DRONE_SERVER_PROTO=http` and the instance's public hostname.
+
+1. Create an OAuth application in your source-control provider.
+2. Supply the provider's client ID and secret to the Drone server.
+3. Activate repositories in the Drone UI.
+4. Add a `.drone.yml` file to each repository.
 
 ---
 

@@ -1,7 +1,7 @@
 # Multi-Framework Compliance
 
 :::warning Infrastructure Controls Only
-This gives you **infrastructure controls only**. Not full compliance. You still need:
+CloudForge provides **infrastructure controls only**, not certification or full compliance. You still need:
 
 - Organizational policies and procedures
 - Training programs
@@ -12,41 +12,21 @@ This gives you **infrastructure controls only**. Not full compliance. You still 
 
 ## What This Does
 
-Automated validation for infrastructure controls across PCI-DSS, HIPAA, SOC 2, and GDPR. Deployment fails if required controls are missing.
+Synthesis-time validation of infrastructure controls for PCI-DSS, HIPAA, SOC 2, and GDPR. In `enforce` mode (the default for `production`), synthesis fails when a required control is missing; in `advisory` mode, violations are reported as warnings.
 
-When you enable AWS Audit Manager, the system creates **one assessment per framework** you specify. For example, if you set `complianceFrameworks: "HIPAA,SOC2,GDPR"`, you'll get:
-- One HIPAA assessment actively collecting evidence
-- One SOC2 assessment actively collecting evidence
-- One GDPR assessment actively collecting evidence
-- All using a shared S3 bucket and IAM role
-- All evidence automatically collected from CloudTrail, Config, GuardDuty, WAF, etc.
+When `auditManagerEnabled` is `true`, CloudForge creates **one AWS Audit Manager assessment per selected framework**. For example, `complianceFrameworks: "hipaa,soc2,gdpr"` creates HIPAA, SOC2, and GDPR assessments that share one report bucket and IAM role. Evidence comes from the data sources that Audit Manager collects, such as CloudTrail, AWS Config, and Security Hub.
 
-**Lifecycle Management**: Assessments are CloudFormation-managed resources, so they:
-- Appear in AWS Audit Manager console when created
-- Are tracked as part of your CloudFormation stack
-- Are automatically deleted when you run `cdk destroy`
+Assessments are CloudFormation-managed resources: they are tracked in your stack and deleted by `cdk destroy`.
 
 ## AWS Config Rules Deployment
 
-When compliance frameworks are enabled, AWS Config rules are automatically deployed for continuous compliance monitoring:
+When `awsConfigEnabled` is `true`, CloudForge deploys AWS Config rules for continuous evaluation:
 
-| Framework Configuration | Base Controls | Framework-Specific Controls | Total AWS Config Rules |
-|------------------------|---------------|----------------------------|----------------------|
-| **SOC2 only** | 9 rules | + 7 SOC2-specific | = **16 rules** |
-| **HIPAA only** | 9 rules | + 8 HIPAA-specific | = **17 rules** |
-| **PCI-DSS only** | 9 rules | + 8 PCI-DSS-specific | = **17 rules** |
-| **GDPR only** | 9 rules | + 8 GDPR-specific | = **17 rules** |
-| **Multi-framework (all 4)** | 9 base | + 31 framework-specific | = **40 rules total** |
+- **Base rules**, deployed for every framework selection: encryption (EBS, S3), S3 public access and versioning, the IAM password policy, and CloudTrail.
+- **Framework-specific rules**, deployed through CloudFormation conditions (`EnablePciDssRules`, `EnableSoc2Rules`, `EnableHipaaRules`, `EnableGdprRules`) only for selected frameworks. Database rules also require `provisionDatabase`.
+- **Collected rules**, registered by other factories (for example GuardDuty or VPC Flow Logs) only when the corresponding resource is created.
 
-:::info Base Rules
-**Base controls (9 rules)** are always deployed regardless of framework:
-- Encryption (EBS, S3, RDS)
-- IAM policies and password requirements
-- CloudTrail logging
-- VPC Flow Logs
-
-Framework-specific controls only deploy when enabled via `complianceFrameworks` configuration property.
-:::
+Rules required by several frameworks are deployed once.
 
 ## Quick Config
 
@@ -56,21 +36,24 @@ Framework-specific controls only deploy when enabled via `complianceFrameworks` 
   "networkMode": "private-with-nat",
   "authMode": "alb-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "jenkins-mycompany",
+  "cognitoDomainPrefix": "my-app-auth",
   "wafEnabled": true,
   "guardDutyEnabled": true,
+  "awsConfigEnabled": true,
   "auditManagerEnabled": true,
-  "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR"
+  "complianceFrameworks": "pci-dss,hipaa,soc2,gdpr"
 }
 ```
 
 Set `auditManagerEnabled=true` to enable both:
-1. **Build-time validation** - Deployment fails if required controls are missing
-2. **Runtime evidence collection** - Creates one AWS Audit Manager assessment per framework
+1. **Synthesis-time validation** - Installs the CloudForge `FrameworkRules` validators
+2. **Evidence collection** - Creates one AWS Audit Manager assessment per framework
 
-GuardDuty is automatically enabled with PRODUCTION security profile.
+cdk-nag packs run for `production` stacks with at least one framework selected, independent of `auditManagerEnabled`.
 
 ## When Validation Runs
+
+Framework validators run only when `auditManagerEnabled` is `true`, and each validator also checks the security profile:
 
 | Framework | DEV | STAGING | PRODUCTION |
 |-----------|-----|---------|------------|
@@ -81,36 +64,29 @@ GuardDuty is automatically enabled with PRODUCTION security profile.
 
 ## alwaysLoad Frameworks
 
-### ConfigurationValidationRules (Priority 1)
+Validators annotated with `alwaysLoad = true` are installed whenever `auditManagerEnabled` is `true`, even when no framework is selected. The registered cross-framework validators are `KeyManagementRules`, `DatabaseSecurityRules`, `AdvancedMonitoringRules`, `ThreatProtectionRules`, `IncidentResponseRules`, `ComputeSecurityRules`, `LambdaSecurityRules`, `CdnApiSecurityRules`, `ElbSecurityRules`, `MessagingSecurityRules`, and `IamSecurityRules`.
 
-**Special Characteristic**: This framework runs **regardless of which compliance frameworks are enabled**.
+### ConfigurationValidationRules
 
-**Purpose**: Validate basic deployment configuration before compliance-specific rules run. This catches common configuration errors (e.g., subdomain without domain, OIDC without HTTPS) that would cause deployment failures regardless of compliance requirements.
+`ConfigurationValidationRules` is annotated as an `alwaysLoad` validator, but it is not listed in `META-INF/services/com.cloudforge.core.interfaces.FrameworkRules`, so `FrameworkLoader` does not currently discover it.
+
+**Purpose**: Validate basic deployment configuration (for example, subdomain without domain, or OIDC without HTTPS) independently of compliance frameworks.
 
 **Framework ID**: `CONFIG`
-**Priority**: 1 (runs first, before all compliance frameworks)
-**alwaysLoad**: true (always runs, even for deployments with no compliance frameworks)
+**Priority**: 1
+**alwaysLoad**: true
 
 **Validation Rules**:
 1. **CONFIG-SUBDOMAIN-DOMAIN** - Subdomain requires parent domain
 2. **CONFIG-OIDC-HTTPS** - ALB OIDC authentication requires HTTPS
 
-**Use Case**: A developer deploying to DEV without any compliance frameworks will still get these basic configuration validations, preventing common deployment errors early.
+**Implementation**: See [ConfigurationValidationRules.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ConfigurationValidationRules.java)
 
-**Implementation**: See [ConfigurationValidationRules.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ConfigurationValidationRules.java)
+**Testing**: `compliance-test-matrix.csv` contains rows for these rules.
 
-**Testing**: 44 test cases in compliance-test-matrix.csv covering all runtimes, profiles, and framework combinations.
+### Organizational and extended validators
 
-**Example - Multi-Framework Scenario**:
-```json
-{
-  "complianceFrameworks": "PCI-DSS,HIPAA,SOC2",
-  "subdomain": "app",
-  "domain": ""  // ❌ FAIL: CONFIG-SUBDOMAIN-DOMAIN runs first and fails
-}
-```
-
-Even though PCI-DSS, HIPAA, and SOC2 are specified, the ConfigurationValidationRules framework runs **first** (priority 1) and catches the subdomain/domain mismatch before any compliance-specific validation runs.
+`HipaaOrganizationalRules` (`HIPAA-Organizational`), `GdprOrganizationalRules` (`GDPR-Organizational`), and `Iso27001Rules` (`ISO-27001`) are registered but are installed only when their framework ID is selected. `complianceFrameworks` does not accept those IDs, so these validators do not currently run.
 
 ## Control Mappings
 
@@ -130,13 +106,13 @@ Here's how infrastructure controls map to multiple frameworks:
 
 ## Framework Details
 
-### PCI-DSS v3.2.1
+### PCI DSS v4.0.1
 
 **Validator**: `PciDssRules.java`
 **Enforced**: PRODUCTION only
 **Scope**: Card data environment
 
-Checks for firewall rules, encryption, WAF, GuardDuty (threat detection), authentication, audit logging (2-year retention), and security monitoring.
+Checks for firewall rules, encryption, WAF, GuardDuty (threat detection), authentication, audit logging (at least 1-year retention), and security monitoring. The cdk-nag pack applied for PCI-DSS is `PCIDSS321Checks`, the most recent PCI pack cdk-nag provides.
 
 **Key requirements**:
 - WAF for Req 6.6 (web application firewall)
@@ -150,7 +126,7 @@ Checks for firewall rules, encryption, WAF, GuardDuty (threat detection), authen
 
 Checks for encryption (at rest and in transit), authentication, audit controls, backups, and 6-year log retention.
 
-**Key requirement**: 6-year retention means you need S3 archival beyond CloudWatch's 2-year limit.
+**Key requirement**: Log retention of at least 6 years (2190 days).
 
 ### SOC 2
 
@@ -160,17 +136,17 @@ Checks for encryption (at rest and in transit), authentication, audit controls, 
 
 Covers Common Criteria (security), Availability (high availability, backups), and Confidentiality (encryption, access control).
 
-**Key requirement**: Type II audit needs 6-12 months of evidence. Plan ahead.
+**Key requirement**: A Type II audit examines controls over a period, typically 6-12 months, so evidence collection must start well before the audit.
 
 ### GDPR
 
 **Validator**: `GdprRules.java`
-**Enforced**: All profiles
+**Enforced**: PRODUCTION and STAGING
 **Scope**: EU personal data
 
 Checks for encryption by default, access controls, logging (records of processing), breach detection (GuardDuty), and security monitoring.
 
-**Key requirement**: Deploy in EU regions for EU data (data residency).
+**Key requirement**: Deploy in EU regions for EU data, or set `gdprDataTransferApproved` when a transfer mechanism is in place (data residency).
 
 ## Examples
 
@@ -184,8 +160,8 @@ Checks for encryption by default, access controls, logging (records of processin
   "cognitoAutoProvision": true,
   "wafEnabled": true,
   "auditManagerEnabled": true,
-  "complianceFrameworks": "HIPAA,SOC2,GDPR",
-  "logRetentionDays": 2555,
+  "complianceFrameworks": "hipaa,soc2,gdpr",
+  "logRetentionDays": "3653",
   "region": "eu-west-1"
 }
 ```
@@ -200,8 +176,8 @@ Checks for encryption by default, access controls, logging (records of processin
   "cognitoAutoProvision": true,
   "wafEnabled": true,
   "auditManagerEnabled": true,
-  "complianceFrameworks": "PCI-DSS,SOC2",
-  "logRetentionDays": 730
+  "complianceFrameworks": "pci-dss,soc2",
+  "logRetentionDays": "731"
 }
 ```
 
@@ -228,7 +204,7 @@ Fix:
 {
   "authMode": "alb-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "jenkins-mycompany"
+  "cognitoDomainPrefix": "my-app-auth"
 }
 ```
 
@@ -242,21 +218,11 @@ Fix: `"wafEnabled": true`
 
 ## Costs
 
-Multi-framework compliance adds roughly $200-300/month:
-
-| Service | Monthly Cost |
-|---------|--------------|
-| NAT Gateway | $45 |
-| GuardDuty | $30-100 |
-| AWS Config | $10-20 |
-| WAF | $5+ |
-| Audit Manager | $1/100k events |
-| Additional Logging | $10-30 |
-| **Total** | **$101-226/month** |
+Multi-framework configurations typically add charges for NAT gateways, GuardDuty, AWS Config, WAF, Audit Manager, and additional logging. Charges depend on region and usage; use the [AWS Pricing Calculator](https://calculator.aws.amazon.com/) for an estimate.
 
 ## Evidence Collection
 
-AWS Audit Manager automatically collects evidence from:
+AWS Audit Manager collects evidence from the data sources configured for its frameworks, which can include:
 - CloudTrail (API activity)
 - AWS Config (configuration compliance)
 - VPC Flow Logs (network traffic)
@@ -283,8 +249,8 @@ You still need to provide:
 ## Files
 
 **Validators**:
-- `/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java`
-- `/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/HipaaRules.java`
-- `/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java`
-- `/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/GdprRules.java`
-- `/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ComplianceMatrix.java`
+- [PciDssRules.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java)
+- [HipaaRules.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/HipaaRules.java)
+- [Soc2Rules.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Soc2Rules.java)
+- [GdprRules.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/GdprRules.java)
+- [ComplianceMatrix.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ComplianceMatrix.java)

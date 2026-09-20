@@ -1,6 +1,6 @@
 # Evidence Generation Script - Sample Output
 
-This document shows the expected output when running the `generate-audit-evidence.sh` script.
+This document shows sample output from `scripts/generate-audit-evidence.sh`. Names, counts, and sizes are illustrative, and the account ID is the AWS documentation placeholder `123456789012`. Text inside the generated files comes from the script's templates.
 
 ## Command
 
@@ -422,8 +422,8 @@ cat AUDIT_EVIDENCE_README.md
 ### Step 2: Validate Controls
 
 ```bash
-# Check MFA enforcement
-jq '.Users[] | select(.PasswordEnabled == true and .MfaActive == false)' iam/credential-report.csv
+# Check MFA enforcement (credential report is CSV: column 4 = password_enabled, column 8 = mfa_active)
+awk -F, 'NR>1 && $4=="true" && $8=="false" {print $1}' iam/credential-report.csv
 
 # Check encryption
 jq '.FileSystems[] | {FileSystemId, Encrypted}' encryption/efs-filesystems.json
@@ -447,22 +447,19 @@ jq '.trailList[] | {Name, IsLogging, IsMultiRegionTrail, LogFileValidationEnable
 
 ### Step 4: Generate Audit Report
 
-Auditors can use the provided evidence to complete their audit checklist:
+Map evidence files to the controls under review, for example:
 
-- ✅ CC6.1: IAM policies reviewed → iam/policies.json
-- ✅ CC6.6: Security groups reviewed → network/security-groups.json
-- ✅ CC6.7: TLS certificates verified → encryption/acm-certificates.json
-- ✅ CC7.2: CloudTrail enabled → logging/cloudtrail-trails.json
-- ✅ CC7.3: EFS encryption enabled → encryption/efs-filesystems.json
+- CC6.1: IAM policies → iam/policies.json
+- CC6.6: Security groups → network/security-groups.json
+- CC6.7: TLS certificates → encryption/acm-certificates.json
+- CC7.2: CloudTrail configuration → logging/cloudtrail-trails.json
+- C1.1: EFS encryption → encryption/efs-filesystems.json
+
+Whether a control is effective is the auditor's determination.
 
 ## Execution Time
 
-Typical execution times:
-- **Small stack** (dev): ~2-3 minutes
-- **Medium stack** (staging): ~4-6 minutes
-- **Large stack** (production): ~8-12 minutes
-
-Most time is spent on:
+Execution time grows with the number of resources and the date range. Most time is spent on:
 1. CloudTrail event sampling (if large date range)
 2. S3 bucket encryption checking
 3. GuardDuty findings retrieval
@@ -520,8 +517,6 @@ chmod +x scripts/generate-audit-evidence.sh
 
 4. **Keep evidence for retention period**:
    ```bash
-   # Archive for required retention period (varies by framework)
-   # SOC 2: 7 years
-   # HIPAA: 6 years
-   # PCI-DSS: 1 year minimum
+   # Archive for the retention period your policies and frameworks require
+   # (for example, HIPAA documentation: 6 years; PCI DSS audit logs: at least 1 year)
    ```

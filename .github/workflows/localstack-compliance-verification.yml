@@ -1,21 +1,21 @@
 name: LocalStack Compliance Verification
 
-# Two independent real-deploy verifications against a genuine LocalStack instance, both feeding
+# Two independent deploy verifications against a LocalStack instance, both feeding
 # compliance-report-generator.py's dashboard (the "Real Deploy" tab on each row's LocalStack
-# verification modal, and the header's live-verification banner) -- without this workflow having
-# run recently, the dashboard is honest about being synth-only:
+# verification modal, and the header's verification banner). Without a recent run of this
+# workflow, the dashboard reports synth-only status:
 #
 #   compliance-matrix    The 13 representative compliance configs (4 frameworks x 3 security
 #                         profiles on Fargate, plus one EC2 all-frameworks sample), via
-#                         InteractiveDeployer + full deployment-context JSON, same as a real user
-#                         deploy. Confirms LocalStackTemplateAdapter produces a deployable
-#                         template for the exact configs a real customer would pick.
+#                         InteractiveDeployer + full deployment-context JSON, the same path as a
+#                         user deploy. Verifies LocalStackTemplateAdapter produces a deployable
+#                         template for these representative configs.
 #
 #   template-sweep       Every individual CFN template the compliance test suite itself
 #                         generates (cfn-templates/, ~260 files from the 375 TruthTableValidation
 #                         test-method scenarios) -- deployed directly via LocalStackCli, which
 #                         takes a canonical template file straight rather than needing its own
-#                         deployment-context JSON. This is what actually verifies the templates
+#                         deployment-context JSON. This verifies the templates
 #                         shown in the 375-row dashboard, not just the 13 representative configs.
 #                         Split across 8 parallel batches (jobs deploy-template-batch, matrix
 #                         0-7): sequentially deploying ~260 templates with a LocalStack restart
@@ -81,10 +81,9 @@ jobs:
           # AWS::Config::ConfigRule (60+ per compliance stack) currently deploys but LocalStack
           # has flagged it for a hard failure in a future release without this set.
           CFN_IGNORE_UNSUPPORTED_RESOURCE_TYPES: "1"
-        # Same real fixes as cloudforge-manager/localstack-integration.yml -- see that file for
-        # why each of these is needed (Lambda/RDS emulation need the host docker.sock and a real
-        # host path for LocalStack's own bind mounts; the network-alias matches the hostname
-        # LocalEmulatorDefaults.LOCALSTACK_CONTAINER assumes).
+        # Lambda/RDS emulation need the host docker.sock and a host path for LocalStack's own
+        # bind mounts; the network-alias matches the hostname
+        # LocalEmulatorDefaults.LOCALSTACK_CONTAINER assumes.
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
           - /tmp/localstack-volume:/var/lib/localstack
@@ -242,14 +241,13 @@ jobs:
         run: |
           cd cfc-testing
           # -U forces Maven to re-check the snapshot repo for cloudforge-manager-deployment
-          # instead of trusting actions/setup-java's own maven cache, which otherwise only
-          # re-validates SNAPSHOT deps once per day -- real bug this fixed: a same-day fix in
-          # that repo kept silently resolving to the morning's stale, pre-fix jar all afternoon.
+          # instead of trusting actions/setup-java's maven cache, which otherwise re-validates
+          # SNAPSHOT dependencies only once per day and can resolve a stale jar.
           mvn -B -U clean package -DskipTests
           cd scripts
           mkdir -p validation-results
           # TruthTableValidationTest's @BeforeAll requires truth-table.json to already exist --
-          # it's gitignored, so a fresh checkout never has it, and every test method silently
+          # it's gitignored, so a fresh checkout never has it, and every test method
           # skips via a JUnit Assumption (not a failure) without it, never reaching the point
           # where it writes a template. Generate it first, same as master-validation-system.sh
           # does internally for publish-reports.yml's equivalent step.
@@ -325,9 +323,8 @@ jobs:
         run: |
           cd cfc-testing
           # -U forces Maven to re-check the snapshot repo for cloudforge-manager-deployment
-          # instead of trusting actions/setup-java's own maven cache, which otherwise only
-          # re-validates SNAPSHOT deps once per day -- real bug this fixed: a same-day fix in
-          # that repo kept silently resolving to the morning's stale, pre-fix jar all afternoon.
+          # instead of trusting actions/setup-java's maven cache, which otherwise re-validates
+          # SNAPSHOT dependencies only once per day and can resolve a stale jar.
           mvn -B -U clean package -DskipTests
           mvn -B dependency:copy-dependencies -DoutputDirectory=target/dependency -q
           chmod +x scripts/*.sh

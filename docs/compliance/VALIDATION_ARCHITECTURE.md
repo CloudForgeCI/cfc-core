@@ -2,85 +2,58 @@
 
 ## Overview
 
-CloudForge CI implements a **4-layer defense-in-depth** validation approach to ensure infrastructure compliance across multiple frameworks (SOC2, HIPAA, PCI-DSS, GDPR). Each layer validates at a different stage of the deployment lifecycle.
+CloudForge CI checks infrastructure against compliance frameworks (SOC2, HIPAA, PCI-DSS, GDPR) in four layers. Each layer runs at a different stage of the deployment lifecycle and has its own enabling conditions.
+
+| Layer | Tool | When it runs | Enabled by |
+|-------|------|--------------|------------|
+| 1 | cdk-nag | During `cdk synth` | `securityProfile: production` and at least one framework selected |
+| 2 | CloudForge `FrameworkRules` | During `cdk synth` (CDK node validations) | `auditManagerEnabled: true` |
+| 3 | cfn-guard | After synthesis, against the template | Interactive Deployer in `enforce` mode with frameworks selected; `TruthTableValidationTest` |
+| 4 | AWS Config | After deployment | `awsConfigEnabled: true` |
 
 ## Multi-Layer Validation Flow
 
 ```mermaid
 sequenceDiagram
-    participant Start as 🚀 CDK Synthesis Starts
-    participant Layer1 as 🔍 Layer 1: cdk-nag
-    participant Check1 as cdk-nag Rules Pass?
-    participant Fail1 as ❌ Validation Failed
-    participant Template as 📋 CloudFormation Template
-    participant Layer2 as 📋 Layer 2: FrameworkRules
-    participant Check2 as FrameworkRules Pass?
-    participant Fail2 as ❌ Validation Failed
-    participant Layer3 as 🛡️ Layer 3: cfn-guard
-    participant Check3 as cfn-guard Rules Pass?
-    participant Fail3 as ❌ Validation Failed
-    participant Deploy as ☁️ AWS Resources Deployed
-    participant Layer4 as ✅ Layer 4: AWS Config
-    participant Monitor as 📊 Continuous Monitoring
-    participant Remediate as 🔧 Auto-Remediation
-    participant Verify as 🔍 Verify Compliance
-    participant Status as Compliant?
-    participant Compliant as ✅ Compliant Status
-    
-    Start->>Layer1: Validate constructs
-    Layer1->>Check1: Check rules
-    alt cdk-nag Rules Pass
-        Check1->>Template: Generate template
-        Template->>Layer2: Validate business logic
-        Layer2->>Check2: Check rules
-        alt FrameworkRules Pass
-            Check2->>Layer3: Validate template policy
-            Layer3->>Check3: Check rules
-            alt cfn-guard Rules Pass
-                Check3->>Deploy: Deploy resources
-                Deploy->>Layer4: Start monitoring
-                Layer4->>Monitor: Continuous monitoring
-                Layer4->>Remediate: Auto-remediation
-                Remediate->>Verify: Verify compliance
-                Verify->>Status: Check status
-                alt Not Compliant
-                    Status->>Remediate: Retry remediation
-                else Compliant
-                    Status->>Compliant: Compliance achieved
-                end
-            else cfn-guard Rules Fail
-                Check3->>Fail3: Validation failed
-                Fail3->>Compliant: ❌ Stop deployment
-            end
-        else FrameworkRules Fail
-            Check2->>Fail2: Validation failed
-            Fail2->>Compliant: ❌ Stop deployment
-        end
-    else cdk-nag Rules Fail
-        Check1->>Fail1: Validation failed
-        Fail1->>Compliant: ❌ Stop deployment
-    end
+    participant Dev as Developer/CI
+    participant CDK as CDK Synthesis
+    participant Nag as Layer 1: cdk-nag
+    participant Framework as Layer 2: FrameworkRules
+    participant Guard as Layer 3: cfn-guard
+    participant AWS as AWS Resources
+    participant Config as Layer 4: AWS Config
+
+    Dev->>CDK: cdk synth
+    CDK->>Nag: Apply NagPack aspects
+    CDK->>Framework: Run node validations
+    Framework-->>CDK: Violations (blocking in enforce mode)
+    CDK-->>Dev: Template and NagReport files
+    Dev->>Guard: cfn-guard validate (Interactive Deployer)
+    Guard-->>Dev: Pass or fail
+    Dev->>AWS: cdk deploy
+    AWS->>Config: Configuration changes recorded
+    Config->>Config: Evaluate rules
+    Config->>AWS: Automatic remediation (SSM Automation)
 ```
 
 ## Layer Details
 
 ### Layer 1: cdk-nag
 
-**Purpose**: CDK construct-level validation using AWS best practices and security rules.
+**Purpose**: Construct-level checks from the cdk-nag rule packs.
 
-**What It Validates**:
-- Security best practices (encryption, IAM policies)
-- AWS Well-Architected Framework compliance
-- Resource configuration (security groups, bucket policies)
-- Construct-level violations
-
-**Location**: Integrated into CDK synthesis
+**Location**: `SecurityRules.applyCdkNagValidation` in `cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/`.
 
 **Packs Used**:
-- AwsSolutions
-- HIPAA Security
-- PCI DSS 3.2.1
-- NIST 800-53
+
+| Framework | Pack |
+|-----------|------|
+| HIPAA | `HIPAASecurityChecks` |
+| PCI-DSS | `PCIDSS321Checks` |
+| SOC2 | `AwsSolutionsChecks` |
+| Other values | `AwsSolutionsChecks` |
+
+Each pack writes JSON and CSV `NagReport` files. `app.synth()` does not fail on cdk-nag findings by itself. When synthesis runs through `CloudForgeSynthesizer` in `enforce` mode, it reads the reports through `NagReportReader` and fails when error-level findings are present; other entry points, such as the sample Interactive Deployer, leave the reports for review.
 
 **Example Violations**:
 - Missing encryption on EBS volumes
@@ -89,63 +62,63 @@ sequenceDiagram
 
 ### Layer 2: FrameworkRules
 
-**Purpose**: CloudForge business logic validation using FrameworkRules implementations.
-
-**What It Validates**:
-- Compliance framework-specific requirements (SOC2, HIPAA, PCI-DSS, GDPR)
-- Security profile enforcement
-- Configuration validation (auth modes, network modes, etc.)
-- Framework-specific rule combinations
-- Business logic that can't be expressed in cdk-nag or cfn-guard
+**Purpose**: CloudForge validators for framework-specific requirements that depend on deployment configuration, such as security profile, network mode, and authentication mode.
 
 **Location**: `cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/`
 
-**Framework Implementations**:
-- `Soc2Rules` - SOC2 Trust Service Criteria validation
-- `HipaaRules` - HIPAA Security Rule validation
-- `PciDssRules` - PCI-DSS requirement validation
-- `GdprRules` - GDPR technical measures validation
-- `IamSecurityRules` - IAM policy validation
-- `DatabaseSecurityRules` - Database security validation
-- And more...
+Validators implement `FrameworkRules<SystemContext>`, are annotated with `@ComplianceFramework`, and are registered in `META-INF/services/com.cloudforge.core.interfaces.FrameworkRules`. `FrameworkLoader` discovers them with `ServiceLoader` and installs them in priority order: `alwaysLoad` validators always, other validators when their ID is in `complianceFrameworks`.
+
+**Registered validators**:
+
+| Class | ID | Priority | Loads |
+|-------|----|----------|-------|
+| `KeyManagementRules` | `KeyManagement` | -10 | always |
+| `DatabaseSecurityRules` | `DatabaseSecurity` | -5 | always |
+| `AdvancedMonitoringRules` | `AdvancedMonitoring` | -5 | always |
+| `ThreatProtectionRules`, `IncidentResponseRules`, `ComputeSecurityRules`, `LambdaSecurityRules`, `CdnApiSecurityRules`, `ElbSecurityRules`, `MessagingSecurityRules`, `IamSecurityRules` | various | 0 | always |
+| `HipaaRules` | `HIPAA` | 10 | `hipaa` selected |
+| `HipaaOrganizationalRules` | `HIPAA-Organizational` | 15 | ID selected (not currently selectable) |
+| `PciDssRules` | `PCI-DSS` | 20 | `pci-dss` selected |
+| `GdprRules` | `GDPR` | 30 | `gdpr` selected |
+| `GdprOrganizationalRules` | `GDPR-Organizational` | 35 | ID selected (not currently selectable) |
+| `Soc2Rules` | `SOC2` | 40 | `soc2` selected |
+| `Iso27001Rules` | `ISO-27001` | 50 | ID selected (not currently selectable) |
+
+`ConfigurationValidationRules`, `FedRampRules`, and `FedRampHighRules` exist in the same package but are not registered, so they are not discovered. FedRAMP support is in development; see [FedRAMP Controls Mapping](FEDRAMP_CONTROLS_MAPPING.md).
 
 **Example Validation**:
 ```java
 @Override
 public void install(SystemContext ctx) {
+    if (ctx.security != SecurityProfile.PRODUCTION) {
+        return;
+    }
     ctx.getNode().addValidation(() -> {
-        // Validates HIPAA-specific requirements
-        if (ctx.security == SecurityProfile.PRODUCTION) {
-            validateEncryptionAtRest(ctx);
-            validateAuditLogging(ctx);
-            validateMfaEnforcement(ctx);
-        }
+        List<ComplianceRule> rules = new ArrayList<>();
+        rules.addAll(validateEncryption(ctx));
+        rules.addAll(validateAuditLogging(ctx));
+        // Failed rules become CDK validation errors in enforce mode
+        // and warnings in advisory mode.
+        ...
     });
 }
 ```
 
-**Configuration**: Controlled by `auditManagerEnabled` flag in deployment context.
+**Adding a framework**: implement `FrameworkRules<SystemContext>`, annotate the class with `@ComplianceFramework`, and list it in a `META-INF/services/com.cloudforge.core.interfaces.FrameworkRules` file on the classpath. The sample project registers `CustomSecurityPolicyRules` and `OpenSourceSecurityPolicyRules` this way in `cfc-testing/src/main/resources/META-INF/services/`.
 
 ### Layer 3: cfn-guard
 
-**Purpose**: CloudFormation template-level policy validation using CFN Guard rules.
+**Purpose**: Template-level policy checks with [AWS CloudFormation Guard](https://github.com/aws-cloudformation/cloudformation-guard).
 
-**What It Validates**:
-- IAM policy restrictions (no wildcard actions/resources)
-- Resource configuration policies
-- Compliance-specific rules (HIPAA, PCI-DSS, SOC2, GDPR)
-- Template-level security controls
-
-**Location**: `cloudforge-api/src/main/resources/cfn-guard/`
+**Location**: `cloudforge-api/src/main/resources/cfn-guard/frameworks/`
 
 **Rule Files**:
-- `frameworks/iam-security.guard` - IAM policy validation
-- `frameworks/hipaa.guard` - HIPAA-specific rules
-- `frameworks/pci-dss.guard` - PCI-DSS-specific rules
-- `frameworks/soc2.guard` - SOC2-specific rules
-- `frameworks/gdpr.guard` - GDPR-specific rules
+- Cross-framework: `iam-security.guard`, `compute-security.guard`, `lambda-security.guard`, `cdn-api-security.guard`, `elb-security.guard`, `database-security.guard`, `messaging-security.guard`, `key-management.guard`, `advanced-monitoring.guard`, `threat-protection.guard`, `incident-response.guard`, `iso-27001-controls.guard`
+- Framework-specific: `soc2-trust-services.guard`, `pci-dss-v4.0.1.guard`, `hipaa-security-rule.guard`, `gdpr-data-protection.guard`
 
-**Example Rule**:
+The Interactive Deployer runs the cross-framework files plus the files for the selected frameworks against `cdk.out/<stackName>.template.json` when `complianceMode` is `enforce`, and stops before deploying if any fail. It skips this layer when the `cfn-guard` binary is not installed. `TruthTableValidationTest` runs the same rules in the test suite.
+
+**Example Rule** (`iam-security.guard`):
 ```guard
 rule iam_security_policy_full_admin when
     resourceType in ['AWS::IAM::Policy'] {
@@ -159,121 +132,60 @@ rule iam_security_policy_full_admin when
 
 ### Layer 4: AWS Config
 
-**Purpose**: Runtime compliance monitoring and automatic remediation.
+**Purpose**: Evaluation of deployed resources and automatic remediation.
 
-**What It Validates**:
-- Continuous compliance checks on deployed resources
-- Framework-specific Config rules:
-  - **SOC2**: 16 rules (9 base + 7 SOC2-specific)
-  - **HIPAA**: 17 rules (9 base + 8 HIPAA-specific)
-  - **PCI-DSS**: 17 rules (9 base + 8 PCI-DSS-specific)
-  - **GDPR**: 17 rules (9 base + 8 GDPR-specific)
-  - **Multi-framework (all 4)**: 40 rules (9 base + 31 framework-specific)
-- Automatic remediation via SSM Automation
-- Compliance status tracking
-
-**Location**: Deployed via ComplianceFactory
+**Location**: `ComplianceFactory` in `cloudforge-api/src/main/java/com/cloudforgeci/api/observability/`
 
 **Config Rules**:
-- **Base rules (9)**: Encryption, IAM, S3, CloudTrail, VPC Flow Logs (always deployed)
-- **Framework-specific rules**:
-  - SOC2: 7 rules (total: 16 rules)
-  - HIPAA: 8 rules (total: 17 rules)
-  - PCI-DSS: 8 rules (total: 17 rules)
-  - GDPR: 8 rules (total: 17 rules)
-  - Multi-framework (all 4): 31 framework-specific rules (total: 40 rules)
-- Custom remediation configurations
+- **Base rules**: encryption (EBS, S3), S3 public access and versioning, IAM password policy, CloudTrail
+- **Framework-specific rules**: deployed under CloudFormation conditions for each selected framework; database rules also require `provisionDatabase`
+- **Collected rules**: registered by other factories only for resources that are created
+- **Conformance packs**: deployed for selected frameworks
 
 **Remediation Examples**:
-- S3 versioning enforcement
 - IAM password policy updates
-- CloudTrail bucket access fixes
-- RDS deletion protection
+- S3 versioning enforcement (`enableS3VersioningRemediation`)
+- CloudTrail bucket access fixes (`enableCloudTrailBucketAccessRemediation`)
+- RDS deletion protection (`enableRdsDeletionProtectionRemediation`)
 
-## Validation Pipeline
+See [Automated Compliance](AUTOMATED_COMPLIANCE.md) and [Retained Resources](RETAINED_RESOURCES.md#aws-config-auto-remediation) for the full list.
 
-```mermaid
-sequenceDiagram
-    participant Dev as Developer/CI
-    participant CDK as CDK Synthesis
-    participant Nag as Layer 1: cdk-nag<br/>🔍 Construct Validation
-    participant Framework as Layer 2: FrameworkRules<br/>📋 Business Logic
-    participant Guard as Layer 3: cfn-guard<br/>🛡️ Template Policy
-    participant AWS as AWS Resources
-    participant Config as Layer 4: AWS Config<br/>✅ Runtime Monitoring
-    
-    Dev->>CDK: cdk synth
-    CDK->>Nag: Validate constructs
-    Nag-->>CDK: Rules pass
-    
-    CDK->>Framework: Validate business logic
-    Framework-->>CDK: Rules pass
-    
-    CDK->>Guard: Validate template
-    Guard-->>CDK: Policies pass
-    
-    CDK-->>Dev: Template generated
-    
-    Dev->>AWS: cdk deploy
-    AWS-->>Dev: Resources deployed
-    
-    AWS->>Config: Continuous monitoring
-    Config->>Config: Evaluate rules
-    Config->>AWS: Auto-remediate if needed<br/>🔧 AWS Systems Manager
-    Config-->>Dev: Compliance status
-```
+## Unit and Integration Tests
 
-## Unit Testing (JUnit)
+JUnit tests validate configuration logic and rule behavior during development and CI. They are separate from the four runtime layers.
 
-JUnit tests provide unit testing and compliance validation during development, but are not part of the runtime validation pipeline.
-
-**Purpose**: Unit and integration tests validate configuration logic and business rules during development.
-
-**What It Validates**:
+**What they cover**:
 - Field validation (required fields, enum values)
 - Configuration logic (security profile requirements)
-- Type conversions (String to Integer, etc.)
 - Default value behavior
-- Framework-specific requirements
+- Framework-specific rule outcomes, including the CSV-driven matrix in `TruthTableValidationTest`
 
 **Location**: `cloudforge-api/src/test/java/`
 
-**Coverage**: 263 parameterized test cases
-
-**Example**:
-```java
-@Test
-void testComplianceFrameworkIntegration() {
-    // Validates that compliance frameworks affect resource deployment
-    // Tests all combinations of frameworks, runtimes, security profiles
-}
-```
-
-**Note**: JUnit tests run during development/CI, but are separate from the 4-layer runtime validation pipeline.
+See [CSV Parameterized Testing](CSV_PARAMETERIZED_TESTING.md) and [Compliance Truth Tables](../testing/COMPLIANCE_TRUTH_TABLES.md).
 
 ## Compliance Mode
 
-CloudForge supports three compliance modes:
-
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| **DISABLED** | No validation, warnings only | Development |
-| **ADVISORY** | Log violations, don't block deployment | Staging |
-| **ENFORCE** | Block deployment on violations | Production |
+| Mode | Behavior | Default for |
+|------|----------|-------------|
+| **ENFORCE** | Framework validator failures block synthesis; cdk-nag errors block when synthesizing through `CloudForgeSynthesizer`; the Interactive Deployer also runs cfn-guard | `production` |
+| **ADVISORY** | Violations are logged as warnings; deployment continues | `dev`, `staging` |
+| **DISABLED** | `ComplianceMatrix` does not force framework-required controls on. The PCI-DSS, HIPAA, SOC2, and GDPR validators currently treat it like `enforce`; disable them with `auditManagerEnabled: false` | none |
 
 ## Framework Coverage
 
-| Framework | Config Rules | Test Coverage | Status |
-|-----------|--------------|---------------|--------|
-| **SOC2** | 16 rules | ✅ Fully tested | Production ready |
-| **HIPAA** | 17 rules | ✅ 263 test cases | Production ready |
-| **PCI-DSS** | 17 rules | ✅ Fully tested | Production ready |
-| **GDPR** | 17 rules | ✅ Fully tested | Production ready |
+| Framework | Validators | cdk-nag Pack | cfn-guard File | Test Matrix |
+|-----------|-----------|--------------|----------------|-------------|
+| **SOC2** | `Soc2Rules` | `AwsSolutionsChecks` | `soc2-trust-services.guard` | `compliance-matrices/soc2_*` |
+| **HIPAA** | `HipaaRules` | `HIPAASecurityChecks` | `hipaa-security-rule.guard` | `compliance-matrices/hipaa_*` |
+| **PCI-DSS** | `PciDssRules` | `PCIDSS321Checks` | `pci-dss-v4.0.1.guard` | `compliance-matrices/pci-dss_*` |
+| **GDPR** | `GdprRules` | `AwsSolutionsChecks` | `gdpr-data-protection.guard` | `compliance-matrices/gdpr_*` |
+
+Passing these checks shows that the configured controls match the encoded rules. It is not a certification or audit opinion.
 
 ## Related Documentation
 
-- [Compliance Posture](../COMPLIANCE_POSTURE.md) - Overall compliance status
-- [Automated Compliance](AUTOMATED_COMPLIANCE.md) - Auto-remediation features
+- [Compliance Posture](../COMPLIANCE_POSTURE.md) - Coverage by framework
+- [Automated Compliance](AUTOMATED_COMPLIANCE.md) - Remediation features
 - [Multi-Framework Compliance](MULTI_FRAMEWORK_COMPLIANCE.md) - Multiple frameworks
-- [Testing Truth Tables](../testing/COMPLIANCE_TRUTH_TABLES.md) - Test coverage details
-
+- [Compliance Truth Tables](../testing/COMPLIANCE_TRUTH_TABLES.md) - Test coverage details

@@ -1,32 +1,37 @@
-# CloudForge Community Testing Platform (cloudforge-sample)
+# cfc-testing: CloudForge sample application
 
-This directory is the **reference entrypoint** for CloudForge — the same layout as
-[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample): libraries in the
-parent repo, **only the deploy shell and examples here**.
+`cfc-testing` is the reference consumer of the CloudForge CI libraries. It has the same layout
+as the standalone [cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample)
+project: it imports the `cfc-core` BOM, depends on the library modules, and adds only a thin
+entry point, example plugins, sample deployment contexts, and validation scripts. It is not
+part of the root Maven reactor and is not published.
 
-## Role in the monorepo
+## Contents
 
-| This module | Library modules (reactor) |
-|-------------|-------------------------|
-| `InteractiveDeployer`, `CloudForgeCommunitySample` | `cloudforge-api` — deploy everything, CMS, factories |
-| Thin CDK launchers (`ApplicationFargateStack`, …) | `cloudforge-core` — contracts, config, `local.*` interfaces |
-| Example plugins (`samples/plugins/cms/…`) | `cloudforge-ministack` — MiniStack-only logic |
-| Benchmark/validation scripts | `cloudforge-localstack` — LocalStack-only logic |
-| `deployment-context.json` examples | `cloudforge-manager` — operations panel (deploy as an app) |
+| Path | Purpose |
+|---|---|
+| `src/main/java/.../samples/app/InteractiveDeployer.java` | Command-line tool: prompts for a configuration, then synthesizes or deploys it. Also the CDK app in `cdk.json`. |
+| `src/main/java/.../samples/app/CloudForgeCommunitySample.java` | Minimal CDK app that builds a stack from `deployment-context.json` or `cfc.*` CDK context values. |
+| `src/main/java/.../samples/app/LocalDeploymentShell.java`, `DeploymentResultPrinter.java` | Helpers for deploying to MiniStack or LocalStack after synthesis; copy them into your own project. |
+| `src/main/java/.../samples/launchers/` | `ApplicationFargateStack` and `ApplicationEc2Stack`, thin stacks that call `ApplicationFactory`. |
+| `src/main/java/.../samples/plugins/` | Example plugins: `CraftCmsApplicationSpec` (application) and two compliance rule sets, registered in `src/main/resources/META-INF/services/`. |
+| `deployment-contexts/` | Sample deployment contexts, including LocalStack and compliance-matrix variants. |
+| `scripts/` | Synthesis, validation, benchmark, and emulator deployment scripts. |
+| `cdk.json` | Runs `InteractiveDeployer` as the CDK app. |
 
-**Architecture:** [Sample BOM template](../docs/architecture/cloudforge-sample-bom.template.md)
+Library code belongs in the modules, not here:
 
-**Rule:** Do not add MiniStack, LocalStack, Manager, or CMS **business logic** here.
-Call `CloudForgeDeployment` via `LocalDeploymentShell` (or directly from `cloudforge-api`).
+| Module | Owns |
+|---|---|
+| `cloudforge-core` | Contracts, `DeploymentConfig`, local-emulator interfaces |
+| `cloudforge-api` | `CloudForgeDeployment`, application specifications, CDK factories |
+| `cloudforge-ministack` | MiniStack adapter and deployer |
+| `cloudforge-localstack` | LocalStack adapter and deployer |
 
-Sample helpers (copy into external projects):
+`cfc-testing` also depends on `cloudforge-manager-deployment`, which makes CloudForge Manager
+available as a deployable application.
 
-- `LocalDeploymentShell` — thin wrapper after CDK synth
-- `DeploymentResultPrinter` — optional console output
-
-## BOM consumption
-
-`cfc-testing` imports the root BOM:
+## Using the BOM
 
 ```xml
 <dependencyManagement>
@@ -34,7 +39,7 @@ Sample helpers (copy into external projects):
     <dependency>
       <groupId>com.cloudforgeci</groupId>
       <artifactId>cfc-core</artifactId>
-      <version>3.2.0</version>
+      <version>${cloudforge.version}</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>
@@ -42,159 +47,100 @@ Sample helpers (copy into external projects):
 </dependencyManagement>
 ```
 
-Add only the modules you need (`cloudforge-api` required; ministack/localstack optional).
+Add `cloudforge-api`, and `cloudforge-ministack` or `cloudforge-localstack` if you deploy to
+an emulator. `pom.xml` in this directory sets `cloudforge.version` to the current snapshot and
+adds the Central snapshots repository. See the
+[sample project BOM template](../docs/architecture/cloudforge-sample-bom.template.md).
 
-## Purpose
+## Build
 
-Validate that CloudForge libraries work end-to-end. The Interactive Deployer is a **sample CLI** —
-not the canonical deploy engine. External Java apps should mirror this module: BOM + api + thin entrypoint.
-
-## MiniStack Local Deployment
-
-Deploy synthesized CloudFormation to [MiniStack](https://github.com/ministackorg/ministack) (open-source AWS emulator) without an AWS account.
-
-**From repository root:** [Local Emulator Quick Start](../docs/guides/LOCAL_EMULATOR_QUICK_START.md) · [MiniStack docs](../docs/ministack/README.md)
+From the repository root:
 
 ```bash
-# Build (root)
-mvn clean install -DskipTests
-mvn -f cfc-testing package -Dmaven.test.skip=true
+mvn clean install
+mvn -f cfc-testing/pom.xml package -Dmaven.test.skip=true
+```
 
-# Start MiniStack or LocalStack (choose the target and action in the platform menu)
-java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer --platform
+`package` copies all dependencies to `target/dependency/`, which the commands below put on the
+classpath.
 
-# Deploy (cfc-testing)
+## Run the Interactive Deployer
+
+```bash
 cd cfc-testing
-export AWS_ENDPOINT_URL=http://localhost:4566
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer
-# Choose option 6 — Deploy to MiniStack
-```
-
-## LocalStack Local Deployment
-
-**From repository root:** [Local Emulator Quick Start](../docs/guides/LOCAL_EMULATOR_QUICK_START.md) · [LocalStack docs](../docs/localstack/README.md)
-
-```bash
-export LOCALSTACK_AUTH_TOKEN=...
-java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer --platform
-cd cfc-testing && java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer
-# Choose option 8 — Deploy to LocalStack
-```
-
-## Interactive Deployer (sample CLI)
-
-Command-line tool for configuring and deploying CloudForge infrastructure. Target state: menu + prompts only, delegating to `CloudForgeDeployment` in `cloudforge-api`.
-
-### Quick Start
-
-```bash
-# Simply run CDK deploy (uses saved configuration from deployment-context.json)
-cdk deploy
-
-# Or synthesize only
-cdk synth
-```
-
-### Features
-
-- **Modular Architecture**: Uses SystemContext orchestration layer for expandable deployment types
-- **Strategy Pattern**: Easily extensible deployment strategies
-- **Multiple Deployment Types**: 
-  - Jenkins (Fargate/EC2) - ✅ Complete
-  - S3 + CloudFront (Static Website) - 🚧 Coming Soon
-  - S3 + CloudFront + SES + Lambda (Website + Mailer) - 🚧 Coming Soon
-- **Interactive Configuration**: Prompts for all necessary parameters with sensible defaults
-- **CDK Integration**: Generates proper CDK context and synthesizes stacks
-
-### Prerequisites
-
-1. **AWS CDK CLI**: `npm install -g aws-cdk`
-2. **AWS Credentials**: `aws configure` (AWS deploy only; not required for MiniStack)
-3. **Java 21+**: Required for compilation
-4. **Maven**: For building the project
-5. **Docker**: Required for MiniStack local deployment
-
-### Testing
-
-```bash
-# Test the interactive deployer
-./test-ec2-deploy.sh
-```
-
-### Usage Examples
-
-#### With Custom Stack Name
-```bash
-java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer my-jenkins-ec2
-```
-
-#### Interactive Mode
-```bash
 java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer
 ```
 
-#### With deployment context file
-```bash
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer \
-  --context deployment-contexts/Jenkins-Stack-LocalStack.json
-```
+With no `deployment-context.json`, it prompts for a configuration and saves it. With an
+existing file, it loads it and shows the deploy menu:
 
-#### Custom plugins
+| Option | Action |
+|---|---|
+| 1 | Synthesize only |
+| 2 | Deploy to AWS |
+| 3 | Destroy the AWS stack, then deploy |
+| 4 | Dry run |
+| 5 | Export the template |
+| 6 | Deploy to MiniStack |
+| 7 | Validate with cfn-guard, deploy to MiniStack, and verify |
+| 8 | Deploy to LocalStack |
+| 9 | Reconfigure |
+| 0 | Cancel |
 
-See `src/main/java/com/cloudforgeci/samples/plugins/cms/CraftCmsApplicationSpec.java` — copy this pattern in your own repo with `META-INF/services` registration.
-
----
-
-For full Interactive Deployer documentation, see [docs/guides/INTERACTIVE_DEPLOYER.md](../docs/guides/INTERACTIVE_DEPLOYER.md).
-
-## Unit Tests
-
-```bash
-# Run unit tests
-mvn test
-
-# Run specific test class
-mvn test -Dtest=InteractiveDeployerTest
-mvn test -Dtest=DeploymentContextPropagationTest
-```
-
-**Test Coverage:**
-- Field propagation from `DeploymentConfig` → `deployment-context.json` → `DeploymentContext`
-- JSON parsing and serialization
-- Enum type conversions (RuntimeType, TopologyType, SecurityProfile)
-- Validation rules (authMode requirements, topology constraints)
-
-**Note:** Prefer adding behavior tests in the **owning library module** (see architecture plan). Keep `cfc-testing` tests focused on entrypoint wiring and context propagation.
-
-## Comprehensive Testing & Validation
+Other forms:
 
 ```bash
-# Test synthesis across all security profiles
-scripts/comprehensive-synth-test.sh
+# Use a specific context file and run option 6 without prompting
+java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer \
+  --context deployment-contexts/Jenkins-Stack.json 6
 
-# Validate synthesized templates against expected resource truth table
-scripts/comprehensive-resource-validator.sh
+# Override the stack name
+java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer my-jenkins
 
-# Drift detection
-scripts/drift-detector.sh baseline
-scripts/drift-detector.sh detect
-
-# Performance benchmarks
-scripts/quick-synth-benchmark.sh
-scripts/performance-synth-benchmark.sh
-scripts/run-all-benchmarks.sh
+# Start, stop, or check MiniStack or LocalStack
+java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer --platform
 ```
 
-See `scripts/` for the full validation suite (`master-validation-system.sh`, `enhanced-synth-test.sh`, etc.).
+When a context file exists, the CDK CLI can be used directly: `cdk synth`, `cdk diff`,
+`cdk deploy`, `cdk destroy <stackName>`. See the
+[Interactive Deployer guide](../docs/guides/INTERACTIVE_DEPLOYER.md) for all flags and the
+[Local Emulator Quick Start](../docs/guides/LOCAL_EMULATOR_QUICK_START.md) for MiniStack and
+LocalStack.
 
-## Key Files
+## Tests
 
-- `src/main/java/com/cloudforgeci/samples/app/InteractiveDeployer.java` — sample CLI (target: thin shell)
-- `src/main/java/com/cloudforgeci/samples/app/CloudForgeCommunitySample.java` — CDK app entry
-- `src/main/java/com/cloudforgeci/samples/launchers/` — thin stacks calling `ApplicationFactory`
-- `src/main/java/com/cloudforgeci/samples/plugins/` — example custom plugins for external projects
-- `deployment-context.json` / `deployment-contexts/` — example contexts
-- `cdk.json` — CDK configuration
+Unlike the root reactor, this project does not skip tests by default:
+
+```bash
+mvn -f cfc-testing/pom.xml test
+mvn -f cfc-testing/pom.xml test -Dtest=DeploymentContextPropagationTest
+mvn -f cfc-testing/pom.xml test -Dtest=InteractiveDeployerTest
+```
+
+These cover context propagation from `DeploymentConfig` through `deployment-context.json` to
+`DeploymentContext`, enum parsing, plugin and platform discovery, and the example plugins. Put
+behavior tests in the library module that owns the behavior; keep tests here focused on
+entry-point wiring.
+
+The default run includes every test. The `ministack` and `localstack` profiles run only the
+tests tagged `ministack` or `localstack`:
+
+```bash
+mvn -f cfc-testing/pom.xml test -Pministack
+mvn -f cfc-testing/pom.xml test -Plocalstack
+```
+
+## Validation scripts
+
+Run from this directory:
+
+```bash
+scripts/comprehensive-synth-test.sh          # synthesize EC2 and Fargate across all profiles
+scripts/comprehensive-resource-validator.sh  # compare resources with the expected matrix
+scripts/drift-detector.sh baseline           # record a baseline
+scripts/drift-detector.sh detect             # compare against it
+scripts/quick-synth-benchmark.sh             # synthesis timing
+```
+
+See [Advanced commands](../docs/ADVANCED.md#cfc-testing-scripts) and
+[Extended Testing](../docs/guides/EXTENDED-TESTING.md) for the full list.

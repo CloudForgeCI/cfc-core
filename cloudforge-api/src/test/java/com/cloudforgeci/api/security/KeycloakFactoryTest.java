@@ -184,13 +184,9 @@ class KeycloakFactoryTest {
 
     // ========== Security Profile Tests ==========
 
-    // SAML/Keycloak is documented, intentional deferred work — not yet functional. These tests
-    // previously passed only because DeploymentContext never exposed an oidcProvider() getter, so
-    // every @DeploymentContext("oidcProvider") field across the codebase silently resolved to null
-    // and KeycloakFactory's own oidcProvider=="cognito-saml" guard always short-circuited before
-    // reaching any real SAML wiring. Now that the getter exists, oidcProvider actually resolves,
-    // and these tests hit KeycloakFactory's real (incomplete) infrastructure requirements instead
-    // of a silent no-op.
+    // SAML/Keycloak support is intentionally deferred and not yet functional. With oidcProvider
+    // resolved from DeploymentContext, these tests reach KeycloakFactory's incomplete
+    // infrastructure requirements, so they are disabled until SAML support is implemented.
     @Disabled("SAML/Keycloak is deferred, not-yet-functional work — this test only ever passed "
         + "because of the DeploymentContext.oidcProvider() getter gap fixed alongside this")
     @ParameterizedTest

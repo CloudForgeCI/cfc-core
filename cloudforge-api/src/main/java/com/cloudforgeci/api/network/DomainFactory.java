@@ -112,14 +112,10 @@ public class DomainFactory extends BaseFactory {
         LOG.info("Enabling Route53 query logging for " + domainName + " (SOC2/NIST compliance)");
 
         // Create CloudWatch Log Group for DNS query logs
-        // Note: Route53 requires the log group name to start with /aws/route53/, so (unlike
-        // ComplianceFactory's plain CloudTrail log group) this can't just fall back to CDK's own
-        // auto-generated name under RETAIN -- Route53 would refuse to write to a log group
-        // outside that prefix. Same fix BackupFactory's own vaultName comment already documents
-        // for its locked vault: append a stack-id-derived suffix (fresh on every real
-        // teardown-and-recreate, fixed across ordinary updates to a live stack) only on the
-        // RETAIN path, so a PRODUCTION teardown's retained log group never collides with a
-        // future redeploy of the same domain under the same stack name.
+        // Route53 requires the log group name to start with /aws/route53/, so a CDK-generated
+        // name cannot be used under RETAIN. Instead, as BackupFactory does for locked vaults,
+        // append a stack-ID-derived suffix (new per stack, stable across updates) on the RETAIN
+        // path so a retained log group never collides with a later redeploy.
         String logGroupName = "/aws/route53/" + domainName.replace(".", "-")
             + (removalPolicy == RemovalPolicy.RETAIN
                 ? "-" + Fn.select(0, Fn.split("-", Stack.of(this).getStackId()))

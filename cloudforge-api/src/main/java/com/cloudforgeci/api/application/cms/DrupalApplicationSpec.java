@@ -61,7 +61,11 @@ public class DrupalApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== Constants ==========
 
     protected static final String APPLICATION_ID = "drupal";
-    protected static final String DEFAULT_IMAGE = "drupal:10-php8.2-fpm-alpine";
+    // Apache variant: the fpm-alpine variant only speaks FastCGI on 9000, so nothing would listen
+    // on APPLICATION_PORT (80) in a single-container Fargate deploy. The apache variant ships the
+    // same Drupal core and serves port 80 directly. The EC2 runtime is unaffected: its UserData
+    // installs and runs nginx + php-fpm on the instance independently of this constant.
+    protected static final String DEFAULT_IMAGE = "drupal:10-php8.2-apache";
     protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";
     protected static final String EFS_DATA_PATH = "/drupal";
@@ -408,6 +412,11 @@ public class DrupalApplicationSpec implements CmsSpec, DatabaseSpec {
         // Hash salt (should be overridden via secrets)
         env.put("DRUPAL_HASH_SALT", "${DRUPAL_HASH_SALT}");
 
+        // Used by containerCommand()'s Drush install wrapper for --account-mail.
+        if (fqdn != null && !fqdn.isBlank()) {
+            env.put("DRUPAL_ADMIN_EMAIL", "admin@" + fqdn);
+        }
+
         return env;
     }
 
@@ -458,5 +467,59 @@ public class DrupalApplicationSpec implements CmsSpec, DatabaseSpec {
             "/user/*",       // User login/registration
             "/update.php"    // Update script
         );
+    }
+
+    // ========== Admin Password / First-Run Install ==========
+
+    /** {@code drupal:10-php8.2-apache} has no bundled Drush and cannot create the admin account
+     *  non-interactively. Unlike the WordPress image, its entrypoint ({@code docker-php-entrypoint})
+     *  has no first-run setup to preserve, because Drupal core is baked in at {@code /opt/drupal},
+     *  so {@link #containerCommand()} starts Apache directly without {@link
+     *  ApplicationSpec#defaultContainerEntrypoint()}. Drush is installed via Composer at boot (it
+     *  has no standalone phar), then {@code drush site:install} runs once; restarts skip the
+     *  install because {@code web/sites/default/settings.php} already exists. */
+    @Override
+    public String autoAdminPasswordEnvVar() {
+        return "DRUPAL_ADMIN_PASSWORD";
+    }
+
+    @Override
+    public String autoAdminEmailEnvVar() {
+        return "DRUPAL_ADMIN_EMAIL";
+    }
+
+    @Override
+    public List<String> containerCommand() {
+        String script = String.join("\n",
+            "echo '----------------------------------------------------------------'",
+            "echo 'CloudForge: initial admin password (printed once at container start)'",
+            "echo \"  DRUPAL_ADMIN_PASSWORD=$DRUPAL_ADMIN_PASSWORD\"",
+            "echo '----------------------------------------------------------------'",
+            "",
+            "apache2-foreground &",
+            "APACHE_PID=$!",
+            "",
+            "cd /opt/drupal",
+            "if [ ! -x ./vendor/bin/drush ]; then",
+            "  composer require drush/drush --no-interaction --quiet",
+            "fi",
+            "",
+            "until php -r \"exit(@fsockopen(getenv('DB_HOST'), (int) getenv('DB_PORT'), \\$e, \\$s, 2) ? 0 : 1);\"; do sleep 2; done",
+            "",
+            "if [ ! -f web/sites/default/settings.php ]; then",
+            "  ./vendor/bin/drush site:install standard --yes " +
+                "--site-name=\"CloudForge Drupal\" " +
+                "--account-name=\"admin\" " +
+                "--account-pass=\"$DRUPAL_ADMIN_PASSWORD\" " +
+                "--account-mail=\"${DRUPAL_ADMIN_EMAIL:-admin@example.com}\" " +
+                "--db-url=\"mysql://${DB_USER}:${DATABASE_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}\"",
+            "  echo 'Drupal site installed via Drush (admin / the password logged above).'",
+            "else",
+            "  echo 'Drupal already installed, skipping site install.'",
+            "fi",
+            "",
+            "wait $APACHE_PID"
+        );
+        return List.of("/bin/sh", "-c", script);
     }
 }

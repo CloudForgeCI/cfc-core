@@ -1,414 +1,186 @@
-# CloudForge Community Interactive Deployer
+# Interactive Deployer
 
-An interactive command-line tool that guides you through configuring and deploying CloudForge Community infrastructure.
+The Interactive Deployer (`com.cloudforgeci.samples.app.InteractiveDeployer` in `cfc-testing`)
+is a sample command-line tool. It prompts for a deployment configuration, saves it as
+`deployment-context.json`, and then synthesizes the stack or deploys it to AWS, MiniStack, or
+LocalStack. It is also the CDK app configured in `cfc-testing/cdk.json`.
 
-## Features
+The tool is a thin entry point: the deployment logic is in the library modules, and your own
+project can call the same APIs (see [Architecture](#architecture)).
 
-- **Interactive Configuration**: Prompts for all necessary parameters with sensible defaults
-- **Plugin-Based Architecture**: Automatic discovery of applications via ServiceLoader
-- **Multiple Applications**:
-  - CI/CD: Jenkins, GitLab, Drone
-  - Analytics: Metabase, Superset, Grafana
-  - Collaboration: Mattermost
-  - Container Registry: Harbor, Nexus
-  - VCS: Gitea
-  - Databases: PostgreSQL, Redis
-  - Secrets Management: Vault
-  - Monitoring: Prometheus
-- **Automatic Database Provisioning**: RDS databases for applications that require them
-- **Smart Defaults**: Skips irrelevant questions based on your choices
-- **Validation**: Ensures all required fields are provided
-- **CDK Integration**: Generates proper CDK context and synthesizes stacks
+## Prerequisites
 
-## Quick Start
+- Java 25 and Maven 3.9+
+- For AWS: the AWS CDK CLI (`npm install -g aws-cdk`), AWS credentials, and `cdk bootstrap`
+  run once per account and region
+- For MiniStack or LocalStack: Docker, and `LOCALSTACK_AUTH_TOKEN` for LocalStack
+- Optional: the `cfn-guard` CLI, used when `complianceMode` is `enforce` and by option 7
 
-### Prerequisites
-
-1. **AWS CDK CLI**: `npm install -g aws-cdk`
-2. **AWS Credentials**: `aws configure`
-3. **Java 17+**: Required for compilation
-4. **Maven**: For building the project
-
-### Running the Interactive Deployer
-
-The Interactive Deployer **automatically activates** when `deployment-context.json` is not found. Simply run:
+## Build and run
 
 ```bash
-# Synthesize CloudFormation template (option 1)
-cdk synth
-
-# Deploy to AWS (option 2)
-cdk deploy
-
-# Create changeset without executing (option 4)
-cdk deploy --no-execute
-```
-
-The interactive prompts will guide you through configuration and generate `deployment-context.json`.
-
-**Manual Invocation** (if deployment-context.json exists but you want to reconfigure):
-
-```bash
+mvn clean install
+mvn -f cfc-testing/pom.xml package -Dmaven.test.skip=true
 cd cfc-testing
-mvn compile
-mvn exec:java -Dexec.mainClass="com.cloudforgeci.samples.app.InteractiveDeployer"
+java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer
 ```
+
+At startup the tool lists the applications discovered through `ServiceLoader`. Then:
+
+- If the context file does not exist, it prompts for a new configuration, saves it to
+  `deployment-context.json`, and shows the deploy menu.
+- If the context file exists, it loads it and shows the deploy menu. The file must contain
+  `applicationId`.
+
+## Command-line options
+
+| Argument | Effect |
+|---|---|
+| `--context <file>`, `-c <file>` | Context file to load (default: `$CFC_CONTEXT_FILE`, then `deployment-context.json`). |
+| `--interactive`, `-i` | Prompt for a new configuration even if the context file exists. `INTERACTIVE=true` in the environment does the same. |
+| `--force`, `-f` | Delete the context file, then prompt for a new configuration. With `--context`, the named file is deleted. |
+| `--platform` | Open the emulator platform menu instead of the deploy flow. |
+| `<digit>` | Run that deploy menu option without prompting. |
+| `<name>` | Use `<name>` as the stack name. |
+| `--ministack`, `-m` | Obsolete; ignored. MiniStack is always available as option 6. |
+
+Examples:
+
+```bash
+alias cfc='java -cp "target/classes:target/dependency/*" com.cloudforgeci.samples.app.InteractiveDeployer'
+
+cfc --context deployment-contexts/Jenkins-Stack.json 1   # synthesize only
+cfc --context deployment-contexts/Jenkins-Stack.json 6   # deploy to MiniStack
+cfc my-jenkins 2                                         # deploy deployment-context.json to AWS as "my-jenkins"
+cfc -i                                                   # start a new configuration
+```
+
+## Configuration prompts
+
+The prompts depend on earlier answers:
+
+1. **Stack name** and **environment** (`dev`, `staging`, `prod`).
+2. **Application**, chosen by category or from the full list. Applications that require a
+   database turn on RDS provisioning automatically.
+3. **Security profile**: `DEV`, `STAGING`, or `PRODUCTION`. Later defaults follow the profile.
+4. **Runtime**: `FARGATE` or `EC2`, limited to what the application supports.
+5. **Domain**: optional domain and subdomain, and whether to enable TLS. Without a domain, TLS
+   is off.
+6. **Authentication**: offered only for applications with OIDC support. Choose Cognito,
+   Cognito SAML, or an external identity provider, and an `authMode` the application supports.
+7. **Resources**: instance type (EC2) or CPU and memory (Fargate). Invalid Fargate CPU and
+   memory combinations are corrected.
+8. **Scaling**: minimum and maximum capacity; scaling is enabled when the maximum is greater,
+   with a CPU target.
+9. **Network**: `public-no-nat` or `private-with-nat`, WAF, and CloudFront.
+10. **Compliance**: encryption, monitoring, and, depending on the profile, AWS Config,
+    GuardDuty, compliance frameworks, validation mode (`enforce` or `advisory`), and log
+    retention.
+11. **Advanced**: region, availability zones, database options, and optional application
+    ports.
+
+The deployer sets `topology` to `application-service`. Before the deploy menu it prints a
+summary and any defaults it filled in (for example Cognito settings when an OIDC mode is
+chosen).
+
+## Deploy menu
+
+| Option | Action |
+|---|---|
+| `1` | Synthesize only. The template is written to `cdk.out/`. |
+| `2` | Deploy to AWS with `cdk deploy --require-approval never`. |
+| `3` | Destroy the existing AWS stack, then deploy. |
+| `4` | Dry run: adapt the template for MiniStack and report the result, and print the command for an AWS change set (`cdk deploy --no-execute --require-approval never`). |
+| `5` | Export the CloudFormation template as JSON or YAML (prompted). |
+| `6` | Deploy to MiniStack. |
+| `7` | Validate with cfn-guard, deploy to MiniStack, and verify the stack. |
+| `8` | Deploy to LocalStack. |
+| `9` | Reconfigure (start a new interactive setup). |
+| `0` | Cancel. |
+
+Pressing Enter at the prompt selects option 1.
+
+When compliance frameworks are selected and `complianceMode` is not `disabled`, cdk-nag packs
+for those frameworks run during synthesis. In `enforce` mode, cfn-guard also validates the
+template after synthesis for every option except 5; a failure stops before any deployment.
+
+## Using the CDK CLI
+
+`cfc-testing/cdk.json` runs the Interactive Deployer as the CDK app. When the CDK CLI starts it,
+the tool detects that, loads `$CFC_CONTEXT_FILE` or `deployment-context.json`, and
+synthesizes without prompting. If neither file exists, nothing is synthesized.
+
+```bash
+cdk synth
+cdk diff
+cdk deploy
+CFC_CONTEXT_FILE=deployment-contexts/Jenkins-Stack.json cdk deploy
+cdk destroy <stackName>
+```
+
+The account and region come from your credentials (`CDK_DEFAULT_ACCOUNT`,
+`CDK_DEFAULT_REGION`) and the `region` property.
+
+## Local emulators
+
+Start an emulator from the platform menu, then deploy with option 6 (MiniStack) or 8
+(LocalStack):
+
+```bash
+cfc --platform          # choose ministack or localstack, then start
+export AWS_ENDPOINT_URL=http://localhost:4566
+cfc                     # choose 6 or 8
+```
+
+Platform actions are `start`, `stop`, `restart`, `status`, and `reconcile_edge`. On an emulator
+the stack is named `<stackName>-ministack` or `<stackName>-localstack`.
+
+Before deploying, a preflight step checks the template against what the emulator supports.
+MiniStack preflight blocks, for example, RDS-backed applications. Set `MINISTACK_PREFLIGHT` or
+`LOCALSTACK_PREFLIGHT` to `warn` or `off` to relax it, or `CFC_LOCALSTACK_SKIP_PREFLIGHT=true`
+to skip LocalStack preflight. If the configured `authMode` is not supported on the target (for
+example `alb-oidc`, which the emulators cannot enforce), the tool prints a warning.
+
+See the [Local Emulator Quick Start](LOCAL_EMULATOR_QUICK_START.md),
+[application compatibility catalog](LOCAL_EMULATOR_APP_CATALOG.md), [MiniStack](../ministack/README.md),
+and [LocalStack](../localstack/README.md).
 
 ## Architecture
 
-The Interactive Deployer is a **sample CLI entrypoint** (`cfc-testing` / cloudforge-sample). It collects configuration and prints results; deploy orchestration lives in the libraries.
-
 ```text
-InteractiveDeployer     → prompts, menu, println
-LocalDeploymentShell    → sample helper (copy into your app)
-CloudForgeDeployment    → cloudforge-api central deploy API
-cloudforge-ministack / cloudforge-localstack → target mechanics
-cloudforge-core         → shared contracts
+InteractiveDeployer        prompts, menu, console output (cfc-testing)
+LocalDeploymentShell       sample helper for emulator deployments (cfc-testing)
+CloudForgeDeployment       deployment API (cloudforge-api)
+cloudforge-ministack /
+cloudforge-localstack      target adapters and deployers
+cloudforge-core            shared contracts (DeploymentConfig, ApplicationSpec, ...)
 ```
 
-### Local deploy (options 6 / 7 / 8)
-
-After CDK synth, local targets use:
+Emulator deployments (options 6-8) synthesize the canonical template and pass it to the target
+module:
 
 ```java
 DeploymentResult result = LocalDeploymentShell.deploy(
-    config,
-    DeploymentTarget.LOCALSTACK,
-    cloudAssembly,
-    DeployOptions.defaults());
+    config, DeploymentTarget.LOCALSTACK, cloudAssembly, DeployOptions.defaults());
 DeploymentResultPrinter.printOutcome(result, "LocalStack", config.applicationId);
 ```
 
-### AWS deploy (options 2 / 3)
+AWS deployments (options 2 and 3) run `cdk deploy` as a subprocess.
 
-Still invokes `cdk deploy` subprocess from the entrypoint. AWS routing into `CloudForgeDeployment` is a future phase.
-
-### Extensibility
-
-- **Applications:** implement `ApplicationSpec` + `META-INF/services` (see `CraftCmsApplicationSpec` in cfc-testing)
-- **Compliance:** plugin guides under `docs/plugins/`
-- **Custom entrypoint:** BOM-import `cfc-core`, depend on `cloudforge-api` + optional target JARs, call `CloudForgeDeployment` — do not copy orchestration from InteractiveDeployer
-
-## Configuration Options
-
-### Basic Configuration
-- **Stack Name**: Name for your CDK stack
-- **Environment**: dev, staging, or prod
-- **Deployment Type**: jenkins, s3-website, or s3-website-mailer
-
-### Domain Configuration
-- **Domain**: Your domain name (e.g., example.com) - *optional with Private CA*
-- **Subdomain**: Subdomain prefix (e.g., ci, app) - skipped if no domain
-- **SSL Certificate**: Enable SSL - uses public ACM cert with domain, Private CA without
-
-> **No Domain Quick Start:** If you skip domain configuration but enable SSL, the system automatically creates an AWS Private CA and issues a certificate for your ALB DNS name. This allows HTTPS without domain registration, ideal for development and internal applications. Private CA costs ~$400/month and is auto-deleted when the stack is destroyed.
-
-### Application Deployment
-- **Application**: Choose from 15+ pre-configured applications
-- **Runtime**: Fargate or EC2
-- **Topology**: APPLICATION_SERVICE (multi-instance) or S3_WEBSITE (static sites)
-- **Instance Capacity**: Min/max instances (EC2 only)
-- **CPU/Memory**: Resource allocation
-- **Authentication**: Cognito OIDC or application-native OIDC
-- **Database**: Automatic RDS provisioning for database-required applications
-
-### S3 Website Deployment
-- **Bucket Name**: S3 bucket for hosting
-- **Index/Error Documents**: Default pages
-- **CloudFront**: CDN distribution
-
-### S3 Website + Mailer Deployment
-- **SES Configuration**: Email address and region
-- **Lambda Function**: Function name, memory, timeout
-
-### Advanced Configuration
-- **Network Mode**: public-no-nat or private-with-nat
-- **WAF Protection**: Enable/disable
-- **CloudFront CDN**: Enable/disable
-- **Security Profile**: DEV, STAGING, or PRODUCTION
-
-## Example Sessions
-
-### With Custom Domain
-
-```
-🚀 CloudForge Community Interactive Deployer
-=============================================
-
-Stack Name [my-cloudforge-stack]: jenkins-ci
-Environment:
-  1. dev (default)
-  2. staging
-  3. prod
-Choose [dev]: 1
-
-Application:
-  1. jenkins
-  2. gitlab
-  3. metabase
-  4. grafana
-  5. mattermost
-  ... (15+ total)
-Choose: 1
-
-Domain (e.g., example.com) []: mycompany.com
-Subdomain (e.g., ci, app) []: ci
-Enable SSL Certificate [Y/n]: y
-
-Runtime:
-  1. FARGATE (default)
-  2. EC2
-Choose [FARGATE]: 1
-
-Topology:
-  1. APPLICATION_SERVICE (default)
-  2. S3_WEBSITE
-Choose [APPLICATION_SERVICE]: 1
-
-CPU (units) [1024]: 2048
-Memory (MB) [2048]: 4096
-
-Authentication Mode:
-  1. none (default)
-  2. alb-oidc
-  3. jenkins-oidc
-Choose [none]: 1
-
-Network Mode:
-  1. public-no-nat (default)
-  2. private-with-nat
-Choose [public-no-nat]: 1
-
-Enable WAF Protection [y/N]: n
-Enable CloudFront CDN [y/N]: n
-
-Security Profile:
-  1. DEV (default)
-  2. STAGING
-  3. PRODUCTION
-Choose [DEV]: 1
-
-🔧 Building CDK Context...
-
-📋 Deployment Configuration:
-============================
-Stack Name: jenkins-ci
-Environment: dev
-Deployment Type: jenkins
-Runtime: FARGATE
-Topology: JENKINS_SERVICE
-Security Profile: DEV
-Domain: mycompany.com
-Subdomain: ci
-SSL Enabled: true
-Network Mode: public-no-nat
-WAF Enabled: false
-CloudFront Enabled: false
-CPU: 2048
-Memory: 4096 MB
-Auth Mode: none
-
-Proceed with deployment? [Y/n]: y
-
-🚀 Starting CDK Deployment...
-
-🚀 Deploying Jenkins using SystemContext orchestration layer...
-✅ Jenkins deployment created successfully!
-   - Infrastructure: VPC, ALB, EFS
-   - Runtime: FARGATE
-   - Topology: APPLICATION_SERVICE
-   - Domain: mycompany.com
-   - SSL: Enabled
-
-✅ CDK Stack synthesized successfully!
-Run 'cdk deploy' to deploy to AWS
-```
-
-### Without Domain (Private CA Quick Start)
-
-```
-🚀 CloudForge Community Interactive Deployer
-=============================================
-
-Stack Name [my-cloudforge-stack]: jenkins-quick
-Environment:
-  1. dev (default)
-  2. staging
-  3. prod
-Choose [dev]: 1
-
-Application:
-  1. jenkins
-  ...
-Choose: 1
-
-Domain (e.g., example.com) []: <enter to skip>
-Enable SSL Certificate [Y/n]: y
-
-⚠️  No domain configured - will use AWS Private CA for HTTPS
-   - Certificate issued for ALB DNS name
-   - Browser will show certificate warnings (not publicly trusted)
-   - Private CA costs ~$400/month (auto-deleted with stack)
-   - Fully compliant: meets HIPAA, PCI-DSS, SOC2 encryption requirements
-
-Authentication Mode:
-  1. none (default)
-  2. alb-oidc
-  3. application-oidc
-Choose [none]: 2
-
-Cognito Domain Prefix []: jenkins-quick-myco
-
-📋 Deployment Configuration:
-============================
-Stack Name: jenkins-quick
-Environment: dev
-Deployment Type: jenkins
-Runtime: FARGATE
-Topology: JENKINS_SERVICE
-Security Profile: DEV
-SSL Enabled: true (Private CA)
-Network Mode: private-with-nat
-Auth Mode: alb-oidc
-Cognito: Auto-provisioned
-
-Proceed with deployment? [Y/n]: y
-
-🚀 Deploying Jenkins using SystemContext orchestration layer...
-✅ Jenkins deployment created successfully!
-   - Infrastructure: VPC, ALB, EFS, Private CA
-   - Runtime: FARGATE
-   - Topology: APPLICATION_SERVICE
-   - SSL: Private CA Certificate
-   - Auth: Cognito ALB-OIDC
-
-✅ CDK Stack synthesized successfully!
-Run 'cdk deploy' to deploy to AWS
-```
-
-## Generated CDK Context
-
-The interactive deployer builds a CDK context map with all your configuration:
-
-### With Custom Domain
-
-```json
-{
-  "env": "dev",
-  "runtime": "FARGATE",
-  "topology": "APPLICATION_SERVICE",
-  "applicationId": "jenkins",
-  "securityProfile": "DEV",
-  "domain": "mycompany.com",
-  "subdomain": "ci",
-  "enableSsl": true,
-  "networkMode": "public-no-nat",
-  "authMode": "none"
-}
-```
-
-### Without Domain (Private CA)
-
-```json
-{
-  "env": "dev",
-  "runtime": "FARGATE",
-  "topology": "APPLICATION_SERVICE",
-  "applicationId": "jenkins",
-  "securityProfile": "DEV",
-  "enableSsl": true,
-  "networkMode": "private-with-nat",
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "jenkins-quick-myco"
-}
-```
-
-> **Note:** When no domain is configured but `enableSsl: true`, the system automatically creates AWS Private CA resources and issues a certificate for the ALB DNS name.
-
-## Next Steps
-
-After running the interactive deployer:
-
-1. **Review the stack**: `cdk diff`
-2. **Deploy to AWS**: `cdk deploy`
-3. **Clean up**: `cdk destroy` (when done)
+To build your own entry point, import the `cfc-core` BOM, depend on `cloudforge-api` (plus a
+target module if you deploy to an emulator), and call `CloudForgeDeployment`. Add applications
+by implementing `ApplicationSpec` and registering it in `META-INF/services`, as
+`CraftCmsApplicationSpec` in `cfc-testing` does; see the
+[Application Plugin Guide](../plugins/APPLICATION-PLUGIN-GUIDE.md).
 
 ## Troubleshooting
 
-### Common Issues
+| Problem | Resolution |
+|---|---|
+| `No applicationId found in deployment-context.json` | Add `applicationId`, or run with `-i` to create a new configuration. |
+| `Unknown application ID` | Use an ID from the startup list; see [application IDs](../ADVANCED.md#application-ids). |
+| AWS deploy fails before creating resources | Check credentials, run `cdk bootstrap`, and confirm the region. |
+| cfn-guard validation failed | Fix the reported rule, or set `"complianceMode": "advisory"` to review findings without blocking. |
+| `cdk synth` produces no stack | Create `deployment-context.json` first, or set `CFC_CONTEXT_FILE`. |
 
-1. **AWS Credentials**: Ensure `aws configure` is run
-2. **CDK Bootstrap**: Run `cdk bootstrap` for first-time setup
-3. **Permissions**: Ensure your AWS user has necessary permissions
-4. **Region**: Set `CDK_DEFAULT_REGION` environment variable
-
-### Getting Help
-
-- Check the CloudForge Community documentation
-- Review CDK documentation for AWS-specific issues
-- Check AWS CloudFormation console for deployment errors
-
-## Advanced Usage
-
-### Custom Configuration
-
-You can also modify the generated CDK context manually or create custom deployment scripts based on the interactive deployer's output.
-
-### Integration with CI/CD
-
-The interactive deployer can be integrated into CI/CD pipelines by providing configuration via environment variables or configuration files.
-
-## MiniStack Local Deployment
-
-Build and start commands from the repository root: **[Local Emulator Quick Start](LOCAL_EMULATOR_QUICK_START.md)**.
-
-The Interactive Deployer always offers MiniStack as menu options **8** / **9** (no mode flag). Point clients at the emulator with `AWS_ENDPOINT_URL` (same key as the AWS CLI):
-
-```bash
-# Start MiniStack or LocalStack (from cfc-testing, after mvn install)
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer --platform
-
-cd cfc-testing
-export AWS_ENDPOINT_URL=http://localhost:4566   # default if unset
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer
-# Choose 6 — Deploy to MiniStack
-```
-
-| Option | Description |
-|--------|-------------|
-| **2** | Deploy to AWS |
-| **4** | Dry-run: MiniStack adapted template + report; AWS changeset hint |
-| **6** | Deploy to MiniStack — adapt canonical template, create/update stack, start auth runtime if needed |
-| **7** | Full pipeline — cfn-guard validation, deploy, stack verification |
-
-Options **6** and **8** run deploy preflight before CloudFormation. MiniStack preflight blocks RDS-backed apps and unsupported CFN types (`MINISTACK_PREFLIGHT=enforce` by default). LocalStack preflight probes tier/capabilities (`LOCALSTACK_PREFLIGHT=enforce`; set `CFC_LOCALSTACK_SKIP_PREFLIGHT=true` to skip).
-
-**Application compatibility:** [Local Emulator Application Catalog](LOCAL_EMULATOR_APP_CATALOG.md) — full MiniStack (13) and LocalStack (37+) lists with ports and sample contexts.
-
-Stack name in MiniStack is `<stackName>-ministack`.
-
-**Documentation**
-
-- [MiniStack overview](../ministack/README.md) — architecture and quick start
-- [Setup](../ministack/SETUP.md) — prerequisites, build, start MiniStack
-- [Deployment](../ministack/DEPLOYMENT.md) — deploy options and Jenkins walkthrough
-- [Verification](../ministack/VERIFICATION.md) — confirm what deployed locally
-- [Advanced](../ministack/ADVANCED.md) — auth proxy, incremental updates, env vars
-- [Troubleshooting](../ministack/TROUBLESHOOTING.md) — common failures
-- [Extended Testing](EXTENDED-TESTING.md) — synthesis and validation scripts
-
-## Contributing
-
-To extend the interactive deployer:
-
-1. Add new deployment types in `collectConfiguration()`
-2. Implement deployment logic in the corresponding `deploy*()` methods
-3. Update the `buildCfcContext()` method to include new parameters
-4. Add validation logic as needed
-
-## License
-
-This tool is part of the CloudForge Community project and follows the same licensing terms.
+For every configuration property, see the [Advanced Guide](../ADVANCED.md).

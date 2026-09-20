@@ -1,6 +1,6 @@
 {
-  "description": "Staging environment with SOC 2 compliance for pre-production validation",
   "stackName": "CloudForge-Staging-SOC2",
+  "applicationId": "jenkins",
   "runtime": "fargate",
   "topology": "jenkins-service",
   "securityProfile": "staging",
@@ -19,7 +19,7 @@
   "complianceFrameworks": "SOC2",
   "scopeConfigRulesToDeployment": true,
   "enableS3VersioningRemediation": true,
-  "enableCloudTrailLoggingRemediation": true,
+  "enableCloudTrailBucketAccessRemediation": true,
 
   "guardDutyEnabled": true,
   "guardDutyAlertsConfigured": true,

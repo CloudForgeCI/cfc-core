@@ -12,9 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Proves {@code CloudForgeDeployment}'s {@code AWS} case actually routes (no longer the
- * {@code IllegalArgumentException}/{@code "not supported here"} it used to throw) without
- * requiring live AWS credentials — DRY_RUN never calls {@link
+ * Verifies that {@code CloudForgeDeployment}'s {@code AWS} case routes to the AWS deployer
+ * without requiring AWS credentials. DRY_RUN never calls {@link
  * com.cloudforgeci.api.deploy.aws.AwsDirectDeployer#deploy}, only DEPLOY/VERIFY do, so this is
  * the one AWS mode fully exercisable in this environment. See {@code AwsDirectDeployerTest} for
  * coverage of the deployer itself.

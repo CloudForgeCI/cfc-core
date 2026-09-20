@@ -1,8 +1,8 @@
 # Prometheus Application Guide
 
-Prometheus is an open-source systems monitoring and alerting toolkit designed for reliability and scalability.
+Prometheus is an open-source systems monitoring and alerting toolkit.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -21,22 +21,17 @@ Prometheus is an open-source systems monitoring and alerting toolkit designed fo
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | No (use ALB-OIDC) |
+| **Supported Auth Modes** | `none` |
 | **Database Required** | No (embedded TSDB) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Multi-dimensional time series data model
-- PromQL query language
-- Pull-based metrics collection
-- Service discovery
-- Alerting with Alertmanager
-- Visualization (basic, use Grafana for dashboards)
-- Recording rules
+- Multi-dimensional time-series data model and PromQL
+- Pull-based metrics collection and service discovery
+- Recording and alerting rules (alert delivery uses a separate Alertmanager)
 - Remote storage integration
-- Exporters ecosystem
 
 ---
 
@@ -51,6 +46,14 @@ Prometheus is an open-source systems monitoring and alerting toolkit designed fo
 | Container User | `65534:65534` (nobody) |
 | EFS Permissions | `755` |
 
+On EC2, data is stored under `/var/lib/prometheus`.
+
+---
+
+## Authentication
+
+Prometheus declares only the `none` auth mode. When a context is prepared for a deployment target (the interactive deployer or `CloudForgeDeployment`), an unsupported `authMode` such as `alb-oidc` is replaced with `none` and a warning is printed. Compliance frameworks that require CloudForge-managed authentication, such as the SOC 2 CC6.2 rule, report a failure when `authMode` is `none`.
+
 ---
 
 ## Deployment Context Examples
@@ -62,8 +65,7 @@ Prometheus is an open-source systems monitoring and alerting toolkit designed fo
   "stackName": "Prometheus-Dev",
   "applicationId": "prometheus",
   "applicationName": "Prometheus Dev",
-  "description": "Prometheus monitoring server",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -82,17 +84,14 @@ Prometheus is an open-source systems monitoring and alerting toolkit designed fo
 }
 ```
 
-**Cost estimate:** ~$50/month
-
-### Production - With Authentication
+### Production
 
 ```json
 {
   "stackName": "Prometheus-Production",
   "applicationId": "prometheus",
   "applicationName": "Prometheus",
-  "description": "Production monitoring server",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -105,16 +104,12 @@ Prometheus is an open-source systems monitoring and alerting toolkit designed fo
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "prometheus-prod-yourcompany",
-  "cognitoMfaEnabled": true,
+  "authMode": "none",
 
   "instanceType": "t3.medium",
   "minInstanceCapacity": 1,
   "maxInstanceCapacity": 2,
 
-  "complianceFrameworks": "SOC2",
   "awsConfigEnabled": true,
   "wafEnabled": true,
 
@@ -125,13 +120,12 @@ Prometheus is an open-source systems monitoring and alerting toolkit designed fo
 }
 ```
 
-**Cost estimate:** ~$200/month
-
 ---
 
 ## Configuration
 
-Default `prometheus.yml`:
+On EC2, CloudForge writes the following `prometheus.yml` to `/var/lib/prometheus/config/prometheus.yml` and mounts it into the container. On Fargate, the image's built-in configuration is used.
+
 ```yaml
 global:
   scrape_interval: 15s
@@ -147,14 +141,14 @@ scrape_configs:
 
 ## Post-Deployment Tasks
 
-1. **Configure Scrape Targets**: Edit prometheus.yml
-2. **Add Exporters**: Node Exporter, CloudWatch Exporter, etc.
-3. **Set Up Alerting**: Configure Alertmanager
-4. **Connect Grafana**: Add as data source
+1. Add scrape targets to `prometheus.yml`.
+2. Deploy exporters (for example Node Exporter or CloudWatch Exporter) as needed.
+3. Configure an Alertmanager if you need alert delivery.
+4. Add Prometheus as a Grafana data source.
 
 ---
 
 ## Related Documentation
 
-- [Grafana Guide](grafana.md) - Visualization
+- [Grafana Guide](grafana.md)
 - [Prometheus Documentation](https://prometheus.io/docs/)

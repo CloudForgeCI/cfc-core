@@ -3,9 +3,8 @@ package com.cloudforge.core.manager.auth;
 import java.time.Instant;
 
 /**
- * A CloudForge Manager user-directory account, as seen through {@link AuthBackend} — a typed
- * stand-in for what used to be an ad-hoc {@code Map<String,Object>} built by hand in two different
- * shapes (one for local rows, one for Cognito pool users). Several fields are only meaningful for
+ * A CloudForge Manager user-directory account, as seen through {@link AuthBackend}, with one
+ * shape for both local rows and Cognito pool users. Several fields are only meaningful for
  * one backend and {@code null} for the other, rather than every implementation needing to invent a
  * value for a concept it doesn't have:
  *
@@ -15,8 +14,8 @@ import java.time.Instant;
  *   <li>{@code firstSeenAt}/{@code lastSeenAt}/{@code lastLoginAt} — local-only; always {@code
  *       null} for Cognito accounts (Manager keeps no local row for the timestamps themselves).
  *       {@code activeSessionCount} is populated for both backends — a Cognito-authenticated login
- *       still gets a real Manager-tracked session (see {@code CognitoAuthBackend}'s own javadoc),
- *       so it's {@code null} only when a backend genuinely can't determine it, not by backend
+ *       still gets a Manager-tracked session (see {@code CognitoAuthBackend}'s javadoc),
+ *       so it's {@code null} only when a backend can't determine it, not by backend
  *       type.</li>
  *   <li>{@code linkedAccountId} — the counterpart account's {@link #id()} in the *other* backend,
  *       when this account was created by (or has since been linked during) a migration; {@code

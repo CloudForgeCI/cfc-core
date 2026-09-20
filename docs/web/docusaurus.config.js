@@ -7,7 +7,7 @@ const darkCodeTheme = require('prism-react-renderer').themes.dracula;
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'CloudForge CI',
-  tagline: 'Secure, compliant infrastructure on AWS',
+  tagline: 'Application infrastructure on AWS with the AWS CDK',
   favicon: 'img/favicon.ico',
 
   // Set the production url of your site here
@@ -41,7 +41,7 @@ const config = {
           routeBasePath: '/', // Serve docs at the root of the documentation site
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl: 'https://github.com/CloudForgeCI/cfc-core/edit/develop/docs/',
-          exclude: ['web/**'], // Exclude the web folder itself from docs
+          exclude: ['web/**', 'epics/**', '**/*.local.md', '**/*.plan.md'], // Site sources and local-only working notes
         },
         blog: false, // Disable blog
         theme: {
@@ -92,7 +92,11 @@ const config = {
             items: [
               {
                 label: 'Quick Start',
-                to: '/compliance/QUICK_START_GUIDE',
+                to: '/ONBOARDING_QUICK_START',
+              },
+              {
+                label: 'Advanced Guide',
+                to: '/ADVANCED',
               },
               {
                 label: 'Applications',

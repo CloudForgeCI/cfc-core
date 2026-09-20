@@ -21,13 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Covers what can be verified without live AWS credentials: pure request-building logic (tag
+ * Covers what can be verified without AWS credentials: pure request-building logic (tag
  * conventions, bucket/region naming) and error paths against an intentionally-unreachable
  * endpoint (same pattern as {@code LocalStackDeployerLifecycleTest} — exercises exception
  * handling in {@code stackExists}/{@code verifyDeployment} without needing a real backend).
  *
- * <p>Does NOT exercise a real {@code deploy()} success path — see {@link AwsDirectDeployer}'s
- * class javadoc for why that's out of reach in this environment.</p>
+ * <p>Does not exercise a successful {@code deploy()} against AWS; see {@link AwsDirectDeployer}'s
+ * class javadoc.</p>
  */
 class AwsDirectDeployerTest {
 
@@ -195,7 +195,7 @@ class AwsDirectDeployerTest {
     /** The literal CLI code path (see {@code DeployOptionsTest}'s javadoc): {@code
      *  InteractiveDeployer.deployLocalTarget} never supplies a credentials override, always
      *  reaching this 1-arg constructor. Reflection, not a public accessor — {@code
-     *  credentialsOverride} is a genuinely private implementation detail everywhere else. */
+     *  credentialsOverride} is otherwise a private implementation detail. */
     @Test
     void oneArgConstructorLeavesCredentialsOverrideNull() throws Exception {
         DeploymentConfig config = new DeploymentConfig();

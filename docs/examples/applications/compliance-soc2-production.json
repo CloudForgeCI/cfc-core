@@ -2,7 +2,6 @@
   "stackName": "App-SOC2-Production",
   "applicationId": "REPLACE_WITH_APP_ID",
   "applicationName": "SOC2 Production Application",
-  "description": "Production environment with full SOC2 compliance",
   "environment": "production",
 
   "runtime": "ec2",
@@ -18,7 +17,7 @@
 
   "authMode": "application-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "app-prod-CHANGEME",
+  "cognitoDomainPrefix": "app-prod-changeme",
   "cognitoMfaEnabled": true,
   "cognitoMfaMethod": "totp",
   "cognitoCreateGroups": true,

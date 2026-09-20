@@ -2,61 +2,55 @@
 
 ## Executive Summary
 
-CloudForge CI provides automated **infrastructure-level** compliance controls through AWS Config rules. The system implements technical safeguards that support SOC2, HIPAA, PCI-DSS, and GDPR frameworks, but **does not provide complete compliance certification**.
+CloudForge CI provides **infrastructure-level** compliance controls: security profile defaults, synthesis-time validators, AWS Config rules, and remediation actions. These support SOC 2, HIPAA, PCI DSS, and GDPR programs, but CloudForge **does not provide compliance certification**.
 
-**What This System Provides**: Infrastructure controls and validation for the behavior described below
-**What You Still Need**: Organizational policies, procedures, training, and third-party audit for certification
+This document keeps three things separate:
 
-**Current Status (Updated December 2025):**
-- **SOC 2**: Validation includes JUnit, cdk-nag, cfn-guard, and AWS Config checks
-- **HIPAA**: Parameterized tests exercise framework-related infrastructure configuration
-- **PCI DSS**: Production configuration requires WAF when this framework is selected
-- **GDPR**: cfn-guard rules cover the infrastructure controls represented by this project
-- **Multi-framework**: The test matrix exercises combinations of supported framework selections
-- **GuardDuty**: Integration is available; limitations are documented in [GuardDuty Status](#guardduty-status)
+1. **Compliance controls** - what CloudForge configures in AWS (encryption, logging, network segmentation, password policy, retention).
+2. **Validation coverage** - what CloudForge checks, and how those checks are tested.
+3. **Certification** - an independent auditor's opinion or assessment, which requires organizational controls and third-party testing that CloudForge does not provide.
 
-**Validation Layer Summary:**
-| Layer | Description | Coverage | Status |
-|-------|-------------|----------|--------|
-| **Layer 1: JUnit Tests** | Unit and integration tests | 263 parameterized test cases | ✅ Passing |
-| **Layer 2: cdk-nag** | CDK construct validation | SOC2, HIPAA, PCI-DSS rules | ✅ Production validated |
-| **Layer 3: cfn-guard** | CloudFormation template validation | All 4 frameworks + custom rules | ✅ Complete coverage |
-| **Layer 4: AWS Config** | Runtime compliance monitoring | Framework-specific rules | ✅ Deployed and monitored |
+### Framework Status
 
-**Test Coverage Summary:**
-- **Compliance Test Matrix**: 607 test cases covering all framework combinations
-- **Parameterized Tests**: 263 test cases with CSV-driven validation
-- **Truth Table Tests**: 1,467+ total validation scenarios
-- **ConfigurationValidationRules**: 44 test cases (alwaysLoad framework)
-- **Negative Edge Cases**: 31 invalid configuration tests
-- **Log Retention Tests**: 44 framework-specific retention validations
+| Framework | `complianceFrameworks` value | Validator | Status |
+|-----------|------------------------------|-----------|--------|
+| SOC 2 | `soc2` | `Soc2Rules` | Supported |
+| HIPAA | `hipaa` | `HipaaRules` | Supported (technical safeguards) |
+| PCI DSS v4.0.1 | `pci-dss` | `PciDssRules` | Supported; WAF required in `production` |
+| GDPR | `gdpr` | `GdprRules` | Supported (technical measures) |
+| ISO/IEC 27001 | not accepted | `Iso27001Rules` | Validator and cfn-guard rules exist; not selectable |
+| FedRAMP Moderate / High | not accepted | `FedRampRules`, `FedRampHighRules` | In development; see [FedRAMP Controls Mapping](compliance/FEDRAMP_CONTROLS_MAPPING.md) |
 
-**Framework Implementation Status:**
-- ✅ **ConfigurationValidationRules**: Priority 1, alwaysLoad=true (runs even without compliance frameworks)
-- ✅ **SOC2 Rules**: Complete Type II control implementation
-- ✅ **HIPAA Rules**: Full technical safeguards (§164.312)
-- ✅ **PCI-DSS Rules**: All 12 requirements mapped (WAF REQUIRED for Req 6.6)
-- ✅ **GDPR Rules**: Articles 25, 30, 32 implemented
+SAML federation is also an incomplete feature: SAML factories exist, but no `authMode` value selects them.
 
-**Validation changes recorded in Q4 2025:**
-- Added cfn-guard checks for previously uncovered configurations
-- Expanded the test matrix from 281 to 607 cases
-- Added `ConfigurationValidationRules` as an always-load framework
-- Required WAF for PCI DSS production configurations
-- Added validation at unit-test, cdk-nag, template, and AWS Config layers
-- Added report history and drift comparison to the compliance dashboard
-- Added tests for simultaneous SOC 2, HIPAA, PCI DSS, and GDPR selection
+### Validation Layers
 
-**⚠️ IMPORTANT**:
-- **What "COMPLIANT" means**: A configured validator reported that the evaluated resource satisfied that validator
-- **What it does NOT mean**: We are NOT SOC2/HIPAA/PCI-DSS/GDPR **certified**
-- **Why**: Compliance certification requires organizational controls + third-party audit
-- **What we provide**: Infrastructure controls and automated checks within the coverage documented here
+| Layer | Description | Enabled by |
+|-------|-------------|------------|
+| **cdk-nag** | Construct checks (`HIPAASecurityChecks`, `PCIDSS321Checks`, `AwsSolutionsChecks`) | `production` profile with frameworks selected |
+| **CloudForge validators** | `FrameworkRules` implementations | `auditManagerEnabled: true` |
+| **cfn-guard** | Template policies in `cloudforge-api/src/main/resources/cfn-guard/frameworks/` | Interactive Deployer in `enforce` mode; test suite |
+| **AWS Config** | Rules, conformance packs, and remediation | `awsConfigEnabled: true` |
 
-**📚 Related Documentation:**
+See [Validation Architecture](compliance/VALIDATION_ARCHITECTURE.md).
+
+### Test Coverage
+
+- `cloudforge-api/src/test/resources/compliance-test-matrix.csv` and the split files in `compliance-matrices/` drive `TruthTableValidationTest`, including negative (`FAIL`) rows for PCI DSS WAF, flow logs, log retention, and multi-framework combinations. See [CSV Parameterized Testing](compliance/CSV_PARAMETERIZED_TESTING.md).
+- Unit tests cover `ComplianceMatrix` and the individual rule classes in `cloudforge-api/src/test/java/com/cloudforgeci/api/core/rules/`.
+
+### Known Gaps in Validation
+
+- `ConfigurationValidationRules`, `HipaaOrganizationalRules`, and `GdprOrganizationalRules` are defined but are not installed during synthesis (not registered, or their IDs cannot be selected).
+- In `disabled` compliance mode, the PCI DSS, HIPAA, SOC 2, and GDPR validators still block on failures.
+- The IAM account password policy for PCI DSS alone uses an 8-character minimum, below PCI DSS v4.0.1 Req 8.3.6.
+
+**What "COMPLIANT" means**: an AWS Config rule or CloudForge validator reported that the evaluated resource satisfied that rule. It does not mean a deployment is SOC 2, HIPAA, PCI DSS, or GDPR certified.
+
+**Related Documentation:**
 - **[Security Best Practices](guides/SECURITY_RULES_README.md)** - Security rules, service enablement by profile, IAM policies
-- **[AUDITOR_COMPLIANCE_MAPPING.md](AUDITOR_COMPLIANCE_MAPPING.md)** - Complete control mappings, evidence collection, management letter language for external audits
-- **[Multi-Framework Compliance Guide](compliance/MULTI_FRAMEWORK_COMPLIANCE.md)** - How to configure multiple frameworks simultaneously
+- **[AUDITOR_COMPLIANCE_MAPPING.md](AUDITOR_COMPLIANCE_MAPPING.md)** - Control mappings and evidence collection for external audits
+- **[Multi-Framework Compliance Guide](compliance/MULTI_FRAMEWORK_COMPLIANCE.md)** - How to configure multiple frameworks
 
 ---
 
@@ -66,17 +60,17 @@ CloudForge CI provides automated **infrastructure-level** compliance controls th
 
 | Blocker | Framework | Impact | Action Required |
 |---------|-----------|--------|-----------------|
-| **GuardDuty not tested** | PCI-DSS, HIPAA | Cannot detect threats in real-time | ✅ Enable GuardDuty, verify findings, test alerts |
+| **GuardDuty response not configured** | PCI-DSS, HIPAA | Findings are not routed to responders | ✅ Enable GuardDuty, verify findings, configure alert routing |
 | **No PHI in production** | HIPAA | Infrastructure tested without actual ePHI | ⚠️ HIPAA compliance requires risk analysis with actual ePHI data |
 | **Cardholder data handling** | PCI-DSS | Infrastructure encrypts, but app must mask PAN | ❌ Application-level controls required (see Req 3-4) |
-| **No ASV/Pen test** | PCI-DSS | External vulnerability testing required | ❌ Contract ASV vendor ($2k-5k/year) + pen testers ($10k-30k) |
-| **No organizational policies** | SOC2, All | ~60-70% of compliance requirements missing | ❌ Document policies, training, incident response |
+| **No ASV/Pen test** | PCI-DSS | External vulnerability testing required | ❌ Engage an Approved Scanning Vendor and penetration testers |
+| **No organizational policies** | SOC2, All | Most SOC 2 criteria are organizational | ❌ Document policies, training, incident response |
 | **No DSR workflow** | GDPR | Cannot fulfill data subject rights requests | ❌ Implement DSR intake, verification, fulfillment process |
 
 **Legend:**
-- ✅ **Can be addressed immediately** (technical fix)
-- ⚠️ **Requires process implementation** (1-3 months)
-- ❌ **Requires external engagement** (3-12 months + ongoing costs)
+- ✅ **Technical configuration**
+- ⚠️ **Requires process implementation**
+- ❌ **Requires external engagement or application work**
 
 ---
 
@@ -107,10 +101,10 @@ Compliance frameworks require **organizational policies, procedures, and human p
 #### SOC2 Compliance - Full Audit Requirements
 
 **✅ Infrastructure Controls We Provide:**
-- CC6.1: Logical access controls (IAM, MFA)
-- CC6.6: Encryption and data protection
-- CC6.7: System monitoring and logging
-- CC7.2: Infrastructure vulnerability management
+- CC6.1: Logical access controls (IAM, MFA, encryption at rest)
+- CC6.6: Boundary protection (VPC, security groups, WAF)
+- CC6.7: Transmission protection (TLS)
+- CC7.2: System monitoring and logging
 
 **❌ Organizational Requirements You Must Implement:**
 - **CC1.1**: Control environment and tone at the top
@@ -125,11 +119,11 @@ Compliance frameworks require **organizational policies, procedures, and human p
   - *Cannot automate*: Assignment of responsibility and authority
   - *You need*: Responsibility matrices, escalation procedures
 
-- **CC2.1**: Risk assessment process
+- **CC3.1/CC3.2**: Risk assessment process
   - *Cannot automate*: Business risk identification and assessment
   - *You need*: Risk register, risk assessment methodology, risk treatment plans
 
-- **CC3.1**: Policies and procedures
+- **CC5.3**: Policies and procedures
   - *Cannot automate*: Documented security policies, acceptable use policies
   - *You need*: Security policy manual, employee handbook, signed acknowledgments
 
@@ -319,57 +313,30 @@ Compliance frameworks require **organizational policies, procedures, and human p
                         ┌─────────────────────────┐
                         │   External Audits       │
                         │  (SOC2, HIPAA, PCI-DSS) │
-                        │   Cost: $15k-$500k/yr   │
                         └─────────────────────────┘
                                     │
               ┌─────────────────────┴─────────────────────┐
               │     Organizational Processes              │
               │  (Policies, Training, Incident Response)  │
-              │         Cost: $50k-$200k/yr               │
               └─────────────────────┬─────────────────────┘
                                     │
         ┌───────────────────────────┴───────────────────────────┐
         │         People & Culture                              │
         │  (Security awareness, competence, accountability)     │
-        │              Cost: $100k-$300k/yr                     │
         └───────────────────────────┬───────────────────────────┘
                                     │
     ┌───────────────────────────────┴───────────────────────────────┐
     │              Infrastructure Controls                          │
     │         (AWS Config, IAM, Encryption, Logging)                │
-        │          Controls configured by CloudForge CI                │
-    │              Cost: $45-$135/month                             │
+    │          Controls configured by CloudForge CI                 │
     └───────────────────────────────────────────────────────────────┘
 ```
 
-**Bottom Line:**
 - CloudForge CI provides the **foundation** (bottom layer)
 - You must build the **organizational layer** (policies, procedures, training)
 - You must engage **external auditors** for certification (top layer)
 
-**Total Compliance Cost for Small Organization:**
-- CloudForge CI infrastructure: $500-$1,600/year (AWS costs: Config, GuardDuty, CloudTrail, S3 storage)
-- Organizational program: $50,000-$200,000/year (policies, training, DPO/CISO)
-- External audits: $15,000-$100,000/year (SOC2, HIPAA, or PCI-DSS)
-- **Total**: $65,000-$300,000+/year
-
-**💰 AWS Cost Disclaimer:**
-Actual AWS costs vary based on:
-- **Region** (us-east-1 typically lowest cost)
-- **Data volume** (CloudTrail logs, VPC Flow Logs, S3 storage)
-- **Resource count** (number of EBS volumes, S3 buckets evaluated by Config)
-- **GuardDuty findings** (billed per million events)
-- **AWS pricing changes** (rates updated periodically)
-
-**Estimated Monthly AWS Costs for Compliance Services:**
-- AWS Config: $2-10/month (depends on # of rules and resources)
-- CloudTrail: $0-5/month (first trail free, S3 storage costs)
-- GuardDuty: $5-50/month (varies by data volume analyzed)
-- VPC Flow Logs: $2-20/month (depends on traffic volume)
-- S3 Storage (logs): $1-50/month (depends on retention period and volume)
-- **Total Estimate**: $10-135/month or $120-$1,620/year
-
-Use the [AWS Pricing Calculator](https://calculator.aws.amazon.com/) for precise estimates based on your workload.
+AWS charges for the compliance services (AWS Config, CloudTrail, GuardDuty, VPC Flow Logs, S3 storage) depend on region, data volume, resource count, and current pricing. Use the [AWS Pricing Calculator](https://calculator.aws.amazon.com/) for an estimate.
 
 ---
 
@@ -454,80 +421,34 @@ Engage qualified compliance and legal professionals as appropriate for your scop
 
 ## SOC 2 Infrastructure-Control Validation
 
-### AWS Config Rules Coverage (16 Rules for SOC2 Only)
+### AWS Config Rules for SOC 2
 
-The recorded test deployment reported **COMPLIANT** for the listed AWS Config rules. This result applies to those resources and evaluations; it does not constitute SOC 2 certification:
+With `awsConfigEnabled: true` and `soc2` selected, `ComplianceFactory` deploys:
 
-**Breakdown:**
-- **9 Base Rules**: Always deployed (encryption, IAM, S3, CloudTrail, VPC Flow Logs)
-- **7 SOC2-Specific Rules**: Only deploy when SOC2 framework is enabled
+- **Base rules** for every selection: EBS encryption by default, S3 server-side encryption, S3 public read prohibited, S3 versioning, and the IAM password policy
+- **Production rules**: `CLOUD_TRAIL_ENABLED`
+- **SOC 2 rules** under the `EnableSoc2Rules` condition, including Security Hub, Inspector, and Macie checks; database rules also require `provisionDatabase`
+- **Collected rules** registered by other factories for resources that are created
+- **A conformance pack** for the framework
 
-**📊 Remediation Coverage:**
-- **🔧 Automatic**: 6 rules (S3 encryption, versioning, EBS encryption can be auto-remediated via SSM)
-- **⚠️ Semi-Automatic**: 4 rules (alert + manual approval required - IAM changes, MFA enrollment)
-- **📋 Manual Only**: 6 rules (policy-based, require human decision - password policies, CloudTrail configuration)
+The full rule list, with Trust Services Criteria mappings, is in the [SOC 2 Controls Gap Analysis](compliance/SOC2_CONTROLS_GAP_ANALYSIS.md).
 
-#### Security Controls (Trust Service Criteria: CC6)
+### Remediation
 
-| # | Rule Name | Remediation | Description |
-|---|-----------|-------------|-------------|
-| 1 | **IAM Password Policy** | 📋 Manual | Enforces 12+ char passwords, 90-day rotation, 12 reuse prevention |
-| 2 | **Root Account MFA** | ⚠️ Alert | Detects root usage, validates MFA enrollment, sends alerts |
-| 3 | **IAM User MFA** | ⚠️ Semi-Auto | Checks all users, can attach MFA policy automatically (with approval) |
-| 4 | **Access Key Rotation** | ⚠️ Alert | Monitors key age >90 days, alerts for rotation |
-| 5 | **S3 Public Read/Write Prohibited** | 🔧 Automatic | Blocks public ACLs/policies via SSM automation |
-| 6 | **S3 Versioning Enabled** | 🔧 Automatic | Enables versioning on buckets via SSM automation |
-| 7 | **CloudTrail Enabled** | 📋 Manual | Validates multi-region trail, log validation, CloudWatch integration |
-| 8 | **EBS Encryption** | 🔧 Automatic | Account-level default encryption via SSM automation |
-| 9 | **RDS Encryption** | 📋 Manual | Storage encryption (can't remediate existing unencrypted DBs) |
-| 10 | **VPC Flow Logs** | 📋 Manual | Validates flow logs enabled, CloudWatch retention policy |
+| Remediation | Mode | Condition |
+|-------------|------|-----------|
+| IAM account password policy | Automatic | Stack creates the Config recorder |
+| S3 bucket versioning | Automatic | `enableS3VersioningRemediation` and the stack creates the recorder |
+| CloudTrail bucket policy | Automatic | `enableCloudTrailBucketAccessRemediation`, `production` profile |
+| RDS deletion protection, RDS minor version upgrades | Automatic | `enableRdsDeletionProtectionRemediation`, `enableRdsAutoMinorVersionUpgradeRemediation` |
+| Enable Security Hub, Inspector, Macie (SOC 2) and GuardDuty (PCI DSS) | Automatic, account-level | `production` stacks that create the recorder |
+| All other rules | Detection only | - |
 
-**Legend:**
-- 🔧 **Automatic**: SSM automation remediates without human intervention
-- ⚠️ **Semi-Auto**: Alert triggered, manual approval required to remediate
-- 📋 **Manual**: Detection only, requires manual configuration change
-
-**Operational Burden:**
-- **Low**: 6 automatic rules (no manual intervention after initial setup)
-- **Medium**: 4 semi-automatic rules (occasional manual review/approval)
-- **High**: 6 manual rules (require ongoing review and manual remediation)
-
-#### Additional SOC2 Controls
-
-11. **S3 Bucket Logging** - Access logging for audit buckets
-12. **CloudWatch Log Retention** - Enforces 2-year retention
-13. **GuardDuty Enabled** - Threat detection (not fully tested)
-14. **Security Group Restrictions** - No unrestricted ingress
-15. **IAM Policy Attached to Groups** - No direct user policies
-16. **Unused IAM Users** - Detection of inactive accounts
-17. **EC2 IMDSv2** - Requires Instance Metadata Service v2
-18. **Lambda Environment Variable Encryption** - Secrets protection
-19. **ALB Access Logging** - Load balancer request logging
-20. **S3 Lifecycle Policies** - Cost-optimized retention
-21. **KMS Key Rotation** - Annual key rotation
-22. **VPC Default Security Group** - No rules in default SG
-23. **EC2 Detailed Monitoring** - Enhanced metrics collection
-24. **CloudFormation Stack Drift** - Detects configuration drift
-25. **Config Recording Enabled** - Continuous compliance monitoring
-26. **SNS Topic Encryption** - Encrypted notification queues
-27. **SQS Queue Encryption** - Encrypted message queues
-28. **DynamoDB Point-in-Time Recovery** - Backup enabled
-29. **EFS Encryption** - File system encryption
-30. **Secrets Manager Rotation** - Automated secret rotation
-31. **API Gateway Logging** - Request/response logging
-32. **ElastiCache Encryption** - Cache encryption at rest
-33. **Redshift Encryption** - Data warehouse encryption
+See [Retained Resources](compliance/RETAINED_RESOURCES.md#aws-config-auto-remediation) for details, including how to remove remediations.
 
 ### Test Results
 
-**Synthesis Tests**: ✅ All SOC2 config rules synthesize successfully
-**Deployment Tests**: ✅ All rules deploy without errors
-**Compliance Status**: ✅ All deployed rules return COMPLIANT
-
-**Test Coverage:**
-- 20 deployment synthesis tests across DEV/STAGING/PRODUCTION
-- 6 deployment dry-run tests with SOC2 profile
-- Continuous validation via GitHub Actions workflow
+Synthesis of SOC 2 configurations is covered by the `soc2_*` matrices in `TruthTableValidationTest`. Deployed evaluation results depend on the target account and are not part of the automated test suite.
 
 ---
 
@@ -582,7 +503,8 @@ The recorded test deployment reported **COMPLIANT** for the listed AWS Config ru
 - ✅ Access controls (right to access)
 - ✅ Audit logging (accountability)
 - ✅ Data retention policies (storage limitation)
-- ✅ S3 versioning (right to erasure support)
+- ✅ S3 versioning (availability and recovery; erasure requests must also remove prior versions)
+- ✅ Data residency validation for the deployment region (`gdprDataTransferApproved` for approved transfers)
 
 **Not Fully Tested:**
 - ⚠️ Data subject rights automation
@@ -599,86 +521,47 @@ The recorded test deployment reported **COMPLIANT** for the listed AWS Config ru
 
 ### Current Implementation
 
-**Enabled:** Limited (not fully tested)
-**Config Rules:** GuardDuty-enabled rule synthesizes but not validated
-**Threat Detection:** Not comprehensively tested
-**Findings Integration:** Not configured with automated response
-
-### GuardDuty Capabilities (Not Fully Tested)
-
-- 🔍 **Threat Intelligence**: AWS-curated threat feeds
-- 🔍 **Anomaly Detection**: Machine learning-based detection
-- 🔍 **VPC Flow Log Analysis**: Network traffic inspection
-- 🔍 **DNS Query Log Analysis**: Malicious domain detection
-- 🔍 **CloudTrail Event Analysis**: API call anomalies
+- `GuardDutyFactory` creates a detector (15-minute finding publishing frequency) when `guardDutyEnabled` and `createGuardDutyDetector` are `true`; the `production` profile enables GuardDuty by default.
+- With PCI DSS selected, `ComplianceFactory` deploys the `GUARDDUTY_ENABLED_CENTRALIZED` Config rule and, for `production`, an automatic remediation that enables GuardDuty.
+- Finding routing and automated response are not configured.
 
 ### Known Gaps
 
-1. **No automated remediation** - GuardDuty findings not integrated with SSM Automation
-2. **No SNS notifications** - Security team alerts not configured
-3. **No Lambda response** - Automatic security group updates not implemented
-4. **No finding aggregation** - Multi-region findings not centralized
-5. **No severity filtering** - All findings treated equally
+1. **No automated response** - Findings are not routed to SSM Automation, Lambda, or EventBridge targets
+2. **No finding notifications** - Security team alerts for findings are not configured
+3. **No finding aggregation** - Multi-region findings are not centralized
+4. **No severity filtering** - All findings are treated equally
 
 ### Recommendation
 
 For production security posture:
 1. Enable GuardDuty in all regions
-2. Configure SNS notifications for HIGH/CRITICAL findings
-3. Implement Lambda-based automated response for common threats
-4. Set up EventBridge rules for finding routing
-5. Create GuardDuty-Config integration for compliance tracking
+2. Route HIGH and CRITICAL findings to SNS with EventBridge rules
+3. Implement automated response for common threats
+4. Aggregate findings in a delegated administrator account
 
 ---
 
 ## Compliance Posture by Security Profile
 
-### DEV Profile
+### Profile Defaults
 
-**Purpose**: Development and testing
-**Compliance**: Minimal (basic security only)
-**Config Rules**: 15 rules (security basics)
+These are the security profile defaults when no framework requires otherwise. A framework that marks a control REQUIRED in `ComplianceMatrix` turns it on (unless `complianceMode` is `disabled`), and explicit deployment context values override the remaining defaults.
 
-**Features:**
-- ✅ IAM password policy (8 characters minimum)
-- ✅ S3 encryption enabled
-- ✅ CloudTrail basic logging
-- ❌ No GuardDuty
-- ❌ No WAF
-- ❌ No Audit Manager
-- ❌ Minimal log retention (7 days)
-
-### STAGING Profile
-
-**Purpose**: Pre-production testing
-**Compliance**: SOC2 + HIPAA subset
-**Config Rules**: 33 rules
-
-**Features:**
-- ✅ SOC2 Config rules (all 33)
-- ✅ 2-year log retention
-- ✅ ALB access logging
-- ✅ Enhanced monitoring
-- ⚠️ GuardDuty (limited testing)
-- ❌ No WAF (cost optimization)
-- ❌ No Audit Manager (testing only)
-
-### PRODUCTION Profile
-
-**Purpose**: Production workloads
-**Compliance**: Full SOC2 + Optional HIPAA/PCI-DSS/GDPR
-**Config Rules**: 40+ rules
-
-**Features:**
-- ✅ All SOC2 Config rules
-- ✅ Optional HIPAA rules (6-year retention)
-- ✅ Optional PCI-DSS rules (WAF, 1-year retention)
-- ✅ WAF protection (OWASP Top 10)
-- ✅ ALB access logging
-- ✅ GuardDuty enabled (needs full testing)
-- ✅ Audit Manager (SOC2 framework only tested)
-- ✅ Immutable audit logs (S3 versioning)
-- ✅ Lifecycle policies (cost optimization)
+| Setting | DEV | STAGING | PRODUCTION |
+|---------|-----|---------|------------|
+| CloudTrail | Not created | Created | Created |
+| CloudWatch Logs retention | 1 week | 3 months | 6 years |
+| VPC Flow Logs | Off | On | On |
+| ALB access logging | Off | On | On |
+| WAF | Off | On | Off (required by PCI DSS, SOC 2, GDPR) |
+| GuardDuty | Off | Off | On |
+| Security monitoring alarms | Off | On | On |
+| `complianceMode` default | advisory | advisory | enforce |
+| cdk-nag packs | No | No | Yes, when frameworks are selected |
+| AWS Config rules | `awsConfigEnabled` | `awsConfigEnabled` | `awsConfigEnabled` |
+| Audit Manager and validators | `auditManagerEnabled` | `auditManagerEnabled` | `auditManagerEnabled` |
+| IAM password minimum (no framework) | 12 | 12 | 14 |
 
 ---
 
@@ -695,8 +578,8 @@ For production security posture:
             ┌─────────────────────────────────┐
             │   ComplianceMatrix.java          │
             │  - Reads complianceFrameworks    │
-            │  - Determines strictest rules    │
-            │  - Maps framework → Config rules │
+            │  - Marks controls REQUIRED or    │
+            │    ADVISORY per framework        │
             └─────────────────────────────────┘
                               │
                               ▼
@@ -734,7 +617,7 @@ For production security posture:
 
 **Automatic**: SSM Automation documents execute immediately
 **Manual**: Config marks non-compliant, admin must fix
-**Retry**: Failed remediation retries 5 times with 60s delay
+**Retry**: 5 attempts at 60-second intervals (password policy, S3 versioning) or 3 attempts at 120-second intervals (other remediations)
 
 ---
 
@@ -742,20 +625,10 @@ For production security posture:
 
 ### Current Test Coverage
 
-1. **Synthesis Tests** (✅ Passing)
-   - Quick synthesis: 1 test
-   - Enhanced synthesis: 20 tests across profiles
-   - Changeset validation: Validates template structure
-
-2. **Deployment Tests** (✅ Passing)
-   - Dry-run tracker: 6 tests (2 per profile)
-   - Creates CloudFormation templates
-   - Validates resource counts
-
-3. **Compliance Validation** (✅ SOC2 Only)
-   - AWS Config rule evaluation
-   - Remediation testing
-   - CloudTrail log verification
+1. **Unit tests** - `ComplianceMatrix`, rule classes, and cfn-guard rule files (`*GuardTest`)
+2. **Truth table tests** - `TruthTableValidationTest` synthesizes stacks from CSV matrices and checks cdk-nag, validator, cfn-guard, and Config rule results
+3. **Synthesis scripts** - `cfc-testing/scripts/` contains synthesis, dry-run, and LocalStack deployment scripts
+4. **LocalStack workflow** - `.github/workflows/localstack-compliance-verification.yml` deploys matrix configurations to LocalStack
 
 ### Recommended Additional Testing
 
@@ -797,119 +670,75 @@ For full compliance posture validation:
 
 ### High Priority
 
-1. **GuardDuty Full Implementation**
-   - **Gap**: Not fully tested or integrated
-   - **Risk**: Missing threat detection
-   - **Effort**: 2-3 days
-   - **Priority**: HIGH
-
-2. **HIPAA Full Testing**
-   - **Gap**: Config rules functional but untested with PHI
-   - **Risk**: Non-compliance if used for healthcare
-   - **Effort**: 1 week (includes legal review)
-   - **Priority**: HIGH (if handling PHI)
-
-3. **Automated Remediation Documentation**
-   - **Gap**: Remediation actions not fully documented
-   - **Risk**: Manual intervention delays
-   - **Effort**: 2 days
-   - **Priority**: MEDIUM
+1. **GuardDuty response**
+   - **Gap**: Findings are not routed or acted on
+   - **Risk**: Missed threat detection
+2. **HIPAA testing with representative workloads**
+   - **Gap**: Infrastructure checks are not tested with PHI workloads
+   - **Risk**: Non-compliance if used for healthcare without further assessment
+3. **Validator registration**
+   - **Gap**: `ConfigurationValidationRules` and the organizational validators are not installed
+   - **Risk**: Documented checks do not run
 
 ### Medium Priority
 
-4. **PCI-DSS ASV Scans**
-   - **Gap**: No automated vulnerability scanning
-   - **Risk**: Required for PCI compliance
-   - **Effort**: 1 day (setup only, scans quarterly)
-   - **Priority**: MEDIUM (if processing cards)
-
-5. **GDPR Data Subject Rights Automation**
+4. **PCI DSS ASV scans**
+   - **Gap**: No external vulnerability scanning
+   - **Risk**: Required for PCI DSS
+5. **GDPR data subject rights**
    - **Gap**: Manual processes for GDPR requests
-   - **Risk**: Cannot meet 30-day response time at scale
-   - **Effort**: 1 week
-   - **Priority**: MEDIUM (if EU users)
-
-6. **Audit Manager Full Framework Testing**
-   - **Gap**: Only SOC2 framework tested
-   - **Risk**: Evidence collection gaps
-   - **Effort**: 3 days
-   - **Priority**: MEDIUM
+   - **Risk**: Response deadlines at scale
+6. **Audit Manager coverage**
+   - **Gap**: Framework resolution depends on AWS CLI name matching at synthesis time
+   - **Risk**: Assessments silently skipped
 
 ### Low Priority
 
-7. **Multi-Region GuardDuty Aggregation**
+7. **Multi-region GuardDuty aggregation**
    - **Gap**: Findings not centralized
-   - **Risk**: Operational inefficiency
-   - **Effort**: 2 days
-   - **Priority**: LOW
-
-8. **Custom Config Rules for Business Logic**
+8. **Custom Config rules for business logic**
    - **Gap**: No business-specific compliance rules
-   - **Risk**: Manual compliance checks required
-   - **Effort**: Ongoing
-   - **Priority**: LOW
 
 ---
 
 ## Deployment Context Configuration
 
-### Minimal SOC2 Compliance
+### Minimal SOC 2 Configuration
 
 ```json
 {
-  "securityProfile": "PRODUCTION",
-  "complianceFrameworks": "SOC2",
-  "awsConfigEnabled": "true",
-  "albAccessLogging": "true",
-  "enableEncryption": "true",
-  "logRetentionDays": "730"
+  "securityProfile": "production",
+  "complianceFrameworks": "soc2",
+  "awsConfigEnabled": true,
+  "albAccessLogging": true,
+  "enableEncryption": true,
+  "logRetentionDays": "731"
 }
 ```
 
-### Multi-Framework (Untested)
+### Multi-Framework
 
 ```json
 {
-  "securityProfile": "PRODUCTION",
-  "complianceFrameworks": "SOC2|HIPAA|PCI-DSS",
-  "awsConfigEnabled": "true",
-  "guardDutyEnabled": "true",
-  "auditManagerEnabled": "true",
-  "wafEnabled": "true",
-  "albAccessLogging": "true",
-  "enableEncryption": "true",
-  "logRetentionDays": "2190"
+  "securityProfile": "production",
+  "complianceFrameworks": "soc2,hipaa,pci-dss",
+  "awsConfigEnabled": true,
+  "guardDutyEnabled": true,
+  "auditManagerEnabled": true,
+  "wafEnabled": true,
+  "albAccessLogging": true,
+  "enableEncryption": true,
+  "logRetentionDays": "3653"
 }
 ```
 
-**Note**: Multi-framework testing not complete - use with caution
+`logRetentionDays` must be one of the CloudWatch Logs retention values (for example `365`, `731`, `1827`, `3653`). HIPAA validation requires at least 2190 days, so use `3653` with HIPAA or leave it unset to use the `production` default of 6 years.
 
 ---
 
 ## Cost Implications
 
-### SOC2 Only (Tested)
-
-**Monthly Costs**:
-- AWS Config: ~$25 (33 rules, 50 resources)
-- CloudTrail: ~$5
-- S3 Storage (2-year retention): ~$10
-- CloudWatch Logs: ~$5
-- **Total**: ~$45/month
-
-### Full Compliance (HIPAA+PCI-DSS+SOC2) - Untested
-
-**Estimated Monthly Costs**:
-- AWS Config: ~$35 (40+ rules, 100 resources)
-- CloudTrail: ~$5
-- S3 Storage (6-year retention): ~$30
-- GuardDuty: ~$30
-- WAF: ~$15
-- Audit Manager: ~$10
-- CloudWatch: ~$10
-- **Total**: ~$135/month
-
-**Note**: Costs scale with resource count and log volume
+The compliance services add AWS charges for AWS Config, CloudTrail, S3 log storage, CloudWatch, and, when enabled, GuardDuty, WAF, and Audit Manager. Charges scale with resource count, log volume, and retention. Use the [AWS Pricing Calculator](https://calculator.aws.amazon.com/) for an estimate.
 
 ---
 
@@ -930,7 +759,7 @@ aws configservice describe-compliance-by-config-rule \
 
 # Get detailed compliance
 aws configservice get-compliance-details-by-config-rule \
-  --config-rule-name iam-password-policy \
+  --config-rule-name <rule-name> \
   --compliance-types NON_COMPLIANT
 ```
 
@@ -962,20 +791,10 @@ aws cloudtrail lookup-events \
 
 ## Summary
 
-**Recorded validation coverage (December 2025):**
-- Infrastructure checks for SOC 2, HIPAA, PCI DSS, and GDPR
-- JUnit, cdk-nag, cfn-guard, and AWS Config validation layers
-- 607 entries in `compliance-test-matrix.csv`, including 263 parameterized cases
-- Tests for simultaneous framework selection
-- Required WAF configuration for PCI DSS production deployments
-- Always-load configuration validation rules
-- GuardDuty configuration checks, subject to the limitations above
-
-**Continuous Improvement:**
-- 📊 Historical compliance tracking with 30-day report archive
-- 📊 Drift detection comparing build snapshots
-- 📊 Multi-layer compliance dashboard with visualization
-- 📋 Evidence collection for auditor review (see [AUDITOR_EVIDENCE_UPDATES.md](compliance/AUDITOR_EVIDENCE_UPDATES.md))
+- CloudForge configures infrastructure controls for SOC 2, HIPAA, PCI DSS, and GDPR, validated by cdk-nag, CloudForge validators, cfn-guard, and AWS Config.
+- The compliance test matrix covers single and combined framework selections, including negative cases.
+- ISO 27001 and FedRAMP validators exist but cannot be selected; FedRAMP is in development.
+- Certification requires organizational controls and an independent audit.
 
 **Before production use:**
 - Review the applicable test evidence and known gaps for each selected framework
@@ -985,5 +804,3 @@ aws cloudtrail lookup-events \
 
 ---
 
-**Last Updated**: 2025-12-30
-**Testing Scope**: Infrastructure controls and validation scenarios documented above

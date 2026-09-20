@@ -85,6 +85,13 @@ public class NexusApplicationSpec implements ApplicationSpec {
         return APPLICATION_ID;
     }
 
+    // Nexus Repository OSS has no clustering/HA support (a Pro-only feature), so ScalingFactory
+    // rejects multi-instance settings for it.
+    @Override
+    public boolean supportsAutoScaling() {
+        return false;
+    }
+
     @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;

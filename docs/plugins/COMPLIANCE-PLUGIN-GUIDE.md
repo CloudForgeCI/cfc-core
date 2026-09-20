@@ -1,14 +1,14 @@
-# CloudForge Compliance Framework Plugin Development Guide
+# Compliance Framework Plugin Guide
 
-## Overview
-
-CloudForge 3.0.0 introduces a plugin architecture for compliance frameworks, enabling external contributors to add new compliance validators without modifying core code. This guide explains how to create, package, and distribute compliance framework plugins.
+Compliance framework plugins add validation rules to a CloudForge stack without modifying
+CloudForge itself. A plugin implements `FrameworkRules<SystemContext>`, carries a
+`@ComplianceFramework` annotation, and is discovered through Java `ServiceLoader`.
 
 ---
 
-## Quick Start - Create a New Framework in 5 Minutes
+## Quick start
 
-### Step 1: Implement `FrameworkRules<SystemContext>`
+### 1. Implement `FrameworkRules<SystemContext>`
 
 ```java
 package com.example.compliance;
@@ -20,12 +20,13 @@ import com.cloudforgeci.api.core.rules.ComplianceRule;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @ComplianceFramework(
-    value = "ACME-SECURITY",  // Matches config: "complianceFrameworks": "ACME-SECURITY"
-    priority = 50,             // Load order (lower = earlier)
-    displayName = "Acme Corp Internal Security Baseline",
-    description = "Example of an organization-specific compliance framework"
+    value = "ACME-SECURITY",   // framework ID
+    priority = 60,             // lower values install first
+    displayName = "Acme Internal Security Baseline",
+    description = "Organization-specific infrastructure controls"
 )
 public class AcmeRules implements FrameworkRules<SystemContext> {
 
@@ -34,206 +35,298 @@ public class AcmeRules implements FrameworkRules<SystemContext> {
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();
 
-            // Add your validation rules
+            // The security profile configuration is available once validation runs.
             var config = ctx.securityProfileConfig.get().orElseThrow();
 
-            if (!config.isGuardDutyEnabled()) {
+            if (config.isGuardDutyEnabled()) {
+                rules.add(ComplianceRule.pass("ACME-AC-2", "GuardDuty enabled"));
+            } else {
                 rules.add(ComplianceRule.fail(
                     "ACME-AC-2",
-                    "GuardDuty required for account management (Acme AC-2)",
-                    "Enable AWS GuardDuty"
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "ACME-AC-2",
-                    "GuardDuty enabled (Acme AC-2)"
-                ));
+                    "GuardDuty required for account monitoring",
+                    "Enable AWS GuardDuty (guardDutyEnabled = true)"));
             }
 
-            // Return failed rules
+            // Return failures as error strings; an empty list means the validation passed.
             return rules.stream()
-                .filter(r -> !r.passed())
-                .map(ComplianceRule::toErrorString)
-                .flatMap(java.util.Optional::stream)
-                .toList();
-        });
-    }
-}
-```
-
-### Step 2: Package as JAR
-
-```bash
-mvn clean package
-```
-
-### Step 3: Use Your Framework
-
-Add the JAR to your CloudForge project classpath, then:
-
-```json
-{
-  "cfc": {
-    "complianceFrameworks": "ACME-SECURITY",
-    "auditManagerEnabled": true
-  }
-}
-```
-
-That's it! CloudForge will automatically discover and load your framework.
-
----
-
-## Architecture Overview
-
-### Version Evolution
-
-| Version | Architecture | External Plugins | Backward Compat |
-|---------|-------------|------------------|-----------------|
-| **v3.0.0** | Hardcoded static methods | ❌ No | N/A |
-| **v3.0.0** | Auto-discovery + static adapters | ✅ Yes (ServiceLoader) | ✅ Full |
-| **future versions** | Pure instance-based | ✅ Yes (ServiceLoader) | ⚠️  Static methods deprecated |
-
-### Plugin Loading Process
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ 1. SecurityRules.install(ctx)                           │
-│    - Triggered during CDK synthesis                     │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ 2. FrameworkLoader.discover()                           │
-│    - Scans classpath for @ComplianceFramework          │
-│    - Loads via ServiceLoader + built-in registry       │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ 3. Sort by priority (low → high)                        │
-│    - Cross-framework rules: -10 to 0                    │
-│    - Core frameworks: 10-20                             │
-│    - External frameworks: 50+                           │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ 4. Install frameworks conditionally                     │
-│    - if framework.alwaysLoad() → install                │
-│    - if "FRAMEWORK" in complianceFrameworks → install   │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ 5. CDK Validation executes rules                        │
-│    - ENFORCE mode → fails synthesis on violations       │
-│    - ADVISORY mode → logs warnings only                 │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## Plugin Development Patterns
-
-### Pattern 1: Instance-Based Framework (Recommended for v3.0.0+)
-
-This is the **recommended pattern** for new frameworks. It's the cleanest, most testable, and future-proof approach.
-
-```java
-@ComplianceFramework(value = "ISO-27001", priority = 50)
-public class Iso27001Rules implements FrameworkRules<SystemContext> {
-    private static final Logger LOG = Logger.getLogger(Iso27001Rules.class.getName());
-
-    @Override
-    public void install(SystemContext ctx) {
-        // Security profile filtering
-        if (ctx.security != SecurityProfile.PRODUCTION &&
-            ctx.security != SecurityProfile.STAGING) {
-            LOG.info("ISO 27001 enforced for PRODUCTION/STAGING only");
-            return;
-        }
-
-        // Compliance mode handling
-        ComplianceMode mode = ComplianceMode.fromString(
-            ctx.cfc.complianceMode(),
-            ComplianceMode.defaultForProfile(ctx.security)
-        );
-
-        ctx.getNode().addValidation(() -> {
-            List<ComplianceRule> rules = new ArrayList<>();
-
-            rules.addAll(validateAccessControl(ctx));
-            rules.addAll(validateCryptography(ctx));
-            rules.addAll(validateLogging(ctx));
-
-            List<String> errors = rules.stream()
                 .filter(r -> !r.passed())
                 .map(ComplianceRule::toErrorString)
                 .flatMap(Optional::stream)
                 .toList();
-
-            if (!errors.isEmpty() && mode == ComplianceMode.ENFORCE) {
-                return errors;  // Block synthesis
-            }
-
-            return List.of();  // Pass
         });
     }
-
-    private List<ComplianceRule> validateAccessControl(SystemContext ctx) {
-        // ... validation logic
-    }
 }
 ```
 
-**Benefits:**
-- ✅ Clean instance-based design
-- ✅ Easy to test (can mock SystemContext)
-- ✅ No static state
-- ✅ Future-proof for future versions
+### 2. Register the class
 
----
-
-### Pattern 2: Static Method Framework (v3.0.0 Legacy, Still Supported)
-
-This pattern is automatically wrapped by `FrameworkLoader` for backward compatibility.
-
-```java
-public final class HipaaRules {
-    private HipaaRules() {}
-
-    public static void install(SystemContext ctx) {
-        // ... validation logic
-    }
-}
-```
-
-**FrameworkLoader automatically wraps this as:**
-```java
-frameworks.add(createStaticAdapter(HipaaRules.class, 10, false));
-```
-
-**Note:** This pattern is deprecated for new frameworks but will continue to work through v3.x.
-
----
-
-## External Plugin Distribution
-
-### Method 1: ServiceLoader (Recommended)
-
-**Step 1:** Create `META-INF/services/com.cloudforge.core.interfaces.FrameworkRules`
+Create `src/main/resources/META-INF/services/com.cloudforge.core.interfaces.FrameworkRules`:
 
 ```
 com.example.compliance.AcmeRules
-com.example.compliance.Nist80053Rules
 ```
 
-**Step 2:** Package as JAR
+The class must have a public no-argument constructor.
+
+### 3. Add the plugin to the deployment classpath
+
+Package the plugin as a JAR and add it as a dependency of the project that runs CDK synthesis.
+See [Distribution](#distribution).
+
+---
+
+## How frameworks are loaded
+
+`SecurityRules.install(ctx)` runs during synthesis and does the following:
+
+1. Sets `ctx.securityProfileConfig` from the security profile (`DEV`, `STAGING`, `PRODUCTION`).
+2. For `PRODUCTION` deployments with `complianceFrameworks` set, adds the matching cdk-nag
+   rule packs.
+3. Returns without installing any `FrameworkRules` unless `auditManagerEnabled` is `true`.
+4. Calls `FrameworkLoader.discover()`, which loads every registered `FrameworkRules`
+   implementation through `ServiceLoader` and sorts by `priority()`, then by `frameworkId()`.
+5. Installs a framework when `alwaysLoad()` is `true` or when its ID appears in
+   `complianceFrameworks`. The ID comparison is case-insensitive.
+
+Validations registered with `ctx.getNode().addValidation(...)` run when the stack is
+synthesized. Any error string returned fails synthesis. Handling advisory mode is the
+framework's responsibility (see [Compliance modes](#compliance-modes)).
+
+### Enabling a framework
+
+```json
+{
+  "securityProfile": "PRODUCTION",
+  "complianceFrameworks": "hipaa,soc2",
+  "auditManagerEnabled": true
+}
+```
+
+> **Limitation:** `DeploymentConfig` parses `complianceFrameworks` into the
+> `ComplianceFrameworkType` enum, which accepts only `soc2`, `pci-dss`, `hipaa`, and `gdpr`.
+> Any other ID, including `ISO-27001`, `HIPAA-Organizational`, `GDPR-Organizational`, and
+> custom plugin IDs, is rejected with `IllegalArgumentException` when the deployment context
+> is loaded. Until that restriction is lifted, a custom framework runs only if it sets
+> `alwaysLoad = true`, or if your own code installs it directly.
+
+---
+
+## `@ComplianceFramework` attributes
+
+| Attribute | Type | Default | Purpose |
+|-----------|------|---------|---------|
+| `value` | `String` | required | Framework ID matched against `complianceFrameworks` |
+| `priority` | `int` | `100` | Install order; lower values install first |
+| `alwaysLoad` | `boolean` | `false` | Install regardless of `complianceFrameworks` |
+| `displayName` | `String` | `""` (falls back to `value`) | Name used in logs |
+| `description` | `String` | `""` | Free-text description |
+
+`FrameworkRules` exposes these values through default methods (`frameworkId()`,
+`priority()`, `alwaysLoad()`, `displayName()`, `description()`). The only method you must
+implement is `install(T ctx)`.
+
+### Framework-required configuration
+
+Override `getRequiredConfiguration()` to supply deployment-context defaults that apply when
+the framework is enabled. Explicit user configuration still takes precedence; security-profile
+defaults apply last.
+
+```java
+@Override
+public Map<String, Object> getRequiredConfiguration() {
+    return Map.of(
+        "logRetentionDays", 2190,
+        "guardDutyEnabled", true
+    );
+}
+```
+
+The keys documented on `FrameworkRules#getRequiredConfiguration()` are `logRetentionDays`,
+`guardDutyEnabled`, `macieEnabled`, `securityHubEnabled`, `inspectorEnabled`,
+`cloudTrailEnabled`, `wafEnabled`, and `albAccessLogging`.
+
+---
+
+## Priorities
+
+Built-in frameworks registered in `cloudforge-api`:
+
+| Priority | Framework IDs | Always load |
+|----------|---------------|-------------|
+| -10 | `KeyManagement` | yes |
+| -5 | `DatabaseSecurity`, `AdvancedMonitoring` | yes |
+| 0 | `ThreatProtection`, `IncidentResponse`, `ComputeSecurity`, `LambdaSecurity`, `CdnApiSecurity`, `ElbSecurity`, `MessagingSecurity`, `IamSecurity` | yes |
+| 10 | `HIPAA` | no |
+| 15 | `HIPAA-Organizational` | no |
+| 20 | `PCI-DSS` | no |
+| 30 | `GDPR` | no |
+| 35 | `GDPR-Organizational` | no |
+| 40 | `SOC2` | no |
+| 50 | `ISO-27001` | no |
+
+Use a priority above 50 for organization-specific frameworks so they install after the
+built-in ones. The sample plugins in `cfc-testing` use 60 and 65.
+
+---
+
+## Writing rules
+
+### `ComplianceRule`
+
+`com.cloudforgeci.api.core.rules.ComplianceRule` is a record:
+
+```java
+public record ComplianceRule(
+    String ruleId,
+    String description,
+    Optional<String> configRuleId,   // related AWS Config rule, if any
+    boolean passed,
+    Optional<String> errorMessage
+)
+```
+
+Factory methods:
+
+```java
+ComplianceRule.pass(ruleId, description);
+ComplianceRule.pass(ruleId, description, configRuleId);
+ComplianceRule.fail(ruleId, description, errorMessage);
+ComplianceRule.fail(ruleId, description, configRuleId, errorMessage);
+```
+
+`toErrorString()` returns an `Optional<String>` that is empty for passing rules.
+
+### Security profile configuration
+
+Inside a validation, read the resolved profile settings from the context:
+
+```java
+var config = ctx.securityProfileConfig.get().orElseThrow();
+```
+
+Frequently used methods of
+[`SecurityProfileConfiguration`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/interfaces/SecurityProfileConfiguration.java):
+
+| Method | Setting |
+|--------|---------|
+| `isSecurityMonitoringEnabled()` | Security monitoring and alerting |
+| `isCloudTrailEnabled()` | CloudTrail audit logging |
+| `isGuardDutyEnabled()` | GuardDuty threat detection |
+| `isAwsConfigEnabled()` | AWS Config recording |
+| `isEbsEncryptionEnabled()` | EBS encryption |
+| `isEfsEncryptionAtRestEnabled()` | EFS encryption at rest |
+| `isEfsEncryptionInTransitEnabled()` | EFS encryption in transit |
+| `isWafEnabled()` | AWS WAF |
+| `isFlowLogsEnabled()` | VPC Flow Logs |
+| `isMultiAzEnforced()` | Multi-AZ deployment |
+| `isAutomatedBackupEnabled()` | Automated backups |
+| `isAlbAccessLoggingEnabled()` | ALB access logs |
+
+The interface defines many more settings; see the source for the full list.
+
+### Other context fields
+
+`SystemContext` exposes the deployment inputs as public fields, including `security`
+(`SecurityProfile`), `runtime` (`RuntimeType`), `topology` (`TopologyType`), and `cfc`
+(`DeploymentContext`).
+
+```java
+if (ctx.security != SecurityProfile.PRODUCTION) {
+    return;   // enforce only for production deployments
+}
+```
+
+### Compliance modes
+
+`ctx.cfc.complianceMode()` returns a `ComplianceMode` (`ENFORCE`, `ADVISORY`, or `DISABLED`).
+When `complianceMode` is not set, it defaults to `ENFORCE` for `PRODUCTION` and `ADVISORY` for
+`DEV` and `STAGING`.
+
+```java
+ComplianceMode mode = ctx.cfc.complianceMode();
+
+ctx.getNode().addValidation(() -> {
+    List<String> errors = collectErrors(ctx);
+    if (mode != ComplianceMode.ENFORCE) {
+        errors.forEach(LOG::warning);
+        return List.of();   // report without failing synthesis
+    }
+    return errors;
+});
+```
+
+[`Iso27001Rules`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Iso27001Rules.java)
+shows profile filtering, compliance-mode handling, and AWS Config rule mapping in a complete
+framework.
+
+### Guidelines
+
+- Use rule IDs that trace to a specific control, such as `ACME-AC-2.1`.
+- Write failure messages that name the setting to change.
+- Read configuration inside the validation lambda, not in `install()`, so values set later
+  during synthesis are visible.
+
+---
+
+## Testing
+
+Unit tests can start a `SystemContext` on a test stack, set the profile configuration, and
+synthesize:
+
+```java
+import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.enums.TopologyType;
+import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.core.security.ProductionSecurityProfileConfiguration;
+import software.amazon.awscdk.App;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.assertions.Template;
+
+@Test
+void acmeRulesPassWithGuardDuty() {
+    App app = new App();
+    Stack stack = new Stack(app, "TestStack");
+
+    Map<String, Object> cfcContext = new HashMap<>();
+    cfcContext.put("stackName", "TestStack");
+    cfcContext.put("securityProfile", "PRODUCTION");
+    cfcContext.put("guardDutyEnabled", true);
+    stack.getNode().setContext("cfc", cfcContext);
+
+    DeploymentContext cfc = DeploymentContext.from(stack);
+    SystemContext ctx = SystemContext.start(
+        stack,
+        TopologyType.APPLICATION_SERVICE,
+        RuntimeType.FARGATE,
+        SecurityProfile.PRODUCTION,
+        IAMProfile.MINIMAL,
+        cfc);
+    ctx.securityProfileConfig.set(new ProductionSecurityProfileConfiguration(cfc));
+
+    new AcmeRules().install(ctx);
+
+    assertDoesNotThrow(() -> Template.fromStack(stack));
+}
+```
+
+Also test the metadata: that the class carries `@ComplianceFramework` with the expected ID and
+priority, and that `ServiceLoader.load(FrameworkRules.class)` finds it. The sample tests under
+`cfc-testing/src/test/java/com/cloudforgeci/samples/plugins/compliance/` do this.
+
+---
+
+## Distribution
+
+### Maven dependency
+
+Build against the CloudForge modules with `provided` scope:
 
 ```xml
-<!-- pom.xml -->
 <project>
+    <groupId>com.example</groupId>
     <artifactId>cloudforge-acme-plugin</artifactId>
     <version>1.0.0</version>
 
@@ -241,20 +334,23 @@ com.example.compliance.Nist80053Rules
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-core</artifactId>
-            <version>3.1.0</version>
+            <version>3.2.16</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-api</artifactId>
-            <version>3.1.0</version>
+            <version>3.2.16</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
 </project>
 ```
 
-**Step 3:** Users add your plugin to their project
+Replace `3.2.16` with the CloudForge release you target. CloudForge modules are compiled for
+Java 25.
+
+Consumers then add your artifact to the project that runs synthesis:
 
 ```xml
 <dependency>
@@ -264,22 +360,9 @@ com.example.compliance.Nist80053Rules
 </dependency>
 ```
 
-**Step 4:** Users enable your framework
+### Local JAR
 
-```json
-{
-  "cfc": {
-    "complianceFrameworks": "ACME-SECURITY",
-    "auditManagerEnabled": true
-  }
-}
-```
-
----
-
-### Method 2: Direct JAR on Classpath
-
-Users can drop your JAR file directly into their classpath:
+To use a JAR that is not published to a repository, install it into the local Maven repository:
 
 ```bash
 mvn install:install-file \
@@ -292,275 +375,40 @@ mvn install:install-file \
 
 ---
 
-## Compliance Rule API
-
-### ComplianceRule Record
-
-```java
-public record ComplianceRule(
-    String ruleId,                    // "ACME-AC-2"
-    String description,               // Human-readable requirement
-    Optional<String> configRuleId,    // AWS Config rule ID (optional)
-    boolean passed,
-    Optional<String> errorMessage
-)
-```
-
-### Creating Rules
-
-```java
-// Passing rule
-ComplianceRule.pass(
-    "ACME-AC-2",
-    "GuardDuty enabled (Acme AC-2)",
-    "GuardDutyEnabled"  // AWS Config rule ID
-);
-
-// Failing rule
-ComplianceRule.fail(
-    "ACME-AC-2",
-    "GuardDuty required (Acme AC-2)",
-    "GuardDutyEnabled",
-    "Enable AWS GuardDuty for threat detection"
-);
-```
-
----
-
-## Security Profile Configuration API
-
-Access deployment security configuration via:
-
-```java
-var config = ctx.securityProfileConfig.get().orElseThrow();
-```
-
-### Available Methods
-
-| Method | Description | Applies To |
-|--------|-------------|------------|
-| `isSecurityMonitoringEnabled()` | Security monitoring & alerting | All profiles |
-| `isCloudTrailEnabled()` | AWS CloudTrail audit logging | PRODUCTION, STAGING |
-| `isGuardDutyEnabled()` | AWS GuardDuty threat detection | PRODUCTION |
-| `isEbsEncryptionEnabled()` | EBS volume encryption | All profiles |
-| `isEfsEncryptionAtRestEnabled()` | EFS encryption at rest | PRODUCTION, STAGING |
-| `isEfsEncryptionInTransitEnabled()` | EFS encryption in transit (TLS) | PRODUCTION, STAGING |
-| `isS3EncryptionEnabled()` | S3 bucket encryption | All profiles |
-| `isWafEnabled()` | AWS WAF protection | PRODUCTION |
-| `isFlowLogsEnabled()` | VPC Flow Logs | PRODUCTION, STAGING |
-| `isMultiAzEnforced()` | Multi-AZ deployment | PRODUCTION |
-| `isAutomatedBackupEnabled()` | Automated backups | PRODUCTION, STAGING |
-
-See [SecurityProfileConfiguration.java](../interfaces/SecurityProfileConfiguration.java) for complete API.
-
----
-
-## Priority System
-
-| Priority Range | Usage | Examples |
-|----------------|-------|----------|
-| **-10 to -5** | Cross-framework infrastructure | KeyManagement, DatabaseSecurity |
-| **-4 to 0** | Cross-framework security | ThreatProtection, IncidentResponse |
-| **10-20** | Core compliance frameworks | HIPAA (10), PCI-DSS (12), SOC2 (15), GDPR (18) |
-| **50-100** | Extended/contributed frameworks | ISO-27001 (50), NIST 800-53 (60) |
-| **100+** | Custom/organizational frameworks | Internal policies |
-
-**Rule:** Lower priority loads first. Use negative priorities for foundation rules that other frameworks depend on.
-
----
-
-## Testing Your Plugin
-
-### Unit Test Example
-
-```java
-@Test
-void testAcmeAccessControl() {
-    App app = new App();
-    Stack stack = new Stack(app, "TestStack");
-
-    // Setup context
-    Map<String, Object> cfcContext = new HashMap<>();
-    cfcContext.put("stackName", "TestStack");
-    cfcContext.put("securityProfile", "PRODUCTION");
-    cfcContext.put("complianceFrameworks", "ACME-SECURITY");
-    cfcContext.put("auditManagerEnabled", true);
-    stack.getNode().setContext("cfc", cfcContext);
-
-    DeploymentContext cfc = DeploymentContext.from(stack);
-    SystemContext ctx = SystemContext.start(
-        stack,
-        TopologyType.APPLICATION_SERVICE,
-        RuntimeType.FARGATE,
-        SecurityProfile.PRODUCTION,
-        IAMProfile.MINIMAL,
-        cfc
-    );
-
-    // Install your framework
-    new AcmeRules().install(ctx);
-
-    // Verify it doesn't throw (compliance passes)
-    assertDoesNotThrow(() -> Template.fromStack(stack));
-}
-```
-
----
-
-## Best Practices
-
-### 1. **Use Specific Rule IDs**
-```java
-// Good: Traceable to specific control
-"ACME-AC-2.1"
-
-// Bad: Generic
-"ACCESS_CONTROL_1"
-```
-
-### 2. **Map to AWS Config Rules**
-```java
-ComplianceRule.fail(
-    "ACME-AC-2",
-    "GuardDuty required",
-    "GuardDutyEnabled",  // ← AWS Config rule ID
-    "Enable GuardDuty"
-);
-```
-
-### 3. **Respect Security Profiles**
-```java
-// DEV: Advisory warnings only
-// STAGING: Balanced security
-// PRODUCTION: Full enforcement
-
-if (ctx.security != SecurityProfile.PRODUCTION) {
-    LOG.info("Framework enforced for PRODUCTION only");
-    return;
-}
-```
-
-### 4. **Support Compliance Modes**
-```java
-ComplianceMode mode = ComplianceMode.fromString(
-    ctx.cfc.complianceMode(),
-    ComplianceMode.defaultForProfile(ctx.security)
-);
-
-if (mode == ComplianceMode.ADVISORY) {
-    errors.forEach(err -> LOG.warning(err));
-    return List.of();  // Don't block
-} else {
-    return errors;     // Block synthesis
-}
-```
-
-### 5. **Write Actionable Error Messages**
-```java
-// Good: Tells user exactly what to do
-"Enable AWS GuardDuty for threat detection (Acme AC-2)"
-
-// Bad: Vague
-"Security requirement not met"
-```
-
----
-
-## Example: Complete Framework Plugin
-
-See [Iso27001Rules.java](../core/rules/Iso27001Rules.java) for a complete working example demonstrating:
-- Instance-based design
-- Security profile filtering
-- Compliance mode handling
-- Structured rule validation
-- AWS Config rule mapping
-
----
-
-## Migration Guide: v2.x → v3.0.0 → v3.1.0+
-
-### v3.0.0 (Static Methods Only)
-```java
-public final class MyRules {
-    public static void install(SystemContext ctx) {
-        // ...
-    }
-}
-```
-
-### v3.0.0 (Plugin Support, Backward Compatible)
-```java
-@ComplianceFramework(value = "MY-FRAMEWORK", priority = 50)
-public class MyRules implements FrameworkRules<SystemContext> {
-    @Override
-    public void install(SystemContext ctx) {
-        // ...
-    }
-}
-```
-
-### future versions (Pure Instance-Based, No Static Adapters)
-Same as v3.0.0, but static methods will be deprecated.
-
----
-
 ## Troubleshooting
 
-### Plugin Not Loading
+### Framework is not discovered
 
-**Check 1:** Verify ServiceLoader registration
+Confirm the service file is packaged:
+
 ```bash
-jar tf cloudforge-acme-plugin.jar | grep services
-# Should show: META-INF/services/com.cloudforge.core.interfaces.FrameworkRules
+jar tf cloudforge-acme-plugin-1.0.0.jar | grep META-INF/services
+# META-INF/services/com.cloudforge.core.interfaces.FrameworkRules
 ```
 
-**Check 2:** Verify annotation
-```java
-@ComplianceFramework(value = "ACME-SECURITY", priority = 50)  // ✓ Correct
-@ComplianceFramework("ACME-SECURITY")  // ✗ Missing priority
-```
+`FrameworkLoader` logs each discovered framework at `INFO`
+(`Discovered framework via ServiceLoader: ...`). Skipped frameworks are logged at `FINE`:
 
-**Check 3:** Enable debug logging
 ```java
 Logger.getLogger("com.cloudforgeci.api.core.rules").setLevel(Level.FINE);
 ```
 
-### Framework Loads But Doesn't Run
+### Framework is discovered but not installed
 
-**Check:** Ensure framework ID matches config
-```java
-@ComplianceFramework(value = "ACME-SECURITY")  // Must match exactly
-
-// In deployment context:
-"complianceFrameworks": "ACME-SECURITY"  // Case-sensitive!
-```
+- `auditManagerEnabled` must be `true`; otherwise no `FrameworkRules` are installed.
+- A conditional framework's ID must appear in `complianceFrameworks`, subject to the
+  [limitation](#enabling-a-framework) on accepted IDs.
+- The class must be annotated with `@ComplianceFramework`; `frameworkId()` throws
+  `IllegalStateException` without it.
 
 ---
 
-## Resources
+## References
 
-- **Example Framework:** [Iso27001Rules.java](../core/rules/Iso27001Rules.java)
-- **Core API:** [FrameworkRules.java](../../../../cloudforge-core/src/main/java/com/cloudforge/core/interfaces/FrameworkRules.java)
-- **Loader Implementation:** [FrameworkLoader.java](../core/rules/FrameworkLoader.java)
-- **Annotation:** [ComplianceFramework.java](../../../../cloudforge-core/src/main/java/com/cloudforge/core/annotation/ComplianceFramework.java)
-
----
-
-## Contributing Your Plugin
-
-We welcome external compliance framework contributions! To add your plugin to the CloudForge ecosystem:
-
-1. Create a GitHub repository for your plugin
-2. Add `cloudforge-plugin` topic to your repo
-3. Submit a PR to add your plugin to the [Plugin Registry](https://github.com/CloudForgeCI/plugin-registry)
-
-**Plugin Naming Convention:** `cloudforge-{framework}-plugin`
-
-Examples:
-- `cloudforge-nist-plugin`
-- `cloudforge-iso27001-plugin`
-- `cloudforge-acme-plugin`
-
----
-
-*CloudForge Compliance Framework Plugin System - v3.0.0+*
+- Sample plugins: [`CustomSecurityPolicyRules`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/src/main/java/com/cloudforgeci/samples/plugins/compliance/CustomSecurityPolicyRules.java),
+  [`OpenSourceSecurityPolicyRules`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/src/main/java/com/cloudforgeci/samples/plugins/compliance/OpenSourceSecurityPolicyRules.java)
+- Example framework: [`Iso27001Rules`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/Iso27001Rules.java)
+- Interface: [`FrameworkRules`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-core/src/main/java/com/cloudforge/core/interfaces/FrameworkRules.java)
+- Annotation: [`ComplianceFramework`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-core/src/main/java/com/cloudforge/core/annotation/ComplianceFramework.java)
+- Loader: [`FrameworkLoader`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/FrameworkLoader.java),
+  [`SecurityRules`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/SecurityRules.java)

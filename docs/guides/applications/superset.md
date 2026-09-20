@@ -1,8 +1,8 @@
 # Superset Application Guide
 
-Apache Superset is a modern data exploration and visualization platform that enables users to explore and visualize their data from simple charts to highly detailed dashboards.
+Apache Superset is a data exploration and visualization platform for building charts and dashboards.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -21,34 +21,29 @@ Apache Superset is a modern data exploration and visualization platform that ena
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | No (requires custom config) |
+| **Supported Auth Modes** | `none` |
 | **Database Required** | Yes (PostgreSQL) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- SQL-based data exploration
-- Rich visualizations (40+ chart types)
-- Dashboard creation
-- SQL Lab for ad-hoc queries
+- SQL Lab for ad hoc queries
+- Chart builder and dashboards
 - Role-based access control
-- Database connectivity (30+ databases)
-- Caching with Redis
-- Alerting and reports
-- No-code chart builder
-- Semantic layer
+- Connectors for many SQL databases
+- Alerts and scheduled reports (require additional worker and cache configuration)
 
 ---
 
 ## Database Requirements
 
-Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
+Superset requires a PostgreSQL database for metadata storage. CloudForge provisions Amazon RDS for PostgreSQL when `provisionDatabase` is set.
 
 | Property | Value |
 |----------|-------|
-| Engine | PostgreSQL 13+ |
-| Instance Class | db.t3.small (default) |
+| Engine | PostgreSQL 13 or later |
+| Instance Class | `db.t3.small` (default) |
 | Storage | 20 GB (default) |
 | Database Name | `superset` |
 | Backup Retention | 14 days |
@@ -57,24 +52,29 @@ Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
 
 ## Authentication
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | Available | ALB-level authentication |
-| `none` | Available | Local accounts only |
+| Mode | Description |
+|------|-------------|
+| `none` | Superset local accounts |
 
-**Note:** Native OIDC requires custom `superset_config.py` configuration.
+Superset declares only the `none` auth mode. When a context is prepared for a deployment target (the interactive deployer or `CloudForgeDeployment`), an unsupported `authMode` such as `alb-oidc` is replaced with `none` and a warning is printed. Compliance frameworks that require CloudForge-managed authentication, such as the SOC 2 CC6.2 rule, report a failure when `authMode` is `none`.
+
+Native OIDC in Superset requires a custom `superset_config.py`, which CloudForge does not generate.
 
 ---
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `SUPERSET_SECRET_KEY` | Session encryption key (required) |
-| `ENABLE_PROXY_FIX` | Enable ALB proxy support |
+| Variable | Value |
+|----------|-------|
+| `SUPERSET_SECRET_KEY` | Fixed placeholder value. Replace it with a long random string before storing real data. |
+| `ENABLE_PROXY_FIX` | `True` |
+| `PROXY_FIX_X_FOR`, `PROXY_FIX_X_PROTO`, `PROXY_FIX_X_HOST`, `PROXY_FIX_X_PORT`, `PROXY_FIX_X_PREFIX` | `1` |
 | `DATABASE_DIALECT` | `postgresql` |
-| `DATABASE_HOST` | RDS endpoint |
-| `SQLALCHEMY_DATABASE_URI` | Full connection string |
+| `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_DB`, `DATABASE_USER` | RDS connection |
+| `SUPERSET_DATABASE_PASSWORD` | Injected from the database secret in Secrets Manager |
+| `SQLALCHEMY_DATABASE_URI` | `postgresql://<user>:${SUPERSET_DATABASE_PASSWORD}@<host>:<port>/<db>` |
+
+ECS does not expand `${...}` references inside environment variable values, so `SQLALCHEMY_DATABASE_URI` contains the literal text `${SUPERSET_DATABASE_PASSWORD}` unless the container's entrypoint expands it.
 
 ---
 
@@ -100,8 +100,7 @@ Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
   "stackName": "Superset-Dev",
   "applicationId": "superset",
   "applicationName": "Superset Dev",
-  "description": "Superset development environment",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -127,8 +126,6 @@ Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
 }
 ```
 
-**Cost estimate:** ~$70/month
-
 ### Production
 
 ```json
@@ -136,8 +133,7 @@ Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
   "stackName": "Superset-Production",
   "applicationId": "superset",
   "applicationName": "Superset Analytics",
-  "description": "Production data exploration platform",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -150,10 +146,7 @@ Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "superset-prod-yourcompany",
-  "cognitoMfaEnabled": true,
+  "authMode": "none",
 
   "instanceType": "t3.medium",
   "minInstanceCapacity": 2,
@@ -169,7 +162,6 @@ Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
   "databaseName": "superset",
   "databaseBackupRetentionDays": 30,
 
-  "complianceFrameworks": "SOC2",
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "wafEnabled": true,
@@ -181,11 +173,11 @@ Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
 }
 ```
 
-**Cost estimate:** ~$350/month
-
 ---
 
 ## Post-Deployment Tasks
+
+CloudForge does not run Superset's initialization commands. Run them in the container after the first deployment:
 
 1. **Initialize Database:**
    ```bash
@@ -203,16 +195,13 @@ Superset **requires** a PostgreSQL (or MySQL) database for metadata storage.
    ```bash
    superset init
    ```
-5. **Connect Data Sources** in the UI
+5. **Connect data sources** in the UI.
 
 ---
 
 ## Compliance Use Cases
 
-- **SOC2**: Security event analytics and metrics
-- **GDPR**: Data subject rights request tracking
-- **PCI-DSS**: Transaction monitoring dashboards
-- **Fintech**: Real-time payment dashboards, fraud detection
+Superset can present dashboards used as evidence for monitoring controls (for example security-event metrics or transaction monitoring). Deploying Superset does not by itself satisfy any framework's requirements.
 
 ---
 

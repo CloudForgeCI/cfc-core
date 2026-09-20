@@ -10,7 +10,7 @@
 
 ## Document Purpose
 
-This living document provides a comprehensive analysis of CloudForge CI's PCI-DSS (Payment Card Industry Data Security Standard) implementation, identifying:
+This document analyzes CloudForge CI's PCI-DSS (Payment Card Industry Data Security Standard) implementation, identifying:
 - ✅ Controls that are fully automated via infrastructure
 - ⚠️ Controls that are partially automated
 - ❌ Controls that require manual implementation
@@ -20,6 +20,8 @@ This living document provides a comprehensive analysis of CloudForge CI's PCI-DS
 **Audience**: QSAs (Qualified Security Assessors), security teams, compliance officers, and engineering leadership
 
 **Framework Version**: PCI-DSS v4.0.1
+
+**Scope note**: This analysis maps infrastructure controls to PCI DSS requirements. It distinguishes controls CloudForge configures, validation that checks them at synthesis time (`PciDssRules`, enabled with `auditManagerEnabled`, `complianceFrameworks: pci-dss`, and the `production` profile), and PCI DSS compliance validation, which requires a QSA assessment of the whole cardholder data environment.
 
 ---
 
@@ -43,24 +45,24 @@ This living document provides a comprehensive analysis of CloudForge CI's PCI-DS
 
 ### Overall Coverage
 
-CloudForge CI implements **PCI-DSS v4.0** controls at the infrastructure level with comprehensive technical safeguards:
+CloudForge CI implements **PCI-DSS v4.0.1** controls at the infrastructure level:
 
 | **Metric** | **Value** | **Status** |
 |-----------|----------|-----------|
 | **Total PCI-DSS Requirements** | 12 principal requirements, 300+ sub-requirements | - |
-| **Automated Infrastructure Controls** | ~35-40 controls (~15-20%) | ✅ Strong |
+| **Automated Infrastructure Controls** | ~35-40 controls (~15-20%) | ✅ Infrastructure |
 | **Partially Automated** | ~10-15 controls (~5%) | ⚠️ Needs Enhancement |
 | **Manual Controls Required** | ~250+ controls (~75-80%) | ❌ Documentation Needed |
-| **Infrastructure Coverage** | ~60-70% of automatable technical controls | ✅ Excellent |
+| **Infrastructure Coverage** | Estimated ~60-70% of automatable technical controls | ✅ Infrastructure |
 | **Production Tested** | Infrastructure controls only | ⚠️ Auth not tested |
 
-### Key Strengths
+### Infrastructure Controls
 
-- ✅ **Strong cryptography**: AES-256 encryption at rest, TLS 1.2+ in transit (Req 3 & 4)
+- ✅ **Cryptography**: AES-256 encryption at rest, TLS 1.2+ in transit (Req 3 & 4)
 - ✅ **Network segmentation**: VPC, private subnets, security groups (Req 1)
-- ✅ **Comprehensive audit logging**: CloudTrail, Flow Logs, ALB logs with 1+ year retention (Req 10)
+- ✅ **Audit logging**: CloudTrail, Flow Logs, ALB logs with 1+ year retention (Req 10)
 - ✅ **Threat detection**: GuardDuty, AWS Config, Security Hub integration (Req 11)
-- ✅ **Multi-layer enforcement**: Validation rules, Guard policies, AWS Config, Security Profiles
+- ✅ **Layered checks**: validation rules, cfn-guard policies, AWS Config, security profiles
 - ✅ **Infrastructure as Code**: Version-controlled, immutable deployments (Req 6)
 
 ### Critical Gaps
@@ -71,6 +73,7 @@ CloudForge CI implements **PCI-DSS v4.0** controls at the infrastructure level w
 - ❌ **Testing & Validation**: Req 11 (penetration testing, ASV scans) - requires third-party
 - ⚠️ **Authentication**: Cognito/OIDC implemented but not production-tested
 - ✅ **WAF**: REQUIRED and enforced in PRODUCTION (Req 6.6 automated enforcement)
+- ⚠️ **IAM password length**: `PciDssRules` checks the security profile's 12-character minimum (Req 8.3.6), but the AWS Config password-policy remediation applies an 8-character minimum when PCI-DSS is the only framework selected
 
 ---
 
@@ -78,7 +81,7 @@ CloudForge CI implements **PCI-DSS v4.0** controls at the infrastructure level w
 
 ### Framework Structure
 
-**PCI-DSS v4.0.1** (latest version, June 2024) consists of **12 principal requirements** organized into **6 control objectives**:
+**PCI-DSS v4.0.1** (published June 2024) consists of **12 principal requirements** organized into **6 control objectives**:
 
 #### Build and Maintain a Secure Network and Systems
 1. **Requirement 1**: Install and Maintain Network Security Controls
@@ -95,9 +98,9 @@ CloudForge CI implements **PCI-DSS v4.0** controls at the infrastructure level w
 #### Implement Strong Access Control Measures
 7. **Requirement 7**: Restrict Access to System Components and Cardholder Data by Business Need to Know
 8. **Requirement 8**: Identify Users and Authenticate Access to System Components
+9. **Requirement 9**: Restrict Physical Access to Cardholder Data
 
 #### Regularly Monitor and Test Networks
-9. **Requirement 9**: Restrict Physical Access to Cardholder Data
 10. **Requirement 10**: Log and Monitor All Access to System Components and Cardholder Data
 11. **Requirement 11**: Test Security of Systems and Networks Regularly
 
@@ -106,9 +109,7 @@ CloudForge CI implements **PCI-DSS v4.0** controls at the infrastructure level w
 
 ### Key Changes in PCI-DSS v4.0
 
-> ✅ **NOTE**: The March 31, 2025 deadline has **passed**. All 51 formerly "best practice" v4.0 requirements are now **mandatory** and must be fully implemented.
-
-- **March 31, 2025**: 51 formerly "best practice" requirements become **mandatory**
+- **March 31, 2025**: 51 formerly "best practice" requirements became **mandatory**
 - **Customized Approach**: New option for demonstrating controls (vs. Defined Approach)
 - **Multi-Factor Authentication (MFA)**: Expanded to all access to CDE (Req 8.4.2)
 - **Targeted Risk Analysis**: New requirements for risk-based security controls
@@ -124,7 +125,7 @@ CloudForge CI implements PCI-DSS controls through **4 enforcement layers**:
 
 ### Layer 1: Validation Rules (Pre-Synthesis)
 
-**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java)
+**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java)
 
 - Java-based validation executed during CDK synthesis
 - Validates security profile configuration against PCI-DSS requirements
@@ -142,7 +143,7 @@ CloudForge CI implements PCI-DSS controls through **4 enforcement layers**:
 
 ### Layer 2: CloudFormation Guard Policies (Pre-Deployment)
 
-**File**: [`cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard`](../../cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard)
+**File**: [`cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard)
 
 - Policy-as-Code validation of CloudFormation templates
 - Enforces security controls before infrastructure creation
@@ -158,7 +159,7 @@ CloudForge CI implements PCI-DSS controls through **4 enforcement layers**:
 
 ### Layer 3: AWS Config Rules (Runtime Monitoring)
 
-**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java)
+**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java)
 
 - Continuous compliance monitoring via AWS Config
 - **17 AWS Config managed rules** for PCI-DSS
@@ -171,7 +172,7 @@ CloudForge CI implements PCI-DSS controls through **4 enforcement layers**:
 
 ### Layer 4: Security Profile Configuration (Infrastructure Defaults)
 
-**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java)
+**File**: [`cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java)
 
 - Production-grade security defaults
 - Enforces encryption, monitoring, backups, high availability
@@ -189,11 +190,11 @@ CloudForge CI implements PCI-DSS controls through **4 enforcement layers**:
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
 | 1.1.1 | Document network security controls | VPC architecture documentation required | ❌ Manual | Infrastructure diagrams, network policies |
-| 1.1.2 | Network diagrams showing CDE | VPC topology, security groups | ⚠️ Partial | [`PciDssRules.java:145-205`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L145-L205) |
+| 1.1.2 | Network diagrams showing CDE | VPC topology, security groups | ⚠️ Partial | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:148-160 - VPC network segmentation
+// PciDssRules.java - VPC network segmentation
 if (ctx.vpc.get().isEmpty()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-1.2.1-VPC",
@@ -211,12 +212,12 @@ if (ctx.vpc.get().isEmpty()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 1.2.1 | Restrict inbound/outbound traffic | Security groups, NACLs | ✅ Automated | [`PciDssRules.java:148-160`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L148-L160) |
+| 1.2.1 | Restrict inbound/outbound traffic | Security groups, NACLs | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 1.2.2 | Secure wireless environments | N/A (cloud infrastructure) | N/A | - |
-| 1.2.3 | Prohibit direct public access from Internet to CDE | Private subnets, NAT gateways | ✅ Automated | [`PciDssRules.java:163-175`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L163-L175) |
+| 1.2.3 | Prohibit direct public access from Internet to CDE | Private subnets, NAT gateways | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 1.2.4 | Anti-spoofing measures | AWS VPC built-in protections | ✅ Automated | AWS responsibility |
 | 1.2.5 | Outbound traffic from CDE authorized | Security group egress rules | ✅ Automated | Security group configuration |
-| 1.2.6 | Security features defined for traffic from CDE | Security groups, TLS encryption | ✅ Automated | [`PciDssRules.java:178-202`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L178-L202) |
+| 1.2.6 | Security features defined for traffic from CDE | Security groups, TLS encryption | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 1.2.7 | NSCs updated at least every 6 months | Infrastructure as Code (Git) | ⚠️ Partial | Git commit history |
 | 1.2.8 | Configuration files secured | CloudFormation templates in Git | ✅ Automated | Git access control |
 
@@ -241,7 +242,7 @@ if (ctx.vpc.get().isEmpty()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 1.3.1 | Inbound traffic restricted to necessary | Security group ingress rules | ✅ Automated | [`PciDssRules.java:178-202`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L178-L202) |
+| 1.3.1 | Inbound traffic restricted to necessary | Security group ingress rules | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 1.3.2 | Outbound traffic restricted to necessary | Security group egress rules | ✅ Automated | Security group configuration |
 | 1.3.3 | No direct routes between Internet and CDE | Private subnets, NAT gateway | ✅ Automated | VPC routing tables |
 
@@ -256,7 +257,7 @@ if (ctx.vpc.get().isEmpty()) {
 | 1.4.1 | NSCs implemented at each connection | ALB in public subnet, app in private | ✅ Automated | VPC architecture |
 | 1.4.2 | Inbound traffic from untrusted to trusted limited | Security groups, ALB routing | ✅ Automated | Security group rules |
 | 1.4.3 | Anti-spoofing at trusted/untrusted boundary | AWS VPC protections | ✅ Automated | AWS responsibility |
-| 1.4.4 | System components cannot expose CDE to Internet | Private subnets, no public IPs | ✅ Automated | [`PciDssRules.java:163-175`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L163-L175) |
+| 1.4.4 | System components cannot expose CDE to Internet | Private subnets, no public IPs | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 1.4.5 | Prevent disclosure of internal IP addresses | NAT gateway, ALB proxy | ✅ Automated | Network architecture |
 
 **Testing Status**: ✅ Production tested
@@ -277,12 +278,12 @@ if (ctx.vpc.get().isEmpty()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 2.1.1 | Change vendor defaults before production | PRODUCTION profile auto-approved | ⚠️ Operational | [`PciDssRules.java:546-655`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L546-L655) |
+| 2.1.1 | Change vendor defaults before production | PRODUCTION profile auto-approved | ⚠️ Operational | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 2.1.2 | Remove or disable unnecessary default accounts | IAM best practices, no default accounts | ✅ Automated | IAM configuration |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:555-568 - Vendor defaults validation
+// PciDssRules.java - Vendor defaults validation
 if (isProduction || getBooleanSetting(ctx, "customConfigurationApplied", false)) {
     rules.add(ComplianceRule.pass(
         "PCI-DSS-Req-2.1-CustomConfig",
@@ -301,13 +302,13 @@ if (isProduction || getBooleanSetting(ctx, "customConfigurationApplied", false))
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 2.2.1 | Configuration standards address known vulnerabilities | PRODUCTION profile hardening assumed | ⚠️ Operational | [`PciDssRules.java:572-585`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L572-L585) |
-| 2.2.2 | Enable only necessary services | Security groups, minimal exposure | ✅ Automated | [`PciDssRules.java:588-602`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L588-L602) |
+| 2.2.1 | Configuration standards address known vulnerabilities | PRODUCTION profile hardening assumed | ⚠️ Operational | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
+| 2.2.2 | Enable only necessary services | Security groups, minimal exposure | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 2.2.3 | Additional security features implemented | TLS, encryption, monitoring | ✅ Automated | Multiple controls |
-| 2.2.4 | Configure system security parameters | Security profile configuration | ✅ Automated | [`ProductionSecurityProfileConfiguration.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) |
-| 2.2.5 | Remove unnecessary functionality | Minimal images assumed | ⚠️ Operational | [`PciDssRules.java:606-619`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L606-L619) |
+| 2.2.4 | Configure system security parameters | Security profile configuration | ✅ Automated | [`ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) |
+| 2.2.5 | Remove unnecessary functionality | Minimal images assumed | ⚠️ Operational | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 2.2.6 | Change default credentials | IAM roles, no default credentials | ✅ Automated | IAM configuration |
-| 2.2.7 | Implement automated mechanism for compliance | AWS Config | ✅ Automated | [`ComplianceFactory.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) |
+| 2.2.7 | Implement automated mechanism for compliance | AWS Config | ✅ Automated | [`ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) |
 
 **Testing Status**: Mixed (✅ infrastructure, ⚠️ operational assumptions)
 
@@ -326,7 +327,7 @@ if (isProduction || getBooleanSetting(ctx, "customConfigurationApplied", false))
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 2.4.1 | Inventory of system components | AWS Config resource inventory | ✅ Automated | [`PciDssRules.java:639-652`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L639-L652) |
+| 2.4.1 | Inventory of system components | AWS Config resource inventory | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 2.4.2 | Automated mechanisms identify connections | VPC Flow Logs, CloudTrail | ✅ Automated | Flow Logs, CloudTrail |
 
 **Testing Status**: ✅ Production tested
@@ -375,12 +376,12 @@ if (isProduction || getBooleanSetting(ctx, "customConfigurationApplied", false))
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 3.4.1 | Disk encryption or database encryption | EBS, EFS, RDS, S3 encryption (AES-256) | ✅ Automated | [`PciDssRules.java:211-305`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L211-L305) |
+| 3.4.1 | Disk encryption or database encryption | EBS, EFS, RDS, S3 encryption (AES-256) | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 3.4.2 | PAN unreadable for removable media | S3 encryption, EBS snapshots encrypted | ✅ Automated | AWS encryption |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:219-232 - EBS encryption validation
+// PciDssRules.java - EBS encryption validation
 if (!config.isEbsEncryptionEnabled()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-3.4-EBS",
@@ -422,7 +423,7 @@ if (!config.isEbsEncryptionEnabled()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 3.6.1 | Cryptographic key procedures | KMS key rotation, access policies | ✅ Automated | [`AuditManagerControlRegistry.java:251-263`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java#L251-L263) |
+| 3.6.1 | Cryptographic key procedures | KMS key rotation, access policies | ✅ Automated | [`AuditManagerControlRegistry.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java) |
 | 3.6.2 | Key change procedures | KMS automatic rotation (annual) | ✅ Automated | KMS rotation settings |
 
 **Config Rule**: `kms-key-rotation-enabled` - Annual key rotation
@@ -447,12 +448,12 @@ if (!config.isEbsEncryptionEnabled()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 4.1.1 | Industry best practices for TLS | ALB TLS 1.2+ minimum policy | ✅ Automated | [`PciDssRules.java:277-302`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L277-L302) |
+| 4.1.1 | Industry best practices for TLS | ALB TLS 1.2+ minimum policy | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 4.1.2 | Trusted keys and certificates maintained | ACM certificate management | ✅ Automated | ACM configuration |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:277-288 - SSL/TLS enforcement
+// PciDssRules.java - SSL/TLS enforcement
 if (!ctx.cfc.enableSsl()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-4.1-SSL",
@@ -490,7 +491,7 @@ if (!ctx.cfc.enableSsl()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 5.1.1 | Anti-malware deployed on systems | Fargate (immutable containers) + GuardDuty | ⚠️ Alternative approach | [`ThreatProtectionRules.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ThreatProtectionRules.java) |
+| 5.1.1 | Anti-malware deployed on systems | Fargate (immutable containers) + GuardDuty | ⚠️ Alternative approach | [`ThreatProtectionRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/ThreatProtectionRules.java) |
 | 5.1.2 | Anti-malware kept current | AWS-managed (GuardDuty auto-updates) | ✅ Automated | GuardDuty service |
 
 **Alternative Approach**:
@@ -508,7 +509,7 @@ if (!ctx.cfc.enableSsl()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 5.2.1 | Anti-malware active and cannot be disabled | GuardDuty always-on for production | ✅ Automated | [`ProductionSecurityProfileConfiguration.java:118-126`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java#L118-L126) |
+| 5.2.1 | Anti-malware active and cannot be disabled | GuardDuty always-on for production | ✅ Automated | [`ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) |
 | 5.2.2 | Periodic scans performed | GuardDuty continuous monitoring | ✅ Automated | GuardDuty findings |
 | 5.2.3 | Removable media scanned | N/A (cloud infrastructure) | N/A | - |
 
@@ -573,12 +574,12 @@ if (!ctx.cfc.enableSsl()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 6.4.1 | Web apps protected from attacks | AWS WAF (REQUIRED) | ✅ Enforced | [`PciDssRules.java:317-334`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L317-L334) |
-| 6.4.2 | Automated technical solution enforced | WAF validation (fail=block) | ✅ Automated | 34 WAF test cases in compliance-test-matrix.csv |
+| 6.4.1 | Web apps protected from attacks | AWS WAF (REQUIRED) | ✅ Enforced | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
+| 6.4.2 | Automated technical solution enforced | WAF validation (fail=block) | ✅ Automated | WAF negative test rows (`no_WAF`) in compliance-test-matrix.csv |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:317-334 - WAF validation
+// PciDssRules.java - WAF validation
 if (!config.isWafEnabled()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-6.6-WAF",
@@ -592,11 +593,11 @@ if (!config.isWafEnabled()) {
 
 **Important**: WAF is now **REQUIRED** (not optional) for PRODUCTION with PCI-DSS. Validation will fail if WAF is not enabled.
 
-**Testing Status**: ✅ WAF REQUIRED and enforced with 34 test cases
+**Testing Status**: ✅ WAF REQUIRED and enforced with negative test rows in the compliance test matrix
 
 **Evidence**:
-- Implementation: [`PciDssRules.java:317-334`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L317-L334)
-- Testing: 34 WAF test cases in [`compliance-test-matrix.csv`](../../cloudforge-api/src/test/resources/compliance-test-matrix.csv)
+- Implementation: [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java)
+- Testing: WAF negative test rows (`configName` containing `no_WAF`) in [`compliance-test-matrix.csv`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/test/resources/compliance-test-matrix.csv)
 - Test Names: `FAIL_PCI-DSS_*_no_WAF*` (EC2, FARGATE, multi-framework combinations)
 
 ---
@@ -605,7 +606,7 @@ if (!config.isWafEnabled()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 6.5.1 | Change control procedures documented | Infrastructure as Code (Git) | ✅ Automated | [`PciDssRules.java:354`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L354) |
+| 6.5.1 | Change control procedures documented | Infrastructure as Code (Git) | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 6.5.2 | Technical controls for change management | Git, PR approvals, CloudFormation | ✅ Automated | Git workflow |
 | 6.5.3 | Document pre-production testing | ❌ Process documentation | ❌ Manual | Testing procedures |
 | 6.5.4 | Removal of test data before production | ❌ Process documentation | ❌ Manual | Data sanitization procedures |
@@ -622,12 +623,12 @@ if (!config.isWafEnabled()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 7.1.1 | Access control mechanisms | IAM policies, security groups | ✅ Automated | [`PciDssRules.java:343-404`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L343-L404) |
+| 7.1.1 | Access control mechanisms | IAM policies, security groups | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 7.1.2 | Access control configured | IAM roles with least privilege | ✅ Automated | IAM policy documents |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:348-361 - IAM access control validation
+// PciDssRules.java - IAM access control validation
 if (ctx.iamProfile == null) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-7.1-IAM",
@@ -665,7 +666,7 @@ if (ctx.iamProfile == null) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 7.3.1 | All access to system components logged | CloudTrail, VPC Flow Logs | ✅ Automated | [`PciDssRules.java:410-478`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L410-L478) |
+| 7.3.1 | All access to system components logged | CloudTrail, VPC Flow Logs | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 
 **Testing Status**: ✅ Production tested
 
@@ -687,16 +688,16 @@ if (ctx.iamProfile == null) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 8.2.1 | Strong authentication for users | OIDC with MFA-enabled providers | ⚠️ Implemented, not tested | [`PciDssRules.java:364-379`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L364-L379) |
+| 8.2.1 | Strong authentication for users | OIDC with MFA-enabled providers | ⚠️ Implemented, not tested | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 8.2.2 | Strong authentication for admins | IAM MFA enforcement | ✅ Automated | AWS Config: `iam-user-mfa-enabled` |
-| 8.2.3 | Password policies enforce complexity | IAM password policy (8+ chars for PCI) | ✅ Automated | [`ProductionSecurityProfileConfiguration.java:449`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java#L449) |
+| 8.2.3 | Password policies enforce complexity | IAM password policy (8+ chars for PCI) | ✅ Automated | [`ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) |
 | 8.2.4 | Password change procedures | IAM password rotation (90 days) | ✅ Automated | IAM password policy |
 | 8.2.5 | Passwords not sent in clear text | Cognito HTTPS, IAM console HTTPS | ✅ Automated | HTTPS enforcement |
 | 8.2.6 | Authentication credentials protected | KMS encryption, Secrets Manager | ✅ Automated | KMS, Secrets Manager |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:364-379 - Authentication validation
+// PciDssRules.java - Authentication validation
 String authMode = ctx.cfc.authMode();
 if ("none".equals(authMode)) {
     rules.add(ComplianceRule.fail(
@@ -716,11 +717,11 @@ if ("none".equals(authMode)) {
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
 | 8.3.1 | MFA for all non-console admin access | IAM MFA enforcement | ✅ Automated | AWS Config: `iam-user-mfa-enabled`, `root-account-mfa-enabled` |
-| 8.3.2 | MFA for all access to CDE | Cognito MFA or Identity Center MFA | ⚠️ Implemented, not tested | [`PciDssRules.java:381-401`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L381-L401) |
+| 8.3.2 | MFA for all access to CDE | Cognito MFA or Identity Center MFA | ⚠️ Implemented, not tested | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:387-400 - MFA validation
+// PciDssRules.java - MFA validation
 boolean usingCognitoWithMfa = ctx.cfc.cognitoMfaEnabled();
 boolean hasValidSso = ctx.cfc.ssoInstanceArn() != null;
 
@@ -797,7 +798,7 @@ if (!usingCognitoWithMfa && !hasValidSso) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 10.1.1 | Logging enabled for all system components | CloudTrail, Flow Logs, ALB logs | ✅ Automated | [`PciDssRules.java:410-478`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L410-L478) |
+| 10.1.1 | Logging enabled for all system components | CloudTrail, Flow Logs, ALB logs | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 
 **Testing Status**: ✅ Production tested
 
@@ -807,12 +808,12 @@ if (!usingCognitoWithMfa && !hasValidSso) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 10.2.1 | User access to cardholder data logged | CloudTrail, ALB logs | ✅ Automated | [`PciDssRules.java:418-431`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L418-L431) |
+| 10.2.1 | User access to cardholder data logged | CloudTrail, ALB logs | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 10.2.2 | Administrative actions logged | CloudTrail API calls | ✅ Automated | CloudTrail event history |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:418-431 - CloudTrail validation
+// PciDssRules.java - CloudTrail validation
 if (!config.isCloudTrailEnabled()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-10.2-CloudTrail",
@@ -847,7 +848,7 @@ if (!config.isCloudTrailEnabled()) {
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:434-445 - VPC Flow Logs validation
+// PciDssRules.java - VPC Flow Logs validation
 if (!config.isFlowLogsEnabled()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-10.3-FlowLogs",
@@ -883,11 +884,11 @@ if (!config.isFlowLogsEnabled()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 10.5.1 | Audit logs retained at least 12 months | S3 lifecycle policies (1+ year) | ✅ Automated | [`PciDssRules.java:448-459`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L448-L459) |
+| 10.5.1 | Audit logs retained at least 12 months | S3 lifecycle policies (1+ year) | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:448-459 - ALB access logging validation
+// PciDssRules.java - ALB access logging validation
 if (!config.isAlbAccessLoggingEnabled()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-10.5-ALB",
@@ -918,11 +919,11 @@ if (!config.isAlbAccessLoggingEnabled()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 10.7.1 | Retain at least 12 months, 3 months online | S3 lifecycle with Glacier transition | ✅ Automated | [`PciDssRules.java:462-476`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L462-L476) |
+| 10.7.1 | Retain at least 12 months, 3 months online | S3 lifecycle with Glacier transition | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:462-476 - Log retention validation
+// PciDssRules.java - Log retention validation
 var retentionDays = config.getLogRetentionDays();
 if (!isRetentionSufficient(retentionDays)) {
     rules.add(ComplianceRule.fail(
@@ -1004,12 +1005,12 @@ if (!isRetentionSufficient(retentionDays)) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 11.5.1 | Intrusion-detection/prevention deployed | GuardDuty threat detection | ✅ Automated | [`PciDssRules.java:492-505`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L492-L505) |
+| 11.5.1 | Intrusion-detection/prevention deployed | GuardDuty threat detection | ✅ Automated | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 | 11.5.2 | IDPS mechanisms kept current | AWS-managed updates | ✅ Automated | AWS GuardDuty service |
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:492-505 - GuardDuty validation
+// PciDssRules.java - GuardDuty validation
 if (!config.isGuardDutyEnabled()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-11.4-GuardDuty",
@@ -1029,7 +1030,7 @@ if (!config.isGuardDutyEnabled()) {
 
 | **Sub-Requirement** | **Description** | **Implementation** | **Status** | **Evidence** |
 |--------------------|----------------|-------------------|-----------|-------------|
-| 11.6.1 | File integrity monitoring (FIM) deployed | Fargate immutable containers + AWS Config | ⚠️ Alternative approach | [`PciDssRules.java:508-519`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L508-519) |
+| 11.6.1 | File integrity monitoring (FIM) deployed | Fargate immutable containers + AWS Config | ⚠️ Alternative approach | [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) |
 
 **Alternative Approach**:
 - **Fargate**: Immutable infrastructure prevents file modification
@@ -1037,7 +1038,7 @@ if (!config.isGuardDutyEnabled()) {
 
 **Infrastructure Implementation**:
 ```java
-// PciDssRules.java:522-534 - AWS Config validation
+// PciDssRules.java - AWS Config validation
 if (!config.isAwsConfigEnabled()) {
     rules.add(ComplianceRule.fail(
         "PCI-DSS-Req-11.6-Config",
@@ -1108,72 +1109,73 @@ if (!config.isAwsConfigEnabled()) {
 
 **Total Rules**: 17 (9 base + 8 PCI-DSS-specific)
 
-**Deployment Logic**: See [`ComplianceFactory.java:246-300`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java#L246-L300)
+**Deployment Logic**: See [`ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java)
 
 ---
 
 ### CloudFormation Guard Policies
 
-**File**: [`pci-dss-v4.0.1.guard`](../../cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard)
+**File**: [`pci-dss-v4.0.1.guard`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard)
 
 **Validation Rules** (15 total):
 
 #### Encryption at Rest (Req 3.4)
-- `pci_s3_encryption` (lines 32-34) - S3 BucketEncryption exists
-- `pci_rds_encryption` (lines 37-39) - RDS StorageEncrypted = true
-- `pci_rds_cluster_encryption` (lines 42-44) - RDS Cluster encrypted
-- `pci_ebs_encryption` (lines 47-49) - EBS Encrypted = true
-- `pci_efs_encryption` (lines 52-54) - EFS Encrypted = true
-- `pci_dynamodb_encryption` (lines 57-60) - DynamoDB SSEEnabled = true
-- `pci_kms_key_rotation` (lines 63-65) - KMS EnableKeyRotation = true
+- `pci_s3_encryption` - S3 BucketEncryption exists
+- `pci_rds_encryption` - RDS StorageEncrypted = true
+- `pci_rds_cluster_encryption` - RDS Cluster encrypted
+- `pci_ebs_encryption` - EBS Encrypted = true
+- `pci_efs_encryption` - EFS Encrypted = true
+- `pci_dynamodb_encryption` - DynamoDB SSEEnabled = true
+- `pci_kms_key_rotation` - KMS EnableKeyRotation = true
 
 #### Encryption in Transit (Req 4.1)
-- `pci_alb_https` (lines 73-75) - ALB HTTPS/TLS on port 443
+- `pci_alb_https` - ALB HTTPS/TLS on port 443
 
 #### Network Security (Req 1.2.1, 1.3)
-- `pci_rds_no_public_access` (lines 82-85) - RDS not publicly accessible
+- `pci_rds_no_public_access` - RDS not publicly accessible
 
 #### Access Control (Req 7.1, 7.2)
-- `pci_s3_block_public_access` (lines 92-96) - S3 public access blocks
+- `pci_s3_block_public_access` - S3 public access blocks
 
 #### Authentication (Req 8.2, 8.3)
-- `pci_cognito_mfa` (lines 103-105) - Cognito MfaConfiguration in ['ON', 'OPTIONAL']
+- `pci_cognito_mfa` - Cognito MfaConfiguration in ['ON', 'OPTIONAL']
 
 #### Audit Logging (Req 10.1, 10.2, 10.3)
-- `pci_cloudtrail_enabled` (lines 112-114) - CloudTrail IsLogging = true
-- `pci_vpc_flow_logs` (lines 117-119) - VPC Flow Logs TrafficType = 'ALL'
+- `pci_cloudtrail_enabled` - CloudTrail IsLogging = true
+- `pci_vpc_flow_logs` - VPC Flow Logs TrafficType = 'ALL'
 
 #### Log Retention (Req 10.7)
-- `pci_cloudwatch_logs_retention` (lines 126-129) - RetentionInDays >= 365
+- `pci_cloudwatch_logs_retention` - RetentionInDays >= 365
 
 #### Backup & Recovery (Req 9.5.1, 10.5)
-- `pci_s3_versioning` (lines 136-139) - S3 versioning enabled
-- `pci_rds_automated_backups` (lines 142-145) - RDS BackupRetentionPeriod >= 7
+- `pci_s3_versioning` - S3 versioning enabled
+- `pci_rds_automated_backups` - RDS BackupRetentionPeriod >= 7
 
 ---
 
 ### Security Profile Enforcement
 
-**File**: [`ProductionSecurityProfileConfiguration.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java)
+**File**: [`ProductionSecurityProfileConfiguration.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java)
 
 **Production Defaults for PCI-DSS**:
 
-| **Control** | **Configuration** | **Line** | **PCI-DSS Req** | **Overridable** |
-|-----------|------------------|---------|----------------|----------------|
-| Log Retention | 1 year minimum (365+ days) | 55 | Req 10.7 | Yes (via `logRetentionDays`) |
-| Flow Logs | Enabled (all traffic) | 80 | Req 10.3 | Yes (via `flowLogsEnabled`) |
-| CloudTrail | Always enabled | 114 | Req 10.2 | Yes (via `cloudTrailEnabled`) |
-| GuardDuty | Always enabled | 125 | Req 11.5 | Yes (via `guardDutyEnabled`) |
-| AWS Config | Always enabled | 134 | Req 11.6 | No |
-| EBS Encryption | Mandatory | 148 | Req 3.4 | No |
-| EFS Encryption (transit) | Mandatory | 162 | Req 4.1 | Yes |
-| EFS Encryption (rest) | Mandatory | 167 | Req 3.4 | No |
-| S3 Encryption | Mandatory | 172 | Req 3.4 | No |
-| ALB Access Logging | Enabled | 285 | Req 10.5 | Yes |
-| MFA Required | Always | 418 | Req 8.3 | No |
-| Password Length | 14 chars (exceeds 8 minimum) | 449 | Req 8.2.3 | No |
-| Password Rotation | 90 days | 443 | Req 8.2.4 | No |
-| Password Reuse | 4 passwords | Implementation | Req 8.2.4 | No |
+With `pci-dss` selected and `complianceMode` other than `disabled`, controls that `ComplianceMatrix` marks as REQUIRED for PCI-DSS are enabled regardless of the deployment context value.
+
+| **Control** | **Configuration** | **PCI-DSS Req** | **Overridable** |
+|-----------|------------------|----------------|----------------|
+| Log Retention | Profile default 6 years; `PciDssRules` requires at least 365 days | Req 10.7 | Yes (via `logRetentionDays`, minimum 365) |
+| Flow Logs | Enabled (all traffic) | Req 10.3 | No (REQUIRED) |
+| CloudTrail | Enabled | Req 10.2 | No (REQUIRED) |
+| GuardDuty | Enabled | Req 11.5 | No (REQUIRED) |
+| AWS Config | Validated by `PciDssRules` | Req 11.6 | Via `awsConfigEnabled` |
+| EBS Encryption | Mandatory | Req 3.4 | No |
+| EFS Encryption (transit) | Mandatory | Req 4.1 | No (REQUIRED) |
+| EFS Encryption (rest) | Mandatory | Req 3.4 | No |
+| S3 Encryption | Mandatory | Req 3.4 | No |
+| ALB Access Logging | Enabled | Req 10.5 | No (REQUIRED) |
+| MFA Required | Always | Req 8.4 | No |
+| Password Length (profile) | 14 characters | Req 8.3.6 | No |
+| IAM account password policy | 8 characters, 90-day rotation, 4 reused passwords (PCI-DSS only; stricter when other frameworks are selected) | Req 8.3.6, 8.3.9 | No |
 
 ---
 
@@ -1336,16 +1338,16 @@ Tasks:
 
 **Current State**: ✅ WAF REQUIRED and enforced in PRODUCTION
 
-**Validation**: Automated enforcement via [`PciDssRules.java:317-334`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java#L317-L334)
+**Validation**: Automated enforcement via [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java)
 
-**Evidence**: 34 WAF test cases in [`compliance-test-matrix.csv`](../../cloudforge-api/src/test/resources/compliance-test-matrix.csv)
+**Evidence**: WAF negative test rows (`configName` containing `no_WAF`) in [`compliance-test-matrix.csv`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/test/resources/compliance-test-matrix.csv)
 
 **Status**: ✅ Fully Implemented
 
 **Deployment**:
 1. ✅ WAF enabled by default in PRODUCTION security profile
 2. ✅ Validation fails if WAF disabled with PCI-DSS framework
-3. ✅ Comprehensive test coverage (EC2, FARGATE, multi-framework scenarios)
+3. ✅ Test coverage across EC2, FARGATE, and multi-framework scenarios
 4. ⏭️ Configure WAF rules (SQL injection, XSS, known bad inputs) - operational task
 5. ⏭️ Monitor WAF logs and tune rules - operational task
 
@@ -1545,22 +1547,21 @@ Tasks:
 
 ### Document Review Schedule
 
-| **Review Type** | **Frequency** | **Owner** | **Next Review** |
-|----------------|-------------|----------|----------------|
-| **Gap Analysis Update** | Quarterly | Compliance Officer | 2026-03-19 |
-| **Control Mapping Verification** | Quarterly | Security Team | 2026-03-19 |
-| **Testing Status Update** | Monthly | Engineering Manager | 2026-01-19 |
-| **Remediation Roadmap Progress** | Monthly | Project Manager | 2026-01-19 |
-| **PCI-DSS Framework Updates** | Annually (or when released) | Compliance Officer | 2026-12-19 |
-| **v4.0 Mandatory Requirement Check** | ✅ Complete (deadline passed) | Compliance Officer | **Passed: 2025-03-31** |
+| **Review Type** | **Frequency** | **Owner** |
+|----------------|-------------|----------|
+| **Gap Analysis Update** | Quarterly | Compliance Officer |
+| **Control Mapping Verification** | Quarterly | Security Team |
+| **Testing Status Update** | Monthly | Engineering Manager |
+| **Remediation Roadmap Progress** | Monthly | Project Manager |
+| **PCI-DSS Framework Updates** | Annually (or when released) | Compliance Officer |
 
 ### Change Log
 
 | **Version** | **Date** | **Changes** | **Author** |
 |-----------|---------|-----------|-----------|
-| 1.0 | 2025-12-14 | Initial comprehensive PCI-DSS gap analysis (v4.0.1) | Claude (AI-assisted) |
-| 1.1 | 2025-12-19 | Updated review schedule; noted March 31, 2025 v4.0 deadline has passed - all requirements now mandatory | Claude (AI-assisted) |
-| 1.2 | 2025-12-28 | Updated WAF requirement from optional to REQUIRED; added evidence references for 34 WAF test cases and validation enforcement | Claude (AI-assisted) |
+| 1.0 | 2025-12-14 | Initial PCI-DSS gap analysis (v4.0.1) | CloudForge CI maintainers |
+| 1.1 | 2025-12-19 | Updated review schedule; noted March 31, 2025 v4.0 deadline has passed - all requirements now mandatory | CloudForge CI maintainers |
+| 1.2 | 2025-12-28 | Updated WAF requirement from optional to REQUIRED; added evidence references for 34 WAF test cases and validation enforcement | CloudForge CI maintainers |
 
 ### PCI-DSS v4.0 Mandatory Requirements (Effective March 31, 2025)
 
@@ -1595,11 +1596,11 @@ Tasks:
 
 ### Code References
 
-- [PciDssRules.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) - Validation rules
-- [pci-dss-v4.0.1.guard](../../cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard) - Guard policies
-- [ComplianceFactory.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - AWS Config deployment
-- [ProductionSecurityProfileConfiguration.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) - Security defaults
-- [AuditManagerControlRegistry.java](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java) - Control mapping
+- [PciDssRules.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java) - Validation rules
+- [pci-dss-v4.0.1.guard](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/resources/cfn-guard/frameworks/pci-dss-v4.0.1.guard) - Guard policies
+- [ComplianceFactory.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - AWS Config deployment
+- [ProductionSecurityProfileConfiguration.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java) - Security defaults
+- [AuditManagerControlRegistry.java](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/AuditManagerControlRegistry.java) - Control mapping
 
 ---
 

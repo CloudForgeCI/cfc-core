@@ -120,11 +120,11 @@ class LocalStackCdkAssetPublisherTest {
             LocalStackCdkAssetPublisher.publish(cdkOut, "Stack", unreachableClient(), "000000000000", true));
     }
 
-    /** The real bug this closes: a real-AWS deploy against an account nobody ever ran {@code cdk
-     *  bootstrap} against must fail with an actionable message, never silently self-create CDK's
+    /** An AWS deploy against an account that was never {@code cdk bootstrap}ped must fail with
+     *  an actionable message, never self-create CDK's
      *  own bootstrap-owned asset bucket — doing so leaves a bare, untracked bucket with that exact
-     *  deterministic name sitting in the account, which then permanently blocks the real {@code
-     *  cdk bootstrap} from ever creating its own properly-configured copy of it. */
+     *  deterministic name sitting in the account, which then permanently blocks a later {@code
+     *  cdk bootstrap} from creating its own properly-configured copy of it. */
     @Test
     void publishRefusesToSelfCreateTheAssetBucketWhenCreateBucketIfMissingIsFalse(@TempDir Path cdkOut)
             throws IOException {

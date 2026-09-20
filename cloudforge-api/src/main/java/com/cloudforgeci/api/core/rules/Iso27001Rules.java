@@ -104,6 +104,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
                 if (complianceMode == ComplianceMode.ADVISORY) {
                     LOG.warning("ISO 27001 validation found " + errors.size() + " recommendations (ADVISORY mode)");
                     errors.forEach(err -> LOG.warning("  - " + err));
+                    ComplianceFindingsCollector.record(failedRules);
                     return List.of(); // Don't block synthesis
                 } else {
                     LOG.severe("ISO 27001 validation failed with " + errors.size() + " violations (ENFORCE mode)");

@@ -124,6 +124,7 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
                 if (complianceMode == ComplianceMode.ADVISORY) {
                     LOG.warning("PCI-DSS validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
                     errors.forEach(err -> LOG.warning("  - " + err));
+                    ComplianceFindingsCollector.record(failedRules);
                     return List.of();
                 } else {
                     LOG.severe("PCI-DSS validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");

@@ -171,12 +171,10 @@ class ComplianceReportGenerator:
                         "mvn", "test",
                         f"-Dtest=TruthTableValidationTest#{method}",
                         "--batch-mode",
-                        # The root pom now defaults skipTests=true (the repo's own -Pci profile is
-                        # what flips it back, per that pom's own comment on why -- not scattering
-                        # -DskipTests=false across individual steps). Without it, this silently
-                        # no-ops: exit 0, zero actual test execution, nothing to parse from
-                        # stdout -- every "✓ ... passed" this script printed was only ever true in
-                        # the sense that skipping never fails.
+                        # The root pom defaults skipTests=true and the -Pci profile re-enables
+                        # tests (see the root pom's comment). Without -Pci this run exits 0
+                        # without executing any test, so there is nothing to parse and every
+                        # result would falsely report as passed.
                         "-Pci",
                         "-Dsurefire.useSystemClassLoader=false",  # Prevent classloader issues
                         "-Dsurefire.useFile=true",  # Force XML output
@@ -1360,9 +1358,9 @@ class ComplianceReportGenerator:
         """Everything the LocalStack verification modal needs for one test row: resource /
         Config rule counts from that test's own synthesized template (cfn-templates/<config
         name>.json), which of the 9 known auto-remediation actions apply, and -- for the
-        subset of rows that match one of the 13 representative configs actually deployed to
-        real LocalStack -- the real PASS/FAIL result and exactly what LocalStackTemplateAdapter
-        changed to make it deployable."""
+        subset of rows that match one of the 13 representative configs deployed to LocalStack --
+        the deploy PASS/FAIL result and exactly what LocalStackTemplateAdapter changed to make it
+        deployable."""
         template_path = self.output_dir / "cfn-templates" / f"{result.config_name}.json"
         if not template_path.exists():
             return None
@@ -1387,7 +1385,7 @@ class ComplianceReportGenerator:
         }
 
         # Exact match first: the template sweep deploys this row's own template directly, so a
-        # hit here is a real, direct verification, not a same-shape-config approximation.
+        # hit here is a direct verification, not a same-shape-config approximation.
         sweep = self.load_template_sweep_results().get(result.config_name)
         if sweep:
             detail["real_deploy"] = {
@@ -1554,11 +1552,11 @@ class ComplianceReportGenerator:
         frameworks_json = json.dumps(list(frameworks.keys()))
         runtimes_json = json.dumps(list(runtimes))
 
-        # Whether this build actually includes real LocalStack deploy verification (from
+        # Whether this build includes LocalStack deploy verification (from
         # localstack-compliance-verification.yml) or is synth-only -- surfaced up front so the
-        # dashboard never implies live verification it doesn't have. See build_localstack_detail.
+        # dashboard never implies deploy verification it doesn't have. See build_localstack_detail.
         # Two separate sources: the template sweep deploys these rows' own templates directly
-        # (the one that actually matters for "were the 375 configs shown here tested"); the
+        # (which answers "were the 375 configs shown here deployed"); the
         # 13-config matrix is a coarser, representative-configs-only check reported alongside it.
         sweep_results = self.load_template_sweep_results()
         sweep_passed = len([d for d in sweep_results.values() if d["result"] == "PASS"])
@@ -2341,9 +2339,9 @@ class ComplianceReportGenerator:
 
         // ═══════════════════════════════════════════════════════════════
         // LocalStack verification modal -- per-row detail sourced from that row's own
-        // synthesized template (cfn-templates/<config_name>.json): resources actually created,
+        // synthesized template (cfn-templates/<config_name>.json): resources created,
         // Config rules deployed, which of the 9 known auto-remediation actions apply, and (for
-        // rows matching one of the 13 representative configs) the real LocalStack deploy result.
+        // rows matching one of the 13 representative configs) the LocalStack deploy result.
         // ═══════════════════════════════════════════════════════════════
         let currentLsTest = null;
         let currentLsTab = 'overview';

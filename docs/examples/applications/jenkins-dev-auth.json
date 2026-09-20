@@ -2,7 +2,6 @@
   "stackName": "Jenkins-Dev-Auth",
   "applicationId": "jenkins",
   "applicationName": "Jenkins Dev",
-  "description": "Jenkins with Cognito OIDC authentication",
   "environment": "development",
 
   "runtime": "fargate",
@@ -18,7 +17,7 @@
 
   "authMode": "application-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "jenkins-dev-CHANGEME",
+  "cognitoDomainPrefix": "jenkins-dev-changeme",
   "cognitoCreateGroups": true,
   "cognitoAdminGroupName": "JenkinsAdmins",
   "cognitoUserGroupName": "JenkinsDevelopers",

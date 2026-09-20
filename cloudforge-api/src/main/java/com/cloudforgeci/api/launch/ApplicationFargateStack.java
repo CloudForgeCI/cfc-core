@@ -12,13 +12,10 @@ import software.amazon.awscdk.Tags;
 import software.constructs.Construct;
 
 /**
- * Universal Application Fargate Stack — CDK-consumer copy of {@code cfc-testing}'s launcher of
- * the same name/shape, relocated here so any in-process synthesizer (Manager's, in particular,
- * which cannot depend on {@code cfc-testing} — that's the public sample/reference repo, not a
- * library) can build one without duplicating the {@code ApplicationFactory} wiring by hand.
- * cfc-testing's own copy is untouched; this is not a shared dependency between them, just the
- * same well-tested ~40-line pattern kept in the one module both a CLI consumer and Manager can
- * actually depend on.
+ * Universal Application Fargate Stack. Mirrors the launcher of the same name in
+ * {@code cfc-testing} so that in-process synthesizers (such as CloudForge Manager), which cannot
+ * depend on the sample project, can build one without duplicating the {@code ApplicationFactory}
+ * wiring. The two copies are independent.
  *
  * <p>See {@link com.cloudforgeci.api.deploy.CloudForgeSynthesizer} for the orchestration that
  * builds the CDK {@code App}/context this stack expects and drives {@code app.synth()}.</p>

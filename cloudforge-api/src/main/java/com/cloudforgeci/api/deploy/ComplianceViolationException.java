@@ -6,17 +6,13 @@ import java.util.List;
 
 /**
  * Thrown by {@link CloudForgeSynthesizer#synthesize} when {@code complianceMode=enforce} and
- * cdk-nag found at least one non-suppressed {@code ERROR}-level violation -- the real
- * implementation of {@code ComplianceMode.ENFORCE}'s "blocks CDK synthesis" behavior (see {@link
- * com.cloudforgeci.api.core.rules.NagReportReader}'s own javadoc for how findings are collected).
+ * cdk-nag found at least one non-suppressed {@code ERROR}-level violation. This implements
+ * {@code ComplianceMode.ENFORCE}'s "blocks CDK synthesis" behavior (see {@link
+ * com.cloudforgeci.api.core.rules.NagReportReader} for how findings are collected).
  *
- * <p>Deliberately its own exception type, not a generic {@code IllegalStateException}/{@code
- * IOException} — callers (Manager's own deploy pipeline in particular) need to distinguish "your
- * template has a real security problem, fix it" from "something about talking to AWS went wrong,"
- * the same way {@code ManagerSelfDeployRestrictedException}/{@code
- * CrossAccountDeployRestrictedException} are their own types rather than folded into a generic
- * failure. Carries the actual findings, not just a flattened message, so a caller can render them
- * as a real list rather than parsing one back out of prose.</p>
+ * <p>A dedicated type so callers such as a deploy pipeline can distinguish a template compliance
+ * failure from an AWS communication error. Carries the structured findings so callers can render
+ * them without parsing the message.</p>
  */
 public final class ComplianceViolationException extends RuntimeException {
 

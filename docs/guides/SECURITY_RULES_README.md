@@ -1,6 +1,8 @@
 # Security Profiles
 
-Every CloudForge deployment has a **security profile** — a curated set of defaults that controls network access, encryption, authentication enforcement, observability, and compliance checks. You pick one in `deployment-context.json` and CloudForge wires everything automatically.
+Every CloudForge deployment has a **security profile**: a set of defaults for network
+access, encryption, logging, threat detection, backups, and compliance validation. Set it in
+`deployment-context.json`:
 
 ```json
 {
@@ -8,85 +10,90 @@ Every CloudForge deployment has a **security profile** — a curated set of defa
 }
 ```
 
-Three profiles are available: `dev`, `staging`, and `production`.
+The profiles are `dev` (the default), `staging`, and `production`. They are implemented by
+`DevSecurityProfileConfiguration`, `StagingSecurityProfileConfiguration`, and
+`ProductionSecurityProfileConfiguration` in `com.cloudforgeci.api.core.security`.
+
+The security profile also selects the default IAM profile; see [IAM Rules](IAM_RULES.md).
 
 ---
 
-## What each profile gives you
+## Profiles
 
-### `dev` — Evaluate freely
+### `dev`
 
-The lowest-friction option. Designed for local evaluation, internal tooling, and feature branches where you want things running quickly without compliance overhead.
+For evaluation, internal tools, and feature branches.
 
-- Application accessible from anywhere over HTTP or HTTPS
-- No authentication required (set `authMode` to enable it)
-- No WAF, no CloudTrail, no GuardDuty
-- Instance and container access via AWS SSM Session Manager — no port 22 open
-- ECS Exec enabled on all Fargate tasks
-- Estimated cost floor: ~$35/month
+- Single-AZ; VPC flow logs, CloudTrail, GuardDuty, AWS Config, WAF, ALB access logs, and automated backups are off by default
+- EBS and EFS encryption at rest on by default (`enableEncryption: false` turns it off)
+- Compliance findings are reported as warnings (`complianceMode` defaults to `advisory`)
 
-> **Do not use `dev` for anything with real user data or internet-facing traffic.**
+> Do not use `dev` for workloads that handle real user data.
 
----
+### `staging`
 
-### `staging` — Test before you ship
+For testing configuration before production.
 
-A middle ground — strict enough to catch configuration problems before production, relaxed enough to allow external testing without a full domain and certificate setup.
+- Multi-AZ
+- WAF, VPC flow logs, and automated backups on by default
+- CloudTrail, GuardDuty, AWS Config, and ALB access logs off unless set in the deployment context or required by a selected framework
+- Compliance findings are reported as warnings (`complianceMode` defaults to `advisory`)
 
-- Application accessible from anywhere over HTTP or HTTPS
-- Authentication optional — configure `authMode` to test your auth flow end-to-end
-- WAF optional (`wafEnabled: true` to enable)
-- Instance and container access via SSM Session Manager — no port 22 open
-- ComplianceFactory runs (CloudTrail, AWS Config) when enabled
+### `production`
 
----
-
-### `production` — Hardened by default
-
-The most opinionated profile. Designed to be compliant out of the box with PCI-DSS, HIPAA, SOC 2, and GDPR when paired with the appropriate compliance framework.
-
-- HTTP redirects to HTTPS — plain HTTP is never forwarded to the application
-- WAF enabled automatically
-- ALB access logs written to S3 (6-year retention, Glacier lifecycle)
-- CloudTrail, AWS Config, and GuardDuty enabled
-- EBS, EFS, and S3 encryption enforced
-- Automated backups enabled
-- Multi-AZ enforced
-- Instance and container access via SSM Session Manager — no port 22 open
-- If `authMode` is `none` and a compliance framework is active, the build fails with a remediation message
+- Multi-AZ, with at least two instances and auto scaling
+- VPC flow logs and automated backups on by default
+- CloudTrail, GuardDuty, AWS Config, and ALB access logs off unless set in the deployment context or required by a selected framework
+- Flow logs (and ALB access logs, when enabled) retained for six years; logs use a `RETAIN` removal policy
+- EBS, EFS, and S3 encryption on
+- WAF off by default unless a selected compliance framework requires it
+- Compliance violations fail synthesis (`complianceMode` defaults to `enforce`)
 
 ---
 
 ## Comparison
 
+Defaults when no compliance framework is selected and no field is overridden:
+
 | | `dev` | `staging` | `production` |
 |--|-------|-----------|--------------|
-| HTTP access | Allowed | Allowed | Redirects to HTTPS |
-| HTTPS access | Allowed | Allowed | Allowed |
-| Authentication | Optional | Optional | Required by compliance frameworks |
-| WAF | Off | Optional | On |
-| ALB access logs | Off | Off | On (6-year S3 retention) |
-| CloudTrail | Off | Optional | On |
-| GuardDuty | Off | Optional | On |
-| EC2 instance access | SSM Session Manager | SSM Session Manager | SSM Session Manager |
-| Fargate shell access | ECS Exec (SSM) | ECS Exec (SSM) | ECS Exec (SSM) |
-| Deletion protection | Off | Off | On |
-| Estimated cost floor | ~$35/mo | ~$80/mo | ~$200/mo |
+| Multi-AZ | Off | On | On |
+| WAF (`wafEnabled`) | Off | On | Off |
+| ALB access logs (`albAccessLogging`) | Off | Off | Off |
+| VPC flow logs (`enableFlowlogs`) | Off | On | On |
+| CloudTrail (`cloudTrailEnabled`) | Off | Off | Off |
+| GuardDuty (`guardDutyEnabled`) | Off | Off | Off |
+| AWS Config (`awsConfigEnabled`) | Off | Off | Off |
+| Automated backups (`automatedBackupEnabled`) | Off | On | On |
+| EBS/EFS encryption at rest | On | On | On |
+| HTTPS strict (`httpsStrictEnabled`) | Off | Off | Off |
+| RDS deletion protection | Off | When required by a framework | When required by a framework |
+| Compliance mode | `advisory` | `advisory` | `enforce` |
+
+`cloudTrailEnabled`, `guardDutyEnabled`, `awsConfigEnabled`, and `albAccessLogging` default to
+`false` in the deployment context, so the profile's own default for them does not apply; set
+them explicitly to enable them. A selected compliance framework turns on the controls it requires (for example WAF, HTTPS
+strict, or deletion protection), regardless of the profile default.
+
+When `httpsStrictEnabled` is on and `enableSsl` is true, the load balancer has no HTTP
+listener on port 80; only HTTPS is served.
 
 ---
 
-## Overriding individual settings
+## Overriding Individual Settings
 
-The profile sets the defaults. You can override individual fields in `deployment-context.json` without changing the profile. For example, enabling WAF in staging:
+The profile supplies defaults. You can override individual fields in
+`deployment-context.json` without changing the profile. For example, turning on GuardDuty
+in staging:
 
 ```json
 {
   "securityProfile": "staging",
-  "wafEnabled": true
+  "guardDutyEnabled": true
 }
 ```
 
-Or disabling HTTP in dev to test an HTTPS flow:
+Or testing HTTPS and authentication in dev:
 
 ```json
 {
@@ -97,13 +104,20 @@ Or disabling HTTP in dev to test an HTTPS flow:
 }
 ```
 
-The profile provides the floor; your config can raise it.
+For most controls, a requirement from a selected compliance framework takes precedence over
+an override. Where an explicit override can still turn a required control off (for example
+`wafEnabled: false`), the framework's validation rules report
+the violation, which fails synthesis in `enforce` mode.
+
+For the full list of `deployment-context.json` fields, see the
+[configuration reference](../ADVANCED.md).
 
 ---
 
-## Compliance frameworks
+## Compliance Frameworks
 
-Compliance frameworks are independent of security profiles — they're a validation layer that runs after the profile and your overrides are applied. If the combined configuration doesn't satisfy the standard's requirements, the build fails with specific remediation steps.
+Compliance frameworks are independent of security profiles. They add required controls and
+validation rules on top of the profile and your overrides.
 
 ```json
 {
@@ -112,22 +126,35 @@ Compliance frameworks are independent of security profiles — they're a validat
 }
 ```
 
-Available frameworks: `PCI-DSS`, `HIPAA`, `SOC2`, `GDPR`.
+Supported values: `PCI-DSS`, `HIPAA`, `SOC2`, `GDPR` (comma-separated, case-insensitive).
 
-Each framework checks things like authentication being enabled, encryption at rest, log retention periods, network isolation, and access control. See [compliance/](../compliance/) for per-framework details.
+Framework rules check items such as authentication, encryption at rest, log retention,
+network isolation, and access control. For example, the HIPAA and GDPR rules report
+`authMode: "none"` as a violation.
+
+`complianceMode` controls what happens when a rule fails:
+
+- `enforce` — synthesis fails with the rule's remediation message (default for `production`)
+- `advisory` — the failure is logged as a warning and synthesis continues (default for `dev` and `staging`)
+
+Passing these checks shows that the synthesized configuration includes the checked
+controls. It is not a certification. See the [compliance documentation](../compliance/README.md)
+for per-framework details.
 
 ---
 
-## Accessing instances and containers
+## Accessing Instances and Containers
 
-No profile opens port 22. All shell access goes through AWS Systems Manager.
+No profile opens port 22. Shell access goes through AWS Systems Manager.
 
-**EC2 instances** (e.g. Jenkins):
+**EC2 instances:**
+
 ```bash
 aws ssm start-session --target <instance-id>
 ```
 
-**Fargate tasks** (ECS Exec):
+**Fargate tasks** (ECS Exec is enabled on every Fargate service):
+
 ```bash
 aws ecs execute-command \
   --cluster <cluster-name> \
@@ -137,4 +164,5 @@ aws ecs execute-command \
   --command "/bin/sh"
 ```
 
-Both require the caller's IAM identity to have `ssm:StartSession` or `ecs:ExecuteCommand` respectively. Sessions are CloudTrail-logged automatically.
+The caller's IAM identity needs `ssm:StartSession` (EC2) or `ecs:ExecuteCommand` (Fargate).
+Both actions are recorded by CloudTrail when a trail is enabled in the account.

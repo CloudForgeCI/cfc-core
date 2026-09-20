@@ -10,7 +10,7 @@ import java.util.Set;
  * single-instance Manager needs nothing beyond an in-memory map; a horizontally-scaled Manager
  * behind a load balancer needs every instance to recognize a session created by any other
  * instance, which an in-memory store can never do regardless of how the user directory itself is
- * configured — see {@code SessionManager}'s javadoc in cloudforge-manager for the full story.
+ * configured — see {@code SessionManager}'s javadoc in cloudforge-manager.
  *
  * <p>Deliberately framework-agnostic (no Spring, no Redis client types) — implementations live in
  * cloudforge-manager, same split as {@link AuthBackend}.</p>
@@ -28,7 +28,7 @@ public interface SessionStore {
     void invalidate(String sessionId);
 
     /** Ends every session belonging to {@code subject} (admin force-logout). Returns how many
-     *  were actually active and removed. */
+     *  were active and removed. */
     int invalidateAllForSubject(String subject);
 
     /** True if {@code subject} has at least one active (non-expired) session. */

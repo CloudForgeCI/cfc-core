@@ -693,31 +693,20 @@ public class RdsFactory {
         return truncated;
     }
 
-    /** Fixed suffix every RDS Enhanced Monitoring role this factory creates ends in — the one
-     *  thing {@link com.cloudforgeci.api.core.iam.OperatorProvisioningPermissionMatrix}'s
-     *  operator-role grant can reliably pattern-match on, since it has to be a wildcard (the
-     *  stack-name-derived prefix varies per deploy). See {@link #createMonitoringRole}'s own
-     *  javadoc for why an explicit name is needed here at all rather than letting {@code
-     *  DatabaseInstance} auto-create one. */
+    /** Fixed suffix of every RDS Enhanced Monitoring role this factory creates, so Manager's
+     *  operator-role grant ({@code ManagerOperatorIamSupport}) can match it with a wildcard prefix.
+     *  See {@link #createMonitoringRole} for why the role is named explicitly. */
     private static final String MONITORING_ROLE_SUFFIX = "-CfcRdsMonitor";
 
     /**
-     * Without an explicit {@code monitoringRole}, {@code DatabaseInstance} auto-creates one as a
-     * child construct fixed literally at id {@code "MonitoringRole"} — normally a fine, stable
-     * name to grant Manager's operator role against, except this role nests several levels below
-     * the database instance's own construct, and CloudFormation's physical-name generator
-     * truncates the *middle* of an over-length id path to fit IAM's 64-character role-name limit.
-     * For a long enough stack/app name, the surviving fragment can cut off before "MonitoringRole"
-     * ever appears — exactly what happened live: {@code iam:CreateRole} denied on a physical name
-     * that had already been chewed down to an unrecognizable stack-name fragment plus a hash,
-     * with no stable substring left for the operator policy to have matched in the first place.
+     * Without an explicit {@code monitoringRole}, {@code DatabaseInstance} auto-creates one at
+     * construct id {@code "MonitoringRole"}, nested several levels deep. CloudFormation truncates
+     * over-length physical names to fit IAM's 64-character limit, so for long stack/app names
+     * "MonitoringRole" may not appear in the physical name at all, leaving no stable substring for
+     * an operator policy to match.
      *
-     * <p>Building the role ourselves sidesteps the truncation problem instead of trying to out-
-     * guess it: an explicit {@code roleName} is never auto-generated from the construct path at
-     * all, so there's nothing for CloudFormation to truncate unpredictably. This method does its
-     * own truncation instead, front-to-back rather than CloudFormation's middle-cut, so the fixed
-     * {@link #MONITORING_ROLE_SUFFIX} this class actually grants permissions against always
-     * survives regardless of how long the stack/instance name is.</p>
+     * <p>An explicit {@code roleName} avoids CloudFormation's truncation. This method truncates
+     * the prefix itself so that {@link #MONITORING_ROLE_SUFFIX} always survives.</p>
      */
     private static Role createMonitoringRole(Construct scope, String stackName, String instanceId) {
         String prefix = stackName + "-" + instanceId;

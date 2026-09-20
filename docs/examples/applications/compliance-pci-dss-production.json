@@ -2,14 +2,13 @@
   "stackName": "App-PCI-Production",
   "applicationId": "REPLACE_WITH_APP_ID",
   "applicationName": "PCI-DSS Production Application",
-  "description": "Production environment with PCI-DSS + SOC2 compliance for payment processing",
   "environment": "production",
 
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "application-service",
 
-  "domain": "secure.payments.com",
+  "domain": "example.com",
   "subdomain": "app",
   "enableSsl": true,
 
@@ -18,7 +17,7 @@
 
   "authMode": "application-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "app-pci-CHANGEME",
+  "cognitoDomainPrefix": "app-pci-changeme",
   "cognitoMfaEnabled": true,
   "cognitoMfaMethod": "totp",
   "cognitoCreateGroups": true,
@@ -54,7 +53,6 @@
 
   "enableS3VersioningRemediation": true,
   "enableCloudTrailBucketAccessRemediation": true,
-  "enableCloudTrailLoggingRemediation": true,
   "enableRdsDeletionProtectionRemediation": true,
   "enableRdsAutoMinorVersionUpgradeRemediation": true,
 

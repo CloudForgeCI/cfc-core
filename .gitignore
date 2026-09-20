@@ -20,7 +20,7 @@ pom.xml.versionsBackup
 # OS files
 .DS_Store
 # CDK artifacts (contains AWS account numbers and sensitive info)
-/**/cdk.out/
+/**/cdk.out*/
 /**/cdk.context.json
 ## keep cdk.json tracked (CDK app config, not sensitive)
 ## /**/cdk.json  <-- do NOT ignore
@@ -90,9 +90,8 @@ dependency-check-report.xml
 dependency-check-report.csv
 **/dependency-check-report.*
 
-# Split into their own repos (CloudForgeCI/cloudforge-manager,
-# CloudForgeCI/cloudforge-manager-deployment) — no longer part of cfc-core's reactor or
-# dependencyManagement (see root pom.xml). Kept as working-tree checkouts here for local dev
-# convenience, but never tracked by cfc-core's own git history.
+# Separate repositories (CloudForgeCI/cloudforge-manager,
+# CloudForgeCI/cloudforge-manager-deployment), not reactor modules (see root pom.xml). They may be
+# checked out here for local development but are never tracked by cfc-core.
 /cloudforge-manager/
 /cloudforge-manager-deployment/

@@ -1,8 +1,6 @@
 # Moodle Application Guide
 
-Moodle is an open-source Learning Management System (LMS) used by universities, schools, and corporate training teams to deliver courses, assessments, and certifications.
-
-**Status**: Available
+Moodle is an open-source learning management system (LMS) for courses, assessments, and training programs.
 
 ---
 
@@ -15,29 +13,18 @@ Moodle is an open-source Learning Management System (LMS) used by universities, 
 | **Default Image** | `moodlehq/moodle-php-apache:8.2` |
 | **PHP Version** | 8.2 |
 | **Application Port** | `80` |
-| **Default CPU** | 2048 (Fargate) |
-| **Default Memory** | 4096 MB (Fargate) |
+| **Recommended CPU / Memory (Fargate)** | 2048 / 4096 MB |
+| **Recommended Instance Type (EC2)** | `t3.medium` |
 | **Health Check Path** | `/login/index.php` |
-| **Health Check Grace** | 300 seconds |
-| **Supports Fargate** | Yes |
+| **Supports Fargate** | Yes (see the note below) |
 | **Supports EC2** | Yes |
-| **Authentication** | ALB-OIDC (Cognito) |
-| **Database Required** | Yes (PostgreSQL 16 or MySQL 8.0) |
+| **Authentication Modes** | `alb-oidc`, `application-oidc` (OpenID Connect auth plugin), `none` |
+| **Database** | Required (MySQL 8.0 default; MariaDB and PostgreSQL supported by the plugin metadata) |
 
----
+**Runtime notes:**
 
-## Capabilities
-
-- Course creation with activities (quizzes, assignments, forums, SCORM)
-- Grading and outcomes tracking
-- Student progress reporting and competency frameworks
-- Video content with H5P
-- Badges and certificates
-- Multilingual interface
-- Mobile app support (Moodle Mobile)
-- Bulk enrollment via CSV or LDAP
-- Native OpenID Connect authentication plugin
-- REST API for integrations
+- **Fargate**: the default image provides PHP and Apache for Moodle but does not include the Moodle code base, and EFS is mounted over `/var/www/html`. Place Moodle on the EFS volume, or build your own image, before the site can serve pages.
+- **EC2**: UserData installs Apache and PHP, and downloads the Moodle 4.4 release into `/var/www/html` when `config.php` is absent.
 
 ---
 
@@ -45,43 +32,42 @@ Moodle is an open-source Learning Management System (LMS) used by universities, 
 
 | Resource | Provisioned | Purpose |
 |----------|-------------|---------|
-| S3 bucket | Yes | Course files, submissions, video content |
-| ElastiCache Redis | Yes | MUC (Moodle Universal Cache) — sessions, application cache |
-| CloudFront CDN | Yes | Course asset delivery |
-| EFS | Yes | `/var/www/html/moodledata` (user files, temp data) |
-| Route53 records | When domain configured | A + AAAA records to ALB |
+| S3 bucket | Yes | File storage (for use with an object file system plugin) |
+| ElastiCache Redis | Yes | Moodle Universal Cache (MUC) and session store |
+| CloudFront CDN | Yes | Theme and library assets (`/theme/*`, `/lib/*`, `/pluginfile.php/*`) |
+| EFS | Yes | Mounted at `/var/www/html` (access point path `/moodle`) |
+| Route53 records | When a hosted zone and domain are configured | A + AAAA alias records |
 
-Moodle's `moodledata` directory must be **outside** the webroot and persistent across deploys. EFS is mounted at the configured `moodledata` path automatically.
+The `moodledata` directory is `/var/moodledata` (`MOODLE_DATA`). It is outside the web root and is **not** on EFS: on Fargate it is task-local storage, and on EC2 it is on each instance's root volume. For multi-task or multi-instance deployments, or to keep data across task replacement, move `moodledata` to shared storage.
 
 ---
 
 ## Authentication
 
-Moodle is typically deployed for a known user population (students, employees). The entire site can be gated at the ALB with Cognito, or Moodle's native OIDC plugin can be used for SSO while leaving the login page accessible.
+| Mode | Description |
+|------|-------------|
+| `alb-oidc` | Cognito at the ALB. Protects `/admin/*` and `/login/*`; course pages are not gated at the ALB and rely on Moodle's own access control. |
+| `application-oidc` | Moodle handles OIDC itself (`MOODLE_OIDC_*` environment variables). |
+| `none` | No authentication in front of Moodle; Moodle local accounts only. |
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | **Recommended** | Cognito at ALB — all traffic authenticated |
-| `none` | Dev only | Moodle local accounts only |
-
-For universities using existing identity providers (Active Directory, Google Workspace), configure Cognito as a federation layer in front of the IdP, then use `alb-oidc`.
+To use an existing identity provider (for example, Microsoft Entra ID or Google Workspace), federate it into the Cognito user pool and keep `alb-oidc`.
 
 ---
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `MOODLE_OIDC_CLIENT_ID` | Cognito client ID |
-| `MOODLE_OIDC_AUTHORIZATION_ENDPOINT` | Cognito authorization endpoint |
-| `MOODLE_OIDC_TOKEN_ENDPOINT` | Cognito token endpoint |
-| `MOODLE_OIDC_USERINFO_ENDPOINT` | Cognito userinfo endpoint |
-| `MOODLE_DB_HOST` | RDS endpoint |
-| `MOODLE_DB_NAME` | Database name (default: `moodle`) |
-| `MOODLE_DB_USER` | Database user |
-| `MOODLE_DB_PASSWORD` | From Secrets Manager |
-| `REDIS_HOST` | ElastiCache endpoint |
-| `REDIS_PORT` | `6379` |
+CloudForge sets the following on the Fargate container:
+
+| Variable | Value |
+|----------|-------|
+| `MOODLE_URL` | `https://<fqdn>` (when a domain is set) |
+| `MOODLE_DATA` | `/var/moodledata` |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | RDS connection settings (when `provisionDatabase` is `true`) |
+| `DATABASE_PASSWORD` | From the RDS Secrets Manager secret |
+
+With `application-oidc`, CloudForge also sets `MOODLE_OIDC_CLIENT_ID`, `MOODLE_OIDC_AUTH_ENDPOINT`, `MOODLE_OIDC_TOKEN_ENDPOINT`, `MOODLE_OIDC_USERINFO_ENDPOINT`, `MOODLE_OIDC_LOGOUT_ENDPOINT`, `MOODLE_OIDC_SCOPE`, and `MOODLE_OIDC_IDP_TYPE`.
+
+The Redis endpoint and S3 bucket name are not injected.
 
 ---
 
@@ -91,44 +77,44 @@ For universities using existing identity providers (Active Directory, Google Wor
 
 | Property | Value |
 |----------|-------|
-| Data Path (webroot) | `/var/www/html` |
-| Moodledata Path | `/var/moodledata` |
+| Data Path (web root) | `/var/www/html` |
+| Moodledata Path | `/var/moodledata` (not on EFS) |
 | EFS Path | `/moodle` |
 | Volume Name | `moodleData` |
 | Container User | `33:33` (www-data) |
 | EFS Permissions | `755` |
 
-**Important:** `moodledata` must not be web-accessible. It is mounted on EFS outside the NGINX document root.
-
 ### EC2
 
 | Property | Value |
 |----------|-------|
-| EBS Device | `/dev/xvdh` |
+| EBS Device | `/dev/xvdh` (used when EFS is not available) |
 | Data Path | `/var/www/html` |
-| Log Paths | `/var/log/apache2/error.log`, `/var/log/php-fpm/error.log`, `/var/moodledata/moodle.log`, `/var/log/userdata.log` |
+| Log Paths | `/var/log/httpd/access_log`, `/var/log/httpd/error_log`, `/var/log/php-fpm/error.log`, `/var/log/userdata.log` |
+| CloudWatch Log Group | `/cloudforge/<stackName>/moodle` |
 
 ---
 
 ## Deployment Context Examples
+
+Set `cpu` and `memory` (Fargate) or `instanceType` (EC2) explicitly; otherwise the framework defaults (`1024`, `2048`, `t3.micro`) apply.
 
 ### Development - Minimal
 
 ```json
 {
   "stackName": "Moodle-Dev",
-  "runtime": "fargate",
+  "runtime": "ec2",
   "securityProfile": "dev",
   "topology": "cms-service",
   "applicationId": "moodle",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
 
-  "cpu": 2048,
-  "memory": 4096,
+  "instanceType": "t3.medium",
 
   "provisionDatabase": true,
   "databaseEngine": "postgres",
@@ -142,9 +128,7 @@ For universities using existing identity providers (Active Directory, Google Wor
 }
 ```
 
-**Cost estimate:** ~$90/month
-
-### Production - University / Corporate Training
+### Production
 
 ```json
 {
@@ -193,11 +177,11 @@ For universities using existing identity providers (Active Directory, Google Wor
 }
 ```
 
-**Cost estimate:** ~$450-650/month
+Before scaling beyond one instance, move `moodledata` to shared storage (see [Auto-Provisioned Infrastructure](#auto-provisioned-infrastructure)).
 
-### Production - HIPAA (Healthcare Training)
+### Production - With HIPAA and SOC 2 Controls
 
-Moodle is frequently used for HIPAA compliance training and healthcare employee onboarding:
+`complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for the listed frameworks. It does not certify the deployment.
 
 ```json
 {
@@ -234,7 +218,7 @@ Moodle is frequently used for HIPAA compliance training and healthcare employee 
   "databaseBackupRetentionDays": 90,
   "databaseName": "moodle",
 
-  "complianceFrameworks": "HIPAA,SOC2",
+  "complianceFrameworks": "hipaa,soc2",
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "auditManagerEnabled": true,
@@ -244,98 +228,85 @@ Moodle is frequently used for HIPAA compliance training and healthcare employee 
 
   "enableMonitoring": true,
   "enableEncryption": true,
-  "logRetentionDays": "2555",
+  "logRetentionDays": "1827",
   "retainStorage": true
 }
 ```
-
-**Cost estimate:** ~$550-750/month
 
 ---
 
 ## Post-Deployment Tasks
 
-### 1. Complete Moodle Installation
+### 1. Complete the Moodle Installation
 
-1. Navigate to `https://your-domain.com`
-2. Accept the license and follow the installer
-3. Configure the database (pre-populated from env vars)
-4. Set `moodledata` directory to `/var/moodledata`
-5. Create the admin account
+1. Open `https://<your-domain>` and follow the installer.
+2. Enter the database settings: the RDS endpoint and the credentials from the RDS Secrets Manager secret.
+3. Set the data directory to `/var/moodledata`.
+4. Create the admin account.
 
 ### 2. Configure Cron
 
-Moodle depends heavily on cron for grade calculations, notifications, and scheduled tasks:
+Moodle uses cron for notifications, grade calculations, and scheduled tasks. On EC2:
 
 ```bash
 aws ssm start-session --target <instance-id>
-crontab -e
+sudo crontab -u apache -e
 # Add:
-* * * * * www-data /usr/bin/php /var/www/html/admin/cli/cron.php > /dev/null 2>&1
+* * * * * /usr/bin/php /var/www/html/admin/cli/cron.php > /dev/null 2>&1
 ```
 
-Or use Moodle's **Task Scheduler** to run cron via the web:
-**Site Administration** > **Server** > **Scheduled Tasks**
+Review scheduled tasks under **Site administration** > **Server** > **Scheduled tasks**.
 
-### 3. Configure Redis Cache (MUC)
+### 3. Configure the Redis Cache (MUC)
 
-1. **Site Administration** > **Plugins** > **Caching** > **Configuration**
-2. Add a Redis store pointing to `REDIS_HOST:REDIS_PORT`
-3. Map **Application**, **Session**, and **Request** caches to the Redis store
+1. Find the ElastiCache cluster (named `moodle-<env>-cache`) and note its endpoint.
+2. **Site administration** > **Plugins** > **Caching** > **Configuration**: add a Redis store pointing to `<endpoint>:6379`.
+3. Map the **Application** and **Session** caches to the Redis store.
 
 ### 4. Configure File Storage
 
-For large course files (video, SCORM packages), configure S3 as the file system backend:
-
-1. Install the **Object File System** plugin for Moodle
-2. Point it to the CloudForge-provisioned S3 bucket
-3. Enable S3 as the default file system for new uploads
+For large course files (video, SCORM packages), install an object file system plugin, grant the instance or task role access to the media bucket, and point the plugin at it.
 
 ---
 
 ## Compliance Considerations
 
-### FERPA (US Education)
+Application-level controls to review alongside CloudForge's infrastructure controls:
 
-Student records in Moodle are protected under FERPA:
+**FERPA (US education)**
 
-- [ ] Restrict grade export to authorized staff only
-- [ ] Enable logging of grade access events
-- [ ] Configure data retention policies for student submissions
-- [ ] Require staff authentication before accessing reports
+- Restrict grade export to authorized staff
+- Log grade access events
+- Set data retention policies for student submissions
 
-### HIPAA (Healthcare Training)
+**HIPAA (healthcare training)**
 
-If training content references PHI:
-
-- [ ] Encrypt `moodledata` directory (EFS encryption is automatic with CloudForge)
-- [ ] Enable detailed audit logging: **Administration** > **Site Administration** > **Reports** > **Logs**
-- [ ] Restrict course enrollment access
-- [ ] Set session timeout ≤ 30 minutes
-- [ ] Enable automatic logout on inactivity
+- Store `moodledata` on encrypted storage (it is not on EFS by default)
+- Review logs under **Site administration** > **Reports** > **Logs**
+- Restrict course enrollment
+- Set a session timeout of 30 minutes or less
 
 ---
 
 ## Troubleshooting
 
-### Cron not running / stale content
+### Cron not running
 
-Check that cron is scheduled and running:
+On Fargate, run cron manually with ECS Exec (ECS Exec must be enabled on the service):
 
 ```bash
-# Fargate — run cron manually via ECS Exec
 aws ecs execute-command --cluster <cluster> --task <task-id> \
-  --container moodle --interactive \
-  --command "/usr/bin/php /var/www/html/admin/cli/cron.php"
+  --container <container-name> --interactive \
+  --command "/usr/local/bin/php /var/www/html/admin/cli/cron.php"
 ```
 
-### `moodledata` not found
+### `moodledata` not writable
 
-Moodle will fail startup if `moodledata` is not writable by `www-data`. Verify the EFS mount in the task definition and check permissions on the mounted directory.
+Moodle fails to start if `/var/moodledata` is not writable by the web server user (`www-data` in the container, `apache` on EC2). Check ownership and permissions of the directory.
 
-### Slow page loads under load
+### Slow page loads
 
-Enable Moodle's caching stores (Redis MUC). Without Redis configured, Moodle falls back to file-based caching which is slow on EFS under concurrent access.
+Configure the Redis MUC store. Without it, Moodle uses file-based caching.
 
 ---
 

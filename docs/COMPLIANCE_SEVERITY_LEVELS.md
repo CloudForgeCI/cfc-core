@@ -1,193 +1,87 @@
 # Compliance Check Severity Levels
 
-This document clarifies which compliance checks are **advisory** (warnings) vs. **blocking** (hard failures) that prevent deployment.
+This document explains which compliance checks block synthesis and which only produce warnings.
 
 ## Overview
 
-CloudForge CI implements compliance checks at two levels:
+Whether a failed check blocks a deployment depends on where the check runs and on `complianceMode`, not on a per-check severity setting:
 
-1. **Advisory (Warnings)**: Recommendations that don't block deployment but should be addressed
-2. **Blocking (Hard Failures)**: Critical issues that prevent deployment from proceeding
+| Check source | Blocking | Non-blocking |
+|--------------|----------|--------------|
+| Security profile structural rules (`SecurityRules`) | Always: missing VPC or required security groups fail synthesis | - |
+| CloudForge framework validators (`FrameworkRules`, when `auditManagerEnabled` is `true`) | `enforce` mode: every failed `ComplianceRule` becomes a CDK validation error | `advisory` mode: failures are logged as warnings |
+| cdk-nag packs (`production` with frameworks selected) | `enforce` mode, when synthesizing through `CloudForgeSynthesizer`: error-level findings fail synthesis | Otherwise findings are written to `NagReport` files |
+| cfn-guard (Interactive Deployer) | `enforce` mode: a failed rule file stops the deployment | Skipped in other modes, or when `cfn-guard` is not installed |
+| AWS Config rules | Never block deployment | Report `NON_COMPLIANT` after deployment and may trigger remediation |
 
-## Severity Classification
+`complianceMode` defaults to `enforce` for `production` and `advisory` for `dev` and `staging`.
 
-### 🔴 Blocking (Hard Fail) - Deployment Prevented
+## Control Requirement Levels
 
-These checks **must pass** for deployment to succeed:
+`ComplianceMatrix` assigns each security control a requirement level per framework:
 
-| Check | Security Profile | Rationale |
-|-------|-----------------|-----------|
-| **AWS Config Enabled** | PRODUCTION | Required for audit evidence collection (SOC2, HIPAA, PCI-DSS) |
-| **CloudTrail Enabled** | PRODUCTION | Mandatory API audit logging for compliance frameworks |
-| **EBS Encryption** | PRODUCTION | Data at rest encryption required by most compliance frameworks |
-| **S3 Bucket Encryption** | PRODUCTION | Prevents accidental exposure of sensitive data |
-| **IAM Password Policy** | PRODUCTION | Enforces minimum password security standards |
-| **Root Account Access Keys** | ALL | Critical security vulnerability if present |
-| **VPC Flow Logs** | PRODUCTION | Network traffic logging required for security monitoring |
+| Level | Effect |
+|-------|--------|
+| **REQUIRED** | When any selected framework marks the control REQUIRED and `complianceMode` is not `disabled`, the security profile enables the control regardless of the deployment context value |
+| **ADVISORY** | The control follows the deployment context value or profile default; `ComplianceMatrix.shouldWarnForControl` reports it when it is disabled |
+| **NOT_APPLICABLE** | No effect |
 
-### 🟡 Advisory (Warnings) - Deployment Allowed
+See [Compliance Control Mapping](compliance/COMPLIANCE_CONTROL_MAPPING.md) for the controls and their levels.
 
-These checks generate warnings but don't block deployment:
+## Framework Validator Rules
 
-| Check | Security Profile | Rationale | Migration Notes |
-|-------|-----------------|-----------|----------------|
-| **Customer-Managed KMS Keys** | PRODUCTION | Recommended but AWS-managed keys acceptable | Previously blocking, now advisory as of v2.5.0 |
-| **S3 Versioning** | PRODUCTION | Best practice for data recovery | Can be enabled via auto-remediation if needed |
-| **Multi-AZ Deployment** | PRODUCTION | High availability recommendation | May increase costs, left to operator discretion |
-| **WAF Enabled** | PRODUCTION | DDoS protection recommended | Not all workloads require WAF |
-| **GuardDuty Enabled** | STAGING, PRODUCTION | Threat detection recommended | Optional for cost control |
+Each framework validator returns `ComplianceRule` results that either pass or fail. Some validators first call `ComplianceMatrix.validateControl`, which returns `PASS`, `WARN`, or `FAIL`; a `WARN` (the control is ADVISORY for the selected frameworks) is logged as a warning and recorded as a pass. Examples of rules that fail for `production` stacks:
 
-### ⚪ Informational - No Action Required
+| Rule ID | Validator | Condition |
+|---------|-----------|-----------|
+| `PCI-DSS-Req-6.6-WAF` | `PciDssRules` | `wafEnabled` is not `true` |
+| `PCI-DSS-Req-1.3-Network` | `PciDssRules` | Public network mode |
+| `PCI-DSS-Req-10.7-Retention` | `PciDssRules` | Log retention below 365 days |
+| `HIPAA-164.312(b)-FlowLogs` | `HipaaRules` | VPC Flow Logs disabled |
+| `SOC2-CC6.2-Auth` | `Soc2Rules` | `authMode` is `none` |
+| `KMS-ROTATION` | `KeyManagementRules` | Customer-managed key rotation not confirmed (`kmsKeyRotationEnabled`) |
 
-These checks are informational only:
+Organizational validators (`HipaaOrganizationalRules`, `GdprOrganizationalRules`) check attestation flags such as `awsBaaSigned`, but they are not installed today because their framework IDs cannot be selected.
 
-| Check | Purpose |
-|-------|---------|
-| **ALB Access Logging** | Performance monitoring and debugging |
-| **Detailed Billing** | Cost tracking and optimization |
-| **Auto-Scaling Configuration** | Capacity planning information |
+## Changing Enforcement
 
-## Changes from Previous Versions
+| Goal | Setting |
+|------|---------|
+| Report framework validator failures without blocking | `"complianceMode": "advisory"` |
+| Skip CloudForge framework validators entirely | `"auditManagerEnabled": false` |
+| Stop `ComplianceMatrix` from forcing REQUIRED controls on | `"complianceMode": "disabled"` (the PCI-DSS, HIPAA, SOC2, and GDPR validators still block in this mode) |
+| Suppress specific cdk-nag findings | `NagSuppressions`, as in `InteractiveDeployer.applyProductionNagSuppressions()` in `cfc-testing` |
 
-### v2.5.0 (Current Release)
+There is no per-check override property. Overriding a blocking check may violate a framework requirement; document every override for audit review.
 
-**Breaking Change - Advisory to Blocking:**
-- None in this release
+## Auto-Remediation
 
-**Breaking Change - Blocking to Advisory:**
-- **Customer-Managed KMS Keys**: Now advisory instead of blocking
-  - **Reason**: AWS-managed keys provide adequate encryption for many use cases
-  - **Migration**: Existing deployments with AWS-managed keys will now succeed
-  - **Recommendation**: Still use customer-managed keys for sensitive data (HIPAA, PCI-DSS)
+Auto-remediation does not change whether a check blocks. It fixes supported non-compliant resources after deployment:
 
-**New Checks:**
-- **CloudTrail Bucket Access Remediation**: Optional auto-fix for bucket policy issues
-- **VPC Default Security Group**: Blocking in PRODUCTION (best practice enforcement)
-
-### v2.4.0 (Previous Release)
-
-**Changed from Advisory to Blocking:**
-- **EBS Encryption**: Now blocks deployment if disabled in PRODUCTION
-  - **Reason**: Required by most compliance frameworks
-  - **Migration Path**: Enable EBS encryption via deployment context: `cfc.put("ebsEncryption", true)`
-
-## How to Override Severity Levels
-
-### Option 1: Deployment Context Override
-
-```json
-{
-  "security": "PRODUCTION",
-  "complianceOverrides": {
-    "allowAwsManagedKmsKeys": true,
-    "allowUnencryptedEbs": false,
-    "allowMissingWaf": true
-  }
-}
-```
-
-### Option 2: Custom Security Profile
-
-```java
-public class CustomProductionProfile implements SecurityProfileConfiguration {
-    @Override
-    public boolean isKmsCustomerManagedKeysRequired() {
-        return false;  // Advisory instead of blocking
-    }
-}
-```
-
-### Option 3: Disable Specific Checks
-
-```json
-{
-  "awsConfigEnabled": true,
-  "skipComplianceChecks": ["KMS_CMK_CHECK", "WAF_ENABLED"]
-}
-```
-
-**⚠️ Warning**: Overriding blocking checks may violate compliance requirements. Document all overrides for audit review.
-
-## Auto-Remediation Impact
-
-Auto-remediation **does not change severity levels**. It only automatically fixes non-compliant resources:
-
-- **Blocking checks with auto-remediation**: Still block initial deployment, but auto-fix subsequent drift
-- **Advisory checks with auto-remediation**: Generate warnings, then auto-fix in background
-
-Example: CloudTrail bucket access remediation
-- Check: CloudTrail enabled (BLOCKING in PRODUCTION)
-- If CloudTrail exists but can't write to S3: **Auto-remediation fixes bucket policy**
-- If CloudTrail doesn't exist: **Deployment blocked** (can't remediate what doesn't exist)
-
-## Security Profile Defaults
-
-| Check | DEV | STAGING | PRODUCTION |
-|-------|-----|---------|------------|
-| CloudTrail | Advisory | Advisory | **Blocking** |
-| AWS Config | Advisory | Advisory | **Blocking** |
-| EBS Encryption | Advisory | Advisory | **Blocking** |
-| S3 Encryption | Advisory | Advisory | **Blocking** |
-| KMS CMK | Informational | Advisory | Advisory |
-| WAF | Informational | Advisory | Advisory |
-| GuardDuty | Informational | Advisory | Advisory |
+- A blocking validator rule still stops synthesis; remediation only corrects drift after deployment.
+- Example: the CloudTrail bucket access remediation (`enableCloudTrailBucketAccessRemediation`) restores the bucket policy when CloudTrail cannot write to its bucket. It cannot create a trail that does not exist.
 
 ## Checking Compliance Before Deployment
 
-### Dry Run Mode
+Run synthesis without deploying:
 
 ```bash
-cdk synth --context dryRunCompliance=true
+cd cfc-testing
+cdk synth
 ```
 
-This generates a compliance report without deploying:
+Framework validator failures appear as `SEVERE` log lines and CDK validation errors in `enforce` mode, or `WARNING` log lines in `advisory` mode. cdk-nag findings are written to `cdk.out/*-NagReport.json` and `.csv`.
 
-```
-[BLOCKING] CloudTrail not enabled (PRODUCTION profile requires CloudTrail)
-[ADVISORY] Customer-managed KMS keys recommended for S3 buckets
-[INFORMATIONAL] WAF not configured (consider enabling for DDoS protection)
-```
+To run synthesis for several configurations, use `cfc-testing/scripts/deployment-dry-run-tracker.sh`.
 
-### CI/CD Integration
-
-```yaml
-# .github/workflows/compliance-check.yml
-- name: Check Compliance
-  run: |
-    cdk synth --context dryRunCompliance=true
-    if grep "BLOCKING" compliance-report.txt; then
-      echo "❌ Blocking compliance issues found"
-      exit 1
-    fi
-```
-
-## Migration Guide
-
-### Upgrading from v2.4.0 to v2.5.0
-
-**If you previously had KMS CMK check failures:**
-
-1. **Before v2.5.0**: Deployment blocked if not using customer-managed KMS keys
-2. **After v2.5.0**: Deployment succeeds with warning
-
-**Action Required**: None - deployments will now succeed
-
-**Recommendation**: Review warning and consider enabling customer-managed keys for sensitive data
-
-**Compliance Impact**:
-- **SOC2**: AWS-managed keys acceptable
-- **HIPAA**: Customer-managed keys still recommended (use `complianceOverrides` to enforce)
-- **PCI-DSS**: Customer-managed keys required (enable in security profile)
-
-## Support & Questions
+## Support
 
 For questions about severity levels:
-1. Check your security profile configuration: `ProductionSecurityProfileConfiguration.java`
-2. Review deployment context: `deployment-context.json`
+1. Check the security profile configuration, for example `ProductionSecurityProfileConfiguration.java`
+2. Review the deployment context (`deployment-context.json` or CDK context)
 3. File an issue: https://github.com/CloudForgeCI/cfc-core/issues
 
-**Before filing an issue, include:**
-- Security profile (DEV/STAGING/PRODUCTION)
-- Failed check name
-- Whether you need to override the check or fix the underlying issue
-- Compliance frameworks you're targeting (SOC2, HIPAA, PCI-DSS, etc.)
+Include:
+- Security profile (`dev`, `staging`, or `production`)
+- `complianceMode` and `complianceFrameworks`
+- The failed rule ID

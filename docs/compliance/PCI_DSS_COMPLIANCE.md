@@ -5,7 +5,7 @@
 **CloudForge CI provides infrastructure controls only. This is NOT full PCI-DSS compliance.**
 
 ### What This Gives You:
-- Infrastructure-level security controls aligned with PCI-DSS v3.2.1
+- Infrastructure-level security controls aligned with PCI DSS v4.0.1
 - Automated validation during deployment
 - Evidence collection for infrastructure requirements
 - AWS services configured per PCI-DSS best practices
@@ -26,7 +26,7 @@
 
 CloudForge CI includes **PCI-DSS validation rules** that evaluate the listed infrastructure controls for production environments processing cardholder data.
 
-The system automatically validates **12 PCI-DSS requirements** during deployment:
+When `auditManagerEnabled` is `true`, `PciDssRules` validates the following requirements during synthesis:
 
 | Requirement | Control | Status |
 |-------------|---------|--------|
@@ -40,9 +40,9 @@ The system automatically validates **12 PCI-DSS requirements** during deployment
 | Req 10 | Audit Logging | ✅ Automated Validation |
 | Req 11 | Security Monitoring | ✅ Automated Validation |
 
-**Implementation:** [`PciDssRules.java`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java)
+**Implementation:** [`PciDssRules.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/PciDssRules.java)
 
-The validation automatically runs for **PRODUCTION security profiles** only.
+The validation runs for the **production** security profile only. In `enforce` mode (the default for `production`), a failed check stops synthesis. For `production` stacks, cdk-nag's `PCIDSS321Checks` pack is also applied; cdk-nag does not provide a v4.0 pack.
 
 ---
 
@@ -59,7 +59,6 @@ This guide covers deploying CloudForge CI for environments that **process, store
 ```json
 {
   "securityProfile": "production",
-  "tier": "production",
   "networkMode": "private-with-nat",
   "authMode": "alb-oidc",
   "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx",
@@ -68,30 +67,32 @@ This guide covers deploying CloudForge CI for environments that **process, store
   "wafEnabled": true,
   "awsConfigEnabled": true,
   "auditManagerEnabled": true,
+  "complianceFrameworks": "pci-dss",
   "enableEncryption": true,
   "enableMonitoring": true,
-  "logRetentionDays": 730
+  "logRetentionDays": "731"
 }
 ```
 
-**Important**: `"auditManagerEnabled": true` enables PCI-DSS compliance validation during deployment. Without this flag, validators are skipped.
+**Important**: `"auditManagerEnabled": true` installs the PCI-DSS validators during synthesis. Without this flag, the CloudForge validators are skipped. Also set `"complianceFrameworks": "pci-dss"`.
 
 ### Deploy with Interactive CLI
 
 ```bash
+mvn -DskipTests install
 cd cfc-testing
-mvn spring-boot:run -Dspring-boot.run.arguments="--interactive"
+cdk deploy
 ```
 
 When prompted:
 1. **Security Profile**: Select `PRODUCTION`
 2. **Network Mode**: Select `private-with-nat`
-3. **Authentication**: Select `alb-oidc` or `jenkins-oidc`
+3. **Authentication**: Select `alb-oidc` or `application-oidc`
 4. **Configure SSO**: Provide AWS SSO details (with MFA enforced)
 5. **Enable WAF**: Yes
 6. **Enable AWS Config**: Yes
 7. **Enable Audit Manager**: Yes
-8. **Select Framework**: PCI DSS 3.2.1
+8. **Compliance Frameworks**: Select PCI-DSS
 
 ---
 
@@ -111,7 +112,7 @@ When prompted:
 - Security groups are properly configured
 
 **Evidence Collection:**
-- VPC Flow Logs (2-year retention)
+- VPC Flow Logs (retention set by `logRetentionDays`; at least 1 year)
 - Security group rules in AWS Config
 - Network architecture diagram (if using Audit Manager)
 
@@ -263,7 +264,7 @@ When prompted:
 **Infrastructure Controls Provided:**
 - AWS SSO integration with MFA support
 - ALB-OIDC authentication (before reaching Jenkins)
-- Jenkins-OIDC authentication (at application level)
+- Application-level OIDC authentication (`authMode: application-oidc`)
 
 **Automated Validation:**
 - Authentication is not set to "none"
@@ -321,10 +322,10 @@ This is an organizational control for physical data centers. For AWS-hosted infr
 ### Requirement 10: Track and monitor all access
 
 **Infrastructure Controls Provided:**
-- **CloudTrail**: All AWS API calls (2-year retention)
-- **VPC Flow Logs**: All network traffic (2-year retention)
-- **ALB Access Logs**: All web requests (2-year retention)
-- **CloudWatch Logs**: Application logs (2-year retention)
+- **CloudTrail**: All AWS API calls (retention set by `logRetentionDays`; at least 1 year)
+- **VPC Flow Logs**: All network traffic (retention set by `logRetentionDays`; at least 1 year)
+- **ALB Access Logs**: All web requests (retention set by `logRetentionDays`; at least 1 year)
+- **CloudWatch Logs**: Application logs (retention set by `logRetentionDays`; at least 1 year)
 - **File Integrity**: CloudTrail log file validation enabled
 
 **Automated Validation:**
@@ -451,11 +452,11 @@ This requirement is entirely policy and procedure-based:
 ### Step 2: Deploy Infrastructure
 
 ```bash
+mvn -DskipTests install
 cd cfc-testing
-mvn clean install
 
 # Interactive deployment with PCI-DSS options
-mvn spring-boot:run -Dspring-boot.run.arguments="--interactive"
+cdk deploy
 ```
 
 Or use deployment context JSON:
@@ -465,7 +466,6 @@ Or use deployment context JSON:
 cat > pci-dss-deployment.json << 'EOF'
 {
   "securityProfile": "production",
-  "tier": "production",
   "networkMode": "private-with-nat",
   "authMode": "alb-oidc",
   "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxxxxx",
@@ -474,7 +474,7 @@ cat > pci-dss-deployment.json << 'EOF'
   "wafEnabled": true,
   "awsConfigEnabled": true,
   "auditManagerEnabled": true,
-  "auditManagerFrameworkId": "PCI-DSS",
+  "complianceFrameworks": "pci-dss",
   "domain": "example.com",
   "subdomain": "jenkins-prod",
   "region": "us-east-1"
@@ -482,7 +482,8 @@ cat > pci-dss-deployment.json << 'EOF'
 EOF
 
 # Deploy
-mvn spring-boot:run -Dspring-boot.run.arguments="--deployment-context=pci-dss-deployment.json"
+java -cp "target/classes:target/dependency/*" \
+  com.cloudforgeci.samples.app.InteractiveDeployer --context pci-dss-deployment.json
 ```
 
 ### Step 3: Validate PCI-DSS Controls
@@ -510,7 +511,7 @@ If validation fails, you'll see specific errors:
    Use 'private-with-nat' for production systems processing card data.
 
 ❌ PCI-DSS Req 8.2: Authentication must be enabled for production environments.
-   Configure authMode='alb-oidc' or 'jenkins-oidc' with MFA-enabled identity provider.
+   Configure authMode='alb-oidc' or 'application-oidc' with MFA-enabled identity provider.
 ```
 
 ### Step 4: Post-Deployment Configuration
@@ -657,8 +658,8 @@ CloudForge CI automatically collects evidence through AWS Audit Manager:
 
 **Error**: "Log retention must be at least 365 days"
 ```bash
-# Solution: The production profile defaults to 2 years (730 days)
-# This should not fail unless manually overridden
+# Solution: The production profile defaults to 6 years (2192 days)
+# This fails only when logRetentionDays is set below 365
 # Ensure you're using securityProfile: "production"
 ```
 
@@ -715,7 +716,7 @@ Costs scale with:
 
 ### PCI-DSS Resources
 - [PCI Security Standards Council](https://www.pcisecuritystandards.org/)
-- [PCI-DSS v3.2.1 Documentation](https://www.pcisecuritystandards.org/document_library)
+- [PCI DSS Document Library](https://www.pcisecuritystandards.org/document_library)
 - [Cloud Computing Guidelines](https://www.pcisecuritystandards.org/pdfs/PCI_DSS_v2_Cloud_Guidelines.pdf)
 
 ### Jenkins Security

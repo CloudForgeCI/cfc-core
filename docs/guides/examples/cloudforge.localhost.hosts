@@ -3,12 +3,15 @@
 # Docs: docs/guides/LOCAL_EMULATOR_HOSTS.md
 # Setup: ./scripts/setup-cloudforge-local-hosts.sh
 #
-# Always include the scheme (otherwise Safari/Chrome may open a Google search):
-#   open http://nginx.localhost/
-#   open http://localstack.localhost/
-#   open http://stackport.localhost/
+# Always include the scheme (browsers may treat a bare name as a search):
+#   open http://nginx.cloudforge.localhost/
+#   open http://localstack.cloudforge.localhost/
+#   open http://stackport.cloudforge.localhost/
+#
+# The nginx edge routes only *.cloudforge.localhost names. The short *.localhost names
+# below reach an application only with an explicit port (for example jenkins.localhost:8080).
 
-# Platform (short *.localhost — address-bar friendly)
+# Platform (short names)
 127.0.0.1 localstack.localhost
 127.0.0.1 ministack.localhost
 127.0.0.1 emulator.localhost
@@ -29,7 +32,7 @@
 127.0.0.1 gitea.localhost
 127.0.0.1 metabase.localhost
 
-# Longer aliases (same IPs)
+# Canonical *.cloudforge.localhost names (routed by the nginx edge)
 127.0.0.1 localstack.cloudforge.localhost ministack.cloudforge.localhost emulator.cloudforge.localhost
 127.0.0.1 stackport.cloudforge.localhost nginx.cloudforge.localhost manager.cloudforge.localhost
 127.0.0.1 jenkins.cloudforge.localhost grafana.cloudforge.localhost prometheus.cloudforge.localhost

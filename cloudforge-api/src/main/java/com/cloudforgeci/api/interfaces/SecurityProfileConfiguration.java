@@ -173,9 +173,8 @@ public interface SecurityProfileConfiguration {
      * @param networkMode The network mode (public-no-nat, private-with-nat)
      * @return The number of NAT gateways to create (0, 1, or 2)
      */
-    // codeql[java/unused-parameter] -- topology/runtime go unused by every current implementation
-    // (Dev/Staging/Production all key only on networkMode); kept as a deliberate extensibility
-    // point per this method's own javadoc, not trimmed just because nothing needs it yet.
+    // codeql[java/unused-parameter] -- topology/runtime are unused by current implementations
+    // (which key only on networkMode) but kept as an extensibility point.
     int getNatGatewayCount(TopologyType topology, RuntimeType runtime, NetworkMode networkMode);
 
     /**

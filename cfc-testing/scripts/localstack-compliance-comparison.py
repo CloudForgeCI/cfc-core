@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Compares, per compliance config (framework x security profile x runtime), what CDK synth says
-should exist against what LocalStackTemplateAdapter actually produced for the real deploy --
-entirely from files CDK synth and the adapter already wrote to cdk.out/, no live LocalStack
-state or fresh AWS CLI calls required. Also folds in the real deploy PASS/FAIL result from
-deploy-localstack-compliance-matrix.sh and, where present, real cdk-nag findings.
+should exist against what LocalStackTemplateAdapter produced for the LocalStack deploy, using
+only files CDK synth and the adapter already wrote to cdk.out/ (no running LocalStack or AWS CLI
+calls required). Also includes the deploy PASS/FAIL result from
+deploy-localstack-compliance-matrix.sh and, where present, cdk-nag findings.
 
 Usage: ./localstack-compliance-comparison.py
 Reads (all from cdk.out/, written by CDK synth / LocalStackTemplateAdapter):
@@ -13,7 +13,7 @@ Reads (all from cdk.out/, written by CDK synth / LocalStackTemplateAdapter):
                                               never completed, e.g. an ENFORCE-mode cfn-guard block)
   <config>.localstack-adaptations.json       exact adaptation records (path/reason/original)
   AwsSolutions-<config>-NagReport.json       cdk-nag findings, where captured
-  scripts/validation-results/localstack-compliance-matrix-results.tsv   real deploy PASS/FAIL
+  scripts/validation-results/localstack-compliance-matrix-results.tsv   deploy PASS/FAIL
 Writes:
   scripts/validation-results/localstack-compliance-comparison.html
 """

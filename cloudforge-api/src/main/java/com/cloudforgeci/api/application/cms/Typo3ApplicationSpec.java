@@ -24,8 +24,7 @@ import java.util.Map;
  * <ul>
  *   <li>PHP 8.1-8.4 support (TYPO3 v12)</li>
  *   <li>MySQL/MariaDB/PostgreSQL/SQLite database</li>
- *   <li>Enterprise multi-site support</li>
- *   <li>Robust security and compliance</li>
+ *   <li>Multi-site support</li>
  *   <li>Long-term support (ELTS) versions</li>
  * </ul>
  *

@@ -6,55 +6,41 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Permission matrix for the <b>operator provisioning</b> layer — the AWS actions CloudForge
- * Manager's own task role needs, acting as the calling principal, to actually create/manage the
- * infrastructure a {@code deploy:create} target application's synthesized CloudFormation template
- * describes (VPC, EFS, ALB, ECS cluster/service/task definition).
+ * Permission matrix for the <b>operator provisioning</b> layer: the AWS actions CloudForge
+ * Manager's task role needs, as the calling principal, to create and manage the infrastructure a
+ * {@code deploy:create} target application's CloudFormation template describes (VPC, EFS, ALB,
+ * ECS cluster/service/task definition).
  *
  * <p><b>This is a different layer than {@link PermissionMatrix}.</b> {@code PermissionMatrix}
- * defines what a <i>deployed app's own task role</i> can do once it's running (pull its image,
- * read SSM params, put CloudWatch metrics). This class defines what <i>Manager's own role</i>
- * needs to bring that app's infrastructure into existence and tear it back down in the first
- * place — CloudFormation issues every one of these calls under Manager's identity, not the
- * deployed app's. A stack's own workload permissions being perfectly correct (which {@link
- * PermissionMatrix} already ensures) says nothing about whether Manager was ever allowed to
- * create that stack's VPC/EFS/ALB/ECS resources at all.</p>
+ * defines what a <i>deployed app's task role</i> can do at runtime (pull its image, read SSM
+ * parameters, put CloudWatch metrics). This class defines what <i>Manager's role</i> needs to
+ * create and delete that app's infrastructure, because CloudFormation issues those calls under
+ * Manager's identity.</p>
  *
- * <p>Tiered by the same {@link IAMProfile} enum {@link PermissionMatrix} uses, not a parallel
- * concept — MINIMAL is read-only (inventory/troubleshooting, no condition since Describe- and
- * List-family actions don't accept a Tags parameter to condition on), STANDARD is full lifecycle
- * for the
- * single Fargate+ALB+EFS shape every catalog app in this platform actually deploys today, and
- * EXTENDED adds the NAT/EIP/flow-log surface a private-with-egress network topology needs.
- * {@link ManagerOperatorIamSupport#deployStatements} currently bakes in EXTENDED unconditionally
- * for Manager's own task role, since there is no per-user AWS-level distinction yet — see the
- * design note below for where that's headed.</p>
+ * <p>Tiered by the same {@link IAMProfile} enum as {@link PermissionMatrix}: MINIMAL is
+ * read-only (inventory and troubleshooting; Describe/List actions accept no Tags parameter to
+ * condition on), STANDARD is the full lifecycle for the Fargate + ALB + EFS shape catalog apps
+ * deploy, and EXTENDED adds flow logs and custom network ACLs.
+ * {@link ManagerOperatorIamSupport#deployStatements} currently uses EXTENDED for Manager's task
+ * role because there is no per-user AWS-level distinction yet.</p>
  *
- * <p><b>Future direction, not built yet:</b> Manager already has a real, working per-user RBAC
- * policy catalog ({@code ManagerPolicyCatalog}, {@code manager_user_policy}) with a {@code
- * deploy:create} capability gating this exact feature today, and a real {@code sts:AssumeRole}
- * pathway ({@code AssumeRoleOperations}/{@code StsAssumeRoleService}) already built for
- * cross-account connections. The intended seam: instead of a {@code deploy:create} request
- * running directly under Manager's task role credentials, Manager assumes its own (or a
- * dedicated operator) role with a session policy scoped to the {@link IAMProfile} tier this
- * matrix says that request needs — so a Manager user without the {@code deploy:create} RBAC
- * capability can never reach AWS-level infrastructure-creation capability even if something
- * upstream misbehaves, because the session policy would never carry those actions to begin with.
- * This class is written so that seam only ever needs one source of truth on the AWS side — never
- * two independently-maintained action lists drifting apart.</p>
+ * <p><b>Planned direction:</b> rather than running {@code deploy:create} requests directly under
+ * Manager's task role, Manager would assume an operator role with a session policy scoped to the
+ * {@link IAMProfile} tier a request needs, using its existing RBAC catalog
+ * ({@code ManagerPolicyCatalog}) and {@code sts:AssumeRole} support. Users without the
+ * {@code deploy:create} capability could then never obtain infrastructure-creation permissions.
+ * This class is intended to remain the single source of truth for those action lists.</p>
  */
 public final class OperatorProvisioningPermissionMatrix {
     private OperatorProvisioningPermissionMatrix() {
     }
 
     /**
-     * {@link com.cloudforgeci.api.network.VpcFactory}'s {@code Vpc} L2 construct — every
-     * underlying EC2 networking resource type it can synthesize depending on subnet
-     * configuration (VpcFactory always creates public+private-with-egress subnet pairs across
-     * 2 AZs for every app in this catalog, hence NAT/EIP/route-table actions live at STANDARD,
-     * not EXTENDED, despite the class javadoc's general EXTENDED-adds-NAT framing above -- see
-     * {@link #EXTENDED_ONLY_VPC_PERMISSIONS} for what genuinely is EXTENDED-only: flow logs and
-     * custom network ACLs, neither of which VpcFactory enables by default).
+     * {@link com.cloudforgeci.api.network.VpcFactory}'s {@code Vpc} L2 construct: every EC2
+     * networking resource type it can synthesize. VpcFactory always creates public and
+     * private-with-egress subnet pairs across two AZs, so NAT/EIP/route-table actions are at
+     * STANDARD. {@link #EXTENDED_ONLY_VPC_PERMISSIONS} holds the EXTENDED-only actions (flow logs
+     * and custom network ACLs, which VpcFactory does not enable by default).
      */
     public static final Map<IAMProfile, List<String>> VPC_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
@@ -67,13 +53,9 @@ public final class OperatorProvisioningPermissionMatrix {
             "ec2:DescribeAvailabilityZones",
             "ec2:DescribeAddresses",
             "ec2:DescribeTags",
-            // Every EFS mount target IS an ENI under the hood -- CreateMountTarget/
-            // DeleteMountTarget call these EC2 APIs on the caller's own identity to actually
-            // create/tear it down, AWS's own documented required permissions for those two EFS
-            // actions. Missing here surfaces as a generic EFS-side 403 ("User is not authorized to
-            // perform that action on the specified resource") with no EC2 action named anywhere
-            // in the error, since it's EFS relaying an authorization failure from its own
-            // downstream EC2 call, not this app's own EC2 call.
+            // EFS mount targets are ENIs: CreateMountTarget/DeleteMountTarget call these EC2 APIs
+            // with the caller's identity (documented AWS requirement). When missing, EFS returns a
+            // generic 403 that does not name the EC2 action.
             "ec2:DescribeNetworkInterfaces"
         ),
         IAMProfile.STANDARD, List.of(
@@ -107,8 +89,7 @@ public final class OperatorProvisioningPermissionMatrix {
             "ec2:RevokeSecurityGroupEgress",
             "ec2:CreateTags",
             "ec2:DeleteTags",
-            // See the MINIMAL tier's ec2:DescribeNetworkInterfaces comment above -- the create/
-            // delete/modify half of the same EFS-mount-target-is-an-ENI requirement.
+            // Create/delete/modify half of the EFS mount-target ENI requirement (see MINIMAL above).
             "ec2:CreateNetworkInterface",
             "ec2:DeleteNetworkInterface",
             "ec2:ModifyNetworkInterfaceAttribute"
@@ -139,9 +120,8 @@ public final class OperatorProvisioningPermissionMatrix {
             "elasticfilesystem:DescribeMountTargetSecurityGroups",
             "elasticfilesystem:DescribeLifecycleConfiguration",
             "elasticfilesystem:DescribeBackupPolicy",
-            // CloudFormation checks for an existing replication configuration as part of
-            // DeleteFileSystem's own preconditions, even on a file system that was never
-            // replicated -- without this, deleting an EFS file system fails outright.
+            // CloudFormation checks for a replication configuration before DeleteFileSystem, even
+            // for file systems that were never replicated; deletion fails without this.
             "elasticfilesystem:DescribeReplicationConfigurations"
         ),
         IAMProfile.STANDARD, List.of(
@@ -173,12 +153,9 @@ public final class OperatorProvisioningPermissionMatrix {
             "elasticloadbalancing:DescribeListeners",
             "elasticloadbalancing:DescribeRules",
             "elasticloadbalancing:DescribeTags",
-            // The ELB service itself calls this EC2 API under the deploying caller's own identity
-            // while handling elasticloadbalancing:CreateLoadBalancer, to check the account's
-            // supported EC2-Classic/VPC platforms -- AWS's own documented required-permission for
-            // CreateLoadBalancer, not something this app calls directly. Missing here surfaces as
-            // "ec2:DescribeAccountAttributes ... (Service: ElasticLoadBalancingV2 ...)" the moment
-            // a deploy actually tries to create an ALB, never earlier.
+            // ELB calls this EC2 API with the caller's identity during CreateLoadBalancer (a
+            // documented AWS requirement). When missing, ALB creation fails with
+            // "ec2:DescribeAccountAttributes ... (Service: ElasticLoadBalancingV2 ...)".
             "ec2:DescribeAccountAttributes"
         ),
         IAMProfile.STANDARD, List.of(
@@ -207,20 +184,12 @@ public final class OperatorProvisioningPermissionMatrix {
 
     /**
      * {@link com.cloudforgeci.api.core.runtime.FargateRuntimeConfiguration}'s public ACM {@code
-     * Certificate} L2 construct (SSL + a domain this deployment controls, DNS-validated against
-     * the target app's Route53 hosted zone) -- a real, live-surfaced gap: every other category in
-     * this file has always covered the resource it names, but nothing ever granted the ACM
-     * actions CloudFormation's {@code AWS::CertificateManager::Certificate} handler calls under
-     * the caller's own identity, so any app requesting SSL with a custom domain failed outright
-     * the moment it reached certificate creation ("not authorized to perform: acm:RequestCertificate").
-     * Grouped with the network category ({@link #getNetworkPermissions}), not compute/data --
-     * this certificate exists to become the ALB's HTTPS listener cert, alongside the same
-     * {@code FargateRuntimeConfiguration} pass that also creates the ALB's private-CA fallback
-     * path (an {@code AWS::ACMPCA::CertificateAuthority}, its own resource type with its own
-     * `acm-pca:*` action prefix -- not covered here, since Manager's own deployments never
-     * exercise Path B, and adding an unused permission for a codepath nothing has ever needed
-     * would be exactly the kind of narrower-than-it-should-be JSON byte spend {@link
-     * #getNetworkPermissions}'s own javadoc explains this file has to budget carefully).
+     * Certificate} L2 construct (SSL with a custom domain, DNS-validated against the app's Route 53
+     * hosted zone). CloudFormation's {@code AWS::CertificateManager::Certificate} handler calls
+     * these actions with the caller's identity. Grouped with the network category
+     * ({@link #getNetworkPermissions}) because the certificate backs the ALB's HTTPS listener.
+     * The private-CA fallback ({@code acm-pca:*}) is a separate category; see
+     * {@link #ACM_PCA_PERMISSIONS}.
      */
     public static final Map<IAMProfile, List<String>> ACM_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
@@ -237,15 +206,12 @@ public final class OperatorProvisioningPermissionMatrix {
     );
 
     /**
-     * {@link com.cloudforgeci.api.network.DomainFactory}'s {@code HostedZone} L2 construct --
-     * another real, live-surfaced gap in the same family as {@link #ACM_PERMISSIONS} above.
-     * MINIMAL covers {@code CloudForgeSynthesizer#seedHostedZoneContext}'s own
-     * {@code ListHostedZonesByName} lookup (that call runs under this same operator role, not a
-     * deployed app's -- see that method's own javadoc for why it exists at all) plus the
-     * read-only calls {@code HostedZone.fromLookup}'s existing-zone path needs; STANDARD covers
-     * {@code createZone=true}'s own hosted-zone lifecycle, and the {@code ARecord}/similar record
-     * sets {@code FargateRuntimeConfiguration}/the CMS and Jenkins topology configurations point
-     * at the app's ALB or CloudFront distribution once a zone is in hand either way.
+     * {@link com.cloudforgeci.api.network.DomainFactory}'s {@code HostedZone} L2 construct.
+     * MINIMAL covers the {@code ListHostedZonesByName} lookup in
+     * {@code CloudForgeSynthesizer#seedHostedZoneContext} (which runs under this operator role)
+     * and the read-only calls {@code HostedZone.fromLookup} needs; STANDARD covers the hosted-zone
+     * lifecycle for {@code createZone=true} and the record sets that point at the app's ALB or
+     * CloudFront distribution.
      */
     public static final Map<IAMProfile, List<String>> ROUTE53_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
@@ -263,12 +229,10 @@ public final class OperatorProvisioningPermissionMatrix {
         )
     );
 
-    /** {@link com.cloudforgeci.api.core.runtime.FargateRuntimeConfiguration}'s Path B private-CA
-     *  fallback ({@code CfnCertificateAuthority}/{@code CfnCertificateAuthorityActivation}) — SSL
-     *  enabled with no custom domain, the ALB-DNS-name-only branch alongside {@link
-     *  #ACM_PERMISSIONS}'s own Path A. A separate category, not folded into ACM_PERMISSIONS,
-     *  since {@code acm-pca:*} is its own action prefix, distinct from {@code acm:*} even though
-     *  both are certificate management. */
+    /** {@link com.cloudforgeci.api.core.runtime.FargateRuntimeConfiguration}'s private-CA
+     *  fallback ({@code CfnCertificateAuthority}/{@code CfnCertificateAuthorityActivation}), used
+     *  when SSL is enabled without a custom domain. Separate from {@link #ACM_PERMISSIONS} because
+     *  {@code acm-pca:*} is a distinct action prefix. */
     public static final Map<IAMProfile, List<String>> ACM_PCA_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
             "acm-pca:DescribeCertificateAuthority",
@@ -368,17 +332,15 @@ public final class OperatorProvisioningPermissionMatrix {
         )
     );
 
-    /** Manager creating the target app's own {@code AWS::Logs::LogGroup} as part of its
-     *  infrastructure -- separate from {@link PermissionMatrix#CORE_PERMISSIONS}, which is what
-     *  the deployed app's own task role needs to write into that log group at runtime. */
+    /** Creating the target app's {@code AWS::Logs::LogGroup}. Separate from
+     *  {@link PermissionMatrix#CORE_PERMISSIONS}, which covers the deployed app's task role writing
+     *  to that log group at runtime. */
     public static final Map<IAMProfile, List<String>> LOGS_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
             "logs:DescribeLogGroups",
             "logs:ListTagsForResource",
-            // The Logs tab's actual event-fetching call (CloudWatchLogsStackOperations
-            // #fetchLogEvents) -- every other action here only describes/manages the log group
-            // itself, never reads what's actually in it, so this was missing entirely until a
-            // live Logs tab request against a real stack surfaced it.
+            // Reads log events for Manager's Logs tab (CloudWatchLogsStackOperations
+            // #fetchLogEvents); the other actions here only describe or manage the log group.
             "logs:FilterLogEvents"
         ),
         IAMProfile.STANDARD, List.of(
@@ -408,9 +370,8 @@ public final class OperatorProvisioningPermissionMatrix {
             "rds:DescribeDBSubnetGroups",
             "rds:DescribeDBParameterGroups",
             "rds:DescribeDBParameters",
-            // CloudFormation resolves the engine's own default parameter values before applying
-            // ParameterGroup's custom overrides, even when every override is explicit -- without
-            // this, DBParameterGroup creation fails outright.
+            // CloudFormation reads the engine's default parameter values before applying
+            // ParameterGroup overrides; DBParameterGroup creation fails without this.
             "rds:DescribeEngineDefaultParameters",
             "rds:ListTagsForResource",
             "kms:DescribeKey",
@@ -456,9 +417,8 @@ public final class OperatorProvisioningPermissionMatrix {
             "kms:UntagResource",
             "kms:ScheduleKeyDeletion",
             "kms:CancelKeyDeletion",
-            // Secrets Manager -- Secret.Builder's generateSecretString is what actually calls
-            // GetRandomPassword server-side; RemovalPolicy.DESTROY means a real DeleteSecret (not
-            // just a scheduled deletion) has to work too.
+            // Secrets Manager: generateSecretString calls GetRandomPassword server-side, and
+            // RemovalPolicy.DESTROY requires DeleteSecret.
             "secretsmanager:CreateSecret",
             "secretsmanager:DeleteSecret",
             "secretsmanager:GetRandomPassword",
@@ -567,8 +527,8 @@ public final class OperatorProvisioningPermissionMatrix {
      *  scaleOnCpuUtilization}/{@code EnableScalingProps} and {@link
      *  com.cloudforgeci.api.compute.Ec2Factory}'s {@code AutoScalingGroup#scaleOnCpuUtilization} --
      *  two distinct AWS services (Application Auto Scaling registers the ECS service as a
-     *  scalable target; EC2 Auto Scaling owns the ASG directly), both genuinely "scaling," so kept
-     *  as one category rather than two near-empty ones. */
+     *  scalable target; EC2 Auto Scaling owns the ASG directly), kept as one category rather than
+     *  two small ones. */
     public static final Map<IAMProfile, List<String>> SCALING_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
             "application-autoscaling:DescribeScalableTargets",
@@ -662,10 +622,9 @@ public final class OperatorProvisioningPermissionMatrix {
 
     /** {@link com.cloudforgeci.api.storage.BackupFactory}'s {@code BackupVault}/{@code
      *  BackupPlan}/{@code BackupSelection} L2 constructs -- {@code BackupSelection} also creates
-     *  its own IAM role (see {@code ManagerOperatorIamSupport#IAM_ROLE_MANAGE_RESOURCES}'s
-     *  {@code -CfcRdsMonitor}-style pattern list and its own "known gap" note for
-     *  {@code BackupSelectionRole} specifically -- that role's own create/manage permissions live
-     *  there, not here). */
+     *  its own IAM role, explicitly named (see {@code BackupFactory#createSelectionRole}) so
+     *  {@code ManagerOperatorIamSupport#IAM_ROLE_MANAGE_RESOURCES}'s {@code -CfcBackupSelection}
+     *  pattern can match it; that role's own create/manage permissions live there, not here. */
     public static final Map<IAMProfile, List<String>> BACKUP_PERMISSIONS = Map.of(
         IAMProfile.MINIMAL, List.of(
             "backup:DescribeBackupVault",
@@ -743,19 +702,12 @@ public final class OperatorProvisioningPermissionMatrix {
     }
 
     /**
-     * {@link #getRequiredPermissions}'s full action list, split roughly in half by measured JSON
-     * byte size rather than by category count -- {@link #VPC_PERMISSIONS}/{@link #ALB_PERMISSIONS}/
-     * {@link #EFS_PERMISSIONS} ("network") on one side, {@link #ECS_PERMISSIONS}/{@link
-     * #LOGS_PERMISSIONS}/{@link #DATABASE_PERMISSIONS}/{@link #COMPLIANCE_PERMISSIONS}
-     * ("compute/data") on the other. Exists because of a hard AWS ceiling: an IAM role's
-     * <i>combined</i> inline-policy size across every inline policy document it carries is
-     * capped at 10,240 bytes total, not a separate budget per document -- this class's flat list
-     * (212 actions, ~6.3KB on its own) exceeds that cap alongside the role's other inline
-     * policies. {@link ManagerOperatorIamSupport} attaches each half as its own customer-managed
-     * policy instead of inline specifically to sidestep that combined-inline ceiling (a managed
-     * policy's size budget is independent of it), so the split point here only needs to keep each
-     * half comfortably under a managed policy's own (smaller, ~6,144-byte default) size limit,
-     * measured against the real synthesized byte counts per AWS service prefix.
+     * The "network" half of {@link #getRequiredPermissions}: VPC, EFS, ALB, ACM, ACM PCA,
+     * Route 53, CloudFront, and app S3 bucket actions. {@link #getComputeAndDataPermissions}
+     * returns the rest. The list is split by JSON size, not category count, because the full list
+     * exceeds a role's combined 10,240-byte inline-policy limit alongside its other policies.
+     * {@link ManagerOperatorIamSupport} attaches each half as its own customer-managed policy, so
+     * each half must stay under the 6,144-byte managed-policy limit.
      */
     public static List<String> getNetworkPermissions(IAMProfile tier) {
         List<String> actions = new java.util.ArrayList<>();

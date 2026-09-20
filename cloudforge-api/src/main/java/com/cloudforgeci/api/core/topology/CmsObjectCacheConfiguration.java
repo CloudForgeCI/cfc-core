@@ -257,8 +257,9 @@ public final class CmsObjectCacheConfiguration {
         // Memory management
         parameters.put("maxmemory-policy", "allkeys-lru");
 
-        // Persistence (disable for pure cache use case)
-        parameters.put("appendonly", "no");
+        // Do not set "appendonly": ElastiCache rejects it ("The parameter appendonly cannot be
+        // modified", InvalidRequest) because it does not support Redis AOF persistence; it uses
+        // its own snapshot-based backups instead.
 
         // Performance tuning
         parameters.put("tcp-keepalive", "300");

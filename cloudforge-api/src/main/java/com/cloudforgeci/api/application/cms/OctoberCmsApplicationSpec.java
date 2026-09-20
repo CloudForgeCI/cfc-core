@@ -56,10 +56,9 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== Constants ==========
 
     protected static final String APPLICATION_ID = "october-cms";
-    // php:8.2-fpm-alpine has no web server -- PHP-FPM only speaks FastCGI on port 9000, so nothing
-    // ever answered the ALB's health check on port 80 and the ECS service could never stabilize.
-    // -apache bundles Apache + mod_php in one container, same pattern every other working PHP CMS
-    // spec in this package already uses (ConcreteCms, Dolphin, MyBB, PhpBB).
+    // The -apache image bundles Apache + mod_php and serves port 80. The fpm-alpine variant has no
+    // web server (PHP-FPM speaks FastCGI on 9000 only), so the ALB health check on port 80 would
+    // never pass. Same approach as the ConcreteCms, Dolphin, MyBB, and PhpBB specs.
     protected static final String DEFAULT_IMAGE = "php:8.2-apache";
     protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";

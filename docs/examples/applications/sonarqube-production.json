@@ -2,7 +2,6 @@
   "stackName": "SonarQube-Production",
   "applicationId": "sonarqube",
   "applicationName": "SonarQube",
-  "description": "Production SonarQube code quality server",
   "environment": "production",
 
   "runtime": "ec2",
@@ -16,11 +15,7 @@
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "sonarqube-prod-CHANGEME",
-  "cognitoMfaEnabled": true,
-  "cognitoMfaMethod": "totp",
+  "authMode": "none",
 
   "instanceType": "t3.medium",
   "minInstanceCapacity": 1,

@@ -1,289 +1,164 @@
 # Contributing to CloudForge CI
 
-Thank you for your interest in contributing to CloudForge CI! This document provides guidelines for contributing to the project.
-
-## Table of Contents
+Thank you for your interest in contributing to CloudForge CI. This guide covers the
+development setup, the build and test commands, and how changes are reviewed.
 
 - [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Setup](#development-setup)
-- [How to Contribute](#how-to-contribute)
-- [Pull Request Process](#pull-request-process)
-- [Coding Standards](#coding-standards)
+- [Development setup](#development-setup)
+- [Reporting issues](#reporting-issues)
+- [Submitting changes](#submitting-changes)
+- [Where code belongs](#where-code-belongs)
+- [Coding standards](#coding-standards)
 - [Testing](#testing)
 - [Documentation](#documentation)
-
----
+- [Adding an application](#adding-an-application)
+- [License](#license)
 
 ## Code of Conduct
 
-By participating in this project, you agree to maintain a respectful and inclusive environment for all contributors.
+By participating in this project, you agree to maintain a respectful and inclusive
+environment for all contributors.
 
----
-
-## Getting Started
-
-1. Fork the repository on GitHub
-2. Clone your fork locally:
-   ```bash
-   git clone https://github.com/CloudForgeCI/cfc-core.git
-   cd cfc-core
-   ```
-3. Add the upstream repository:
-   ```bash
-   git remote add upstream https://github.com/CloudForgeCI/cfc-core.git
-   ```
-
----
-
-## Development Setup
+## Development setup
 
 ### Prerequisites
 
-- **Java 21+** (OpenJDK recommended)
-- **Maven 3.9+**
-- **Node.js 18+**
-- **AWS CDK CLI** (`npm install -g aws-cdk`)
-- **AWS Account** (for testing deployments)
+- Java 25 and Maven 3.9+
+- Docker, to run MiniStack or LocalStack locally
+- Node.js and the AWS CDK CLI (`npm install -g aws-cdk`), and an AWS account, only for
+  deploying to AWS
 
-### Build Commands
+### Get the code
+
+Fork the repository on GitHub, then:
 
 ```bash
-# Fast build (skip tests)
-mvn -T1C -DskipTests install
-
-# Full build with tests
-mvn clean verify
-
-# Build single module
-mvn -pl cloudforge-api -am package
-
-# Run tests only
-mvn test
-
-# Run specific test
-mvn test -Dtest=YourTestClass
+git clone https://github.com/<your-username>/cfc-core.git
+cd cfc-core
+git remote add upstream https://github.com/CloudForgeCI/cfc-core.git
 ```
 
----
+### Build
 
-## How to Contribute
+Tests are skipped by default (`skipTests=true` in the root `pom.xml`); the `ci` profile
+enables them.
 
-### Reporting Bugs
+```bash
+mvn clean install                                          # build all modules, no tests
+mvn -T1C clean install -Djacoco.skip=true                  # faster parallel build
+mvn clean verify -Pci                                      # build with tests and coverage checks
+mvn -pl cloudforge-api -am install                         # one module and its dependencies
+mvn -f cfc-testing/pom.xml package -Dmaven.test.skip=true  # sample application
+```
 
-1. Check if the bug has already been reported in [GitHub Issues](https://github.com/CloudForgeCI/cfc-core/issues)
-2. If not, create a new issue with:
-   - Clear title and description
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Your environment (OS, Java version, AWS region)
-   - Relevant logs or error messages
+See [Advanced commands](docs/ADVANCED.md#advanced-commands) for more.
 
-### Suggesting Features
+## Reporting issues
 
-1. Open a GitHub issue with the `enhancement` label
-2. Describe the feature and its use case
-3. Explain why it would be valuable
-4. Consider implementation approaches
+Use the [issue templates](https://github.com/CloudForgeCI/cfc-core/issues/new/choose).
+Include steps to reproduce, expected and actual behavior, your environment (OS, Java version,
+deployment target, AWS region), the relevant part of your `deployment-context.json` with
+secrets removed, and any error output.
 
-### Submitting Changes
+Prefix the title with the owning module when you know it, for example `[module:localstack]`:
 
-1. Create a feature branch:
+| Prefix | Module |
+|---|---|
+| `module:core` | `cloudforge-core` |
+| `module:api` | `cloudforge-api` |
+| `module:ministack` | `cloudforge-ministack` |
+| `module:localstack` | `cloudforge-localstack` |
+| `module:sample` | `cfc-testing`, documentation, or the sample entry point |
+
+Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+## Submitting changes
+
+1. Create a branch from `develop`:
    ```bash
-   git checkout -b feature/your-feature-name
+   git fetch upstream
+   git checkout -b feature/your-feature-name upstream/develop
    ```
-2. Make your changes following our [Coding Standards](#coding-standards)
-3. Add or update tests as needed
-4. Update documentation
-5. Commit with clear messages:
-   ```bash
-   git commit -m "Add feature: description of what you did"
-   ```
-6. Push to your fork:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-7. Open a Pull Request
+2. Make your change, with tests and documentation updates.
+3. Run the tests for the modules you changed, for example `mvn -pl cloudforge-api -am -Pci verify`.
+4. Commit with a clear message and push to your fork.
+5. Open a pull request against `develop`. Describe the change, reference related issues
+   (for example "Fixes #123"), and list any breaking changes.
 
----
+A maintainer reviews each pull request. Every merge to `develop` is published as a release
+(see [Maven Release Process](docs/MAVEN_RELEASE_PROCESS.md)), so keep `develop` releasable.
+Do not change the `<version>` in `pom.xml`; the release workflow manages it.
 
-## Pull Request Process
+## Where code belongs
 
-1. **Before submitting:**
-   - Ensure all tests pass: `mvn clean verify`
-   - Run code formatting (if applicable)
-   - Update documentation for any changed functionality
-   - Add tests for new features
+Put changes in the module that owns the behavior:
 
-2. **PR Description:**
-   - Describe what the PR does
-   - Reference related issues (e.g., "Fixes #123")
-   - Include screenshots for UI changes
-   - List any breaking changes
+| Module | Owns |
+|---|---|
+| `cloudforge-core` | Contracts: `DeploymentConfig`, enums, `ApplicationSpec` and other interfaces, local-emulator interfaces (`com.cloudforge.core.local`) |
+| `cloudforge-api` | `CloudForgeDeployment`, application specifications, CDK factories, compliance rules |
+| `cloudforge-ministack` | MiniStack template adapter, deployer, and platform runtime |
+| `cloudforge-localstack` | LocalStack template adapter, deployer, and platform runtime |
+| `cfc-testing` | Sample entry point (`InteractiveDeployer`, `LocalDeploymentShell`), example plugins, and scripts; not library logic |
 
-3. **Review Process:**
-   - Maintainers will review your PR
-   - Address feedback and comments
-   - Once approved, a maintainer will merge
+Emulator-specific fixes go in the target module, CMS and factory fixes in `cloudforge-api`,
+and shared interface changes in `cloudforge-core`.
 
-4. **After Merge:**
-   - Delete your feature branch
-   - Update your fork:
-     ```bash
-     git checkout main
-     git pull upstream main
-     git push origin main
-     ```
+## Coding standards
 
----
-
-## Coding Standards
-
-### Java Code
-
-- Follow standard Java conventions
-- Use meaningful variable and method names
-- Add Javadoc comments for public APIs
-- Keep methods focused and concise
-- Avoid deep nesting (max 3-4 levels)
-
-### Code Organization
-
-- Place new features in appropriate packages:
-  - `cloudforge-core`: Core interfaces and annotations
-  - `cloudforge-api`: Implementation classes
-  - `cfc-testing`: Test utilities and examples
-
-### Naming Conventions
-
-- Classes: `PascalCase` (e.g., `JenkinsApplicationSpec`)
-- Methods: `camelCase` (e.g., `applicationId()`)
-- Constants: `UPPER_SNAKE_CASE` (e.g., `DEFAULT_PORT`)
-- Packages: `lowercase` (e.g., `com.cloudforgeci.api.application`)
-
----
+- Follow standard Java conventions: `PascalCase` classes, `camelCase` methods,
+  `UPPER_SNAKE_CASE` constants, lowercase packages.
+- Add JavaDoc to public APIs.
+- Keep methods focused and nesting shallow.
+- Write comments that explain what the code does and why a non-obvious choice was made.
+  Keep investigation history in pull requests and issues, not in comments.
 
 ## Testing
 
-### Test Requirements
-
-- All new features must include tests
-- Bug fixes should include regression tests
-- Aim for >80% code coverage for new code
-
-### Test Types
-
-1. **Unit Tests:**
-   ```java
-   @Test
-   public void testApplicationId() {
-       ApplicationSpec spec = new JenkinsApplicationSpec();
-       assertEquals("jenkins", spec.applicationId());
-   }
-   ```
-
-2. **Integration Tests:**
-   - Located in `cfc-testing/src/test/java/`
-   - Test complete deployment scenarios
-   - Use `cdk synth` to validate CloudFormation
-
-3. **Truth Table Tests:**
-   - Test compliance rule combinations
-   - See [COMPLIANCE_TRUTH_TABLES.md](docs/testing/COMPLIANCE_TRUTH_TABLES.md)
-
-### Running Tests
+- New features need tests; bug fixes need a regression test.
+- The build enforces JaCoCo coverage minimums in `verify` with the `ci` profile.
+- Prefer tests in the module that owns the behavior. Keep `cfc-testing` tests focused on
+  entry-point wiring and context propagation.
 
 ```bash
-# All tests
-mvn test
-
-# Specific module
-mvn -pl cloudforge-api test
-
-# Integration tests
-cd cfc-testing
-./test-synth.sh
-
-# Compliance validation
-cd cfc-testing
-mvn test -Dtest=ComplianceTruthTableTest
+mvn -pl cloudforge-api -Pci test                                  # one module
+mvn -pl cloudforge-api -Pci test -Dtest=ComplianceFactoryTest     # one class
+mvn -pl cloudforge-api -Pci test -Dtest=TruthTableValidationTest  # compliance truth tables
+mvn -pl cloudforge-ministack -Pci,ministack test                  # includes tests that need a running MiniStack
+mvn -f cfc-testing/pom.xml test                                   # sample application tests
 ```
 
----
+See [Compliance Truth Tables](docs/testing/COMPLIANCE_TRUTH_TABLES.md) and
+[Extended Testing](docs/guides/EXTENDED-TESTING.md) for the synthesis and validation scripts.
 
 ## Documentation
 
-### Documentation Standards
+- Update documentation in the same pull request as the behavior it describes.
+- The root [readme.md](readme.md) is a short entry point. Put configuration and command
+  details in [docs/ADVANCED.md](docs/ADVANCED.md) and topic guides under `docs/`.
+- Application guides live in `docs/guides/applications/` and `docs/guides/cms/`; example
+  deployment contexts in `docs/examples/`.
+- When adding or moving a page, update `docs/web/sidebars.js` and the
+  [documentation index](docs/README.md). See
+  [Documentation Maintenance](docs/DOCUMENTATION_SETUP.md).
+- Write plainly: describe behavior and limitations, and avoid marketing language.
 
-- Update README.md for major features
-- Add application guides for new applications
-- Document configuration options
-- Include examples and use cases
+## Adding an application
 
-### Documentation Locations
+1. Implement `com.cloudforge.core.interfaces.ApplicationSpec` (and `DatabaseSpec`, `CmsSpec`,
+   or OIDC integration interfaces as needed) in the appropriate package under
+   `cloudforge-api/src/main/java/com/cloudforgeci/api/application/`.
+2. Register the class in
+   `cloudforge-api/src/main/resources/META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec`.
+3. Add tests for the specification.
+4. Add a guide under `docs/guides/applications/` (or `docs/guides/cms/`) and an example
+   context under `docs/examples/applications/`.
 
-- **Main README:** `/readme.md`
-- **Compliance Docs:** `/docs/compliance/`
-- **Application Guides:** `/docs/guides/applications/`
-- **Setup Guides:** `/docs/setup/`
-- **Examples:** `/docs/examples/`
-
-### Writing Style
-
-- Use clear, concise language
-- Include code examples
-- Add troubleshooting sections
-- Link to related documentation
-
----
-
-## Adding New Applications
-
-To add a new application:
-
-1. **Create ApplicationSpec:**
-   ```java
-   package com.cloudforgeci.api.application.category;
-
-   public class MyAppApplicationSpec implements ApplicationSpec {
-       @Override
-       public String applicationId() {
-           return "myapp";
-       }
-       // Implement other methods...
-   }
-   ```
-
-2. **Register in ServiceLoader:**
-   - Add to `META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec`
-
-3. **Add Application Guide:**
-   - Create `/docs/guides/applications/myapp.md`
-   - Follow the template from existing guides
-
-4. **Add Example Configuration:**
-   - Create `/docs/examples/examples/myapp-dev.json`
-   - Include production example if applicable
-
-5. **Update Documentation:**
-   - Add to main README application list
-   - Update application catalog
-   - Add to plugin ecosystem docs
-
----
+Applications can also live in your own project as plugins; see the
+[Application Plugin Guide](docs/plugins/APPLICATION-PLUGIN-GUIDE.md) and the
+`CraftCmsApplicationSpec` example in `cfc-testing`.
 
 ## License
 
-By contributing to CloudForge CI, you agree that your contributions will be licensed under the Apache License 2.0.
-
----
-
-## Questions?
-
-- Open a GitHub Discussion
-- Comment on relevant issues
-- Check existing documentation in `/docs`
-
----
-
-**Thank you for contributing to CloudForge CI!**
+By contributing, you agree that your contributions are licensed under the
+[Apache License 2.0](LICENSE).

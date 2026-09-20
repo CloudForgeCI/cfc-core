@@ -14,8 +14,8 @@ docs/web/
 │       └── custom.css    # Custom styling
 └── static/               # Static assets
     └── img/
-        ├── logo.svg      # Replace with your brand logo
-        └── favicon.ico   # Replace with your favicon
+        ├── logo.svg      # Site logo
+        └── favicon.ico   # Site favicon
 ```
 
 ## Documentation Content
@@ -43,13 +43,9 @@ This generates static content into the `build` directory, which can be served on
 
 ## Customization
 
-### Replace Placeholder Logo
+### Logo and Favicon
 
-Replace `static/img/logo.svg` with your CloudForge CI brand logo (SVG format recommended).
-
-### Replace Favicon
-
-Replace `static/img/favicon.ico` with your actual favicon file.
+The site logo is `static/img/logo.svg` and the favicon is `static/img/favicon.ico`.
 
 ### Customize Colors
 
@@ -65,4 +61,4 @@ The `.github/workflows/publish-reports.yml` workflow automatically:
 ## More Information
 
 - [Docusaurus Documentation](https://docusaurus.io/)
-- [CloudForge CI Main README](../README.md)
+- [CloudForge CI documentation index](../README.md)

@@ -2,7 +2,6 @@
   "stackName": "CloudForgeManager-Dev-Auth",
   "applicationId": "cloudforge-manager",
   "applicationName": "CloudForge Manager",
-  "description": "Operations Panel with Cognito application-oidc (DeploymentConfig Cognito fields)",
   "environment": "development",
 
   "runtime": "fargate",
@@ -18,7 +17,7 @@
 
   "authMode": "application-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "cfc-manager-dev-CHANGEME",
+  "cognitoDomainPrefix": "cfc-manager-dev-changeme",
   "cognitoCreateGroups": true,
   "cognitoAdminGroupName": "ManagerAdmins",
   "cognitoUserGroupName": "ManagerUsers",

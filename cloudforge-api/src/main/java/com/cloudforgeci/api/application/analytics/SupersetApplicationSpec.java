@@ -319,11 +319,20 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "EOF"
         );
 
+        // Read the admin password from the secret ApplicationFactory provisions (see
+        // autoAdminPasswordEnvVar()) when one exists; otherwise generate one locally.
+        // TODO: SUPERSET_SECRET_KEY is always generated locally; no provisioned secret exists for it yet.
+        String adminPasswordArn = context.autoAdminPasswordSecretArn();
+        String adminPasswordLine = adminPasswordArn != null && !adminPasswordArn.isBlank()
+            ? "SUPERSET_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id " + adminPasswordArn
+                + " --query SecretString --output text)"
+            : "SUPERSET_ADMIN_PASSWORD=$(openssl rand -base64 16)";
+
         // Run Superset container
         builder.addCommands(
-            "# Generate secure secret key and admin password",
-            "SUPERSET_SECRET_KEY=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-superset}/secret-key --query SecretString --output text 2>/dev/null || openssl rand -base64 32)",
-            "SUPERSET_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${STACK_NAME:-superset}/admin-password --query SecretString --output text 2>/dev/null || openssl rand -base64 16)",
+            "# Generate secure secret key; retrieve admin password (real secret if provisioned)",
+            "SUPERSET_SECRET_KEY=$(openssl rand -base64 32)",
+            adminPasswordLine,
             "echo \"Generated Superset admin password (save this): $SUPERSET_ADMIN_PASSWORD\" >> /var/log/userdata.log",
             "",
             "# Run Superset container",
@@ -362,8 +371,7 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "",
             "1. Access Superset:",
             "   - Navigate to http://superset.example.com:8088",
-            "   - Login with: admin / admin",
-            "   - CHANGE THE PASSWORD IMMEDIATELY!",
+            "   - Login with: admin / <the generated password logged above>",
             "",
             "2. Connect to databases:",
             "   - Go to Data > Databases",
@@ -411,6 +419,13 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
     public OidcIntegration getOidcIntegration() {
         // OIDC not supported - requires custom superset_config.py configuration
         return null;
+    }
+
+    /** Names the shell variable {@link #configureUserData} assigns the admin password to, so
+     *  {@code ApplicationFactory} provisions a Secrets Manager secret for it. */
+    @Override
+    public String autoAdminPasswordEnvVar() {
+        return "SUPERSET_ADMIN_PASSWORD";
     }
 
     @Override

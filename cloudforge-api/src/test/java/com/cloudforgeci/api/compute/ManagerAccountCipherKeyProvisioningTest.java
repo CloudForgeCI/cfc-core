@@ -97,14 +97,10 @@ class ManagerAccountCipherKeyProvisioningTest {
         )), 0);
     }
 
-    /** Minimal stand-in for {@code CloudForgeManagerApplicationSpec} — see class javadoc. Real
-     *  bug this test's own staleness caused: cipher-key provisioning used to key off {@code
-     *  applicationId() == "cloudforge-manager"} directly; now that {@code
-     *  ApplicationFactory}/{@code ContainerFactory} instead key off {@link
-     *  ApplicationSpec#cipherKeySecretEnvVar()} returning a non-blank value (see that method's
-     *  own javadoc), a fake spec that never overrides it — the interface default is blank — gets
-     *  zero {@code AWS::SecretsManager::Secret} resources synthesized, silently reflecting the
-     *  new contract-driven behavior rather than the old hardcoded one this test still names. */
+    /** Minimal stand-in for {@code CloudForgeManagerApplicationSpec} (see class javadoc).
+     *  Cipher-key provisioning keys off {@link ApplicationSpec#cipherKeySecretEnvVar()} returning a
+     *  non-blank value, not off {@code applicationId()}, so this spec must override it; the
+     *  interface default is blank and would produce no {@code AWS::SecretsManager::Secret}. */
     private static final class FakeManagerSpec implements ApplicationSpec {
         @Override public String applicationId() { return "cloudforge-manager"; }
         @Override public String cipherKeySecretEnvVar() { return ManagerEnvKeys.ACCOUNT_SECRET_KEY; }

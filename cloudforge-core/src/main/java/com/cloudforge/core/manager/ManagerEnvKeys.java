@@ -18,8 +18,8 @@ public final class ManagerEnvKeys {
      *  when SSL is on but no domain/cert is configured, or absent entirely when SSL is off. Set
      *  by {@code ContainerFactory}, computed the same way {@code FargateRuntimeConfiguration}
      *  itself decides which cert path to take — see that class for why Private CA certs can't
-     *  answer "yes" here. Consumed by cloudforge-manager to decide whether embedding a real
-     *  payment form (which requires the hosting page to be genuinely trusted) is safe on this
+     *  answer "yes" here. Consumed by cloudforge-manager to decide whether embedding a
+     *  payment form (which requires a browser-trusted hosting page) is safe on this
      *  installation, or whether to fall back to a redirect-based purchase flow instead. */
     public static final String PUBLIC_TLS_TRUSTED = "CFC_MANAGER_PUBLIC_TLS_TRUSTED";
     public static final String TARGET = "CFC_MANAGER_TARGET";
@@ -102,8 +102,8 @@ public final class ManagerEnvKeys {
      *  Manager with a different role than the one its own AWS calls run as. */
     public static final String TRUST_PRINCIPAL_ARN = "CFC_MANAGER_TRUST_PRINCIPAL_ARN";
 
-    /** Matches {@code ManagerRuntimeConfiguration.LicenseSeat}'s "stopgap" env-var path exactly
-     *  (cloudforge-manager) — a deploy-time-supplied customer license key, delivered as a
+    /** The env var {@code ManagerRuntimeConfiguration.LicenseSeat} (cloudforge-manager) reads
+     *  for a deploy-time-supplied customer license key, delivered as a
      *  Secrets Manager-backed ECS Secret, never a literal value in the task definition. */
     public static final String LICENSE_KEY = "CFC_MANAGER_LICENSESEAT_LICENSE_KEY";
 

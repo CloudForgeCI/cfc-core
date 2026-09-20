@@ -122,7 +122,7 @@ public class InteractiveDeployer {
             List<ApplicationInfo> apps = new ArrayList<>();
 
             for (ApplicationSpec spec : entry.getValue()) {
-                apps.add(new ApplicationInfo(
+                ApplicationInfo info = new ApplicationInfo(
                     spec.applicationId(),
                     spec.displayName(),
                     spec.description(),
@@ -132,7 +132,9 @@ public class InteractiveDeployer {
                     spec.defaultCpu(),
                     spec.defaultMemory(),
                     spec.defaultInstanceType()
-                ));
+                );
+                info.supportsAutoScaling = spec.supportsAutoScaling();
+                apps.add(info);
             }
 
             categories.put(category, apps);
@@ -142,31 +144,7 @@ public class InteractiveDeployer {
     }
 
     public static void main(String[] args) {
-        // Check if we're being called from our own subprocess or non-interactive CDK command
-        String cfcDeploying = System.getenv("CFC_DEPLOYING");
-
-        // Check parent process for cdk destroy/diff/list commands (skip menu for these)
-        boolean skipMenu = cfcDeploying != null;
-        if (!skipMenu) {
-            try {
-                // Check grandparent since CDK spawns node which spawns java
-                ProcessHandle current = ProcessHandle.current();
-                for (int i = 0; i < 3; i++) {  // Check up to 3 levels
-                    ProcessHandle ancestor = current.parent().orElse(null);
-                    if (ancestor == null) break;
-                    String cmd = ancestor.info().commandLine().orElse("");
-                    if (cmd.contains("cdk destroy") || cmd.contains("cdk diff") || cmd.contains("cdk list")) {
-                        skipMenu = true;
-                        break;
-                    }
-                    current = ancestor;
-                }
-            } catch (Exception e) {
-                // Ignore - can't determine parent process
-            }
-        }
-
-        if (skipMenu) {
+        if (isInvokedByCdkCli()) {
             // We're in a deploy subprocess or cdk destroy - just synthesize quietly without menu
             try {
                 String contextFile = System.getenv("CFC_CONTEXT_FILE");
@@ -272,6 +250,36 @@ public class InteractiveDeployer {
             e.printStackTrace();
             System.exit(1);
         }
+    }
+
+    /**
+     * True when this process was launched as the CDK CLI's own "app" synth subprocess (i.e.
+     * {@code cdk deploy}/{@code destroy}/{@code diff}/{@code synth}/{@code list} re-invoking the
+     * command {@code cdk.json}'s {@code app} field names -- which is this same class, since it
+     * doubles as both the interactive CLI a human runs directly and the CDK app entrypoint) rather
+     * than by a human running it directly. Detected by walking up to three levels of process
+     * ancestry looking for a {@code cdk <verb>} command line (CDK spawns {@code node}, which spawns
+     * this JVM) -- no env var needed, since the ancestry is present regardless of which CDK verb
+     * triggered it.
+     */
+    static boolean isInvokedByCdkCli() {
+        try {
+            ProcessHandle current = ProcessHandle.current();
+            for (int i = 0; i < 3; i++) {  // Check up to 3 levels
+                ProcessHandle ancestor = current.parent().orElse(null);
+                if (ancestor == null) break;
+                String cmd = ancestor.info().commandLine().orElse("");
+                if (cmd.contains("cdk deploy") || cmd.contains("cdk destroy")
+                        || cmd.contains("cdk diff") || cmd.contains("cdk list")
+                        || cmd.contains("cdk synth")) {
+                    return true;
+                }
+                current = ancestor;
+            }
+        } catch (Exception e) {
+            // Ignore - can't determine parent process
+        }
+        return false;
     }
 
     private static void printWelcomeBanner() {
@@ -834,15 +842,18 @@ public class InteractiveDeployer {
                                      config.securityProfile == SecurityProfile.PRODUCTION);
         config.enableMonitoring = promptYesNo("Enable CloudWatch Monitoring", defaultMonitoring);
 
-        // Truth table: AWS Config only for PRODUCTION
+        // Truth table: AWS Config only for PRODUCTION -- both prompts default to no: accepting
+        // the default on a routine redeploy must never silently enable AWS Config, and must
+        // especially never silently create its account-level singleton infrastructure (Recorder +
+        // Delivery Channel) a second time when another stack already owns it in this region.
         if (config.securityProfile == SecurityProfile.PRODUCTION) {
-            config.awsConfigEnabled = promptYesNo("Enable AWS Config Compliance Monitoring", true);
+            config.awsConfigEnabled = promptYesNo("Enable AWS Config Compliance Monitoring", false);
 
             if (config.awsConfigEnabled) {
                 System.out.println("\n📋 AWS Config Infrastructure Setup:");
                 System.out.println("AWS Config has account-level singleton resources (Recorder + Delivery Channel).");
                 System.out.println("Only ONE stack per region should create these resources.");
-                config.createConfigInfrastructure = promptYesNo("Create Config Infrastructure (first stack in region)", true);
+                config.createConfigInfrastructure = promptYesNo("Create Config Infrastructure (first stack in region)", false);
             } else {
                 config.createConfigInfrastructure = false; // No infrastructure if Config disabled
             }
@@ -1566,7 +1577,7 @@ public class InteractiveDeployer {
                  ", topology=" + cfcContext.get("topology") +
                  ", stackName=" + cfcContext.get("stackName"));
 
-        // Show comprehensive configuration summary
+        // Show configuration summary
         showConfigurationSummary(config);
 
         System.out.println("\n🚀 Deployment Options:");
@@ -1928,7 +1939,7 @@ public class InteractiveDeployer {
     }
 
     /**
-     * Prints a post-deploy install checklist for CloudForge Manager: the real URL resolved
+     * Prints a post-deploy install checklist for CloudForge Manager: the URL resolved
      * from the just-deployed stack's own CFN outputs (same precedence
      * {@code CloudFormationInventory} uses, via the shared
      * {@link com.cloudforge.core.local.PreferredUrlResolver}), plus auth-mode-specific next
@@ -1936,8 +1947,9 @@ public class InteractiveDeployer {
      * where first-run setup is reachable from for {@code none}. {@code outputs} is null/empty
      * for the AWS {@code cdk deploy} subprocess paths (choices 2/3), which print CFN's own
      * "Outputs:" section directly to the console (inherited stdio) but don't hand back a
-     * structured result to resolve a URL from here — that gap is tracked, not silently masked
-     * by falling back to a possibly-stale config URL.
+     * structured result to resolve a URL from here. In that case the {@code cfc.manager.url}
+     * property (via {@code ApplicationPropertyLoader}) is used if set; otherwise nothing is
+     * printed.
      */
     // Package-private, not private: InteractiveDeployerTest exercises this directly rather than
     // through the full interactive-menu/subprocess flow the other choices in this class go
@@ -1981,15 +1993,12 @@ public class InteractiveDeployer {
             java.util.List<String> cmd = new java.util.ArrayList<>();
             cmd.add("cdk");
             cmd.add("deploy");
-            cmd.add("--output");
-            cmd.add("cdk.out.deploy");
             for (String arg : extraArgs) {
                 cmd.add(arg);
             }
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.inheritIO();
-            pb.environment().put("CFC_DEPLOYING", "true");
             Process proc = pb.start();
             int exitCode = proc.waitFor();
 
@@ -2007,7 +2016,6 @@ public class InteractiveDeployer {
         try {
             ProcessBuilder pb = new ProcessBuilder("cdk", "destroy", "--force", stackName);
             pb.inheritIO();
-            pb.environment().put("CFC_DEPLOYING", "true");
             Process proc = pb.start();
             int exitCode = proc.waitFor();
 
@@ -3089,16 +3097,16 @@ public class InteractiveDeployer {
 
     /**
      * Warns (does not block) when the configured auth mode isn't in the ApplicationSpec's
-     * target-aware supported list — e.g. {@code alb-oidc} on MiniStack/LocalStack, where there's
-     * no real ALB and the template adapter silently strips the OIDC listener action instead of
-     * deploying what was configured. Uses {@code ApplicationSpec.getSupportedAuthModes(String)}
+     * target-aware supported list — e.g. {@code alb-oidc} on MiniStack/LocalStack, which don't
+     * support ALB authenticate actions, so the template adapter strips the OIDC listener action
+     * instead of deploying what was configured. Uses {@code ApplicationSpec.getSupportedAuthModes(String)}
      * — a target-aware override any {@code ApplicationSpec} can provide (default: same as the
      * no-arg list; {@code CloudForgeManagerApplicationSpec} overrides it) — that
      * {@code collectConfiguration()} can't apply when the auth-mode prompt runs, since the
      * deploy target isn't chosen until later in the flow (menu option 6/7/8/2/3). This runtime
      * check exists because laptop/MiniStack/LocalStack and AWS support different auth-mode sets:
-     * without it, an auth mode unsupported on the eventual target would deploy silently instead
-     * of surfacing to the operator.
+     * without it, an auth mode unsupported on the eventual target would deploy without any
+     * warning to the operator.
      */
     private static void warnIfAuthModeUnsupportedOnTarget(DeploymentConfig config, DeploymentTarget target) {
         if (config.applicationSpec == null || config.authMode == null) {

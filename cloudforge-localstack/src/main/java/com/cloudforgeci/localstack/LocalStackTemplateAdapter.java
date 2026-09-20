@@ -184,16 +184,12 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                 databases.put(entry.getKey(), new LocalDatabaseEndpoint(
                     LocalStackPostgresCompanion.hostname(), LocalStackPostgresCompanion.PORT));
             } else if (engine.startsWith("mysql") || engine.startsWith("mariadb")) {
-                // 4510, not 4512 — a real RDS_MYSQL_DOCKER=1 instance's Endpoint.Port matches the
-                // first port in LocalStack's own default EXTERNAL_SERVICE_PORTS_START..END range
-                // (4510-4559), which is where its dynamic-port-per-resource allocator starts.
-                // Known limitation this hardcoded value doesn't solve (pre-existing, not
-                // introduced here): the adapter runs at synth/adapt time, before the actual RDS
-                // resource — and its allocated port — exist, so it can't ask LocalStack which
-                // port THIS instance actually got. Fine for today's one-MySQL-RDS-instance-at-a-
-                // time usage; a second simultaneous mysql/mariadb instance in the same LocalStack
-                // session would very likely get a different port and this would need to become
-                // genuinely dynamic (e.g. resolved post-deploy, not baked into the template).
+                // 4510, not 4512 — an RDS_MYSQL_DOCKER=1 instance's Endpoint.Port matches the
+                // first port in LocalStack's default EXTERNAL_SERVICE_PORTS_START..END range
+                // (4510-4559), where its dynamic-port-per-resource allocator starts. This is a
+                // guess: the adapter runs before the RDS instance and its allocated port exist.
+                // LocalStackMysqlPortReconciler corrects it after deploy when another MySQL/MariaDB
+                // instance in the same LocalStack session already holds this port.
                 databases.put(entry.getKey(), new LocalDatabaseEndpoint("cfc-localstack", 4510));
             }
         });
@@ -223,18 +219,17 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                     // A GetAtt doesn't have to be the WHOLE value — an app spec building a combined
                     // "host:port" env var (e.g. WORDPRESS_DB_HOST, from Java string concatenation on
                     // CDK tokens) synthesizes as an Fn::Join wrapping a nested Fn::GetAtt alongside a
-                    // literal like ":3306", not a bare Fn::GetAtt. Missing this left WORDPRESS_DB_HOST
-                    // pointing at LocalStack's RDS-emulation hostname — unreachable from inside the
-                    // ECS task's own Docker network — even though the plain DB_HOST env var right next
-                    // to it was correctly rewritten, so WordPress reported "Database Error" (a real DB
-                    // is running; wrong host).
+                    // literal like ":3306", not a bare Fn::GetAtt. Without this, WORDPRESS_DB_HOST
+                    // would keep LocalStack's RDS-emulation hostname — unreachable from inside the
+                    // ECS task's own Docker network — even when the plain DB_HOST env var next to it
+                    // is rewritten, and WordPress reports "Database Error".
                     //
                     // The literal that follows the rewritten host (":3306" here) needs handling too,
                     // not just the GetAtt itself — it's the RDS port the app spec assumed at synth
                     // time (`host + ":" + port` with a plain int, never a token, so it was never a
                     // GetAtt for this method to see in the first place), not LocalStack's actual
-                    // emulator listener port. Left alone, the host fix alone still connects to the
-                    // right host on the wrong port — same "Database Error" symptom, harder to spot
+                    // emulator listener port. Rewriting only the host would connect to the right
+                    // host on the wrong port — same "Database Error" symptom, harder to spot
                     // since DB_HOST/DB_PORT (separate, bare-GetAtt env vars) look correctly rewritten.
                     if (value.get("Fn::Join") instanceof ArrayNode join && join.size() == 2
                             && join.get(1) instanceof ArrayNode parts) {
@@ -640,14 +635,11 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
      * Host ports the local emulator stack itself always occupies — {@code cfc-emulator-edge}
      * (nginx) on 80, LocalStack's own gateway on 4566, StackPort on 8888. An application whose
      * container listens on one of these (WordPress's default image listens on 80, for instance)
-     * can never actually get that host port: something else already holds it before the app's
-     * task even starts. Pinning {@code HostPort} to it anyway — the pre-existing behavior — just
-     * makes Docker/LocalStack silently fall back to a random host port while every URL this
-     * adapter generates keeps confidently pointing at the reserved one, which is unreachable for
-     * the app and already serves something else entirely. Caught live: a WordPress deploy's
-     * {@code LocalStackApplicationUrl} output claimed {@code http://localhost:80/}, which is
-     * actually {@code cfc-emulator-edge}'s own root ("route not found"), while the real container
-     * ended up on an unrelated, undiscoverable Docker-assigned port instead.
+     * can never get that host port: something else already holds it before the app's task
+     * starts. Pinning {@code HostPort} to it anyway makes Docker/LocalStack fall back to a random
+     * host port while every URL this adapter generates points at the reserved one, which serves
+     * something else (e.g. {@code http://localhost:80/} is {@code cfc-emulator-edge}'s own root,
+     * "route not found").
      */
     private static final Set<Integer> RESERVED_LOCAL_HOST_PORTS = Set.of(
         LocalEmulatorDefaults.EMULATOR_EDGE_HOST_PORT,
@@ -659,7 +651,7 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
      * {@code HostPort} to {@code ContainerPort} and redirect ALB forward/TLS actions
      * to {@code http://localhost:{port}} like MiniStack — except when that port is one of the
      * emulator stack's own reserved ports (see {@link #RESERVED_LOCAL_HOST_PORTS}), where pinning
-     * would silently fail; leave the ALB forward action alone in that case so the (still working,
+     * would fail; leave the ALB forward action alone in that case so the (still working,
      * if asset-loading-limited) ELB-hostname URL remains the reachable one instead of a broken
      * localhost:port promise.
      */
@@ -999,8 +991,7 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
      * @return the derived {@code <subdomain>.cloudforge.localhost} edge hostname, or {@code null}
      *         when no RecordSet was found (no subdomain configured) or its {@code Name} wasn't a
      *         plain string (e.g. still an unresolved CDK token) — the caller falls back to the
-     *         existing per-application-type hostname in that case, exactly as before this method
-     *         started capturing anything.
+     *         per-application-type hostname in that case.
      */
     private static String removeRoute53RecordSets(
             ObjectNode template,
@@ -1304,15 +1295,14 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                     // itself (Manager's own Spring Boot process, doing deploy:create against
                     // LocalStack) has no such access, so creation predictably fails (and even
                     // where the mkdir itself *would* succeed inside that caller's own container,
-                    // the resulting SourcePath still wouldn't resolve to anything real on the
-                    // host — it'd just be a path inside that caller's own throwaway filesystem).
+                    // the resulting SourcePath still wouldn't resolve to anything on the host —
+                    // it'd just be a path inside that caller's own throwaway filesystem).
                     // Hard-aborting the whole deploy over this would be needlessly strict;
                     // degrading to an ephemeral task-scoped Docker volume instead lets the
                     // deploy — and the container's own expectation of *something* mounted at this
-                    // path — still succeed. The real tradeoff (this app's data won't survive a
-                    // task replacement when deployed this way) is real and worth knowing, not
-                    // something to hide —
-                    // that's what the adaptation `reason` below surfaces.
+                    // path — still succeed. The tradeoff (this app's data won't survive a task
+                    // replacement when deployed this way) is surfaced in the adaptation `reason`
+                    // below.
                     hostMountUsable = false;
                 }
                 if (hostMountUsable) {
@@ -1386,16 +1376,16 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
     /**
      * {@code defaultVolumeRoot()} falls back to {@code user.dir} whenever {@code
      * LOCALSTACK_VOLUME_ROOT} isn't set — meaningful only when the JVM adapting the template is
-     * running directly on the real host (the interactive deployer, a CLI, a test). {@code
+     * running directly on the host (the interactive deployer, a CLI, a test). {@code
      * deploy:create}/{@code deploy:catalog} run this exact same adapt pipeline from *inside
      * Manager's own already-running container*, though, where {@code user.dir} is {@code /app}
-     * (the Dockerfile's WORKDIR), a path meaningless to the real Docker host — without this fix,
-     * every EFS-backed volume for every app deployed through Manager's UI (Jenkins, GitLab,
-     * Manager itself) would bind-mount to a bogus {@code /app/.localstack-volumes/...} path,
-     * silently auto-created fresh and empty by Docker each time, quietly resetting all of that
-     * app's persistent data on every redeploy while the deploy still "succeeds".
+     * (the Dockerfile's WORKDIR), a path meaningless to the Docker host. Every EFS-backed volume
+     * for every app deployed through Manager's UI (Jenkins, GitLab, Manager itself) would then
+     * bind-mount to a bogus {@code /app/.localstack-volumes/...} path that Docker auto-creates
+     * empty, resetting the app's persistent data on every redeploy while the deploy still
+     * "succeeds".
      *
-     * <p>Fix: resolve the real value once, from a process where {@code user.dir} is trustworthy
+     * <p>This method resolves the value once, from a process where {@code user.dir} is trustworthy
      * (this method's own {@code defaultVolumeRoot()} fallback still does exactly that), and bake
      * it into Manager's own launched container as {@code LOCALSTACK_VOLUME_ROOT}. From then on,
      * every synth+adapt Manager's own process performs — including adapting its own next
@@ -1513,18 +1503,17 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
     }
 
     /**
-     * Plain HTTP, not HTTPS — LocalStack's edge (2026.7.2) completes a genuine TLS handshake with
+     * Plain HTTP, not HTTPS — LocalStack's edge (2026.7.2) completes a TLS handshake with
      * a valid cert on this port, but then 400s every {@code /_aws/elb/<name>/}
      * path-style request over HTTPS regardless of hostname (bare {@code localhost} or {@code
      * localhost.localstack.cloud}), HTTP version, or trailing slash — a platform-level routing gap
      * for this specific proxy path, not a client/cert issue (same 400 for the subdomain-style
      * {@code <name>.elb.localhost.localstack.cloud} ELB hostname too). Plain HTTP on the same port
-     * reaches the app correctly every time. Almost nothing exercised this path in practice before —
-     * {@link #addLocalUrlOutput}'s {@code OUTPUT_APPLICATION_URL} branch already prefers a direct
+     * reaches the app correctly. {@link #addLocalUrlOutput}'s {@code OUTPUT_APPLICATION_URL} branch already prefers a direct
      * {@code http://localhost:<port>/} whenever the app's own port isn't one of {@link
      * #RESERVED_LOCAL_HOST_PORTS}, so this path-style fallback (and this method) mainly gets
-     * exercised by apps whose default port collides with a reservation — WordPress (port 80,
-     * reserved by the emulator edge) being the one that surfaced this.
+     * exercised by apps whose default port collides with a reservation, such as WordPress (port 80,
+     * reserved by the emulator edge).
      */
     private static String pathStyleBrowserUrl(int gatewayPort, String albLocalName) {
         return "http://localhost:" + gatewayPort + "/_aws/elb/" + albLocalName + "/";
@@ -1795,17 +1784,16 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                 } else if (MANAGER_OIDC_ENDPOINT_ENV_NAMES.contains(name)) {
                     // CloudForge Manager's own application-oidc env vars (built server-side by
                     // ApplicationOidcFactory/CognitoAuthenticationFactory, not baked into a
-                    // Command string the way Jenkins/GitLab's are) never went through this
-                    // rewrite at all until now — Manager's Cognito Hosted UI redirect pointed at
-                    // the real, unreachable amazoncognito.com domain on LocalStack instead of the
-                    // emulator's `/_aws/cognito-idp/...` endpoints this same helper already knows
-                    // how to target for every other application-oidc app.
+                    // Command string the way Jenkins/GitLab's are) need the same rewrite, or
+                    // Manager's Cognito Hosted UI redirect points at the amazoncognito.com domain,
+                    // unreachable on LocalStack, instead of the emulator's `/_aws/cognito-idp/...`
+                    // endpoints used for every other application-oidc app.
                     //
                     // Unlike JAVA_OPTS/GITLAB_OMNIBUS_CONFIG, these values are not always plain
                     // strings: the issuer/JWKS URIs embed the Cognito User Pool's ID, which isn't
                     // known until deploy time, so CDK builds them as an `Fn::Join` combining a
                     // literal prefix with a `Ref`/`Fn::GetAtt` token. Coercing a non-textual node
-                    // with `.asText()` silently discards that intrinsic and replaces it with an
+                    // with `.asText()` discards that intrinsic and replaces it with an
                     // empty string instead of rewriting it — handle those two by walking the join
                     // parts directly rather than reusing rewriteOidcCommandNode/
                     // rewriteLocalStackOidcText: the JWKS URI's correct target gateway (container-
@@ -1967,10 +1955,9 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
         // (an Fn::Join/Fn::GetAtt token, not a literal placeholder host like Jenkins/GitLab's
         // "jenkins.local.test"), so findNamedLocalCallbackHost above never matches for it. The
         // emulator edge still assigns Manager a stable vhost (HOST_MANAGER) regardless — this
-        // template just never says so anywhere. Falling back to raw localhost:<port> here used
-        // the container's own internal port, which the browser can't reach directly and which
-        // doesn't survive LocalStack respawning the container onto a new host port either;
-        // HOST_MANAGER does.
+        // template just never says so anywhere. Raw localhost:<port> would use the container's
+        // internal port, which the browser can't reach directly and which doesn't survive
+        // LocalStack respawning the container onto a new host port; HOST_MANAGER does.
         if (referencesManagerOidcRedirect(template)) {
             return "http://" + LocalEmulatorDefaults.HOST_MANAGER;
         }
@@ -2046,8 +2033,8 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
                     // Manager has no such placeholder — without a custom domain configured, its
                     // canonical CallbackURLs are built from the ALB's real DNS name via a
                     // deploy-time Fn::Join/Fn::GetAtt token, which arrives here as a JSON object,
-                    // not a string. Falling through to Jenkins's own callback path for that case
-                    // silently registered the wrong path for Manager's Cognito client.
+                    // not a string. Falling through to Jenkins's callback path for that case would
+                    // register the wrong path for Manager's Cognito client.
                     sawIntrinsic = true;
                 }
             }

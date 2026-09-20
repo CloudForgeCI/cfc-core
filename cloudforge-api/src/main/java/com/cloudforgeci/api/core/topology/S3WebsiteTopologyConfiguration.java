@@ -88,9 +88,8 @@ public final class S3WebsiteTopologyConfiguration implements TopologyConfigurati
     c.once("S3:Distribution", () -> {
       if (!Boolean.TRUE.equals(c.cfc.cloudfrontEnabled())) return;
 
-      // S3Origin (Origin Access Identity) is deprecated in favor of Origin Access Control --
-      // the CDK-recommended, more modern access mechanism CloudFront now provisions and grants
-      // the bucket policy for automatically, the same way S3Origin used to for OAI.
+      // Origin Access Control (the CDK-recommended replacement for the deprecated OAI-based
+      // S3Origin); CDK grants the bucket policy automatically.
       var origin = S3BucketOrigin.withOriginAccessControl(c.websiteBucket.get().orElseThrow(
               () -> new IllegalStateException("websiteBucket must exist before creating CloudFront Distribution")));
 

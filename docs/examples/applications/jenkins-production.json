@@ -2,7 +2,6 @@
   "stackName": "Jenkins-Production",
   "applicationId": "jenkins",
   "applicationName": "Jenkins CI",
-  "description": "Production Jenkins with SOC2 compliance and build agents",
   "environment": "production",
 
   "runtime": "ec2",
@@ -18,7 +17,7 @@
 
   "authMode": "application-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "jenkins-prod-CHANGEME",
+  "cognitoDomainPrefix": "jenkins-prod-changeme",
   "cognitoMfaEnabled": true,
   "cognitoMfaMethod": "totp",
   "cognitoCreateGroups": true,

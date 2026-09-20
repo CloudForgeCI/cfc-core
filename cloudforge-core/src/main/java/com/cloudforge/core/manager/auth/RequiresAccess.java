@@ -15,9 +15,9 @@ import java.lang.annotation.Target;
  * <p>Enforced by {@code AuthorizationInterceptor} against
  * {@code com.cloudforgeci.manager.web.AccessGuard#requireAccess}. Every method on a Manager
  * {@code @RestController} must carry exactly one of {@link RequiresAccess}, {@link RequiresCaller},
- * {@link RequiresPolicy}, or {@link RequiresAdmin} — enforced at build time by
+ * {@link RequiresPolicy}, {@link RequiresAnyPolicy}, or {@link RequiresAdmin} — enforced at build time by
  * {@code ControllerAnnotationCoverageTest} so a forgotten annotation fails the build instead of
- * silently leaving an endpoint unguarded.</p>
+ * leaving an endpoint unguarded.</p>
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)

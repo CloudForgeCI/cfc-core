@@ -105,12 +105,9 @@ class DeploymentContextCatalogTest {
      * DeployOptions} passes {@code catalogDirectory = Path.of("deployment-contexts")} — a bare,
      * single-segment relative path. {@code Path.of("deployment-contexts").resolveSibling
      * ("panel-stacks.json")} has no parent ({@code Path.getParent()} is {@code null} for a
-     * single-segment path), which used to NPE inside {@code registerKnownStack}'s {@code
-     * Files.createDirectories(null)} call — an exception type its own {@code IOException}-only
-     * catch didn't swallow, so it escaped {@code persist()} entirely and, in production, aborted
-     * {@code CloudForgeDeployment.finalizeResult} before it reached emulator-edge reconciliation —
-     * silently leaving the freshly-deployed stack's hostname unrouted in the local nginx edge
-     * (surfaced as "CloudForge application route not found" in a browser).
+     * single-segment path). {@code persist()} must handle that without throwing, because an
+     * exception would abort {@code CloudForgeDeployment.finalizeResult} before emulator-edge
+     * reconciliation, leaving the new stack's hostname unrouted in the local nginx edge.
      */
     @Test
     void persistDoesNotThrowWhenCatalogDirectoryIsABareSingleSegmentRelativePath() throws Exception {

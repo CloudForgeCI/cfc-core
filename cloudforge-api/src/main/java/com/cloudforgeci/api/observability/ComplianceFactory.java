@@ -190,8 +190,10 @@ public class ComplianceFactory extends BaseFactory {
 
         // STEP 1: Check if Config INFRASTRUCTURE should be created (Recorder + Delivery Channel)
         // These are account-level singleton resources - only ONE per region per account allowed
-        // createConfigInfrastructure controls ONLY infrastructure, NOT rules
-        boolean shouldCreateInfra = Boolean.TRUE.equals(createConfigInfrastructure);
+        // createConfigInfrastructure controls ONLY infrastructure, NOT rules, and applies only
+        // when awsConfigEnabled is true (matching the field's visibleWhen).
+        boolean shouldCreateInfra = Boolean.TRUE.equals(awsConfigEnabled)
+            && Boolean.TRUE.equals(createConfigInfrastructure);
         boolean configInfraExists = false;
 
         // Only check for existing infrastructure if we're planning to create it
@@ -480,9 +482,8 @@ public class ComplianceFactory extends BaseFactory {
 
             // CDK's LogGroup#encryptionKey does NOT grant the CloudWatch Logs service permission
             // to use the key — a customer-managed key defaults to an account-root-only policy, so
-            // without this explicit grant CreateLogGroup fails with AccessDenied the moment this
-            // path is actually exercised (PRODUCTION + HIPAA/PCI-DSS, or the optional hardening
-            // flag — DEV never hits it, which is why this went unnoticed).
+            // without this explicit grant CreateLogGroup fails with AccessDenied. (This path runs
+            // for PRODUCTION + HIPAA/PCI-DSS, or when the optional hardening flag is set.)
             //
             // Resource is "*", not this key's own explicit ARN — spelling out the key's own ARN
             // here creates a CDK circular dependency: it's a self-reference (Ref to this same
@@ -517,18 +518,12 @@ public class ComplianceFactory extends BaseFactory {
             trailBuilder.cloudWatchLogGroup(cloudTrailLogGroup);
             trailBuilder.sendToCloudWatchLogs(true);
         } else {
-            // Trail's own cloudWatchLogsRetention(...) shortcut has CDK create this log group
-            // internally with CDK's own default removal policy (RETAIN), entirely outside
-            // config.getLogRemovalPolicy()'s own securityProfile-driven decision -- an explicit
-            // name plus that default RETAIN is the same class of redeploy-time collision the
-            // backup vault fix (BackupFactory's own vaultName comment) already closed once: a
-            // PRODUCTION/STAGING teardown leaves this log group behind under a name a future
-            // redeploy of the same stackName can't reuse. Building the LogGroup ourselves, same
-            // conditional-name pattern LoggingCwFactory/FlowLogFactory already use, makes the
-            // policy actually ours instead of an accidental CDK default: explicit name only under
-            // DESTROY (always freely reusable), CDK's own generated unique name under RETAIN (so
-            // a real production trail's audit history keeps accumulating log groups instead of
-            // colliding with itself).
+            // Create the log group explicitly rather than via Trail's cloudWatchLogsRetention(...)
+            // shortcut, which uses CDK's default RETAIN policy regardless of
+            // config.getLogRemovalPolicy(). A retained log group with a fixed name blocks a later
+            // redeploy of the same stackName. Same conditional-name pattern as
+            // LoggingCwFactory/FlowLogFactory: explicit name only under DESTROY, CDK-generated
+            // unique name under RETAIN.
             LogGroup.Builder plainCloudTrailLogGroupBuilder = LogGroup.Builder.create(this, "CloudTrailLogGroupPlain")
                     .retention(config.getLogRetentionDays())
                     .removalPolicy(config.getLogRemovalPolicy());

@@ -1,104 +1,98 @@
-# CloudForge Application Plugin Development Guide
+# Application Plugin Guide
 
-## Overview
+An application plugin tells CloudForge how to run one application on AWS. It implements
+`com.cloudforge.core.interfaces.ApplicationSpec` and is discovered through Java
+`ServiceLoader`. CloudForge supplies the VPC, load balancer, storage, logging, and security
+profile wiring; the plugin supplies the application-specific parts:
 
-Application plugins implement `ApplicationSpec` so CloudForge can configure an application for supported runtimes. A plugin can:
+- container image, port, data paths, and environment for Fargate
+- EC2 user data for installing and starting the application
+- optional OIDC integration, database requirements, and PHP/CMS settings
 
-- Define Docker/ECS (Fargate) and EC2 deployment behavior
-- Be distributed as a standalone JAR file
-- Integrate with CloudForge security-profile, validation, and OIDC hooks
-- Reuse VPC, ALB, EFS, and monitoring configuration
+Test every runtime you declare. Implementing the interface does not by itself validate an
+application for production use.
 
-Implement and test each runtime you intend to support; implementing the interface does not by itself validate an application for production use.
+---
 
-## Quick Start
+## Quick start
 
-### 1. Create a New Maven Project
+### 1. Create a Maven project
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.example</groupId>
     <artifactId>vault-application</artifactId>
     <version>1.0.0</version>
-    <name>HashiCorp Vault Application for CloudForge</name>
+
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+    </properties>
 
     <dependencies>
-        <!-- CloudForge Core API -->
+        <!-- Interfaces and annotations -->
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-core</artifactId>
-            <version>3.1.0</version>
+            <version>3.2.16</version>
             <scope>provided</scope>
         </dependency>
-
-        <!-- CloudForge API (for ApplicationFactory) -->
+        <!-- Only needed if the plugin or its tests use cloudforge-api classes -->
         <dependency>
             <groupId>com.cloudforgeci</groupId>
             <artifactId>cloudforge-api</artifactId>
-            <version>3.1.0</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- AWS CDK -->
-        <dependency>
-            <groupId>software.amazon.awscdk</groupId>
-            <artifactId>aws-cdk-lib</artifactId>
-            <version>2.147.0</version>
+            <version>3.2.16</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
 </project>
 ```
 
-### 2. Implement ApplicationSpec
+Replace `3.2.16` with the CloudForge release you target. CloudForge modules are compiled for
+Java 25, so plugins must build with Java 25 or later.
+
+### 2. Implement `ApplicationSpec`
+
+The example below is a trimmed version of the built-in
+[`VaultApplicationSpec`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/application/secrets/VaultApplicationSpec.java).
+It uses the ID `my-vault` because application IDs must be unique: when two registered specs
+return the same `applicationId()`, `ApplicationLoader` keeps the first one and logs a warning.
 
 ```java
 package com.example.applications;
 
+import com.cloudforge.core.annotation.ApplicationPlugin;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.Ec2Context;
-import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforge.core.interfaces.UserDataBuilder;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * HashiCorp Vault ApplicationSpec implementation.
- *
- * <p>Deploys HashiCorp Vault for secrets management and encryption on AWS.</p>
- *
- * <h2>Features:</h2>
- * <ul>
- *   <li>Secrets management and encryption as a service</li>
- *   <li>Dynamic secrets for databases and cloud providers</li>
- *   <li>Centralized secrets storage</li>
- *   <li>Audit logging and access control</li>
- *   <li>KMS auto-unseal integration</li>
- * </ul>
- *
- * <h2>Deployment Modes:</h2>
- * <ul>
- *   <li><b>Fargate (Container):</b> Uses official vault:latest Docker image</li>
- *   <li><b>EC2:</b> Installs Vault binary via HashiCorp repository</li>
- * </ul>
- *
- * @since 1.0.0
- */
-public class VaultApplicationSpec implements ApplicationSpec {
+@ApplicationPlugin(
+    value = "my-vault",
+    category = "secrets",
+    displayName = "Vault (custom)",
+    description = "HashiCorp Vault with file storage",
+    defaultCpu = 1024,
+    defaultMemory = 2048,
+    defaultInstanceType = "t3.small",
+    supportsFargate = true,
+    supportsEc2 = true,
+    supportsOidc = false
+)
+public class MyVaultApplicationSpec implements ApplicationSpec {
 
-    // ========== Application Identity ==========
+    // ---- Identity ----
 
     @Override
     public String applicationId() {
-        return "vault";
+        return "my-vault";
     }
 
-    // ========== Container Configuration (Fargate) ==========
+    // ---- Container (Fargate) ----
 
     @Override
     public String defaultContainerImage() {
@@ -107,12 +101,12 @@ public class VaultApplicationSpec implements ApplicationSpec {
 
     @Override
     public int applicationPort() {
-        return 8200;  // Vault HTTP API port
+        return 8200;
     }
 
     @Override
     public String containerDataPath() {
-        return "/vault/data";
+        return "/vault/file";
     }
 
     @Override
@@ -127,38 +121,31 @@ public class VaultApplicationSpec implements ApplicationSpec {
 
     @Override
     public String containerUser() {
-        return "100:1000";  // Vault runs as user 100
+        return "100:1000";
     }
 
     @Override
     public String efsPermissions() {
-        return "755";
+        return "750";
     }
 
     @Override
     public String healthCheckPath() {
-        return "/v1/sys/health?standbyok=true";
+        // Report healthy while Vault is uninitialized or sealed so the target stays registered.
+        return "/v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200";
     }
 
     @Override
     public Map<String, String> containerEnvironmentVariables(String fqdn, boolean sslEnabled, String authMode) {
-        Map<String, String> environment = new HashMap<>();
-
-        // Vault server configuration
-        environment.put("VAULT_API_ADDR", (sslEnabled ? "https://" : "http://") + (fqdn != null ? fqdn : "localhost:8200"));
-        environment.put("VAULT_ADDR", "http://127.0.0.1:8200");  // Internal communication
-        environment.put("SKIP_SETCAP", "true");  // Required for container environments
-
-        // Enable Vault UI
-        environment.put("VAULT_UI", "true");
-
-        // Vault log level
-        environment.put("VAULT_LOG_LEVEL", "info");
-
-        return environment;
+        Map<String, String> env = new HashMap<>();
+        if (fqdn != null && !fqdn.isBlank()) {
+            env.put("VAULT_API_ADDR", (sslEnabled ? "https://" : "http://") + fqdn);
+        }
+        env.put("SKIP_SETCAP", "true");
+        return env;
     }
 
-    // ========== EC2 Configuration ==========
+    // ---- EC2 ----
 
     @Override
     public String ebsDeviceName() {
@@ -172,196 +159,62 @@ public class VaultApplicationSpec implements ApplicationSpec {
 
     @Override
     public List<String> ec2LogPaths() {
-        return List.of(
-            "/var/log/vault/vault.log",
-            "/var/log/vault/audit.log",
-            "/var/log/userdata.log",
-            "/var/log/messages"
-        );
+        return List.of("/var/log/vault/vault.log", "/var/log/userdata.log");
     }
 
     @Override
     public void configureUserData(UserDataBuilder builder, Ec2Context context) {
-        // System updates
         builder.addSystemUpdate();
 
-        // Install required packages
         builder.addCommands(
-            "# Install dependencies",
-            "command -v dnf >/dev/null && dnf -y install yum-utils || yum -y install yum-utils",
-            "echo 'Dependencies installed' >> /var/log/userdata.log"
+            "dnf -y install dnf-plugins-core",
+            "dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo",
+            "dnf -y install vault"
         );
 
-        // Add HashiCorp repository
-        builder.addCommands(
-            "# Add HashiCorp repository",
-            "yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo",
-            "echo 'HashiCorp repository added' >> /var/log/userdata.log"
-        );
+        builder.installCloudWatchAgent(
+            "/aws/" + context.stackName() + "/" + context.runtimeType() + "/" + context.securityProfile(),
+            ec2LogPaths());
 
-        // Install Vault
-        builder.addCommands(
-            "# Install Vault",
-            "command -v dnf >/dev/null && dnf -y install vault || yum -y install vault",
-            "echo 'Vault installed' >> /var/log/userdata.log"
-        );
-
-        // Install and configure CloudWatch Agent
-        String logGroupName = String.format("/aws/%s/%s/%s",
-            context.stackName(),
-            context.runtimeType(),
-            context.securityProfile());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
-
-        // Mount storage (EFS or EBS based on availability)
-        String[] userParts = containerUser().split(":");
-        String uid = userParts[0];
-        String gid = userParts[1];
-
+        String[] ids = containerUser().split(":");
         if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                uid,
-                gid
-            );
+            builder.mountEfs(context.efsId().orElseThrow(), context.accessPointId().orElseThrow(),
+                ec2DataPath(), ids[0], ids[1]);
         } else {
-            builder.mountEbs(
-                ebsDeviceName(),
-                ec2DataPath(),
-                uid,
-                gid
-            );
+            builder.mountEbs(ebsDeviceName(), ec2DataPath(), ids[0], ids[1]);
         }
 
-        // Create Vault directories
         builder.addCommands(
-            "# Create Vault directories",
-            "mkdir -p /etc/vault.d",
-            "mkdir -p /var/log/vault",
-            "chown -R vault:vault /var/log/vault",
-            "echo 'Vault directories created' >> /var/log/userdata.log"
-        );
-
-        // Configure Vault
-        builder.addCommands(
-            "# Configure Vault",
+            "mkdir -p /etc/vault.d /var/log/vault",
             "cat > /etc/vault.d/vault.hcl <<'EOF'",
             "ui = true",
-            "",
-            "storage \"file\" {",
-            "  path = \"" + ec2DataPath() + "\"",
-            "}",
-            "",
+            "storage \"file\" { path = \"" + ec2DataPath() + "\" }",
             "listener \"tcp\" {",
             "  address     = \"0.0.0.0:8200\"",
             "  tls_disable = 1",
             "}",
-            "",
-            "api_addr = \"http://127.0.0.1:8200\"",
             "EOF",
-            "chown vault:vault /etc/vault.d/vault.hcl",
-            "chmod 640 /etc/vault.d/vault.hcl",
-            "echo 'Vault configuration created' >> /var/log/userdata.log"
+            "chown -R vault:vault /etc/vault.d /var/log/vault " + ec2DataPath(),
+            "systemctl enable --now vault"
         );
-
-        // Configure Vault systemd service
-        builder.addCommands(
-            "# Configure Vault systemd service",
-            "cat > /etc/systemd/system/vault.service <<'EOF'",
-            "[Unit]",
-            "Description=HashiCorp Vault",
-            "Documentation=https://www.vaultproject.io/docs/",
-            "Requires=network-online.target",
-            "After=network-online.target",
-            "ConditionFileNotEmpty=/etc/vault.d/vault.hcl",
-            "",
-            "[Service]",
-            "User=vault",
-            "Group=vault",
-            "ProtectSystem=full",
-            "ProtectHome=read-only",
-            "PrivateTmp=yes",
-            "PrivateDevices=yes",
-            "SecureBits=keep-caps",
-            "AmbientCapabilities=CAP_IPC_LOCK",
-            "CapabilityBoundingSet=CAP_SYSLOG CAP_IPC_LOCK",
-            "NoNewPrivileges=yes",
-            "ExecStart=/usr/bin/vault server -config=/etc/vault.d/vault.hcl",
-            "ExecReload=/bin/kill --signal HUP $MAINPID",
-            "KillMode=process",
-            "KillSignal=SIGINT",
-            "Restart=on-failure",
-            "RestartSec=5",
-            "TimeoutStopSec=30",
-            "LimitNOFILE=65536",
-            "LimitMEMLOCK=infinity",
-            "",
-            "[Install]",
-            "WantedBy=multi-user.target",
-            "EOF",
-            "echo 'Vault systemd service configured' >> /var/log/userdata.log"
-        );
-
-        // Start Vault
-        builder.addCommands(
-            "# Start Vault",
-            "systemctl daemon-reload",
-            "systemctl enable vault",
-            "systemctl start vault",
-            "echo 'Vault service started' >> /var/log/userdata.log",
-            "",
-            "# Wait for Vault to start",
-            "sleep 10",
-            "",
-            "# Check Vault status",
-            "if systemctl is-active --quiet vault; then",
-            "  echo 'Vault is running' >> /var/log/userdata.log",
-            "  export VAULT_ADDR='http://127.0.0.1:8200'",
-            "  vault status >> /var/log/userdata.log 2>&1 || echo 'Vault not initialized yet' >> /var/log/userdata.log",
-            "else",
-            "  echo 'ERROR: Vault failed to start' >> /var/log/userdata.log",
-            "  journalctl -u vault -n 50 >> /var/log/userdata.log",
-            "fi"
-        );
-    }
-
-    // ========== OIDC Integration (Not supported by Vault Community) ==========
-
-    @Override
-    public boolean supportsOidcIntegration() {
-        return false;  // OIDC is an Enterprise feature
-    }
-
-    @Override
-    public OidcIntegration getOidcIntegration() {
-        return null;
-    }
-
-    @Override
-    public String toString() {
-        return "VaultApplicationSpec{" +
-                "applicationId='vault'" +
-                ", defaultImage='hashicorp/vault:latest'" +
-                ", applicationPort=8200" +
-                ", containerDataPath='/vault/data'" +
-                ", ec2DataPath='/opt/vault/data'" +
-                '}';
     }
 }
 ```
 
-### 3. Register Your Application (ServiceLoader Pattern)
+`tls_disable = 1` is appropriate only because the load balancer terminates TLS in this
+example; adjust the listener for your network design.
 
-Create: `src/main/resources/META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec`
+### 3. Register the class
+
+Create `src/main/resources/META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec`:
 
 ```
-# HashiCorp Vault Application
-com.example.applications.VaultApplicationSpec
+com.example.applications.MyVaultApplicationSpec
 ```
 
-### 4. Build and Distribute
+The class must have a public no-argument constructor.
+
+### 4. Build
 
 ```bash
 mvn clean package
@@ -369,645 +222,257 @@ mvn clean package
 
 ---
 
-## Using Your Custom Application
+## Deploying a plugin application
 
-### In CDK Stack
+Add the plugin JAR as a dependency of the deployment project (for example, a project based on
+the [sample BOM template](../architecture/cloudforge-sample-bom.template.md)). `ApplicationLoader`
+then finds it by ID, and it appears in the `InteractiveDeployer` application list.
 
-```java
-import com.cloudforge.core.interfaces.ApplicationSpec;
-import com.example.applications.VaultApplicationSpec;
-import com.cloudforgeci.api.compute.ApplicationFactory;
-import com.cloudforge.core.enums.RuntimeType;
-
-public class VaultStack extends Stack {
-    public VaultStack(Construct scope, String id) {
-        super(scope, id);
-
-        // Create application spec
-        ApplicationSpec vaultSpec = new VaultApplicationSpec();
-
-        // Deploy on Fargate
-        ApplicationFactory vaultFargate = new ApplicationFactory(
-            this,
-            "VaultFargate",
-            RuntimeType.FARGATE,
-            vaultSpec
-        );
-
-        // Or deploy on EC2
-        ApplicationFactory vaultEc2 = new ApplicationFactory(
-            this,
-            "VaultEc2",
-            RuntimeType.EC2,
-            vaultSpec
-        );
-    }
-}
-```
-
-### Via cdk.json Configuration
+Select it in `deployment-context.json`:
 
 ```json
 {
-  "context": {
-    "stackName": "VaultProd",
-    "applicationId": "vault",
-    "runtimeType": "FARGATE",
-    "securityProfile": "PRODUCTION",
-    "domain": "example.com",
-    "subdomain": "vault",
-    "sslEnabled": "true"
-  }
+  "stackName": "vault-dev",
+  "applicationId": "my-vault",
+  "runtime": "FARGATE",
+  "topology": "application-service",
+  "securityProfile": "dev",
+  "domain": "example.com",
+  "subdomain": "vault",
+  "enableSsl": true
 }
 ```
+
+To build a stack in your own CDK code, use the `ApplicationFactory` helpers. They start the
+`SystemContext` and create the infrastructure from the deployment context stored under the
+`cfc` context key:
+
+```java
+import com.cloudforgeci.api.compute.ApplicationFactory;
+import com.cloudforgeci.api.core.DeploymentContext;
+import com.example.applications.MyVaultApplicationSpec;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.StackProps;
+import software.constructs.Construct;
+
+public class VaultStack extends Stack {
+    public VaultStack(Construct scope, String id, StackProps props) {
+        super(scope, id, props);
+        DeploymentContext cfc = DeploymentContext.from(scope);
+        ApplicationFactory.createFargate(this, id, cfc, new MyVaultApplicationSpec());
+        // or: ApplicationFactory.createEc2(this, id, cfc, new MyVaultApplicationSpec());
+    }
+}
+```
+
+The sample launchers in
+[`cfc-testing/src/main/java/com/cloudforgeci/samples/launchers/`](https://github.com/CloudForgeCI/cfc-core/tree/develop/cfc-testing/src/main/java/com/cloudforgeci/samples/launchers)
+show the complete pattern, including tags and outputs.
 
 ---
 
-## Advanced Examples
+## `ApplicationSpec` reference
 
-### Example 1: GitLab with OIDC Integration
-
-```java
-package com.example.applications;
-
-import com.cloudforge.core.interfaces.ApplicationSpec;
-import com.cloudforge.core.interfaces.Ec2Context;
-import com.cloudforge.core.interfaces.OidcIntegration;
-import com.cloudforge.core.interfaces.UserDataBuilder;
-import com.cloudforge.core.oidc.GitLabOidcIntegration;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-/**
- * GitLab ApplicationSpec implementation with OIDC support.
- */
-public class GitLabApplicationSpec implements ApplicationSpec {
-
-    @Override
-    public String applicationId() {
-        return "gitlab";
-    }
-
-    @Override
-    public String defaultContainerImage() {
-        return "gitlab/gitlab-ce:latest";
-    }
-
-    @Override
-    public int applicationPort() {
-        return 80;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return "/var/opt/gitlab";
-    }
-
-    @Override
-    public String efsDataPath() {
-        return "/gitlab";
-    }
-
-    @Override
-    public String volumeName() {
-        return "gitlabData";
-    }
-
-    @Override
-    public String containerUser() {
-        return "998:998";  // GitLab git user
-    }
-
-    @Override
-    public String efsPermissions() {
-        return "755";
-    }
-
-    @Override
-    public String healthCheckPath() {
-        return "/-/health";
-    }
-
-    @Override
-    public Map<String, String> containerEnvironmentVariables(String fqdn, boolean sslEnabled, String authMode) {
-        Map<String, String> environment = new HashMap<>();
-
-        // GitLab configuration
-        StringBuilder omnibusConfig = new StringBuilder();
-
-        // External URL
-        if (fqdn != null && !fqdn.isBlank()) {
-            String externalUrl = (sslEnabled ? "https://" : "http://") + fqdn;
-            omnibusConfig.append("external_url '").append(externalUrl).append("'; ");
-        }
-
-        // OIDC configuration for application-oidc mode
-        if ("application-oidc".equals(authMode)) {
-            omnibusConfig.append("gitlab_rails['omniauth_enabled'] = true; ");
-            omnibusConfig.append("gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']; ");
-            omnibusConfig.append("gitlab_rails['omniauth_block_auto_created_users'] = false; ");
-            omnibusConfig.append("gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']; ");
-        }
-
-        // Disable HTTPS redirect (ALB handles SSL)
-        if (sslEnabled) {
-            omnibusConfig.append("nginx['listen_https'] = false; ");
-            omnibusConfig.append("nginx['listen_port'] = 80; ");
-        }
-
-        environment.put("GITLAB_OMNIBUS_CONFIG", omnibusConfig.toString().trim());
-
-        return environment;
-    }
-
-    @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/opt/gitlab";
-    }
-
-    @Override
-    public List<String> ec2LogPaths() {
-        return List.of(
-            "/var/log/gitlab/gitlab-rails/production.log",
-            "/var/log/gitlab/nginx/gitlab_access.log",
-            "/var/log/userdata.log"
-        );
-    }
-
-    @Override
-    public void configureUserData(UserDataBuilder builder, Ec2Context context) {
-        // System updates
-        builder.addSystemUpdate();
-
-        // Install dependencies
-        builder.addCommands(
-            "# Install dependencies for GitLab",
-            "command -v dnf >/dev/null && dnf -y install curl policycoreutils openssh-server perl postfix || " +
-            "yum -y install curl policycoreutils openssh-server perl postfix",
-            "systemctl enable sshd postfix",
-            "systemctl start sshd postfix",
-            "echo 'Dependencies installed' >> /var/log/userdata.log"
-        );
-
-        // Add GitLab repository
-        builder.addCommands(
-            "# Add GitLab repository",
-            "curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.rpm.sh | bash",
-            "echo 'GitLab repository added' >> /var/log/userdata.log"
-        );
-
-        // Install GitLab
-        builder.addCommands(
-            "# Install GitLab CE",
-            "EXTERNAL_URL=\"http://" + context.fqdn().orElse("localhost") + "\" yum -y install gitlab-ce",
-            "echo 'GitLab installed' >> /var/log/userdata.log"
-        );
-
-        // Install and configure CloudWatch Agent
-        String logGroupName = String.format("/aws/%s/%s/%s",
-            context.stackName(),
-            context.runtimeType(),
-            context.securityProfile());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
-
-        // Mount storage (EFS or EBS)
-        String[] userParts = containerUser().split(":");
-        String uid = userParts[0];
-        String gid = userParts[1];
-
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                uid,
-                gid
-            );
-        } else {
-            builder.mountEbs(
-                ebsDeviceName(),
-                ec2DataPath(),
-                uid,
-                gid
-            );
-        }
-
-        // Reconfigure and start GitLab
-        builder.addCommands(
-            "# Reconfigure GitLab",
-            "gitlab-ctl reconfigure",
-            "echo 'GitLab configured and started' >> /var/log/userdata.log",
-            "",
-            "# Wait for GitLab to fully start",
-            "sleep 60",
-            "",
-            "# Get initial root password",
-            "if [ -f /etc/gitlab/initial_root_password ]; then",
-            "  echo 'GitLab Root Password:' >> /var/log/userdata.log",
-            "  cat /etc/gitlab/initial_root_password >> /var/log/userdata.log",
-            "fi"
-        );
-    }
-
-    @Override
-    public boolean supportsOidcIntegration() {
-        return true;
-    }
-
-    @Override
-    public OidcIntegration getOidcIntegration() {
-        return new GitLabOidcIntegration();
-    }
-
-    @Override
-    public String toString() {
-        return "GitLabApplicationSpec{" +
-                "applicationId='gitlab'" +
-                ", defaultImage='gitlab/gitlab-ce:latest'" +
-                ", applicationPort=80" +
-                '}';
-    }
-}
-```
-
-### Example 2: Grafana with OIDC
-
-```java
-public class GrafanaApplicationSpec implements ApplicationSpec {
-
-    @Override
-    public String applicationId() {
-        return "grafana";
-    }
-
-    @Override
-    public String defaultContainerImage() {
-        return "grafana/grafana:latest";
-    }
-
-    @Override
-    public int applicationPort() {
-        return 3000;
-    }
-
-    @Override
-    public String healthCheckPath() {
-        return "/api/health";
-    }
-
-    @Override
-    public Map<String, String> containerEnvironmentVariables(String fqdn, boolean sslEnabled, String authMode) {
-        Map<String, String> environment = new HashMap<>();
-
-        // Grafana server configuration
-        if (fqdn != null && !fqdn.isBlank()) {
-            environment.put("GF_SERVER_ROOT_URL", (sslEnabled ? "https://" : "http://") + fqdn);
-            environment.put("GF_SERVER_DOMAIN", fqdn);
-        }
-
-        // OIDC configuration
-        if ("application-oidc".equals(authMode)) {
-            environment.put("GF_AUTH_GENERIC_OAUTH_ENABLED", "true");
-            environment.put("GF_AUTH_GENERIC_OAUTH_NAME", "IAM Identity Center");
-            environment.put("GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP", "true");
-            environment.put("GF_AUTH_GENERIC_OAUTH_SCOPES", "openid profile email");
-        }
-
-        return environment;
-    }
-
-    @Override
-    public boolean supportsOidcIntegration() {
-        return true;
-    }
-
-    @Override
-    public OidcIntegration getOidcIntegration() {
-        return new GrafanaOidcIntegration();
-    }
-
-    // ... rest of implementation
-}
-```
-
----
-
-## ApplicationSpec API Reference
-
-### Required Methods
+### Required methods
 
 | Method | Purpose | Example |
 |--------|---------|---------|
-| `applicationId()` | Unique identifier | `"jenkins"`, `"gitlab"`, `"vault"` |
-| `defaultContainerImage()` | Docker image | `"jenkins/jenkins:lts"` |
-| `applicationPort()` | HTTP port | `8080`, `80`, `3000` |
-| `containerDataPath()` | Mount path in container | `"/var/jenkins_home"` |
-| `efsDataPath()` | Path in EFS | `"/jenkins"` |
-| `volumeName()` | Volume reference name | `"jenkinsHome"` |
-| `containerUser()` | UID:GID | `"1000:1000"` |
-| `efsPermissions()` | File permissions | `"750"`, `"755"` |
-| `ebsDeviceName()` | EC2 block device | `"/dev/xvdh"` |
-| `ec2DataPath()` | EC2 mount path | `"/var/lib/jenkins"` |
-| `ec2LogPaths()` | CloudWatch log paths | `["/var/log/app.log"]` |
-| `configureUserData()` | EC2 installation script | See examples above |
+| `applicationId()` | Unique ID used for lookup and resource naming | `"jenkins"` |
+| `defaultContainerImage()` | Container image for Fargate | `"jenkins/jenkins:lts"` |
+| `applicationPort()` | Port the application listens on | `8080` |
+| `containerDataPath()` | Persistent data path inside the container | `"/var/jenkins_home"` |
+| `efsDataPath()` | Directory on EFS for the access point | `"/jenkins"` |
+| `volumeName()` | Task-definition volume name | `"jenkinsHome"` |
+| `containerUser()` | `uid:gid` that owns the data | `"1000:1000"` |
+| `efsPermissions()` | Access point directory permissions | `"750"` |
+| `ebsDeviceName()` | EBS device used on EC2 when EFS is absent | `"/dev/xvdh"` |
+| `ec2DataPath()` | Data path on EC2 | `"/var/lib/jenkins"` |
+| `ec2LogPaths()` | Files the CloudWatch agent ships | `List.of("/var/log/app.log")` |
+| `configureUserData(UserDataBuilder, Ec2Context)` | EC2 installation and startup | see above |
 
-### Optional Methods
+### Common optional methods
 
 | Method | Default | Purpose |
 |--------|---------|---------|
-| `healthCheckPath()` | `"/"` | ALB health check endpoint |
-| `containerEnvironmentVariables()` | `{}` | Container env vars |
-| `supportsOidcIntegration()` | `false` | Whether app supports OIDC |
-| `getOidcIntegration()` | `null` | OIDC configuration handler |
+| `healthCheckPath()` | `"/"` | Target group health check path |
+| `containerEnvironmentVariables(String fqdn, boolean sslEnabled, String authMode)` | empty map | Container environment |
+| `cpuArchitecture()` | `X86_64` | Container CPU architecture |
+| `supportsOidcIntegration()` | `false` | Whether the application can use OIDC |
+| `getOidcIntegration()` | `null` | Application-level OIDC handler |
+| `getSupportedAuthModes()` | derived from the two methods above | Allowed `authMode` values |
+| `protectedPaths()` / `publicPaths()` | empty | Path rules for `alb-oidc` |
+| `optionalPorts()` | empty | Additional ports gated by config keys |
+| `sidecarContainers()` | empty | Extra containers in the task |
+| `defaultContainerCommand()` / `defaultContainerEntrypoint()` | image default | Container command overrides |
+| `defaultHealthCheckGracePeriod()` | `300` | Health check grace period in seconds |
+
+Metadata methods such as `category()`, `displayName()`, `description()`, `defaultCpu()`,
+`defaultMemory()`, `defaultInstanceType()`, `supportsFargate()`, and `supportsEc2()` read
+`@ApplicationPlugin` by default, so they usually do not need to be overridden. See
+[`ApplicationSpec.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-core/src/main/java/com/cloudforge/core/interfaces/ApplicationSpec.java)
+for every method.
+
+### `@ApplicationPlugin` attributes
+
+| Attribute | Default | Notes |
+|-----------|---------|-------|
+| `value` | required | Application ID |
+| `category` | required | Grouping in the application list, e.g. `cicd`, `monitoring`, `secrets` |
+| `displayName` | `""` | Falls back to the capitalized ID |
+| `description` | `""` | |
+| `defaultCpu` | `1024` | Fargate CPU units |
+| `defaultMemory` | `2048` | Fargate memory (MiB) |
+| `defaultInstanceType` | `"t3.small"` | EC2 instance type |
+| `supportsFargate` | `true` | |
+| `supportsEc2` | `true` | |
+| `supportsOidc` | `false` | |
+| `requiresDatabase` | `false` | |
+| `supportsDatabase` | `false` | |
 
 ---
 
-## UserDataBuilder API
+## Helper interfaces
 
-The `UserDataBuilder` provides helper methods for EC2 configuration:
+### `UserDataBuilder`
 
-### System Configuration
+| Method | Purpose |
+|--------|---------|
+| `addSystemUpdate()` | Update OS packages |
+| `addCommands(String...)` / `addCommand(String)` | Append shell commands |
+| `installCloudWatchAgent(String logGroupName, List<String> logFilePaths)` | Install and configure the CloudWatch agent |
+| `mountEfs(String efsId, String accessPointId, String mountPath, String uid, String gid)` | Mount an EFS access point |
+| `mountEbs(String deviceName, String mountPath, String uid, String gid)` | Format and mount an EBS volume |
 
-```java
-// Update OS packages
-builder.addSystemUpdate();
+### `Ec2Context`
 
-// Add custom commands
-builder.addCommands(
-    "# Install application",
-    "yum install -y myapp",
-    "systemctl enable myapp"
-);
-```
-
-### Storage Mounting
-
-```java
-// Mount EFS
-builder.mountEfs(
-    efsId,
-    accessPointId,
-    mountPath,
-    uid,
-    gid
-);
-
-// Mount EBS
-builder.mountEbs(
-    deviceName,
-    mountPath,
-    uid,
-    gid
-);
-```
-
-### CloudWatch Integration
-
-```java
-// Install and configure CloudWatch Agent
-builder.installCloudWatchAgent(
-    logGroupName,
-    List.of("/var/log/app.log", "/var/log/access.log")
-);
-```
+| Method | Returns |
+|--------|---------|
+| `stackName()` | `String` |
+| `runtimeType()` | `String` |
+| `securityProfile()` | `String` |
+| `hasEfs()` | `boolean` |
+| `efsId()` / `accessPointId()` | `Optional<String>` |
+| `authMode()` | `String`, default `"none"` |
+| `fqdn()` | `String`, may be `null` |
+| `sslEnabled()` | `boolean` |
+| `autoAdminPasswordSecretArn()` | `String`, may be `null` |
 
 ---
 
-## Ec2Context API
+## OIDC
 
-The `Ec2Context` provides deployment information:
+`ApplicationSpec` supports three `authMode` values:
 
-```java
-// Stack information
-String stackName = context.stackName();
-String securityProfile = context.securityProfile();
-String runtimeType = context.runtimeType();
+- `application-oidc`: the application performs the OIDC flow. Requires `getOidcIntegration()`
+  to return an implementation.
+- `alb-oidc`: the load balancer authenticates requests before they reach the application.
+- `none`: no CloudForge-managed authentication.
 
-// Network information
-Optional<String> fqdn = context.fqdn();
-boolean sslEnabled = context.sslEnabled();
+By default, `getSupportedAuthModes()` returns `application-oidc`, `alb-oidc`, and `none` when
+an integration is present; `alb-oidc` and `none` when `supportsOidcIntegration()` is `true`
+without an integration; and only `none` otherwise.
 
-// Storage information
-boolean hasEfs = context.hasEfs();
-Optional<String> efsId = context.efsId();
-Optional<String> accessPointId = context.accessPointId();
-```
+An `OidcIntegration` must implement `isSupported()`, `getIntegrationMethod()`,
+`getEnvironmentVariables(OidcConfiguration)`, and
+`getUserDataCommands(OidcConfiguration, Ec2Context)`. The built-in integrations in
+[`cloudforge-core/src/main/java/com/cloudforge/core/oidc/`](https://github.com/CloudForgeCI/cfc-core/tree/develop/cloudforge-core/src/main/java/com/cloudforge/core/oidc)
+(for example `GitLabOidcIntegration` and `GrafanaOidcIntegration`) are working references.
+See the [OIDC guide](../applications/OIDC.md) for deployment settings.
 
 ---
 
-## Best Practices
+## Databases: `DatabaseSpec`
 
-### 1. Support Each Declared Runtime
-
-Test your application on both Fargate and EC2:
-
-```bash
-# Test Fargate deployment
-cdk deploy -c runtimeType=FARGATE
-
-# Test EC2 deployment
-cdk deploy -c runtimeType=EC2
-```
-
-### 2. Prefer Official Images
-
-Prefer official Docker images when available:
-- ✅ `jenkins/jenkins:lts`
-- ✅ `gitlab/gitlab-ce:latest`
-- ✅ `hashicorp/vault:latest`
-- ❌ `random-user/jenkins:custom`
-
-### 3. Configure Health Checks
-
-Provide application-specific health endpoints:
+Implement `DatabaseSpec` alongside `ApplicationSpec` to request a managed RDS database. The only
+required method is `databaseRequirement()`:
 
 ```java
 @Override
-public String healthCheckPath() {
-    return "/api/health";  // Application health endpoint
+public DatabaseRequirement databaseRequirement() {
+    return DatabaseRequirement.required("postgres", "16")
+        .withInstanceClass("db.t3.micro")
+        .withStorage(20)
+        .withDatabaseName("appdb");
 }
 ```
 
-### 4. Configure Operational Logs
-
-Send logs to CloudWatch for debugging:
-
-```java
-builder.addCommands(
-    "echo 'Step completed' >> /var/log/userdata.log",
-    "mycommand >> /var/log/userdata.log 2>&1"
-);
-```
-
-### 5. Do Not Hard-Code Credentials
-
-Never hard-code passwords or secrets:
-
-```java
-// Bad
-environment.put("DB_PASSWORD", "hardcoded");
-
-// Good
-environment.put("DB_PASSWORD_SECRET_ARN", secretArn);
-```
-
-### 6. Do Not Assume Filesystem Paths
-
-Check context for EFS vs EBS:
-
-```java
-if (context.hasEfs()) {
-    // Use EFS mount
-} else {
-    // Use EBS mount
-}
-```
+`DatabaseRequirement.optional(...)` and `DatabaseRequirement.none()` are also available.
+Optional methods cover init scripts, parameters, backup retention, and read replicas. When the
+requirement is `REQUIRED`, `InteractiveDeployer` enables `provisionDatabase` automatically.
 
 ---
 
-## Testing Your Application Plugin
+## PHP and CMS applications: `CmsSpec`
 
-### Unit Tests
+`CmsSpec` extends `ApplicationSpec` with PHP runtime, media storage, CDN, object cache, and cron
+settings. CMS applications deploy with the `cms-service` topology. In addition to the
+`ApplicationSpec` required methods, a `CmsSpec` must implement:
+
+- `phpVersion()`
+- `requiredPhpExtensions()`
+- `mediaUploadPath()`
+
+Annotate the class with `@CmsPlugin` instead of `@ApplicationPlugin`. Its attributes include
+`value`, `category` (default `"cms"`), `phpVersion`, `supportsOidc`, `oidcMethod`,
+`requiresDatabase` (default `true`), `supportedDatabases`, `supportsS3Media`,
+`supportsObjectCache`, `supportsMultisite`, `websiteUrl`, and `defaultImage`; see
+[`CmsPlugin.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-core/src/main/java/com/cloudforge/core/annotation/CmsPlugin.java).
+
+CMS plugins register in the same `META-INF/services/com.cloudforge.core.interfaces.ApplicationSpec`
+file; `CmsLoader` selects the entries that implement `CmsSpec`.
+
+[`CraftCmsApplicationSpec`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/src/main/java/com/cloudforgeci/samples/plugins/cms/CraftCmsApplicationSpec.java)
+is a complete external `CmsSpec` + `DatabaseSpec` plugin. The
+[CMS guide](../applications/CMS.md) covers CMS deployment settings.
+
+---
+
+## Guidelines
+
+- Prefer official images, and pin a tag for production use.
+- Do not put credentials in environment variables or user data. Reference Secrets Manager
+  instead; `ApplicationSpec` has hooks such as `databasePasswordEnvVar()` and
+  `oidcClientSecretEnvVar()` for secret-backed values.
+- Check `context.hasEfs()` in `configureUserData` and mount EFS or EBS accordingly.
+- Write user-data progress to a log file listed in `ec2LogPaths()` so it reaches CloudWatch.
+
+---
+
+## Testing
+
+Unit-test the spec's values directly:
 
 ```java
 @Test
-void testApplicationSpecMetadata() {
-    ApplicationSpec spec = new VaultApplicationSpec();
+void environmentUsesHttpsWhenSslEnabled() {
+    ApplicationSpec spec = new MyVaultApplicationSpec();
 
-    assertEquals("vault", spec.applicationId());
-    assertEquals("hashicorp/vault:latest", spec.defaultContainerImage());
-    assertEquals(8200, spec.applicationPort());
-    assertEquals("/vault/data", spec.containerDataPath());
-}
+    Map<String, String> env = spec.containerEnvironmentVariables("vault.example.com", true, "none");
 
-@Test
-void testContainerEnvironmentVariables() {
-    ApplicationSpec spec = new VaultApplicationSpec();
-
-    Map<String, String> env = spec.containerEnvironmentVariables(
-        "vault.example.com",
-        true,
-        "none"
-    );
-
-    assertTrue(env.containsKey("VAULT_API_ADDR"));
     assertEquals("https://vault.example.com", env.get("VAULT_API_ADDR"));
 }
-```
-
-### Integration Tests
-
-```java
-@Test
-void testFargateDeployment() {
-    App app = new App();
-    Stack stack = new Stack(app, "VaultFargateTest");
-
-    ApplicationSpec spec = new VaultApplicationSpec();
-    ApplicationFactory factory = new ApplicationFactory(
-        stack,
-        "Vault",
-        RuntimeType.FARGATE,
-        spec
-    );
-
-    assertDoesNotThrow(() -> app.synth());
-}
 
 @Test
-void testEc2Deployment() {
-    App app = new App();
-    Stack stack = new Stack(app, "VaultEc2Test");
-
-    ApplicationSpec spec = new VaultApplicationSpec();
-    ApplicationFactory factory = new ApplicationFactory(
-        stack,
-        "Vault",
-        RuntimeType.EC2,
-        spec
-    );
-
-    assertDoesNotThrow(() -> app.synth());
+void isDiscoverable() {
+    boolean found = ServiceLoader.load(ApplicationSpec.class).stream()
+        .anyMatch(p -> p.type() == MyVaultApplicationSpec.class);
+    assertTrue(found);
 }
 ```
 
----
-
-## Distribution
-
-### Maven Central
-
-```xml
-<dependency>
-    <groupId>com.yourcompany</groupId>
-    <artifactId>vault-application</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
-
-### GitHub Releases
-
-```bash
-# Download JAR from your plugin repository
-wget https://github.com/yourcompany/vault-application/releases/download/v1.0.0/vault-application-1.0.0.jar
-
-# Add to classpath
-java -cp "cloudforge-api.jar:vault-application-1.0.0.jar" ...
-```
+For synthesis tests, set a `cfc` context on the app and call `ApplicationFactory.createFargate`
+or `createEc2`, then assert on `Template.fromStack(stack)`. The tests under
+`cfc-testing/src/test/java/com/cloudforgeci/samples/plugins/` and
+`cloudforge-api/src/test/java/com/cloudforgeci/api/application/` are working examples.
 
 ---
 
-## Example Application Plugins
+## Built-in applications
 
-The repository includes some of these application specifications; the remaining entries are possible plugin ideas. Check the application catalog and source before relying on a listed integration.
+`cloudforge-api` registers 35 application specs. The
+[application catalog](../applications/README.md) and the
+[plugin ecosystem overview](PLUGIN-ECOSYSTEM.md) list them. Their sources under
+[`cloudforge-api/src/main/java/com/cloudforgeci/api/application/`](https://github.com/CloudForgeCI/cfc-core/tree/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/application)
+are the most complete reference for writing a new plugin.
 
-### CI/CD Tools
-- ✅ Jenkins (built-in)
-- 🚧 GitLab
-- 🚧 Drone CI
-- 🚧 Gitea
-- 🚧 ArgoCD
-
-### Monitoring & Observability
-- 🚧 Grafana
-- 🚧 Prometheus
-- 🚧 Metabase
-- 🚧 Apache Superset
-
-### Databases
-- 🚧 PostgreSQL
-- 🚧 Redis
-- 🚧 MongoDB
-- 🚧 Cassandra
-
-### Artifact Registries
-- 🚧 Nexus Repository
-- 🚧 Harbor
-- 🚧 JFrog Artifactory
-
-### Secrets Management
-- 🚧 HashiCorp Vault
-- 🚧 Infisical
-
-### Collaboration
-- 🚧 Mattermost
-- 🚧 Rocket.Chat
-
----
-
-## Support and Community
-
-- **Documentation:** https://github.com/cloudforgeci/cfc-core/tree/main/docs
-- **Issues:** https://github.com/cloudforgeci/cfc-core/issues
-- **Reference plugin:** https://github.com/CloudForgeCI/cloudforge-sample
-
----
-
-For plugin discovery and registration details, see the [Plugin System](PLUGIN-SYSTEM.md).
+See [Plugin System](PLUGIN-SYSTEM.md) for discovery and registration details.

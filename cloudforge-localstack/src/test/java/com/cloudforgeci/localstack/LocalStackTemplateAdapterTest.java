@@ -383,10 +383,10 @@ class LocalStackTemplateAdapterTest {
      * Guards against a bogus volume-root path: without LOCALSTACK_VOLUME_ROOT baked into
      * Manager's own container, {@code defaultVolumeRoot()} falls back to {@code user.dir} —
      * meaningful only on a host-run process, not inside Manager's own already-containerized JVM
-     * (where deploy:create/deploy:catalog actually run, for every app deployed through Manager's
+     * (where deploy:create/deploy:catalog run, for every app deployed through Manager's
      * UI, not just Manager itself). Without this, every EFS-backed volume for every such app
-     * would bind-mount to a bogus path inside that container's own WORKDIR, silently reset on
-     * every redeploy. Baking the resolved value
+     * would bind-mount to a bogus path inside that container's own WORKDIR, reset on every
+     * redeploy. Baking the resolved value
      * into Manager's container breaks the cycle: whatever resolves the value now (this test's own
      * process, standing in for the very first host-run deploy) becomes what every later
      * self-referential adapt() call reads back out of its own environment instead of re-deriving.

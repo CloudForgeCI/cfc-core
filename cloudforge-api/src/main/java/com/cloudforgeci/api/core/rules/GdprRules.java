@@ -97,6 +97,7 @@ public class GdprRules implements FrameworkRules<SystemContext> {
                 if (complianceMode == ComplianceMode.ADVISORY) {
                     LOG.warning("GDPR validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking):");
                     errors.forEach(error -> LOG.warning("  - " + error));
+                    ComplianceFindingsCollector.record(failedRules);
                     return List.of(); // No errors = synthesis proceeds
                 } else {
                     LOG.severe("GDPR validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment):");

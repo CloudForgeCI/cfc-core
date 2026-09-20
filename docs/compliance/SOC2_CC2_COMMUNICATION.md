@@ -1,7 +1,7 @@
 # SOC2 CC2 - Communication and Information
 
 **Control**: CC2 - Communication and Information
-**Status**: Fully Documented
+**Status**: Procedure template
 **Last Updated**: 2025-12-16
 **Owner**: Organization Leadership
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document defines communication and information requirements for organizations using CloudForge CI. Effective communication ensures that relevant, quality information is identified, captured, and communicated to support internal control. These procedures satisfy SOC2 CC2 (Communication and Information) requirements.
+This document defines communication and information requirements for organizations using CloudForge CI. Effective communication ensures that relevant, quality information is identified, captured, and communicated to support internal control. These procedures are a template for addressing SOC2 CC2 (Communication and Information) requirements.
 
 ---
 
@@ -63,26 +63,14 @@ CloudForge CI generates the following information for internal control:
 
 ### SNS Topic Configuration
 
-```yaml
-# CloudForge CI deploys these notification topics
-SecurityAlertsTopic:
-  Type: AWS::SNS::Topic
-  Properties:
-    TopicName: cloudforge-security-alerts
-    KmsMasterKeyId: alias/aws/sns
+CloudForge CI creates the following SNS topics:
 
-ComplianceAlertsTopic:
-  Type: AWS::SNS::Topic
-  Properties:
-    TopicName: cloudforge-compliance-alerts
-    KmsMasterKeyId: alias/aws/sns
+| Topic | Created by | Purpose |
+|-------|-----------|---------|
+| `security-alerts-<profile>` | `SecurityMonitoringFactory` | Security findings and alarms |
+| `alb-alarms-<profile>` | `AlarmFactory` | ALB health and error-rate alarms |
 
-OperationalAlertsTopic:
-  Type: AWS::SNS::Topic
-  Properties:
-    TopicName: cloudforge-operational-alerts
-    KmsMasterKeyId: alias/aws/sns
-```
+`<profile>` is the security profile in lower case (`dev`, `staging`, or `production`). Separate compliance or operational topics, if required, must be created by the organization.
 
 ---
 

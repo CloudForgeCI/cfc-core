@@ -1,141 +1,70 @@
-# Deployment Context Examples
+# Application Deployment Context Examples
 
-Ready-to-use deployment context configurations for CloudForge applications. Copy any of these files and customize for your environment.
+Per-application `deployment-context.json` examples. See the [parent README](../README.md) for how to load a file
+with `cfc-testing` or as CDK context, and for the Private CA option when no domain is configured.
 
-## Quick Start
+## Before deploying
 
-```bash
-# Copy an example
-cp docs/examples/applications/jenkins-dev.json deployment-context.json
+| Key | Notes |
+|-----|-------|
+| `stackName` | Unique CloudFormation stack name in the target account and region. |
+| `domain`, `subdomain` | Your DNS zone and host name, or omit both for a Private CA certificate on the load balancer DNS name. |
+| `cognitoDomainPrefix` | Replace the `-changeme` suffix. Lowercase letters, digits, and hyphens; CloudForge appends the stack name. |
+| `region` | Target AWS region. |
+| `applicationId` | The `compliance-*` files use the placeholder `REPLACE_WITH_APP_ID`; set it to an ID from the [catalog](../../applications/README.md). |
 
-# Edit required fields
-vim deployment-context.json
+## By application
 
-# Deploy
-cdk deploy
-```
+| File | Application | Profile | Notes |
+|------|-------------|---------|-------|
+| [jenkins-dev.json](jenkins-dev.json) | `jenkins` | `dev` | Fargate, public network, no auth |
+| [jenkins-dev-auth.json](jenkins-dev-auth.json) | `jenkins` | `dev` | `application-oidc` with Cognito |
+| [jenkins-dev-quick.json](jenkins-dev-quick.json) | `jenkins` | `dev` | `alb-oidc` with Cognito, no domain (Private CA) |
+| [jenkins-production.json](jenkins-production.json) | `jenkins` | `production` | EC2, `application-oidc`, SOC 2, build agent port |
+| [mattermost-dev.json](mattermost-dev.json) | `mattermost-team` | `dev` | Fargate, public network, no auth |
+| [mattermost-production.json](mattermost-production.json) | `mattermost-team` | `production` | EC2, RDS PostgreSQL, `application-oidc`, SOC 2 |
+| [metabase-dev.json](metabase-dev.json) | `metabase` | `dev` | No RDS database (Metabase uses its embedded H2 store) |
+| [metabase-production.json](metabase-production.json) | `metabase` | `production` | EC2, RDS PostgreSQL, `alb-oidc`, SOC 2 |
+| [gitlab-production.json](gitlab-production.json) | `gitlab` | `production` | EC2, RDS PostgreSQL 16, `application-oidc`, SSH and metrics ports |
+| [grafana-production.json](grafana-production.json) | `grafana` | `production` | EC2, RDS PostgreSQL, `application-oidc` |
+| [harbor-production.json](harbor-production.json) | `harbor` | `production` | EC2, RDS PostgreSQL, Notary and Trivy ports; no OIDC integration |
+| [sonarqube-production.json](sonarqube-production.json) | `sonarqube` | `production` | EC2, SOC 2; no OIDC integration |
+| [cloudforge-manager-dev.json](cloudforge-manager-dev.json) | `cloudforge-manager` | `dev` | Fargate, no database, no auth |
+| [cloudforge-manager-dev-auth.json](cloudforge-manager-dev-auth.json) | `cloudforge-manager` | `dev` | `application-oidc` with Cognito |
+| [cloudforge-manager-production.json](cloudforge-manager-production.json) | `cloudforge-manager` | `production` | RDS PostgreSQL (Multi-AZ), `alb-oidc` |
 
-## Required Customizations
+`cloudforge-manager` is provided by the separate `com.cloudforgeci:cloudforge-manager-deployment` artifact (version
+managed by the `cfc-core` BOM), not by `cloudforge-api`; it must be on the classpath for its `applicationId` to
+resolve. Its database is optional and defaults to MySQL 8.0 when
+`provisionDatabase` is `true` and no engine is given.
 
-Before deploying, update these fields in any example:
+Optional ports (`enableAgents`, `enableSsh`, `enableMetrics`, `enableNotary`, `enableTrivy`, `enableSmtp`) are only
+opened for applications that declare the matching port; see the [catalog](../../applications/README.md).
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| `stackName` | Unique CloudFormation stack name | `MyCompany-Jenkins-Prod` |
-| `domain` | Your domain (or omit for Private CA) | `example.com` |
-| `subdomain` | Service subdomain (or omit for Private CA) | `jenkins` |
-| `cognitoDomainPrefix` | Globally unique Cognito prefix | `mycompany-jenkins-prod` |
-| `region` | AWS region | `us-east-1` |
+If `authMode` names a mode the application does not support, CloudForge replaces it with the application's
+recommended mode and prints a warning.
 
-### SSL Certificate Options
+## By compliance framework
 
-**Option A: Custom Domain (public certificate)**
-```json
-{
-  "domain": "example.com",
-  "subdomain": "jenkins",
-  "enableSsl": true
-  // Public ACM certificate via DNS validation
-}
-```
+| File | Frameworks | Mode | Notes |
+|------|-----------|------|-------|
+| [compliance-soc2-quick.json](compliance-soc2-quick.json) | SOC 2 | `advisory` | `staging`, no domain (Private CA) |
+| [compliance-hipaa-quick.json](compliance-hipaa-quick.json) | SOC 2 + HIPAA | `advisory` | `staging`, no domain (Private CA), 2190-day log retention |
+| [compliance-soc2-staging.json](compliance-soc2-staging.json) | SOC 2 | `advisory` | `staging` |
+| [compliance-soc2-production.json](compliance-soc2-production.json) | SOC 2 | `enforce` | `production` |
+| [compliance-hipaa-production.json](compliance-hipaa-production.json) | HIPAA + SOC 2 | `enforce` | `production`, RDS PostgreSQL, Config remediations |
+| [compliance-pci-dss-production.json](compliance-pci-dss-production.json) | PCI-DSS + SOC 2 | `enforce` | `production`, Aurora PostgreSQL |
 
-**Option B: No Domain (Private CA certificate)**
-
-For rapid deployment without domain setup, omit `domain` and `subdomain`. The system automatically creates an AWS Private CA and issues a certificate for the ALB DNS name:
-
-```json
-{
-  "enableSsl": true,
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true
-  // No domain/subdomain - Private CA certificate issued for ALB DNS name
-}
-```
-
-> **Private CA Notes:**
-> - Only created when no domain is configured AND `enableSsl: true`
-> - Costs ~$400/month (auto-deleted with stack via RemovalPolicy.DESTROY)
-> - Browser shows certificate warnings (not publicly trusted)
-> - Fully compliant with HIPAA, PCI-DSS, SOC2, GDPR (encryption requirements met)
-
-## Examples by Application
-
-### Jenkins
-| File | Environment | Features |
-|------|-------------|----------|
-| [jenkins-dev.json](jenkins-dev.json) | Development | Minimal, no auth |
-| [jenkins-dev-auth.json](jenkins-dev-auth.json) | Development | With Cognito OIDC |
-| [jenkins-dev-quick.json](jenkins-dev-quick.json) | Development | **No domain** - Private CA, Cognito OIDC |
-| [jenkins-production.json](jenkins-production.json) | Production | SOC2, HA, build agents |
-
-### Mattermost
-| File | Environment | Features |
-|------|-------------|----------|
-| [mattermost-dev.json](mattermost-dev.json) | Development | Minimal, no database |
-| [mattermost-production.json](mattermost-production.json) | Production | SOC2, RDS PostgreSQL |
-
-### Metabase
-| File | Environment | Features |
-|------|-------------|----------|
-| [metabase-dev.json](metabase-dev.json) | Development | Embedded H2 database |
-| [metabase-production.json](metabase-production.json) | Production | SOC2, RDS PostgreSQL |
-
-### GitLab
-| File | Environment | Features |
-|------|-------------|----------|
-| [gitlab-production.json](gitlab-production.json) | Production | SSH, Registry, Metrics |
-
-### Grafana
-| File | Environment | Features |
-|------|-------------|----------|
-| [grafana-production.json](grafana-production.json) | Production | RDS PostgreSQL, HA |
-
-### Harbor
-| File | Environment | Features |
-|------|-------------|----------|
-| [harbor-production.json](harbor-production.json) | Production | Trivy, Notary |
-
-### SonarQube
-| File | Environment | Features |
-|------|-------------|----------|
-| [sonarqube-production.json](sonarqube-production.json) | Production | ALB-OIDC |
-
-## Examples by Compliance Framework
-
-### No Domain Quick Start (Private CA)
-
-Test compliance rules without domain infrastructure:
-
-| File | Description |
-|------|-------------|
-| [compliance-soc2-quick.json](compliance-soc2-quick.json) | SOC2 staging - **no domain required** |
-| [compliance-hipaa-quick.json](compliance-hipaa-quick.json) | HIPAA staging - **no domain required** |
-
-### SOC2
-| File | Description |
-|------|-------------|
-| [compliance-soc2-staging.json](compliance-soc2-staging.json) | SOC2 staging template |
-| [compliance-soc2-production.json](compliance-soc2-production.json) | SOC2 production template |
-
-### HIPAA
-| File | Description |
-|------|-------------|
-| [compliance-hipaa-production.json](compliance-hipaa-production.json) | HIPAA + SOC2 template |
-
-### PCI-DSS
-| File | Description |
-|------|-------------|
-| [compliance-pci-dss-production.json](compliance-pci-dss-production.json) | PCI-DSS + SOC2 template |
-
-## File Naming Convention
+## File naming
 
 ```
-{application}-{environment}.json
+{applicationId}-{environment}[-variant].json
 compliance-{framework}-{environment}.json
 ```
 
-## Related Documentation
+## Related documentation
 
-- [Deployment Context Reference](../README.md)
-- [Application Guides](../../guides/applications/)
-- [Compliance Guide](../../compliance/README.md)
+- [Deployment context examples](../README.md)
+- [Application catalog](../../applications/README.md)
+- [Per-application guides](../../guides/applications/README.md)
+- [Compliance documentation](../../compliance/README.md)

@@ -80,6 +80,13 @@ public class MattermostTeamApplicationSpec implements ApplicationSpec, DatabaseS
         return APPLICATION_ID;
     }
 
+    // Mattermost Team Edition has no HA clustering support (an Enterprise Edition feature; see
+    // MattermostApplicationSpec), so ScalingFactory rejects multi-instance settings for it.
+    @Override
+    public boolean supportsAutoScaling() {
+        return false;
+    }
+
     @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;

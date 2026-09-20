@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate comprehensive audit evidence package for compliance audits
+# Generate an audit evidence package for compliance audits
 # Supports SOC 2, HIPAA, PCI-DSS, and GDPR frameworks
 
 set -euo pipefail
@@ -30,7 +30,7 @@ usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
-Generate comprehensive audit evidence package for compliance audits.
+Generate an audit evidence package for compliance audits.
 
 OPTIONS:
     --stack-name NAME       CloudFormation stack name (default: CloudForge-Prod-SOC2)
@@ -616,7 +616,7 @@ generate_summary_report() {
 
 ## Contents
 
-This evidence package contains comprehensive documentation and configuration
+This evidence package contains documentation and configuration
 exports to support $FRAMEWORK compliance auditing.
 
 ### Directory Structure

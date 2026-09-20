@@ -228,6 +228,9 @@ public class Ec2Factory extends BaseFactory {
   @SystemContext("applicationOidcConfig")
   private OidcConfiguration applicationOidcConfig;
 
+  @SystemContext("autoAdminPasswordSecretArn")
+  private String autoAdminPasswordSecretArn;
+
   private void createEc2Infrastructure() {
     // Use existing IAM role created by IAM configuration (has CloudWatch Logs permissions)
     if (ec2InstanceRole == null) {
@@ -380,6 +383,14 @@ public class Ec2Factory extends BaseFactory {
     String efsId = hasEfs ? efs.getFileSystemId() : null;
     String accessPointId = hasEfs ? ap.getAccessPointId() : null;
 
+    // The instance role needs an explicit grant to read this secret from UserData. On Fargate,
+    // the ECS Secret binding in ContainerFactory grants the task role implicitly.
+    if (autoAdminPasswordSecretArn != null && !autoAdminPasswordSecretArn.isBlank() && ec2InstanceRole != null) {
+      software.amazon.awscdk.services.secretsmanager.Secret
+          .fromSecretCompleteArn(this, "AutoAdminPasswordSecretRef", autoAdminPasswordSecretArn)
+          .grantRead(ec2InstanceRole);
+    }
+
     com.cloudforgeci.api.core.Ec2ContextImpl ec2Context = new com.cloudforgeci.api.core.Ec2ContextImpl(
         stackName,
         runtime.name().toLowerCase(),
@@ -389,7 +400,8 @@ public class Ec2Factory extends BaseFactory {
         accessPointId,
         authMode == null ? "none" : authMode.getValue(),
         fqdn,
-        Boolean.TRUE.equals(enableSsl)
+        Boolean.TRUE.equals(enableSsl),
+        autoAdminPasswordSecretArn
     );
 
     // Create UserDataBuilder and delegate to ApplicationSpec

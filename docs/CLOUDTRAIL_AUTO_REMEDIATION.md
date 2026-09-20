@@ -2,52 +2,42 @@
 
 ## Overview
 
-The CloudForge CI compliance system now includes automatic remediation for CloudTrail S3 bucket access errors. This feature automatically fixes common CloudTrail logging issues when AWS Config detects non-compliance.
+CloudForge CI can attach an AWS Config remediation that restores the CloudTrail S3 bucket policy when CloudTrail cannot write to its bucket. The remediation is off by default.
 
 ## What It Does
 
 When AWS Config detects that CloudTrail cannot write to its S3 bucket (due to incorrect bucket policies or permissions), the system automatically:
 
-1. **Detects the Issue**: AWS Config rule `CLOUD_TRAIL_ENABLED` identifies that CloudTrail is not functioning properly
+1. **Detects the Issue**: The AWS Config managed rule `CLOUD_TRAIL_ENABLED` reports the account as non-compliant
 2. **Triggers Remediation**: AWS Config automatically initiates the remediation workflow
 3. **Fixes Bucket Policy**: SSM Automation updates the S3 bucket policy with correct CloudTrail permissions
 4. **Restores Compliance**: CloudTrail resumes logging audit events to the bucket
 
 ## Common Issues Fixed
 
-This remediation automatically resolves:
+The remediation writes a bucket policy that grants CloudTrail `s3:GetBucketAcl` and `s3:PutObject`. This resolves:
 
-- ✅ Missing bucket policy for CloudTrail service principal
-- ✅ Incorrect bucket ACL permissions
-- ✅ Bucket policies that inadvertently deny CloudTrail access
-- ✅ Policy drift after manual bucket configuration changes
+- Missing bucket policy for the CloudTrail service principal
+- Bucket policies that deny CloudTrail access
+- Policy drift after manual bucket policy changes
 
 ## How to Enable
 
-### Method 1: Deployment Context (Recommended)
-
-Add to your `deployment-context.json`:
+Add to your deployment context (for example `deployment-context.json`):
 
 ```json
 {
-  "enableCloudTrailBucketAccessRemediation": true,
-  "awsConfigEnabled": true
+  "securityProfile": "production",
+  "awsConfigEnabled": true,
+  "enableCloudTrailBucketAccessRemediation": true
 }
-```
-
-### Method 2: Programmatic Configuration
-
-```java
-DeploymentContext context = new DeploymentContext();
-context.put("enableCloudTrailBucketAccessRemediation", true);
-context.put("awsConfigEnabled", true);
 ```
 
 ## Prerequisites
 
-- **AWS Config must be enabled** in your account
-- **CloudTrail must be configured** (the system creates this automatically in PRODUCTION security profile)
-- **IAM permissions** for SSM Automation to update S3 bucket policies
+- **`securityProfile: production`**: the `CLOUD_TRAIL_ENABLED` rule and this remediation are created only for `production` stacks
+- **`awsConfigEnabled: true`**, and a Config recorder in the account and region (created by one stack with `createConfigInfrastructure: true`)
+- **CloudTrail created by the stack**: CloudForge creates a trail for `staging` and `production` profiles
 
 ## How It Works
 
@@ -73,11 +63,10 @@ context.put("awsConfigEnabled", true);
                      ▼
 ┌─────────────────────────────────────────┐
 │  SSM Automation Document                │
-│  "fix-cloudtrail-bucket-access"         │
-│                                         │
-│  1. Get CloudTrail configuration        │
-│  2. Update S3 bucket policy             │
-│  3. Grant CloudTrail permissions        │
+│  "<stackName>-fix-cloudtrail-bucket-    │
+│   access"                               │
+│  1. GetCloudTrailBucket (GetTrail)      │
+│  2. FixBucketPolicy (PutBucketPolicy)   │
 └─────────────────────────────────────────┘
                      │
                      ▼
@@ -92,45 +81,22 @@ context.put("awsConfigEnabled", true);
 - **Type**: Automatic
 - **Max Attempts**: 3
 - **Retry Interval**: 120 seconds
-- **SSM Document**: Custom automation document created per stack
+- **SSM Document**: `<stackName>-fix-cloudtrail-bucket-access`, created per stack
 
 ### IAM Permissions (Least Privilege)
 
-The remediation creates an IAM role with **scoped permissions** following AWS security best practices. No wildcard (*) permissions are used.
+The remediation creates an IAM role (logical ID `CloudTrailBucketAccessRemediationRole`) whose inline policy is scoped to the exact trail and bucket of this stack:
 
-```json
-{
-  "S3BucketPolicyManagement": {
-    "Actions": [
-      "s3:GetBucketPolicy",
-      "s3:PutBucketPolicy",
-      "s3:GetBucketAcl",
-      "s3:PutBucketAcl"
-    ],
-    "Resources": [
-      "arn:aws:s3:::cloudforge-cloudtrail-*-{region}"
-    ],
-    "Note": "Scoped to CloudForge CloudTrail buckets only - NOT wildcard"
-  },
-  "CloudTrailReadAccess": {
-    "Actions": [
-      "cloudtrail:GetTrail",
-      "cloudtrail:DescribeTrails",
-      "cloudtrail:GetEventSelectors"
-    ],
-    "Resources": [
-      "arn:aws:cloudtrail:{region}:{account}:trail/cloudforge-cloudtrail-*"
-    ],
-    "Note": "Scoped to CloudForge trails only - NOT wildcard"
-  }
-}
-```
+| Statement | Actions | Resource |
+|-----------|---------|----------|
+| `S3BucketPolicyManagement` | `s3:GetBucketPolicy`, `s3:PutBucketPolicy`, `s3:GetBucketAcl`, `s3:PutBucketAcl` | The stack's CloudTrail bucket ARN |
+| `CloudTrailReadAccess` | `cloudtrail:GetTrail`, `cloudtrail:DescribeTrails`, `cloudtrail:GetEventSelectors` | The stack's trail ARN |
 
-**Security Note:** All IAM permissions are scoped to specific resource ARNs. The automation role cannot modify arbitrary S3 buckets or CloudTrail resources.
+The automation role cannot modify other S3 buckets or trails.
 
 ## Bucket Policy Applied
 
-The remediation applies this S3 bucket policy:
+The remediation replaces the bucket policy with this policy:
 
 ```json
 {
@@ -169,7 +135,7 @@ The remediation applies this S3 bucket policy:
 
 Check AWS Config Console:
 ```
-AWS Config → Rules → cloud-trail-enabled → Remediation actions
+AWS Config → Rules → <rule generated from the CloudTrailEnabledRule logical ID> → Remediation actions
 ```
 
 ### View SSM Automation Executions
@@ -181,10 +147,7 @@ Systems Manager → Automation → Executions → Filter by document name
 
 ### CloudWatch Logs
 
-Remediation logs are available in CloudWatch Logs under:
-```
-/aws/ssm/automation/
-```
+SSM Automation writes step output to CloudWatch Logs only when Automation logging is enabled for the account. CloudForge does not enable it.
 
 ## Compliance Impact
 
@@ -201,10 +164,9 @@ This feature supports the following compliance requirements:
 
 ### Least Privilege
 
-The SSM Automation role follows least privilege principles:
-- Only has permissions to read CloudTrail configuration
-- Only can modify S3 bucket policies (not delete or create buckets)
-- Scoped to specific automation tasks
+The SSM Automation role:
+- Can read the stack's trail configuration
+- Can read and write the policy and ACL of the stack's CloudTrail bucket, but cannot create or delete buckets
 
 ### Audit Trail
 
@@ -213,20 +175,15 @@ All remediation actions are logged:
 - **AWS Config Timeline**: Shows remediation trigger and completion
 - **SSM Automation History**: Detailed execution logs with timestamps
 
-### Policy Preservation
+### Policy Replacement
 
-The remediation:
-- ✅ Only adds necessary CloudTrail permissions
-- ✅ Does not remove existing bucket policy statements
-- ✅ Merges with existing policies when possible
-- ❌ Does not grant public access
-- ❌ Does not weaken existing security controls
+The remediation calls `PutBucketPolicy` with the two CloudTrail statements shown above. This **replaces** the existing bucket policy: any other statements on the bucket, such as a TLS-only (`aws:SecureTransport`) deny statement, are removed. The policy it writes does not grant public access. If the CloudTrail bucket needs additional statements, leave this remediation disabled and manage the policy in code.
 
 ## Error Handling & Safety
 
 ### Pre-Deployment Validation
 
-The system performs comprehensive null guards and validation checks **before** creating remediation:
+`ComplianceFactory` checks the following **before** creating the remediation:
 
 1. **CloudTrail Existence Check**: Verifies CloudTrail is configured before enabling remediation
 2. **S3 Bucket Existence Check**: Confirms CloudTrail S3 bucket exists and is accessible
@@ -248,7 +205,7 @@ All remediation actions are automatically logged:
 - **CloudTrail**: Records all S3 PutBucketPolicy API calls with full request/response details
 - **AWS Config Timeline**: Shows when remediation was triggered and completed
 - **SSM Automation History**: Provides step-by-step execution logs with timestamps
-- **CloudWatch Logs**: Contains detailed automation execution output under `/aws/ssm/automation/`
+- **CloudWatch Logs**: Automation output, if SSM Automation CloudWatch logging is enabled in the account
 
 ## Troubleshooting
 
@@ -259,17 +216,16 @@ All remediation actions are automatically logged:
 **Solutions**:
 1. Check that `enableCloudTrailBucketAccessRemediation` is `true` in deployment context
 2. Verify AWS Config is enabled: `aws configservice describe-configuration-recorders`
-3. Ensure the Config rule exists: `aws configservice describe-config-rules --config-rule-names cloud-trail-enabled`
+3. Ensure the stack uses the `production` profile and that the Config rule exists: `aws configservice describe-config-rules` (look for the rule generated from the `CloudTrailEnabledRule` logical ID)
 
 ### Deployment Fails with "CloudTrail is not configured"
 
 **Problem**: CDK deployment fails during stack synthesis
 
 **Solutions**:
-1. This is expected behavior if CloudTrail is disabled in your security profile
-2. Either enable CloudTrail: `cfc.put("security", "PRODUCTION")` (CloudTrail enabled by default)
-3. Or disable auto-remediation: `cfc.put("enableCloudTrailBucketAccessRemediation", false)`
-4. Check your security profile configuration implements `isCloudTrailEnabled()` correctly
+1. This is expected if the stack did not create a trail
+2. Use `"securityProfile": "production"` (CloudTrail is created for `staging` and `production`)
+3. Or disable auto-remediation: `"enableCloudTrailBucketAccessRemediation": false`
 
 ### Remediation Fails
 
@@ -292,11 +248,9 @@ All remediation actions are automatically logged:
 
 ## Cost Implications
 
-- **AWS Config Rule Evaluations**: Minimal cost (periodic evaluations)
-- **SSM Automation Executions**: ~$0.002 per execution
-- **CloudTrail Logging**: Standard CloudTrail pricing applies
-
-Typical monthly cost for auto-remediation: **< $1**
+- **AWS Config rule evaluations**: charged per evaluation
+- **SSM Automation executions**: charged per step beyond the free tier
+- **CloudTrail logging**: standard CloudTrail pricing applies
 
 ## Disabling Auto-Remediation
 
@@ -309,7 +263,7 @@ To disable automatic remediation while keeping Config monitoring:
 }
 ```
 
-You can also disable it by removing the deployment context property entirely.
+The property defaults to `false`, so removing it also disables the remediation.
 
 ## Operational Procedures
 
@@ -317,35 +271,35 @@ You can also disable it by removing the deployment context property entirely.
 
 **Pre-Deployment Checklist:**
 
-1. ✅ **Verify CloudTrail is Enabled**: Check `isCloudTrailEnabled()` in security profile
-2. ✅ **Test in Staging First**: Deploy to staging environment with `enableCloudTrailBucketAccessRemediation=true`
-3. ✅ **Review IAM Permissions**: Confirm automation role has scoped permissions (not wildcard)
-4. ✅ **Set Up Monitoring**: Configure CloudWatch alarms for failed remediations
-5. ✅ **Document Override Rationale**: If disabling remediation, document why in deployment context
+1. **Verify CloudTrail is created**: The stack uses the `staging` or `production` profile
+2. **Review the bucket policy**: The remediation replaces it (see [Policy Replacement](#policy-replacement))
+3. **Review IAM permissions**: Confirm the automation role is scoped to the stack's trail and bucket
+4. **Set up monitoring**: Configure CloudWatch alarms for failed remediations
+5. **Document the decision**: Record why the remediation is enabled or disabled
 
 **Post-Deployment Verification:**
 
 ```bash
 # 1. Verify CloudTrail is logging
-aws cloudtrail get-trail-status --name cloudforge-cloudtrail-us-east-1
+aws cloudtrail get-trail-status --name cloudforge-cloudtrail-<stack-name>
 
 # 2. Check Config rule compliance
 aws configservice describe-compliance-by-config-rule \
-  --config-rule-names cloud-trail-enabled
+  --config-rule-names <cloudtrail-rule-name>
 
 # 3. Verify remediation configuration exists
 aws configservice describe-remediation-configurations \
-  --config-rule-names cloud-trail-enabled
+  --config-rule-names <cloudtrail-rule-name>
 
 # 4. Test remediation trigger (optional - requires breaking CloudTrail)
 # Do NOT run in production without approval
-aws s3api put-bucket-policy --bucket cloudforge-cloudtrail-... \
+aws s3api put-bucket-policy --bucket <cloudtrail-bucket-name> \
   --policy '{"Version":"2012-10-17","Statement":[]}'
 ```
 
 **Safe Operational Procedures:**
 
-- **Changing Bucket Policies Manually**: Auto-remediation will overwrite manual changes after ~15 minutes
+- **Changing Bucket Policies Manually**: Auto-remediation overwrites manual changes the next time Config evaluates the rule as non-compliant
   - To prevent: Disable auto-remediation, make changes, re-enable
   - Better approach: Use Infrastructure as Code (IaC) to manage policies
 
@@ -367,22 +321,18 @@ aws s3api put-bucket-policy --bucket cloudforge-cloudtrail-... \
 
 **What Auto-Remediation WILL Fix:**
 
-- ✅ Missing CloudTrail service principal in bucket policy
-- ✅ Incorrect bucket policy statement structure
-- ✅ Bucket policy denying CloudTrail access
-- ✅ Missing `s3:GetBucketAcl` permission for CloudTrail
-- ✅ Missing `s3:PutObject` permission for CloudTrail
-- ✅ Incorrect ACL conditions on `s3:PutObject`
+- Missing CloudTrail service principal in bucket policy
+- Bucket policy denying CloudTrail access
+- Missing `s3:GetBucketAcl` or `s3:PutObject` permission for CloudTrail
+- Incorrect ACL conditions on `s3:PutObject`
 
 **What Auto-Remediation WILL NOT Fix:**
 
-- ❌ CloudTrail doesn't exist (will fail deployment - requires CloudTrail creation)
-- ❌ S3 bucket doesn't exist (will fail deployment - requires bucket creation)
-- ❌ S3 bucket policy size exceeds 20KB limit (requires manual intervention)
-- ❌ Bucket encrypted with KMS key that CloudTrail can't access (requires KMS policy update)
-- ❌ Bucket in different account (cross-account CloudTrail requires separate setup)
-- ❌ Bucket in wrong region (CloudTrail requires bucket in same region)
-- ❌ AWS Organizations service control policies (SCPs) blocking S3 policy updates
+- CloudTrail doesn't exist (synthesis fails when the remediation is enabled without a trail)
+- S3 bucket doesn't exist
+- Bucket encrypted with a KMS key that CloudTrail can't use (requires a KMS key policy update)
+- Bucket in a different account (cross-account CloudTrail requires separate setup)
+- AWS Organizations service control policies (SCPs) blocking S3 policy updates
 
 **Remediation Frequency:**
 
@@ -390,7 +340,7 @@ aws s3api put-bucket-policy --bucket cloudforge-cloudtrail-... \
 - Config evaluation: Every 24 hours OR on configuration change
 - Max attempts: 3 per Config rule evaluation
 - Retry interval: 120 seconds between attempts
-- Total remediation window: ~6 minutes maximum (3 attempts × 120 seconds)
+- Retry window: about 6 minutes (3 attempts at 120-second intervals)
 
 ### Security Considerations for Operations Teams
 
@@ -398,12 +348,13 @@ aws s3api put-bucket-policy --bucket cloudforge-cloudtrail-... \
 
 The automation role has these permissions (verify in IAM console):
 ```
-arn:aws:iam::ACCOUNT_ID:role/CloudTrailBucketAccessRemediationRole
+Role: <stack>-CloudTrailBucketAccessRemediationRole... (generated name)
 
 Permissions:
-- s3:GetBucketPolicy on arn:aws:s3:::cloudforge-cloudtrail-*
-- s3:PutBucketPolicy on arn:aws:s3:::cloudforge-cloudtrail-*
-- cloudtrail:GetTrail on arn:aws:cloudtrail:*:ACCOUNT_ID:trail/cloudforge-cloudtrail-*
+- s3:GetBucketPolicy, s3:PutBucketPolicy, s3:GetBucketAcl, s3:PutBucketAcl
+  on the stack's CloudTrail bucket
+- cloudtrail:GetTrail, cloudtrail:DescribeTrails, cloudtrail:GetEventSelectors
+  on arn:aws:cloudtrail:<region>:<account-id>:trail/cloudforge-cloudtrail-<stack-name>
 ```
 
 **Audit Trail Review:**
@@ -419,12 +370,12 @@ aws cloudtrail lookup-events \
 
 # Check SSM Automation execution history
 aws ssm describe-automation-executions \
-  --filters Key=DocumentNamePrefix,Values=fix-cloudtrail-bucket-access \
+  --filters Key=DocumentNamePrefix,Values=<stack-name>-fix-cloudtrail-bucket-access \
   --max-results 50
 
 # Check Config compliance timeline
 aws configservice get-compliance-details-by-config-rule \
-  --config-rule-name cloud-trail-enabled
+  --config-rule-name <cloudtrail-rule-name>
 ```
 
 **Incident Response:**
@@ -457,7 +408,7 @@ If auto-remediation is causing issues:
   "Dimensions": [
     {
       "Name": "DocumentName",
-      "Value": "fix-cloudtrail-bucket-access"
+      "Value": "<stack-name>-fix-cloudtrail-bucket-access"
     }
   ],
   "Statistic": "Sum",
@@ -471,9 +422,9 @@ If auto-remediation is causing issues:
 
 ## Related Features
 
-- [S3 Versioning Auto-Remediation](./S3_VERSIONING_REMEDIATION.md)
-- [AWS Config Rules](./AWS_CONFIG_RULES.md)
-- [CloudTrail Configuration](./CLOUDTRAIL_SETUP.md)
+- [S3 Versioning Auto-Remediation](compliance/S3_VERSIONING_REMEDIATION.md)
+- [Automated Compliance](compliance/AUTOMATED_COMPLIANCE.md)
+- [AWS Config Multi-Stack](compliance/AWS_CONFIG_MULTI_STACK.md)
 - [Compliance Frameworks](./AUDITOR_COMPLIANCE_MAPPING.md)
 
 ## Example Deployment
@@ -482,10 +433,10 @@ Complete example with CloudTrail remediation enabled:
 
 ```json
 {
-  "security": "PRODUCTION",
+  "securityProfile": "production",
   "awsConfigEnabled": true,
   "enableCloudTrailBucketAccessRemediation": true,
-  "complianceFrameworks": "PCI-DSS,SOC2,HIPAA",
+  "complianceFrameworks": "pci-dss,soc2,hipaa",
   "createConfigInfrastructure": true
 }
 ```
@@ -494,5 +445,5 @@ Complete example with CloudTrail remediation enabled:
 
 For issues or questions:
 - GitHub Issues: https://github.com/CloudForgeCI/cfc-core/issues
-- Documentation: [docs/](../)
+- Documentation: [docs/](https://github.com/CloudForgeCI/cfc-core/tree/develop/.)
 - Compliance Guide: [AUDITOR_COMPLIANCE_MAPPING.md](./AUDITOR_COMPLIANCE_MAPPING.md)

@@ -37,6 +37,16 @@ public class ApplicationInfo {
     /** Minimum instance type (EC2) */
     public String minInstanceType;
 
+    /** Mirrors {@link com.cloudforge.core.interfaces.ApplicationSpec#supportsAutoScaling()} --
+     *  {@code false} means this application has no clustering/HA support at all, regardless of
+     *  configuration, so a deploy-time UI/CLI should skip or disable the autoscaling prompt/fields
+     *  for it entirely rather than let a user configure something {@code ScalingFactory} will
+     *  reject at synth time anyway. Not a constructor parameter -- defaults to {@code true} (every
+     *  existing caller keeps working unchanged) and is set explicitly by callers that have the
+     *  {@code ApplicationSpec} in hand, e.g. {@code info.supportsAutoScaling =
+     *  spec.supportsAutoScaling();}. */
+    public boolean supportsAutoScaling = true;
+
     /**
      * Creates ApplicationInfo with default resource requirements.
      *
