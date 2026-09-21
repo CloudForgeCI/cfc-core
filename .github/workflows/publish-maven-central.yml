@@ -183,6 +183,27 @@ jobs:
           </settings>
           EOF
 
+      # Central rejects a release artifact whose dependencyManagement pins a SNAPSHOT dependency
+      # ("Dependency management dependencies to SNAPSHOT versions not allowed"), but the BOM's
+      # cloudforge-manager-deployment.version property is always a SNAPSHOT by design — see that
+      # property's own comment in pom.xml, kept current by sync-cloudforge-manager-deployment-
+      # version.yml, which only ever tracks the latest *SNAPSHOT*. For this one real-release
+      # publish, swap it to whatever cloudforge-manager-deployment last published as a real
+      # release on Central instead (never committed -- versions:set-property only touches this
+      # runner's own checkout, the same way the SNAPSHOT-bump steps below never push pom changes
+      # either, only the git tag at the very end).
+      - name: Resolve cloudforge-manager-deployment.version to its latest real Central release
+        run: |
+          RELEASE=$(curl -fsSL "https://repo1.maven.org/maven2/com/cloudforgeci/cloudforge-manager-deployment/maven-metadata.xml" \
+            | grep -o '<release>[^<]*</release>' | sed -E 's|</?release>||g')
+          if [ -z "$RELEASE" ]; then
+            echo "::error::Could not resolve cloudforge-manager-deployment's latest release from Central's maven-metadata.xml"
+            exit 1
+          fi
+          echo "Pinning cloudforge-manager-deployment.version to $RELEASE for this release build (never committed)"
+          mvn -q -B versions:set-property -Dproperty=cloudforge-manager-deployment.version \
+            -DnewVersion="$RELEASE" -DgenerateBackupPoms=false
+
       - name: Build, test, sign, and publish cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack + cloudforge-ministack
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
