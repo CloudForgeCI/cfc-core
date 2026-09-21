@@ -66,7 +66,7 @@ run_benchmark() {
     echo ""
 }
 
-# Function to run comprehensive benchmarks
+# Run the full benchmark set
 run_comprehensive_benchmarks() {
     echo -e "${BLUE}Running Synthesis Benchmarks${NC}"
     echo -e "${BLUE}===============================================${NC}"

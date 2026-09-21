@@ -1,7 +1,7 @@
 # SOC2 CC5 - Control Activities & Operational Procedures
 
 **Control**: CC5 - Control Activities
-**Status**: Fully Documented
+**Status**: Procedure template
 **Last Updated**: 2025-12-16
 **Owner**: Infrastructure Administrator
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document defines operational procedures for security controls deployed by CloudForge CI. These procedures complement the automated technical controls to satisfy SOC2 CC5 (Control Activities) requirements.
+This document defines operational procedures for security controls deployed by CloudForge CI. These procedures complement the automated technical controls and are a template for addressing SOC2 CC5 (Control Activities) requirements.
 
 ---
 

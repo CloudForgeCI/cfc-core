@@ -86,6 +86,14 @@ public class JenkinsApplicationSpec implements ApplicationSpec {
         return APPLICATION_ID;
     }
 
+    // The Jenkins controller is a single stateful process (in-memory build queue, executor state,
+    // local $JENKINS_HOME); multiple controllers cannot share that state. Jenkins scales
+    // horizontally by adding agents, so ScalingFactory rejects multi-instance settings for it.
+    @Override
+    public boolean supportsAutoScaling() {
+        return false;
+    }
+
     // ========== Container Configuration ==========
 
     @Override

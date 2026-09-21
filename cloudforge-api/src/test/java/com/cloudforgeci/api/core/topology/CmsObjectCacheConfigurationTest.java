@@ -6,9 +6,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** {@code createRedisReplicationGroup}'s {@code numReplicas} guard — previously flowed straight
- *  into {@code numCacheClusters} with no validation despite the javadoc's documented range,
- *  failing only at CDK synth/deploy time with a far less clear ElastiCache error. The guard runs
+/** {@code createRedisReplicationGroup}'s {@code numReplicas} guard, which validates the documented
+ *  range up front instead of letting an invalid value surface later as an unclear ElastiCache
+ *  error. The guard runs
  *  before {@code ctx}/{@code spec} are touched, so these tests exercise it directly with null
  *  stand-ins rather than standing up a full CDK stack — the same reasoning {@code
  *  OidcPathShadowingTest} uses to avoid this package's own heavier CDK-synthesis tests. */

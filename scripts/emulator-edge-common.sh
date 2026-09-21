@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deprecated standalone Docker helpers. Edge lifecycle is owned by
-# EmulatorEdgeLifecycle (mvn cloudforge:emulator-edge-* / scripts/emulator-edge-via-maven.sh).
+# EmulatorEdgeLifecycle (scripts/emulator-edge-via-maven.sh).
 # Kept only for path defaults if you need to inspect .emulator-edge manually.
 set -euo pipefail
 

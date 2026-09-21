@@ -1,15 +1,14 @@
 {
   "stackName": "Mattermost-Dev",
-  "applicationId": "mattermost",
+  "applicationId": "mattermost-team",
   "applicationName": "Mattermost Dev",
-  "description": "Mattermost development environment",
   "environment": "development",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",

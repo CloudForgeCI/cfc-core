@@ -1,5 +1,4 @@
 {
-  "description": "Minimal development environment - fast setup, no compliance overhead",
   "stackName": "CloudForge-Dev",
   "applicationId": "jenkins",
   "runtime": "fargate",
@@ -7,7 +6,7 @@
   "securityProfile": "dev",
   "region": "us-east-1",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "wafEnabled": false,
   "authMode": "none",
 

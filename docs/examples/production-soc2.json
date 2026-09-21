@@ -1,6 +1,6 @@
 {
-  "description": "Production environment with SOC 2 compliance - recommended for most organizations",
   "stackName": "CloudForge-Prod-SOC2",
+  "applicationId": "jenkins",
   "runtime": "ec2",
   "topology": "jenkins-service",
   "securityProfile": "production",
@@ -10,7 +10,6 @@
   "subdomain": "jenkins",
   "enableSsl": true,
   "createZone": false,
-  "_domain_note": "Domain is optional - remove domain/subdomain/createZone for Private CA (meets SOC2 encryption requirements)",
 
   "networkMode": "private-with-nat",
   "wafEnabled": true,
@@ -25,7 +24,7 @@
   "complianceFrameworks": "SOC2",
   "scopeConfigRulesToDeployment": false,
   "enableS3VersioningRemediation": true,
-  "enableCloudTrailLoggingRemediation": true,
+  "enableCloudTrailBucketAccessRemediation": true,
   "complianceMode": "enforce",
 
   "guardDutyEnabled": true,

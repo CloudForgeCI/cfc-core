@@ -29,16 +29,15 @@ import java.util.Objects;
  * LocalStackTemplateAdapter#inlineOidcSecretForLocalStack} bakes into each ECS task's environment
  * at adapt time — LocalStack ECS cannot resolve a real {@code Secrets}/{@code ValueFrom} reference
  * to Secrets Manager, so the adapter inlines the literal string {@code "pending-localstack-sync"}
- * instead and leaves real sync to a post-deploy step, matching {@link
+ * instead and leaves the sync to a post-deploy step, matching {@link
  * LocalStackCognitoSecretReconciler}'s own doc comment.
  *
  * <p>That existing reconciler only covers the Cognito-auto-provisioned client secret (discovered
  * via the stack's {@code AWS::Cognito::UserPoolClient}/{@code CognitoClientSecret} resources). It
  * has no path for the generic, manually-supplied {@code oidcClientSecretName} a deployer sets for
- * {@code external-idp}/{@code cloudforge-manager} OIDC providers — the exact case surfaced while
- * live-verifying a CloudForge-Manager-as-OIDC-provider deployment: the secret's real value sat
- * correctly in Secrets Manager the whole time, but the running container's environment kept the
- * disconnected placeholder forever, since nothing ever re-read the secret and patched it in.
+ * {@code external-idp}/{@code cloudforge-manager} OIDC providers. Without this reconciler, the
+ * secret's value is correct in Secrets Manager but the running container keeps the placeholder,
+ * because nothing re-reads the secret and patches it in.
  *
  * <p>Same "adapt-time placeholder, deploy-time reconcile" shape as {@link
  * LocalStackMysqlPortReconciler} — the placeholder is a literal baked into the task definition,
@@ -289,7 +288,7 @@ final class LocalStackOidcClientSecretReconciler {
 
     /** Points every ECS service in this stack at {@code revisionArn} — see {@link
      *  LocalStackMysqlPortReconciler#redeployServicesOntoRevision}'s own comment on why full ARNs
-     *  (not bare names) are required for LocalStack's {@code UpdateService} to actually stick. */
+     *  (not bare names) are required for LocalStack's {@code UpdateService} to take effect. */
     private static void redeployServicesOntoRevision(
             EcsClient ecs, List<StackResource> resources, String revisionArn) {
         for (StackResource resource : resources) {

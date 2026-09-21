@@ -104,6 +104,7 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
                     // Advisory mode: Log warnings but don't fail synthesis
                     LOG.warning("HIPAA validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
                     errors.forEach(err -> LOG.warning("  - " + err));
+                    ComplianceFindingsCollector.record(failedRules);
                     return List.of(); // Return empty list = no CDK synthesis errors
                 } else {
                     // Enforce mode: Fail synthesis

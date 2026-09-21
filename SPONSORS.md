@@ -1,7 +1,6 @@
-# Support CloudForgeCI
+# Sponsoring CloudForge CI
 
-If CloudForgeCI saved you time and money, consider supporting its development!
+CloudForge CI is developed in the open. You can support its development through
+[GitHub Sponsors](https://github.com/sponsors/CloudForgeCI).
 
-[Make a one-time contribution](https://github.com/sponsors/CloudForgeCI)
-
-For enterprise support, custom features, or consulting: sales@cloudforgeci.com
+For commercial support, custom features, or consulting, contact sales@cloudforgeci.com.

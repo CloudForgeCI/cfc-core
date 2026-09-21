@@ -44,9 +44,9 @@ esac
 
 # Discover currently-active per-instance hostnames (e.g. jenkins1.cloudforge.localhost,
 # jenkins2.cloudforge.localhost) straight from the running edge's reconciled nginx config —
-# the same source of truth the edge itself routes on, so this can never drift out of sync with
-# what's actually deployed right now. Silently empty when the edge isn't running or has no
-# routes yet; that's a normal state; setup still writes the static block.
+# the same source the edge routes on, so it matches what is currently deployed. Returns nothing
+# when the edge isn't running or has no routes yet (a normal state); setup still writes the
+# static block.
 dynamic_hostnames() {
   local conf
   conf="$(docker exec "$EDGE_CONTAINER" cat /etc/nginx/conf.d/cloudforge-apps.conf 2>/dev/null || true)"

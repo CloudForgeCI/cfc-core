@@ -6,6 +6,8 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
 import software.amazon.awscdk.services.ec2.FlowLogOptions;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.constructs.Construct;
@@ -23,8 +25,32 @@ public class FlowLogFactory extends BaseFactory {
     @SystemContext("security")
     private SecurityProfile security;
 
+    @SystemContext("stackName")
+    private String stackName;
+
     public FlowLogFactory(Construct scope, String id) {
         super(scope, id);
+    }
+
+    /** Fixed suffix of the VPC Flow Log delivery role this factory creates, so Manager's
+     *  operator-role grant ({@code ManagerOperatorIamSupport}) can match it with a wildcard
+     *  prefix -- same reasoning and pattern as {@code RdsFactory#createMonitoringRole}'s {@code
+     *  -CfcRdsMonitor} role and {@code BackupFactory#createSelectionRole}'s {@code
+     *  -CfcBackupSelection} role: without an explicit {@code roleName}, {@code addFlowLog}/{@code
+     *  FlowLogDestination.toCloudWatchLogs} auto-creates one at a construct id nested several
+     *  levels deep, and CloudFormation's 64-character IAM name limit can truncate away the only
+     *  substring that would otherwise identify it. */
+    private static final String FLOW_LOG_ROLE_SUFFIX = "-CfcFlowLog";
+
+    private Role createFlowLogRole() {
+        int maxPrefixLength = 64 - FLOW_LOG_ROLE_SUFFIX.length();
+        String prefix = stackName.length() > maxPrefixLength
+            ? stackName.substring(0, maxPrefixLength)
+            : stackName;
+        return Role.Builder.create(this, "VpcFlowLogRole")
+            .roleName(prefix + FLOW_LOG_ROLE_SUFFIX)
+            .assumedBy(new ServicePrincipal("vpc-flow-logs.amazonaws.com"))
+            .build();
     }
 
     @Override
@@ -70,21 +96,14 @@ public class FlowLogFactory extends BaseFactory {
 
         if (flowLogsKmsKey != null) {
             // CDK's LogGroup#encryptionKey does NOT grant the CloudWatch Logs service permission
-            // to use the key — a customer-managed key defaults to an account-root-only policy, so
-            // without this explicit grant CreateLogGroup fails with AccessDenied the moment this
-            // path is actually exercised (see ComplianceFactory's identical CloudTrail-log-group
-            // fix for the full explanation).
+            // to use the key; a customer-managed key defaults to an account-root-only policy, so
+            // CreateLogGroup fails with AccessDenied without this grant (same as ComplianceFactory's
+            // CloudTrail log group).
             //
-            // Resource is "*", not this key's own explicit ARN — verified that spelling out the key's own ARN here creates
-            // a CDK circular dependency: it's a self-reference (Ref to this same key's own
-            // logical id) inside this key's OWN resource policy, which CDK's dependency graph
-            // rejects as a self-loop (the kms:EncryptionContext condition referencing the log
-            // group's ARN was a red herring — removing just that changed nothing, this was the
-            // actual cause). "*" in a resource-based policy on the key itself isn't a real wildcard
-            // grant — the policy is already scoped to this one key by being attached to it — it's
-            // the standard AWS pattern specifically to avoid this self-reference, and matches every
-            // other working KMS-log grant already in this codebase (LoggingCwFactory's,
-            // ComplianceFactory's identical CloudTrail-log-group fix).
+            // Resource is "*" rather than the key's ARN: referencing the key's own ARN in its
+            // resource policy is a self-reference CDK rejects as a circular dependency. In a key
+            // policy, "*" means this key only, and is the standard AWS pattern (also used by
+            // LoggingCwFactory and ComplianceFactory).
             String region = software.amazon.awscdk.Stack.of(this).getRegion();
             flowLogsKmsKey.addToResourcePolicy(
                 software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
@@ -101,7 +120,7 @@ public class FlowLogFactory extends BaseFactory {
         // Create flow log options with security profile-based traffic type
         FlowLogOptions flowLogOptions = FlowLogOptions.builder()
                 .trafficType(config.getFlowLogTrafficType())
-                .destination(FlowLogDestination.toCloudWatchLogs(logGroup))
+                .destination(FlowLogDestination.toCloudWatchLogs(logGroup, createFlowLogRole()))
                 .build();
 
         ctx.flowlogs.set(flowLogOptions);

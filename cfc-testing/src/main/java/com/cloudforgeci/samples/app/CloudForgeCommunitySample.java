@@ -29,7 +29,7 @@ import java.util.Map;
 public class CloudForgeCommunitySample {
 
   public static void main(final String[] args) {
-    if (System.getenv("CFC_DEPLOYING") == null && shouldRunInteractiveDeployer()) {
+    if (!InteractiveDeployer.isInvokedByCdkCli() && shouldRunInteractiveDeployer()) {
       InteractiveDeployer.main(args);
       return;
     }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Build Snapshot Capture System
-# Captures comprehensive state of each build for drift detection and progression tracking
+# Captures the state of each build for drift detection and progression tracking
 # Tracks: template synthesis, test results, configuration evolution, resource changes
 
 set -e

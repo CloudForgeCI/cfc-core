@@ -18,6 +18,8 @@ import software.amazon.awscdk.services.backup.BackupSelectionOptions;
 import software.amazon.awscdk.services.backup.BackupVault;
 import software.amazon.awscdk.services.events.CronOptions;
 import software.amazon.awscdk.services.events.Schedule;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.constructs.Construct;
 
 import java.util.ArrayList;
@@ -95,16 +97,11 @@ public class BackupFactory extends BaseFactory {
      * Vault name must be 2-50 characters, alphanumeric with hyphens and underscores only.
      */
     private BackupVault createBackupVault() {
-        // Vault lock/retention (below) is gated by the compliance matrix, not the security
-        // profile alone -- see isBackupVaultLockEnabled()'s own javadoc. Only that path needs a
-        // stack-id-derived suffix instead of a bare stackName-derived name: AWS Backup refuses to
-        // ever delete a locked vault, so a full teardown of this stack leaves it behind under the
-        // exact name a future redeploy of the same stackName would otherwise try to reuse --
-        // CloudFormation CREATE then fails outright on that collision. Stack IDs are fresh UUIDs
-        // even when the stack name repeats, and stay fixed for the life of one running stack (no
-        // churn across ordinary updates), so this only changes across a genuine
-        // teardown-then-recreate -- exactly the case that needs it. Every non-locked vault keeps
-        // the plain stackName-derived name, since it can always be deleted and freely reused.
+        // Vault lock is gated by the compliance matrix (see isBackupVaultLockEnabled()). AWS
+        // Backup never deletes a locked vault, so a torn-down stack leaves it behind and a
+        // redeploy with the same stackName would collide on the name. Locked vaults therefore get
+        // a suffix derived from the stack ID, which is new for each stack but stable across
+        // updates. Unlocked vaults can be deleted, so they keep the plain stackName-derived name.
         boolean lockEnabled = config.isBackupVaultLockEnabled();
         String vaultName = lockEnabled
             ? sanitizeResourceName(stackName, "-vault-" + Fn.select(0, Fn.split("-", Stack.of(this).getStackId())))
@@ -242,12 +239,48 @@ public class BackupFactory extends BaseFactory {
             return;
         }
 
-        // Create backup selection
+        // Create backup selection -- an explicit roleName (see createSelectionRole) instead of
+        // letting BackupSelection auto-create one, so Manager's operator-role grant
+        // (ManagerOperatorIamSupport#IAM_ROLE_MANAGE_RESOURCES) can match it with a stable
+        // wildcard suffix regardless of stack-name-prefix truncation -- same reasoning and pattern
+        // as RdsFactory#createMonitoringRole's -CfcRdsMonitor role.
         plan.addSelection("BackupSelection", BackupSelectionOptions.builder()
                 .resources(resources)
+                .role(createSelectionRole())
                 .build());
 
         LOG.info("Added " + resources.size() + " resource(s) to backup plan");
+    }
+
+    /** Fixed suffix of the AWS Backup selection role this factory creates, so Manager's
+     *  operator-role grant ({@code ManagerOperatorIamSupport}) can match it with a wildcard
+     *  prefix. See this method's own javadoc for why the role is named explicitly. */
+    private static final String SELECTION_ROLE_SUFFIX = "-CfcBackupSelection";
+
+    /**
+     * Without an explicit {@code role}, {@code BackupSelection} auto-creates one at a construct id
+     * nested several levels deep. CloudFormation truncates over-length physical names to fit IAM's
+     * 64-character limit, so for long stack/app names the distinguishing part of that construct id
+     * may not appear in the physical name at all, leaving no stable substring for an operator
+     * policy to match -- {@code iam:DeleteRole}/{@code iam:DetachRolePolicy} then fail with
+     * AccessDenied when a rollback needs to delete it, because its truncated physical name shares
+     * only a generic tail with unrelated roles in the same stack.
+     *
+     * <p>An explicit {@code roleName} avoids CloudFormation's truncation, the same fix already
+     * applied to {@code RdsFactory#createMonitoringRole}'s {@code -CfcRdsMonitor} role. {@code
+     * BackupSelection} still attaches its own default backup/restore managed policies to whatever
+     * role is passed in (see {@code BackupSelectionOptions#role}'s own javadoc), so this only needs
+     * to supply the identity, not any AWS Backup permissions itself.</p>
+     */
+    private Role createSelectionRole() {
+        int maxPrefixLength = 64 - SELECTION_ROLE_SUFFIX.length();
+        String prefix = stackName.length() > maxPrefixLength
+            ? stackName.substring(0, maxPrefixLength)
+            : stackName;
+        return Role.Builder.create(this, "BackupSelectionRole")
+            .roleName(prefix + SELECTION_ROLE_SUFFIX)
+            .assumedBy(new ServicePrincipal("backup.amazonaws.com"))
+            .build();
     }
 
     /**

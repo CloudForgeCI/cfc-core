@@ -1,8 +1,8 @@
 # Grafana Application Guide
 
-Grafana is an open-source platform for monitoring and observability that allows you to query, visualize, alert on, and understand your metrics.
+Grafana is an open-source platform for querying, visualizing, and alerting on metrics, logs, and traces.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -17,27 +17,22 @@ Grafana is an open-source platform for monitoring and observability that allows 
 | **Default CPU** | 512 (Fargate) |
 | **Default Memory** | 1024 MB (Fargate) |
 | **Default Instance** | t3.micro (EC2) |
-| **Health Check Path** | `/api/health` |
+| **Health Check Path** | `/` |
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | Yes (via generic_oauth) |
-| **Database Required** | Optional |
+| **Supported Auth Modes** | `application-oidc` (default), `alb-oidc`, `none` |
+| **Database Required** | No (SQLite by default; PostgreSQL optional) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Multi-source metrics visualization
-- Interactive dashboards
-- Alerting and notifications
-- Team and user management
-- Plugin ecosystem (panels, data sources)
-- Dashboard templating
-- Annotations and events
-- Explore mode for ad-hoc queries
-- Dashboard sharing and embedding
-- Built-in support for Prometheus, CloudWatch, InfluxDB, etc.
+- Dashboards with templating and annotations
+- Alerting and notification contact points
+- Explore mode for ad hoc queries
+- Data sources including Prometheus, CloudWatch, and InfluxDB
+- Panel and data-source plugins
 
 ---
 
@@ -49,25 +44,25 @@ Grafana does not have optional ports. All traffic flows through port 3000.
 
 ## Database Configuration
 
-### Development
+### Without a Database
 
-Uses SQLite (H2 embedded) - single instance only.
+Without `provisionDatabase`, Grafana uses SQLite at `/var/lib/grafana/grafana.db` (`GF_DATABASE_TYPE=sqlite3`). SQLite supports a single instance only.
 
-### Production (Recommended)
+### With PostgreSQL
 
 | Property | Value |
 |----------|-------|
-| Engine | PostgreSQL 14+ |
-| Instance Class | db.t3.micro (default) |
+| Engine | PostgreSQL 14 or later |
+| Instance Class | `db.t3.micro` (default) |
 | Storage | 20 GB (default) |
 | Database Name | `grafana` |
 
-When using RDS, environment variables are set:
-- `GF_DATABASE_TYPE`: postgres
-- `GF_DATABASE_HOST`: RDS endpoint
-- `GF_DATABASE_NAME`: grafana
-- `GF_DATABASE_USER`: grafana
-- `GF_DATABASE_PASSWORD`: From Secrets Manager
+When an RDS database is provisioned, CloudForge sets:
+- `GF_DATABASE_TYPE`: `postgres`
+- `GF_DATABASE_HOST`: `<endpoint>:<port>`
+- `GF_DATABASE_NAME` and `GF_DATABASE_USER`: from the database connection
+- `GF_DATABASE_SSL_MODE`: `require`
+- `GF_DATABASE_PASSWORD`: injected from Secrets Manager
 
 ---
 
@@ -75,41 +70,35 @@ When using RDS, environment variables are set:
 
 ### Supported Auth Modes
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `application-oidc` | Available | Native OIDC via generic_oauth |
-| `alb-oidc` | Available | ALB-level authentication |
-| `none` | Available | Local accounts only |
+| Mode | Description |
+|------|-------------|
+| `application-oidc` | Grafana signs users in through its `generic_oauth` provider (default) |
+| `alb-oidc` | The load balancer authenticates users before requests reach Grafana |
+| `none` | Grafana local accounts only |
 
 ### OIDC Integration Details
 
-Grafana uses **generic_oauth** provider configured via environment variables.
+With `application-oidc`, CloudForge configures Grafana's `generic_oauth` provider through `GF_AUTH_GENERIC_OAUTH_*` environment variables:
 
-**Features:**
-- Auto-create users on first login
-- Group/role mapping from OIDC claims
-- Admin role assignment via group membership
-- PKCE support
-- Automatic user provisioning
+- Users are created on first sign-in when automatic user creation is enabled (`GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP`).
+- The groups claim is passed through `GF_AUTH_GENERIC_OAUTH_GROUPS_ATTRIBUTE_PATH`.
+- PKCE is enabled according to the OIDC provider configuration.
+- Role mapping is not configured: `GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH` is empty, so new users receive Grafana's default organization role. Set a role attribute path yourself to map groups to Grafana roles.
 
 **Callback Path:** `/login/generic_oauth`
-
-**Role Mapping:**
-- Users in admin group → Grafana Admin role
-- Others → Grafana Editor role
 
 ---
 
 ## Environment Variables
 
-CloudForge automatically configures:
+CloudForge sets:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `GF_SERVER_ROOT_URL` | External URL (critical for OAuth) | `https://grafana.example.com` |
-| `GF_SERVER_DOMAIN` | Domain name | `grafana.example.com` |
-| `GF_SERVER_ENFORCE_DOMAIN` | Allow ALB health checks | `false` |
-| `GF_SERVER_PROTOCOL` | Protocol (ALB handles HTTPS) | `http` |
+| `GF_SERVER_ROOT_URL` | External URL, required for OAuth redirects (set when an FQDN is configured) | `https://grafana.example.com` |
+| `GF_SERVER_DOMAIN` | Domain name (set when an FQDN is configured) | `grafana.example.com` |
+| `GF_SERVER_ENFORCE_DOMAIN` | Disabled so load balancer health checks succeed | `false` |
+| `GF_SERVER_PROTOCOL` | TLS terminates at the load balancer | `http` |
 | `GF_DATABASE_TYPE` | Database type | `postgres` or `sqlite3` |
 
 **OIDC Variables (when enabled):**
@@ -117,10 +106,12 @@ CloudForge automatically configures:
 |----------|-------------|
 | `GF_AUTH_GENERIC_OAUTH_ENABLED` | Enable OAuth |
 | `GF_AUTH_GENERIC_OAUTH_CLIENT_ID` | OAuth client ID |
-| `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` | OAuth client secret |
+| `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` | Set to the literal `${GRAFANA_OAUTH_CLIENT_SECRET}` on Fargate (see note below) |
 | `GF_AUTH_GENERIC_OAUTH_AUTH_URL` | Authorization endpoint |
 | `GF_AUTH_GENERIC_OAUTH_TOKEN_URL` | Token endpoint |
 | `GF_AUTH_GENERIC_OAUTH_API_URL` | UserInfo endpoint |
+
+On Fargate, the client secret is injected from Secrets Manager as `GRAFANA_OIDC_CLIENT_SECRET`, while `GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET` references `${GRAFANA_OAUTH_CLIENT_SECRET}`. ECS does not expand such references, so verify the client secret Grafana receives before relying on `application-oidc` on Fargate.
 
 ---
 
@@ -146,21 +137,20 @@ CloudForge automatically configures:
 
 ## Deployment Context Examples
 
-### Development - Minimal Setup
+### Development
 
 ```json
 {
   "stackName": "Grafana-Dev",
   "applicationId": "grafana",
   "applicationName": "Grafana Dev",
-  "description": "Grafana development environment",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -173,17 +163,14 @@ CloudForge automatically configures:
 }
 ```
 
-**Cost estimate:** ~$25/month
-
-### Development - With OIDC
+### Development with OIDC
 
 ```json
 {
   "stackName": "Grafana-Dev-Auth",
   "applicationId": "grafana",
   "applicationName": "Grafana Dev",
-  "description": "Grafana with Cognito authentication",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -211,17 +198,14 @@ CloudForge automatically configures:
 }
 ```
 
-**Cost estimate:** ~$70/month
-
-### Production - With Database
+### Production with PostgreSQL
 
 ```json
 {
   "stackName": "Grafana-Production",
   "applicationId": "grafana",
   "applicationName": "Grafana",
-  "description": "Production Grafana with PostgreSQL",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -258,7 +242,6 @@ CloudForge automatically configures:
   "databaseBackupRetentionDays": 30,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "wafEnabled": true,
@@ -272,19 +255,16 @@ CloudForge automatically configures:
 }
 ```
 
-**Cost estimate:** ~$250/month
+### Fargate with ALB Authentication
 
-### Observability Stack (with Prometheus)
-
-Deploy Grafana alongside Prometheus for complete observability.
+Grafana on Fargate behind load balancer authentication, for example as the front end for a separately deployed Prometheus stack.
 
 ```json
 {
   "stackName": "Grafana-Observability",
   "applicationId": "grafana",
   "applicationName": "Grafana Observability",
-  "description": "Grafana for observability stack",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "fargate",
   "securityProfile": "production",
@@ -324,15 +304,13 @@ Deploy Grafana alongside Prometheus for complete observability.
 }
 ```
 
-**Cost estimate:** ~$300/month
-
 ---
 
 ## Health Check Configuration
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| Path | `/api/health` | Health check endpoint |
+| Path | `/` | Health check endpoint |
 | Grace Period | 300 seconds | Time before health checks start |
 | Interval | 30 seconds | Time between checks |
 | Timeout | 5 seconds | Response timeout |
@@ -341,20 +319,20 @@ Deploy Grafana alongside Prometheus for complete observability.
 
 ## Compliance Considerations
 
-### SOC2
+Setting `complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for those frameworks. It does not certify the deployment.
 
-**Automatic Controls:**
-- Encryption at rest
-- Encryption in transit (TLS)
+### SOC 2
+
+**Infrastructure controls CloudForge can configure:**
+- Encryption at rest and in transit (TLS)
 - Network isolation
 - CloudWatch logging
 
-**User Responsibilities:**
-- [ ] Configure session timeouts
-- [ ] Disable anonymous access
-- [ ] Implement dashboard access controls
-- [ ] Enable audit logging (Grafana Enterprise)
-- [ ] Configure data source access controls
+**Controls you configure in Grafana:**
+- Session timeouts
+- Anonymous access disabled
+- Dashboard and data-source permissions
+- Audit logging (a Grafana Enterprise feature)
 
 ---
 
@@ -362,20 +340,20 @@ Deploy Grafana alongside Prometheus for complete observability.
 
 ### 1. Initial Login
 
-1. Navigate to `https://grafana.your-domain.com`
-2. If OIDC: Click "Sign in with OAuth"
-3. If local: Default credentials `admin` / `admin`
+1. Open `https://grafana.example.com` (your configured FQDN).
+2. With `application-oidc`, choose the OAuth sign-in button.
+3. Otherwise, sign in with Grafana's default credentials, `admin` / `admin`, and change the password.
 
 ### 2. Add Data Sources
 
-1. **Configuration** > **Data Sources**
-2. Click **Add data source**
-3. Select type (Prometheus, CloudWatch, etc.)
-4. Configure connection
+1. Go to **Connections** > **Data sources**.
+2. Choose **Add data source**.
+3. Select a type (for example Prometheus or CloudWatch).
+4. Configure the connection.
 
 **Example Prometheus data source:**
 ```
-URL: http://prometheus:9090
+URL: https://prometheus.example.com
 Access: Server (default)
 ```
 
@@ -387,20 +365,17 @@ Default Region: us-east-1
 
 ### 3. Import Dashboards
 
-1. **Dashboards** > **Import**
-2. Enter Grafana.com dashboard ID or upload JSON
-3. Select data source
+1. Go to **Dashboards** > **Import**.
+2. Enter a Grafana.com dashboard ID or upload JSON.
+3. Select the data source.
 
-**Recommended dashboards:**
-- AWS CloudWatch: 11541, 139
-- Prometheus: 1860 (Node Exporter)
-- Docker: 893
+For example, dashboard 1860 visualizes Node Exporter metrics.
 
 ### 4. Configure Alerting
 
-1. **Alerting** > **Contact points**
-2. Add notification channels (Slack, Email, PagerDuty)
-3. Create alert rules on dashboards
+1. Go to **Alerting** > **Contact points**.
+2. Add contact points (for example email, Slack, or PagerDuty).
+3. Create alert rules.
 
 ---
 
@@ -410,24 +385,26 @@ Default Region: us-east-1
 
 **Check logs:**
 ```bash
-# Fargate
-aws logs tail /aws/ecs/grafana --follow
+# Fargate (log group name when storage is not retained; otherwise find the
+# stack's log group in the CloudWatch console)
+aws logs tail /aws/ecs/<stack-name>/fargate/<security-profile> --follow
 
-# EC2
-ssh ec2-user@instance 'tail -f /var/log/grafana/grafana.log'
+# EC2 (via SSM Session Manager)
+aws ssm start-session --target <instance-id>
+# then: tail -f /var/log/grafana/grafana.log
 ```
 
 ### OIDC login fails
 
-1. Verify `GF_SERVER_ROOT_URL` matches actual URL
-2. Check Cognito callback URLs
-3. Verify OAuth client configuration
+1. Verify `GF_SERVER_ROOT_URL` matches the URL users open.
+2. Check the Cognito callback URLs (`/login/generic_oauth`).
+3. Verify the OAuth client configuration and client secret.
 
 ### Dashboards not loading
 
-1. Check data source connectivity
-2. Verify IAM permissions for CloudWatch
-3. Check network security groups
+1. Check data source connectivity.
+2. Verify IAM permissions for CloudWatch.
+3. Check security group rules.
 
 ---
 

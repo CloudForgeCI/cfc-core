@@ -1,7 +1,7 @@
 # SOC2 Privacy (P) - Privacy Procedures
 
 **Control**: Privacy Trust Service Criteria
-**Status**: Fully Documented
+**Status**: Procedure template
 **Last Updated**: 2025-12-16
 **Owner**: Privacy Officer / Data Protection Officer
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document defines privacy procedures for organizations using CloudForge CI that have elected to include the Privacy category in their SOC2 examination. These procedures address the collection, use, retention, disclosure, and disposal of personal information. These procedures satisfy SOC2 Privacy (P) requirements.
+This document defines privacy procedures for organizations using CloudForge CI that have elected to include the Privacy category in their SOC2 examination. These procedures address the collection, use, retention, disclosure, and disposal of personal information. These procedures are a template for addressing SOC2 Privacy (P) requirements.
 
 ---
 

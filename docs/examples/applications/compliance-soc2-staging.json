@@ -2,7 +2,6 @@
   "stackName": "App-SOC2-Staging",
   "applicationId": "REPLACE_WITH_APP_ID",
   "applicationName": "SOC2 Staging Application",
-  "description": "Staging environment with SOC2 compliance controls",
   "environment": "staging",
 
   "runtime": "fargate",
@@ -18,7 +17,7 @@
 
   "authMode": "alb-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "app-staging-CHANGEME",
+  "cognitoDomainPrefix": "app-staging-changeme",
   "cognitoMfaEnabled": true,
   "cognitoMfaMethod": "totp",
   "cognitoCreateGroups": true,

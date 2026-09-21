@@ -96,4 +96,20 @@ public interface Ec2Context {
      * @since 3.2.0
      */
     default boolean sslEnabled() { return false; }
+
+    /**
+     * The ARN of the initial-admin-password secret {@code ApplicationFactory} provisions when
+     * {@link ApplicationSpec#autoAdminPasswordEnvVar()} is non-null, or {@code null} if that
+     * method returns {@code null} (no such secret exists for this application) or the secret
+     * hasn't been provisioned yet at the point {@code configureUserData} runs.
+     *
+     * <p>UserData scripts that need this app's own generated admin password should fetch it via
+     * {@code aws secretsmanager get-secret-value --secret-id <this ARN>} using the EC2 instance
+     * role's own IAM permissions (granted automatically by {@code Ec2Factory} whenever this is
+     * non-null) — not a guessed secret name/path, which will not match the provisioned secret.</p>
+     *
+     * @return the secret ARN, or {@code null}
+     * @since 3.2.18
+     */
+    default String autoAdminPasswordSecretArn() { return null; }
 }

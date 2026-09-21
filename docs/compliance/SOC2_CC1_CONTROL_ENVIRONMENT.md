@@ -1,7 +1,7 @@
 # SOC2 CC1 - Control Environment
 
 **Control**: CC1 - Control Environment
-**Status**: Fully Documented
+**Status**: Procedure template
 **Last Updated**: 2025-12-16
 **Owner**: Organization Leadership
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document defines the control environment for organizations using CloudForge CI. The control environment establishes the foundation for internal controls by influencing the control consciousness of personnel. These procedures satisfy SOC2 CC1 (Control Environment) requirements.
+This document defines the control environment for organizations using CloudForge CI. The control environment establishes the foundation for internal controls by influencing the control consciousness of personnel. These procedures are a template for addressing SOC2 CC1 (Control Environment) requirements.
 
 ---
 

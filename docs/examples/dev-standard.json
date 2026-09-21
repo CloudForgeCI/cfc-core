@@ -1,6 +1,6 @@
 {
-  "description": "Standard development environment with basic security controls",
   "stackName": "CloudForge-Dev-Standard",
+  "applicationId": "jenkins",
   "runtime": "fargate",
   "topology": "jenkins-service",
   "securityProfile": "dev",

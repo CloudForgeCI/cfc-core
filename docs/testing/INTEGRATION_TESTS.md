@@ -1,368 +1,157 @@
-# CloudForge CI Integration Tests
+# Integration Tests
 
-This directory contains **extensive integration tests** that validate end-to-end infrastructure deployment, security controls, and compliance requirements for the CloudForge CI CDK framework.
+The integration tests in
+[`cloudforge-api/src/test/java/com/cloudforgeci/api/integration/`](https://github.com/CloudForgeCI/cfc-core/tree/develop/cloudforge-api/src/test/java/com/cloudforgeci/api/integration)
+synthesize complete CloudFormation templates with CDK and assert on their contents with
+`Template.fromStack(...)`. They run offline; nothing is deployed to AWS.
 
-## Overview
+They cover:
 
-These integration tests go beyond unit testing to validate:
-- **CloudFormation Template Output** - Actual synthesized CDK templates
-- **Compliance Controls** - SOC2, HIPAA, PCI-DSS, GDPR requirements
-- **Auto-Remediation** - AWS Config rules and automated fixes
-- **Cross-Component Security** - Security group chains, IAM trust relationships
-- **Authentication** - OIDC and Cognito integration with ALB
-- **Deployment Workflows** - Context propagation and topology validation
+- compliance controls for SOC 2, HIPAA, PCI-DSS, and GDPR,
+- AWS Config rules and automatic remediation,
+- security group chains, IAM trust relationships, and encryption across components,
+- Cognito and OIDC authentication on the ALB,
+- deployment workflows, runtime/topology combinations, and the deployment truth table.
 
-## Test Structure
+## Layout
 
 ```
 integration/
-├── IntegrationTestBase.java           # Base class with assertion utilities
-├── compliance/                         # Compliance framework tests
-│   ├── Soc2ComplianceIntegrationTest.java
-│   ├── HipaaComplianceIntegrationTest.java
-│   ├── PciDssComplianceIntegrationTest.java
-│   └── GdprComplianceIntegrationTest.java
-├── remediation/                        # Auto-remediation tests
+├── IntegrationTestBase.java                    # Shared stack setup and assertions
+├── CompleteInfrastructureTest.java
+├── compliance/
+│   ├── Soc2ComplianceIntegrationTest.java      Soc2ComplianceExtendedTest.java
+│   ├── HipaaComplianceIntegrationTest.java     HipaaComplianceExtendedTest.java
+│   ├── PciDssComplianceIntegrationTest.java    PciDssComplianceExtendedTest.java
+│   ├── GdprComplianceIntegrationTest.java      GdprComplianceExtendedTest.java
+│   └── ConfigRulesDeploymentIntegrationTest.java
+├── remediation/
 │   └── RemediationIntegrationTest.java
-├── security/                           # Security validation tests
-│   ├── CrossComponentSecurityIntegrationTest.java
-│   └── AuthenticationIntegrationTest.java
-└── deployment/                         # Deployment workflow tests
-    └── DeploymentWorkflowIntegrationTest.java
+├── security/
+│   ├── CognitoAuthenticationIntegrationTest.java
+│   ├── OidcAuthenticationIntegrationTest.java  # @Disabled
+│   └── CrossComponentSecurityIntegrationTest.java
+├── deployment/
+│   ├── DeploymentWorkflowIntegrationTest.java
+│   ├── RuntimeTopologyIntegrationTest.java
+│   ├── SynthesisValidationIntegrationTest.java
+│   ├── TruthTableValidationTest.java
+│   ├── ComplianceValidationMatrix.java         # helper
+│   └── ResourceValidationMatrix.java           # helper
+└── runtime/
+    └── RuntimeInfrastructureSynthesisTest.java
 ```
 
-## Test Categories
+## Test classes
 
-### 1. Compliance Integration Tests
+### Compliance
 
-#### SOC 2 Compliance ([Soc2ComplianceIntegrationTest.java](compliance/Soc2ComplianceIntegrationTest.java))
+Each `*ComplianceIntegrationTest` synthesizes a stack for one framework and checks the resources behind
+its controls. The matching `*ComplianceExtendedTest` goes further into specific settings (key rotation,
+log retention, alarm thresholds, and so on).
 
-Tests validate SOC 2 Trust Services Criteria:
-- **CC6.1** - Logical and Physical Access Controls
-- **CC6.6** - Data-in-Transit Protection
-- **CC6.7** - Data-at-Rest Protection
-- **CC7.2** - System Monitoring
-- **CC7.3** - Threat Detection and Prevention
-- **CC7.4** - Security Incident Management
-- **A1.2** - Data Availability and Processing Integrity
+| Class | Controls covered |
+|-------|------------------|
+| `Soc2ComplianceIntegrationTest` | Fargate and EC2 full stacks, network segmentation, encryption in transit, logging and audit trail, IAM, backup and recovery, high availability, threat detection, Config rules |
+| `HipaaComplianceIntegrationTest` | §164.308 (security management, workforce security, information access), §164.310(d), §164.312 (access control, encryption, audit, integrity, authentication, transmission), business continuity |
+| `PciDssComplianceIntegrationTest` | Requirements 1, 2, 3, 4, 5, 6, 8, 10, 11, plus network segmentation, access control lists, data retention and disposal, high availability |
+| `GdprComplianceIntegrationTest` | Articles 5(1)(f), 25, 30, 32, 33; data minimization, erasure, portability, access control, data residency, accountability, threat detection |
+| `ConfigRulesDeploymentIntegrationTest` | Which Config rules each framework activates, rule scoping, remediation attachments, recorder and delivery channel. Builds its own context instead of extending `IntegrationTestBase`. |
 
-**Key Tests:**
-- `testSoc2FargateDeploymentWithFullInfrastructure()` - Full Fargate stack with compliance
-- `testSoc2Ec2DeploymentWithFullInfrastructure()` - Full EC2 stack with compliance
-- `testSoc2NetworkSegmentationControls()` - Public/private subnet isolation
-- `testSoc2EncryptionInTransit()` - HTTPS and EFS encryption
-- `testSoc2LoggingAndAuditTrail()` - CloudTrail, VPC Flow Logs, retention
-- `testSoc2AccessControlAndIAM()` - Least privilege IAM roles
-- `testSoc2BackupAndRecovery()` - EFS backups and DR
-- `testSoc2HighAvailability()` - Multi-AZ deployment
-- `testSoc2ThreatDetectionAndResponse()` - GuardDuty, security monitoring
-- `testSoc2ChangeManagementAndConfig()` - AWS Config rules
+### Remediation
 
-#### HIPAA Compliance ([HipaaComplianceIntegrationTest.java](compliance/HipaaComplianceIntegrationTest.java))
+`RemediationIntegrationTest` checks S3 public-access-block and versioning remediation, CloudTrail
+bucket access logging, encryption enforcement, retry settings, IAM permissions for the remediation
+roles, scope tagging, framework-specific remediation, notifications, and multiple remediation actions
+per rule.
 
-Tests validate HIPAA Security Rule requirements:
-- **164.308(a)(1)** - Security Management Process
-- **164.308(a)(3)** - Workforce Security
-- **164.308(a)(4)** - Information Access Management
-- **164.310(d)** - Device and Media Controls
-- **164.312(a)(1)** - Access Control
-- **164.312(a)(2)(iv)** - Encryption and Decryption
-- **164.312(b)** - Audit Controls
-- **164.312(c)(1)** - Integrity Controls
-- **164.312(d)** - Person or Entity Authentication
-- **164.312(e)(1)** - Transmission Security
+### Security
 
-**Key Tests:**
-- `testHipaaEncryptionAtRest()` - EFS, S3, CloudWatch Logs encryption
-- `testHipaaTransmissionSecurity()` - HTTPS, EFS in-transit encryption
-- `testHipaaAuditControls()` - CloudTrail, Flow Logs, log retention
-- `testHipaaAccessControl()` - Security groups, IAM roles
-- `testHipaaIntegrityControls()` - Log file validation, versioning
-- `testHipaaPersonEntityAuthentication()` - IAM trust relationships
-- `testHipaaSecurityManagement()` - GuardDuty, Config, alarms
-- `testHipaaDeviceAndMediaControls()` - Backups, lifecycle management
-- `testHipaaWorkforceSecurity()` - Least privilege, network segmentation
-- `testHipaaBusinessContinuity()` - Multi-AZ, disaster recovery
+- `CrossComponentSecurityIntegrationTest` — ALB → compute → EFS security group chains (Fargate and
+  EC2), IAM trust relationships, network isolation, encryption across components, multi-AZ
+  distribution, egress restrictions, target group health checks, listener configuration, EFS access
+  points, VPC endpoints.
+- `CognitoAuthenticationIntegrationTest` — user pool creation, email verification, app client,
+  domain, MFA, password policy, threat protection, account recovery, token validity, and the ALB
+  `authenticate-cognito` action. See [Cognito MFA setup](../setup/COGNITO_MFA_COMPLIANCE_SETUP.md).
+- `OidcAuthenticationIntegrationTest` — ALB OIDC action, client secret in Secrets Manager, listener
+  rule, session settings, scopes, multiple providers, Identity Center. The class is `@Disabled`
+  and does not run. See [Identity Center setup](../setup/AWS_IDENTITY_CENTER_SETUP.md).
 
-#### PCI-DSS Compliance ([PciDssComplianceIntegrationTest.java](compliance/PciDssComplianceIntegrationTest.java))
+### Deployment and runtime
 
-Tests validate PCI-DSS v4.0 requirements:
-- **Requirement 1** - Install and Maintain Network Security Controls
-- **Requirement 2** - Apply Secure Configurations
-- **Requirement 3** - Protect Stored Account Data
-- **Requirement 4** - Protect Cardholder Data with Strong Cryptography
-- **Requirement 5** - Protect from Malicious Software
-- **Requirement 6** - Develop and Maintain Secure Systems
-- **Requirement 8** - Identify Users and Authenticate Access
-- **Requirement 10** - Log and Monitor All Access
-- **Requirement 11** - Test Security Regularly
+- `DeploymentWorkflowIntegrationTest` — `DeploymentContext` creation, `SystemContext` slot population,
+  Fargate and EC2 stacks, security profile progression and IAM profile mapping, context validation,
+  stack outputs, multiple stacks, naming, and factory ordering (VPC → ALB → EFS → compute).
+- `RuntimeTopologyIntegrationTest` — runtime/topology combinations, TLS, autoscaling, DNS.
+- `SynthesisValidationIntegrationTest` — resources created for combinations of autoscaling, DNS, WAF,
+  and security/IAM profile settings.
+- `RuntimeInfrastructureSynthesisTest` — full EC2 and Fargate synthesis across all security profiles.
+- `CompleteInfrastructureTest` — complete infrastructure with all validation requirements met.
+- `TruthTableValidationTest` — every valid configuration from the deployment truth table. Requires
+  `cfc-testing/scripts/validation-results/truth-table.json`; the class is skipped when it is missing.
+  One parameterized test in this class is `@Disabled`. See
+  [Compliance truth tables](COMPLIANCE_TRUTH_TABLES.md).
 
-**Key Tests:**
-- `testPciDssRequirement1NetworkSecurityControls()` - Security groups, WAF
-- `testPciDssRequirement2SecureConfigurations()` - Least privilege
-- `testPciDssRequirement3ProtectStoredData()` - Encryption at rest
-- `testPciDssRequirement4ProtectTransmittedData()` - HTTPS, TLS
-- `testPciDssRequirement5MalwareProtection()` - GuardDuty
-- `testPciDssRequirement6SecureDevelopment()` - Config monitoring
-- `testPciDssRequirement8IdentifyAndAuthenticate()` - IAM
-- `testPciDssRequirement10LogAndMonitor()` - CloudTrail, retention
-- `testPciDssRequirement11TestSecurity()` - Continuous monitoring
-- `testPciDssNetworkSegmentation()` - VPC, subnets, security groups
+## Running the tests
 
-#### GDPR Compliance ([GdprComplianceIntegrationTest.java](compliance/GdprComplianceIntegrationTest.java))
-
-Tests validate GDPR requirements:
-- **Article 5(1)(f)** - Integrity and Confidentiality
-- **Article 25** - Data Protection by Design and by Default
-- **Article 30** - Records of Processing Activities
-- **Article 32** - Security of Processing
-- **Article 33** - Notification of Personal Data Breach
-- **Article 35** - Data Protection Impact Assessment
-
-**Key Tests:**
-- `testGdprArticle32SecurityOfProcessing()` - Encryption, backups, testing
-- `testGdprArticle5IntegrityAndConfidentiality()` - Encryption, access controls
-- `testGdprArticle25DataProtectionByDesign()` - Default encryption, isolation
-- `testGdprArticle30RecordsOfProcessing()` - CloudTrail, Flow Logs, retention
-- `testGdprArticle33BreachNotification()` - Detection, alerting
-- `testGdprDataMinimization()` - Minimal IAM, configurable retention
-- `testGdprRightToErasure()` - File deletion, crypto-shredding
-- `testGdprDataPortability()` - Standard access methods
-- `testGdprAccessControls()` - IAM, security groups, private subnets
-- `testGdprDataResidency()` - Regional VPC, EFS, S3
-
-### 2. Auto-Remediation Tests ([RemediationIntegrationTest.java](remediation/RemediationIntegrationTest.java))
-
-Tests validate AWS Config auto-remediation functionality:
-
-**Key Tests:**
-- `testS3PublicAccessBlockRemediation()` - Automatic public access blocking
-- `testS3VersioningRemediation()` - Automatic versioning enablement
-- `testCloudTrailBucketAccessLoggingRemediation()` - CloudTrail logging
-- `testEncryptionEnforcementRemediation()` - EFS, S3, CloudWatch encryption
-- `testRemediationRetryConfiguration()` - Retry logic for failed remediations
-- `testRemediationIAMPermissions()` - Config service role permissions
-- `testConfigRulesWithRemediationScopeTagging()` - Scoped remediation
-- `testRemediationExecutionRolePermissions()` - S3 remediation permissions
-- `testComplianceFrameworkSpecificRemediation()` - SOC2, HIPAA, PCI-DSS rules
-- `testRemediationNotificationConfiguration()` - SNS notifications
-
-### 3. Cross-Component Security Tests ([CrossComponentSecurityIntegrationTest.java](security/CrossComponentSecurityIntegrationTest.java))
-
-Tests validate security controls across infrastructure layers:
-
-**Key Tests:**
-- `testSecurityGroupRuleChaining()` - ALB → Compute → EFS traffic flow
-- `testIAMRoleTrustRelationships()` - ECS Tasks trust relationships
-- `testNetworkIsolationAndSegmentation()` - VPC, public/private subnets
-- `testEncryptionAcrossComponents()` - EFS, S3, CloudWatch, HTTPS
-- `testAccessControlPropagation()` - Security groups at each layer
-- `testMultiAzResourceDistribution()` - Subnets, EFS mount targets, ALB
-- `testSecurityGroupEgressRestrictions()` - Controlled outbound traffic
-- `testEC2SecurityGroupChaining()` - ALB → EC2 → EFS rules
-- `testTargetGroupHealthCheckConfiguration()` - Health check settings
-- `testLoadBalancerListenerConfiguration()` - Listener and actions
-- `testEFSAccessPointSecurityConfiguration()` - POSIX user, permissions
-- `testVPCEndpointSecurity()` - Private AWS service access
-
-### 4. Authentication Tests
-
-#### Cognito Authentication ✅ ([CognitoAuthenticationIntegrationTest.java](security/CognitoAuthenticationIntegrationTest.java))
-
-**Status: All 10 tests passing (100%)**
-
-Tests validate AWS Cognito User Pool authentication for user management:
-
-- `testCognitoUserPoolCreation()` - User Pool auto-provisioning
-- `testCognitoUserPoolEmailVerification()` - Email verification
-- `testCognitoUserPoolClient()` - OAuth 2.0 app client for ALB
-- `testCognitoUserPoolDomain()` - Cognito-managed domain
-- `testCognitoMfaConfiguration()` - MFA (TOTP + SMS)
-- `testCognitoPasswordPolicy()` - Password complexity (12+ chars, mixed case, numbers, symbols)
-- `testCognitoAdvancedSecurity()` - Advanced security features
-- `testCognitoAccountRecovery()` - Account recovery mechanisms
-- `testCognitoTokenValidity()` - Access, ID, and refresh token validity
-- `testAlbAuthenticateCognitoAction()` - ALB authenticate-cognito action
-
-**See:** [Cognito MFA Setup](../setup/COGNITO_MFA_COMPLIANCE_SETUP.md) for configuration details.
-
-#### OIDC Authentication ⏭️ ([OidcAuthenticationIntegrationTest.java](security/OidcAuthenticationIntegrationTest.java))
-
-**Status: 7 tests disabled until OIDC configured**
-
-Tests validate external OIDC provider integration (Okta, Auth0, IAM Identity Center):
-
-- `testOidcAuthenticationConfiguration()` - ALB OIDC action configuration
-- `testOidcSecretsManagerIntegration()` - Client credential storage
-- `testOidcAlbListenerRule()` - Listener rule with OIDC
-- `testOidcSessionManagement()` - Session cookies and timeout
-- `testOidcScopeConfiguration()` - OpenID scopes
-- `testOidcMultipleProviderSupport()` - Support for various OIDC providers
-- `testOidcIamIdentityCenterIntegration()` - IAM Identity Center as OIDC provider
-
-**Note:** Tests are disabled with `@Disabled` annotation until OIDC endpoints are configured in deployment context.
-
-### 5. Deployment Workflow Tests ([DeploymentWorkflowIntegrationTest.java](deployment/DeploymentWorkflowIntegrationTest.java))
-
-Tests validate deployment workflows and context propagation:
-
-**Key Tests:**
-- `testBasicDeploymentContextCreation()` - DeploymentContext from stack
-- `testSystemContextSlotPopulation()` - VPC, ALB, EFS, compute slots
-- `testFargateServiceTopologyDeployment()` - Full Fargate stack
-- `testEc2ServiceTopologyDeployment()` - Full EC2 stack
-- `testSecurityProfileProgression()` - DEV, STAGING, PRODUCTION
-- `testIAMProfileMapping()` - Security → IAM profile mapping
-- `testMinimalVsCompleteInfrastructure()` - Component comparison
-- `testContextFieldValidation()` - Context validation
-- `testStackOutputGeneration()` - CloudFormation outputs
-- `testMultiStackDeploymentContext()` - Independent stack contexts
-- `testResourceNamingConventions()` - Tagging and naming
-- `testFactoryDependencyChain()` - VPC → ALB → EFS → Compute
-
-## Running the Tests
-
-### Run All Integration Tests
+The root `pom.xml` sets `skipTests=true`, so a plain `mvn test` runs nothing. Use the `ci` profile.
+The commands below run from the repository root; `-am` also builds `cloudforge-core`, and
+`-Dsurefire.failIfNoSpecifiedTests=false` keeps modules without matching tests from failing.
 
 ```bash
-mvn test -Dtest="**/*IntegrationTest"
+# All integration tests
+mvn -pl cloudforge-api -am test -Pci \
+  -Dtest='com/cloudforgeci/api/integration/**/*' -Dsurefire.failIfNoSpecifiedTests=false
+
+# One package
+mvn -pl cloudforge-api -am test -Pci \
+  -Dtest='com/cloudforgeci/api/integration/compliance/*' -Dsurefire.failIfNoSpecifiedTests=false
+
+# One class
+mvn -pl cloudforge-api -am test -Pci \
+  -Dtest=HipaaComplianceIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false
+
+# The whole test suite
+mvn clean install -Pci
 ```
 
-### Run Compliance Tests Only
+Surefire runs `cloudforge-api` tests with `-Xss8m`; CDK synthesis in a long-lived fork needs the larger
+thread stack.
 
-```bash
-mvn test -Dtest="**/compliance/*IntegrationTest"
-```
+## `IntegrationTestBase`
 
-### Run Specific Compliance Framework
+[`IntegrationTestBase`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/test/java/com/cloudforgeci/api/integration/IntegrationTestBase.java)
+creates the stack, lets subclasses choose the runtime, security profile, and stack name
+(`getRuntimeType()`, `getSecurityProfile()`, `getStackName()`), and synthesizes it with
+`synthesizeTemplate()`. It provides these assertions:
 
-```bash
-# SOC 2
-mvn test -Dtest="Soc2ComplianceIntegrationTest"
+| Area | Methods |
+|------|---------|
+| Security groups | `assertSecurityGroupHasIngressRule`, `assertSecurityGroupChain` |
+| IAM | `assertRoleHasManagedPolicy`, `assertRoleTrustsService`, `assertRoleHasPermissions` |
+| Encryption | `assertEfsEncrypted`, `assertLogGroupsEncrypted` |
+| Network | `assertVpcFlowLogsEnabled`, `assertAlbPublic`, `assertAlbNotPublic` |
+| Compliance services | `assertConfigRulesDeployed`, `assertCloudTrailEnabled`, `assertGuardDutyEnabled` |
+| Backup | `assertBackupPoliciesConfigured`, `assertBackupVaultLockConfigured`, `assertEfsProtectedByBackupPlan` |
+| Availability | `assertMultiAzDeployment`, `assertEfsMultiAzMountTargets` |
+| Monitoring | `assertCriticalAlarmsConfigured`, `assertLogRetentionConfigured` |
 
-# HIPAA
-mvn test -Dtest="HipaaComplianceIntegrationTest"
+## Adding a test
 
-# PCI-DSS
-mvn test -Dtest="PciDssComplianceIntegrationTest"
+1. Extend `IntegrationTestBase` and override the runtime, security profile, or stack name as needed.
+   Tests that must set deployment context before `SystemContext` starts (as
+   `ConfigRulesDeploymentIntegrationTest` does) build their own stack instead.
+2. Synthesize with `synthesizeTemplate()` and assert with the base-class helpers or
+   `template.hasResourceProperties(...)`.
+3. Cover both Fargate and EC2 where the behavior differs.
+4. Name classes `<Feature>IntegrationTest` and methods `test<Control><Scenario>`, for example
+   `testHipaaAuditControls` or `testPciDssRequirement1NetworkSecurityControls`, and state the
+   control the test covers in its javadoc.
 
-# GDPR
-mvn test -Dtest="GdprComplianceIntegrationTest"
-```
+## Related documentation
 
-### Run Remediation Tests
-
-```bash
-mvn test -Dtest="RemediationIntegrationTest"
-```
-
-### Run Security Tests
-
-```bash
-mvn test -Dtest="**/security/*IntegrationTest"
-```
-
-### Run Deployment Tests
-
-```bash
-mvn test -Dtest="**/deployment/*IntegrationTest"
-```
-
-## Test Base Class
-
-[IntegrationTestBase.java](IntegrationTestBase.java) provides common utilities:
-
-### Assertion Utilities
-
-**Security Group Validation:**
-- `assertSecurityGroupHasIngressRule()` - Verify specific ingress rules
-- `assertSecurityGroupChain()` - Verify security group chains
-
-**IAM Policy Validation:**
-- `assertRoleHasManagedPolicy()` - Verify managed policies
-- `assertRoleTrustsService()` - Verify trust relationships
-- `assertRoleHasPermissions()` - Verify inline policies
-
-**Encryption Validation:**
-- `assertEfsEncrypted()` - EFS encryption at rest
-- `assertS3BucketsEncrypted()` - S3 bucket encryption
-- `assertLogGroupsEncrypted()` - CloudWatch Logs KMS encryption
-
-**Network Security:**
-- `assertVpcFlowLogsEnabled()` - VPC Flow Logs
-- `assertAlbNotPublic()` - Internal ALB
-- `assertAlbPublic()` - Internet-facing ALB
-
-**Compliance Controls:**
-- `assertConfigRulesDeployed()` - AWS Config rules
-- `assertCloudTrailEnabled()` - CloudTrail configuration
-- `assertGuardDutyEnabled()` - GuardDuty detector
-- `assertBackupPoliciesConfigured()` - Backup plans
-
-**High Availability:**
-- `assertMultiAzDeployment()` - Multi-AZ resources
-- `assertEfsMultiAzMountTargets()` - EFS mount targets
-
-**Monitoring:**
-- `assertCriticalAlarmsConfigured()` - CloudWatch alarms
-- `assertLogRetentionConfigured()` - Log retention days
-
-## Test Coverage Summary
-
-| Category | Test Files | Test Methods | Status | Coverage |
-|----------|------------|--------------|--------|----------|
-| Compliance | 4 | 45 | ✅ All passing | SOC2, HIPAA, PCI-DSS, GDPR |
-| Remediation | 1 | 11 | ⚠️ Needs Config | Config rules, auto-fix |
-| Security (Cross-Component) | 1 | 13 | ⚠️ Template fixes needed | Security chains, network isolation |
-| **Authentication (Cognito)** | **1** | **10** | **✅ All passing** | **User Pool, MFA, OAuth 2.0** |
-| Authentication (OIDC) | 1 | 7 | ⏭️ Disabled | External providers (Okta, Auth0) |
-| Deployment | 1 | 14 | ✅ Mostly passing | Workflows, topologies |
-| **Total** | **9** | **100** | **96.2% passing** | **End-to-end validation** |
-
-## Key Features
-
-### 1. CloudFormation Template Validation
-All tests use `Template.fromStack()` to validate actual synthesized CloudFormation templates, not just mock objects.
-
-### 2. Compliance Framework Integration
-Tests map directly to compliance control requirements (SOC2 CC6.1, HIPAA 164.312, PCI-DSS Req 1, GDPR Article 32).
-
-### 3. Multi-Runtime Support
-Tests validate both Fargate and EC2 runtime configurations.
-
-### 4. Security Profile Progression
-Tests validate DEV, STAGING, and PRODUCTION security profiles.
-
-### 5. Real-World Scenarios
-Tests simulate actual deployment workflows including:
-- Full infrastructure creation
-- Compliance control enablement
-- Auto-remediation triggers
-- Authentication integration
-- Cross-component dependencies
-
-## Best Practices
-
-### When Adding New Tests
-
-1. **Extend IntegrationTestBase** - Use the base class for assertion utilities
-2. **Override Security Profile** - Set appropriate profile for test
-3. **Document Compliance Mapping** - Link tests to specific compliance requirements
-4. **Validate CloudFormation** - Use `synthesizeTemplate()` and `template.hasResourceProperties()`
-5. **Test Both Runtimes** - Validate Fargate and EC2 where applicable
-6. **Verify Security Controls** - Check encryption, access controls, logging
-
-### Test Naming Convention
-
-- Test class: `<Feature>IntegrationTest.java`
-- Test method: `test<ComplianceControl><Scenario>()`
-- Examples:
-  - `testSoc2EncryptionInTransit()`
-  - `testHipaaAuditControls()`
-  - `testPciDssRequirement1NetworkSecurityControls()`
-
-## Related Documentation
-
-- [Compliance Documentation](../compliance/README.md)
-- [Security Best Practices](../guides/SECURITY_RULES_README.md)
-- [Automated Compliance](../compliance/AUTOMATED_COMPLIANCE.md)
+- [Compliance truth tables](COMPLIANCE_TRUTH_TABLES.md)
+- [Compliance documentation](../compliance/README.md)
+- [Automated compliance](../compliance/AUTOMATED_COMPLIANCE.md)
+- [Security rules](../guides/SECURITY_RULES_README.md)

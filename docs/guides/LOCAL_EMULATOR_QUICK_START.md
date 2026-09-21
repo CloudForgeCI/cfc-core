@@ -5,7 +5,7 @@ MiniStack and LocalStack share gateway port `4566`, so run only one at a time.
 
 ## Prerequisites
 
-- Java 21+, Maven 3.9+, Docker, and the AWS CDK CLI.
+- Java 25, Maven 3.9+, and Docker.
 - `LOCALSTACK_AUTH_TOKEN` only when using LocalStack.
 - Optional friendly hostnames: `./scripts/setup-cloudforge-local-hosts.sh`.
 
@@ -14,14 +14,14 @@ MiniStack and LocalStack share gateway port `4566`, so run only one at a time.
 ```bash
 git clone https://github.com/CloudForgeCI/cfc-core.git
 cd cfc-core
-mvn clean install -DskipTests
-mvn -f cfc-testing package -Dmaven.test.skip=true
+mvn clean install                  # tests are skipped by default
+mvn -f cfc-testing/pom.xml package -Dmaven.test.skip=true
 ```
 
 ## Start a platform
 
-The target artifacts own lifecycle implementation. `cfc-testing` only discovers and
-invokes them through `PlatformRuntimeProvider`.
+The lifecycle implementation lives in `cloudforge-ministack` and `cloudforge-localstack`;
+`cfc-testing` discovers and invokes it through `PlatformRuntimeProvider`.
 
 ```bash
 # Required before selecting LocalStack in the menu.
@@ -32,8 +32,9 @@ java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.samples.app.InteractiveDeployer --platform
 ```
 
-Choose MiniStack or LocalStack, then `start`. The platform starts its emulator and
-companions (StackPort and emulator edge) and reconciles host routes. Use the same menu
+Choose `ministack` or `localstack`, then `start`. This starts the emulator and its companions
+(the StackPort resource browser on port 8888 and the nginx emulator edge on port 80) and
+reconciles host routes. Use the same menu
 for `stop`, `restart`, `status`, or `reconcile_edge`.
 
 Verify the selected platform:
@@ -54,33 +55,30 @@ java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.samples.app.InteractiveDeployer
 ```
 
-Choose option 6** for MiniStack or option **8** for LocalStack. These paths synthesize
-the canonical template, apply the selected target adapter, and deploy it locally.
+Answer the prompts (or pass `--context <file>`), then choose option **6** for MiniStack or
+**8** for LocalStack. Both synthesize the canonical template, adapt it for the target, run a
+preflight check, and deploy it. The stack is named `<stackName>-ministack` or
+`<stackName>-localstack`.
 
 ## Deploy CloudForge Manager
 
-CloudForge Manager is discovered from `cloudforge-manager-deployment`, not from
-`cloudforge-api`. Select **CloudForge Manager** from the application list and choose the
-same target option. Its deployment extension does the LocalStack-only work:
+CloudForge Manager is provided by the `cloudforge-manager-deployment` artifact, which
+`cfc-testing` depends on. Select **CloudForge Manager** from the application list (or use
+`--context deployment-contexts/CloudForgeManager-Fresh.json`) and choose option 6 or 8. For
+MiniStack and LocalStack, its deployment extension:
 
-1. builds `cloudforgeci/cloudforge-manager:latest`;
-2. deploys through the generic LocalStack path;
+1. uses the `cloudforgeci/cloudforge-manager` image, building it from a sibling
+   `cloudforge-manager` source checkout when one exists, otherwise pulling the published
+   image from Docker Hub;
+2. deploys through the standard local target path;
 3. reconciles the emulator edge; and
-4. verifies `http://manager.cloudforge.localhost/api/v1/health`.
+4. waits for `http://manager.cloudforge.localhost/api/v1/health`.
 
-The default Manager preset uses embedded H2 and no read replica. Choose RDS explicitly
-when persistent managed storage is wanted; replica count is an explicit advanced setting.
+Contexts that set `provisionDatabase: true` (for example `CloudForgeManager-Dev.json`) deploy
+to LocalStack only; MiniStack preflight blocks RDS. After deployment, open
+`http://manager.cloudforge.localhost/`.
 
-For a host-run Manager during development:
-
-```bash
-cd ..
-mvn -pl cloudforge-manager -am -Pui spring-boot:run -Dspring-boot.run.profiles=local \
-  -Dspring-boot.run.arguments="--cfc.manager.target=localstack" # or ministack
-```
-
-Open `http://127.0.0.1:1958` for the host-run service or
-`http://manager.cloudforge.localhost/` after an in-emulator deployment.
+CloudForge Manager itself is developed in a separate repository.
 
 ## Troubleshooting
 
@@ -90,7 +88,7 @@ Open `http://127.0.0.1:1958` for the host-run service or
 | Port `4566` busy | Use the platform menu to stop the other emulator. |
 | LocalStack refuses to start | Export a valid `LOCALSTACK_AUTH_TOKEN`. |
 | Application URL missing | Select `reconcile_edge` from the platform menu. |
-| Manager health check fails | Confirm option 8 was used and inspect the Manager ECS task logs. |
+| Manager health check fails | Confirm option 6 or 8 was used, run `reconcile_edge`, and inspect the Manager ECS task logs. |
 
 See [MiniStack](../ministack/README.md), [LocalStack](../localstack/README.md), and
 [Interactive Deployer](INTERACTIVE_DEPLOYER.md) for target-specific detail.

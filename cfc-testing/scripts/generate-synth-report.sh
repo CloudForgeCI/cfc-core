@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Generate HTML Report for Comprehensive Synthesis Tests
+# Generate HTML report for the synthesis test matrix (comprehensive-synth-test.sh)
 # Creates an interactive HTML dashboard showing synthesis test results across all security profiles and runtimes
 
 set -e

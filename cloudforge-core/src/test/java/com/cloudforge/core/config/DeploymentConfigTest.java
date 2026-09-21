@@ -71,10 +71,10 @@ class DeploymentConfigTest {
     void testDefaultDatabaseEngine() {
         // Deliberately null, not a static "postgres" default — DeploymentContextPreparer only
         // resolves a field's defaultFrom (here, ApplicationSpec.databaseRequirement().engine())
-        // when the field is currently null/blank. A non-null static default here previously
-        // blocked that resolution for every app, silently forcing engine=postgres regardless of
-        // what the deployed application actually required (broke MySQL-only apps like WordPress
-        // with an invalid "mysql15" RDS parameter group family). See the field's javadoc.
+        // when the field is currently null/blank. A non-null static default would block that
+        // resolution and force engine=postgres regardless of what the application requires
+        // (e.g. an invalid "mysql15" RDS parameter group family for WordPress). See the field's
+        // javadoc.
         assertNull(config.databaseEngine);
     }
 

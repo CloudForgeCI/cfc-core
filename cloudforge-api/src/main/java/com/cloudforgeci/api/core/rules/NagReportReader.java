@@ -13,8 +13,8 @@ import java.util.Locale;
 
 /**
  * Reads cdk-nag's own {@code <PackName>-<StackName>-NagReport.json} files back off disk after
- * {@code app.synth()} completes -- the real implementation of {@code ComplianceMode.ENFORCE}'s
- * "blocks CDK synthesis" behavior. {@code app.synth()} itself never throws for a cdk-nag
+ * {@code app.synth()} completes, implementing {@code ComplianceMode.ENFORCE}'s "blocks CDK
+ * synthesis" behavior. {@code app.synth()} itself never throws for a cdk-nag
  * violation regardless of severity, so a caller has to inspect findings explicitly; this is
  * that inspection point.
  *
@@ -56,19 +56,35 @@ public final class NagReportReader {
      * the rest of this codebase's optional/best-effort reads already take.</p>
      */
     public static List<ComplianceFinding> readErrors(Path assemblyDirectory, String stackName) {
+        return readReports(assemblyDirectory, stackName, true);
+    }
+
+    /**
+     * Every line across all {@code *-NagReport.json} files cdk-nag wrote for {@code stackName},
+     * regardless of compliance/level -- compliant, suppressed, and warning-level lines included.
+     * Unlike {@link #readErrors} (which exists to answer "must synthesis be blocked"), this exists
+     * to answer "what does a full compliance report for this stack look like", for a caller (an
+     * on-demand advisory check, not a real deploy) that wants to show the user everything cdk-nag
+     * has to say, not just what would fail an enforce-mode deploy.
+     */
+    public static List<ComplianceFinding> readAll(Path assemblyDirectory, String stackName) {
+        return readReports(assemblyDirectory, stackName, false);
+    }
+
+    private static List<ComplianceFinding> readReports(Path assemblyDirectory, String stackName, boolean errorsOnly) {
         List<ComplianceFinding> findings = new ArrayList<>();
         String suffix = "-" + stackName + "-NagReport.json";
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(assemblyDirectory, "*" + suffix)) {
             for (Path reportFile : stream) {
-                findings.addAll(readOneFile(reportFile));
+                findings.addAll(readOneFile(reportFile, errorsOnly));
             }
         } catch (IOException ignored) {
-            // Best-effort -- see this method's own javadoc.
+            // Best-effort; see javadoc.
         }
         return findings;
     }
 
-    private static List<ComplianceFinding> readOneFile(Path reportFile) {
+    private static List<ComplianceFinding> readOneFile(Path reportFile, boolean errorsOnly) {
         List<ComplianceFinding> findings = new ArrayList<>();
         try {
             JsonNode root = MAPPER.readTree(reportFile.toFile());
@@ -76,23 +92,23 @@ public final class NagReportReader {
             for (JsonNode line : lines) {
                 String compliance = line.path("compliance").asText("");
                 String level = line.path("ruleLevel").asText("");
-                if (!isNonCompliant(compliance) || !"error".equals(level.toLowerCase(Locale.ROOT))) {
+                if (errorsOnly && (!isNonCompliant(compliance) || !"error".equals(level.toLowerCase(Locale.ROOT)))) {
                     continue;
                 }
                 findings.add(new ComplianceFinding(
                     line.path("ruleId").asText(null),
-                    level.toUpperCase(Locale.ROOT),
+                    level.isBlank() ? compliance.toUpperCase(Locale.ROOT) : level.toUpperCase(Locale.ROOT),
                     line.path("resourceId").asText(null),
                     line.path("ruleInfo").asText(null)));
             }
         } catch (IOException ignored) {
-            // Best-effort -- see readErrors' own javadoc.
+            // Best-effort; see readErrors.
         }
         return findings;
     }
 
     /** cdk-nag's own {@code compliance} field is a human-readable string ({@code "Non-Compliant"}
-     *  for a real violation); matched case-insensitively and by substring so a minor wording
+     *  for a violation); matched case-insensitively and by substring so a minor wording
      *  change across cdk-nag versions degrades to "excluded" rather than a hard parse failure. */
     private static boolean isNonCompliant(String compliance) {
         return compliance.toLowerCase(Locale.ROOT).contains("non-compliant");

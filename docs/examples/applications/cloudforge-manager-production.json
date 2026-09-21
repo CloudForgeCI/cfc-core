@@ -2,7 +2,6 @@
   "stackName": "CloudForgeManager-Production",
   "applicationId": "cloudforge-manager",
   "applicationName": "CloudForge Manager",
-  "description": "Operations Panel with optional PostgreSQL for durable history",
   "environment": "production",
 
   "runtime": "fargate",
@@ -18,7 +17,7 @@
 
   "authMode": "alb-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "cfc-manager-prod-CHANGEME",
+  "cognitoDomainPrefix": "cfc-manager-prod-changeme",
   "cognitoMfaEnabled": true,
   "cognitoMfaMethod": "totp",
   "cognitoCreateGroups": true,

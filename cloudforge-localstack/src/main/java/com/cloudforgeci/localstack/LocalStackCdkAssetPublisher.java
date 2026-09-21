@@ -26,19 +26,18 @@ import java.util.zip.ZipOutputStream;
  * (this module) and {@code AwsDirectDeployer} (cloudforge-api, which already depends on this
  * module for orchestrating the local-emulator deploy pipelines it dispatches to; despite the
  * class's LocalStack-flavored name, its logic is a plain S3 upload against whatever {@code
- * S3Client} it's given and was never actually LocalStack-specific).
+ * S3Client} it's given and is not LocalStack-specific).
  *
  * <p><b>Resolves CDK's {@code ${AWS::AccountId}}/{@code ${AWS::Partition}} pseudo-parameter
  * tokens</b> in {@code bucketName}/{@code objectKey} before using them as literal S3 API values —
  * an account-agnostic CDK synthesis (no concrete AWS account known at synth time, e.g. {@code
  * CloudForgeSynthesizer}'s deploy:create path) leaves these as unresolved literal token strings
  * in the asset manifest, which the S3 SDK then rejects outright
- * ({@code "Bucket name should not contain '$'"}) since a real S3 API call has no CloudFormation
+ * ({@code "Bucket name should not contain '$'"}) since a direct S3 API call has no CloudFormation
  * pseudo-parameter evaluator to fall back on — CloudFormation resolves them fine <em>inside</em>
  * the template body itself, but never for values an S3 client uses directly. {@code ${AWS::Region}}
- * is deliberately not substituted the same way: every manifest destination this class has ever
- * seen already carries its own concrete {@code region} field, so there's nothing to resolve there
- * in practice.</p>
+ * is deliberately not substituted the same way: manifest destinations carry their own concrete
+ * {@code region} field.</p>
  */
 public final class LocalStackCdkAssetPublisher {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -60,11 +59,11 @@ public final class LocalStackCdkAssetPublisher {
      *     is supposed to create and own as a tracked CloudFormation resource (versioning,
      *     encryption, lifecycle rules, an SSL-only bucket policy). Self-creating a bare, untracked
      *     bucket with that exact name papers over an unbootstrapped account instead of surfacing
-     *     it, and then permanently blocks the real {@code cdk bootstrap} from ever creating its
+     *     it, and then permanently blocks a later {@code cdk bootstrap} from creating its
      *     own properly-configured copy of that bucket (CloudFormation's early-validation resource-
      *     existence check refuses to "adopt" a bucket the stack doesn't already own) — a
-     *     connected account's first cross-account deploy attempt would otherwise silently
-     *     pre-create this bucket before the account had ever been bootstrapped.
+     *     connected account's first cross-account deploy attempt would otherwise pre-create
+     *     this bucket before the account had been bootstrapped.
      * @throws IOException if the destination bucket doesn't exist and {@code createBucketIfMissing}
      *     is {@code false} — the actionable signal that the target account needs {@code cdk
      *     bootstrap} run against it before this deploy can proceed
@@ -130,8 +129,8 @@ public final class LocalStackCdkAssetPublisher {
     }
 
     /**
-     * Substitutes {@code ${AWS::AccountId}} (the only pseudo-parameter this codebase's manifests
-     * have ever actually contained in {@code bucketName}/{@code objectKey} — see class javadoc)
+     * Substitutes {@code ${AWS::AccountId}} (the only pseudo-parameter these manifests contain in
+     * {@code bucketName}/{@code objectKey} — see class javadoc)
      * with a real value, leaving everything else untouched. Also handles the bare
      * {@code ${AWS::Partition}} token some manifests carry in the (currently unused)
      * {@code assumeRoleArn} field, hardcoded to the standard {@code aws} partition — this

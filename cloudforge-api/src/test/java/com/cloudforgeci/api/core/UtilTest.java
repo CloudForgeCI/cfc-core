@@ -226,11 +226,9 @@ class UtilTest {
         assertNotSame(context1, context2);
     }
 
-    /** Regression: {@code complianceFrameworks} arriving as a {@code List} (e.g. from a raw JSON
-     *  array — {@code convertToContext} legitimately produces this shape) previously threw
-     *  {@code ClassCastException} on a blind {@code (String)} cast, before {@code
-     *  DeploymentConfig.fromMap} ever got a chance to normalize it. Must normalize to the same
-     *  comma-joined string form a plain string value already uses. */
+    /** {@code complianceFrameworks} may arrive as a {@code List} (e.g. from a raw JSON array,
+     *  which {@code convertToContext} can produce). It must normalize to the same comma-joined
+     *  string form as a plain string value rather than fail on a {@code (String)} cast. */
     @Test
     void complianceFrameworksAsListIsNormalizedNotCastBlind() {
         Map<String, Object> contextMap = new HashMap<>();

@@ -394,6 +394,13 @@ public class ApplicationFactory extends BaseFactory {
                         .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
                         .build();
                 ctx.autoAdminPasswordSecretArn.set(adminPasswordSecret.getSecretArn());
+                // Fixed output key (rather than the construct's generated logical id) so tools
+                // such as CloudForge Manager can find it via DescribeStacks for any application,
+                // matching CloudForgeApplicationId/CloudForgeApplicationName.
+                software.amazon.awscdk.CfnOutput.Builder.create(this, "CloudForgeAutoAdminPasswordSecretArn")
+                    .value(adminPasswordSecret.getSecretArn())
+                    .description("ARN of the initial admin password secret (" + autoAdminPasswordEnvVar + ")")
+                    .build();
                 LOG.info("Successfully provisioned admin password secret: "
                     + adminPasswordSecret.getSecretName());
             }

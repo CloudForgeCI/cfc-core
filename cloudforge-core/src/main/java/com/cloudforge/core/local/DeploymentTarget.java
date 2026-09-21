@@ -20,9 +20,8 @@ public enum DeploymentTarget {
     /**
      * Parses a wire-format target id ({@link #configKey()}'s inverse) — case-insensitive,
      * defaults to {@link #AWS} for blank input (matching every other target-selector default in
-     * this codebase). Unknown non-blank values are a caller error, not silently coerced —
-     * accidentally routing a real deploy to the wrong target is exactly the class of bug worth
-     * failing loudly on.
+     * this codebase). Unknown non-blank values are a caller error and throw rather than being
+     * coerced, so a deploy is never routed to the wrong target.
      */
     public static DeploymentTarget fromConfigKey(String key) {
         if (key == null || key.isBlank()) {

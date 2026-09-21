@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.scaling.ScalingFactory;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
@@ -335,15 +336,14 @@ public class FargateFactory extends BaseFactory {
 
     // An application whose persistence can't tolerate a normal rolling deployment's brief overlap
     // (e.g. a single-writer embedded-file database) declares that via
-    // ApplicationSpec#requiresSequentialDeploymentWithoutDatabase — see its own javadoc. ECS's own
+    // ApplicationSpec#requiresSequentialDeploymentWithoutDatabase. ECS's
     // default (minHealthyPercent=50/maxPercent=200) starts the new task BEFORE stopping the old
     // one; two tasks briefly holding the same file open at once loses the lock race and crashes
     // the new task on startup, tripping the deployment circuit breaker above and rolling the whole
     // update back. Forcing a stop-then-start replacement (0%/100%) trades a few seconds of
     // downtime per deploy for deploys actually succeeding. Only applies while this application has
-    // no managed database connection provisioned (see DatabaseSpec) — once it does, a real
-    // database safely handles the overlap and this no longer applies regardless of what the
-    // application declares.
+    // no managed database connection provisioned (see DatabaseSpec); a managed database handles
+    // the overlap safely.
     //
     // AvailabilityZoneRebalancing.DISABLED has to go with it: ECS rejects maxHealthyPercent<=100
     // outright ("does not support maximumPercent <= 100% as deployment configuration") while AZ
@@ -357,6 +357,19 @@ public class FargateFactory extends BaseFactory {
     }
 
     FargateService service = serviceBuilder.build();
+
+    // ScalingFactory#rejectUnsupportedAutoScaling is the single enforcement point for "can this
+    // application safely run more than one instance" -- both the supportsAutoScaling()=false case
+    // (Jenkins, Nexus/SonarQube community editions) and the single-writer-embedded-database case
+    // (requiresSequentialDeploymentWithoutDatabase() with no managed database connection, e.g.
+    // CloudForge Manager's own H2). Only the validation is called here, not scale(FargateService)
+    // itself -- Fargate's actual auto-scaling wiring lives in each topology configuration class's
+    // own wireBaseAutoscalingAndDns (e.g. CmsServiceTopologyConfiguration), already correctly
+    // guarded against double-registering autoScaleTaskCount; calling scale(FargateService) here
+    // too would register it a second time. Called unconditionally (not gated on
+    // maxInstanceCapacity>1 the way Ec2RuntimeConfiguration's own call site is) so a
+    // minInstanceCapacity>1-only request still gets caught.
+    new ScalingFactory(this, "FargateScalingPolicy").rejectUnsupportedAutoScaling();
 
     // Set health check grace period (critical for slow-starting apps like GitLab)
     // Must be set on the underlying CfnService after FargateService creation
@@ -430,6 +443,16 @@ public class FargateFactory extends BaseFactory {
     if (albSg != null) {
       int appPort = applicationSpec != null ? applicationSpec.applicationPort() : 8080;
       serviceSg.addIngressRule(albSg, Port.tcp(appPort), "HTTP_from_ALB", false);
+    }
+
+    // Applications with a single-writer embedded database (the requiresSequentialDeployment-
+    // WithoutDatabase() condition above), e.g. H2 opened with AUTO_SERVER=TRUE on an EFS-backed
+    // file: the first task to open the file becomes a TCP server on an ephemeral port and other
+    // tasks connect to it. The service security group has no self-ingress by default, so allow
+    // task-to-task traffic, but only for applications that need it.
+    if (applicationSpec != null && applicationSpec.requiresSequentialDeploymentWithoutDatabase()
+        && ctx.dbConnection.get().isEmpty()) {
+      serviceSg.addIngressRule(serviceSg, Port.allTraffic(), "Self_for_embedded_database_AUTO_SERVER", false);
     }
 
     // Allow database traffic from Fargate service to RDS (for applications with external database)

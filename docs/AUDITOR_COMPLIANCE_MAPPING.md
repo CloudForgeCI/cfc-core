@@ -9,7 +9,6 @@ This document maps CloudForge CI's automated controls to compliance framework re
 - **Risk Management** assessing control coverage
 
 **Document Classification**: Public (Audit Support Documentation)
-**Last Updated**: 2025-11-20 | **Version**: 2.0
 **Audience**: External auditors, compliance assessors, security reviewers
 
 ---
@@ -18,41 +17,38 @@ This document maps CloudForge CI's automated controls to compliance framework re
 
 ### What This System Provides
 
-CloudForge CI is an Infrastructure-as-Code (IaC) solution that automatically deploys and enforces technical security controls on Amazon Web Services (AWS). The system uses AWS Config for continuous compliance monitoring with automatic remediation.
+CloudForge CI is an Infrastructure-as-Code (IaC) framework that deploys technical security controls on Amazon Web Services (AWS). When `awsConfigEnabled` is `true`, it deploys AWS Config rules for continuous evaluation, with automatic remediation for a subset of rules.
 
 **Key Audit Evidence:**
-- ✅ **Automated Control Deployment**: All controls deployed via CloudFormation (immutable infrastructure)
-- ✅ **Continuous Monitoring**: AWS Config evaluates controls 24/7
-- ✅ **Audit Trail**: All changes logged to CloudTrail with 6-year retention (HIPAA profile)
+- ✅ **Automated Control Deployment**: Controls deployed via CloudFormation
+- ✅ **Continuous Monitoring**: AWS Config evaluates supported resources on configuration change and periodically
+- ✅ **Audit Trail**: API activity logged to CloudTrail (`staging` and `production`), retained 6 years when HIPAA is selected
 - ✅ **Remediation Tracking**: SSM Automation execution history provides evidence of control effectiveness
 - ✅ **Configuration Baseline**: Git repository serves as configuration management database (CMDB)
 
 **Scope of Controls:**
-- Technical infrastructure controls only (approx. 30-40% of total framework requirements)
+- Technical infrastructure controls only (a minority of total framework requirements; see the per-framework gap analyses)
 - Does NOT include organizational policies, procedures, or training
 - Does NOT replace need for external audit or certification
 
-**Control Deployment Count:**
+**Control Deployment:**
 
-| Framework Configuration | Base Controls | Framework-Specific Controls | Total AWS Config Rules |
-|------------------------|---------------|----------------------------|----------------------|
-| **SOC2 only** | 9 rules | + 7 SOC2-specific | = **16 rules** |
-| **HIPAA only** | 9 rules | + 8 HIPAA-specific | = **17 rules** |
-| **PCI-DSS only** | 9 rules | + 8 PCI-DSS-specific | = **17 rules** |
-| **GDPR only** | 9 rules | + 8 GDPR-specific | = **17 rules** |
-| **Multi-framework (all 4)** | 9 base | + 31 framework-specific | = **40 rules total** |
+- **Base rules** are deployed for every configuration with `awsConfigEnabled: true`; three of them only for the `production` profile.
+- **Framework-specific rules** are deployed under a CloudFormation condition for each selected framework (`EnableSoc2Rules`, `EnableHipaaRules`, `EnablePciDssRules`, `EnableGdprRules`).
+- **Database rules** for each framework are deployed only when `provisionDatabase` is `true`.
+- **Conformance packs** are deployed for selected frameworks, and other factories register additional rules for resources they create.
 
-*Note: Base controls (encryption, IAM, S3, CloudTrail, VPC Flow Logs) are always deployed. Framework-specific controls only deploy when enabled via `complianceFrameworks` configuration property.*
+See [Detailed AWS Config Rules Breakdown](#detailed-aws-config-rules-breakdown).
 
 **Testing Status:**
-- ✅ **SOC2 (16 rules)**: Fully tested, all rules return COMPLIANT status
-- ⚠️ **HIPAA (17 rules)**: Not Tested
-- ⚠️ **PCI-DSS (17 rules)**: No Tested
-- ⚠️ **GDPR (17 rules)**: Not Tested
+- ✅ **SOC2**: Rules deployed and evaluated in a test account
+- ⚠️ **HIPAA, PCI-DSS, GDPR**: Rules synthesized in the automated test matrix; deployed evaluation not tested
 
 ---
 
 ## Control Mapping Matrix
+
+AWS Config rule names in this document (for example `iam-password-policy`) are descriptive. Actual rule names are generated per stack by CloudFormation, and some framework rules are named `<stackName>-<framework>-...`; use `aws configservice describe-config-rules` to find them.
 
 ### 3.1 SOC2 Trust Service Criteria
 
@@ -61,13 +57,13 @@ CloudForge CI is an Infrastructure-as-Code (IaC) solution that automatically dep
 | **CC6.1** | **Logical and Physical Access Controls** | | | | |
 | CC6.1.1 | Restrict logical access | IAM policies, security groups, NACLs | IAM, VPC | CloudFormation templates | ✅ Tested |
 | CC6.1.2 | Identify and authenticate users | IAM password policy, MFA enforcement | IAM | AWS Config: iam-password-policy, iam-user-mfa-enabled | ✅ Tested |
-| CC6.1.3 | Remove access when no longer required | Access key rotation (90 days) | IAM | AWS Config: access-keys-rotated | ✅ Tested |
+| CC6.1.3 | Remove access when no longer required | Access key rotation (90 days) | IAM | `ACCESS_KEYS_ROTATED` is not deployed by CloudForge; add it or review the IAM credential report | ⚠️ Manual |
 | CC6.1.4 | Restrict access to data | S3 bucket policies, encryption | S3, KMS | AWS Config: s3-bucket-public-read-prohibited | ✅ Tested |
-| **CC6.6** | **Encryption** | | | | |
+| **CC6.1 / CC6.7** | **Encryption** | | | | |
 | CC6.6.1 | Encryption at rest | EBS, RDS, S3 encryption | EC2, RDS, S3 | AWS Config: encrypted-volumes, rds-storage-encrypted | ✅ Tested |
 | CC6.6.2 | Encryption in transit | HTTPS ALB listeners, TLS 1.2+ | ELB | ALB configuration in CloudFormation | ✅ Tested |
-| CC6.6.3 | Key management | KMS key rotation | KMS | AWS Config: kms-key-rotation-enabled | ✅ Tested |
-| **CC6.7** | **System Monitoring** | | | | |
+| CC6.6.3 | Key management | KMS key rotation | KMS | AWS Config: `CMK_BACKING_KEY_ROTATION_ENABLED` (deployed with GDPR); `KeyManagementRules` validator | ✅ Tested |
+| **CC7.2** | **Logging and Monitoring** | | | | |
 | CC6.7.1 | Logging of security events | CloudTrail, VPC Flow Logs, ALB logs | CloudTrail, VPC, ELB | S3 buckets with lifecycle policies | ✅ Tested |
 | CC6.7.2 | Log retention | 2-year retention for SOC2 | S3 | S3 lifecycle policies | ✅ Tested |
 | CC6.7.3 | Log integrity | S3 versioning, CloudTrail validation | S3, CloudTrail | AWS Config: s3-bucket-versioning-enabled | ✅ Tested |
@@ -78,9 +74,10 @@ CloudForge CI is an Infrastructure-as-Code (IaC) solution that automatically dep
 
 **Additional SOC2 Controls Not Automated:**
 - CC1.x: Control Environment (requires organizational structure, governance)
-- CC2.x: Risk Assessment (requires business risk analysis)
-- CC3.x: Control Activities (requires documented policies and procedures)
-- CC9.x: Vendor Management (requires third-party assessments)
+- CC2.x: Communication and Information (requires internal and external communication processes)
+- CC3.x: Risk Assessment (requires business risk analysis)
+- CC5.x: Control Activities (requires documented policies and procedures)
+- CC9.x: Risk Mitigation, including vendor management (requires third-party assessments)
 
 **SOC2 Coverage Summary:**
 - **Controls Automated**: 13 out of ~75 TSC criteria (~17%)
@@ -177,7 +174,7 @@ CloudForge CI is an Infrastructure-as-Code (IaC) solution that automatically dep
 | **8** | **Identify Users and Authenticate Access** | | | | |
 | 8.2.1 | Unique user IDs | IAM users (no shared credentials) | IAM | IAM user list | ✅ Tested |
 | 8.3.1 | MFA for admin access | IAM MFA enforcement | IAM | AWS Config: iam-user-mfa-enabled | ✅ Tested |
-| 8.3.6 | Strong authentication minimum 8 characters | IAM password policy (8 chars minimum for PCI) | IAM | AWS Config: iam-password-policy | ✅ Tested |
+| 8.3.6 | Passwords at least 12 characters | IAM account password policy: 8 characters when PCI-DSS is the only framework selected (12 or 14 when SOC2 or HIPAA is also selected); `PciDssRules` checks the security profile minimum of 14 | IAM | AWS Config: iam-password-policy | ⚠️ Gap for PCI-DSS alone |
 | 8.3.9 | Password reuse prevention | IAM password reuse prevention (4 passwords for PCI) | IAM | IAM account password policy | ✅ Tested |
 | 8.3.11 | Password rotation every 90 days | IAM password max age 90 days | IAM | IAM account password policy | ✅ Tested |
 | **10** | **Log and Monitor All Access** | | | | |
@@ -265,16 +262,14 @@ CloudForge provides **Article 32 technical safeguards** (encryption, access cont
 
 ### Supported Frameworks
 
-CloudForge CI integrates with AWS Audit Manager for automated evidence collection. The following frameworks are available:
+When `auditManagerEnabled` is `true`, CloudForge creates one Audit Manager assessment per framework in `complianceFrameworks`. It resolves each framework to an AWS standard framework at synthesis time by matching framework names in `aws auditmanager list-assessment-frameworks --framework-type Standard` output; frameworks that cannot be resolved are skipped with a warning. See [AWS Audit Manager Integration](AUDIT_MANAGER.md).
 
-| Framework | Audit Manager Framework ID | Control Set Count | Evidence Collection | Test Status |
-|-----------|---------------------------|-------------------|---------------------|-------------|
-| SOC2 | aws/standard/SOC2 | 5 control sets | ✅ Automated | ✅ Tested |
-| HIPAA | aws/standard/HIPAA | 8 control sets | ✅ Automated | ⚠️ Not fully tested |
-| PCI-DSS v3.2.1 | aws/standard/PCI-DSS-v3.2.1 | 12 control sets | ✅ Automated | ⚠️ Not fully tested |
-| GDPR | aws/standard/GDPR | 7 control sets | ✅ Automated | ⚠️ Not fully tested |
-
-**Note**: Only SOC2 framework has been fully tested and validated. Other frameworks are functional but require additional testing.
+| Framework | Matched by | Test Status |
+|-----------|-----------|-------------|
+| SOC2 | Name containing `SOC2` or `SOC 2` | ✅ Tested |
+| HIPAA | Name containing `HIPAA` | ⚠️ Not fully tested |
+| PCI-DSS | Name containing `PCI-DSS` or `PCI DSS` | ⚠️ Not fully tested |
+| GDPR | Name containing `GDPR` | ⚠️ Not fully tested |
 
 ### Evidence Collection
 
@@ -292,19 +287,13 @@ Audit Manager automatically collects evidence from:
 To generate an assessment report for auditors:
 
 ```bash
-# Create assessment
-aws auditmanager create-assessment \
-  --name "SOC2-Assessment-2025" \
-  --description "SOC2 Type 2 Assessment" \
-  --assessment-reports-destination s3://your-audit-bucket \
-  --scope "accountIds=123456789012,awsServices=S3,EC2,IAM,Config" \
-  --roles assessmentReportDestination="arn:aws:iam::123456789012:role/AuditManager" \
-  --framework-id "aws/standard/SOC2"
+# Find the assessment CloudForge created (name: audit-<framework>-<stackName>-<hash>)
+aws auditmanager list-assessments
 
-# Generate report
-aws auditmanager get-assessment-report \
+# Generate a report into the assessment's report bucket
+aws auditmanager create-assessment-report \
   --assessment-id <ASSESSMENT_ID> \
-  --assessment-report-destination s3://your-audit-bucket
+  --name "SOC2-Assessment-Report"
 ```
 
 **Report Contents:**
@@ -318,25 +307,29 @@ aws auditmanager get-assessment-report \
 
 ## Detailed AWS Config Rules Breakdown
 
-### Base Rules (Always Deployed - 9 Rules)
+### Base Rules
 
-These rules are deployed for ALL security profiles and frameworks:
+Deployed whenever `awsConfigEnabled` is `true`:
 
-| Rule Name | AWS Managed Rule ID | Purpose | Applies To |
-|-----------|-------------------|---------|------------|
-| EBS Encryption | EC2_EBS_ENCRYPTION_BY_DEFAULT | Ensures EBS volumes are encrypted | All frameworks |
-| S3 Bucket Encryption | S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED | Ensures S3 buckets have encryption enabled | All frameworks |
-| S3 Public Access Block | S3_BUCKET_PUBLIC_READ_PROHIBITED | Prevents public S3 bucket access | All frameworks |
-| S3 Versioning | S3_BUCKET_VERSIONING_ENABLED | Enables S3 versioning for audit trail | All frameworks |
-| IAM Password Policy | IAM_PASSWORD_POLICY | Enforces strong password requirements | All frameworks |
-| IAM Root Access Keys | IAM_ROOT_ACCESS_KEY_CHECK | Ensures no root access keys exist | All frameworks |
-| CloudTrail Enabled | CLOUD_TRAIL_ENABLED | Ensures CloudTrail is logging | All frameworks |
-| CloudTrail Log Validation | CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED | Ensures log file validation is enabled | All frameworks |
-| VPC Flow Logs | VPC_FLOW_LOGS_ENABLED | Ensures VPC Flow Logs are enabled | All frameworks |
+| Rule Name | AWS Managed Rule ID | Purpose | Profiles |
+|-----------|-------------------|---------|----------|
+| EBS Encryption | EC2_EBS_ENCRYPTION_BY_DEFAULT | Ensures EBS encryption by default is enabled | All |
+| S3 Bucket Encryption | S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED | Ensures S3 buckets have encryption enabled | All |
+| S3 Public Read | S3_BUCKET_PUBLIC_READ_PROHIBITED | Detects publicly readable buckets | All |
+| S3 Versioning | S3_BUCKET_VERSIONING_ENABLED | Checks S3 versioning | All |
+| IAM Password Policy | IAM_PASSWORD_POLICY | Enforces strong password requirements | All |
+| IAM Root Access Keys | IAM_ROOT_ACCESS_KEY_CHECK | Ensures no root access keys exist | All |
+| CloudTrail Enabled | CLOUD_TRAIL_ENABLED | Ensures CloudTrail is logging | `production` |
+| CloudTrail Log Validation | CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED | Ensures log file validation is enabled | `production` |
+| VPC Flow Logs | VPC_FLOW_LOGS_ENABLED | Ensures VPC Flow Logs are enabled | `production` |
 
-### SOC2-Specific Rules (7 Rules)
+### Database Rules
 
-Deploy only when `complianceFrameworks` includes "SOC2":
+Deployed for each selected framework when `provisionDatabase` is `true` (the exact set varies by framework): `RDS_STORAGE_ENCRYPTED`, `RDS_INSTANCE_PUBLIC_ACCESS_CHECK`, `DB_INSTANCE_BACKUP_ENABLED`, `RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED`, `RDS_LOGGING_ENABLED`, `RDS_INSTANCE_DELETION_PROTECTION_ENABLED`, `RDS_MULTI_AZ_SUPPORT` (SOC2, GDPR), and `RDS_ENHANCED_MONITORING_ENABLED` (SOC2).
+
+### SOC2-Specific Rules
+
+Deploy only when `complianceFrameworks` includes `soc2`:
 
 | Rule Name | AWS Managed Rule ID | SOC2 TSC Mapping | Purpose |
 |-----------|-------------------|-----------------|---------|
@@ -344,13 +337,14 @@ Deploy only when `complianceFrameworks` includes "SOC2":
 | Restricted SSH | INCOMING_SSH_DISABLED | CC6.6 | Blocks SSH from 0.0.0.0/0 |
 | ALB HTTPS Redirection | ALB_HTTP_TO_HTTPS_REDIRECTION_CHECK | CC6.7 | Enforces HTTPS |
 | Security Hub Enabled | SECURITYHUB_ENABLED | CC7.2 | Monitors security posture |
+| Inspector Enabled | INSPECTOR_ENABLED | CC7.2 | Vulnerability scanning |
+| Macie Enabled | MACIE_ENABLED | C1.1 | Sensitive data discovery |
 | CloudTrail S3 Data Events | CLOUDTRAIL_S3_DATAEVENTS_ENABLED | CC8.1 | Tracks S3 data access |
-| RDS Multi-AZ | RDS_MULTI_AZ_SUPPORT | A1.2 | Ensures high availability |
 | ELB Deletion Protection | ELB_DELETION_PROTECTION_ENABLED | A1.2 | Prevents accidental deletion |
 
-### HIPAA-Specific Rules (8 Rules)
+### HIPAA-Specific Rules
 
-Deploy only when `complianceFrameworks` includes "HIPAA":
+Deploy only when `complianceFrameworks` includes `hipaa`:
 
 | Rule Name | AWS Managed Rule ID | HIPAA CFR Mapping | Purpose |
 |-----------|-------------------|------------------|---------|
@@ -363,24 +357,23 @@ Deploy only when `complianceFrameworks` includes "HIPAA":
 | CloudTrail Encryption | CLOUD_TRAIL_ENCRYPTION_ENABLED | §164.312(c)(2) | Authenticate integrity |
 | ELB ACM Certificate | ELB_ACM_CERTIFICATE_REQUIRED | §164.312(e)(2)(ii) | Encrypt in transit |
 
-### PCI-DSS-Specific Rules (8 Rules)
+### PCI-DSS-Specific Rules
 
-Deploy only when `complianceFrameworks` includes "PCI-DSS":
+Deploy only when `complianceFrameworks` includes `pci-dss`:
 
 | Rule Name | AWS Managed Rule ID | PCI-DSS Req Mapping | Purpose |
 |-----------|-------------------|-------------------|---------|
 | VPC Default SG Closed | VPC_DEFAULT_SECURITY_GROUP_CLOSED | Req 1.3 | Prohibit public access |
 | EC2 Managed by SSM | EC2_INSTANCE_MANAGED_BY_SSM | Req 2 | System configuration management |
-| RDS Encryption | RDS_STORAGE_ENCRYPTED | Req 3.4 | Render data unreadable |
 | ELB TLS Only | ELB_TLS_HTTPS_LISTENERS_ONLY | Req 4.1 | Strong cryptography |
 | IAM No Admin Policy | IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS | Req 7.1 | Need-to-know access |
 | IAM MFA Enabled | IAM_USER_MFA_ENABLED | Req 8.3 | Multi-factor auth |
 | CloudWatch Alarm Action | CLOUDWATCH_ALARM_ACTION_CHECK | Req 10.6 | Daily log review |
 | GuardDuty Enabled | GUARDDUTY_ENABLED_CENTRALIZED | Req 11.4 | Intrusion detection |
 
-### GDPR-Specific Rules (8 Rules)
+### GDPR-Specific Rules
 
-Deploy only when `complianceFrameworks` includes "GDPR":
+Deploy only when `complianceFrameworks` includes `gdpr`:
 
 | Rule Name | AWS Managed Rule ID | GDPR Article Mapping | Purpose |
 |-----------|-------------------|---------------------|---------|
@@ -388,12 +381,12 @@ Deploy only when `complianceFrameworks` includes "GDPR":
 | VPC Flow Logs | VPC_FLOW_LOGS_ENABLED | Art 30(1) | Records of processing |
 | S3 KMS Encryption | S3_DEFAULT_ENCRYPTION_KMS | Art 32(1)(a) | Pseudonymisation/encryption |
 | KMS Key Rotation | CMK_BACKING_KEY_ROTATION_ENABLED | Art 32(1)(d) | Security measures testing |
-| Restricted RDP | RESTRICTED_INCOMING_TRAFFIC | Art 32(1)(b) | Access control |
+| Restricted Incoming Traffic | RESTRICTED_INCOMING_TRAFFIC | Art 32(1)(b) | Access control |
 | DynamoDB Autoscaling | DYNAMODB_AUTOSCALING_ENABLED | Art 25 | Privacy by design |
 | S3 Replication | S3_BUCKET_REPLICATION_ENABLED | Art 32(1)(c) | Resilience of systems |
 | GuardDuty Findings | GUARDDUTY_NON_ARCHIVED_FINDINGS | Art 32(1)(d) | Testing effectiveness |
 
-**Total Unique Rules When All Frameworks Enabled: 40** (9 base + 31 framework-specific)
+Rules required by several selected frameworks are deployed once per framework condition; the exact count depends on the framework selection, profile, and `provisionDatabase`.
 
 ---
 
@@ -401,50 +394,41 @@ Deploy only when `complianceFrameworks` includes "GDPR":
 
 ### 1. Infrastructure Configuration Evidence
 
-**Location**: Git repository (`github.com/yourdomain/cfc-core`)
+**Location**: Git repository (`https://github.com/CloudForgeCI/cfc-core`) and the deployment configuration for each in-scope stack
 **Evidence Type**: Configuration baseline
 
 **Files to Review:**
-- `cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java` - AWS Config rules definitions
+- `cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java` - AWS Config rules, remediation, CloudTrail, and Audit Manager
 - `cloudforge-api/src/main/java/com/cloudforgeci/api/observability/GuardDutyFactory.java` - Threat detection setup
-- `cloudforge-api/src/main/java/com/cloudforgeci/api/constructs/SecurityConstruct.java` - IAM policies and encryption
-- `cfc-testing/deployment-context.json` - Deployment configuration with compliance frameworks
-- `.github/workflows/deployment-testing.yml` - CI/CD pipeline with approval gates
-- `cfc-testing/test-results/enhanced-synth-results/FARGATE-PRODUCTION-*.json` - Synthesized CloudFormation templates
+- `cloudforge-api/src/main/java/com/cloudforgeci/api/core/security/ProductionSecurityProfileConfiguration.java` - Production security defaults
+- `cloudforge-api/src/main/java/com/cloudforgeci/api/core/rules/` - Framework validators and `ComplianceMatrix`
+- The stack's deployment context (`deployment-context.json` or CDK context) - Frameworks and settings in use
+- `.github/workflows/` - CI pipelines
+- Synthesized CloudFormation templates (`cdk.out/`, or `cfc-testing/test-results/enhanced-synth-results/` when generated by `cfc-testing/scripts/enhanced-synth-test.sh`)
 
-**Example File Path for Synthesized Template:**
-```
-cfc-testing/test-results/enhanced-synth-results/
-  └── FARGATE-PRODUCTION-alb-oidc-private-with-nat-template.json
-```
+**Code References for Key Controls** (in `ComplianceFactory.java` unless noted):
 
-**Code References for Key Controls:**
-
-| Control | Implementation | Line Numbers | Git Commit |
-|---------|---------------|--------------|------------|
-| IAM Password Policy | `ComplianceFactory.java` | Lines 626, 942 | `549118c` |
-| Root Account MFA | `ComplianceFactory.java` | Lines 1323, 1720 | `549118c` |
-| IAM User MFA | `ComplianceFactory.java` | Lines 1123, 1542 | `549118c` |
-| S3 Public Read Prohibited | `ComplianceFactory.java` | Lines 578, 923 | `549118c` |
-| S3 Versioning Enabled | `ComplianceFactory.java` | Lines 587, 930 | `549118c` |
-| CloudTrail Enabled | `ComplianceFactory.java` | Lines 855, 961 | `549118c` |
-| VPC Flow Logs | `ComplianceFactory.java` | Lines 871, 975, 1393, 1784 | `549118c` |
-| RDS Storage Encrypted | `ComplianceFactory.java` | Lines 1087, 1509 | `549118c` |
-| GuardDuty Setup | `GuardDutyFactory.java` | Full file | `549118c` |
+| Control | Method |
+|---------|--------|
+| IAM Password Policy | `createIAMConfigRules`, `getPasswordPolicyParameters`, `createPasswordPolicyRemediation` |
+| Root Account MFA | `createHipaaConfigRules` |
+| IAM User MFA | `createPciDssConfigRules` |
+| S3 Public Read Prohibited, S3 Versioning | `createS3ConfigRules` |
+| CloudTrail | `createCloudTrail`, `createProductionConfigRules` |
+| VPC Flow Logs | `createProductionConfigRules`, `createGdprConfigRules` |
+| RDS Storage Encrypted | Framework-specific `create*ConfigRules` methods |
+| GuardDuty Setup | `GuardDutyFactory.java` |
 
 **How to Verify:**
 ```bash
-# View specific control implementation
-git show 549118c:cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java | sed -n '626p'
+# Locate a control implementation
+grep -n "IAM_PASSWORD_POLICY" cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java
 
-# View commit details
-git show 549118c --stat
-
-# View file at specific line
-sed -n '626,650p' cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java
+# Record the source revision deployed
+git rev-parse HEAD
 ```
 
-**Audit Assertion**: Infrastructure deployed matches source code (immutable infrastructure)
+**Audit Assertion**: Infrastructure deployed matches the recorded source revision and deployment configuration
 
 ### 2. AWS Config Compliance Reports
 
@@ -500,10 +484,9 @@ s3://<your-cloudtrail-bucket>/
                       └── <account-id>_CloudTrail_<region>_YYYYMMDDTHHmmZ_<hash>.json.gz
 ```
 
-**Example Bucket Name Pattern:**
-- Stack name: `fargate-production-alb-oidc-private-with-nat-20`
-- CloudTrail bucket: `fargate-production-alb-oidc-private-with-nat-20-cloudtrail-<account-id>`
-- Location: `s3://fargate-production-alb-oidc-private-with-nat-20-cloudtrail-<account-id>/AWSLogs/<account-id>/CloudTrail/us-east-1/2025/11/20/`
+**Finding the Bucket:**
+- The CloudTrail bucket name is generated by CloudFormation. Its ARN is stored in SSM at `/cloudforge/shared/<region>/stack/<stackName>/cloudtrail/bucket-arn`.
+- Location: `s3://<cloudtrail-bucket>/AWSLogs/<account-id>/CloudTrail/<region>/YYYY/MM/DD/`
 
 **Console Navigation:**
 1. Navigate to: **Services** > **CloudTrail** > **Event history**
@@ -601,12 +584,12 @@ aws ssm describe-automation-executions \
 ```bash
 # List stack events (deployments)
 aws cloudformation describe-stack-events \
-  --stack-name jenkinsTSoc \
+  --stack-name <stack-name> \
   --output json
 
 # Get stack template (current configuration)
 aws cloudformation get-template \
-  --stack-name jenkinsTSoc \
+  --stack-name <stack-name> \
   --query TemplateBody
 ```
 
@@ -623,7 +606,7 @@ aws cloudformation get-template \
 
 **Change Control Process:**
 
-1. **Code Changes** → Developers create feature branch from `main`
+1. **Code Changes** → Developers create a feature branch from the default branch (`develop`)
 2. **Pull Request** → Developer opens PR with description of changes
 3. **Automated Checks** → GitHub Actions CI/CD pipeline runs:
    - Maven build and unit tests
@@ -632,12 +615,12 @@ aws cloudformation get-template \
    - Deployment dry-run tests
 4. **Code Review** → Required approver(s) review the changes
 5. **Approval Gate** → PR must have approved review before merge
-6. **Merge to Main** → Changes merged to main branch
+6. **Merge** → Changes merged to the default branch
 7. **Deployment** → Automated or manual deployment to AWS via CDK
 
 **GitHub Workflow Configuration:**
 - File: `.github/workflows/deployment-testing.yml`
-- Runs on: Pull requests and pushes to main branch
+- Runs on: Pull requests and pushes to `develop` and `main`
 - Checks: Build, test, synth, deployment validation
 
 **Who Can Approve Changes:**
@@ -647,8 +630,7 @@ aws cloudformation get-template \
 
 **Example PR Approval Requirements (Configurable):**
 ```yaml
-# .github/workflows/deployment-testing.yml
-# Branch protection rules enforced via GitHub settings:
+# Branch protection rules are configured in GitHub repository settings, not in the workflow file:
 - Require pull request before merging: ✅
 - Require approvals: 1 (configurable)
 - Require status checks to pass: ✅
@@ -838,19 +820,17 @@ CloudFormation Template:
                   └── Expiration (retention limit)
 ```
 
-**Example S3 Bucket Names:**
-- CloudTrail logs: `<stack-name>-cloudtrail-<account-id>`
-- ALB access logs: `<stack-name>-alb-logs-<account-id>`
-- VPC Flow Logs: `<stack-name>-vpc-flowlogs-<account-id>`
+**Finding the Buckets:**
+Bucket names are generated by CloudFormation. The ARNs of the CloudTrail, Config, Audit Manager, and ALB log buckets are stored in SSM under `/cloudforge/shared/<region>/stack/<stackName>/`; see [SSM Parameter Scoping](SSM_PARAMETER_SCOPING.md).
 
 ### Checking S3 Lifecycle Policies (Auditor Instructions)
 
 **Console Navigation:**
 1. Navigate to: **Services** > **S3**
-2. Find CloudTrail bucket (e.g., `fargate-production-alb-oidc-private-with-nat-20-cloudtrail-<account-id>`)
+2. Find the CloudTrail bucket (from the SSM parameter above)
 3. Click bucket name > **Management** tab > **Lifecycle rules**
 4. Review each lifecycle rule:
-   - **Rule name** (e.g., "CloudTrail-Retention-SOC2")
+   - **Rule name** (generated by CloudFormation)
    - **Transition actions** (e.g., move to Glacier after 90 days)
    - **Expiration actions** (e.g., delete after 730 days for SOC2)
 
@@ -865,17 +845,12 @@ aws s3api get-bucket-lifecycle-configuration \
 {
   "Rules": [
     {
-      "ID": "CloudTrail-Retention-SOC2",
       "Status": "Enabled",
       "Transitions": [
-        {
-          "Days": 90,
-          "StorageClass": "GLACIER"
-        }
+        { "Days": 90, "StorageClass": "GLACIER" },
+        { "Days": 365, "StorageClass": "DEEP_ARCHIVE" }
       ],
-      "Expiration": {
-        "Days": 730  # 2 years for SOC2
-      }
+      "Expiration": { "Days": 730 }
     }
   ]
 }
@@ -891,104 +866,53 @@ aws s3api list-buckets --query 'Buckets[*].Name' --output text | \
 
 ### Lifecycle Policy Examples by Compliance Framework
 
-#### SOC2 Lifecycle Policy (2-Year Retention)
+`ComplianceFactory.getLifecycleRulesForEnabledFrameworks` builds one lifecycle rule per compliance bucket, applied to all objects. The expiration is the retention of the strictest selected framework.
+
+#### SOC2 (2-Year Retention) and HIPAA (6-Year Retention)
+
+Retention longer than one year uses both archive tiers. `get-bucket-lifecycle-configuration` returns a rule similar to:
 
 ```json
 {
   "Rules": [
     {
-      "ID": "SOC2-CloudTrail-Retention",
       "Status": "Enabled",
-      "Prefix": "AWSLogs/",
+      "Filter": {},
       "Transitions": [
-        {
-          "Days": 90,
-          "StorageClass": "STANDARD_IA"
-        },
-        {
-          "Days": 180,
-          "StorageClass": "GLACIER"
-        }
+        { "Days": 90, "StorageClass": "GLACIER" },
+        { "Days": 365, "StorageClass": "DEEP_ARCHIVE" }
       ],
-      "Expiration": {
-        "Days": 730
-      }
+      "Expiration": { "Days": 730 }
     }
   ]
 }
 ```
 
-**Explanation:**
-- Days 0-90: S3 Standard storage (frequent access)
-- Days 90-180: S3 Standard-IA (infrequent access, cost savings)
-- Days 180-730: Glacier storage (long-term archive, lowest cost)
-- Day 730+: Automatic deletion (end of retention period)
+HIPAA uses `"Expiration": { "Days": 2190 }`.
 
-#### HIPAA Lifecycle Policy (6-Year Retention)
+- Days 0-90: S3 Standard
+- Days 90-365: S3 Glacier
+- Day 365 until expiration: S3 Glacier Deep Archive
+
+#### PCI-DSS (1-Year Retention)
 
 ```json
 {
   "Rules": [
     {
-      "ID": "HIPAA-CloudTrail-Retention",
       "Status": "Enabled",
-      "Prefix": "AWSLogs/",
+      "Filter": {},
       "Transitions": [
-        {
-          "Days": 90,
-          "StorageClass": "STANDARD_IA"
-        },
-        {
-          "Days": 365,
-          "StorageClass": "GLACIER"
-        },
-        {
-          "Days": 730,
-          "StorageClass": "DEEP_ARCHIVE"
-        }
+        { "Days": 90, "StorageClass": "GLACIER" }
       ],
-      "Expiration": {
-        "Days": 2190
-      }
+      "Expiration": { "Days": 365 }
     }
   ]
 }
 ```
 
-**Explanation:**
-- Days 0-90: S3 Standard (immediate retrieval)
-- Days 90-365: S3 Standard-IA (occasional access)
-- Days 365-730: Glacier (archive, hours retrieval)
-- Days 730-2190: Glacier Deep Archive (long-term, 12-hour retrieval)
-- Day 2190+: Automatic deletion (6 years per HIPAA § 164.316)
-
-#### PCI-DSS Lifecycle Policy (1-Year Retention, 90-Day Immediate Access)
-
-```json
-{
-  "Rules": [
-    {
-      "ID": "PCI-DSS-CloudTrail-Retention",
-      "Status": "Enabled",
-      "Prefix": "AWSLogs/",
-      "Transitions": [
-        {
-          "Days": 90,
-          "StorageClass": "GLACIER"
-        }
-      ],
-      "Expiration": {
-        "Days": 365
-      }
-    }
-  ]
-}
-```
-
-**Explanation:**
-- Days 0-90: S3 Standard (immediate access per PCI Req 10.5.1)
-- Days 90-365: Glacier (archive remaining 9 months)
-- Day 365+: Automatic deletion (1-year retention)
+- Days 0-90: S3 Standard (immediately available, PCI DSS Req 10.5.1)
+- Days 90-365: S3 Glacier
 
 ### Verifying Log File Existence (Sampling)
 
@@ -996,7 +920,7 @@ aws s3api list-buckets --query 'Buckets[*].Name' --output text | \
 
 ```bash
 # Check oldest CloudTrail log (SOC2 = 2 years)
-BUCKET_NAME="fargate-production-alb-oidc-private-with-nat-20-cloudtrail-123456789012"
+BUCKET_NAME="<cloudtrail-bucket-name>"
 TARGET_DATE=$(date -d '2 years ago' +%Y/%m/%d)
 
 # List logs from 2 years ago
@@ -1028,10 +952,10 @@ done
 
 ### Cost Optimization vs. Compliance
 
-**Balance:**
-- Frequent access (0-90 days): S3 Standard ($0.023/GB)
-- Occasional access (90-365 days): S3 Standard-IA ($0.0125/GB)
-- Archive (1+ years): Glacier ($0.004/GB) or Deep Archive ($0.00099/GB)
+**Storage classes used by CloudForge lifecycle rules:**
+- 0-90 days: S3 Standard
+- 90-365 days: S3 Glacier
+- More than 1 year: S3 Glacier Deep Archive (when retention exceeds one year)
 
 **Compliance Note:**
 PCI-DSS requires 90 days of logs be "immediately available" (S3 Standard). Logs older than 90 days can be in Glacier (hours retrieval time) to save costs while maintaining 1-year retention.
@@ -1043,17 +967,16 @@ PCI-DSS requires 90 days of logs be "immediately available" (S3 Standard). Logs 
 **CloudForge Approach:**
 - Technical logs (CloudTrail, VPC Flow Logs) contain minimal personal data (IP addresses)
 - Retention periods match other compliance requirements (SOC2, HIPAA, PCI-DSS)
-- Organizations can override retention periods via `logRetentionDays` parameter
+- `logRetentionDays` sets CloudWatch Logs retention only
+- S3 lifecycle expiration follows the strictest of HIPAA (6 years), SOC2 (2 years), and PCI-DSS (1 year). GDPR has no entry of its own, so with GDPR alone the expiration follows the security profile default (6 years for `production`, 2 years for `staging`, 1 year for `dev`). Changing it requires a code change in `ComplianceFactory.getLifecycleRulesForEnabledFrameworks`.
 
 **Example GDPR-Specific Configuration:**
 ```json
 {
-  "logRetentionDays": "365",  // 1 year for GDPR
-  "complianceFrameworks": "GDPR"
+  "complianceFrameworks": "gdpr",
+  "logRetentionDays": "365"
 }
 ```
-
-This will set S3 lifecycle expiration to 365 days instead of longer retention periods.
 
 **Auditor Note:** Organizations must demonstrate that retention periods are necessary for legal obligations or legitimate business purposes. Retention beyond GDPR minimization should be justified (e.g., HIPAA legal requirement for 6-year retention).
 
@@ -1159,7 +1082,7 @@ When controls are identified as not implemented because they are outside the sco
 "The organization acknowledges that GDPR Data Subject Rights require business processes beyond infrastructure automation. CloudForge CI provides the technical foundation (audit logs, access controls, encryption) to support DSR fulfillment. The organization has established manual procedures for receiving, validating, and fulfilling DSR requests using the audit logs provided by CloudForge CI infrastructure."
 
 **Recommendation:**
-"Management should document and implement GDPR Data Subject Rights procedures, including DSR request intake, identity verification, data retrieval workflows, and response timelines (within 30 days per GDPR Article 12). CloudForge audit logs can be used to identify personal data locations and processing activities."
+"Management should document and implement GDPR Data Subject Rights procedures, including DSR request intake, identity verification, data retrieval workflows, and response timelines (within one month per GDPR Article 12(3)). CloudForge audit logs can be used to identify personal data locations and processing activities."
 
 #### Example 4: Third-Party Testing (PCI-DSS Req 11)
 
@@ -1209,7 +1132,7 @@ These cannot be automated and require human review:
    - DSR request: "What personal data do you have about me?"
    - **Process Required**: Query CloudTrail/CloudWatch logs, application databases, backups
    - **CloudForge Support**: Audit logs help identify where data is stored and processed
-   - **Response Time**: 30 days (GDPR Article 12)
+   - **Response Time**: One month, extendable in some cases (GDPR Article 12(3))
 
 2. **Article 16 - Right to Rectification:**
    - DSR request: "Correct my personal data"
@@ -1245,7 +1168,7 @@ These cannot be automated and require human review:
    ↓
 5. Fulfillment (access/rectify/erase/export/restrict)
    ↓
-6. Response to Data Subject (within 30 days)
+6. Response to Data Subject (within one month)
    ↓
 7. Documentation (log DSR request and fulfillment)
 ```
@@ -1403,7 +1326,7 @@ Use this checklist when auditing CloudForge CI implementations:
 - [ ] Request vendor management documentation
 
 ### Final Report
-- [ ] Document control implementation (Technical controls: 30-40% of requirements)
+- [ ] Document control implementation (technical infrastructure controls only)
 - [ ] Document testing results for automated controls
 - [ ] List controls not implemented (organizational)
 - [ ] Provide recommendations for organizational controls
@@ -1418,6 +1341,4 @@ This document is publicly available as part of the CloudForge CI open-source pro
 - Contact information and organizational structure (technical lead, security officer, compliance officer)
 - Additional organizational controls implemented beyond infrastructure automation
 
----
 
-**Last Updated**: 2025-11-20 | **Version**: 2.0.6

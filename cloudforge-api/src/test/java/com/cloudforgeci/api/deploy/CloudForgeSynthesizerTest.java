@@ -62,9 +62,9 @@ class CloudForgeSynthesizerTest {
     }
 
     /**
-     * WordPress-on-Fargate's own real infrastructure carries a genuine {@code AwsSolutions-RDS3}
-     * finding (its RDS instance isn't Multi-AZ), so this exercises {@code ComplianceMode.ENFORCE}
-     * against a real violation rather than a synthetic one.
+     * WordPress on Fargate produces an {@code AwsSolutions-RDS3} finding (its RDS instance is not
+     * Multi-AZ), so this exercises {@code ComplianceMode.ENFORCE} against an actual violation
+     * rather than a synthetic one.
      */
     @Test
     void enforceModeBlocksSynthesisWhenComplianceFrameworkFindsARealViolation() {
@@ -93,6 +93,83 @@ class CloudForgeSynthesizerTest {
             CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
 
         assertEquals("SynthTestAdvisory", result.stackName());
+    }
+
+    /** {@link CloudForgeSynthesizer#synthesizeAdvisoryDryRun} exists specifically so an on-demand
+     *  compliance check (CloudForge Manager's Compliance tab) can see EVERY finding regardless of
+     *  {@code complianceMode} -- proves it never throws even when the caller's own
+     *  {@code complianceMode}/{@code securityProfile}/{@code auditManagerEnabled} would otherwise
+     *  have produced nothing (a DEV-profile stack blocked by a real violation), restores all three
+     *  afterward, and surfaces both cdk-nag AND framework-rule findings (the latter otherwise only
+     *  ever reaching a {@code Logger.warning} call -- see {@link
+     *  com.cloudforgeci.api.core.rules.ComplianceFindingsCollector}). */
+    @Test
+    void advisoryDryRunNeverThrowsAndReturnsBothCdkNagAndFrameworkFindings() {
+        DeploymentConfig config = wordpressFargateConfig("SynthTestDryRun");
+        config.securityProfile = SecurityProfile.DEV;
+        config.complianceFrameworks = java.util.List.of(ComplianceFrameworkType.SOC2, ComplianceFrameworkType.HIPAA);
+        config.complianceMode = ComplianceMode.ENFORCE;
+        config.auditManagerEnabled = false;
+        // AdvancedMonitoringRules ("always load", doesn't itself honor ComplianceMode) hard-blocks
+        // synthesis for PRODUCTION + GDPR/HIPAA without this -- a real, pre-existing gap unrelated
+        // to this test's own purpose, worked around the same way its own error message says to.
+        config.macieEnabled = true;
+        config.macieAutomatedDiscovery = true;
+
+        CloudForgeSynthesizer.ComplianceCheckResult result =
+            CloudForgeSynthesizer.synthesizeAdvisoryDryRun(config, tempDir.resolve("cdk.out"));
+
+        assertEquals(null, result.error(), "synthesis should have completed cleanly: " + result.error());
+        assertEquals("SynthTestDryRun", result.stackName());
+        assertTrue(!result.nagFindings().isEmpty(), "expected a real cdk-nag finding");
+        assertTrue(!result.frameworkFindings().isEmpty(), "expected a real HIPAA framework-rule finding");
+        assertEquals(ComplianceMode.ENFORCE, config.complianceMode,
+            "caller's original complianceMode must be restored after the call");
+        assertEquals(SecurityProfile.DEV, config.securityProfile,
+            "caller's original securityProfile must be restored after the call");
+        assertEquals(Boolean.FALSE, config.auditManagerEnabled,
+            "caller's original auditManagerEnabled must be restored after the call");
+    }
+
+    /** A real, pre-existing gap this method has to defend against: not every validator in this
+     *  codebase honors {@code ComplianceMode} -- {@code AdvancedMonitoringRules} (an "always load"
+     *  cross-framework validator) hard-blocks {@code app.synth()} for a PRODUCTION profile
+     *  requesting GDPR/HIPAA without {@code macieEnabled}, regardless of {@code complianceMode}.
+     *  Proves the dry run surfaces that as {@code error} instead of throwing. */
+    @Test
+    void advisoryDryRunReportsAnErrorRatherThanThrowingWhenAnAlwaysLoadValidatorHardBlocks() {
+        DeploymentConfig config = wordpressFargateConfig("SynthTestDryRunHardBlock");
+        config.complianceFrameworks = java.util.List.of(ComplianceFrameworkType.HIPAA);
+        config.auditManagerEnabled = true;
+        // macieEnabled left false -- deliberately triggers AdvancedMonitoringRules' hard block.
+
+        CloudForgeSynthesizer.ComplianceCheckResult result =
+            CloudForgeSynthesizer.synthesizeAdvisoryDryRun(config, tempDir.resolve("cdk.out"));
+
+        assertTrue(result.error() != null && result.error().contains("Macie"), "expected a Macie error: " + result.error());
+        assertTrue(result.nagFindings().isEmpty(), "cdk-nag never ran since synthesis never completed");
+    }
+
+    /** {@code complianceFrameworksRawOverride} is the escape hatch for tokens with no {@link
+     *  ComplianceFrameworkType} entry -- ISO-27001 (a real {@code FrameworkRules} implementation)
+     *  and AWS-BEST-PRACTICES (cdk-nag's own generic {@code AwsSolutionsChecks} fallback pack,
+     *  independent of any specific compliance framework). Neither could be requested through
+     *  {@code config.complianceFrameworks} at all -- that field's enum doesn't have them. */
+    @Test
+    void advisoryDryRunSupportsRawOverrideTokensWithNoComplianceFrameworkTypeEntry() {
+        DeploymentConfig config = wordpressFargateConfig("SynthTestDryRunRawOverride");
+        config.complianceFrameworksRawOverride = "ISO-27001,AWS-BEST-PRACTICES";
+        config.auditManagerEnabled = true;
+        config.macieEnabled = true;
+        config.macieAutomatedDiscovery = true;
+
+        CloudForgeSynthesizer.ComplianceCheckResult result =
+            CloudForgeSynthesizer.synthesizeAdvisoryDryRun(config, tempDir.resolve("cdk.out"));
+
+        assertEquals(null, result.error(), "synthesis should have completed cleanly: " + result.error());
+        assertTrue(!result.nagFindings().isEmpty(),
+            "AWS-BEST-PRACTICES should apply cdk-nag's AwsSolutionsChecks fallback pack");
+        assertTrue(!result.frameworkFindings().isEmpty(), "expected a real ISO-27001 framework-rule finding");
     }
 
     @Test
@@ -159,13 +236,11 @@ class CloudForgeSynthesizerTest {
     }
 
     /**
-     * The landmine this closes: {@code VpcFactory.maxAzs(2)} resolves AZs via {@code Fn::GetAZs}
-     * (a CloudFormation-time token) only while account+region are both unresolved. Pinning {@code
-     * config.account} routes CDK's AZ resolution through its synth-time {@code availability-zones}
-     * context provider instead — and since this deploy path never shells out to the {@code cdk}
-     * CLI to satisfy that lookup, CDK would silently fall back to its built-in dummy values
-     * ({@code dummy1a}/{@code dummy1b}/{@code dummy1c}) baked straight into subnet definitions,
-     * which then fails at real CloudFormation. Must never regress.
+     * {@code VpcFactory.maxAzs(2)} resolves AZs via {@code Fn::GetAZs} (a CloudFormation-time
+     * token) only while account and region are both unresolved. Pinning {@code config.account}
+     * routes AZ resolution through CDK's synth-time {@code availability-zones} context provider,
+     * and because this path does not invoke the {@code cdk} CLI, CDK would fall back to dummy
+     * values ({@code dummy1a}/{@code dummy1b}/{@code dummy1c}) that fail at CloudFormation.
      */
     @Test
     void synthesizingWithAnExplicitAccountNeverBakesInDummyAvailabilityZones() throws IOException {
@@ -184,9 +259,8 @@ class CloudForgeSynthesizerTest {
     }
 
     /**
-     * Companion to the dummy-AZ regression test above — proves the fix is additive, not a
-     * behavior change for every existing caller that never sets {@code config.account} (the
-     * default). Same account-agnostic {@code Fn::GetAZs} resolution as before this field existed.
+     * Companion to the dummy-AZ test above: callers that do not set {@code config.account} (the
+     * default) keep account-agnostic {@code Fn::GetAZs} resolution.
      */
     @Test
     void synthesizingWithoutAnAccountStillUsesDeferredCloudFormationTimeAzResolution() throws IOException {

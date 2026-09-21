@@ -28,7 +28,7 @@ public final class CdkNagControlMapper {
     private static final Logger LOG = Logger.getLogger(CdkNagControlMapper.class.getName());
 
     /**
-     * Comprehensive mapping from cdk-nag rule IDs to CloudForge SecurityControl enums.
+     * Mapping from cdk-nag rule IDs to CloudForge SecurityControl enums.
      *
      * <p>Rules are organized by security control category for maintainability.</p>
      */

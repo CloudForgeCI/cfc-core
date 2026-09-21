@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Master Validation System for CloudForge Core
-# Orchestrates comprehensive resource validation, truth table generation, and drift detection
+# Orchestrates resource validation, truth table generation, and drift detection
 
 set -e
 
@@ -373,7 +373,7 @@ EOF
     fi
 }
 
-# Function to generate comprehensive report
+# Generate the HTML validation report
 generate_comprehensive_report() {
     echo -e "${PURPLE}📊 Generating comprehensive validation report...${NC}"
     echo ""

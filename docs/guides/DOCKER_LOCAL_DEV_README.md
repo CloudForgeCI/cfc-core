@@ -1,44 +1,47 @@
-# CloudForge Local Development Environment
+# CloudForge CI Local Docker Environment
 
-Local dockerized environment for developing and testing CloudForge applications. Spins up infrastructure services plus CI/CD, monitoring, CMS, and analytics applications — all pre-wired and health-checked.
+The repository's `docker-compose.yml` runs the applications that CloudForge deploys, plus
+local stand-ins for the AWS services they depend on, so you can try an application without
+deploying to AWS or an emulator. The compose file includes:
 
-**Features:**
-- ✅ Infrastructure layer: PostgreSQL, MySQL, MariaDB, Redis, Mock OIDC (Cognito simulator)
-- ✅ CMS & e-commerce: WordPress, WooCommerce, Drupal, Joomla
-- ✅ CI/CD & VCS: Jenkins, GitLab, Gitea, Drone
-- ✅ Monitoring: Prometheus, Grafana
-- ✅ Selective startup — start only what you need (groups or individual services)
-- ✅ Health checks and service monitoring
-- ✅ Persistent volumes for data preservation
+- **Infrastructure:** PostgreSQL, MySQL, MariaDB, Redis, and a mock OIDC provider that stands in for Amazon Cognito
+- **CI/CD and version control:** Jenkins, GitLab, Gitea, Drone
+- **Monitoring and analytics:** Prometheus, Grafana, Metabase, Apache Superset
+- **Services:** Nexus Repository, HashiCorp Vault, Mattermost
+- **CMS and e-commerce:** WordPress, WooCommerce, Drupal, Joomla, UNA, Magento (with OpenSearch), OpenCart
+- **Reverse proxy:** HAProxy, standing in for an Application Load Balancer
 
-**Status:** ✓ Fully operational | Tested with Docker 28.1+
+Services have health checks and use named volumes, so data survives restarts.
+
+For a shorter walkthrough, see the [Docker Quick Start](DOCKER_QUICK_START.md).
 
 ---
 
 ## Prerequisites
 
-- **Docker Desktop** 24.0+ (or Docker Engine 24+ with Compose plugin)
-- **4GB+ RAM** allocated to Docker (8GB recommended for full stack)
-- **10GB+ disk space** for volumes
-- **Ports 80, 3000-9090** available (or modify `docker-compose.yml`)
+- **Docker Desktop** 24.0+ (or Docker Engine 24+ with the Compose v2 plugin). The standalone `docker-compose` v1 binary is not supported.
+- **4 GB+ RAM** allocated to Docker (8 GB for the full stack)
+- **10 GB+ disk space** for volumes
+- The host ports listed under [Services and Ports](#services-and-ports) must be free, or you must change them in `docker-compose.yml`
+- `python3` on the `PATH` (`docker-start.sh` uses it to read container health)
 
 ### macOS: Bash Version
 
-The management scripts require **bash 4+** (macOS ships bash 3.2 by default). Install via Homebrew:
+The management scripts use associative arrays and require **bash 4+**. macOS ships bash 3.2. Install a newer bash with Homebrew:
 
 ```bash
 brew install bash
 ```
 
-Verify: `bash --version` should show 5.x. The scripts use `#!/usr/bin/env bash` which picks up the Homebrew bash automatically.
+The scripts use `#!/usr/bin/env bash`, so they pick up the Homebrew bash when it is first on your `PATH`.
 
 ### Check Prerequisites
 
 ```bash
-docker --version              # 24.0+ required
-docker compose version        # built-in Compose plugin (v2)
-docker info | grep "Memory"   # confirm RAM allocation
-bash --version                # 5.x required on macOS
+docker --version              # 24.0+
+docker compose version        # Compose v2 plugin
+docker info | grep "Memory"   # RAM allocated to Docker
+bash --version                # 4.0+ (macOS)
 ```
 
 ---
@@ -46,31 +49,37 @@ bash --version                # 5.x required on macOS
 ## Quick Start
 
 ```bash
-# Clone and navigate to project root
 git clone https://github.com/CloudForgeCI/cfc-core.git
 cd cfc-core
 
-# Start just infrastructure + CMS (fastest useful subset)
+# Infrastructure plus the CMS applications
 ./scripts/docker-start.sh infrastructure cms
 
-# Or start everything
+# Or every service in the "all" group
 ./scripts/docker-start.sh all
 
 # Check status
 ./scripts/docker-status.sh
 ```
 
-The script prints URLs and credentials for every service it started.
+`docker-start.sh` pulls images, starts the selected containers, waits up to two minutes for
+health checks, and then prints the URL (and, where applicable, the credentials) for each
+service it started. Run it with no arguments, or with `--interactive`, for a selection menu.
 
 ### Service Groups
 
 ```bash
-./scripts/docker-start.sh infrastructure     # Mock OIDC, PostgreSQL, Redis, MySQL, MariaDB
-./scripts/docker-start.sh cicd               # Jenkins, GitLab, Gitea, Drone
-./scripts/docker-start.sh monitoring         # Prometheus, Grafana
-./scripts/docker-start.sh cms                # WordPress, WooCommerce, Drupal, Joomla
-./scripts/docker-start.sh core              # Everything except CMS and analytics extras
-./scripts/docker-start.sh all               # All containers (~26)
+./scripts/docker-start.sh infrastructure   # Mock OIDC, PostgreSQL, Redis, MySQL, MariaDB
+./scripts/docker-start.sh cicd             # Jenkins, GitLab, Gitea, Drone
+./scripts/docker-start.sh monitoring       # Prometheus, Grafana
+./scripts/docker-start.sh analytics        # Metabase, Superset
+./scripts/docker-start.sh services         # Nexus, Vault
+./scripts/docker-start.sh collaboration    # Mattermost
+./scripts/docker-start.sh cms              # WordPress, WooCommerce, Drupal, Joomla
+./scripts/docker-start.sh databases        # Standalone PostgreSQL and Redis (postgresql-app, redis-app)
+./scripts/docker-start.sh core             # Infrastructure, CI/CD, monitoring, Metabase, Vault, Mattermost
+./scripts/docker-start.sh all              # Every group above, plus HAProxy
+./scripts/docker-start.sh --list           # Print groups and service names
 ```
 
 You can combine groups and individual service names:
@@ -79,90 +88,100 @@ You can combine groups and individual service names:
 ./scripts/docker-start.sh infrastructure monitoring wordpress
 ```
 
+UNA (`dolphin-una`), Magento, OpenCart, and OpenSearch are not part of any group. Start them
+with `docker-app.sh` (see [Testing One Application at a Time](#testing-one-application-at-a-time))
+or directly with `docker compose up -d <service>`.
+
 ---
 
 ## Architecture
 
-### Infrastructure Layer
-- **PostgreSQL** (port 5432) - Primary relational database
-- **Redis** (port 6379) - Caching & sessions
-- **MySQL** (port 3306) - Additional relational DB
-- **MariaDB** (port 3307) - MySQL-compatible DB
-- **Mock OIDC** (port 3001) - Authentication testing
-- **MiniStack** (port 4566) - Open-source AWS emulator for CloudFormation/ECS/ALB testing (`ministack` compose profile)
+### Services and Ports
 
-MiniStack is separate from the application containers above. It emulates AWS services for deploying synthesized CloudFormation from `cfc-testing`. See **[MiniStack Local Deployment](../ministack/README.md)** for setup, deployment, verification, and incremental updates.
+Host ports as mapped in `docker-compose.yml`:
 
-### Service Categories
+| Service | Compose name | Host port | Notes |
+|---------|--------------|-----------|-------|
+| Mock OIDC | `mock-oidc` | 3001 | Mockoon; stands in for Cognito |
+| PostgreSQL | `postgres-main` | 5432 | Shared database for Gitea, Drone, Metabase, Superset, Mattermost, Drupal |
+| Redis | `redis-main` | 6379 | Shared cache |
+| MySQL | `mysql` | 3306 | Shared database for WordPress, WooCommerce, Joomla, UNA, Magento, OpenCart |
+| MariaDB | `mariadb` | 3307 | |
+| Jenkins | `jenkins` | 8080, 50000 | Served under `/jenkins` |
+| GitLab | `gitlab` | 8081, 8444 (HTTPS), 2222 (SSH) | |
+| Drone | `drone` | 8082 | |
+| Gitea | `gitea` | 8083, 2223 (SSH) | |
+| Prometheus | `prometheus` | 9090 | |
+| Grafana | `grafana` | 3000 | |
+| Metabase | `metabase` | 3002 | |
+| Apache Superset | `superset` | 8088 | |
+| PostgreSQL (standalone) | `postgresql-app` | 5433 | |
+| Redis (standalone) | `redis-app` | 6380 | |
+| Nexus Repository | `nexus` | 8084 | |
+| HashiCorp Vault | `vault` | 8200 | Dev mode |
+| Mattermost | `mattermost` | 8065 | |
+| WordPress | `wordpress` | 8087 | |
+| WooCommerce | `woocommerce` | 8089 | Built from `docker/woocommerce` |
+| Drupal | `drupal` | 8090 | Uses PostgreSQL |
+| Joomla | `joomla` | 8091 | |
+| UNA | `dolphin-una` | 8092 | Built from `docker/una` |
+| Magento | `magento` | 8093 | Built from `docker/magento`; requires OpenSearch |
+| OpenCart | `opencart` | 8094 | Built from `docker/opencart` |
+| OpenSearch | `opensearch` | 9200 | |
+| HAProxy | `haproxy` | 80, 8404 (stats) | Path- and host-based routing, like ALB listener rules |
 
-#### CI/CD & Version Control (4 apps)
-- **Jenkins** (8080) - Automation server
-- **GitLab** (8081) - DevOps platform
-- **Gitea** (8083) - Lightweight Git service
-- **Drone** (8082) - Container CI/CD
+Harbor is not included: it needs the official offline installer (multiple containers and
+shared configuration), so it cannot run as a single compose service. `docker-compose.yml`
+contains a comment with the installer steps, and `docker/harbor/harbor.yml` holds a sample
+configuration.
 
-#### Monitoring & Analytics (5 apps)
-- **Prometheus** (9090) - Metrics collection
-- **Grafana** (3000) - Observability dashboards
-- **Metabase** (3002) - BI & analytics
-- **Apache Superset** (8088) - Data exploration
-- **HAProxy Stats** (8404) - Load balancer stats
+### Emulators
 
-#### Infrastructure Services (3 apps)
-- **Nexus Repository** (8084) - Artifact management
-- **Harbor** (8085) - Container registry
-- **HashiCorp Vault** (8200) - Secrets management
+MiniStack and LocalStack are not defined in `docker-compose.yml`. Start them from the
+Interactive Deployer's platform lifecycle menu (`--platform`); both listen on port 4566. See
+[MiniStack Local Deployment](../ministack/README.md) and the
+[Local Emulator Quick Start](LOCAL_EMULATOR_QUICK_START.md).
 
-#### Collaboration (1 app)
-- **Mattermost** (8065) - Team communications
+### Network
 
-#### CMS & E-Commerce
-- **WordPress** (8087) - Blogging & content management
-- **WooCommerce** (8089) - E-commerce (WordPress + WooCommerce plugin)
-- **Drupal** (8090) - Enterprise CMS
-- **Joomla** (8091) - Publishing platform
-- *Craft CMS and other platforms supported via `cms-service` topology — see [CMS Guide](docs/applications/CMS.md)*
+All services join a single bridge network, `cfc-network`, and reach each other by compose
+service name (for example `postgres-main:5432` or `mock-oidc:3000`).
 
-### Network Architecture
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    cfc-network                          │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────┐  │
-│  │ PostgreSQL   │  │ Redis        │  │ MySQL       │  │
-│  │ (5432)       │  │ (6379)       │  │ (3306)      │  │
-│  └──────────────┘  └──────────────┘  └─────────────┘  │
-│         │                │                    │         │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │         Application Services Layer               │  │
-│  │                                                  │  │
-│  │  Jenkins  GitLab  Gitea  Grafana  Metabase     │  │
-│  │  Vault    Harbor  Nexus  Mattermost ...        │  │
-│  │                                                  │  │
-│  └──────────────────────────────────────────────────┘  │
-│         │                                               │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │    HAProxy Load Balancer (ports 80, 443)        │  │
-│  │    Mock OIDC Provider (port 3001)               │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                       cfc-network                        │
+│                                                          │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐       │
+│  │ PostgreSQL  │  │ Redis       │  │ MySQL       │       │
+│  │ (5432)      │  │ (6379)      │  │ (3306)      │       │
+│  └─────────────┘  └─────────────┘  └─────────────┘       │
+│         │                │                │              │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │            Application services                  │    │
+│  │  Jenkins  GitLab  Gitea  Grafana  Metabase       │    │
+│  │  Vault  Nexus  Mattermost  WordPress ...         │    │
+│  └──────────────────────────────────────────────────┘    │
+│         │                                                │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │  HAProxy (80, stats on 8404)                     │    │
+│  │  Mock OIDC provider (3001 on host, 3000 inside)  │    │
+│  └──────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Usage
 
-### Start Environment
+### Start Services
 
 ```bash
-./scripts/docker-start.sh
+./scripts/docker-start.sh <group|service> ...
 ```
 
-**Output:** URLs and access credentials for all services
+Some services (GitLab, Nexus, Magento) take several minutes to initialize on first start.
+Follow their progress with:
 
-**First-time setup:** Services initialize in background. Monitor with:
 ```bash
 ./scripts/docker-logs.sh -f jenkins    # or any service name
 ```
@@ -173,52 +192,55 @@ MiniStack is separate from the application containers above. It emulates AWS ser
 ./scripts/docker-status.sh
 ```
 
-Shows container status, health checks, port mappings.
+Shows `docker compose ps` output: container state, health, and port mappings.
 
 ### Access Services
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Jenkins | http://localhost:8080 | Auto-generated (check logs) |
-| GitLab | http://localhost:8081 | root / cfc_gitlab_dev |
-| Gitea | http://localhost:8083 | admin / (auto-generated) |
-| Grafana | http://localhost:3000 | admin / cfc_grafana_dev |
-| Metabase | http://localhost:3002 | admin@localhost / auto-generated |
-| Vault | http://localhost:8200 | Token: cfc_vault_dev_token |
-| Harbor | http://localhost:8085 | admin / cfc_harbor_dev |
-| Mock OIDC | http://localhost:3001 | (mock provider) |
-| HAProxy Stats | http://localhost:8404/stats | (read-only) |
+| Jenkins | http://localhost:8080/jenkins | Initial admin password is printed in the container log |
+| GitLab | http://localhost:8081 | `root` / value of `GITLAB_ROOT_PASSWORD` in `docker-compose.yml` |
+| Gitea | http://localhost:8083 | Set in the install wizard on first visit |
+| Grafana | http://localhost:3000 | `admin` / `cfc_grafana_dev` |
+| Metabase | http://localhost:3002 | Set on first visit |
+| Superset | http://localhost:8088 | Set on first visit |
+| Vault | http://localhost:8200 | Token `cfc_vault_dev_token` |
+| Mock OIDC | http://localhost:3001 | None (mock provider) |
+| HAProxy stats | http://localhost:8404/stats | None |
+| Magento | http://localhost:8093 | `cfc_admin` / `MAGENTO_ADMIN_PASSWORD` in `docker-compose.yml` |
+| OpenCart | http://localhost:8094 | `cfc_admin` / `OC_ADMIN_PASS` in `docker-compose.yml` |
+
+Database credentials are listed in the [Docker Quick Start](DOCKER_QUICK_START.md#infrastructure).
+All credentials are development defaults; do not reuse them outside local testing.
 
 ### View Logs
 
-```bash
-# Follow all logs
-./scripts/docker-logs.sh -f
+`docker-logs.sh` passes its arguments to `docker compose logs`:
 
-# View specific service
-./scripts/docker-logs.sh jenkins
-./scripts/docker-logs.sh jenkins --tail 100
+```bash
+./scripts/docker-logs.sh -f                  # follow all services
+./scripts/docker-logs.sh jenkins             # one service
+./scripts/docker-logs.sh jenkins --tail 100  # last 100 lines
 
 # Search logs
-docker compose -f docker-compose.yml logs | grep "ERROR"
+docker compose logs | grep "ERROR"
 ```
 
-### Execute Commands Inside Containers
+### Run Commands Inside Containers
 
 ```bash
-# Access a service shell
 docker compose exec jenkins bash
 docker compose exec postgres-main psql -U cfc_admin
-
-# Run single commands
-docker compose exec postgres-main pg_dump -U cfc_admin
+docker compose exec postgres-main pg_dump -U cfc_admin gitea > gitea.sql
 ```
 
-### List All Services
+### List Services
 
 ```bash
 ./scripts/docker-services.sh
 ```
+
+Lists the running compose services, grouped by category.
 
 ### Stop Services
 
@@ -226,78 +248,80 @@ docker compose exec postgres-main pg_dump -U cfc_admin
 ./scripts/docker-stop.sh
 ```
 
-**Note:** Volumes are preserved. Run `docker-clean.sh` to remove all data.
+Stops and removes the containers. Volumes are preserved.
 
-### Clean Everything (Remove All Data)
+### Remove Everything
 
 ```bash
 ./scripts/docker-clean.sh
 ```
 
-**Warning:** This deletes all containers, volumes, and data. Cannot be undone.
+**Warning:** this removes all containers and volumes, and all data stored in them. It cannot be undone.
+
+---
+
+## Testing One Application at a Time
+
+`docker-app.sh` starts one application together with only the infrastructure it needs,
+creates the application's database if required, and prints its URL. The shared
+infrastructure stays running between applications, the same way RDS and ElastiCache
+persist independently of an application deployment on AWS.
+
+```bash
+./scripts/docker-app.sh list              # show testable applications
+./scripts/docker-app.sh start magento     # start MySQL, Redis, OpenSearch, then Magento
+./scripts/docker-app.sh logs magento      # follow logs
+./scripts/docker-app.sh restart magento   # restart the application container
+./scripts/docker-app.sh stop magento      # stop the application, keep infrastructure
+```
 
 ---
 
 ## Configuration
 
-### Environment Variables
+### Credentials and Environment Variables
 
-Edit or create `.env.local` in project root:
+Credentials and application settings are set directly in the `environment:` blocks of
+`docker-compose.yml`; the compose file does not read a `.env` file. Edit the relevant
+service, then recreate it:
 
-```env
-# PostgreSQL
-POSTGRES_USER=cfc_admin
-POSTGRES_PASSWORD=cfc_password_dev
-
-# Redis
-REDIS_PASSWORD=cfc_redis_dev
-
-# Grafana
-GRAFANA_ADMIN_PASSWORD=cfc_grafana_dev
-
-# GitLab
-GITLAB_ROOT_PASSWORD=cfc_gitlab_dev
-```
-
-Changes require service restart:
 ```bash
-./scripts/docker-stop.sh
-./scripts/docker-start.sh
+docker compose up -d --force-recreate <service>
 ```
 
-### Scale Individual Services
-
-Scale Jenkins to 3 instances:
-```bash
-docker compose up -d --scale jenkins=3
-```
+Some settings (for example, PostgreSQL and MySQL user passwords) are applied only when the
+data volume is first initialized. To apply a change to those, remove the volume
+(`./scripts/docker-clean.sh`, or `docker volume rm` for a single volume) and start again.
 
 ### Custom Ports
 
-Modify `docker-compose.yml` port mappings (format: `HOST_PORT:CONTAINER_PORT`):
+Change the host side of a port mapping (`HOST_PORT:CONTAINER_PORT`) in `docker-compose.yml`:
 
 ```yaml
 services:
   jenkins:
     ports:
-      - "9080:8080"  # Changed from 8080 to 9080
+      - "9080:8080"  # host port 9080 instead of 8080
 ```
 
-Restart: `./scripts/docker-start.sh`
+Then recreate the service with `docker compose up -d jenkins`.
 
-### Persistent Data Storage
+Services use fixed `container_name` values and host ports, so `docker compose --scale` does not work with this file.
 
-All volumes use Docker named volumes (auto-created):
+### Persistent Data
+
+Services use Docker named volumes, created automatically. Compose prefixes volume names
+with the project name, which defaults to the directory name (`cfc-core`):
 
 ```bash
 # List volumes
-docker volume ls | grep cfc
+docker volume ls | grep cfc-core
 
-# Inspect volume
-docker volume inspect cfc_postgres_main_data
+# Inspect a volume
+docker volume inspect cfc-core_postgres_main_data
 
-# Backup volume
-docker run --rm -v cfc_postgres_main_data:/data -v $(pwd):/backup \
+# Back up a volume to the current directory
+docker run --rm -v cfc-core_postgres_main_data:/data -v "$(pwd)":/backup \
   alpine tar czf /backup/postgres-backup.tar.gz /data
 ```
 
@@ -305,72 +329,68 @@ docker run --rm -v cfc_postgres_main_data:/data -v $(pwd):/backup \
 
 ## Application Testing Workflows
 
-### Test Jenkins Pipeline
+### Jenkins with Gitea
 
-1. Access Jenkins: http://localhost:8080
-2. Create new pipeline job
-3. Use Gitea instance as SCM source: `http://gitea:3000/..`
-4. Configure pipeline with CloudForge templates
+1. Open Jenkins at http://localhost:8080/jenkins.
+2. Create a pipeline job.
+3. Use the Gitea instance as the SCM source. Inside the network, Gitea is at `http://gitea:3000/`.
 
-### Test OIDC Integration
+### OIDC Integration
 
-The mock OIDC provider simulates AWS Cognito. It is exposed on **port 3001** from the host and at `mock-oidc:3000` within the Docker network.
+The mock OIDC provider is a Mockoon server (`docker/mock-oidc/oidc-mock.json`). It is
+exposed on port **3001** on the host and at `mock-oidc:3000` inside the Docker network.
 
-**From the host:**
+From the host:
+
 ```bash
-# Verify discovery endpoint
 curl http://localhost:3001/.well-known/openid-configuration
-
-# Health check
 curl http://localhost:3001/health
 ```
 
-**Configure an application (use container-internal address):**
+The discovery document advertises `http://localhost:3001` as the issuer and endpoint base.
+Applications running inside the network reach the same routes at `mock-oidc:3000`:
 
 | Setting | Value |
 |---------|-------|
 | Issuer | `http://localhost:3001` |
-| Authorization endpoint | `http://mock-oidc:3000/oauth/authorize` |
-| Token endpoint | `http://mock-oidc:3000/oauth/token` |
-| UserInfo endpoint | `http://mock-oidc:3000/oauth/userinfo` |
+| Authorization endpoint | `/oauth/authorize` |
+| Token endpoint | `/oauth/token` |
+| UserInfo endpoint | `/oauth/userinfo` |
 
-**Mock token/userinfo response:**
+The userinfo response is static:
+
 ```json
 {
   "sub": "cfc_dev_user",
-  "email": "dev@cloudforgeci.com",
   "name": "CloudForge Developer",
-  "cognito:groups": ["developers", "admins"]
+  "email": "dev@example.com",
+  "cognito:groups": ["ManagerAdmins", "ManagerUsers"],
+  "cognito:username": "dev-user"
 }
 ```
 
-### Test Database Applications
+### Databases
 
-1. Connect to PostgreSQL:
-   ```bash
-   docker compose exec postgres-main psql -U cfc_admin
-   ```
-
-2. List available databases:
-   ```sql
-   \l
-   ```
-
-3. Connect to app database:
-   ```sql
-   \c mattermost
-   SELECT * FROM users;
-   ```
-
-### Test Multi-App Communication
-
-Example: Connect GitLab → Jenkins → Nexus
+`docker/postgres-init.sql` creates one database per application in `postgres-main` the
+first time its volume is initialized.
 
 ```bash
-# From GitLab container
-docker compose exec gitlab curl http://jenkins:8080/
+docker compose exec postgres-main psql -U cfc_admin
+```
 
-# From Jenkins container
+```sql
+\l                -- list databases
+\c mattermost     -- connect to an application database
+\dt               -- list its tables
+```
+
+### Service-to-Service Calls
+
+```bash
+# From the GitLab container to Jenkins
+docker compose exec gitlab curl http://jenkins:8080/jenkins/login
+
+# From the Jenkins container to Nexus
 docker compose exec jenkins curl http://nexus:8081/service/rest/v1/status
 ```
 
@@ -381,162 +401,79 @@ docker compose exec jenkins curl http://nexus:8081/service/rest/v1/status
 ### Service Won't Start
 
 ```bash
-# Check service logs
 ./scripts/docker-logs.sh jenkins
+docker info | grep -E "Memory|CPUs"
 
-# Check resource constraints
-docker info | grep -E "Memory|CPUs|Disk"
-
-# Restart from scratch
+# Start again from empty volumes
 ./scripts/docker-clean.sh
-./scripts/docker-start.sh
+./scripts/docker-start.sh <group>
 ```
 
 ### Port Already in Use
 
 ```bash
-# Find process using port 8080
-lsof -i :8080
-
-# Change port in docker-compose.yml (line with "8080:8080")
-# Or kill the process
-kill -9 <PID>
+lsof -i :8080    # find the process using the port
 ```
+
+Stop that process, or change the host port in `docker-compose.yml`.
 
 ### Out of Memory
 
-Increase Docker memory allocation:
-- Docker Desktop: Settings → Resources → Memory (increase to 6GB+)
-- Then restart services
+Increase Docker's memory allocation (Docker Desktop: Settings → Resources → Memory), then
+restart the services. The full stack needs about 8 GB.
 
-### Failed Health Checks
+### Health Check Failing
+
+Slow services (GitLab, Nexus, Metabase, Magento) can report `starting` for several minutes.
 
 ```bash
-# Wait longer for services to initialize
-sleep 60
-
-# Check health status
 docker compose ps
-
-# View detailed logs
-./scripts/docker-logs.sh [service_name]
+./scripts/docker-logs.sh <service>
 ```
 
 ### Database Connection Refused
 
 ```bash
-# Verify database is running
 ./scripts/docker-status.sh | grep postgres
-
-# Test connection manually
-docker compose exec postgres-main \
-  pg_isready -U cfc_admin
+docker compose exec postgres-main pg_isready -U cfc_admin
 ```
 
-### Volume Permissions Issues
+### Mock OIDC Returns 404 on All Routes
+
+`docker/mock-oidc/oidc-mock.json` must be in the Mockoon data format expected by the
+`mockoon/cli` image. If you replaced it, restore the repository version and restart:
 
 ```bash
-# Fix volume permissions
-docker volume prune
-./scripts/docker-start.sh
+docker compose restart mock-oidc
+docker compose logs --tail 5 mock-oidc
 ```
 
 ---
 
 ## Advanced Usage
 
-### Run Custom Shell Script in Service
+### Mount a Local Directory
 
-```bash
-docker compose exec jenkins \
-  bash -c "java -version && mvn -v"
-```
-
-### Mount Local Directory
-
-Edit `docker-compose.yml`:
 ```yaml
 services:
   jenkins:
     volumes:
       - jenkins_home:/var/jenkins_home
-      - /path/to/local/workspace:/workspace  # Add this
+      - /path/to/local/workspace:/workspace
 ```
 
-### Export Database Backup
+### Use a Custom Image
 
-```bash
-docker compose exec postgres-main \
-  pg_dump -U cfc_admin gitea > gitea_backup.sql
+Replace a service's `image:` with a `build:` entry that points at a directory containing a
+Dockerfile, as `woocommerce`, `dolphin-una`, `magento`, and `opencart` already do:
+
+```yaml
+services:
+  jenkins:
+    build: ./path/to/jenkins-image
 ```
 
-### Monitor Resource Usage
-
-```bash
-docker stats --no-stream
-
-# For specific service
-docker stats cfc-jenkins
-```
-
-### Build Custom Image
-
-```bash
-# Extend a service with Dockerfile
-vi docker/jenkins/Dockerfile
-
-# In docker-compose.yml, change:
-# image: jenkins/jenkins:lts
-# To:
-# build: ./docker/jenkins
-```
-
----
-
-## Maintenance
-
-### Regular Backups
-
-```bash
-# Backup all PostgreSQL data
-docker compose exec postgres-main \
-  pg_dump -U cfc_admin appdb > appdb_backup.sql
-
-# Backup all volumes
-tar czf cfc-volumes-backup.tar.gz $(docker volume ls -q | grep cfc)
-```
-
-### Cleanup Old Containers/Images
-
-```bash
-# Remove unused resources
-docker system prune -f
-
-# Remove unused volumes
-docker volume prune -f
-
-# Remove dangling images
-docker image prune -f
-```
-
-### Update Service Images
-
-```bash
-# Pull latest images
-docker compose pull
-
-# Restart services with new images
-./scripts/docker-stop.sh
-./scripts/docker-start.sh
-```
-
----
-
-## Performance Optimization
-
-### For Large Deployments
-
-Edit `docker-compose.yml`:
+### Resource Limits
 
 ```yaml
 services:
@@ -551,114 +488,78 @@ services:
           memory: 1G
 ```
 
-### Reduce Memory Usage
-
-Comment out unused services in `docker-compose.yml` (e.g., Superset, Harbor):
+### Monitor Resource Usage
 
 ```bash
-# Then restart
-./scripts/docker-start.sh
-```
-
-### Use External Storage
-
-Mount high-capacity storage for volumes:
-```yaml
-volumes:
-  postgres_main_data:
-    driver_opts:
-      type: nfs
-      o: addr=your.nfs.server,vers=4,soft,timeo=180,bg,tcp,rw
-      device: ":/export/postgres"
+docker stats --no-stream
+docker stats cfc-jenkins
 ```
 
 ---
 
-## Integration with CloudForge Development
+## Maintenance
 
-### Test Local Changes
+### Back Up Databases
 
-1. Rebuild CloudForge libraries:
-   ```bash
-   cd cfc-core          # your project root
-   mvn install -DskipTests -Djacoco.skip=true -q
-   ```
+```bash
+docker compose exec postgres-main pg_dump -U cfc_admin gitea > gitea_backup.sql
+docker compose exec postgresql-app pg_dump -U appuser appdb > appdb_backup.sql
+```
 
-2. Use local JAR in application:
-   ```bash
-   docker compose exec jenkins \
-     aws s3 cp /local/cloudforge-core-3.1.1.jar s3://...
-   ```
+To back up a whole volume, use the `docker run ... tar` command under [Persistent Data](#persistent-data).
 
-### Deploy Custom Application
+### Update Images
 
-1. Create Dockerfile for application
-2. Add service to docker-compose.yml
-3. Start: `./scripts/docker-start.sh`
+Most services use `latest` tags.
+
+```bash
+docker compose pull
+./scripts/docker-stop.sh
+./scripts/docker-start.sh <group>
+```
+
+### Clean Up Unused Resources
+
+```bash
+docker image prune -f     # dangling images
+docker system prune -f    # stopped containers, unused networks, dangling images
+```
+
+`docker volume prune` also removes the volumes of any stopped services, including this
+environment's data.
 
 ---
 
-## Contributing
+## Adding a Service
 
-To add more applications:
-
-1. **Add service to docker-compose.yml** (under appropriate category)
-2. **Configure volumes** (if needed)
-3. **Add health checks**
-4. **Test startup**: `./scripts/docker-start.sh && ./scripts/docker-status.sh`
-5. **Document access details** in this README
-6. **Update scripts** if new categories needed
+1. Add the service to `docker-compose.yml` under the appropriate section, on `cfc-network`.
+2. Add named volumes and a health check.
+3. Add it to `SERVICE_GROUPS`, `ALL_SERVICES`, and `URLS` in `scripts/docker-start.sh`, and to the registries in `scripts/docker-app.sh`.
+4. Test with `./scripts/docker-start.sh <service> && ./scripts/docker-status.sh`.
+5. Document its port and credentials in this guide.
 
 ---
 
 ## Scripts Reference
 
+All scripts are in `scripts/` and run from any directory.
+
 | Script | Purpose |
 |--------|---------|
-| `docker-start.sh` | Start all services with health checks |
-| `docker-stop.sh` | Stop all services (preserve data) |
-| `docker-status.sh` | Show container status & health |
-| `docker-logs.sh` | View service logs with filtering |
-| `docker-services.sh` | List all available services |
-| `docker-clean.sh` | Remove all containers & volumes |
+| `docker-start.sh` | Start groups or services, wait for health checks, print URLs |
+| `docker-app.sh` | Start, stop, restart, or follow one application with its infrastructure |
+| `docker-stop.sh` | Stop and remove containers (keeps volumes) |
+| `docker-status.sh` | Show container status and health |
+| `docker-logs.sh` | Show logs (arguments pass through to `docker compose logs`) |
+| `docker-services.sh` | List running services by category |
+| `docker-clean.sh` | Remove containers and volumes |
 
 ---
 
-## Useful Docker Commands
+## Related Documentation
 
-```bash
-# General
-docker ps                                    # List running containers
-docker ps -a                                 # List all containers
-docker volume ls                             # List volumes
-docker network ls                            # List networks
-
-# Inspection
-docker inspect cfc-jenkins                   # Detailed container info
-docker logs --tail 50 -f cfc-jenkins         # Follow logs
-docker stats                                 # Real-time resource usage
-
-# Interaction
-docker exec -it cfc-jenkins bash             # Execute command in container
-docker attach cfc-jenkins                    # Attach to container
-
-# Cleanup
-docker rm $(docker ps -aq)                   # Remove all containers
-docker volume rm $(docker volume ls -q)      # Remove all volumes
-docker system prune -a                       # Complete cleanup
-```
-
----
-
-## Support & Resources
-
-- **Docker Docs:** https://docs.docker.com/
-- **Docker Compose Reference:** https://docs.docker.com/compose/compose-file/
-- **CloudForge Docs:** https://github.com/CloudForgeCI/cfc-core/docs
-- **Issues:** Report in GitHub with `docker-environment` label
-
----
-
-**Last Updated:** June 2026  
-**Docker Version:** 28.1+ (tested)  
-**Compose Plugin:** v2 (`docker compose`) — Compose v1 (`docker-compose`) not supported
+- [Docker Quick Start](DOCKER_QUICK_START.md)
+- [Local Emulator Quick Start](LOCAL_EMULATOR_QUICK_START.md)
+- [CMS Guide](../applications/CMS.md)
+- [Documentation index](../README.md)
+- [Docker Compose file reference](https://docs.docker.com/reference/compose-file/)

@@ -1,53 +1,50 @@
 # AWS Audit Manager Integration
 
-CloudForge now supports AWS Audit Manager for continuous auditing and automated evidence collection. This integration helps organizations maintain compliance with various regulatory frameworks.
+CloudForge can create AWS Audit Manager assessments for the compliance frameworks selected in a deployment. Audit Manager then collects evidence from AWS services for those assessments.
 
 ## Overview
 
-AWS Audit Manager is automatically enabled for **STAGING** and **PRODUCTION** security profiles. It provides:
+Set `auditManagerEnabled: true` to enable the integration. It is `false` by default for every security profile. When enabled, CloudForge:
 
-- **Continuous Auditing** - Automated evidence collection from AWS services
-- **Compliance Frameworks** - Pre-built frameworks for SOC2, HIPAA, PCI-DSS, GDPR, etc.
-- **Assessment Reports** - Automated compliance reports stored in S3
-- **Evidence Management** - Centralized evidence collection and organization
+- Creates one Audit Manager assessment per framework in `complianceFrameworks`
+- Creates an S3 bucket for assessment reports and an IAM role for Audit Manager
+- Installs the CloudForge framework validators (`FrameworkRules`) during synthesis; see [Validation Architecture](compliance/VALIDATION_ARCHITECTURE.md)
+
+Audit Manager assessments collect evidence. They do not certify a system or replace an auditor.
 
 ## Prerequisites
 
-⚠️ **IMPORTANT:** CloudForge validates Audit Manager setup **before** creating AWS Config infrastructure (Recorder + Delivery Channel). This fail-fast approach prevents creating account-level resources when Audit Manager is not properly configured.
-
-Before deploying with Audit Manager enabled, you must:
-
 ### 1. Enable AWS Audit Manager in Your Account
 
-**This must be done per-region** where you plan to deploy CloudForge with Audit Manager enabled.
+Audit Manager must be set up in each region where you deploy with `auditManagerEnabled: true`. Use the AWS Audit Manager console, or:
 
 ```bash
-# Navigate to AWS Audit Manager in the AWS Console for the target region
-# OR use AWS CLI
-aws auditmanager update-settings \
-  --region us-east-1 \
-  --default-assessment-reports-destination destinationType=S3,destination=s3://your-audit-reports-bucket
+aws auditmanager register-account --region us-east-1
+aws auditmanager get-account-status --region us-east-1
 ```
 
-**What happens if not enabled:**
-- ❌ Deployment will **fail during CDK synthesis or deployment**
-- ✅ Config Recorder and Delivery Channel will **NOT be created** (fail-fast behavior)
-- ✅ Prevents orphaned account-level resources
-
-### 2. Configure Data Sources
+### 2. Data Sources
 
 Audit Manager collects evidence from:
-- **AWS CloudTrail** - API activity logs (CloudForge creates this automatically)
-- **AWS Config** - Configuration change history (CloudForge creates this automatically)
+- **AWS CloudTrail** - API activity (CloudForge creates a trail for `staging` and `production`)
+- **AWS Config** - Configuration history (CloudForge creates Config rules when `awsConfigEnabled` is `true`, and the recorder when `createConfigInfrastructure` is `true`)
 - **AWS Security Hub** - Security findings (optional)
-- **AWS Control Tower** (if applicable)
 
-**Note:** CloudForge automatically creates CloudTrail and AWS Config infrastructure, so you only need to enable Audit Manager itself.
+### 3. AWS CLI at Synthesis Time
 
-### 3. List Available Frameworks
+CloudForge resolves each framework to an Audit Manager framework ID during synthesis by running `aws auditmanager list-assessment-frameworks --framework-type Standard`. The CLI is invoked at `/usr/local/bin/aws`, with the `AWS_PROFILE` and `AWS_REGION` environment variables passed through. If the CLI is missing, times out (10 seconds), or finds no match, the assessment for that framework is skipped with a warning and synthesis continues.
+
+## Framework Selection
+
+Assessments are created for the values in `complianceFrameworks` (`soc2`, `pci-dss`, `hipaa`, `gdpr`). For each value, CloudForge searches the names of the standard frameworks in your account and region:
+
+- Names containing the value (case-insensitive)
+- `SOC 2` for `soc2`
+- `PCI DSS` for `pci-dss`
+
+The first match is used. List the available frameworks with:
 
 ```bash
-# List standard AWS frameworks
 aws auditmanager list-assessment-frameworks --framework-type Standard
 
 # Example output:
@@ -64,116 +61,54 @@ aws auditmanager list-assessment-frameworks --framework-type Standard
 # }
 ```
 
-**IMPORTANT**: Note the framework `id` field (36-character UUID). CloudForge automatically queries AWS to discover framework UUIDs based on framework names.
-
-### 4. Configure Framework
-
-**How Framework Selection Works**:
-CloudForge automatically queries your AWS account for available Audit Manager frameworks. When you select a framework by short name (SOC2, HIPAA, PCI-DSS) or use the default, the system:
-1. Queries AWS using `aws auditmanager list-assessment-frameworks`
-2. Searches for matching framework by name
-3. Extracts the framework UUID automatically
-4. Uses that UUID to create the assessment
-
-**Interactive Deployer** (Recommended)
-```bash
-mvn clean compile exec:java
-# Select from menu (framework UUID is auto-discovered from AWS):
-#   1. AWS Foundational Security Best Practices (default)
-#   2. SOC 2
-#   3. HIPAA
-#   4. PCI DSS 3.2.1
-#   5. Custom (enter framework UUID manually)
-```
-
-**Environment Variables** (CI/CD)
-```bash
-# Use short names (framework UUID will be auto-discovered from AWS)
-export AUDIT_MANAGER_FRAMEWORK_PRODUCTION=SOC2
-export AUDIT_MANAGER_FRAMEWORK_STAGING=HIPAA
-
-# Or provide framework UUID directly (36-character ID from AWS)
-export AUDIT_MANAGER_FRAMEWORK_PRODUCTION=a1b2c3d4-5678-90ab-cdef-EXAMPLE11111
-
-# Or provide full ARN (UUID will be extracted automatically)
-export AUDIT_MANAGER_FRAMEWORK_PRODUCTION=arn:aws:auditmanager:region::framework/a1b2c3d4-5678-90ab-cdef-EXAMPLE11111
-```
-
-**CDK Context**
-```json
-{
-  "context": {
-    "auditManagerFrameworkPRODUCTION": "SOC2",
-    "auditManagerFrameworkSTAGING": "HIPAA"
-  }
-}
-```
-
-**Default**: Queries AWS for "AWS Foundational Security Best Practices" framework. If AWS query fails, uses placeholder UUID.
+`ComplianceFactory` also reads an `auditManagerFrameworkId` key (a framework UUID, ARN, or name) as a fallback when `complianceFrameworks` is empty. The key is not exposed through `DeploymentContext` yet, so it cannot currently be set from configuration.
 
 ## Configuration
 
-### Enable Audit Manager for a Deployment
-
-Audit Manager is enabled by default for STAGING and PRODUCTION profiles. To override:
-
-```java
-Map<String, Object> config = new LinkedHashMap<>();
-config.put("auditManagerEnabled", true);  // Force enable
-// OR
-config.put("auditManagerEnabled", false); // Force disable
-
-App app = new App();
-app.getNode().setContext("cfc", config);
+```json
+{
+  "securityProfile": "production",
+  "complianceFrameworks": "soc2,hipaa",
+  "awsConfigEnabled": true,
+  "auditManagerEnabled": true
+}
 ```
 
 ### Security Profile Defaults
 
-| Profile    | Audit Manager | CloudTrail | AWS Config |
-|------------|---------------|------------|------------|
-| DEV        | ❌ Disabled   | ✅ Enabled  | ❌ Disabled |
-| STAGING    | ✅ Enabled    | ✅ Enabled  | ✅ Enabled  |
-| PRODUCTION | ✅ Enabled    | ✅ Enabled  | ✅ Enabled  |
+| Profile    | Audit Manager | CloudTrail | AWS Config rules |
+|------------|---------------|------------|------------------|
+| DEV        | Off unless `auditManagerEnabled` | Not created | Off unless `awsConfigEnabled` |
+| STAGING    | Off unless `auditManagerEnabled` | Created | Off unless `awsConfigEnabled` |
+| PRODUCTION | Off unless `auditManagerEnabled` | Created | Off unless `awsConfigEnabled` |
 
 ## What Gets Created
 
-When Audit Manager is enabled, CloudForge creates:
-
 ### 1. S3 Bucket for Assessment Reports
-- Encrypted with S3-managed encryption
-- Versioning enabled
-- Public access blocked
-- Retention policy: RETAIN
+- S3-managed encryption, versioning, and public access blocked
+- Bucket policy that denies requests without TLS (`aws:SecureTransport`)
+- S3 data events recorded by the stack's CloudTrail trail
+- ARN recorded in SSM at `/cloudforge/shared/{region}/stack/{stackName}/audit-manager/bucket-arn`
+- Retained in `production`; see [Retained Resources](compliance/RETAINED_RESOURCES.md)
 
 ### 2. IAM Role for Audit Manager
 - Service principal: `auditmanager.amazonaws.com`
-- Inline policies for:
-  - Audit Manager access (GetAccountStatus, ListAssessmentFrameworks, etc.)
-  - CloudTrail read permissions (evidence collection)
-  - AWS Config read permissions (evidence collection)
-  - S3 write permissions to assessment report bucket
-- SSL/TLS enforcement for S3 access
-- Server access logging enabled
+- Permissions for:
+  - Audit Manager read access (`GetAccountStatus`, `ListAssessmentFrameworks`, and related actions)
+  - CloudTrail read access for evidence collection
+  - AWS Config read access for evidence collection
+  - Writing to the assessment report bucket
 
-### 3. Audit Manager Assessment
-- Name: `audit-{profile}-{stack-hash}`
-- Framework: Based on security profile (or configured)
-- Scope: Current AWS account (automatically detected)
-- Reports: Stored in S3 bucket
-- Tags: Environment and ManagedBy
-
-## Common Compliance Frameworks
-
-| Framework | Use Case | ARN Pattern |
-|-----------|----------|-------------|
-| SOC 2 Type II | SaaS, cloud providers | `arn:aws:auditmanager:region::framework/SOC2-ID` |
-| HIPAA | Healthcare | `arn:aws:auditmanager:region::framework/HIPAA-ID` |
-| PCI DSS 3.2.1 | Payment processing | `arn:aws:auditmanager:region::framework/PCI-DSS-ID` |
-| AWS Best Practices | General compliance | `arn:aws:auditmanager:::framework/aws-foundational-security-best-practices` |
+### 3. Audit Manager Assessments
+- One per resolved framework
+- Name: `audit-{framework}-{stackName}-{hash}`
+- Scope: the current AWS account
+- Reports: stored in the report bucket
+- Tags: `Environment`, `Framework`, and `ManagedBy`
 
 ## IAM Permissions for Deployment
 
-Deployment role needs these permissions:
+The deployment role needs these permissions in addition to the usual CloudFormation permissions:
 
 ```json
 {
@@ -207,131 +142,72 @@ Deployment role needs these permissions:
 }
 ```
 
-Note: Application IAM roles don't need Audit Manager permissions. CloudForge creates a dedicated service role.
+The credentials used for `cdk synth` also need `auditmanager:ListAssessmentFrameworks` for framework resolution.
+
+Application IAM roles do not need Audit Manager permissions.
 
 ## Accessing Assessment Reports
 
-After deployment, assessment reports are automatically generated and stored in S3:
+Generate assessment reports in the Audit Manager console or with `aws auditmanager create-assessment-report`. Reports are written to the report bucket:
 
 ```bash
-# List assessment reports
-aws s3 ls s3://audit-manager-report-bucket-XXXXX/
-
-# Download a report
-aws s3 cp s3://audit-manager-report-bucket-XXXXX/report.zip ./
+aws s3 ls s3://<audit-manager-report-bucket>/
 ```
-
-You can also access reports via the AWS Audit Manager console.
 
 ## Cost Considerations
 
-AWS Audit Manager pricing:
-- **Assessment Evidence Collection**: $1.00 per 100,000 evidence items
-- **S3 Storage**: Standard S3 pricing for reports
-- **No charge**: For assessments themselves
-
-**Recommendation**: Enable for STAGING and PRODUCTION only to control costs.
+Audit Manager is priced per resource assessment, and report storage uses standard S3 pricing. See [AWS Audit Manager Pricing](https://aws.amazon.com/audit-manager/pricing/).
 
 ## Troubleshooting
 
-### Error: "Audit Manager is not enabled in this region"
+### Assessments Not Created
 
-**Symptoms:**
-- Deployment fails during CDK synthesis or CloudFormation deployment
-- Error mentions Audit Manager not being initialized
-- Config Recorder and Delivery Channel were NOT created (fail-fast behavior)
-
-**Root Cause:**
-Audit Manager must be enabled per-region before deploying CloudForge with `auditManagerEnabled: true`.
+**Symptoms:** Synthesis logs contain `Unable to resolve Audit Manager framework` or `No Audit Manager assessments were created`.
 
 **Solution:**
-1. Enable Audit Manager in the target region:
-   ```bash
-   aws auditmanager update-settings \
-     --region us-east-1 \
-     --default-assessment-reports-destination destinationType=S3,destination=s3://your-bucket
-   ```
-
-2. Verify Audit Manager is enabled:
+1. Confirm Audit Manager is set up in the region:
    ```bash
    aws auditmanager get-account-status --region us-east-1
    ```
-
-3. Redeploy the stack
-
-**Why this is good:**
-- ✅ Prevents creating orphaned Config Recorder/Delivery Channel resources
-- ✅ Fails before creating account-level singleton resources
-- ✅ Easier cleanup if configuration is wrong
-
-### Error: "Framework not found"
-
-**Solution**:
-1. List available frameworks in your region:
+2. Confirm the AWS CLI is available at `/usr/local/bin/aws` in the synthesis environment and that `AWS_PROFILE`/`AWS_REGION` point to the target account and region.
+3. List the standard frameworks and confirm one matches the selected framework name:
    ```bash
-   aws auditmanager list-assessment-frameworks \
-     --framework-type Standard \
-     --region us-east-1
+   aws auditmanager list-assessment-frameworks --framework-type Standard --region us-east-1
    ```
-
-2. Update `deployment-context.json` with correct framework ID:
-   ```json
-   {
-     "auditManagerFrameworkId": "a1b2c3d4-5678-90ab-cdef-EXAMPLE11111"
-   }
-   ```
-
-3. Verify the framework ID is correct for your region and account
 
 ### Error: "Insufficient permissions"
 
-**Solution**: Ensure the deployment IAM role has permissions to create Audit Manager resources. See [IAM Permissions for Deployment](#iam-permissions-for-deployment) section above.
+Ensure the deployment role has permissions to create Audit Manager resources. See [IAM Permissions for Deployment](#iam-permissions-for-deployment).
 
 ### No Evidence Being Collected
 
-**Symptoms:**
-- Assessment created successfully but no evidence appears
-- Evidence count remains at 0 in Audit Manager console
+**Symptoms:** The assessment exists, but its evidence count stays at 0.
 
-**Solution**:
-1. Verify CloudTrail is enabled and logging (CloudForge creates this automatically)
-2. Verify AWS Config Recorder is running:
+**Solution:**
+1. Verify CloudTrail is logging
+2. Verify the AWS Config recorder is running:
    ```bash
    aws configservice describe-configuration-recorders
    aws configservice describe-configuration-recorder-status
    ```
-3. Check Audit Manager data source settings in AWS Console
-4. Wait 24-48 hours for initial evidence collection
-
-### Deployment Order Issues
-
-**Problem:** Deploying to a new region without Audit Manager enabled creates Config infrastructure before failing.
-
-**Solution (Fixed):** CloudForge now validates Audit Manager **before** creating Config infrastructure:
-
-**Deployment Order:**
-1. ✅ CloudTrail creation
-2. ✅ Audit Manager validation (fails fast if not enabled)
-3. ✅ Config Recorder + Delivery Channel (only if Audit Manager succeeds)
-4. ✅ Config Rules
-
-This ensures clean failure without orphaned resources.
+3. Check the Audit Manager data source settings in the AWS console
+4. Allow 24-48 hours for initial evidence collection
 
 ## Best Practices
 
-1. **Framework Selection**: Choose frameworks that match your compliance requirements
-2. **Evidence Retention**: Keep assessment reports for at least 7 years for most frameworks
-3. **Access Control**: Restrict access to assessment reports using S3 bucket policies
-4. **Regular Reviews**: Review assessment findings monthly
-5. **Automation**: Use AWS EventBridge to trigger automated actions based on assessment status
+1. **Framework selection**: Select frameworks that match your compliance requirements
+2. **Evidence retention**: Keep assessment reports for the period your frameworks require
+3. **Access control**: Restrict access to the report bucket
+4. **Regular reviews**: Review assessment findings on a fixed schedule
+5. **Automation**: Use Amazon EventBridge to act on assessment status changes
 
 ## Integration with Other CloudForge Features
 
-Audit Manager works alongside:
-- **CloudTrail** - Provides API activity evidence
-- **AWS Config** - Provides configuration compliance evidence
-- **Security Monitoring** - GuardDuty findings can be evidence sources
-- **VPC Flow Logs** - Network activity evidence
+Audit Manager uses evidence from:
+- **CloudTrail** - API activity
+- **AWS Config** - Configuration compliance
+- **Security Hub and GuardDuty** - Security findings
+- **VPC Flow Logs** - Network activity
 
 ## Example Deployment
 
@@ -340,15 +216,19 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.enums.*;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class ComplianceStack {
     public static void main(String[] args) {
         App app = new App();
 
-        // Configure for production with Audit Manager
         Map<String, Object> config = new LinkedHashMap<>();
-        config.put("tier", "production");
-        config.put("env", "prod");
+        config.put("securityProfile", "production");
+        config.put("complianceFrameworks", "soc2");
+        config.put("awsConfigEnabled", true);
         config.put("auditManagerEnabled", true);
 
         app.getNode().setContext("cfc", config);
@@ -373,13 +253,12 @@ public class ComplianceStack {
 
 - [AWS Audit Manager Documentation](https://docs.aws.amazon.com/audit-manager/)
 - [AWS Audit Manager Pricing](https://aws.amazon.com/audit-manager/pricing/)
-- [Compliance Framework Guide](https://docs.aws.amazon.com/audit-manager/latest/userguide/framework-overviews.html)
-- [CloudForge Security Configuration](guides/SECURITY_RULES_README.md#comparison)
+- [Audit Manager Framework Library](https://docs.aws.amazon.com/audit-manager/latest/userguide/framework-overviews.html)
 
 ## Support
 
 For issues or questions:
 1. Check the [troubleshooting section](#troubleshooting) above
-2. Review CloudForge logs for error messages
-3. Consult AWS Audit Manager documentation
-4. Open an issue in the CloudForge repository
+2. Review the synthesis log for Audit Manager messages
+3. Consult the AWS Audit Manager documentation
+4. Open an issue at https://github.com/CloudForgeCI/cfc-core/issues

@@ -1,5 +1,4 @@
 {
-  "description": "Jenkins development with OIDC - no domain required, uses Private CA",
   "stackName": "Jenkins-Dev-Quick",
   "applicationId": "jenkins",
   "applicationName": "Jenkins Dev Quick",
@@ -16,7 +15,7 @@
 
   "authMode": "alb-oidc",
   "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "jenkins-dev-quick-CHANGEME",
+  "cognitoDomainPrefix": "jenkins-dev-quick-changeme",
   "cognitoCreateGroups": true,
   "cognitoAdminGroupName": "JenkinsAdmins",
   "cognitoUserGroupName": "JenkinsDevelopers",
@@ -25,12 +24,5 @@
   "memory": 2048,
 
   "enableMonitoring": true,
-  "logRetentionDays": "30",
-
-  "_comments": {
-    "ssl": "Private CA certificate issued for ALB DNS name (no domain needed)",
-    "cost": "Includes ~$400/month Private CA cost",
-    "browser": "Users will see certificate warnings (internal use only)",
-    "compliance": "Can enable compliance frameworks - Private CA meets all requirements"
-  }
+  "logRetentionDays": "30"
 }

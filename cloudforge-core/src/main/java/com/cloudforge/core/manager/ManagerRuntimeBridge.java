@@ -40,28 +40,22 @@ public final class ManagerRuntimeBridge {
             ministack = awsEndpoint != null ? awsEndpoint : localstack;
         }
 
-        // ManagerProperties.Localstack#endpoint defaults to "http://localhost:4566" unconditionally
-        // (a Java field default, there for LocalStack-target convenience) — that default is not
-        // the same thing as an explicit "run against a local emulator" instruction, but folding it
-        // into `localstack` above (via the `if (localstack == null)` fallback, itself only reached
-        // when nothing else set it either) made it look like one by the time it got here. Both
-        // LOCALSTACK_ENDPOINT and AWS_ENDPOINT_URL (the AWS SDK's own globally-recognized endpoint
-        // override — every AWS client built anywhere in this process, Cognito's included, see
-        // ApplicationOidcAuthenticator, honors the latter) have to be gated on actually targeting a
-        // local emulator (target=localstack/ministack), not just AWS_ENDPOINT_URL alone —
-        // ApplicationOidcAuthenticator#resolveLocalEmulatorEndpoint checks LOCALSTACK_ENDPOINT
-        // FIRST, so gating only AWS_ENDPOINT_URL left that check-order unprotected: Cognito sign-in
-        // kept silently trying to reach localhost:4566 in a production ECS task with no LocalStack
-        // anywhere in sight, because LOCALSTACK_ENDPOINT itself was still being bridged
-        // unconditionally here.
+        // ManagerProperties.Localstack#endpoint defaults to "http://localhost:4566" (a convenience
+        // default for LocalStack targets), which is not an explicit instruction to use a local
+        // emulator. Both LOCALSTACK_ENDPOINT and AWS_ENDPOINT_URL (the AWS SDK's global endpoint
+        // override, honored by every AWS client in this process, including Cognito's in
+        // ApplicationOidcAuthenticator) are therefore bridged only when target=localstack/ministack.
+        // Gating AWS_ENDPOINT_URL alone is not enough: ApplicationOidcAuthenticator checks
+        // LOCALSTACK_ENDPOINT first, so an ungated LOCALSTACK_ENDPOINT would send Cognito sign-in
+        // to localhost:4566 in a production ECS task.
         boolean targetingLocalEmulator = "localstack".equalsIgnoreCase(target) || "ministack".equalsIgnoreCase(target);
         if (targetingLocalEmulator) {
             setIfAbsent(ManagerEnvKeys.LOCALSTACK_ENDPOINT, localstack);
             setIfAbsent(ManagerEnvKeys.AWS_ENDPOINT_URL, firstNonBlank(awsEndpoint, localstack));
         } else {
             // awsEndpoint only (never `localstack`, which may carry the inert convenience default)
-            // — a genuine, explicitly-set AWS_ENDPOINT_URL/its PROP_ counterpart still bridges
-            // normally outside a local-emulator target (e.g. a real custom VPC endpoint override).
+            // — an explicitly set AWS_ENDPOINT_URL/its PROP_ counterpart still bridges normally
+            // outside a local-emulator target (e.g. a custom VPC endpoint override).
             setIfAbsent(ManagerEnvKeys.LOCALSTACK_ENDPOINT, awsEndpoint);
             setIfAbsent(ManagerEnvKeys.AWS_ENDPOINT_URL, awsEndpoint);
         }

@@ -345,9 +345,8 @@ public final class MiniStackTemplateAdapter implements TemplateAdapter {
                     Files.createDirectories(hostPath);
                     hostMountUsable = true;
                 } catch (IOException e) {
-                    // Same fix as LocalStackTemplateAdapter's identical block — see its javadoc
-                    // comment for the full explanation. This path only means anything on the real
-                    // host filesystem; a containerized caller (e.g. Manager's own deploy:create)
+                    // Mirrors LocalStackTemplateAdapter's equivalent block (see its comment).
+                    // This path only means anything on the host filesystem; a containerized caller (e.g. Manager's own deploy:create)
                     // has no access to it, so degrade to an ephemeral per-task Docker volume
                     // instead of hard-failing the whole deploy.
                     hostMountUsable = false;

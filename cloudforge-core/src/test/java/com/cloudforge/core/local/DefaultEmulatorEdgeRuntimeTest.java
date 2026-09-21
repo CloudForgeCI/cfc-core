@@ -195,8 +195,7 @@ class DefaultEmulatorEdgeRuntimeTest {
      *  a clean redirect. Applying both unconditionally to every path-prefixed app regardless of
      *  hostname (see hostnameForContainer) would give a non-Jenkins app a forced "/" → "/login"
      *  redirect to a route that doesn't exist for it, and a forced-prefix request path its own
-     *  webserver can't resolve to a real file (a genuine 404, never even reaching the app) —
-     *  breaking its real root path outright. */
+     *  webserver can't resolve (a 404 that never reaches the app) — breaking its root path. */
     @Test
     void nonJenkinsPathPrefixedAppIsProxiedAtItsOwnRootWithNoLoginRedirect() {
         String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(
@@ -227,7 +226,7 @@ class DefaultEmulatorEdgeRuntimeTest {
         // Two separately-deployed Jenkins stacks (subdomain=jenkins1 / jenkins2) both publish
         // container port 8080 — without the override they'd collide on one shared
         // jenkins.cloudforge.localhost route (see managerRoutePrefersStandardPortRegardlessOf...
-        // for the analogous pre-existing collision-merge behavior this deliberately bypasses).
+        // for the analogous collision-merge behavior this deliberately bypasses).
         Map<String, Integer> routes = DefaultEmulatorEdgeRuntime.parseDockerPortPublishes(
             List.of(
                 "ecs-jenkins1-task\t0.0.0.0:18080->8080/tcp",

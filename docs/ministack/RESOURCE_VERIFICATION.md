@@ -23,7 +23,7 @@ Every verification question maps to one of three artifacts:
                                 │ MiniStackDeployer (create/update)
 ┌───────────────────────────────▼─────────────────────────────────────────┐
 │ 3. Deployed + runtime     CFN stack + service APIs + Docker + auth proxy│
-│    What MiniStack recorded and what actually runs on your machine.      │
+│    What MiniStack recorded and what runs on your machine.               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -32,7 +32,7 @@ Every verification question maps to one of three artifacts:
 | “Should this resource exist for my config?” | **Canonical** template (Layer 6 / `comprehensive-resource-validator.sh`) |
 | “Did we deploy the adapted shape?” | **Adapted** template + adaptation report |
 | “Did MiniStack accept and materialize it?” | **CFN** `list-stack-resources` + **service APIs** |
-| “Does the app actually work?” | **Stack outputs**, HTTP, Docker, auth proxy |
+| “Does the app respond?” | **Stack outputs**, HTTP, Docker, auth proxy |
 
 Always set endpoint credentials before API checks:
 
@@ -45,7 +45,7 @@ export STACK_NAME=my-jenkins          # deployment-context.json stackName
 export MINISTACK_STACK="${STACK_NAME}-ministack"
 ```
 
-On ARM Macs where the host `aws` binary fails, use Docker:
+If the host `aws` binary is unavailable or the wrong architecture, run the CLI in Docker:
 
 ```bash
 alias aws='docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
@@ -68,14 +68,14 @@ export AWS_ENDPOINT_URL=http://host.docker.internal:4566
 | **Template JSON diff** | — (pre-deploy) | Intended add/remove/change between transitions |
 | **Adaptation report** | — (MiniStack-specific) | Explicit local divergences from canonical |
 | **HTTP probe** | Browser / curl | Application responds |
-| **Docker inspect** | ECS task → container | Real container running with expected port/volume |
-| **Auth proxy / mock OIDC** | — (local substitute) | OIDC flow when ALB auth is in canonical template |
+| **Docker inspect** | ECS task → container | Container running with expected port/volume |
+| **Auth proxy / mock OIDC** | — (local substitute, opt-in) | OIDC flow when ALB auth is in canonical template |
 
 **Rule:** For infrastructure wiring (VPC, Route53 alias → ALB, Cognito pool present), trust **CFN + service APIs**. For user-facing reachability locally, trust **stack outputs + HTTP**, not public DNS or ALB forward behavior.
 
 ---
 
-## Resource Matrix — Jenkins Fargate (MiniStack MVP)
+## Resource Matrix — Jenkins Fargate
 
 Legend:
 
@@ -168,9 +168,9 @@ aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" \
 
 See [Local DNS vs API verification](VERIFICATION.md#local-dns-vs-api-verification).
 
-### Authentication (incremental) — *deferred for MiniStack MVP*
+### Authentication (incremental)
 
-> Local auth runtime and browser login flow are **tabled** pending LocalStack evaluation. Adapter behavior and CFN inventory checks below still apply if you deploy with auth enabled; use `authMode: none` for MiniStack day-to-day testing.
+> The local auth runtime is off by default (`MINISTACK_AUTH_AUTOSTART=false`). Adapter behavior and CFN inventory checks below apply whenever you deploy with auth enabled; use `authMode: none` for day-to-day MiniStack testing. See [Local Auth Runtime](ADVANCED.md#local-auth-runtime).
 
 | Resource type | Canonical | Deployed CFN | Adapter | Verify via | Local fidelity |
 |---------------|-----------|--------------|---------|------------|----------------|
@@ -178,7 +178,7 @@ See [Local DNS vs API verification](VERIFICATION.md#local-dns-vs-api-verificatio
 | `AWS::Cognito::UserPoolClient` | Auth enabled | Yes | none | CFN; `aws cognito-idp list-user-pool-clients` | Same |
 | `AWS::Cognito::UserPoolDomain` | Auth enabled | Yes | none | CFN inventory | Same |
 | ALB `authenticate-oidc` / `authenticate-cognito` | Auth enabled | **Stripped from listener** | transform | Adaptation report; listener `describe-listeners` has no auth action | **Not executed on ALB** |
-| `MiniStackAuthProxy` + mock OIDC | — | **Runtime only** | local-only | `curl http://localhost:4180/_ministack/auth/health`; stack output `MiniStackAuthenticatedUrl` | Substitutes ALB edge auth |
+| `MiniStackAuthProxy` + mock OIDC | — | **Runtime only** (opt-in) | local-only | `curl http://localhost:4180/_ministack/auth/health`; stack output `MiniStackAuthenticatedUrl` | Substitutes ALB edge auth |
 
 ```bash
 # Cognito in stack
@@ -197,17 +197,17 @@ When auth is **removed** from config, expect Cognito resources absent from CFN i
 
 ---
 
-## By Deployment Phase
+## By Deployment Step
 
-What to assert after each incremental step (matches [Advanced — incremental deployments](ADVANCED.md#incremental-deployments)):
+What to assert after each incremental step (matches [Advanced: incremental deployments](ADVANCED.md#incremental-deployments)):
 
-| Phase | Config flags | Assert in CFN inventory | Assert via service API | Assert runtime |
+| Step | Config flags | Assert in CFN inventory | Assert via service API | Assert runtime |
 |-------|--------------|-------------------------|------------------------|----------------|
 | **0 — Base** | no domain, no SSL, no auth | VPC, ALB, ECS, IAM, Logs | `describe-load-balancers`, `list-clusters` | `MiniStackApplicationUrl` HTTP `< 500`; Docker container |
 | **1 — Domain** | `domain`, optional `subdomain`, `createZone` | + Route53 zone + records | `list-resource-record-sets` alias → ALB | FQDN in browser **optional** |
 | **2 — TLS** | `enableSsl: true` | + ACM cert, HTTPS listener | `acm list-certificates`, listener port 443 | Canonical has cert; local browser may still use output URLs |
-| **3 — Auth** | `authMode: alb-oidc` *(deferred)* | + Cognito resources in CFN if deployed | Cognito APIs | Auth proxy — **not active by default** |
-| **4 — Remove auth** | `authMode: none` *(deferred)* | Cognito gone | — | — |
+| **3 — Auth** | `authMode: alb-oidc` | + Cognito resources in CFN | Cognito APIs | Auth proxy only with `MINISTACK_AUTH_AUTOSTART=true` |
+| **4 — Remove auth** | `authMode: none` | Cognito gone | — | — |
 | **5 — Remove domain** | clear domain | Route53 gone | Zones/records removed | — |
 
 **No-op redeploy:** identical adapted template → deployer reports no change set; CFN stack status unchanged.
@@ -239,24 +239,25 @@ aws cloudformation list-stack-resources --stack-name "$MINISTACK_STACK" \
 
 **Parity rule:** Deployed CFN resource **types** should match the adapted template (not the canonical template). Differences from canonical must appear in `.ministack-adaptations.json`.
 
-For transition testing, use `CloudFormationTemplateDiff` (in `cloudforge-ministack`) between canonical templates at each config step — see [Verification](VERIFICATION.md).
+For transition testing, use `CloudFormationTemplateDiff` (in `cloudforge-core`) between canonical templates at each config step; see [Verification](VERIFICATION.md).
 
 ---
 
 ## What Is Not Verified on MiniStack
 
-These appear in **canonical** templates for AWS compliance/production profiles but are **out of scope** for MiniStack local MVP. Do not expect them in deployed CFN inventory or emulator APIs:
+These appear in **canonical** templates for AWS compliance and production profiles but are not supported on MiniStack. Preflight blocks templates that contain them, so disable the features that add them before deploying locally:
 
 | Resource / concern | Verified on AWS | MiniStack local |
 |--------------------|-----------------|-----------------|
-| `AWS::Config::*` | CDK `Template.fromStack()` integration tests | Not deployed |
-| `AWS::CloudTrail::*` | Same | Not deployed |
-| `AWS::GuardDuty::*` | Same | Not deployed |
-| `AWS::WAFv2::*` | Same | Not deployed |
+| `AWS::Config::*` | CDK `Template.fromStack()` integration tests | Blocked by preflight |
+| `AWS::CloudTrail::*` | Same | Blocked by preflight |
+| `AWS::GuardDuty::*` | Same | Blocked by preflight |
+| `AWS::WAFv2::*` | Same | Blocked by preflight |
+| `AWS::RDS::*`, `AWS::Backup::*` | Same | Blocked by preflight; use LocalStack |
 | Compliance Config rules / audit posture | [COMPLIANCE_TRUTH_TABLES.md](../testing/COMPLIANCE_TRUTH_TABLES.md) | Not emulated |
 | Public DNS propagation | Route53 + registrar | Emulator-only Route53 |
 | ALB → ECS forward | Real target health | Redirect to localhost |
-| ALB edge OIDC/Cognito | Listener authenticate actions | Auth proxy + mock OIDC |
+| ALB edge OIDC/Cognito | Listener authenticate actions | Stripped; optional auth proxy + mock OIDC |
 | EFS NFS | Mount in task | Host bind mount |
 | Application Auto Scaling | CFN + ECS scaling | Removed by adapter |
 
@@ -275,7 +276,7 @@ aws cloudformation describe-stacks --stack-name "$MINISTACK_STACK" \
 java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.ministack.MiniStackCli verify "$MINISTACK_STACK"
 
-# Ground truth container
+# Application container
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -i jenkins
 ```
 

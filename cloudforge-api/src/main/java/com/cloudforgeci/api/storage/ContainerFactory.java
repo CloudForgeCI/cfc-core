@@ -46,6 +46,9 @@ public class ContainerFactory extends BaseFactory {
     @DeploymentContext("authMode")
     private AuthMode authMode;
 
+    @DeploymentContext("cognitoInitialAdminEmail")
+    private String cognitoInitialAdminEmail;
+
     // ========== Optional Port Configuration ==========
     // These flags control which optional ports are exposed for applications
     // Ports are NOT exposed by default - must be explicitly enabled
@@ -194,6 +197,17 @@ public class ContainerFactory extends BaseFactory {
                 environment.put(publicTlsTrustedEnvVar, String.valueOf(publiclyTrusted));
             }
 
+            // With alb-oidc and cognitoInitialAdminEmail set (see CognitoAuthenticationFactory),
+            // use that address for the application's first-run admin account instead of the
+            // admin@<fqdn> default from containerEnvironmentVariables(). Applies only to specs
+            // that expose autoAdminEmailEnvVar().
+            String autoAdminEmailEnvVar = applicationSpec.autoAdminEmailEnvVar();
+            if (autoAdminEmailEnvVar != null && !autoAdminEmailEnvVar.isBlank()
+                    && authMode == AuthMode.ALB_OIDC
+                    && cognitoInitialAdminEmail != null && !cognitoInitialAdminEmail.isBlank()) {
+                environment.put(autoAdminEmailEnvVar, cognitoInitialAdminEmail);
+                LOG.info("  ✅ Admin email set from cognitoInitialAdminEmail for " + applicationSpec.applicationId());
+            }
         }
 
         if (applicationSpec != null) {
@@ -438,20 +452,13 @@ public class ContainerFactory extends BaseFactory {
                         // Support both forms so application OIDC can synthesize and deploy with
                         // managed or pre-existing secrets.
                         //
-                        // clientSecretArn.startsWith("arn:") alone is NOT enough: the Cognito
-                        // auto-provision path (CognitoAuthenticationFactory) hands this value in
-                        // as cognitoSecret.getSecretArn() — a CDK Token, i.e. an opaque unresolved
-                        // placeholder string at this point in synthesis, not literally "arn:..."
-                        // yet. startsWith() on a Token silently returns false, sending an ARN down
-                        // the fromSecretNameV2 (bare-name) branch — which then wraps the eventual
-                        // resolved ARN inside ANOTHER "arn:aws:secretsmanager:...:secret:" prefix,
-                        // producing a doubled ARN that fails at deploy time with "unexpected ARN
-                        // format" (via the ECS deployment circuit breaker). Token.isUnresolved()
-                        // catches exactly this case — Cognito's own getSecretArn() contract always
-                        // resolves to a complete ARN, so a Token here is routed the same way a
-                        // literal "arn:" string already is; only a resolved, non-ARN-shaped
-                        // literal (a hand-typed bare name in DeploymentContext) takes the
-                        // fromSecretNameV2 branch.
+                        // startsWith("arn:") alone is not enough: the Cognito auto-provision path
+                        // (CognitoAuthenticationFactory) passes cognitoSecret.getSecretArn(), an
+                        // unresolved CDK Token. Treating it as a bare name would wrap the resolved
+                        // ARN in a second "arn:aws:secretsmanager:...:secret:" prefix and fail at
+                        // deploy time. Unresolved Tokens always resolve to a full ARN, so they take
+                        // the ARN branch; only a literal non-ARN value (a secret name supplied in
+                        // the deployment context) uses fromSecretNameV2.
                         boolean isCompleteArn = software.amazon.awscdk.Token.isUnresolved(clientSecretArn)
                             || clientSecretArn.startsWith("arn:");
                         ISecret clientSecret = isCompleteArn
@@ -546,20 +553,12 @@ public class ContainerFactory extends BaseFactory {
                         .logGroup(logs)
                         .streamPrefix(logStreamPrefix).build()));
 
-        // Only set user if specified (some apps like GitLab need to run as root) -- and never for
-        // a privileged port (<1024), regardless of what the ApplicationSpec declares. Forcing a
-        // non-root user at the ECS container level applies from PID 1 onward, bypassing the
-        // image's own normal root-then-drop-privileges startup (Apache's docker-entrypoint starts
-        // as root specifically so its master process can bind a privileged port, then forks
-        // www-data workers) -- without this, an app whose port is privileged fails outright with
-        // "Permission denied: could not bind to address" the moment containerUser forces it to
-        // start as a non-root UID from the beginning. Granting the Linux capability that would
-        // close this gap (NET_BIND_SERVICE) isn't an option: AWS Fargate flatly rejects it at
-        // CreateTaskDefinition ("NET_BIND_SERVICE is not allowed on Fargate"), a hard platform
-        // ceiling with no capability-grant path around it on the launch type every app in this
-        // catalog actually uses. So for a privileged port, root is the only working option here --
-        // which is also just letting the image run the way its own Dockerfile already intends
-        // (root-then-drop), not a step down in security posture from some other achievable state.
+        // Only set user if specified (some apps like GitLab need to run as root), and never for a
+        // privileged port (<1024). A container-level user applies from PID 1, bypassing the
+        // image's root-then-drop-privileges startup (e.g. Apache binds port 80 as root, then forks
+        // www-data workers), so the bind would fail with "Permission denied". Fargate does not
+        // allow adding NET_BIND_SERVICE, so for privileged ports the image runs as its Dockerfile
+        // intends: start as root, then drop privileges.
         boolean privilegedPort = appPort < 1024;
         if (containerUser != null && !privilegedPort) {
             containerOptionsBuilder.user(containerUser);
@@ -663,20 +662,44 @@ public class ContainerFactory extends BaseFactory {
             }
         }
 
-        // CmsSpec's own startup customization (e.g. phpBB reconfiguring Apache's listen port
-        // and downloading its source on first run) — independent of OIDC, so it applies
-        // regardless of authMode, but only when the OIDC branch above hasn't already claimed
-        // the container's command. Without a caller for this hook, an app implementing
-        // CmsSpec.containerCommand() (e.g. PhpBBApplicationSpec) would silently get the stock
-        // image entrypoint instead, starting Apache on its image's default port 80 while every
-        // other part of the stack (ALB target group, container port mappings, generated URLs)
-        // assumes the app spec's declared applicationPort().
+        // CmsSpec startup customization (e.g. phpBB reconfiguring Apache's listen port and
+        // downloading its source on first run). Applies regardless of authMode, unless the OIDC
+        // branch above already set the container command.
         if (!commandConfigured && applicationSpec instanceof CmsSpec cmsSpec) {
             List<String> command = cmsSpec.containerCommand();
             if (command != null && !command.isEmpty()) {
                 containerOptionsBuilder.command(command);
+                commandConfigured = true;
                 LOG.info("✅ Configured containerCommand() startup script for " + applicationSpec.applicationId());
             }
+        }
+
+        // Print the generated initial admin password once at container start, before the image's
+        // default process takes over, so it can be retrieved from CloudWatch Logs. Applies only
+        // when the spec declares its image's default CMD (see
+        // ApplicationSpec#defaultContainerCommand for why this is opt-in) and no other command
+        // has been configured.
+        if (!commandConfigured && applicationSpec != null
+                && applicationSpec.autoAdminPasswordEnvVar() != null
+                && applicationSpec.defaultContainerCommand() != null
+                && !applicationSpec.defaultContainerCommand().isEmpty()) {
+            String passwordEnvVar = applicationSpec.autoAdminPasswordEnvVar();
+            String defaultCommand = String.join(" ", applicationSpec.defaultContainerCommand());
+            // Only CMD is replaced, so the image's entrypoint still runs first with $1 set to
+            // /bin/sh. Entrypoints that gate first-run setup on $1 matching the default command
+            // (see defaultContainerEntrypoint()) would skip it, so re-invoke the entrypoint here
+            // with the default command as its argument.
+            String entrypointPath = applicationSpec.defaultContainerEntrypoint();
+            String exec = entrypointPath != null && !entrypointPath.isBlank()
+                ? "exec " + entrypointPath + " " + defaultCommand
+                : "exec " + defaultCommand;
+            String banner = "echo '----------------------------------------------------------------' && "
+                + "echo 'CloudForge: initial admin password (printed once at container start)' && "
+                + "echo \"  " + passwordEnvVar + "=$" + passwordEnvVar + "\" && "
+                + "echo '----------------------------------------------------------------'";
+            containerOptionsBuilder.command(List.of("/bin/sh", "-c", banner + " && " + exec));
+            commandConfigured = true;
+            LOG.info("✅ Configured initial-admin-password startup banner for " + applicationSpec.applicationId());
         }
 
         // Check if we need SAML certificate init container
@@ -816,14 +839,13 @@ public class ContainerFactory extends BaseFactory {
                 .readOnly(false)
                 .build());
 
-        // Same-task sidecar containers (see ApplicationSpec.SidecarContainer's own javadoc) —
+        // Same-task sidecar containers (see ApplicationSpec.SidecarContainer) —
         // empty by default, opt-in per application. Always-running, essential=true:
         // unlike the SAML init container above, a sidecar has no exit condition, so its own
         // death is treated the same as the main container's — ECS replaces the whole task.
         if (applicationSpec != null) {
             for (ApplicationSpec.SidecarContainer sidecar : applicationSpec.sidecarContainers()) {
-                ContainerDefinition sidecarContainer = fargateTaskDef.addContainer(sidecar.containerName(),
-                    ContainerDefinitionOptions.builder()
+                ContainerDefinitionOptions.Builder sidecarOptions = ContainerDefinitionOptions.builder()
                         .containerName(sidecar.containerName())
                         .image(ContainerImage.fromRegistry(sidecar.image()))
                         .essential(true)
@@ -838,8 +860,17 @@ public class ContainerFactory extends BaseFactory {
                         .logging(LogDriver.awsLogs(AwsLogDriverProps.builder()
                             .logGroup(logs)
                             .streamPrefix(sidecar.containerName())
-                            .build()))
-                        .build());
+                            .build()));
+                // A hard memory ceiling, when the sidecar asks for one -- see
+                // ApplicationSpec.SidecarContainer#memoryLimitMiB's own javadoc for why a sidecar
+                // running its own JVM (or one that spawns a further child process, like
+                // cloudforge-synth-service's jsii/Node) needs a guaranteed floor rather than
+                // sharing the task's memory pool with no minimum.
+                if (sidecar.memoryLimitMiB() != null) {
+                    sidecarOptions.memoryLimitMiB(sidecar.memoryLimitMiB());
+                }
+                ContainerDefinition sidecarContainer =
+                    fargateTaskDef.addContainer(sidecar.containerName(), sidecarOptions.build());
                 sidecarContainer.addPortMappings(PortMapping.builder()
                     .containerPort(sidecar.containerPort())
                     .build());

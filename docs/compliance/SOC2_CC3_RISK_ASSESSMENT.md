@@ -1,7 +1,7 @@
 # SOC2 CC3 - Risk Assessment
 
 **Control**: CC3 - Risk Assessment
-**Status**: Fully Documented
+**Status**: Procedure template
 **Last Updated**: 2025-12-16
 **Owner**: Security Leadership
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document defines risk assessment procedures for organizations using CloudForge CI. Risk assessment identifies and analyzes risks to achieving objectives, forming the basis for determining how risks should be managed. These procedures satisfy SOC2 CC3 (Risk Assessment) requirements.
+This document defines risk assessment procedures for organizations using CloudForge CI. Risk assessment identifies and analyzes risks to achieving objectives, forming the basis for determining how risks should be managed. These procedures are a template for addressing SOC2 CC3 (Risk Assessment) requirements.
 
 ---
 

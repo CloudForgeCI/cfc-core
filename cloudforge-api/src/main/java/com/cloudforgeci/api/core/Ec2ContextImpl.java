@@ -17,6 +17,7 @@ public class Ec2ContextImpl implements Ec2Context {
     private final String authMode;
     private final String fqdn;
     private final boolean sslEnabled;
+    private final String autoAdminPasswordSecretArn;
 
     public Ec2ContextImpl(String stackName, String runtimeType, String securityProfile,
                           boolean hasEfs, String efsId, String accessPointId) {
@@ -27,6 +28,14 @@ public class Ec2ContextImpl implements Ec2Context {
     public Ec2ContextImpl(String stackName, String runtimeType, String securityProfile,
                           boolean hasEfs, String efsId, String accessPointId,
                           String authMode, String fqdn, boolean sslEnabled) {
+        this(stackName, runtimeType, securityProfile, hasEfs, efsId, accessPointId,
+            authMode, fqdn, sslEnabled, null);
+    }
+
+    public Ec2ContextImpl(String stackName, String runtimeType, String securityProfile,
+                          boolean hasEfs, String efsId, String accessPointId,
+                          String authMode, String fqdn, boolean sslEnabled,
+                          String autoAdminPasswordSecretArn) {
         this.stackName = stackName;
         this.runtimeType = runtimeType;
         this.securityProfile = securityProfile;
@@ -36,6 +45,7 @@ public class Ec2ContextImpl implements Ec2Context {
         this.authMode = authMode == null || authMode.isBlank() ? "none" : authMode;
         this.fqdn = fqdn;
         this.sslEnabled = sslEnabled;
+        this.autoAdminPasswordSecretArn = autoAdminPasswordSecretArn;
     }
 
     @Override
@@ -81,5 +91,10 @@ public class Ec2ContextImpl implements Ec2Context {
     @Override
     public boolean sslEnabled() {
         return sslEnabled;
+    }
+
+    @Override
+    public String autoAdminPasswordSecretArn() {
+        return autoAdminPasswordSecretArn;
     }
 }

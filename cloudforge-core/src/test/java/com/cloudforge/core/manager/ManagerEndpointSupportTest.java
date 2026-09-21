@@ -31,9 +31,9 @@ class ManagerEndpointSupportTest {
         assertEquals("http://127.0.0.1:4567", ManagerEndpointSupport.resolveMiniStackEndpoint());
     }
 
-    /** The actual regression this method exists to close: a real {@code target=aws} run must
-     *  ignore {@code AWS_ENDPOINT_URL} entirely, even when it's set to something that looks
-     *  exactly like a real local emulator. */
+    /** The case this method exists for: a {@code target=aws} run must ignore
+     *  {@code AWS_ENDPOINT_URL} entirely, even when it's set to something that looks exactly like
+     *  a local emulator. */
     @Test
     void awsTargetIgnoresLocalEmulatorEnvVarsEntirely() {
         System.setProperty(ManagerEnvKeys.LOCALSTACK_ENDPOINT, "http://127.0.0.1:4566");

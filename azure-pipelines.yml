@@ -2,24 +2,20 @@
 # cfc-core Azure Artifacts feed, so cloudforge-manager's ADO pipeline can resolve them without
 # hitting Maven Central snapshots directly.
 #
-# cloudforge-synth-service moved out to its own repo (CloudForgeCI/cloudforge-synth-service) and
-# is no longer published here — cloudforge-manager's ADO build resolves it by checking that repo
-# out as a sibling and `mvn install`-ing it locally instead (see build-and-test.yml).
+# cloudforge-synth-service is not published here; cloudforge-manager's ADO build checks out
+# CloudForgeCI/cloudforge-synth-service as a sibling and `mvn install`s it locally.
 #
-# Deliberately separate from .github/workflows/publish-snapshot.yml, which stays the
-# publish-of-record to real Maven Central -- this pipeline never touches that path. No
-# pom.xml/distributionManagement change anywhere: -DaltDeploymentRepository below redirects only
-# this pipeline's own deploy, so the existing GitHub->Central publish is completely unaffected.
+# Separate from .github/workflows/publish-snapshot.yml, which remains the publish-of-record to
+# Maven Central. -DaltDeploymentRepository below redirects only this pipeline's deploy; no
+# pom.xml/distributionManagement change is involved.
 #
-# No GPG signing here (unlike publish-snapshot.yml's release job) -- Azure Artifacts feeds don't
-# require it, and the release profile that adds it isn't activated by this build.
+# No GPG signing here (unlike publish-snapshot.yml's release job): Azure Artifacts feeds don't
+# require it, and this build does not activate the release profile.
 #
-# Triggers on pushes to develop -- every merge auto-publishes here alongside the existing GitHub
-# auto-release pipeline; the two don't race each other, they just both react to the same push
-# independently. pr: none stays regardless: that's the half of this that actually matters for a
-# public repo -- it's what stops an external fork's PR from ever getting this pipeline to run
-# pipeline-authored code with the feed's injected Maven credentials. A push-only trigger carries
-# none of that risk, since nothing reaches develop without already going through a reviewed merge.
+# Triggers on pushes to develop, independently of the GitHub release pipeline. `pr: none` is
+# required for a public repo: it prevents a fork's PR from running pipeline-authored code with the
+# feed's injected Maven credentials. Push-only triggers are safe because changes reach develop
+# only through a reviewed merge.
 trigger:
   branches:
     include:

@@ -58,6 +58,13 @@ public class GiteaApplicationSpec implements ApplicationSpec {
         return APPLICATION_ID;
     }
 
+    // Gitea has no official multi-node clustering support; a single instance with local repository
+    // storage is the only supported topology, so ScalingFactory rejects multi-instance settings.
+    @Override
+    public boolean supportsAutoScaling() {
+        return false;
+    }
+
     @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;

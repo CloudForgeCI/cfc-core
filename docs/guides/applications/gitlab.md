@@ -1,8 +1,8 @@
 # GitLab Application Guide
 
-GitLab is a complete DevOps platform that provides source code management, CI/CD pipelines, container registry, and security scanning in a single application.
+GitLab provides Git repository hosting, CI/CD pipelines, issue tracking, and a container registry in one application.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -14,33 +14,27 @@ GitLab is a complete DevOps platform that provides source code management, CI/CD
 | **Category** | CI/CD |
 | **Default Image** | `gitlab/gitlab-ce:latest` |
 | **Application Port** | `80` |
-| **SSH Port** | `22` |
+| **SSH Port** | `22` (optional, see below) |
 | **Default CPU** | 2048 (Fargate) |
 | **Default Memory** | 4096 MB (Fargate) |
 | **Default Instance** | t3.medium (EC2) |
 | **Health Check Path** | `/users/sign_in` |
-| **Health Check Grace** | 900 seconds (15 min) |
+| **Health Check Grace** | 900 seconds (application default) |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | Yes (via OmniAuth) |
+| **Supported Auth Modes** | `application-oidc` (default), `alb-oidc`, `none` |
 | **Database Required** | Yes (PostgreSQL) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Git repository hosting
-- Built-in CI/CD pipelines
-- Container registry
-- Issue tracking and project management
-- Code review with merge requests
-- Security scanning (SAST, DAST, dependency scanning)
-- Wiki and documentation
-- Package registry (npm, Maven, NuGet, PyPI)
-- Kubernetes integration
-- Auto DevOps
+- Git repository hosting and merge requests
+- CI/CD pipelines (runners are deployed separately)
+- Container and package registries
+- Issues, wikis, and project management
 
-**Note:** GitLab CE (Community Edition) is deployed. Some features require GitLab Premium/Ultimate.
+CloudForge deploys GitLab Community Edition (`gitlab/gitlab-ce`). Some features require GitLab Premium or Ultimate.
 
 ---
 
@@ -49,14 +43,15 @@ GitLab is a complete DevOps platform that provides source code management, CI/CD
 | Port | Protocol | Direction | Feature Flag | Description |
 |------|----------|-----------|--------------|-------------|
 | 22 | TCP | Inbound | `enableSsh` | Git SSH |
-| 5050 | TCP | Inbound | `enableDockerRegistry` | Container Registry |
+| 5050 | TCP | Inbound | `enableRegistry` | Container Registry |
 | 9090 | TCP | Inbound | `enableMetrics` | Prometheus Metrics |
 
-**Example enabling all optional ports:**
+`enableRegistry` is not a recognized deployment-context key, so port 5050 cannot currently be opened through the deployment context.
+
+**Example:**
 ```json
 {
   "enableSsh": true,
-  "enableDockerRegistry": true,
   "enableMetrics": true
 }
 ```
@@ -65,20 +60,17 @@ GitLab is a complete DevOps platform that provides source code management, CI/CD
 
 ## Database Requirements
 
-GitLab **requires** a PostgreSQL database.
+GitLab requires a PostgreSQL database. The interactive deployer and `CloudForgeDeployment` enable `provisionDatabase` automatically when it is not set. If a context is synthesized without it, GitLab falls back to the image's embedded PostgreSQL, which is suitable only for a single development instance.
 
 | Property | Value |
 |----------|-------|
-| Engine | PostgreSQL 16+ |
-| Instance Class | db.t3.medium (default) |
+| Engine | PostgreSQL 16 or later |
+| Instance Class | `db.t3.medium` (default) |
 | Storage | 50 GB (default) |
 | Database Name | `gitlabhq_production` |
 | Backup Retention | 30 days |
 
-**Database Parameters:**
-- `max_connections`: 300
-- `shared_buffers`: Optimized for instance class
-- `work_mem`: 16MB
+**Database parameters** include `max_connections=300`, `shared_buffers={DBInstanceClassMemory/4096}`, `effective_cache_size={DBInstanceClassMemory*3/4096}`, `work_mem=16MB`, `maintenance_work_mem=256MB`, and `random_page_cost=1.1`.
 
 ---
 
@@ -86,22 +78,19 @@ GitLab **requires** a PostgreSQL database.
 
 ### Supported Auth Modes
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `application-oidc` | Available | Native OIDC via OmniAuth OpenID Connect |
-| `alb-oidc` | Available | ALB-level authentication |
-| `none` | Available | Local accounts only |
+| Mode | Description |
+|------|-------------|
+| `application-oidc` | GitLab signs users in through OmniAuth OpenID Connect (default) |
+| `alb-oidc` | The load balancer authenticates users before requests reach GitLab |
+| `none` | GitLab local accounts only |
 
 ### OIDC Integration Details
 
-GitLab uses **OmniAuth OpenID Connect** configured via `gitlab.rb`.
+With `application-oidc`, CloudForge adds an OmniAuth `openid_connect` provider to `GITLAB_OMNIBUS_CONFIG`:
 
-**Features:**
-- Auto-create users on first login
-- Group synchronization (GitLab Premium/Ultimate)
-- Admin role assignment
-- PKCE support
-- Block external OAuth sign-ins option
+- Users are created on first sign-in (`omniauth_block_auto_created_users = false`) and linked to existing accounts by email (`omniauth_auto_link_user`).
+- PKCE is enabled according to the OIDC provider configuration.
+- Group synchronization and admin-role assignment are not configured. Grant administrator rights with the GitLab Rails console or the admin UI.
 
 **Callback Path:** `/users/auth/openid_connect/callback`
 
@@ -109,17 +98,18 @@ GitLab uses **OmniAuth OpenID Connect** configured via `gitlab.rb`.
 
 ## Environment Variables
 
-CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
+CloudForge configures GitLab through the `GITLAB_OMNIBUS_CONFIG` environment variable:
 
 | Setting | Description |
 |---------|-------------|
-| `external_url` | Full external URL |
-| `nginx['listen_port']` | Internal port (80) |
-| `nginx['listen_https']` | Disabled (ALB terminates TLS) |
-| `nginx['proxy_set_headers']` | X-Forwarded headers |
-| `postgresql['enable']` | Embedded PostgreSQL (false when using RDS) |
-| `gitlab_rails['db_*']` | Database connection settings |
-| `redis['enable']` | Embedded Redis for caching |
+| `external_url` | External URL |
+| `nginx['listen_port']` | `80` |
+| `nginx['listen_https']` | `false` (TLS terminates at the load balancer) |
+| `nginx['real_ip_*']`, `nginx['proxy_set_headers']` | Trust `X-Forwarded-*` headers from private address ranges |
+| `gitlab_rails['monitoring_whitelist']` | `['0.0.0.0/0', '::/0']` |
+| `postgresql['enable']` | `false` when an RDS database is provisioned, otherwise `true` |
+| `gitlab_rails['db_*']` | RDS connection settings; the password is read from `GITLAB_DATABASE_PASSWORD`, injected from Secrets Manager |
+| `redis['enable']` | `true` (embedded Redis) |
 
 ---
 
@@ -131,7 +121,7 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
 | Data Path | `/var/opt/gitlab` |
 | EFS Path | `/gitlab` |
 | Volume Name | `gitlabData` |
-| Container User | `null` (runs as root) |
+| Container User | Not set (the image runs as root) |
 | EFS Permissions | `755` |
 
 ### EC2
@@ -145,21 +135,20 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
 
 ## Deployment Context Examples
 
-### Development - Minimal Setup
+### Development
 
 ```json
 {
   "stackName": "GitLab-Dev",
   "applicationId": "gitlab",
   "applicationName": "GitLab Dev",
-  "description": "GitLab development environment",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -173,17 +162,14 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
 }
 ```
 
-**Cost estimate:** ~$80/month
-
-### Development - With Database and SSH
+### Development with Database, SSH, and OIDC
 
 ```json
 {
   "stackName": "GitLab-Dev-Full",
   "applicationId": "gitlab",
   "applicationName": "GitLab Dev",
-  "description": "GitLab with PostgreSQL and SSH",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -218,17 +204,16 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
 }
 ```
 
-**Cost estimate:** ~$180/month
+### Production
 
-### Production - Full DevOps Platform
+Repository data and the embedded Redis are local to each instance, so run a single instance.
 
 ```json
 {
   "stackName": "GitLab-Production",
   "applicationId": "gitlab",
   "applicationName": "GitLab",
-  "description": "Production GitLab with all features",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -248,9 +233,8 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
   "cognitoMfaMethod": "totp",
 
   "instanceType": "t3.large",
-  "minInstanceCapacity": 2,
-  "maxInstanceCapacity": 4,
-  "enableAutoScaling": true,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
 
   "provisionDatabase": true,
   "databaseEngine": "postgres",
@@ -262,11 +246,9 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
   "databaseBackupRetentionDays": 30,
 
   "enableSsh": true,
-  "enableDockerRegistry": true,
   "enableMetrics": true,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "auditManagerEnabled": true,
@@ -282,8 +264,6 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
 }
 ```
 
-**Cost estimate:** ~$600/month
-
 ---
 
 ## Health Check Configuration
@@ -291,33 +271,34 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
 | Property | Default | Description |
 |----------|---------|-------------|
 | Path | `/users/sign_in` | Health check endpoint |
-| Grace Period | **900 seconds** | Extended for database migrations |
+| Grace Period | 900 seconds | GitLab's application default, to allow for database migrations |
 | Interval | 30 seconds | Time between checks |
 | Timeout | 5 seconds | Response timeout |
 
-**Important:** GitLab requires a longer health check grace period (15 minutes) due to database migrations and initial setup.
+GitLab's first start runs database migrations and service initialization, so its default grace period is 900 seconds rather than the usual 300. Setting `healthCheckGracePeriod` overrides it.
 
 ---
 
 ## Compliance Considerations
 
-### SOC2
+Setting `complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for those frameworks. It does not certify the deployment.
 
-**User Responsibilities:**
-- [ ] Enable audit logging (`gitlab_rails['audit_events_enabled'] = true`)
-- [ ] Configure secret scanning
-- [ ] Enable branch protection on production branches
-- [ ] Require code reviews (minimum 1 approver)
-- [ ] Enable signed commits
-- [ ] Configure session timeouts
-- [ ] Enable 2FA for all users
+### SOC 2
+
+Controls you configure in GitLab:
+- Audit events
+- Secret scanning
+- Protected branches and required approvals
+- Signed commits
+- Session timeouts
+- Two-factor authentication
 
 ### GDPR
 
-**User Responsibilities:**
-- [ ] User consent for profile data
-- [ ] Data export capability
-- [ ] Right to erasure procedures
+Controls you configure in GitLab and your processes:
+- Consent for profile data
+- Data export
+- Erasure procedures
 
 ---
 
@@ -325,23 +306,19 @@ CloudForge configures GitLab via `GITLAB_OMNIBUS_CONFIG` environment variable:
 
 ### 1. Initial Login
 
-1. Navigate to `https://gitlab.your-domain.com`
-2. Set root password (first access) or use OIDC
-3. Create initial admin account
+1. Open `https://gitlab.example.com` (your configured FQDN).
+2. Sign in as `root`. Recent GitLab images generate the initial password in `/etc/gitlab/initial_root_password` inside the container.
+3. With `application-oidc`, sign in through OIDC and grant administrator rights to the appropriate users.
 
 ### 2. Configure Container Registry
 
-If `enableDockerRegistry: true`:
-
-1. **Admin** > **Settings** > **Container Registry**
-2. Enable registry
-3. Configure storage backend (S3 recommended)
+CloudForge does not configure GitLab's container registry. To use it, set `registry_external_url` and a storage backend (for example S3) in the Omnibus configuration.
 
 ### 3. Configure CI/CD Runners
 
-1. **Admin** > **Runners**
-2. Register GitLab Runner
-3. Configure executor (Docker, Kubernetes, etc.)
+1. Go to **Admin** > **CI/CD** > **Runners**.
+2. Register a GitLab Runner.
+3. Configure its executor (for example Docker or Kubernetes).
 
 ---
 
@@ -349,18 +326,15 @@ If `enableDockerRegistry: true`:
 
 ### GitLab takes too long to start
 
-GitLab requires significant startup time (10-15 minutes) for:
-- Database migrations
-- Asset compilation
-- Service initialization
+The first start can take 10 to 15 minutes for database migrations and service initialization.
 
-Monitor logs: `/var/log/gitlab/gitlab-rails/production.log`
+Monitor `/var/log/gitlab/gitlab-rails/production.log`.
 
 ### Container Registry not accessible
 
-1. Verify `enableDockerRegistry: true`
-2. Check security group allows port 5050
-3. Verify DNS resolution
+1. Confirm the registry is configured in the Omnibus configuration.
+2. Check that the security group allows port 5050 (see Optional Ports).
+3. Verify DNS resolution.
 
 ---
 

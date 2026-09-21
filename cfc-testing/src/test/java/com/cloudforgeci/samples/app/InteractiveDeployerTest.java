@@ -507,7 +507,7 @@ class InteractiveDeployerTest {
      * {@link InteractiveDeployer#maybePrintManagerHint} falls through to {@code
      * ApplicationPropertyLoader.resolve("cfc.manager.url")} whenever {@code
      * PreferredUrlResolver.preferredUrl(outputs)} can't resolve one from the deploy's own CFN
-     * outputs (empty/null {@code outputs} — the real case for the AWS {@code cdk deploy}
+     * outputs (empty/null {@code outputs} — the case for the AWS {@code cdk deploy}
      * subprocess paths, per that method's own javadoc). Uses the system-property precedence tier
      * ({@code resolve()}'s own doc: env → system property → classpath file) rather than the env
      * tier, since {@code ApplicationPropertyLoader}'s env-override test hook is package-private to

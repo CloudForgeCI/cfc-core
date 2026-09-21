@@ -429,6 +429,27 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
         return "JOOMLA_ADMIN_PASSWORD";
     }
 
+    @Override
+    public String autoAdminEmailEnvVar() {
+        return "JOOMLA_ADMIN_EMAIL";
+    }
+
+    /** The default {@code CMD} of {@code joomla:5-php8.2-apache}; see {@link
+     *  com.cloudforge.core.interfaces.ApplicationSpec#defaultContainerCommand} for why specs only
+     *  override this for images whose default command is known. */
+    @Override
+    public List<String> defaultContainerCommand() {
+        return List.of("apache2-foreground");
+    }
+
+    /** The entrypoint of {@code joomla:5-php8.2-apache}, which runs its first-run setup (copying
+     *  Joomla's source, waiting on the database) only when {@code $1} matches {@code apache2*};
+     *  see {@link com.cloudforge.core.interfaces.ApplicationSpec#defaultContainerEntrypoint()}. */
+    @Override
+    public String defaultContainerEntrypoint() {
+        return "/entrypoint.sh";
+    }
+
     // ========== OIDC Support ==========
 
     @Override

@@ -77,12 +77,32 @@ public final class SecurityRules {
     String frameworksConfig = ctx.cfc.complianceFrameworks();
 
     // Parse enabled frameworks into a set for fast lookup
-    Set<String> enabledFrameworks = (frameworksConfig == null || frameworksConfig.trim().isEmpty())
-        ? Collections.emptySet()
-        : Arrays.stream(frameworksConfig.split(","))
-            .map(String::trim)
-            .map(String::toUpperCase)
-            .collect(java.util.stream.Collectors.toSet());
+    Set<String> enabledFrameworks = new LinkedHashSet<>(
+        (frameworksConfig == null || frameworksConfig.trim().isEmpty())
+            ? Collections.emptySet()
+            : Arrays.stream(frameworksConfig.split(","))
+                .map(String::trim)
+                .map(String::toUpperCase)
+                .collect(java.util.stream.Collectors.toSet()));
+
+    // See DeploymentConfig#complianceFrameworksRawOverride's own javadoc -- an on-demand advisory
+    // check's escape hatch for tokens with no ComplianceFrameworkType entry at all (e.g.
+    // "ISO-27001", or "AWS-BEST-PRACTICES" for cdk-nag's own generic fallback pack below), read
+    // directly off the construct tree rather than through DeploymentContext/DeploymentConfig
+    // since it deliberately can't round-trip through either. Validated against a fixed charset
+    // (rather than trusted verbatim) since it never passes through ComplianceFrameworkType's own
+    // enum parsing the way the comma-separated field above does -- every valid token this feature
+    // actually offers (see ComplianceService#checkableFrameworks) is already upper-case
+    // letters/digits/hyphens, so anything else is dropped rather than logged or installed.
+    Object rawOverride = ctx.getNode().tryGetContext("complianceFrameworksRawOverride");
+    if (rawOverride instanceof String rawOverrideText && !rawOverrideText.isBlank()) {
+        for (String token : rawOverrideText.split(",")) {
+            String candidate = token.trim().toUpperCase(java.util.Locale.ROOT);
+            if (candidate.matches("[A-Z0-9-]{1,64}")) {
+                enabledFrameworks.add(candidate);
+            }
+        }
+    }
 
     // CDK-nag validation only runs for PRODUCTION with enabled frameworks
     if (ctx.security == SecurityProfile.PRODUCTION && !enabledFrameworks.isEmpty()) {
@@ -166,11 +186,11 @@ public final class SecurityRules {
       if (pack != null) {
         Aspects.of(ctx.getNode().getRoot()).add(pack);
         appliedCount++;
-        LOG.info("  ✓ Applied cdk-nag pack for " + framework);
       }
     }
 
-    LOG.info("Applied " + appliedCount + " cdk-nag validation packs");
+    LOG.info("Applied " + appliedCount + " cdk-nag validation pack(s) across "
+        + enabledFrameworks.size() + " enabled framework(s)");
   }
 
   /**
@@ -182,14 +202,11 @@ public final class SecurityRules {
    * @since 3.1.0
    */
   private static NagPack mapFrameworkToNagPack(String framework, boolean enforce) {
-    // Report formats for compliance auditing -- also what actually makes ComplianceMode.ENFORCE
-    // block anything: cdk-nag's own Annotations calls alone never do (app.synth() doesn't throw
-    // for them), so CloudForgeSynthesizer reads the generated <Pack>-<Stack>-NagReport.json file
-    // back off disk after synth instead (see NagReportReader). Deliberately NOT additionalLoggers
-    // -- registering a second INagLogger alongside cdk-nag's own default AnnotationsLogger
-    // triggers a jsii/cdk-nag runtime bug (a StackOverflowError from reentrant kernel calls,
-    // independent of what the extra logger's callbacks do). The built-in report logger these
-    // formats enable doesn't go through that path.
+    // Report formats for compliance auditing. These reports are also how ComplianceMode.ENFORCE
+    // blocks: app.synth() does not throw on cdk-nag annotations, so CloudForgeSynthesizer reads
+    // <Pack>-<Stack>-NagReport.json after synthesis (see NagReportReader). additionalLoggers is
+    // not used because registering a second INagLogger triggers a jsii/cdk-nag StackOverflowError
+    // from reentrant kernel calls; the built-in report logger avoids that path.
     var reportFormats = List.of(NagReportFormat.JSON, NagReportFormat.CSV);
 
     return switch (framework) {
@@ -209,14 +226,14 @@ public final class SecurityRules {
           .reportFormats(reportFormats)
           .build();
       // FEDRAMP: Handled by existing FedRampRules.java plugin only
-      // Not integrated with cdk-nag to avoid conflicts (future epic)
+      // Not integrated with cdk-nag to avoid conflicts with FedRampRules.
       case "FEDRAMP", "FEDRAMPHIGH" -> {
-        LOG.info("  - Skipping cdk-nag for " + framework + " (uses existing FedRampRules.java)");
+        LOG.info("  - Skipping cdk-nag for a FedRAMP framework (uses existing FedRampRules.java)");
         yield null;
       }
       // Custom frameworks: fallback to AWS Solutions best practices
       default -> {
-        LOG.info("  - Applying AwsSolutionsChecks (fallback) for custom framework: " + framework);
+        LOG.info("  - Applying AwsSolutionsChecks (fallback) for an unrecognized/custom framework");
         yield AwsSolutionsChecks.Builder.create()
             .logIgnores(!enforce)
             .reports(true)

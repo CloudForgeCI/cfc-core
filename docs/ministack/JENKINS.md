@@ -23,7 +23,7 @@ Naming (from `stackName` in `deployment-context.json`):
 |---------|---------|----------------------------------|
 | MiniStack CloudFormation stack | `<stackName>-ministack` | `my-jenkins-ministack` |
 | Canonical template | `cdk.out/<stackName>.template.json` | `cdk.out/my-jenkins.template.json` |
-| CloudWatch log group | `/aws/ecs/<stackName>/fargate/<profile>` | `/aws/ecs/my-jenkins/fargate/dev` |
+| CloudWatch log group | `/aws/ecs/<stackName>/fargate/<securityProfile>` | `/aws/ecs/my-jenkins/fargate/dev` |
 | Host bind mount | `.ministack-volumes/<stackName>/jenkinsHome` | `.ministack-volumes/my-jenkins/jenkinsHome` |
 | Log stream prefix | `<applicationId>/...` | `jenkins/...` |
 
@@ -35,12 +35,13 @@ Same as [Setup](SETUP.md). From the repository root:
 
 ```bash
 mvn clean install -DskipTests
-cd cfc-testing && java -cp "target/classes:target/dependency/*" \
+mvn -f cfc-testing package -Dmaven.test.skip=true
+
+# Start MiniStack (ministack → start)
+cd cfc-testing
+java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.samples.app.InteractiveDeployer --platform
 curl -s http://localhost:4566/_ministack/health
-
-cd cfc-testing
-mvn package -Dmaven.test.skip=true
 ```
 
 ---
@@ -53,11 +54,11 @@ Save as `cfc-testing/deployment-context.json` for a minimal Jenkins Fargate depl
 {
   "stackName": "my-jenkins",
   "applicationId": "jenkins",
+  "environment": "dev",
   "runtime": "FARGATE",
   "topology": "application-service",
-  "securityProfile": "dev",
+  "securityProfile": "DEV",
   "networkMode": "public",
-  "domain": "",
   "enableSsl": false,
   "authMode": "none",
   "cpu": 1024,
@@ -68,10 +69,9 @@ Save as `cfc-testing/deployment-context.json` for a minimal Jenkins Fargate depl
   "wafEnabled": false,
   "cloudfrontEnabled": false,
   "enableMonitoring": false,
-  "complianceFrameworks": "",
+  "complianceFrameworks": [],
   "complianceMode": "DISABLED",
-  "region": "us-east-1",
-  "env": "dev"
+  "region": "us-east-1"
 }
 ```
 
@@ -80,7 +80,8 @@ Save as `cfc-testing/deployment-context.json` for a minimal Jenkins Fargate depl
 | `stackName` | your choice (e.g. `my-jenkins`) | Used for templates, log group, bind-mount path |
 | `enableAutoScaling` | `false` | Application Auto Scaling is stripped locally anyway |
 | `minInstanceCapacity` / `maxInstanceCapacity` | `1` / `1` | Single task — avoids port conflicts on `:8080` |
-| `domain` / `authMode` | empty / `none` | Simplest path for first deploy |
+| `domain` / `authMode` | omitted / `none` | Simplest path for first deploy |
+| `wafEnabled` / `complianceFrameworks` | `false` / `[]` | WAF and compliance resources are blocked by MiniStack preflight |
 
 ---
 
@@ -88,23 +89,20 @@ Save as `cfc-testing/deployment-context.json` for a minimal Jenkins Fargate depl
 
 ```bash
 cd cfc-testing
-export AWS_ENDPOINT_URL=http://localhost:4566
-export AWS_DEFAULT_REGION=us-east-1
-
 java -cp "target/classes:target/dependency/*" \
   com.cloudforgeci.samples.app.InteractiveDeployer
-# Choose 6 — Deploy to MiniStack
+# Choose 6 (Deploy to MiniStack)
 ```
 
-With `deployment-context.json` present, the deployer skips prompts and shows the menu — choose **6**.
+With `deployment-context.json` present, the deployer skips prompts and shows the menu; choose **6**.
 
 Expected artifacts in `cdk.out/` (replace `<stackName>` with your value):
 
-- `<stackName>.template.json` — canonical AWS template
-- `<stackName>.ministack.template.json` — adapted template deployed to MiniStack
-- `<stackName>.ministack-adaptations.json` — audit of local changes
+- `<stackName>.template.json`: canonical AWS template
+- `<stackName>.ministack.template.json`: adapted template deployed to MiniStack
+- `<stackName>.ministack-adaptations.json`: audit of local changes
 
-Expected stack outputs (names may vary slightly):
+Expected stack outputs:
 
 | Output | Example | Use |
 |--------|---------|-----|
@@ -127,8 +125,6 @@ export MINISTACK_STACK="${STACK_NAME}-ministack"
 export LOG_GROUP="/aws/ecs/${STACK_NAME}/fargate/dev"
 export VOLUME_HOME=".ministack-volumes/${STACK_NAME}/jenkinsHome"
 ```
-
-Interactive Deployer prompts also accept any stack name matching `^[A-Za-z][A-Za-z0-9-]*$`.
 
 ---
 
@@ -177,15 +173,7 @@ Use it:
 aws --profile ministack cloudformation describe-stacks --stack-name "$MINISTACK_STACK"
 ```
 
-### Option C — Env only (no named profile)
-
-Same as Option A: export `AWS_ENDPOINT_URL` (and dummy credentials). Prefer that over per-command `--endpoint-url` so CLI and Java stay on one key.
-
-```bash
-export AWS_ENDPOINT_URL=http://localhost:4566
-export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1
-aws cloudformation describe-stacks --stack-name "$MINISTACK_STACK"
-```
+Prefer `AWS_ENDPOINT_URL` over per-command `--endpoint-url` so the AWS CLI and the Java deployer use the same setting.
 
 ### Sanity check
 
@@ -207,7 +195,7 @@ CloudForge creates a log group for Fargate container output:
 /aws/ecs/<stackName>/fargate/<securityProfile>
 ```
 
-With `securityProfile: dev` that is `$LOG_GROUP` → `/aws/ecs/<stackName>/fargate/dev`.
+With `securityProfile: DEV` that is `$LOG_GROUP` → `/aws/ecs/<stackName>/fargate/dev`. The explicit name is set only when the security profile destroys logs on stack deletion (DEV); profiles that retain logs get a CDK-generated name, so look it up with `describe-log-groups`.
 
 ECS uses the `awslogs` driver with stream prefix **`jenkins`** (`applicationId`). Jenkins prints first-run setup text and password hints to **stdout**, which lands in this log group on AWS and in MiniStack.
 
@@ -303,7 +291,7 @@ aws --profile ministack logs get-log-events \
 
 ---
 
-## 8. Initial admin password — all methods
+## 8. Initial admin password
 
 Jenkins writes the password to **`/var/jenkins_home/secrets/initialAdminPassword`** inside the container. On first boot it also prints guidance to the console (→ CloudWatch Logs).
 
@@ -334,7 +322,7 @@ If permission denied, fix ownership once (Jenkins runs as uid **1000**):
 sudo chown -R 1000:1000 "${VOLUME_HOME}"
 ```
 
-### Method 3 — Docker logs (ground truth)
+### Method 3 — Docker logs
 
 ```bash
 CONTAINER=$(docker ps --filter ancestor=jenkins/jenkins:lts --format '{{.Names}}' | head -1)
@@ -344,7 +332,7 @@ docker logs "$CONTAINER" 2>&1 | tail -80
 Search for the password line:
 
 ```bash
-docker logs "$CONTAINER" 2>&1 | rg -i 'password|unlock|initial'
+docker logs "$CONTAINER" 2>&1 | grep -iE 'password|unlock|initial'
 ```
 
 ### Method 4 — Exec into the container
@@ -352,34 +340,6 @@ docker logs "$CONTAINER" 2>&1 | rg -i 'password|unlock|initial'
 ```bash
 CONTAINER=$(docker ps --filter ancestor=jenkins/jenkins:lts --format '{{.Names}}' | head -1)
 docker exec "$CONTAINER" cat /var/jenkins_home/secrets/initialAdminPassword
-```
-
-### Method 5 — ECS Exec (if enabled in template)
-
-CloudForge enables ECS Exec on Fargate services. Through MiniStack:
-
-```bash
-CLUSTER=$(aws --profile ministack ecs list-clusters \
-  --query 'clusterArns[0]' --output text)
-
-SERVICE=$(aws --profile ministack ecs list-services --cluster "$CLUSTER" \
-  --query 'serviceArns[0]' --output text)
-
-TASK=$(aws --profile ministack ecs list-tasks --cluster "$CLUSTER" \
-  --service-name "$SERVICE" --query 'taskArns[0]' --output text)
-
-CONTAINER=$(aws --profile ministack ecs describe-task-definition \
-  --task-definition "$(aws --profile ministack ecs describe-services \
-    --cluster "$CLUSTER" --services "$SERVICE" \
-    --query 'services[0].taskDefinition' --output text)" \
-  --query 'taskDefinition.containerDefinitions[0].name' --output text)
-
-aws --profile ministack ecs execute-command \
-  --cluster "$CLUSTER" \
-  --task "$TASK" \
-  --container "$CONTAINER" \
-  --interactive \
-  --command "cat /var/jenkins_home/secrets/initialAdminPassword"
 ```
 
 ---
@@ -467,7 +427,7 @@ rm -rf "cfc-testing/${VOLUME_HOME}"
 | Empty `filter-log-events` | Task still starting or logs not shipped yet | Wait 1–3 min; try `docker logs` |
 | `Log group not found` | Wrong `STACK_NAME` or stack not deployed | Verify `stackName` in context; `describe-log-groups --log-group-name-prefix /aws/ecs` |
 | `8080 already allocated` | Old ECS container still running | `docker stop` container on 8080; redeploy |
-| Rollback on deploy | Unsupported resources (historically autoscaling) | Rebuild after adapter updates; use `enableAutoScaling: false` |
+| Rollback or preflight block on deploy | Unsupported resource types in the canonical template | Check the preflight message and adaptation report; disable WAF/compliance features for MiniStack |
 | Permission denied on bind mount | Host dir not owned by uid 1000 | `sudo chown -R 1000:1000 "${VOLUME_HOME}"` |
 
 More: [Troubleshooting](TROUBLESHOOTING.md)
@@ -477,5 +437,5 @@ More: [Troubleshooting](TROUBLESHOOTING.md)
 ## Next steps
 
 - [Verify the full stack](VERIFICATION.md)
-- [Add domain, TLS, or auth](ADVANCED.md)
+- [Add domain or TLS](ADVANCED.md#incremental-deployments)
 - [Interactive Deployer options](../guides/INTERACTIVE_DEPLOYER.md)

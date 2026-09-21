@@ -1,35 +1,27 @@
 # Mattermost Application Guide
 
-Mattermost is an open-source, self-hosted team collaboration platform providing secure messaging, file sharing, and integrations for enterprise teams.
+Mattermost is an open-source, self-hosted team messaging platform with file sharing and integrations.
 
-**Status**: Verified
+**Status**: Verified (deployed and exercised end to end by maintainers)
 
 ---
 
 ## Editions Overview
 
-CloudForge supports two Mattermost editions:
+CloudForge provides two Mattermost application IDs:
 
 | Edition | Application ID | License | OIDC Method | Single Logout |
 |---------|---------------|---------|-------------|---------------|
-| **Team (Free)** | `mattermost-team` | None required | GitLab OAuth | ❌ No |
-| **Enterprise** | `mattermost-enterprise` | Required for enterprise features | Native OpenID Connect | ✅ Yes |
+| **Team (Free)** | `mattermost-team` | None required | GitLab OAuth provider | No |
+| **Enterprise** | `mattermost-enterprise` | Required for enterprise features | Native OpenID Connect | Yes |
 
 ### Which Edition Should I Use?
 
-**Use `mattermost-team` (Free) if:**
-- You want a free, open-source solution
-- Single logout is not a requirement
-- You don't need AD/LDAP group sync or compliance exports
+**Use `mattermost-team` if** you do not have a Mattermost license and do not need single logout, AD/LDAP group sync, or compliance exports.
 
-**Use `mattermost-enterprise` if:**
-- You need single logout (logging out of Mattermost also logs out of Cognito)
-- You require SAML 2.0 support
-- You need AD/LDAP group synchronization
-- You need compliance exports or high availability clustering
-- You have or plan to purchase a Mattermost license
+**Use `mattermost-enterprise` if** you need single logout (signing out of Mattermost also ends the Cognito session), SAML, AD/LDAP group synchronization, compliance exports, or clustering, and you have or plan to buy a Mattermost license.
 
-> **Note:** Both editions use the same Enterprise Edition Docker image. The Team edition simply runs without a license, using GitLab OAuth for OIDC compatibility. Enterprise features are unlocked by uploading a license.
+Both IDs use the `mattermost/mattermost-enterprise-edition` image. Without a license it runs with Team Edition features; `mattermost-team` signs users in through Mattermost's GitLab OAuth provider pointed at the OIDC provider. Enterprise features are enabled by uploading a license.
 
 ---
 
@@ -50,7 +42,7 @@ CloudForge supports two Mattermost editions:
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | Yes (GitLab OAuth) |
+| **Supported Auth Modes** | `application-oidc` (default), `alb-oidc`, `none` |
 | **Database Required** | Yes (PostgreSQL) |
 
 ### Mattermost Enterprise
@@ -68,26 +60,17 @@ CloudForge supports two Mattermost editions:
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | Yes (Native OpenID Connect) |
+| **Supported Auth Modes** | `application-oidc` (default), `alb-oidc`, `none` |
 | **Database Required** | Yes (PostgreSQL) |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Real-time team messaging
-- Direct messages and group channels
-- File sharing with preview
-- Audio/video calls (with plugins)
-- Webhooks and bot integrations
-- Mobile apps (iOS, Android)
-- Desktop apps (Windows, Mac, Linux)
-- LDAP/AD integration
-- Custom emojis and branding
-- Message search and archiving
-- Compliance exports
-
-**Note:** The Enterprise Edition image runs in "Team Edition" mode without a license, providing core features. Enterprise features require a license.
+- Channels, direct messages, and file sharing
+- Webhooks, slash commands, bots, and plugins
+- Desktop and mobile clients
+- LDAP/AD integration and compliance exports (licensed features)
 
 ---
 
@@ -100,7 +83,7 @@ CloudForge supports two Mattermost editions:
 | 587 | TCP | Outbound | `enableSmtp` | SMTP Email (STARTTLS) |
 | 465 | TCP | Outbound | `enableSmtps` | SMTP Email (TLS) |
 
-> **Note:** Clustering is not available in Team Edition.
+Clustering is not available without a license.
 
 ### Mattermost Enterprise
 
@@ -118,33 +101,23 @@ CloudForge supports two Mattermost editions:
 }
 ```
 
-**Example enabling clustering (High Availability):**
-```json
-{
-  "enableClustering": true
-}
-```
+The SMTP entries describe outbound traffic. CloudForge adds security-group rules only for inbound optional ports, so outbound SMTP depends on the security group's egress configuration.
 
 ---
 
 ## Database Requirements
 
-Mattermost **requires** a PostgreSQL database.
+Mattermost requires a PostgreSQL database. The interactive deployer and `CloudForgeDeployment` enable `provisionDatabase` automatically when it is not set; set it explicitly in hand-written contexts.
 
 | Property | Value |
 |----------|-------|
-| Engine | PostgreSQL 14+ |
-| Instance Class | db.t3.small (default) |
+| Engine | PostgreSQL 14 or later |
+| Instance Class | `db.t3.small` (default) |
 | Storage | 30 GB (default) |
 | Database Name | `mattermost` |
 | Backup Retention | 14 days |
 
-**Database Parameters:**
-- `max_connections`: 200
-- `shared_buffers`: Optimized for instance class
-- `work_mem`: 16MB
-
-When deploying Mattermost, CloudForge automatically provisions RDS PostgreSQL.
+**Database parameters:** `max_connections=200`, `shared_buffers={DBInstanceClassMemory/4096}`, `work_mem=8MB`, `maintenance_work_mem=128MB`, `log_statement=ddl`.
 
 ---
 
@@ -154,62 +127,57 @@ When deploying Mattermost, CloudForge automatically provisions RDS PostgreSQL.
 
 | Mode | Team Edition | Enterprise Edition | Description |
 |------|--------------|-------------------|-------------|
-| `application-oidc` | ✅ GitLab OAuth | ✅ Native OIDC | Application handles OIDC directly |
-| `alb-oidc` | ✅ | ✅ | ALB-level authentication |
-| `none` | ✅ | ✅ | No SSO (local accounts only) |
+| `application-oidc` | GitLab OAuth provider | Native OIDC | Mattermost handles sign-in (default) |
+| `alb-oidc` | Yes | Yes | The load balancer authenticates users |
+| `none` | Yes | Yes | Mattermost local accounts only |
 
 ### OIDC Integration Details
 
 #### Mattermost Team (Free) - GitLab OAuth
 
-Team Edition uses the **GitLab OAuth provider** (`MM_GITLABSETTINGS_*`) for OIDC compatibility. This works with any OAuth 2.0 / OpenID Connect provider including Cognito.
+`mattermost-team` configures Mattermost's GitLab OAuth provider (`MM_GITLABSETTINGS_*`) with the OIDC provider's endpoints, which lets the free edition sign users in through Cognito.
 
-**Features:**
-- Auto-create users on first login
-- Email-based account creation
-- Customizable login button text and color
-- OAuth 2.0 / OpenID Connect standard flow
+- Users are created on first sign-in.
+- The login button text and color are configurable.
 
 **Callback Path:** `/signup/gitlab/complete`
 
 **Limitations:**
-- ⚠️ **No single logout** - Logging out of Mattermost does NOT log out of Cognito
-- No automatic group synchronization (manual team membership)
-- No AD/LDAP sync in OIDC mode
-- Manual endpoint configuration (no discovery endpoint)
+- No single logout: signing out of Mattermost does not end the Cognito session.
+- No group synchronization; team membership is managed in Mattermost.
+- Endpoints are configured individually; the discovery document is not used.
 
 #### Mattermost Enterprise - Native OpenID Connect
 
-Enterprise Edition uses **native OpenID Connect** (`MM_OPENIDSETTINGS_*`) with full OIDC 1.0 support.
+`mattermost-enterprise` configures Mattermost's OpenID Connect provider (`MM_OPENIDSETTINGS_*`).
 
-**Features:**
-- Auto-create users on first login
-- ✅ **Single logout support** via `end_session_endpoint`
-- Discovery endpoint for automatic configuration
-- Customizable login button text and color
-- Standard OpenID Connect 1.0 compliance
+- Users are created on first sign-in.
+- Endpoints come from the provider's discovery document.
+- Single logout uses the provider's `end_session_endpoint`.
+- The login button text and color are configurable.
 
 **Callback Path:** `/signup/openid/complete`
 
 **Limitations:**
-- Requires Mattermost Enterprise or Professional license for full features
-- No automatic group synchronization (manual team membership)
+- Mattermost's OpenID Connect provider requires a Professional or Enterprise license.
+- No group synchronization; team membership is managed in Mattermost.
 
-**Note:** SAML support exists but OIDC is the verified and recommended approach.
+A SAML integration class (`MattermostSamlIntegration`) exists but is not the default and is incomplete.
 
 ---
 
 ## Environment Variables
 
-CloudForge automatically configures these environment variables:
+CloudForge sets these environment variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `MM_SERVICESETTINGS_SITEURL` | External URL (critical for OAuth) | `https://chat.example.com` |
-| `MM_SERVICESETTINGS_TRUSTEDPROXYIPHEADER` | Trust ALB headers | `X-Forwarded-For,X-Real-IP` |
-| `MM_SERVICESETTINGS_FORWARD80TO443` | Disable (ALB handles) | `false` |
+| `MM_SERVICESETTINGS_SITEURL` | External URL, required for OAuth redirects (set when an FQDN is configured) | `https://chat.example.com` |
+| `MM_SERVICESETTINGS_TRUSTEDPROXYIPHEADER` | Headers trusted from the load balancer | `X-Forwarded-For,X-Real-IP` |
+| `MM_SERVICESETTINGS_FORWARD80TO443` | Disabled; TLS terminates at the load balancer | `false` |
+| `MM_SERVICESETTINGS_WEBSOCKETURL` | Empty, so the site URL is used | `""` |
 | `MM_SQLSETTINGS_DRIVERNAME` | Database driver | `postgres` |
-| `MM_SQLSETTINGS_DATASOURCE` | Database connection | Injected via SSM |
+| `MM_SQLSETTINGS_DATASOURCE` | Complete connection URL, injected from an SSM parameter | |
 
 ### OIDC Variables - Team Edition (GitLab OAuth)
 
@@ -217,7 +185,7 @@ CloudForge automatically configures these environment variables:
 |----------|-------------|
 | `MM_GITLABSETTINGS_ENABLE` | Enable GitLab OAuth |
 | `MM_GITLABSETTINGS_ID` | OAuth client ID |
-| `MM_GITLABSETTINGS_SECRET` | OAuth client secret (via ECS secrets) |
+| `MM_GITLABSETTINGS_SECRET` | OAuth client secret, injected from Secrets Manager |
 | `MM_GITLABSETTINGS_AUTHENDPOINT` | Authorization endpoint |
 | `MM_GITLABSETTINGS_TOKENENDPOINT` | Token endpoint |
 | `MM_GITLABSETTINGS_USERAPIENDPOINT` | UserInfo endpoint |
@@ -231,7 +199,7 @@ CloudForge automatically configures these environment variables:
 |----------|-------------|
 | `MM_OPENIDSETTINGS_ENABLE` | Enable native OpenID Connect |
 | `MM_OPENIDSETTINGS_ID` | OIDC client ID |
-| `MM_OPENIDSETTINGS_SECRET` | OIDC client secret (via ECS secrets) |
+| `MM_OPENIDSETTINGS_SECRET` | OIDC client secret, injected from Secrets Manager |
 | `MM_OPENIDSETTINGS_DISCOVERYENDPOINT` | OIDC discovery endpoint |
 | `MM_OPENIDSETTINGS_SCOPE` | OIDC scopes (`openid profile email`) |
 | `MM_OPENIDSETTINGS_BUTTONTEXT` | Login button text |
@@ -261,23 +229,22 @@ CloudForge automatically configures these environment variables:
 
 ## Deployment Context Examples
 
-### Development - Minimal Setup (Team Edition)
+### Development (Team Edition)
 
-Quick Mattermost for testing (uses embedded database - not for production).
+A minimal configuration with the required PostgreSQL database.
 
 ```json
 {
   "stackName": "Mattermost-Dev",
   "applicationId": "mattermost-team",
   "applicationName": "Mattermost Dev",
-  "description": "Mattermost development environment",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -285,26 +252,23 @@ Quick Mattermost for testing (uses embedded database - not for production).
   "cpu": 1024,
   "memory": 2048,
 
+  "provisionDatabase": true,
+
   "enableMonitoring": true,
   "logRetentionDays": "7"
 }
 ```
 
-**Note:** Without RDS, Mattermost uses H2 embedded database (single instance only).
 
-**Cost estimate:** ~$40/month
 
-### Development - With Database (Team Edition)
-
-Team development with PostgreSQL database.
+### Development with OIDC (Team Edition)
 
 ```json
 {
   "stackName": "Mattermost-Dev-DB",
   "applicationId": "mattermost-team",
   "applicationName": "Mattermost Dev",
-  "description": "Mattermost with PostgreSQL",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -337,18 +301,13 @@ Team development with PostgreSQL database.
 }
 ```
 
-**Cost estimate:** ~$80/month
-
-### Staging - With Email (Enterprise Edition)
-
-Pre-production with SMTP for email notifications and single logout.
+### Staging with Email (Enterprise Edition)
 
 ```json
 {
   "stackName": "Mattermost-Staging",
   "applicationId": "mattermost-enterprise",
   "applicationName": "Mattermost Staging",
-  "description": "Mattermost staging with email",
   "environment": "staging",
 
   "runtime": "fargate",
@@ -372,7 +331,7 @@ Pre-production with SMTP for email notifications and single logout.
   "cpu": 1024,
   "memory": 2048,
   "minInstanceCapacity": 1,
-  "maxInstanceCapacity": 2,
+  "maxInstanceCapacity": 1,
 
   "provisionDatabase": true,
   "databaseEngine": "postgres",
@@ -385,7 +344,6 @@ Pre-production with SMTP for email notifications and single logout.
   "enableSmtp": true,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": true,
   "awsConfigEnabled": true,
   "wafEnabled": true,
 
@@ -395,19 +353,14 @@ Pre-production with SMTP for email notifications and single logout.
 }
 ```
 
-**Cost estimate:** ~$180/month
-
-### Production - SOC2 Compliance (Enterprise Edition)
-
-Full production deployment for enterprise teams with native OIDC and single logout.
+### Production with SOC 2 Controls (Enterprise Edition)
 
 ```json
 {
   "stackName": "Mattermost-Production",
   "applicationId": "mattermost-enterprise",
   "applicationName": "Mattermost",
-  "description": "Production Mattermost with SOC2 compliance",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -430,10 +383,8 @@ Full production deployment for enterprise teams with native OIDC and single logo
   "cognitoUserGroupName": "MattermostUsers",
 
   "instanceType": "t3.medium",
-  "minInstanceCapacity": 2,
-  "maxInstanceCapacity": 4,
-  "enableAutoScaling": true,
-  "cpuTargetUtilization": 60,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
 
   "provisionDatabase": true,
   "databaseEngine": "postgres",
@@ -447,7 +398,6 @@ Full production deployment for enterprise teams with native OIDC and single logo
   "enableSmtp": true,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "createConfigInfrastructure": true,
   "guardDutyEnabled": true,
@@ -463,25 +413,22 @@ Full production deployment for enterprise teams with native OIDC and single logo
 }
 ```
 
-**Cost estimate:** ~$450/month
+### Production with HIPAA Controls (Enterprise Edition)
 
-### Production - HIPAA (Healthcare) (Enterprise Edition)
-
-For healthcare teams communicating about PHI.
+For teams whose messages may contain PHI.
 
 ```json
 {
   "stackName": "Mattermost-HIPAA",
   "applicationId": "mattermost-enterprise",
   "applicationName": "Mattermost Secure",
-  "description": "HIPAA-compliant team messaging",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
   "topology": "application-service",
 
-  "domain": "secure.healthcare.com",
+  "domain": "secure.example.com",
   "subdomain": "chat",
   "enableSsl": true,
 
@@ -496,9 +443,8 @@ For healthcare teams communicating about PHI.
   "cognitoCreateGroups": true,
 
   "instanceType": "t3.medium",
-  "minInstanceCapacity": 2,
-  "maxInstanceCapacity": 6,
-  "enableAutoScaling": true,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
 
   "provisionDatabase": true,
   "databaseEngine": "postgres",
@@ -512,7 +458,6 @@ For healthcare teams communicating about PHI.
   "enableSmtp": true,
 
   "complianceFrameworks": "HIPAA,SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "createConfigInfrastructure": true,
   "guardDutyEnabled": true,
@@ -528,70 +473,9 @@ For healthcare teams communicating about PHI.
 }
 ```
 
-**Cost estimate:** ~$550/month
+### High Availability
 
-### High Availability - Clustering (Enterprise Edition)
-
-For large organizations requiring high availability. Requires Enterprise license.
-
-```json
-{
-  "stackName": "Mattermost-HA",
-  "applicationId": "mattermost-enterprise",
-  "applicationName": "Mattermost HA",
-  "description": "High availability Mattermost cluster",
-  "environment": "production",
-
-  "runtime": "ec2",
-  "securityProfile": "production",
-  "topology": "application-service",
-
-  "domain": "enterprise.example.com",
-  "subdomain": "chat",
-  "enableSsl": true,
-
-  "networkMode": "private-with-nat",
-  "region": "us-east-1",
-
-  "authMode": "application-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "mattermost-ha-yourcompany",
-  "cognitoMfaEnabled": true,
-  "cognitoMfaMethod": "totp",
-
-  "instanceType": "t3.large",
-  "minInstanceCapacity": 3,
-  "maxInstanceCapacity": 10,
-  "enableAutoScaling": true,
-  "cpuTargetUtilization": 50,
-
-  "provisionDatabase": true,
-  "databaseEngine": "aurora-postgresql",
-  "databaseVersion": "15",
-  "databaseInstanceClass": "db.r5.large",
-  "databaseAllocatedStorageGB": 100,
-  "databaseMultiAz": true,
-  "databaseName": "mattermost",
-  "databaseBackupRetentionDays": 30,
-
-  "enableSmtp": true,
-  "enableClustering": true,
-
-  "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": false,
-  "awsConfigEnabled": true,
-  "guardDutyEnabled": true,
-  "wafEnabled": true,
-  "albAccessLogging": true,
-
-  "enableMonitoring": true,
-  "enableEncryption": true,
-  "logRetentionDays": "730",
-  "retainStorage": true
-}
-```
-
-**Cost estimate:** ~$800+/month
+Running more than one Mattermost instance requires Mattermost's clustering feature, which needs an Enterprise license and `ClusterSettings` configuration. CloudForge does not set `MM_CLUSTERSETTINGS_*` variables, so the examples above use a single instance. The `enableClustering` flag only opens the gossip ports (8074 and 8075).
 
 ---
 
@@ -610,45 +494,36 @@ For large organizations requiring high availability. Requires Enterprise license
 
 ## Compliance Considerations
 
-### SOC2
+Setting `complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for those frameworks. It does not certify the deployment.
 
-**Automatic Controls:**
-- Encryption at rest (EBS/EFS/RDS)
-- Encryption in transit (TLS)
-- Network isolation (Security Groups)
+### SOC 2
+
+**Infrastructure controls CloudForge can configure:**
+- Encryption at rest (EBS, EFS, RDS) and in transit (TLS)
+- Network isolation with security groups
 - CloudWatch logging
 - Database backup retention
 
-**Use Cases:**
-- Audit logs for team communications
-- Access control via OIDC
-
-**User Responsibilities:**
-- [ ] Configure message retention policies
-- [ ] Enable compliance exports (Enterprise)
-- [ ] Set up audit logging
-- [ ] Configure data retention
+**Controls you configure in Mattermost:**
+- Message and data retention policies
+- Compliance exports (a licensed feature)
+- Audit logging
 
 ### HIPAA
 
-**Automatic Controls:**
-- All SOC2 controls
-- 6-year log retention
-- Enhanced encryption
-
-**User Responsibilities:**
-- [ ] Enable compliance exports
-- [ ] Configure DLP policies (Enterprise)
-- [ ] Disable public channels for PHI
-- [ ] Train users on PHI handling
+The HIPAA example sets `logRetentionDays` to 2190 (six years). Controls you configure in Mattermost and your processes:
+- Compliance exports
+- Data loss prevention policies (a licensed feature)
+- Restrictions on public channels for PHI
+- User training on PHI handling
 
 ### GDPR
 
-**User Responsibilities:**
-- [ ] Configure data retention policies
-- [ ] Enable user data export
-- [ ] Implement right to erasure procedures
-- [ ] Privacy policy in instance
+Controls you configure in Mattermost and your processes:
+- Data retention policies
+- User data export
+- Erasure procedures
+- A privacy policy for the instance
 
 ---
 
@@ -658,35 +533,34 @@ For large organizations requiring high availability. Requires Enterprise license
 
 After deployment with `authMode: "application-oidc"`:
 
-1. Navigate to `https://chat.your-domain.com`
-2. Click "Sign in with AWS Cognito"
-   - **Team Edition**: Uses GitLab OAuth provider (callback: `/signup/gitlab/complete`)
-   - **Enterprise Edition**: Uses native OIDC (callback: `/signup/openid/complete`)
-3. Authenticate with Cognito
-4. First user becomes system admin
+1. Open `https://chat.example.com` (your configured FQDN).
+2. Choose the Cognito sign-in button.
+   - `mattermost-team` uses the GitLab OAuth provider (callback `/signup/gitlab/complete`).
+   - `mattermost-enterprise` uses OpenID Connect (callback `/signup/openid/complete`).
+3. Authenticate with Cognito.
+4. The first user to sign in becomes the system administrator.
 
-> **Note (Team Edition):** When logging out of Mattermost, you will NOT be logged out of Cognito. Your Cognito session remains active until it expires. For proper single logout, use Enterprise Edition.
+With `mattermost-team`, signing out of Mattermost does not end the Cognito session; it remains active until it expires.
 
 ### 2. Create Teams and Channels
 
-1. Go to **System Console** > **Teams**
-2. Create initial teams
-3. Create public and private channels
-4. Invite users
+1. Create the initial teams.
+2. Create public and private channels.
+3. Invite users.
 
 ### 3. Configure Email (if enabled)
 
-When `enableSmtp: true`, configure in System Console:
+CloudForge does not configure SMTP settings in Mattermost. In the System Console:
 
-1. **System Console** > **Email** > **SMTP**
-2. Enter SMTP server details (e.g., Amazon SES)
-3. Test email delivery
+1. Go to **Environment** > **SMTP**.
+2. Enter the SMTP server details (for example Amazon SES).
+3. Test email delivery.
 
 ### 4. Configure Integrations
 
-1. Enable incoming/outgoing webhooks
-2. Install plugins (Jira, GitHub, etc.)
-3. Configure slash commands
+1. Enable incoming and outgoing webhooks.
+2. Install plugins as needed.
+3. Configure slash commands.
 
 ---
 
@@ -696,30 +570,32 @@ When `enableSmtp: true`, configure in System Console:
 
 **Check logs:**
 ```bash
-# Fargate
-aws logs tail /aws/ecs/mattermost --follow
+# Fargate (log group name when storage is not retained; otherwise find the
+# stack's log group in the CloudWatch console)
+aws logs tail /aws/ecs/<stack-name>/fargate/<security-profile> --follow
 
-# EC2
-ssh ec2-user@instance 'tail -f /opt/mattermost/logs/mattermost.log'
+# EC2 (via SSM Session Manager)
+aws ssm start-session --target <instance-id>
+# then: tail -f /opt/mattermost/logs/mattermost.log
 ```
 
 ### Database connection fails
 
-1. Verify security group allows port 5432
-2. Check RDS endpoint in SSM parameters
-3. Verify database credentials in Secrets Manager
+1. Verify the security group allows port 5432 from the application.
+2. Check the datasource SSM parameter.
+3. Verify the database credentials in Secrets Manager.
 
 ### OIDC login fails
 
-1. Verify Cognito domain prefix is globally unique
-2. Check callback URL is registered
-3. Ensure `MM_SERVICESETTINGS_SITEURL` matches actual URL
+1. Verify the Cognito domain prefix is globally unique.
+2. Check that the callback URL is registered.
+3. Ensure `MM_SERVICESETTINGS_SITEURL` matches the URL users open.
 
 ### WebSocket errors
 
-1. Check ALB is configured for sticky sessions
-2. Verify security groups allow WebSocket upgrade
-3. Check WAF rules aren't blocking WebSocket
+1. Check whether the target group uses sticky sessions.
+2. Verify that WebSocket upgrade requests reach the target.
+3. Check that WAF rules are not blocking WebSocket requests.
 
 ---
 

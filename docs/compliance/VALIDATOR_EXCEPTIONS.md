@@ -68,8 +68,8 @@ These resources are created internally by AWS CDK and cannot be modified without
 
 **Mitigation**:
 - Secrets can be recreated from source (RDS, Cognito)
-- Cross-region replication adds ~$1/secret/month
-- Enable via `secretsReplicationEnabled` flag if required
+- Cross-region replication adds a per-replica secret charge
+- CloudForge has no configuration flag for secret replication; configure it outside the stack if required
 
 ---
 
@@ -95,7 +95,7 @@ These resources are created internally by AWS CDK and cannot be modified without
 | `AlbLogsBucket` | Logging not configured | Would create second log bucket chain |
 
 **Mitigation**:
-- CloudTrail S3 data events provide comprehensive audit logging
+- CloudTrail S3 data events record object-level API activity
 - All S3 API calls are logged via CloudTrail
 - Bucket access is logged at API level, not file level
 
@@ -107,10 +107,10 @@ These resources are created internally by AWS CDK and cannot be modified without
 | `AlbLogsBucket` | ObjectLockEnabled not set | WORM compliance is optional |
 
 **Mitigation**:
-- Versioning is enabled (prevents accidental deletion)
+- Versioning is enabled (prior versions are retained after overwrite or delete)
 - Lifecycle policies archive to Glacier
 - Object Lock adds complexity and cost
-- Enable if regulatory WORM requirement exists
+- Enable with `s3ObjectLockEnabled` if a regulatory WORM requirement exists
 
 ### Organization Trail
 
@@ -127,13 +127,11 @@ These resources are created internally by AWS CDK and cannot be modified without
 
 ## ConfigurationValidationRules Exceptions
 
-### When alwaysLoad Frameworks Cannot Be Bypassed
+`ConfigurationValidationRules` is annotated with `alwaysLoad = true`, so it is intended to run even when no compliance frameworks are specified. It is not currently registered in `META-INF/services/com.cloudforge.core.interfaces.FrameworkRules`, so `FrameworkLoader` does not install it.
 
-**Important**: ConfigurationValidationRules has `alwaysLoad = true`, meaning it runs **even when no compliance frameworks are specified**.
-
-**No Exception Scenarios** (these configurations will ALWAYS fail):
-1. ❌ Subdomain without domain - No exception (deployment will fail)
-2. ❌ OIDC without HTTPS - No exception (deployment will fail)
+When installed, these rules have no exceptions:
+1. Subdomain without domain
+2. OIDC without HTTPS
 
 | Rule | Finding | Why No Exception |
 |------|---------|-----------------|
@@ -154,7 +152,6 @@ If you need SSL without a public domain, use AWS Private CA with self-signed cer
 | KMS encryption for logs | `cloudWatchLogsKmsEncryptionEnabled: true` | Encrypts CloudWatch Logs with KMS |
 | Security group egress restriction | `restrictSecurityGroupEgress: true` | Limits egress to VPC CIDR only |
 | WAF protection | `wafEnabled: true` | Adds AWS WAF to ALB |
-| Secrets replication | `secretsReplicationEnabled: true` | Cross-region secret replication |
 | S3 Object Lock | `s3ObjectLockEnabled: true` | WORM compliance for buckets |
 
 ---
@@ -168,11 +165,11 @@ This validator parses CloudFormation templates directly and does not recognize:
 - CDK construct patterns (treats all resources equally)
 - Deployment-time vs runtime distinction
 
-**Recommendation**: Configure validator exception rules for resource patterns listed above.
+**Recommendation**: Configure validator exception rules for the resource patterns listed above.
 
 ### cdk-nag
 
-CDK-nag suppressions are applied in `InteractiveDeployer.applyProductionNagSuppressions()` for:
+The sample Interactive Deployer (`cfc-testing`) applies cdk-nag stack suppressions in `InteractiveDeployer.applyProductionNagSuppressions()` for:
 - HIPAA.Security-* rules
 - PCI.DSS.321-* rules
 - AwsSolutions-* rules
@@ -187,6 +184,6 @@ CDK-nag suppressions are applied in `InteractiveDeployer.applyProductionNagSuppr
 | CDK Framework (lambdas) | 2 | Accept - deployment-time only |
 | Architecture (ALB SG, public subnets) | ~5 | Accept - expected behavior |
 | AWS Limitations (ALB logs KMS) | 1 | Accept - service limitation |
-| Optional Features (Object Lock, replication) | ~4 | Configure if required |
+| Optional Features (Object Lock, secret replication) | ~4 | Configure if required |
 
 **Total Expected Exceptions**: ~24 findings

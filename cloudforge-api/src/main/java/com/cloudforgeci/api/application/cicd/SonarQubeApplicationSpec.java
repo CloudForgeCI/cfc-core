@@ -42,6 +42,13 @@ public class SonarQubeApplicationSpec implements ApplicationSpec {
         return "sonarqube";
     }
 
+    // SonarQube Community Edition has no clustering/HA support (a Data Center Edition feature),
+    // so ScalingFactory rejects multi-instance settings for it.
+    @Override
+    public boolean supportsAutoScaling() {
+        return false;
+    }
+
     // ========== Container Configuration (Fargate) ==========
 
     @Override

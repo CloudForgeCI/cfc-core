@@ -2,7 +2,6 @@
   "stackName": "Harbor-Production",
   "applicationId": "harbor",
   "applicationName": "Harbor Registry",
-  "description": "Production Harbor with Trivy scanning and Notary",
   "environment": "production",
 
   "runtime": "ec2",
@@ -16,11 +15,7 @@
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "harbor-prod-CHANGEME",
-  "cognitoMfaEnabled": true,
-  "cognitoMfaMethod": "totp",
+  "authMode": "none",
 
   "instanceType": "t3.large",
   "minInstanceCapacity": 2,

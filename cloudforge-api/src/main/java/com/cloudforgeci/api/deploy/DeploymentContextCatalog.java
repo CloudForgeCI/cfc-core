@@ -108,12 +108,9 @@ public final class DeploymentContextCatalog {
             }
             MAPPER.writeValue(panelStacksFile.toFile(), Map.of("stacks", List.copyOf(stacks)));
         } catch (IOException | RuntimeException ignored) {
-            // Best-effort, deliberately broad: this must never propagate. It previously only
-            // caught IOException, and a null-parent NullPointerException (the case this method
-            // now guards against above) escaped uncaught all the way out of
-            // CloudForgeDeployment.finalizeResult — aborting the deploy's emulator-edge
-            // reconciliation that runs *after* the catalog-persist block, not just this file
-            // write. Tag-based AWS inventory matching remains the primary mechanism regardless.
+            // Best-effort and deliberately broad: an exception here must not abort
+            // CloudForgeDeployment.finalizeResult, which runs emulator-edge reconciliation after
+            // this write. Tag-based AWS inventory matching remains the primary mechanism.
         }
     }
 

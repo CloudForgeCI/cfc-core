@@ -1,8 +1,6 @@
 # WordPress Application Guide
 
-WordPress is an open-source CMS for blogs, marketing sites, portfolios, and e-commerce through plugins such as WooCommerce.
-
-**Status**: Verified
+WordPress is an open-source CMS for blogs, marketing sites, and portfolios, and for e-commerce through plugins such as WooCommerce.
 
 ---
 
@@ -12,74 +10,79 @@ WordPress is an open-source CMS for blogs, marketing sites, portfolios, and e-co
 |----------|-------|
 | **Application ID** | `wordpress` |
 | **Category** | CMS |
-| **Default Image** | `wordpress:php8.2-fpm-alpine` |
+| **Default Image** | `wordpress:php8.2-apache` |
 | **PHP Version** | 8.2 |
 | **Application Port** | `80` |
-| **Default CPU** | 1024 (Fargate) |
-| **Default Memory** | 2048 MB (Fargate) |
+| **Recommended CPU / Memory (Fargate)** | 1024 / 2048 MB |
+| **Recommended Instance Type (EC2)** | `t3.small` |
 | **Health Check Path** | `/wp-admin/install.php` |
-| **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **Authentication** | ALB-OIDC (Cognito) |
-| **Database Required** | Yes (MySQL 8.0) |
+| **Authentication Modes** | `alb-oidc`, `application-oidc` (OpenID Connect Generic plugin), `none` |
+| **Database** | Required (MySQL 8.0 default; MariaDB supported) |
 
----
-
-## Capabilities
-
-- Full plugin ecosystem (60,000+ plugins)
-- Gutenberg block editor
-- Custom post types and taxonomies
-- Multisite network support
-- WP-CLI for automation
-- WooCommerce for e-commerce
-- REST API
-- S3 media offloading via WP Offload Media
+The EC2 runtime installs nginx and PHP-FPM on the instance instead of using the container image.
 
 ---
 
 ## Auto-Provisioned Infrastructure
 
-The `cms-service` topology automatically provisions based on WordPress capabilities:
+The `cms-service` topology provisions the following based on WordPress capabilities:
 
 | Resource | Provisioned | Purpose |
 |----------|-------------|---------|
-| S3 bucket | Yes | Media uploads offloading |
-| ElastiCache Redis | Yes | Object cache (transients, sessions) |
-| CloudFront CDN | Yes | Media and static asset delivery |
+| S3 bucket | Yes | Media offloading (WP Offload Media) |
+| ElastiCache Redis | Yes | Object cache (Redis Object Cache plugin) |
+| CloudFront CDN | Yes | Media (`/wp-content/uploads/*`) and static assets (themes, plugins, `wp-includes`) |
 | EFS | Yes | `/var/www/html` (themes, plugins, uploads) |
-| Route53 records | When domain configured | A + AAAA records to ALB |
+| Route53 records | When a hosted zone and domain are configured | A + AAAA alias records |
 
 ---
 
 ## Authentication
 
-WordPress is protected at the ALB level by Cognito. No WordPress plugin or configuration is required — users authenticate with Cognito before the request reaches the container.
+| Mode | Description |
+|------|-------------|
+| `alb-oidc` | Cognito at the ALB. Protects `/wp-admin/*` and `/wp-login.php`; the public site stays reachable without signing in. |
+| `application-oidc` | WordPress handles OIDC through the OpenID Connect Generic plugin (`OIDC_*` environment variables). |
+| `none` | No authentication in front of WordPress. |
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | **Recommended** | Cognito at ALB — full site protection |
-| `none` | Dev only | No authentication |
+---
 
-**How it works:** Cognito issues a session cookie at the ALB. Authenticated users land directly on the WordPress site. The WordPress login page (`/wp-login.php`) remains accessible for wp-admin emergency access if needed.
+## First-Run Install and Admin Password
+
+On Fargate, the container installs WordPress automatically on first start:
+
+1. CloudForge generates a random admin password in Secrets Manager and exposes its ARN as the stack output `CloudForgeAutoAdminPasswordSecretArn`.
+2. The container downloads WP-CLI, waits for the image entrypoint to write `wp-config.php`, and runs `wp core install` with user `admin` and that password.
+3. The password is also printed once to the container log at startup.
+
+Restarts skip the install because `wp core is-installed` succeeds. The admin email is `admin@<fqdn>`, or `cognitoInitialAdminEmail` when `authMode` is `alb-oidc` and that property is set.
+
+Retrieve the password:
+
+```bash
+aws secretsmanager get-secret-value --secret-id <CloudForgeAutoAdminPasswordSecretArn> \
+  --query SecretString --output text
+```
 
 ---
 
 ## Environment Variables
 
-CloudForge automatically injects:
+CloudForge sets the following on the Fargate container:
 
-| Variable | Description |
-|----------|-------------|
-| `WORDPRESS_DB_HOST` | RDS endpoint |
-| `WORDPRESS_DB_USER` | Database user |
-| `WORDPRESS_DB_NAME` | Database name |
-| `WORDPRESS_DB_PASSWORD` | Retrieved from Secrets Manager at runtime |
-| `WORDPRESS_TABLE_PREFIX` | `wp_` (default) |
-| `WORDPRESS_DEBUG` | `false` in production |
-| `REDIS_HOST` | ElastiCache endpoint (when Redis provisioned) |
-| `REDIS_PORT` | `6379` |
+| Variable | Value |
+|----------|-------|
+| `WORDPRESS_DB_HOST` | `<rds-endpoint>:<port>` (when `provisionDatabase` is `true`) |
+| `WORDPRESS_DB_NAME`, `WORDPRESS_DB_USER` | RDS database name and user |
+| `WORDPRESS_DB_PASSWORD` | From the RDS Secrets Manager secret |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | Generic copies of the database settings |
+| `WORDPRESS_CONFIG_EXTRA` | Defines `WP_HOME`, `WP_SITEURL`, `FORCE_SSL_ADMIN` (when a domain is set), `DISABLE_WP_CRON`, and `DISALLOW_FILE_EDIT` |
+| `WORDPRESS_SITE_URL`, `WORDPRESS_ADMIN_EMAIL` | Used by the first-run install (when a domain is set) |
+| `WORDPRESS_ADMIN_PASSWORD` | From the generated admin password secret |
+
+The Redis endpoint and S3 bucket name are not injected; see [Configure Redis Object Cache](#4-configure-redis-object-cache) and [Configure S3 Media Offloading](#3-configure-s3-media-offloading).
 
 ---
 
@@ -99,13 +102,16 @@ CloudForge automatically injects:
 
 | Property | Value |
 |----------|-------|
-| EBS Device | `/dev/xvdh` |
+| EBS Device | `/dev/xvdh` (used when EFS is not available) |
 | Data Path | `/var/www/html` |
-| Log Paths | `/var/log/nginx/error.log`, `/var/log/php-fpm/error.log`, `/var/log/userdata.log` |
+| Log Paths | `/var/log/nginx/access.log`, `/var/log/nginx/error.log`, `/var/log/php-fpm/error.log`, `/var/log/userdata.log` |
+| CloudWatch Log Group | `/cloudforge/<stackName>/wordpress` |
 
 ---
 
 ## Deployment Context Examples
+
+Set `cpu` and `memory` (Fargate) or `instanceType` (EC2) explicitly. The framework defaults (`cpu: 1024`, `memory: 2048`, `instanceType: t3.micro`) apply when they are omitted.
 
 ### Development - Minimal
 
@@ -117,7 +123,7 @@ CloudForge automatically injects:
   "topology": "cms-service",
   "applicationId": "wordpress",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -136,9 +142,7 @@ CloudForge automatically injects:
 }
 ```
 
-**Cost estimate:** ~$40/month
-
-### Development - With Auth and Redis
+### Development - With Authentication
 
 ```json
 {
@@ -172,8 +176,6 @@ CloudForge automatically injects:
   "logRetentionDays": "30"
 }
 ```
-
-**Cost estimate:** ~$120/month
 
 ### Production - High Traffic
 
@@ -224,9 +226,9 @@ CloudForge automatically injects:
 }
 ```
 
-**Cost estimate:** ~$350-550/month
+### Production - With SOC 2 and HIPAA Controls
 
-### Production - SOC2 / HIPAA
+`complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for the listed frameworks. It does not certify the deployment; application-level controls and audits remain your responsibility.
 
 ```json
 {
@@ -262,7 +264,7 @@ CloudForge automatically injects:
   "databaseMultiAz": true,
   "databaseBackupRetentionDays": 30,
 
-  "complianceFrameworks": "SOC2,HIPAA",
+  "complianceFrameworks": "soc2,hipaa",
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "auditManagerEnabled": true,
@@ -272,83 +274,82 @@ CloudForge automatically injects:
 
   "enableMonitoring": true,
   "enableEncryption": true,
-  "logRetentionDays": "730",
+  "logRetentionDays": "731",
   "retainStorage": true
 }
 ```
-
-**Cost estimate:** ~$500-700/month
 
 ---
 
 ## Health Check Configuration
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| Path | `/wp-admin/install.php` | Responds 200 before and after setup |
-| Grace Period | 300 seconds | Time before checks start |
-| Interval | 30 seconds | Time between checks |
-| Timeout | 5 seconds | Response timeout |
-| Healthy Threshold | 2 | Consecutive successes |
-| Unhealthy Threshold | 3 | Consecutive failures |
+| Property | Default | Deployment-context property |
+|----------|---------|-----------------------------|
+| Path | `/wp-admin/install.php` | — |
+| Grace Period | 300 seconds | `healthCheckGracePeriod` |
+| Interval | 30 seconds | `healthCheckInterval` |
+| Timeout | 5 seconds | `healthCheckTimeout` |
+| Healthy Threshold | 2 | `healthyThreshold` |
+| Unhealthy Threshold | 3 | `unhealthyThreshold` |
 
 ---
 
 ## Post-Deployment Tasks
 
-### 1. Complete WordPress Setup
+### 1. Sign In
 
-1. Navigate to `https://your-domain.com`
-2. The setup wizard appears on first load
-3. Enter site title, admin username, and admin email
-4. **Important**: Save the admin password — it cannot be recovered later
+On Fargate the site is installed automatically (see [First-Run Install](#first-run-install-and-admin-password)). Sign in at `https://<your-domain>/wp-admin/` as `admin`. On EC2, WordPress core is downloaded to `/var/www/html` but not configured; complete the installer in the browser.
 
-### 2. Install Recommended Plugins
+### 2. Install Plugins
 
-For production WordPress on AWS:
+Commonly used plugins for WordPress on AWS:
 
-- **WP Offload Media Lite** — Sync uploads to the auto-provisioned S3 bucket
-- **Redis Object Cache** — Connect to the auto-provisioned ElastiCache Redis
-- **W3 Total Cache** or **WP Super Cache** — Page caching layer
-- **Wordfence** — Security scanning (WAF is handled at ALB but app-level scanning adds depth)
+- **WP Offload Media Lite**: syncs uploads to S3
+- **Redis Object Cache**: connects to ElastiCache Redis
+- **W3 Total Cache** or **WP Super Cache**: page caching
+- **Wordfence**: application-level security scanning (complements the ALB WAF when `wafEnabled` is `true`)
+
+`DISALLOW_FILE_EDIT` is set, which disables the theme and plugin file editors but not plugin installation.
 
 ### 3. Configure S3 Media Offloading
 
-After installing WP Offload Media Lite:
-
-1. **Settings** > **Offload Media**
-2. Select the S3 bucket provisioned by CloudForge (named `{stackName}-media`)
-3. Enable **Remove Files From Server** to save EFS space
+1. Find the media bucket in the stack's resources (logical ID prefix `wordpressmedia`).
+2. Grant the ECS task role (or an IAM user configured in the plugin) read/write access to the bucket.
+3. Install WP Offload Media Lite, open **Settings** > **Offload Media**, and select the bucket.
 
 ### 4. Configure Redis Object Cache
 
-After installing Redis Object Cache plugin:
+1. Find the ElastiCache cluster (named `wordpress-<env>-cache`) and note its endpoint.
+2. Add `define('WP_REDIS_HOST', '<endpoint>');` to `wp-config.php` (or extend `WORDPRESS_CONFIG_EXTRA`).
+3. Install Redis Object Cache and click **Enable Object Cache** under **Settings** > **Redis**.
 
-1. **Settings** > **Redis**
-2. The `REDIS_HOST` env var is already set — click **Enable Object Cache**
+### 5. Scheduled Tasks
+
+`DISABLE_WP_CRON` is set, so WP-Cron does not run on page loads. Schedule `wp-cron.php` externally (for example, every 15 minutes).
 
 ---
 
 ## Troubleshooting
 
-### White screen / 500 error on first load
+### White screen or 500 error on first load
 
-WordPress requires a database connection on startup. Check:
+WordPress requires a database connection on startup. Check the logs:
 
 ```bash
-# Fargate
-aws logs tail /aws/ecs/wordpress --follow
+# Fargate: the log group is /aws/ecs/<stackName>/fargate/<securityProfile>
+# (CloudFormation generates the name when logs are retained)
+aws logs tail /aws/ecs/<stackName>/fargate/dev --follow
 
 # EC2 (via SSM)
 aws ssm start-session --target <instance-id>
 # then: tail -f /var/log/php-fpm/error.log
 ```
 
-Verify the database credentials in Secrets Manager are correct and the security group allows the container to reach RDS.
+Verify that the database secret exists and that the RDS security group allows traffic from the service.
 
-### Login redirects loop
+### Login redirect loop
 
-The ALB terminates TLS and forwards HTTP to the container. Add to `wp-config.php`:
+The ALB terminates TLS and forwards HTTP to the container. If WordPress does not detect HTTPS, add to `wp-config.php` (or to `WORDPRESS_CONFIG_EXTRA`):
 
 ```php
 if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
@@ -356,17 +357,17 @@ if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROT
 }
 ```
 
-CloudForge pre-configures this via the `WORDPRESS_CONFIG_EXTRA` environment variable.
+CloudForge sets `WP_HOME`, `WP_SITEURL`, and `FORCE_SSL_ADMIN` through `WORDPRESS_CONFIG_EXTRA`, but not this proxy check.
 
 ### Uploads not persisting (Fargate)
 
-EFS must be mounted at `/var/www/html/wp-content/uploads`. Verify EFS mount in task definition and that the EFS access point has correct permissions (`755`, UID `33`).
+EFS is mounted at `/var/www/html` (access point path `/wordpress`). Verify the mount in the task definition and that the access point uses UID/GID `33` with permissions `755`.
 
 ---
 
 ## Related Documentation
 
 - [CMS Guides Index](README.md)
-- [WooCommerce Guide](woocommerce.md) — E-commerce on top of WordPress
+- [WooCommerce Guide](woocommerce.md): e-commerce on top of WordPress
 - [CMS Topology Reference](../../applications/CMS.md)
 - [OIDC Integration](../../applications/OIDC.md)

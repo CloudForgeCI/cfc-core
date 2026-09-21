@@ -197,10 +197,8 @@ public final class CloudForgeDeployment {
                     request.options().catalogDirectory(),
                     request.options().managerVolumeRoots());
             } catch (IOException | RuntimeException e) {
-                // Catalog persistence is best-effort bookkeeping, not the deploy itself — must
-                // never abort the caller. Broadened beyond IOException after a real
-                // NullPointerException from DeploymentContextCatalog escaped this same shape of
-                // catch elsewhere and took down an entire deploy; see that fix's javadoc.
+                // Catalog persistence is best-effort bookkeeping and must never abort the deploy,
+                // so RuntimeException is caught as well as IOException.
                 messages.add("Could not write deployment-contexts catalog: " + e.getMessage());
             }
         }
@@ -244,15 +242,10 @@ public final class CloudForgeDeployment {
                     request.options().catalogDirectory(),
                     request.options().managerVolumeRoots());
             } catch (IOException | RuntimeException e) {
-                // Must never abort the deploy — reconcileEmulatorEdge below depends on reaching
-                // this point. Broadened beyond IOException: DeploymentContextCatalog.registerKnownStack
-                // can throw a NullPointerException for a null-parent Path (fixed there too, but this
-                // catch stays broad as a second line of defense). An IOException-only catch here would
-                // let that escape and silently skip emulator-edge reconciliation for every local deploy
-                // afterward in that run — the new stack's route never gets added to nginx, surfacing as
-                // "CloudForge application route not found" in a browser hitting its hostname. Nothing in
-                // the test suite exercises this catalog-persist call chain against a real filesystem
-                // layout where catalogDirectory is a bare relative path.
+                // Must never abort the deploy: reconcileEmulatorEdge below must still run, or the
+                // new stack's nginx route is never added ("CloudForge application route not found").
+                // Catches RuntimeException as well as IOException as a second line of defense
+                // behind DeploymentContextCatalog's own broad catch.
                 messages.add("Could not write deployment-contexts catalog: " + e.getMessage());
             }
         }

@@ -1,8 +1,8 @@
 # Redis Application Guide
 
-Redis is an in-memory data structure store used as a database, cache, message broker, and queue.
+Redis is an in-memory data store used as a cache, database, and message broker.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -21,24 +21,16 @@ Redis is an in-memory data structure store used as a database, cache, message br
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | No |
+| **Supported Auth Modes** | `none` |
 | **Database Required** | N/A |
 
 ---
 
 ## When to Use
 
-Use containerized Redis for:
-- Development and testing
-- Session storage
-- Caching layer
-- Message queuing
+A containerized Redis instance is suited to development, testing, session storage, and caching.
 
-For production, consider **Amazon ElastiCache for Redis** which provides:
-- Automatic failover
-- Multi-AZ deployment
-- Read replicas
-- Managed patching
+For production, consider Amazon ElastiCache, which provides automatic failover, Multi-AZ deployment, read replicas, and managed patching.
 
 ---
 
@@ -48,6 +40,8 @@ For production, consider **Amazon ElastiCache for Redis** which provides:
 |------|----------|-----------|--------------|-------------|
 | 16379 | TCP | Inbound | `enableCluster` | Cluster Bus |
 | 26379 | TCP | Inbound | `enableSentinel` | Sentinel |
+
+These flags only open security-group ports. CloudForge does not configure Redis Cluster or Sentinel.
 
 ---
 
@@ -62,6 +56,8 @@ For production, consider **Amazon ElastiCache for Redis** which provides:
 | Container User | `999:999` |
 | EFS Permissions | `755` |
 
+On EC2, data is stored under `/var/lib/redis`, and the server runs with `--appendonly yes --requirepass <password>`. The password is read from the Secrets Manager secret `<stack name>/redis-password`; create that secret before deploying, because the user data otherwise falls back to a fixed placeholder value. The Fargate task definition does not set a password.
+
 ---
 
 ## Deployment Context Examples
@@ -73,8 +69,7 @@ For production, consider **Amazon ElastiCache for Redis** which provides:
   "stackName": "Redis-Dev",
   "applicationId": "redis",
   "applicationName": "Redis Dev",
-  "description": "Redis development cache",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -92,8 +87,6 @@ For production, consider **Amazon ElastiCache for Redis** which provides:
   "logRetentionDays": "7"
 }
 ```
-
-**Cost estimate:** ~$30/month
 
 ---
 

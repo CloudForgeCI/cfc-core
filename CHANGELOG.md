@@ -2,18 +2,21 @@
 
 All notable changes to CloudForge CI are documented here.
 
+Releases after 3.0.0 are published continuously from `develop` and tagged `vX.Y.Z` in Git;
+see the [tags](https://github.com/CloudForgeCI/cfc-core/tags) for 3.2.x release points.
+
 ## [3.0.0]
 
 ### Added
 
-**AWS Backup Infrastructure (NEW)**
+**AWS Backup Infrastructure**
 - BackupFactory for EFS and RDS automated backups
 - Daily backup schedules with configurable retention (DEV: disabled, STAGING: 14 days, PRODUCTION: 90 days)
 - Backup vault lock for PRODUCTION (prevents manual deletion - PCI-DSS compliance)
 - Cross-region backup copy support for disaster recovery
 - AwsRegion enum with DR region pairs and geographic areas for data residency
 
-**SAML Authentication (NEW) - ⚠️ IN DEVELOPMENT**
+**SAML Authentication (in development)**
 - SAML 2.0 integration framework for enterprise IdPs
 - MattermostSamlIntegration for AD/LDAP group sync
 - MetabaseSamlIntegration with group mapping
@@ -31,7 +34,7 @@ All notable changes to CloudForge CI are documented here.
 - ECS Container Insights enabled for STAGING/PRODUCTION profiles
 - Backup vault lock to prevent recovery point deletion
 
-**Configuration Introspection (NEW)**
+**Configuration Introspection**
 - @ConfigField annotation for field metadata
 - ConfigurationIntrospector for automatic field discovery
 - VisibilityExpressionEvaluator for conditional field visibility
@@ -51,7 +54,7 @@ All notable changes to CloudForge CI are documented here.
 - AWS Backup vault/plan name validation (2-50 chars, alphanumeric with hyphens/underscores)
 
 
-**Plugin System (NEW)**
+**Plugin System**
 - Universal ApplicationSpec plugin system for custom applications
 - Compliance framework plugin system for custom validators
 - Java ServiceLoader-based automatic plugin discovery
@@ -59,7 +62,7 @@ All notable changes to CloudForge CI are documented here.
 - 12 built-in compliance frameworks (5 always-load, 7 conditional)
 - Plugin ecosystem documentation and developer guides
 
-**Applications (NEW)**
+**Applications**
 - Jenkins, GitLab, Drone (CI/CD)
 - Gitea (Version Control)
 - Grafana, Prometheus (Monitoring)
@@ -69,7 +72,7 @@ All notable changes to CloudForge CI are documented here.
 - HashiCorp Vault (Secrets Management)
 - Mattermost (Collaboration)
 
-**OIDC Integration (NEW)**
+**OIDC Integration**
 - Application-level OIDC integration framework
 - Grafana OIDC integration (implemented)
 - GitLab OIDC integration (implemented)
@@ -86,18 +89,18 @@ All notable changes to CloudForge CI are documented here.
 - Cognito authentication with auto-provisioning
 - Multi-framework compliance support (PCI-DSS, HIPAA, SOC 2, GDPR, ISO 27001)
 - Security profile configurations (DEV, STAGING, PRODUCTION)
-- Comprehensive security rules engine with compliance mappings
+- Security rules engine with compliance mappings
 
 **Infrastructure**
 - WAF factory for web application firewall
 - Compliance factory for automated audit evidence
 - AWS Audit Manager integration
-- Enhanced monitoring and logging capabilities
+- Additional monitoring and logging options
 - VPC Flow Logs support
 - CloudWatch alarms for security events
 
 **Testing & Validation**
-- Comprehensive CDK synthesis test suite (100% success rate)
+- CDK synthesis test suite across runtimes and security profiles
 - Automated validation workflow in GitHub Actions
 - Performance benchmarking tool for synthesis operations
 - Truth table generator for configuration combinations
@@ -148,7 +151,7 @@ All notable changes to CloudForge CI are documented here.
 **Testing**
 - Expanded test coverage across all modules
 - Added unit tests for BaseFactory (100% coverage)
-- Comprehensive validation for CDK constructs
+- Validation tests for CDK constructs
 - Fixed all synthesis test failures (10/10 passing)
 
 ### Fixed
@@ -214,5 +217,5 @@ git describe --tags --abbrev=0
 ## Links
 
 - [Security Policy](SECURITY.md)
-- [Contributing Guidelines](CONTRIBUTING.md) (if exists)
+- [Contributing Guidelines](CONTRIBUTING.md)
 - [GitHub Releases](https://github.com/CloudForgeCI/cfc-core/releases)

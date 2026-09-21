@@ -1,8 +1,6 @@
 # Magento Application Guide
 
-Magento (Adobe Commerce Open Source) is an enterprise e-commerce platform designed for high-traffic storefronts, complex product catalogs, and multi-store deployments. It has the highest resource requirements of any CMS in CloudForge.
-
-**Status**: Available
+Magento Open Source (Adobe Commerce) is an e-commerce platform for storefronts with large product catalogs and multi-store setups. It has the highest resource requirements of the CMS applications in CloudForge.
 
 ---
 
@@ -15,29 +13,21 @@ Magento (Adobe Commerce Open Source) is an enterprise e-commerce platform design
 | **Default Image** | `magento/magento-cloud-docker-php:8.2-fpm` |
 | **PHP Version** | 8.2 |
 | **Application Port** | `80` |
-| **Default CPU** | 4096 (Fargate) |
-| **Default Memory** | 8192 MB (Fargate) |
+| **Recommended CPU / Memory (Fargate)** | 4096 / 8192 MB |
+| **Recommended Instance Type (EC2)** | `t3.xlarge` |
 | **Health Check Path** | `/health_check.php` |
-| **Health Check Grace** | 600 seconds |
-| **Supports Fargate** | Yes |
-| **Supports EC2** | Yes (recommended for production) |
-| **Authentication** | ALB-OIDC (Cognito) |
-| **Database Required** | Yes (MySQL 8.0) |
+| **Recommended Health Check Grace** | 600 seconds |
+| **Supports Fargate** | Yes (see the note below) |
+| **Supports EC2** | Yes |
+| **Authentication Modes** | `alb-oidc`, `application-oidc` (miniOrange OIDC module), `none` |
+| **Database** | Required (MySQL 8.0 default; MariaDB supported) |
 
-**Note:** Magento requires significantly more CPU and memory than other CMS applications. Do not reduce below 4096 CPU / 8192 MB without testing — Magento will fail to serve requests under typical catalog load.
+**Runtime notes:**
 
----
+- **Fargate**: the default image is a PHP-FPM runtime image. It does not serve HTTP on port 80 by itself and does not contain Magento. Plan to build your own image that includes Magento and a web server.
+- **EC2**: UserData installs nginx, PHP-FPM, and a single-node Elasticsearch 8 on each instance, but does not download Magento. Install the Magento code base (for example, with Composer) into `/var/www/html` before running `setup:install`.
 
-## Capabilities
-
-- Multi-store and multi-website management from a single admin
-- Layered navigation with Elasticsearch
-- Advanced pricing rules (catalog, cart, customer groups)
-- B2B features (company accounts, requisition lists, negotiated quotes)
-- Visual Merchandiser for category sorting
-- GraphQL API for headless/PWA storefronts
-- Page Builder for content creation
-- Magento CLI for deployments and indexing
+Magento 2.4 requires OpenSearch or Elasticsearch for catalog search. Apart from the per-instance Elasticsearch on EC2, CloudForge does not provision a search cluster.
 
 ---
 
@@ -46,48 +36,39 @@ Magento (Adobe Commerce Open Source) is an enterprise e-commerce platform design
 | Resource | Provisioned | Purpose |
 |----------|-------------|---------|
 | S3 bucket | Yes | Media storage (`pub/media`) |
-| ElastiCache Redis | Yes | Full-page cache, session storage, default cache backend |
-| CloudFront CDN | Yes | Static assets (`pub/static`), media delivery |
-| EFS | Yes | `/var/www/html/pub` (generated assets, media) |
-| Route53 records | When domain configured | A + AAAA records to ALB |
+| ElastiCache Redis | Yes | Default cache, full-page cache, and session storage |
+| CloudFront CDN | Yes | Static assets (`/pub/static/*`, `/static/*`) and media (`/pub/media/*`, `/media/*`) |
+| EFS | Yes | Mounted at `/var/www/html` (access point path `/magento`) |
+| Route53 records | When a hosted zone and domain are configured | A + AAAA alias records |
 
-Magento uses Redis for three separate cache backends (default cache, page cache, sessions). All three are configured automatically against the provisioned ElastiCache cluster.
+The Redis endpoint is not injected into the container. Configure the cache and session backends during `setup:install` (see below).
 
 ---
 
 ## Authentication
 
-The Magento storefront (product catalog, cart, checkout) can be public or restricted. The Magento Admin panel (`/admin`) is protected separately. CloudForge gates the entire site at the ALB with Cognito.
-
-For a public storefront with protected admin:
-
-```json
-{
-  "authMode": "alb-oidc",
-  "publicPaths": ["/", "/catalog/*", "/catalogsearch/*", "/checkout/*", "/customer/*", "/graphql", "/rest/*", "/pub/*"]
-}
-```
-
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | **Recommended** | Cognito at ALB |
-| `none` | Dev only | No authentication |
+| Mode | Description |
+|------|-------------|
+| `alb-oidc` | Cognito at the ALB. Protects `/admin/*`, `/backend/*`, and `/setup/*`; the storefront stays public. |
+| `application-oidc` | Magento handles OIDC through the miniOrange module (`MAGENTO_OIDC_*` environment variables). |
+| `none` | No authentication in front of Magento. |
 
 ---
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `MAGENTO_DB_HOST` | RDS endpoint |
-| `MAGENTO_DB_NAME` | Database name |
-| `MAGENTO_DB_USER` | Database user |
-| `MAGENTO_DB_PASSWORD` | From Secrets Manager |
-| `MAGENTO_OIDC_CLIENT_ID` | Cognito client ID |
-| `MAGENTO_OIDC_AUTHORIZATION_ENDPOINT` | Cognito authorization endpoint |
-| `MAGENTO_OIDC_TOKEN_ENDPOINT` | Cognito token endpoint |
-| `REDIS_HOST` | ElastiCache endpoint |
-| `REDIS_PORT` | `6379` |
+CloudForge sets the following on the Fargate container:
+
+| Variable | Value |
+|----------|-------|
+| `MAGENTO_DATABASE_HOST`, `MAGENTO_DATABASE_PORT`, `MAGENTO_DATABASE_NAME`, `MAGENTO_DATABASE_USER` | RDS connection settings (when `provisionDatabase` is `true`) |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | Generic copies of the database settings |
+| `DATABASE_PASSWORD` | From the RDS Secrets Manager secret |
+| `MAGE_MODE` | `production` |
+| `MAGENTO_BASE_URL`, `MAGENTO_BASE_URL_SECURE`, `MAGENTO_USE_SECURE`, `MAGENTO_USE_SECURE_ADMIN`, `MAGENTO_BACKEND_FRONTNAME` | Set when a domain is configured |
+| `MAGENTO_CACHE_BACKEND`, `MAGENTO_SESSION_SAVE` | `redis` |
+
+With `application-oidc`, CloudForge also sets `MAGENTO_OIDC_CLIENT_ID`, `MAGENTO_OIDC_AUTHORIZE_URL`, `MAGENTO_OIDC_TOKEN_URL`, `MAGENTO_OIDC_USERINFO_URL`, `MAGENTO_OIDC_LOGOUT_URL`, and `MAGENTO_OIDC_SCOPE`.
 
 ---
 
@@ -101,39 +82,40 @@ For a public storefront with protected admin:
 | EFS Path | `/magento` |
 | Volume Name | `magentoData` |
 | Media Upload Path | `/var/www/html/pub/media` |
+| Container User | `33:33` (www-data) |
 | EFS Permissions | `755` |
 
 ### EC2
 
 | Property | Value |
 |----------|-------|
-| EBS Device | `/dev/xvdh` |
+| EBS Device | `/dev/xvdh` (used when EFS is not available) |
 | Data Path | `/var/www/html` |
-| Log Paths | `/var/log/nginx/error.log`, `/var/log/php-fpm/error.log`, `/var/www/html/var/log/system.log`, `/var/www/html/var/log/exception.log`, `/var/log/userdata.log` |
+| Log Paths | `/var/log/nginx/access.log`, `/var/log/nginx/error.log`, `/var/log/php-fpm/error.log`, `/var/www/html/var/log/system.log`, `/var/www/html/var/log/exception.log`, `/var/www/html/var/log/debug.log`, `/var/log/userdata.log` |
+| CloudWatch Log Group | `/cloudforge/<stackName>/magento` |
 
 ---
 
 ## Deployment Context Examples
 
-### Development - Minimal
+Set `cpu`/`memory` (Fargate) or `instanceType` (EC2) and `healthCheckGracePeriod` explicitly. When omitted, the framework defaults (`1024` CPU, `2048` MB, `t3.micro`, 300 seconds) apply, which are too small for Magento.
 
-Magento requires more resources even in development. A reduced setup for testing:
+### Development - Minimal
 
 ```json
 {
   "stackName": "Magento-Dev",
-  "runtime": "fargate",
+  "runtime": "ec2",
   "securityProfile": "dev",
   "topology": "cms-service",
   "applicationId": "magento",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
 
-  "cpu": 4096,
-  "memory": 8192,
+  "instanceType": "t3.xlarge",
 
   "provisionDatabase": true,
   "databaseEngine": "mysql",
@@ -148,11 +130,7 @@ Magento requires more resources even in development. A reduced setup for testing
 }
 ```
 
-**Cost estimate:** ~$200/month
-
-### Production - EC2 (Recommended)
-
-EC2 is strongly recommended for Magento production due to the consistent resource requirements and lower cost at sustained CPU:
+### Production
 
 ```json
 {
@@ -202,9 +180,9 @@ EC2 is strongly recommended for Magento production due to the consistent resourc
 }
 ```
 
-**Cost estimate:** ~$800-1200/month
+### Production - With PCI DSS and SOC 2 Controls
 
-### Production - PCI-DSS
+`complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for the listed frameworks. It does not make the store PCI DSS compliant; scope depends on how payments are handled (see below).
 
 ```json
 {
@@ -242,7 +220,7 @@ EC2 is strongly recommended for Magento production due to the consistent resourc
   "databaseBackupRetentionDays": 90,
   "databaseName": "magento",
 
-  "complianceFrameworks": "PCI-DSS,SOC2",
+  "complianceFrameworks": "pci-dss,soc2",
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "auditManagerEnabled": true,
@@ -252,26 +230,22 @@ EC2 is strongly recommended for Magento production due to the consistent resourc
 
   "enableMonitoring": true,
   "enableEncryption": true,
-  "logRetentionDays": "730",
+  "logRetentionDays": "731",
   "retainStorage": true,
   "healthCheckGracePeriod": 600
 }
 ```
 
-**Cost estimate:** ~$1200-1800/month
-
 ---
 
 ## Health Check Configuration
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| Path | `/health_check.php` | Lightweight built-in endpoint |
-| Grace Period | **600 seconds** | Magento requires time for caches and DI compilation |
-| Interval | 30 seconds | Time between checks |
-| Timeout | 10 seconds | Longer timeout for heavy PHP bootstrap |
-
-**Important:** Magento's startup is slow due to dependency injection compilation and cache warming. Do not reduce the grace period below 300 seconds.
+| Property | Recommended | Deployment-context property |
+|----------|-------------|-----------------------------|
+| Path | `/health_check.php` | — |
+| Grace Period | 600 seconds (startup includes dependency-injection compilation and cache warm-up) | `healthCheckGracePeriod` (framework default 300, maximum 900) |
+| Interval | 30 seconds (default) | `healthCheckInterval` |
+| Timeout | 10 seconds (framework default is 5) | `healthCheckTimeout` |
 
 ---
 
@@ -279,30 +253,35 @@ EC2 is strongly recommended for Magento production due to the consistent resourc
 
 ### 1. Run Magento Setup
 
-Magento requires a CLI setup command after first deployment:
+Install Magento from the instance (EC2 via SSM). Use the RDS endpoint and credentials from the RDS Secrets Manager secret, the ElastiCache endpoint from the stack's resources, and your search engine host (`localhost` for the per-instance Elasticsearch on EC2):
 
 ```bash
 aws ssm start-session --target <instance-id>
 
 cd /var/www/html
 php bin/magento setup:install \
-  --base-url=https://store.example.com \
-  --db-host=$MAGENTO_DB_HOST \
-  --db-name=$MAGENTO_DB_NAME \
-  --db-user=$MAGENTO_DB_USER \
-  --db-password=$MAGENTO_DB_PASSWORD \
+  --base-url=https://store.example.com/ \
+  --db-host=<rds-endpoint> \
+  --db-name=magento \
+  --db-user=<db-user> \
+  --db-password=<db-password> \
   --admin-firstname=Admin \
   --admin-lastname=User \
   --admin-email=admin@example.com \
   --admin-user=admin \
-  --admin-password=Admin123! \
+  --admin-password=<choose-a-strong-password> \
   --backend-frontname=admin \
+  --search-engine=elasticsearch8 \
+  --elasticsearch-host=<search-host> \
   --session-save=redis \
-  --session-save-redis-host=$REDIS_HOST \
+  --session-save-redis-host=<redis-endpoint> \
+  --session-save-redis-db=2 \
   --cache-backend=redis \
-  --cache-backend-redis-server=$REDIS_HOST \
+  --cache-backend-redis-server=<redis-endpoint> \
+  --cache-backend-redis-db=0 \
   --page-cache=redis \
-  --page-cache-redis-server=$REDIS_HOST
+  --page-cache-redis-server=<redis-endpoint> \
+  --page-cache-redis-db=1
 ```
 
 ### 2. Set Production Mode and Compile
@@ -316,43 +295,42 @@ php bin/magento cache:flush
 
 ### 3. Configure Cron
 
-Magento relies heavily on cron for indexing, email, and order processing:
+Magento uses cron for indexing, email, and order processing:
 
 ```bash
 php bin/magento cron:install
 ```
 
-### 4. Configure Admin Security
+### 4. Secure the Admin
 
-1. Change the default admin URL (`--backend-frontname`) to something non-obvious
-2. Enable two-factor authentication for admin users: **Admin** > **Stores** > **Configuration** > **Security** > **2FA**
+1. Use a non-default admin path (`--backend-frontname`). If you change it from `admin`, the default `alb-oidc` protected paths no longer cover it.
+2. Enable two-factor authentication for admin users: **Stores** > **Configuration** > **Security** > **2FA**.
 
 ---
 
 ## Compliance Considerations
 
-### PCI-DSS
+### PCI DSS
 
-Magento using a hosted payment gateway (Stripe, Braintree) reduces PCI scope. If using Magento Payments or direct card capture, full PCI-DSS applies.
+Using a hosted payment gateway with hosted payment fields keeps raw card data off your servers and reduces PCI DSS scope. Direct card capture brings the full environment into scope. Application-level items to review:
 
-- [ ] Use hosted payment fields (Stripe Elements, Braintree Hosted Fields) — never handle raw card data
-- [ ] Enable Magento's built-in brute force protection
-- [ ] Enable TLS 1.2+ only (ALB default)
-- [ ] Change admin URL from default `/admin`
-- [ ] Enable WAF with OWASP ruleset
-- [ ] Quarterly vulnerability scans
+- Use hosted payment fields; never handle raw card data
+- Enable Magento's brute-force protection
+- Use a non-default admin URL
+- Enable WAF (`wafEnabled`)
+- Schedule quarterly vulnerability scans
 
 ---
 
 ## Troubleshooting
 
-### Magento shows blank page or 500 error
+### Blank page or 500 error
 
-Enable developer mode temporarily to see error details:
+Switch to developer mode temporarily to see error details:
 
 ```bash
 php bin/magento deploy:mode:set developer
-# reproduce the error, then check:
+# reproduce the error, then:
 tail -100 var/log/exception.log
 ```
 
@@ -367,12 +345,12 @@ php bin/magento cache:flush
 
 ### `var/` directory permission errors
 
-Magento writes heavily to `var/`, `pub/`, and `generated/`. Ensure these are writable by the web user:
+Magento writes to `var/`, `pub/`, and `generated/`. Make them writable by the web server user (`nginx` on the EC2 runtime, `www-data` in Debian-based images):
 
 ```bash
 find /var/www/html/var /var/www/html/pub /var/www/html/generated -type d -exec chmod 755 {} \;
 find /var/www/html/var /var/www/html/pub -type f -exec chmod 644 {} \;
-chown -R www-data:www-data /var/www/html
+chown -R <web-user>:<web-user> /var/www/html
 ```
 
 ---
@@ -380,5 +358,5 @@ chown -R www-data:www-data /var/www/html
 ## Related Documentation
 
 - [CMS Guides Index](README.md)
-- [WooCommerce Guide](woocommerce.md) — Lighter-weight e-commerce alternative
+- [WooCommerce Guide](woocommerce.md): lighter-weight e-commerce option
 - [CMS Topology Reference](../../applications/CMS.md)

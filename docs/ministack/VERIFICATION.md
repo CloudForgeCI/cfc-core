@@ -1,6 +1,6 @@
 # MiniStack Verification
 
-Confirm what CloudForge actually deployed to MiniStack — the local equivalent of browsing the AWS Console (CloudFormation → Stack → Resources, ECS, ELB, EC2).
+Confirm what CloudForge deployed to MiniStack: the local equivalent of browsing the AWS Console (CloudFormation → Stack → Resources, ECS, ELB, EC2).
 
 See also: [Deployment](DEPLOYMENT.md) · [Jenkins on MiniStack](JENKINS.md) · [Resource verification matrix](RESOURCE_VERIFICATION.md) · [Troubleshooting](TROUBLESHOOTING.md) · [Advanced Configuration](ADVANCED.md)
 
@@ -8,7 +8,7 @@ See also: [Deployment](DEPLOYMENT.md) · [Jenkins on MiniStack](JENKINS.md) · [
 
 ## Verification Layers
 
-There is no AWS Console for MiniStack. Use layered checks — each layer confirms a different part of “what actually got deployed.”
+There is no AWS Console for MiniStack. Use layered checks; each layer confirms a different part of what was deployed.
 
 For a **per-resource matrix** (canonical vs adapted vs deployed, with CLI commands), see **[Resource Verification Matrix](RESOURCE_VERIFICATION.md)**.
 
@@ -25,7 +25,7 @@ Layer 6  Template + adaptations   →  “What was intended vs. what MiniStack s
 
 ## Layer 1 — Stack Status (Built-In)
 
-**Interactive Deployer option 7** runs `verifyMiniStackDeployment` after deploy.
+**Interactive Deployer option 7** verifies the stack after deploying it.
 
 **MiniStackCli:**
 
@@ -71,15 +71,13 @@ aws cloudformation describe-stack-events --stack-name "$MINISTACK_STACK" \
 
 ### Resource browser (StackPort, optional)
 
-MiniStack has no AWS Console UI. [StackPort](https://github.com/DaviReisVieira/stackport) is a third-party resource browser that reads `AWS_ENDPOINT_URL`. CloudForge CI can start it against the running emulator:
+MiniStack has no AWS Console UI. [StackPort](https://github.com/DaviReisVieira/stackport) is a third-party resource browser that reads `AWS_ENDPOINT_URL`. The platform `start` action launches it as `cfc-ministack-stackport` on port **8888**:
 
 ```bash
-cd cfc-testing && java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer --platform
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8888
 ```
 
-Use StackPort to browse CloudFormation, ECS, ELB, IAM, and other services exposed by MiniStack or LocalStack. Platform start owns its lifecycle (see [LocalStack verification](../localstack/README.md#resource-browser-stackport)).
+Use StackPort to browse CloudFormation, ECS, ELB, IAM, and other services exposed by MiniStack or LocalStack. See also [LocalStack: Resource browser](../localstack/README.md#resource-browser-stackport).
 
 ### Expected resource types — base Jenkins Fargate (no domain/auth)
 
@@ -102,7 +100,7 @@ cd cfc-testing
 # Resource types in canonical AWS template
 jq -r '.Resources | to_entries[] | .value.Type' "cdk.out/${STACK_NAME}.template.json" | sort -u
 
-# Resource types actually deployed to MiniStack
+# Resource types deployed to MiniStack
 jq -r '.Resources | to_entries[] | .value.Type' "cdk.out/${STACK_NAME}.ministack.template.json" | sort -u
 
 # What the adapter changed
@@ -177,8 +175,6 @@ aws cloudformation list-stack-     http://localhost:<port>     ← MiniStackAppl
 aws route53 list-resource-         http://localhost:4566/_alb/… ← MiniStackLocalUrl
   record-sets (alias → ALB)
 
-(with auth enabled)                http://localhost:4180          ← MiniStackAuthenticatedUrl
-                                   or MiniStackAuthenticatedUrl from outputs
 ```
 
 **Verify domain wiring (API — source of truth):**
@@ -215,9 +211,9 @@ Expected alias target shape:
 }
 ```
 
-**Optional — browser hostname (not required for verification):**
+**Optional: browser hostname (not required for verification)**
 
-If you want a friendly name in the address bar, use the shared [`*.cloudforge.localhost`](../guides/LOCAL_EMULATOR_HOSTS.md) hosts block (works for MiniStack and LocalStack) and **include the port**:
+For a friendly name in the address bar, use the shared [`*.cloudforge.localhost`](../guides/LOCAL_EMULATOR_HOSTS.md) names (they work for MiniStack and LocalStack) and **include the port**. Most macOS and modern Linux resolvers handle `*.localhost` already; on other hosts, run the setup script from the repository root:
 
 ```bash
 ./scripts/setup-cloudforge-local-hosts.sh
@@ -242,9 +238,9 @@ Success: HTTP `200` or `403` (Jenkins login page) — anything `< 500` means the
 
 ---
 
-## Layer 5 — Docker (Ground Truth)
+## Layer 5 — Docker
 
-MiniStack starts real containers via Docker:
+MiniStack runs ECS tasks as Docker containers:
 
 ```bash
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -i jenkins
@@ -263,26 +259,25 @@ cd cfc-testing
 ./scripts/comprehensive-resource-validator.sh
 ```
 
-This checks `cdk.out/` templates against expected resource matrices (runtime × profile × domain × SSL). It validates **what AWS would get**, not what MiniStack deployed — pair it with Layer 2 on the adapted template.
+This checks `cdk.out/` templates against expected resource matrices (runtime × profile × domain × SSL). It validates **what AWS would get**, not what MiniStack deployed; pair it with Layer 2 on the adapted template.
 
 ---
 
 ## Automated tests (Maven)
 
-Live MiniStack JUnit tests hit real emulator APIs (CFN, EC2, ELBv2, Route53, ACM) — not Java mocks.
+Live MiniStack JUnit tests (`@Tag("ministack")`) call the emulator's APIs (CFN, EC2, ELBv2, Route53, ACM), not Java mocks.
 
 ```bash
-# Unit suites (reactor modules; MiniStack-tagged tests excluded by default)
-cd /path/to/cfc-core
-mvn -pl cloudforge-core,cloudforge-api,cloudforge-ministack,cloudforge-manager -am test
+# Repository root: unit suites (MiniStack-tagged tests excluded by default)
+mvn -pl cloudforge-core,cloudforge-api,cloudforge-ministack -am test
 
-# Live MiniStack integration (Testcontainers, or reuse compose)
-export AWS_ENDPOINT_URL=http://localhost:4566   # preferred when compose MiniStack is up
+# Live MiniStack integration: reuses the emulator on AWS_ENDPOINT_URL when set,
+# otherwise starts one with Testcontainers
+export AWS_ENDPOINT_URL=http://localhost:4566
 mvn -pl cloudforge-ministack test -P ministack
 
-# Synth-only MiniStack-related parity (no emulator) in cfc-testing
-cd cfc-testing
-mvn test -P ministack
+# Synth-only canonical parity (no emulator) in cfc-testing
+mvn -f cfc-testing/pom.xml test -P ministack
 ```
 
 | Suite | Module | What it asserts |
@@ -300,7 +295,7 @@ mvn test -P ministack
 | Route53 hosted zone + alias A/AAAA → ALB `DNSName` | OS/public DNS resolving the FQDN |
 | ALB / listener inventory; adapted ECS forward → localhost redirect | Real ALB→ECS target-health forward |
 | ACM cert + HTTPS listener **presence** | Browser TLS termination parity |
-| `MiniStackLocalUrl` / app port HTTP | Cognito / ALB OIDC edge (stripped; auth proxy deferred) |
+| `MiniStackLocalUrl` / app port HTTP | Cognito / ALB OIDC edge (stripped; auth proxy off by default) |
 
 `MiniStackNativeNetworkVerificationTest` documents this boundary in code comments.
 
@@ -329,7 +324,7 @@ After enabling **TLS**:
 - [ ] `AWS::CertificateManager::Certificate` in stack resources
 - [ ] HTTPS listener present in `elbv2 describe-listeners`
 
-After enabling **auth**:
+After enabling **auth** (with `MINISTACK_AUTH_AUTOSTART=true`; see [Local Auth Runtime](ADVANCED.md#local-auth-runtime)):
 
 - [ ] Cognito resources in stack; `MiniStackAuthenticatedUrl` in outputs
 - [ ] Auth proxy health: `curl http://localhost:4180/_ministack/auth/health`

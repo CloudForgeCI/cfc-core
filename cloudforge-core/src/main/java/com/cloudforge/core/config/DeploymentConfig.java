@@ -100,7 +100,7 @@ public class DeploymentConfig {
     /**
      * Subdomain prefix (e.g., "ci", "gitlab") — ordered ahead of {@link #domain}: you pick what
      * this app is called (the subdomain) before which domain it hangs off of, and the combined
-     * result (subdomain + "." + domain) is what actually gets requested, not the other way
+     * result (subdomain + "." + domain) is what gets requested, not the other way
      * around.
      */
     @ConfigField(
@@ -156,8 +156,8 @@ public class DeploymentConfig {
      * provisioning a new one. Takes priority over both of {@code FargateRuntimeConfiguration}'s
      * other two certificate paths — the DNS-validated public cert (needs a Route53 hosted zone
      * this deployment controls) and the AWS Private CA cert (issued for the bare ALB DNS name,
-     * NOT trusted by browsers — see that class's own comments). This is how a deployment gets a
-     * genuinely publicly-trusted certificate without either of those: import your own cert
+     * NOT trusted by browsers — see that class's comments). This is how a deployment gets a
+     * publicly-trusted certificate without either of those: import your own cert
      * (issued by any public CA — ACM's own DNS/email validation, Let's Encrypt, a purchased
      * cert, ...) into ACM yourself first (e.g. {@code aws acm import-certificate}, entirely
      * within your own account — the key material never has to pass through this deployment
@@ -187,7 +187,7 @@ public class DeploymentConfig {
     )
     public RuntimeType runtime;
 
-    /** Topology type — genuinely selectable, not just an auto-derived display value, so a future
+    /** Topology type — user-selectable, not just an auto-derived display value, so a future
      *  topology (or an app implementing more than one applicable interface) isn't locked out of
      *  being chosen explicitly. No {@code allowedValues} override here on purpose: leaving it
      *  unset lets the schema builder enumerate every {@link TopologyType} constant automatically —
@@ -887,15 +887,12 @@ public class DeploymentConfig {
      * <p><b>Deliberately no static default here (nor on the other {@code database*} fields below
      * with a {@code defaultFrom}):</b> {@link com.cloudforge.core.config.DeploymentContextPreparer}
      * only applies a field's {@code defaultFrom}-resolved ApplicationSpec value when the field is
-     * currently null/blank — a non-null Java initializer (this used to be {@code = "postgres"})
-     * permanently looks "already set" and blocks that resolution forever. That silently forced
-     * every app onto engine=postgres/version=15/instanceClass=db.t3.small/storage=20GB/name=appdb
-     * unless a caller explicitly overrode every one of these fields together — for a MySQL-only
-     * app like WordPress, a form that filled in {@code databaseEngine=mysql} but left {@code
-     * databaseVersion} untouched produced an impossible "mysql15" RDS parameter group family and
-     * failed CloudFormation with {@code CREATE_FAILED}. {@code cloudforge-api}'s {@code
-     * ApplicationFactory} merges these fields against {@code ApplicationSpec.databaseRequirement()}
-     * with the same null-check pattern, now consistently reachable too.</p>
+     * currently null/blank, so a non-null Java initializer would always look "already set" and
+     * block that resolution. Mixing a caller-supplied engine with a static default version can
+     * then produce an invalid combination (e.g. {@code databaseEngine=mysql} with a Postgres
+     * version yields a nonexistent "mysql15" RDS parameter group family). {@code cloudforge-api}'s
+     * {@code ApplicationFactory} merges these fields against
+     * {@code ApplicationSpec.databaseRequirement()} with the same null-check pattern.</p>
      */
     @ConfigField(
         displayName = "Database Engine",
@@ -1072,8 +1069,8 @@ public class DeploymentConfig {
      * is already delivered — never a literal value in the task definition. Only {@code
      * ApplicationFactory} acts on this, and only when {@code applicationId ==
      * cloudforge-manager}. Defaults to {@code true} (unlike {@code
-     * provisionManagerRedisSessions}) because without it Manager silently falls back to {@code
-     * PlaintextSecretCipher} — leaving it on is the secure-by-default choice for any real AWS
+     * provisionManagerRedisSessions}) because without it Manager falls back to {@code
+     * PlaintextSecretCipher} — leaving it on is the secure-by-default choice for any AWS
      * deployment of Manager, not an opt-in scaling feature like Redis. Independent of {@code
      * provisionDatabase}: even an embedded-H2 Manager deployment benefits from encrypting the
      * secrets it holds.
@@ -1096,8 +1093,8 @@ public class DeploymentConfig {
      * owner-only License settings screen after the stack comes up. When set, {@code
      * ApplicationFactory} provisions a dedicated Secrets Manager entry for it and {@code
      * ContainerFactory} binds that as {@code CFC_MANAGER_LICENSESEAT_LICENSE_KEY} — the exact
-     * env var {@code ManagerRuntimeConfiguration}'s "stopgap" path already reads (see its {@code
-     * LicenseSeat} record javadoc, cloudforge-manager). Purely additive: the in-app License
+     * env var {@code ManagerRuntimeConfiguration} reads for its environment-supplied license key
+     * (see its {@code LicenseSeat} record javadoc, cloudforge-manager). Purely additive: the in-app License
      * settings screen still works, and a key activated through it still takes precedence (see
      * {@code LicenseKeyStore}, cloudforge-manager) — this only seeds the initial value.
      *
@@ -1105,7 +1102,7 @@ public class DeploymentConfig {
      * to {@code provisionManagerAccountCipherKey} above for the same reason that field does —
      * {@code InteractiveDeployer.configureDatabaseOptions()} is the one place that currently
      * discovers and prompts for manager-only fields by reflection ({@code
-     * ConfigurationIntrospector.discoverVisibleFields(..., "database")}); a genuine "security"
+     * ConfigurationIntrospector.discoverVisibleFields(..., "database")}); a "security"
      * category discovery pass would also surface ~30 unrelated existing security fields that
      * were never meant for CLI prompting.
      */
@@ -1157,11 +1154,8 @@ public class DeploymentConfig {
         displayName = "Compliance Frameworks",
         description = "Compliance frameworks to enable (soc2, pci-dss, hipaa, gdpr)",
         category = "compliance",
-        // Was free-text-only (no allowedValues) — the Manager UI's builder rendered this as a
-        // bare "comma, separated, values" text box for an array field with real, fixed,
-        // machine-checkable options, exactly the kind of field a typo silently corrupts. Adding
-        // allowedValues lets the UI render checkboxes instead and auto-fill the exact expected
-        // token, matching ComplianceFrameworkType's own JSON values.
+        // allowedValues lets UIs render checkboxes with the exact expected tokens (matching
+        // ComplianceFrameworkType's JSON values) instead of a free-text list prone to typos.
         allowedValues = {"soc2", "pci-dss", "hipaa", "gdpr"},
         example = "soc2,pci-dss",
         order = 300
@@ -1169,6 +1163,30 @@ public class DeploymentConfig {
     @JsonDeserialize(using = ComplianceFrameworkListConverter.Deserializer.class)
     @JsonSerialize(using = ComplianceFrameworkListConverter.Serializer.class)
     public List<ComplianceFrameworkType> complianceFrameworks = new ArrayList<>();
+
+    /**
+     * Raw compliance-framework token override for an on-demand advisory check (see
+     * {@code CloudForgeSynthesizer#synthesizeAdvisoryDryRun}) -- lets a caller ask cdk-nag /
+     * FrameworkRules to validate against tokens with no {@link ComplianceFrameworkType} entry at
+     * all (e.g. {@code "ISO-27001"}, or {@code "AWS-BEST-PRACTICES"} for cdk-nag's own generic
+     * {@code AwsSolutionsChecks} fallback pack — see {@code SecurityRules#mapFrameworkToNagPack}'s
+     * {@code default} case), without extending the license-gated {@link #complianceFrameworks}
+     * enum real deploys use. Comma-separated, same format {@link #complianceFrameworks} itself
+     * serializes to.
+     *
+     * <p>Deliberately NOT part of {@link #toContextMap}'s output: the "cfc" context map it builds
+     * gets round-tripped back through a strict {@code DeploymentConfig} deserialization inside
+     * {@code DeploymentContext.from} (jsii construct-tree plumbing), and that round trip enforces
+     * the same {@link ComplianceFrameworkType} enum this field exists specifically to bypass —
+     * feeding it through that key would just re-throw the same "unknown compliance framework"
+     * error one layer later. {@code CloudForgeSynthesizer#synthesize} instead seeds this under its
+     * own separate, sibling top-level CDK context key (not nested in "cfc" at all), and {@code
+     * SecurityRules#install} reads it directly off the construct tree rather than through {@code
+     * DeploymentContext}. {@code transient}/{@code @JsonIgnore} since it must never round-trip
+     * through a saved deployment context the way every other field here does.</p>
+     */
+    @JsonIgnore
+    public transient String complianceFrameworksRawOverride;
 
     /**
      * Compliance validation mode controlling how validation failures are handled.
@@ -1221,15 +1239,20 @@ public class DeploymentConfig {
     )
     public Boolean awsConfigEnabled = false;
 
-    /** Create AWS Config infrastructure */
+    /** Create AWS Config infrastructure — an account+region-wide singleton (AWS allows exactly
+     *  one recorder and one delivery channel per account per region), so this must stay an
+     *  explicit, single-stack-only opt-in. {@code false} by default, same as {@link
+     *  #awsConfigEnabled}: unset means neither compliance rules nor the recorder/channel they'd
+     *  attach to ever get created. */
     @ConfigField(
         displayName = "Create Config Infrastructure",
-        description = "Create AWS Config recorder and delivery channel (only one per region)",
+        description = "Create AWS Config recorder and delivery channel (only one per region — "
+            + "only ever set this true on exactly one stack per account/region)",
         category = "compliance",
         visibleWhen = "awsConfigEnabled == true",
         order = 40
     )
-    public Boolean createConfigInfrastructure = true;
+    public Boolean createConfigInfrastructure = false;
 
     /** Enable GuardDuty threat detection */
     @ConfigField(
@@ -1556,10 +1579,9 @@ public class DeploymentConfig {
      * IAM role before synthesis — see {@code cloudforge-manager}'s account-connection feature,
      * which owns every concept of "which account" beyond this bare pass-through field).</p>
      *
-     * <p>When {@code null} (the default — every existing caller), behavior is completely
-     * unchanged from before this field existed: {@code cloudforge-api}'s {@code
-     * CloudForgeSynthesizer} falls back to its prior {@code CDK_DEFAULT_ACCOUNT}-env-var-or-omit
-     * resolution, producing the same account-agnostic template it always has.</p>
+     * <p>When {@code null} (the default), {@code cloudforge-api}'s {@code CloudForgeSynthesizer}
+     * falls back to {@code CDK_DEFAULT_ACCOUNT} if set, or omits the account, producing an
+     * account-agnostic template.</p>
      */
     public String account;
 

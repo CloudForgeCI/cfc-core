@@ -340,7 +340,7 @@ class ComplianceTruthTableGenerator:
         return filepath
 
     def generate_html_report(self) -> str:
-        """Generate comprehensive HTML report with truth tables for four audiences"""
+        """Generate HTML report with truth tables for four audiences"""
 
         # Calculate statistics
         total_tests = sum(len(f.parameterized_tests) for f in self.parser.frameworks)

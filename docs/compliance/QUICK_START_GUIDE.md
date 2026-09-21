@@ -6,56 +6,47 @@ Configure compliance validation for a CloudForge deployment.
 
 ## Overview
 
-This guide shows how to select compliance mappings, configure validation behavior, and inspect validation output. These checks evaluate configured technical controls; they do not certify the deployed environment.
+This guide shows how to select compliance frameworks, configure validation behavior, and inspect validation output. These checks evaluate configured technical controls; they do not certify the deployed environment.
+
+Two validation mechanisms run during `cdk synth`:
+
+- **cdk-nag packs** run for `production` stacks with at least one framework selected.
+- **CloudForge framework validators** (`FrameworkRules` implementations such as `PciDssRules` and `HipaaRules`) run when `auditManagerEnabled` is `true`.
 
 ---
 
 ## Method 1: Interactive Deployment (Recommended)
 
-### Step 1: Run Interactive Deployer
+### Step 1: Run the Interactive Deployer
 
 ```bash
+mvn -DskipTests install
 cd cfc-testing
 cdk deploy
 ```
 
-The Interactive Deployer will automatically activate if `deployment-context.json` is not found.
+The Interactive Deployer starts its prompts when `deployment-context.json` is not found, or when run with `--interactive`.
 
-### Step 2: Answer Compliance Prompts
+### Step 2: Answer the Compliance Prompts
 
-When prompted for **Advanced Configuration**:
+The deployer asks for compliance frameworks and then for advanced settings such as AWS Config, GuardDuty, and Audit Manager. The framework menu is:
 
 ```
-🔧 Advanced Configuration:
-==========================
-Enable AWS Config Compliance Monitoring [y/N]: y
-Enable AWS GuardDuty [Y/n]: y
-Enable AWS Audit Manager [Y/n]: y
-
-Select compliance frameworks:
+📋 Select Compliance Frameworks:
+================================
   1. All Standard Frameworks (PCI-DSS, HIPAA, SOC2, GDPR)
-  2. SOC 2 only
-  3. HIPAA only
-  4. PCI-DSS only
-  5. GDPR only
-  6. Healthcare (HIPAA + SOC2 + GDPR)
+  2. SOC 2 Only (SaaS applications)
+  3. HIPAA Only (Healthcare)
+  4. PCI-DSS Only (Payment Processing)
+  5. GDPR Only (Data Protection)
+  6. Healthcare Focused (HIPAA + SOC2 + GDPR)
   7. Payment Processing (PCI-DSS + SOC2)
-  8. Custom
-Framework(s) [1]: 1
+  8. Custom (comma-separated list)
 ```
 
 ### Step 3: Deploy
 
-```bash
-# Synthesis will validate your infrastructure
-# If compliant: Template generated
-# If non-compliant: Errors shown with remediation steps
-
-# Deploy to AWS
-cdk deploy --require-approval never
-```
-
-After deployment, compliance validation runs with the selected frameworks and mode.
+Synthesis runs the validators. In `enforce` mode, a failed check stops synthesis and lists the failing rules; in `advisory` mode, failures are logged as warnings and the deployment continues.
 
 ---
 
@@ -63,104 +54,88 @@ After deployment, compliance validation runs with the selected frameworks and mo
 
 ### Step 1: Create `deployment-context.json`
 
+`deployment-context.json` contains a flat set of `DeploymentConfig` properties:
+
 ```json
 {
   "stackName": "my-application-stack",
-  "context": {
-    "applicationId": "jenkins",
-    "runtime": "FARGATE",
-    "topology": "APPLICATION_SERVICE",
-    "securityProfile": "PRODUCTION",
-    "domain": "example.com",
-    "subdomain": "jenkins",
-    "enableSsl": true,
+  "applicationId": "jenkins",
+  "runtime": "FARGATE",
+  "topology": "APPLICATION_SERVICE",
+  "securityProfile": "production",
+  "domain": "example.com",
+  "subdomain": "jenkins",
+  "enableSsl": true,
 
-    "auditManagerEnabled": true,
-    "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR",
-    "complianceMode": "enforce",
+  "auditManagerEnabled": true,
+  "complianceFrameworks": "pci-dss,hipaa,soc2,gdpr",
+  "complianceMode": "enforce",
 
-    "enableEncryption": true,
-    "enableMonitoring": true,
-    "awsConfigEnabled": true,
-    "guardDutyEnabled": true,
-    "wafEnabled": true,
+  "enableEncryption": true,
+  "enableMonitoring": true,
+  "awsConfigEnabled": true,
+  "guardDutyEnabled": true,
+  "wafEnabled": true,
 
-    "kmsKeyRotationEnabled": true,
-    "securityHubEnabled": true,
-    "inspectorEnabled": true,
-    "macieEnabled": true,
+  "securityHubEnabled": true,
+  "inspectorEnabled": true,
+  "macieEnabled": true,
 
-    "enableS3VersioningRemediation": false,
-    "enableCloudTrailBucketAccessRemediation": false
-  }
+  "enableS3VersioningRemediation": false,
+  "enableCloudTrailBucketAccessRemediation": false
 }
 ```
 
-### Step 2: Run CDK Synth
+### Step 2: Synthesize and Deploy
 
 ```bash
 cd cfc-testing
-mvn compile
-cdk synth --app "java -cp target/classes:target/dependency/* com.cloudforgeci.samples.app.CloudForgeCommunitySample"
+cdk synth
+cdk deploy
 ```
 
-### Step 3: Deploy
-
-```bash
-cdk deploy --require-approval never
-```
+`cdk.json` runs the Interactive Deployer, which reads `deployment-context.json` without prompting. To use another file, set `CFC_CONTEXT_FILE` or pass `--context <file>` when running the deployer directly.
 
 ---
 
 ## Compliance Framework Selection Guide
 
+`complianceFrameworks` accepts `pci-dss`, `hipaa`, `soc2`, and `gdpr` (case-insensitive), separated by commas, spaces, or `+`. Any other value fails configuration parsing. ISO 27001 and FedRAMP validators exist in the source tree but cannot be selected yet.
+
 ### Option 1: All Supported Frameworks
 
 ```json
-"complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR"
+"complianceFrameworks": "pci-dss,hipaa,soc2,gdpr"
 ```
 
-**Coverage**: 70% overall (170+ validation rules)
-**Use Case**: Validate controls mapped across all listed frameworks
-**Cost**: ~$150-300/month (Security Hub + Inspector + Macie + GuardDuty)
+**Use Case**: Validate controls mapped across all four frameworks.
 
 ---
 
 ### Option 2: Healthcare (HIPAA-focused)
 
 ```json
-"complianceFrameworks": "HIPAA,SOC2,GDPR"
+"complianceFrameworks": "hipaa,soc2,gdpr"
 ```
 
-**Coverage**: 68% (125+ validation rules)
 **Use Case**: Healthcare applications with PHI data
-**Required AWS Services**:
+**Related AWS Services**:
 - AWS Config (compliance monitoring)
-- Amazon Macie (PHI discovery)
-- Security Hub (centralized dashboard)
+- Amazon Macie (sensitive data discovery)
+- Security Hub (centralized findings)
 - GuardDuty (threat detection)
-
-**Additional Settings**:
-```json
-"awsBaaSigned": true,
-"macieEnabled": true,
-"gdprDpiaCompleted": true,
-"incidentResponsePlan": true,
-"breachNotificationProcedures": true
-```
 
 ---
 
 ### Option 3: Payment Processing (PCI-DSS focused)
 
 ```json
-"complianceFrameworks": "PCI-DSS,SOC2"
+"complianceFrameworks": "pci-dss,soc2"
 ```
 
-**Coverage**: 73% (95+ validation rules)
 **Use Case**: E-commerce and payment processing applications
-**Required AWS Services**:
-- AWS WAF (application firewall)
+**Related AWS Services**:
+- AWS WAF (application firewall; required by `PciDssRules` in `production`)
 - GuardDuty (intrusion detection)
 - Inspector (vulnerability scanning)
 - Security Hub (compliance dashboard)
@@ -170,25 +145,25 @@ cdk deploy --require-approval never
 "wafEnabled": true,
 "guardDutyEnabled": true,
 "inspectorEnabled": true,
-"antiMalwareProtectionEnabled": true,
-"fileIntegrityMonitoringEnabled": true
+"antiMalwareEnabled": true,
+"fileIntegrityMonitoring": true
 ```
 
 ---
 
-### Option 4: Trust & Transparency (SOC 2 only)
+### Option 4: SOC 2 only
 
 ```json
-"complianceFrameworks": "SOC2"
+"complianceFrameworks": "soc2"
 ```
 
-**Coverage**: 94% (30+ validation rules)
-**Use Case**: SaaS applications, vendor trust requirements
-**Minimal Cost**: Can use DEV profile, no additional AWS services required
+**Use Case**: SaaS applications, vendor trust requirements. `Soc2Rules` runs for `staging` and `production`.
 
 ---
 
 ## Compliance Mode Selection
+
+`complianceMode` defaults to `enforce` for `production` and `advisory` for `dev` and `staging`.
 
 ### ENFORCE Mode
 
@@ -197,115 +172,120 @@ cdk deploy --require-approval never
 ```
 
 **Behavior**:
-- ❌ **Blocks** CDK synthesis if validation fails
-- 🛑 **Prevents** synthesis when configured validation rules fail
-- Intended for production environments where failed validation should block synthesis
+- Framework validators return their failures as CDK validation errors, which stop synthesis
+- When synthesis runs through `CloudForgeSynthesizer`, cdk-nag findings in the generated `NagReport` files also stop synthesis
+- The Interactive Deployer also runs `cfn-guard` against the synthesized template (when the binary is installed) and stops before deploying if it fails
 
 **When to use**:
 - Production deployments
 - Environments subject to formal control review
-- Regulatory compliance required
 
 ---
 
-### ADVISORY Mode (Development)
+### ADVISORY Mode
 
 ```json
 "complianceMode": "advisory"
 ```
 
 **Behavior**:
-- ⚠️ **Logs** warnings for validation failures
-- ✅ **Allows** deployment to proceed
-- Intended for development and staging environments
+- Framework validators log failures as warnings
+- Synthesis and deployment continue
 
 **When to use**:
 - Development and testing
-- Proof-of-concept deployments
-- Gradual compliance adoption
+- Gradual adoption of a framework
+
+### DISABLED Mode
+
+```json
+"complianceMode": "disabled"
+```
+
+`ComplianceMatrix` no longer forces framework-required controls on, so profile methods fall back to the deployment context and profile defaults. The PCI-DSS, HIPAA, SOC2, and GDPR validators do not check for `disabled` and handle it the same way as `enforce`; set `auditManagerEnabled: false` to skip them.
 
 ---
 
 ## Configuration Parameter Reference
 
+This section lists the parameters most relevant to compliance. The complete set of properties is defined in `DeploymentConfig` (`cloudforge-core/src/main/java/com/cloudforge/core/config/DeploymentConfig.java`).
+
 ### Application Parameters
 
 | Parameter | Type | Values | Description |
 |-----------|------|--------|-------------|
-| `applicationId` | string | jenkins, gitlab, metabase, grafana, mattermost, harbor, nexus, gitea, drone, superset, vault, prometheus, redis, postgresql | **Required**. Application to deploy |
-| `applicationName` | string | Any | Display name for application (auto-set from applicationId) |
-| `provisionDatabase` | boolean | true, false | **Optional apps only** (Metabase, Grafana). Use RDS instead of embedded DB. Default: false |
+| `applicationId` | string | See [Applications](../applications/README.md) | **Required**. Application to deploy (for example `jenkins`, `gitlab`, `grafana`, `mattermost-team`, `wordpress`) |
+| `applicationName` | string | Any | Display name for the application |
+| `provisionDatabase` | boolean | true, false | Provision RDS for applications that support an external database. Default: false |
 
 ### Infrastructure Parameters
 
 | Parameter | Type | Values | Description |
 |-----------|------|--------|-------------|
-| `runtime` | string | FARGATE, EC2 | Container runtime. Default: FARGATE |
-| `topology` | string | APPLICATION_SERVICE, CMS_SERVICE, S3_WEBSITE | Deployment topology. Default: APPLICATION_SERVICE. Use `CMS_SERVICE` for PHP/CMS platforms (WordPress, Magento, Drupal, etc.) — auto-wires S3 media, Redis, and CloudFront. |
-| `applicationId` | string | `wordpress`, `magento`, `drupal`, … | **Required with `CMS_SERVICE`.** Identifies the CMS plugin to deploy. See [CMS Deployment Guide](../applications/CMS.md) for all 19 platform IDs. |
-| `securityProfile` | string | DEV, STAGING, PRODUCTION | Security configuration level |
+| `runtime` | string | FARGATE, EC2 | Container runtime |
+| `topology` | string | APPLICATION_SERVICE, CMS_SERVICE, JENKINS_SERVICE | Deployment topology. Use `CMS_SERVICE` for PHP/CMS platforms (WordPress, Magento, Drupal, and others); see the [CMS Deployment Guide](../applications/CMS.md) |
+| `securityProfile` | string | dev, staging, production | Security configuration level. Default: dev |
+| `networkMode` | string | public, private-with-nat, isolated | VPC topology. `public-no-nat` is accepted as an alias for `public` |
 
 ### Database Parameters (RDS)
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `dbInstanceClass` | string | Varies by app | RDS instance type (e.g., db.t3.small) |
-| `dbAllocatedStorage` | number | 20-50GB | Storage size in GB |
-| `dbBackupRetentionDays` | number | 7-30 days | Backup retention period |
-| `dbName` | string | App-specific | Database name |
-| `dbEngineVersion` | string | 13-15 | PostgreSQL version |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `databaseEngine` | string | RDS engine |
+| `databaseVersion` | string | Engine version |
+| `databaseInstanceClass` | string | RDS instance type (for example `db.t3.small`) |
+| `databaseAllocatedStorageGB` | number | Storage size in GB |
+| `databaseBackupRetentionDays` | number | Backup retention period. Default: 7 |
+| `databaseName` | string | Database name |
+| `databaseMultiAz` | boolean | Multi-AZ deployment |
 
-### Compliance & Remediation Parameters
+### Compliance and Remediation Parameters
 
 | Parameter | Type | Values | Description |
 |-----------|------|--------|-------------|
-| `complianceFrameworks` | string | PCI-DSS, HIPAA, SOC2, GDPR, ISO27001 | Comma-separated list |
-| `complianceMode` | string | enforce, advisory | enforcement or warnings only |
-| `auditManagerEnabled` | boolean | true, false | Enable AWS Audit Manager |
-| `awsConfigEnabled` | boolean | true, false | Enable AWS Config monitoring |
-| `createConfigInfrastructure` | boolean | true, false | Create Config Recorder/Delivery Channel |
-| `enableS3VersioningRemediation` | boolean | true, false | Auto-enable S3 versioning |
-| `enableCloudTrailBucketAccessRemediation` | boolean | true, false | Auto-enable CloudTrail logging |
-| `enableRdsDeletionProtectionRemediation` | boolean | true, false | Auto-enable RDS deletion protection |
-| `enableRdsAutoMinorVersionUpgradeRemediation` | boolean | true, false | Auto-enable RDS security patches |
+| `complianceFrameworks` | string | pci-dss, hipaa, soc2, gdpr | Delimited list |
+| `complianceMode` | string | enforce, advisory, disabled | See [Compliance Mode Selection](#compliance-mode-selection) |
+| `auditManagerEnabled` | boolean | true, false | Install framework validators and create Audit Manager assessments |
+| `awsConfigEnabled` | boolean | true, false | Deploy AWS Config rules and remediation |
+| `createConfigInfrastructure` | boolean | true, false | Create the Config recorder and delivery channel (one stack per account and region) |
+| `logRetentionDays` | string | 1 to 3653 (CloudWatch values) | CloudWatch Logs retention override |
+| `enableS3VersioningRemediation` | boolean | true, false | Enable versioning on non-compliant S3 buckets |
+| `enableCloudTrailBucketAccessRemediation` | boolean | true, false | Restore CloudTrail bucket access and logging |
+| `enableRdsDeletionProtectionRemediation` | boolean | true, false | Enable RDS deletion protection |
+| `enableRdsAutoMinorVersionUpgradeRemediation` | boolean | true, false | Enable RDS automatic minor version upgrades |
 
-### Available Applications
+### Validator Settings
 
-| Application | Category | Database Requirement | OIDC Support |
-|-------------|----------|---------------------|--------------|
-| **jenkins** | CI/CD | NONE | Yes |
-| **gitlab** | CI/CD | REQUIRED (PostgreSQL) | Yes |
-| **drone** | CI/CD | NONE | Yes |
-| **metabase** | Analytics | OPTIONAL (H2 or PostgreSQL) | Yes |
-| **superset** | Analytics | REQUIRED (PostgreSQL) | Yes |
-| **grafana** | Monitoring | OPTIONAL (SQLite or PostgreSQL) | Yes |
-| **mattermost** | Collaboration | REQUIRED (PostgreSQL) | Yes |
-| **harbor** | Container Registry | REQUIRED (PostgreSQL) | Yes |
-| **nexus** | Artifact Registry | NONE | Yes |
-| **gitea** | VCS | NONE | Yes |
-| **vault** | Secrets | NONE | No |
-| **prometheus** | Monitoring | NONE | No |
-| **redis** | Database | NONE | No |
-| **postgresql** | Database | NONE | No |
+Some validators read additional keys directly from the raw `cfc` context map instead of from `DeploymentConfig`:
+
+| Key | Read by |
+|-----|---------|
+| `kmsKeyRotationEnabled` | `KeyManagementRules` |
+| `securityHubPciDssEnabled`, `securityHubCisEnabled`, `securityHubAutoRemediation` | `AdvancedMonitoringRules` |
+| `inspectorEc2Scanning`, `inspectorEcrScanning`, `inspectorContinuousScanning` | `AdvancedMonitoringRules` |
+| `incidentResponsePlanDocumented`, `disasterRecoveryPlanDocumented` | `IncidentResponseRules` |
+| `awsBaaSigned`, `workforceAuthorizationProcedures`, `breachNotificationProcedures`, `incidentResponsePlan` | `HipaaOrganizationalRules` |
+| `gdprLegalBasisDocumented`, `gdprDataSubjectRequestProcedures`, `gdprDpiaCompleted`, `gdprInternationalTransferSafeguards` | `GdprOrganizationalRules` |
+
+Because `DeploymentConfig` ignores unknown properties, these keys take effect only when supplied in the `cfc` object of the CDK context (for example in `cdk.json`); they are dropped when the configuration is loaded from `deployment-context.json`. `HipaaOrganizationalRules` and `GdprOrganizationalRules` are also not installed today, because their framework IDs cannot be selected in `complianceFrameworks`.
 
 ---
 
-## Essential Compliance Settings
+## Example Configurations
 
-### Minimum Configuration (All Frameworks)
+### Minimum Configuration
 
 ```json
 {
   "applicationId": "jenkins",
+  "securityProfile": "production",
   "auditManagerEnabled": true,
-  "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR",
+  "complianceFrameworks": "pci-dss,hipaa,soc2,gdpr",
   "enableEncryption": true,
   "enableMonitoring": true,
   "awsConfigEnabled": true
 }
 ```
-
-**Cost**: ~$50/month (Config + basic monitoring)
 
 ---
 
@@ -316,52 +296,9 @@ cdk deploy --require-approval never
   "applicationId": "gitlab",
   "runtime": "FARGATE",
   "topology": "APPLICATION_SERVICE",
-  "securityProfile": "PRODUCTION",
+  "securityProfile": "production",
   "auditManagerEnabled": true,
-  "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR",
-  "complianceMode": "enforce",
-
-  "enableEncryption": true,
-  "enableMonitoring": true,
-  "awsConfigEnabled": true,
-  "guardDutyEnabled": true,
-  "wafEnabled": true,
-
-  "kmsKeyRotationEnabled": true,
-  "kmsKeyRotationDays": 90,
-  "secretsManagerRotationEnabled": true,
-
-  "securityHubEnabled": true,
-  "securityHubPciDssEnabled": true,
-  "securityHubCisEnabled": true,
-
-  "inspectorEnabled": true,
-  "inspectorContinuousScanning": true,
-
-  "macieEnabled": true,
-  "macieAutomatedDiscovery": true,
-
-  "enableS3VersioningRemediation": true,
-  "enableCloudTrailBucketAccessRemediation": true,
-  "enableRdsDeletionProtectionRemediation": true,
-  "enableRdsAutoMinorVersionUpgradeRemediation": true
-}
-```
-
-**Cost**: ~$150-300/month (all security services)
-
----
-
-### Expanded Configuration
-
-```json
-{
-  "applicationId": "mattermost",
-  "runtime": "EC2",
-  "topology": "APPLICATION_SERVICE",
-  "securityProfile": "PRODUCTION",
-  "auditManagerEnabled": true,
-  "complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR",
+  "complianceFrameworks": "pci-dss,hipaa,soc2,gdpr",
   "complianceMode": "enforce",
 
   "enableEncryption": true,
@@ -371,42 +308,14 @@ cdk deploy --require-approval never
   "wafEnabled": true,
   "albAccessLogging": true,
 
-  "kmsKeyRotationEnabled": true,
-  "kmsKeyRotationDays": 90,
-  "secretsManagerRotationEnabled": true,
-  "certificateAutoRenewalEnabled": true,
-
   "securityHubEnabled": true,
-  "securityHubPciDssEnabled": true,
-  "securityHubCisEnabled": true,
-  "securityHubAutoRemediation": true,
-
   "inspectorEnabled": true,
-  "inspectorEc2Scanning": true,
-  "inspectorEcrScanning": true,
-  "inspectorContinuousScanning": true,
-
   "macieEnabled": true,
   "macieAutomatedDiscovery": true,
 
-  "antiMalwareProtectionEnabled": true,
-  "containerImageScanningEnabled": true,
-  "fileIntegrityMonitoringEnabled": true,
-  "intrusionDetectionAlertsEnabled": true,
-
-  "incidentResponsePlanDocumented": true,
-  "disasterRecoveryPlanDocumented": true,
-  "backupRestoreTestingEnabled": true,
-  "forensicLoggingEnabled": true,
-
-  "awsBaaSigned": true,
-  "workforceAuthorizationProcedures": true,
-  "breachNotificationProcedures": true,
-
-  "gdprLegalBasisDocumented": true,
-  "gdprDataSubjectRequestProcedures": true,
-  "gdprDpiaCompleted": true,
-  "gdprInternationalTransferSafeguards": true,
+  "antiMalwareEnabled": true,
+  "containerImageScanning": true,
+  "fileIntegrityMonitoring": true,
 
   "enableS3VersioningRemediation": true,
   "enableCloudTrailBucketAccessRemediation": true,
@@ -415,90 +324,69 @@ cdk deploy --require-approval never
 }
 ```
 
-**Cost**: ~$200-400/month
-**Coverage**: 70% overall (170+ validation rules)
-
 ---
 
 ## Validation Output Examples
 
-### Success (Compliant)
+### Validators Installed
 
 ```
-INFO: Installing compliance validation for: PCI-DSS,HIPAA,SOC2,GDPR
-INFO:   - PCI-DSS v3.2.1 validator enabled
-INFO:   - HIPAA Security Rule validator enabled
-INFO:   - HIPAA Organizational validator enabled
-INFO:   - SOC 2 Trust Services Criteria validator enabled
-INFO:   - GDPR Technical Safeguards validator enabled
-INFO:   - GDPR Data Protection validator enabled
-INFO:   - Key Management validator enabled
-INFO:   - Advanced Monitoring validator enabled
-INFO:   - Incident Response & DR validator enabled
-INFO:   - Threat Protection validator enabled
-INFO:   - Database Security validator enabled
-
-INFO: PCI-DSS validation passed (24 checks)
-INFO: HIPAA validation passed (31 checks)
-INFO: SOC 2 validation passed (18 checks)
-INFO: GDPR validation passed (29 checks)
-INFO: Key Management validation passed (12 checks)
-INFO: Advanced Monitoring validation passed (14 checks)
-
-✅ All compliance validation passed!
-✅ CDK Stack synthesized successfully!
+INFO: Installing CloudForge FrameworkRules validation for: pci-dss,hipaa,soc2,gdpr
+INFO: Discovered 18 compliance frameworks
+INFO:   ✓ Key Management & Encryption (priority=-10)
+INFO:   ✓ Database Security (priority=-5)
+INFO:   ✓ Advanced Security Monitoring (priority=-5)
+...
+INFO:   ✓ HIPAA Security Rule (priority=10)
+INFO:   ✓ PCI DSS v4.0.1 (priority=20)
+INFO:   ✓ GDPR (priority=30)
+INFO:   ✓ SOC 2 (priority=40)
+INFO: Successfully installed 15 CloudForge FrameworkRules validators
 ```
 
----
-
-### Failure (Non-compliant in ENFORCE mode)
+### Passing Validation
 
 ```
-INFO: Installing compliance validation for: PCI-DSS,HIPAA,SOC2,GDPR
-
-WARNING: PCI-DSS validation found 3 failures
-WARNING:   - PCI-DSS-Req-3.4-EBS-Encryption: EBS encryption must be enabled
-WARNING:   - PCI-DSS-Req-10.1-CloudTrail: CloudTrail must be enabled for audit logging
-WARNING:   - PCI-DSS-Req-11.4-GuardDuty: GuardDuty required for intrusion detection
-
-ERROR: *** Compliance validation failed in ENFORCE mode ***
-ERROR: Fix 3 violations or set complianceMode=advisory
-ERROR:
-ERROR: Remediation steps:
-ERROR:   1. Set enableEncryption=true
-ERROR:   2. Set enableMonitoring=true (includes CloudTrail)
-ERROR:   3. Set guardDutyEnabled=true
-
-❌ CDK synthesis failed - infrastructure is non-compliant
+INFO: PCI-DSS validation passed (<n> checks)
 ```
+
+### Failing Validation (ENFORCE mode)
+
+```
+SEVERE: PCI-DSS validation failed with 2 violations (ENFORCE mode - blocking deployment)
+SEVERE:   - PCI-DSS-Req-6.6-WAF: Web Application Firewall (WAF) REQUIRED for PCI-DSS compliance in PRODUCTION - ...
+SEVERE:   - PCI-DSS-Req-11.4-GuardDuty: ...
+```
+
+The failures are returned as CDK validation errors and `cdk synth` exits with an error.
 
 ---
 
 ## Common Scenarios
 
-### Scenario 1: I want to enable compliance without breaking my existing deployment
+### Scenario 1: Enable compliance without breaking an existing deployment
 
-**Solution**: Use ADVISORY mode first
+Use ADVISORY mode first:
 
 ```json
 {
   "auditManagerEnabled": true,
-  "complianceFrameworks": "SOC2",
+  "complianceFrameworks": "soc2",
   "complianceMode": "advisory"
 }
 ```
 
-Review warnings, fix issues incrementally, then switch to ENFORCE mode.
+Review the warnings, fix issues incrementally, then switch to ENFORCE mode.
 
 ---
 
-### Scenario 2: I need HIPAA compliance but don't have all organizational policies yet
-
-**Solution**: Enable technical controls, skip organizational (advisory only)
+### Scenario 2: Evaluate HIPAA technical controls
 
 ```json
 {
-  "complianceFrameworks": "HIPAA",
+  "securityProfile": "production",
+  "auditManagerEnabled": true,
+  "complianceFrameworks": "hipaa",
   "complianceMode": "enforce",
   "enableEncryption": true,
   "awsConfigEnabled": true,
@@ -506,19 +394,17 @@ Review warnings, fix issues incrementally, then switch to ENFORCE mode.
 }
 ```
 
-Organizational rules (BAA, training, procedures) will show as advisory warnings only.
+`HipaaRules` checks technical safeguards only. Administrative safeguards such as a Business Associate Agreement, training, and procedures must be tracked outside CloudForge.
 
 ---
 
-### Scenario 3: I need to evaluate SOC 2-mapped controls
-
-**Approach**: Enable SOC 2 validation in ENFORCE mode
+### Scenario 3: Evaluate SOC 2-mapped controls
 
 ```json
 {
-  "securityProfile": "PRODUCTION",
+  "securityProfile": "production",
   "auditManagerEnabled": true,
-  "complianceFrameworks": "SOC2",
+  "complianceFrameworks": "soc2",
   "complianceMode": "enforce",
   "enableEncryption": true,
   "enableMonitoring": true,
@@ -526,13 +412,11 @@ Organizational rules (BAA, training, procedures) will show as advisory warnings 
 }
 ```
 
-The current mapping reports 94% rule coverage for SOC 2. This validation result is not an audit opinion or certification.
+A passing validation result is not an audit opinion or certification.
 
 ---
 
-### Scenario 4: I want to test compliance validation without deploying
-
-**Solution**: Use dry-run script
+### Scenario 4: Test compliance validation without deploying
 
 ```bash
 cd cfc-testing
@@ -543,32 +427,21 @@ This runs `cdk synth` for multiple configurations and reports validation results
 
 ---
 
-## Cost Estimation
+## Cost Considerations
 
-### Synthesis-Time Validation
+Synthesis-time validation has no AWS cost. The optional AWS services have usage-based charges:
 
-- **CDK Synthesis-time validation**: $0
-- **170+ validation rules**: $0
-- **Advisory mode logging**: $0
+| Service | Purpose |
+|---------|---------|
+| **AWS Config** | Configuration items and rule evaluations |
+| **GuardDuty** | Threat detection, priced by analyzed data volume |
+| **Security Hub** | Security checks and finding ingestion |
+| **Inspector** | EC2 and container image scanning |
+| **Macie** | Sensitive data discovery, priced by data scanned |
+| **Audit Manager** | Evidence collection, priced by assessed resources |
+| **CloudTrail** | Data events and additional trails |
 
----
-
-### AWS Services (Variable Cost)
-
-| Service | Purpose | Estimated Cost |
-|---------|---------|---------------|
-| **AWS Config** | Compliance monitoring | ~$2/month (10 rules) to $10/month (50 rules) |
-| **GuardDuty** | Threat detection | ~$30-100/month (based on data volume) |
-| **Security Hub** | Centralized dashboard | $0.0010 per finding |
-| **Inspector** | Vulnerability scanning | ~$1/EC2/month, $0.09/container image |
-| **Macie** | Sensitive data discovery | ~$1/GB scanned |
-| **Audit Manager** | Evidence collection | ~$1.00 per 100k evidence items |
-| **CloudTrail** | Audit logging | First trail free, then $2/100k events |
-
-**Total Estimated Cost**:
-- **Minimal** (SOC2 only, DEV): ~$10-20/month
-- **Recommended** (All frameworks, PRODUCTION): ~$150-300/month
-- **Maximum** (All services, high volume): ~$300-500/month
+Use the [AWS Pricing Calculator](https://calculator.aws.amazon.com/) for a workload-specific estimate.
 
 ---
 
@@ -576,34 +449,24 @@ This runs `cdk synth` for multiple configurations and reports validation results
 
 ### Q: Validation not running?
 
-**Check**:
+Check that both are set:
+
 ```json
 "auditManagerEnabled": true,
-"complianceFrameworks": "PCI-DSS,HIPAA,SOC2,GDPR"
+"complianceFrameworks": "pci-dss,hipaa,soc2,gdpr"
 ```
 
-Both must be set for validation to run.
-
----
-
-### Q: Too many advisory warnings?
-
-**Solution**: Mark organizational controls as completed:
-```json
-"awsBaaSigned": true,
-"gdprLegalBasisDocumented": true,
-"incidentResponsePlanDocumented": true
-```
+Also check `securityProfile`: `PciDssRules` runs only for `production`; `HipaaRules`, `Soc2Rules`, and `GdprRules` run for `staging` and `production`. cdk-nag packs run only for `production`.
 
 ---
 
 ### Q: Synthesis blocked by validation?
 
-**Solution 1** (Fix issues):
+**Solution 1** (Fix issues): enable the controls named in the failing rule IDs, for example:
 ```json
 "enableEncryption": true,
 "guardDutyEnabled": true,
-"kmsKeyRotationEnabled": true
+"wafEnabled": true
 ```
 
 **Solution 2** (Switch to advisory):
@@ -616,12 +479,7 @@ Both must be set for validation to run.
 ## Operational Follow-up
 
 1. **Enable compliance**: Choose a method above and configure your deployment
-2. **Review validation output**: Check for any warnings or errors
+2. **Review validation output**: Check for warnings or errors
 3. **Deploy to AWS**: Run `cdk deploy` to create infrastructure
-4. **Monitor compliance**: Check Security Hub, Config, Audit Manager dashboards
-5. **Iterate**: Add more controls, switch to ENFORCE mode when ready
-
----
-
-**Document Version**: 1.0
-**Last Updated**: 2025-11-12
+4. **Monitor**: Review Security Hub, AWS Config, and Audit Manager
+5. **Iterate**: Add controls, and switch to ENFORCE mode when ready

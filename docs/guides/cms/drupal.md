@@ -1,8 +1,6 @@
 # Drupal Application Guide
 
-Drupal is a CMS used in government, higher education, and large organizations. It supports structured content models, multilingual sites, and configurable access controls.
-
-**Status**: Available
+Drupal is an open-source CMS for structured content models, multilingual sites, and configurable access controls.
 
 ---
 
@@ -12,32 +10,18 @@ Drupal is a CMS used in government, higher education, and large organizations. I
 |----------|-------|
 | **Application ID** | `drupal` |
 | **Category** | CMS |
-| **Default Image** | `drupal:10-php8.2-fpm-alpine` |
+| **Default Image** | `drupal:10-php8.2-apache` |
 | **PHP Version** | 8.2 |
 | **Application Port** | `80` |
-| **Default CPU** | 1024 (Fargate) |
-| **Default Memory** | 2048 MB (Fargate) |
+| **Recommended CPU / Memory (Fargate)** | 1024 / 2048 MB |
+| **Recommended Instance Type (EC2)** | `t3.small` |
 | **Health Check Path** | `/user/login` |
-| **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **Authentication** | ALB-OIDC (Cognito) |
-| **Database Required** | Yes (PostgreSQL 16 or MySQL 8.0) |
+| **Authentication Modes** | `alb-oidc`, `application-oidc` (OpenID Connect module), `none` |
+| **Database** | Required (MySQL 8.0 default; MariaDB and PostgreSQL supported by the plugin metadata) |
 
----
-
-## Capabilities
-
-- Structured content with custom entity types
-- Multilingual content and interface
-- Layout Builder for visual page composition
-- Views for dynamic content listings
-- Paragraphs module for component-based editing
-- Media Library with S3 integration
-- JSON:API and GraphQL for headless architectures
-- Drush CLI for administration and deployments
-- Native OpenID Connect module (no third-party plugin)
-- Configuration management (config sync)
+The EC2 runtime installs nginx and PHP-FPM on the instance instead of using the container image.
 
 ---
 
@@ -45,42 +29,53 @@ Drupal is a CMS used in government, higher education, and large organizations. I
 
 | Resource | Provisioned | Purpose |
 |----------|-------------|---------|
-| S3 bucket | Yes | Media files via S3FS or S3 File System module |
-| ElastiCache Redis | Yes | Page cache, dynamic page cache, object cache |
+| S3 bucket | Yes | Media files (for use with the S3 File System module) |
+| ElastiCache Redis | Yes | Cache backend (for use with the Redis module) |
 | CloudFront CDN | Yes | Asset and media delivery |
-| EFS | Yes | `/var/www/html/sites/default/files` (public files) |
-| Route53 records | When domain configured | A + AAAA records to ALB |
+| EFS | Yes | Mounted at `/var/www/html` (access point path `/drupal`) |
+| Route53 records | When a hosted zone and domain are configured | A + AAAA alias records |
 
 ---
 
 ## Authentication
 
-Drupal is protected at the ALB level by Cognito. For admin-only sites, all traffic is gated. For public-facing sites with authenticated editors, configure `publicPaths`.
+| Mode | Description |
+|------|-------------|
+| `alb-oidc` | Cognito at the ALB. Protects `/admin/*`, `/user/*`, and `/update.php`; other pages stay public. |
+| `application-oidc` | Drupal handles OIDC itself (`DRUPAL_OIDC_*` environment variables). |
+| `none` | No authentication in front of Drupal. |
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | **Recommended** | Cognito at ALB — zero config inside Drupal |
-| `none` | Dev only | No authentication |
+---
 
-The Drupal login page (`/user/login`) remains accessible for local admin access if needed.
+## First-Run Install and Admin Password
+
+On Fargate, the container installs Drupal automatically on first start:
+
+1. CloudForge generates a random admin password in Secrets Manager (stack output `CloudForgeAutoAdminPasswordSecretArn`); it is also printed once to the container log.
+2. The container installs Drush with Composer, waits for the database port, and runs `drush site:install standard` with user `admin`.
+3. Restarts skip the install when `web/sites/default/settings.php` already exists.
+
+The install uses a `mysql://` database URL, so the automatic install requires `databaseEngine` `mysql` (or MariaDB). For PostgreSQL, complete the installation manually.
 
 ---
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `DRUPAL_OIDC_CLIENT_ID` | Cognito client ID |
-| `DRUPAL_OIDC_AUTHORIZATION_ENDPOINT` | Cognito authorization endpoint |
-| `DRUPAL_OIDC_TOKEN_ENDPOINT` | Cognito token endpoint |
-| `DRUPAL_OIDC_USERINFO_ENDPOINT` | Cognito userinfo endpoint |
-| `DRUPAL_OIDC_SCOPES` | `openid email profile` |
-| `REDIS_HOST` | ElastiCache endpoint |
-| `REDIS_PORT` | `6379` |
-| `DRUPAL_DB_HOST` | RDS endpoint |
-| `DRUPAL_DB_NAME` | Database name |
-| `DRUPAL_DB_USER` | Database user |
-| `DRUPAL_DB_PASSWORD` | From Secrets Manager |
+CloudForge sets the following on the Fargate container:
+
+| Variable | Value |
+|----------|-------|
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | RDS connection settings (when `provisionDatabase` is `true`) |
+| `DRUPAL_DATABASE_HOST`, `DRUPAL_DATABASE_PORT`, `DRUPAL_DATABASE_NAME`, `DRUPAL_DATABASE_USER` | Same values under Drupal-specific names |
+| `DRUPAL_DATABASE_DRIVER` | `mysql` |
+| `DATABASE_PASSWORD` | From the RDS Secrets Manager secret |
+| `DRUPAL_TRUSTED_HOST_PATTERNS` | `^<fqdn>$` |
+| `DRUPAL_ADMIN_EMAIL` | `admin@<fqdn>` (or `cognitoInitialAdminEmail` with `alb-oidc`) |
+| `DRUPAL_ADMIN_PASSWORD` | From the generated admin password secret |
+
+With `application-oidc`, CloudForge also sets `DRUPAL_OIDC_CLIENT_ID`, `DRUPAL_OIDC_AUTHORIZATION_ENDPOINT`, `DRUPAL_OIDC_TOKEN_ENDPOINT`, `DRUPAL_OIDC_USERINFO_ENDPOINT`, `DRUPAL_OIDC_END_SESSION_ENDPOINT`, and `DRUPAL_OIDC_SCOPES`.
+
+The Redis endpoint and S3 bucket name are not injected; configure them in the Drupal modules.
 
 ---
 
@@ -100,13 +95,16 @@ The Drupal login page (`/user/login`) remains accessible for local admin access 
 
 | Property | Value |
 |----------|-------|
-| EBS Device | `/dev/xvdh` |
+| EBS Device | `/dev/xvdh` (used when EFS is not available) |
 | Data Path | `/var/www/html` |
-| Log Paths | `/var/log/nginx/error.log`, `/var/log/php-fpm/error.log`, `/var/log/drupal/drupal.log`, `/var/log/userdata.log` |
+| Log Paths | `/var/log/nginx/access.log`, `/var/log/nginx/error.log`, `/var/log/php-fpm/error.log`, `/var/www/html/sites/default/files/logs/drupal.log`, `/var/log/userdata.log` |
+| CloudWatch Log Group | `/cloudforge/<stackName>/drupal` |
 
 ---
 
 ## Deployment Context Examples
+
+Set `cpu` and `memory` (Fargate) or `instanceType` (EC2) explicitly; otherwise the framework defaults (`1024`, `2048`, `t3.micro`) apply.
 
 ### Development - Minimal
 
@@ -118,7 +116,7 @@ The Drupal login page (`/user/login`) remains accessible for local admin access 
   "topology": "cms-service",
   "applicationId": "drupal",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -127,8 +125,8 @@ The Drupal login page (`/user/login`) remains accessible for local admin access 
   "memory": 2048,
 
   "provisionDatabase": true,
-  "databaseEngine": "postgres",
-  "databaseVersion": "16",
+  "databaseEngine": "mysql",
+  "databaseVersion": "8.0",
   "databaseInstanceClass": "db.t3.micro",
   "databaseAllocatedStorageGB": 20,
   "databaseName": "drupal",
@@ -138,9 +136,7 @@ The Drupal login page (`/user/login`) remains accessible for local admin access 
 }
 ```
 
-**Cost estimate:** ~$45/month
-
-### Staging - With Auth and Redis
+### Staging - With Authentication
 
 ```json
 {
@@ -165,8 +161,8 @@ The Drupal login page (`/user/login`) remains accessible for local admin access 
   "memory": 4096,
 
   "provisionDatabase": true,
-  "databaseEngine": "postgres",
-  "databaseVersion": "16",
+  "databaseEngine": "mysql",
+  "databaseVersion": "8.0",
   "databaseInstanceClass": "db.t3.medium",
   "databaseAllocatedStorageGB": 50,
   "databaseName": "drupal",
@@ -176,11 +172,9 @@ The Drupal login page (`/user/login`) remains accessible for local admin access 
 }
 ```
 
-**Cost estimate:** ~$180/month
+### Production - With SOC 2 and HIPAA Controls
 
-### Production - Government / Enterprise
-
-Drupal is commonly used in US federal and state government contexts. This configuration targets production readiness with SOC2 controls:
+`complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for the listed frameworks. It does not certify the deployment. This example uses EC2, where the database is configured manually during installation, so PostgreSQL is an option:
 
 ```json
 {
@@ -190,7 +184,7 @@ Drupal is commonly used in US federal and state government contexts. This config
   "topology": "cms-service",
   "applicationId": "drupal",
 
-  "domain": "example.gov",
+  "domain": "example.com",
   "subdomain": "www",
   "enableSsl": true,
 
@@ -217,7 +211,7 @@ Drupal is commonly used in US federal and state government contexts. This config
   "databaseMultiAz": true,
   "databaseBackupRetentionDays": 30,
 
-  "complianceFrameworks": "SOC2,HIPAA",
+  "complianceFrameworks": "soc2,hipaa",
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "auditManagerEnabled": true,
@@ -227,62 +221,50 @@ Drupal is commonly used in US federal and state government contexts. This config
 
   "enableMonitoring": true,
   "enableEncryption": true,
-  "logRetentionDays": "730",
+  "logRetentionDays": "731",
   "retainStorage": true
 }
 ```
-
-**Cost estimate:** ~$550-750/month
 
 ---
 
 ## Post-Deployment Tasks
 
-### 1. Complete Drupal Installation
+### 1. Complete the Installation
 
-1. Navigate to `https://your-domain.com`
-2. Select **Standard** installation profile
-3. Configure database connection (pre-populated from env vars in most cases)
-4. Set site name, admin email, and admin password
+- **Fargate**: the site is installed automatically. Sign in at `https://<your-domain>/user/login` as `admin`.
+- **EC2**: open `https://<your-domain>`, select the **Standard** profile, and enter the RDS connection details (endpoint and credentials from the RDS Secrets Manager secret).
 
-### 2. Install Recommended Modules
+### 2. Install Modules
 
-For production Drupal on AWS:
+Commonly used modules for Drupal on AWS:
 
-- **S3 File System** (`s3fs`) — Mount the CloudForge S3 bucket as the public files filesystem
-- **Redis** (`redis`) — Connect to ElastiCache using `PhpRedis` backend
-- **Metatag** — SEO metadata management
-- **Pathauto** — Automatic URL aliases
-- **Config Split** — Per-environment configuration management
+- **S3 File System** (`s3fs`): stores public files in the S3 media bucket (grant the task role or configured credentials access to the bucket first)
+- **Redis** (`redis`): connects to ElastiCache using the PhpRedis backend
+- **Metatag**, **Pathauto**, **Config Split**
 
-Install via Drush (EC2 access via SSM):
+On Fargate, Drush is at `/opt/drupal/vendor/bin/drush`. Install modules with Composer and Drush:
 
 ```bash
-aws ssm start-session --target <instance-id>
-cd /var/www/html
-drush composer require drupal/s3fs drupal/redis
-drush en s3fs redis -y
-drush cr
+cd /opt/drupal
+composer require drupal/s3fs drupal/redis
+./vendor/bin/drush en s3fs redis -y
+./vendor/bin/drush cr
 ```
 
-### 3. Configure Config Sync
+### 3. Configuration Sync
 
-For team-based development, export configuration to the repository:
+Export configuration for version control, and import it on deployment:
 
 ```bash
 drush cex -y
-```
-
-On deployment, import configuration:
-
-```bash
 drush cim -y
 drush cr
 ```
 
-### 4. Run Database Updates
+### 4. Database Updates
 
-After any module update:
+After a module update:
 
 ```bash
 drush updb -y
@@ -293,19 +275,21 @@ drush cr
 
 ## Compliance Considerations
 
-### SOC2
+Application-level controls to review alongside CloudForge's infrastructure controls:
 
-- [ ] Enable Drupal's database logging module (`dblog`) or syslog
-- [ ] Configure session timeouts (`/admin/config/people/accounts`)
-- [ ] Enable password policies (Password Policy module)
-- [ ] Restrict admin role assignments
-- [ ] Enable revision tracking on all content types
+**SOC 2**
 
-### HIPAA
+- Enable database logging (`dblog`) or syslog
+- Configure session timeouts
+- Enforce password policies (Password Policy module)
+- Restrict admin role assignments
+- Enable revision tracking on content types
 
-- [ ] Enable field-level access controls for PHI content types
-- [ ] Configure content access logging
-- [ ] Restrict file download access with private file system
+**HIPAA**
+
+- Apply field-level access controls to content types that hold PHI
+- Log content access
+- Use the private file system for restricted downloads
 
 ---
 
@@ -313,22 +297,17 @@ drush cr
 
 ### Permission denied errors on `sites/default/files`
 
-EFS is mounted at the document root. The container runs as `www-data` (UID 33). Verify EFS access point permissions:
+The container runs as `www-data` (UID 33). Check the EFS access point:
 
 ```bash
-# Check EFS mount
 aws efs describe-access-points --file-system-id <efs-id>
 ```
 
-The access point must have `posixUser: {uid: 33, gid: 33}` and `rootDirectory.creationInfo.permissions: "755"`.
+The access point should use `posixUser` UID/GID `33` and `creationInfo` permissions `755`.
 
-### Drush commands not found
+### Drush not found
 
-Drush is installed via Composer at `/var/www/html/vendor/bin/drush`. Use the full path or add to `PATH`:
-
-```bash
-/var/www/html/vendor/bin/drush status
-```
+On Fargate, Drush is installed by Composer at `/opt/drupal/vendor/bin/drush` during the first start. On EC2, install Drush with Composer in the Drupal project directory.
 
 ---
 

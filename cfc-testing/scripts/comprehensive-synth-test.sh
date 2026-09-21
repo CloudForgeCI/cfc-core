@@ -365,9 +365,8 @@ analyze_results() {
     local failed_tests=0
     
     # Count tests -- EC2 only ever runs ec1/ec2/ec3 subdomains, FARGATE only fc1/fc2/fc3 (see the
-    # actual test-execution loops below); skip the other runtime's subdomain set rather than
-    # counting it as a failure, or every run reports 18 phantom failures that were never real
-    # tests (e.g. EC2-DEV-fc1, which is never synthesized in the first place).
+    # test-execution loops below); skip the other runtime's subdomain set rather than counting
+    # it as a failure, since those combinations (e.g. EC2-DEV-fc1) are never synthesized.
     for runtime in "EC2" "FARGATE"; do
         for security_profile in "DEV" "STAGING" "PRODUCTION"; do
             for subdomain in "ec1" "ec2" "ec3" "fc1" "fc2" "fc3"; do

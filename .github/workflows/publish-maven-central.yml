@@ -3,32 +3,15 @@ name: Publish to Maven Central
 # Publishes the OSS deployment library: cfc-core's own root/BOM pom, cloudforge-core,
 # cloudforge-api, cloudforge-localstack, and cloudforge-ministack.
 #
-# cloudforge-synth-service moved out to its own repo (CloudForgeCI/cloudforge-synth-service) and
-# is no longer published from here at all — it never had any Maven consumer besides
-# cloudforge-manager's single test-scope dependency, resolved by that repo's own CI installing it
-# locally instead (see that module's pom.xml comment).
+# cloudforge-localstack must stay in this list: cloudforge-manager depends on it directly, and a
+# fresh CI runner can only resolve what is actually published.
 #
-# cloudforge-localstack was missing from this scope for a while after cloudforge-manager was
-# split into its own repo — cloudforge-manager depends on it directly, so its own CI couldn't
-# resolve dependencies at all until this was added (a real live failure, not theoretical: a
-# fresh GitHub Actions runner has no local .m2 cache the way a dev machine does, so anything not
-# actually published to Central is simply unresolvable there).
-#
-# Does NOT publish cloudforge-manager-deployment — despite currently living in this working tree
-# (gitignored, not tracked by cfc-core's own git history), it's a standalone-repo module with its
-# own independent versioning and its own self-contained publish-maven-central.yml (see
-# cloudforge-manager-deployment/.github/workflows/) — bundling its release into cfc-core's own
-# cadence would defeat "independent versioning" the moment the two version numbers drift, and
-# that workflow won't even exist in this repo once the split's git push happens. Its <parent> on
-# cfc-core's own pom (resolved from Central, not a local checkout — see its pom.xml) is exactly
-# what lets it publish independently while still inheriting this release profile.
-#
-# Does NOT publish cloudforge-manager either (the Spring Boot app carrying all the LicenseSeat/
-# Checkpoint A/B licensing logic) — same reasoning as cloudforge-manager-deployment above: it's
-# now published too, but from its own standalone repo's own publish-maven-central.yml /
-# publish-snapshot.yml (deliberately NOT inheriting cfc-core's release profile via <parent> the
-# way cloudforge-manager-deployment does — see that pom's own comment on why), not bundled into
-# this workflow's cadence.
+# Not published here (each is released from its own repository and cadence):
+#   - cloudforge-synth-service: its only Maven consumer is cloudforge-manager's test scope, which
+#     installs it from a sibling checkout.
+#   - cloudforge-manager-deployment: declares cfc-core as its Maven <parent> (resolved from
+#     Central), which lets it inherit this release profile while publishing independently.
+#   - cloudforge-manager: standalone pom with no parent.
 #
 # Required repo secrets (none of these can be set by CI itself — add them under Settings →
 # Secrets and variables → Actions before the publish job will do anything but skip):
@@ -39,13 +22,12 @@ name: Publish to Maven Central
 #                             account login. https://central.sonatype.com/account
 #   CENTRAL_PORTAL_PASSWORD   Same token's password half.
 #
-# Safety gate: only actually builds/signs/publishes when the root pom's <version> isn't already
-# tagged (v<version>) in this repo — every other push to develop is a fast no-op. This is on top
-# of (not instead of) central-publishing-maven-plugin's own <ignorePublishedComponents>true</...>,
-# which makes a genuine duplicate-version publish attempt a safe no-op rather than a failure —
-# belt-and-suspenders, since the tag check avoids even attempting the (slow, GPG-signing-heavy)
-# build for a version that hasn't changed, and the plugin setting covers the case where the tag
-# push itself failed on a previous run but the artifacts already landed on Central.
+# Safety gate: builds/signs/publishes only when the root pom's <version> isn't already tagged
+# (v<version>) in this repo; every other push to develop is a fast no-op. This complements
+# central-publishing-maven-plugin's <ignorePublishedComponents>true</...>, which turns a
+# duplicate-version publish into a no-op: the tag check skips the slow signing build for an
+# unchanged version, and the plugin setting covers a run where the artifacts reached Central but
+# the tag push failed.
 
 on:
   push:
@@ -124,12 +106,9 @@ jobs:
 
   publish:
     name: Build, sign, and publish
-    # macOS, not any Linux variant -- every GnuPG build/version tried on Linux (ubuntu-latest's
-    # system GnuPG, ubuntu-22.04's system GnuPG, Homebrew's own Linux build) reproduced an
-    # identical gpg-agent "Too much data for IPC layer" bug on the very first sign, independent
-    # of key content, plugin version, or config (all ruled out individually) -- including inside
-    # a container, which shares its host's kernel rather than getting its own. macOS has never
-    # once failed.
+    # macOS, not Linux: on Linux runners (ubuntu-latest, ubuntu-22.04, Homebrew's GnuPG, and
+    # containers, which share the host kernel) gpg-agent fails with "Too much data for IPC layer"
+    # when signing, regardless of key, plugin version, or config. macOS runners are not affected.
     runs-on: macos-latest
     needs: check-version
     if: needs.check-version.outputs.should_publish == 'true'
@@ -165,10 +144,9 @@ jobs:
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
-          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
-          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
-          # without it, the agent still tries (and fails, headless) to launch a real pinentry
-          # program ("gpg: signing failed: No pinentry").
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is ignored by
+          # gpg-agent unless allow-loopback-pinentry is set here; without it, the agent tries to
+          # launch a pinentry program and fails headless ("gpg: signing failed: No pinentry").
           echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
           DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
           # ::add-mask:: only masks a single line -- mask every line of the multi-line

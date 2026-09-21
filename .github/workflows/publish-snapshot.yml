@@ -4,39 +4,29 @@ name: Publish Snapshot & Auto-Release
 # cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack). The pom.xml
 # always carries a -SNAPSHOT version.
 #
-# cloudforge-synth-service moved out to its own repo (CloudForgeCI/cloudforge-synth-service) and
-# is no longer published from here — see publish-maven-central.yml's own header comment for why.
+# cloudforge-synth-service is not published here; see publish-maven-central.yml's header.
 #
 #   1. build-test       — full build + test. Nothing downstream runs unless this passes.
 #   2. publish-snapshot — deploys the current -SNAPSHOT version to Central Portal's snapshots
 #      repository (https://central.sonatype.com/repository/maven-snapshots/), so
-#      cloudforge-manager-deployment/cloudforge-manager can immediately resolve it in their own
-#      CI. Tied to a pull request being open against develop (opened/updated), not to merging —
-#      requesting review is what should make a snapshot available downstream, not waiting for the
-#      merge itself.
-#   3. release          — develop only, i.e. only once a PR actually merges (a push, not a pull
-#      request event). Strips "-SNAPSHOT" from whatever version this commit already carries,
-#      builds/signs/publishes that as a real numbered release to Maven Central (no re-test —
-#      build-test already validated this exact code), tags vX.Y.Z, and stops. Never writes to any
-#      pom.xml, never commits, never bumps anything — the version it releases is exactly whatever
-#      bump-develop (below) most recently landed, nothing more.
-#   4. bump-develop     — develop only, runs independently of and in parallel with release (they
-#      share no ordering dependency: release publishes THIS commit's current version, bump-develop
-#      advances develop to the NEXT one — unrelated operations that happen to fire off the same
-#      push). Bumps develop's pom to the next patch -SNAPSHOT and pushes that commit with
-#      "[skip ci]" so it doesn't re-trigger this workflow. No GPG, no Central, no macOS runner —
-#      pure version bookkeeping, so a lost push-race here (see its own "Bump develop" step comment)
-#      is a cheap, side-effect-free re-run, not entangled with a real publish the way it used to be
-#      when both lived in one job.
+#      cloudforge-manager-deployment/cloudforge-manager can resolve it in their own CI. Runs when a
+#      pull request against develop is opened or updated, so a snapshot is available downstream
+#      during review rather than only after merge.
+#   3. release          — develop pushes only (i.e. after a PR merges). Strips "-SNAPSHOT" from
+#      the commit's version, builds/signs/publishes that as a numbered release to Maven Central
+#      (no re-test; build-test already validated this commit), and tags vX.Y.Z. Never edits a
+#      pom.xml, commits, or bumps a version: it releases whatever bump-develop last landed.
+#   4. bump-develop     — develop pushes only, in parallel with release (release publishes this
+#      commit's version; bump-develop advances develop to the next one). Bumps the pom to the next
+#      patch -SNAPSHOT and pushes that commit with "[skip ci]" so it doesn't re-trigger this
+#      workflow. It needs no GPG, Central access, or macOS runner, so a lost push race (see its
+#      "Bump develop" step comment) is a cheap, side-effect-free re-run.
 #
-# No developer-maintained versioning at all: a feature branch never touches <version> anywhere, so
-# concurrent PRs never conflict with each other over it. The bump lives entirely at the merge
-# point — bump-develop is the only thing that ever advances it, one merge at a time, serialized by
-# git the same way any other push to develop already is. Every merge to develop is therefore both
-# a snapshot AND a real Central release — deliberate, confirmed design (not a staged/manual release
-# process). publish-maven-central.yml still exists as a manual workflow_dispatch-only escape hatch;
-# it never fires from a push under this flow because the only commit this workflow ever pushes back
-# to develop is bump-develop's own -SNAPSHOT bump.
+# Feature branches never edit <version>, so concurrent PRs never conflict over it. bump-develop is
+# the only thing that advances it, one merge at a time, serialized by git like any other push to
+# develop. Every merge to develop therefore produces both a snapshot and a Central release, by
+# design. publish-maven-central.yml publishes only a non-SNAPSHOT, untagged pom version, so under
+# this flow (develop always carries -SNAPSHOT) it is a no-op unless run against a release version.
 #
 # Required repo secrets (same four already configured for publish-maven-central.yml):
 #   GPG_PRIVATE_KEY, GPG_PASSPHRASE, CENTRAL_PORTAL_USERNAME, CENTRAL_PORTAL_PASSWORD
@@ -53,11 +43,10 @@ on:
       - 'cloudforge-ministack/**'
       - '.github/workflows/publish-snapshot.yml'
   push:
-    branches: [ develop ] # real release, on every push to develop (a PR merge, most commonly) —
-                           # deliberately no path filter: the safety gate below (root pom's
-                           # <version> not already tagged) is what actually decides whether a run
-                           # does anything, so a path filter here only risks silently skipping a
-                           # real release rather than saving any meaningful CI time.
+    branches: [ develop ] # release on every push to develop (normally a PR merge). No path
+                           # filter on purpose: the safety gate below (root pom's <version> not
+                           # already tagged) decides whether a run does anything, and a path filter
+                           # would only risk skipping a release.
   workflow_dispatch: {}
 
 permissions:
@@ -84,15 +73,10 @@ jobs:
 
   publish-snapshot:
     name: Publish SNAPSHOT to Central
-    # macOS, not any Linux variant. Every GnuPG-side variable has been ruled out at this point:
-    # 3 different GnuPG builds (ubuntu-latest's system 2.4.4, ubuntu-22.04's system build, and
-    # Homebrew's 2.5.21 -- a completely different major/build), 2 plugin versions, 2 different
-    # keys, every homedir/pinentry/passphrase config combination, gpg1, both import methods, and
-    # running inside a container (maven:3.9-eclipse-temurin-21 -- worked locally in Docker
-    # Desktop's own Linux VM, still failed identically on GitHub's own runner, since containers
-    # share their host's kernel rather than getting their own -- whatever's causing this lives at
-    # the GitHub Linux runner kernel level, not in GnuPG, our config, or containerization).
-    # macOS has never once failed, locally, all day, across every one of the above combinations.
+    # macOS, not Linux: on GitHub's Linux runners gpg-agent fails with "Too much data for IPC
+    # layer" when signing, independent of GnuPG build (system 2.4.4, Homebrew 2.5.x), plugin
+    # version, key, homedir/pinentry/passphrase configuration, or running inside a container
+    # (containers share the runner's kernel). macOS runners are not affected.
     runs-on: macos-latest
     needs: build-test
     timeout-minutes: 30
@@ -130,10 +114,9 @@ jobs:
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
-          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
-          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
-          # without it, the agent still tries (and fails, headless) to launch a real pinentry
-          # program ("gpg: signing failed: No pinentry").
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is ignored by
+          # gpg-agent unless allow-loopback-pinentry is set here; without it, the agent tries to
+          # launch a pinentry program and fails headless ("gpg: signing failed: No pinentry").
           echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
           DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
           # ::add-mask:: only masks a single line -- mask every line of the multi-line
@@ -184,9 +167,8 @@ jobs:
       - name: Deploy SNAPSHOT (cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack)
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        # No re-test -- needs: build-test above already ran the real suite with -Pci and gates
-        # whether this step runs at all; explicit here so it doesn't silently depend on the
-        # skipTests=true default happening to be correct.
+        # No re-test: build-test already ran the suite with -Pci and gates this job. -DskipTests
+        # is explicit so this step does not depend on the pom's skipTests default.
         run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
@@ -255,10 +237,9 @@ jobs:
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -p "$GNUPGHOME"
           chmod 700 "$GNUPGHOME"
-          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is silently
-          # ignored by gpg-agent unless allow-loopback-pinentry is explicitly permitted here --
-          # without it, the agent still tries (and fails, headless) to launch a real pinentry
-          # program ("gpg: signing failed: No pinentry").
+          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is ignored by
+          # gpg-agent unless allow-loopback-pinentry is set here; without it, the agent tries to
+          # launch a pinentry program and fails headless ("gpg: signing failed: No pinentry").
           echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
           DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
           # ::add-mask:: only masks a single line -- mask every line of the multi-line
@@ -327,12 +308,9 @@ jobs:
 
   bump-develop:
     name: Bump develop to next SNAPSHOT
-    # ubuntu-latest, not macOS: this job never touches GPG/Central at all -- pure version
-    # bookkeeping (mvn versions:set + a git commit/push), so it carries none of the reasons the
-    # release job above needs a macOS runner. Runs independently of and in parallel with release
-    # (needs: publish-snapshot only, not release) -- release publishes THIS commit's current
-    # version, this job advances develop to the NEXT one; unrelated operations that happen to fire
-    # off the same push, with no ordering dependency on each other.
+    # ubuntu-latest, not macOS: this job never touches GPG or Central (mvn versions:set plus a git
+    # commit/push). Runs in parallel with release (needs: publish-snapshot only): release publishes
+    # this commit's version, this job advances develop to the next one.
     runs-on: ubuntu-latest
     needs: publish-snapshot
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
@@ -364,10 +342,7 @@ jobs:
           mvn -q -B versions:set -DnewVersion="$NEXT_SNAPSHOT" -DprocessAllModules=true -DgenerateBackupPoms=false
           git add -A
           git commit -m "chore: bump to $NEXT_SNAPSHOT [skip ci]"
-          # Guards against a genuine race (another push landing on develop between this job's
-          # checkout and its own push below) -- a plain push here would be rejected as
-          # non-fast-forward. Same pattern cloudforge-manager's sync-versions.yml already uses for
-          # its own bump-and-push. Isolated to this one cheap, side-effect-free operation now, not
-          # entangled with a real Central publish the way it was when both lived in one job.
+          # Guards against a race (another push landing on develop between this job's checkout
+          # and its push below), where a plain push would be rejected as non-fast-forward.
           git pull --rebase origin develop
           git push origin HEAD:develop

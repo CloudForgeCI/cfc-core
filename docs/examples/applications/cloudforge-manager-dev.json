@@ -2,14 +2,13 @@
   "stackName": "CloudForgeManager-Dev",
   "applicationId": "cloudforge-manager",
   "applicationName": "CloudForge Manager",
-  "description": "Operations Panel — Fargate, no database",
   "environment": "development",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",

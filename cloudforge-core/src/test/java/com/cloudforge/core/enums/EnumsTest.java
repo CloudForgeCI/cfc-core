@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Comprehensive tests for all CloudForge core enums.
+ * Tests for all CloudForge core enums.
  */
 class EnumsTest {
 

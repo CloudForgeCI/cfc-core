@@ -47,7 +47,7 @@ run_cli_benchmark() {
     ./command-line-benchmark.sh
 }
 
-# Function to run comprehensive benchmark
+# Run the full benchmark
 run_comprehensive_benchmark() {
     echo -e "${GREEN}🚀 Running Comprehensive Performance Benchmark${NC}"
     echo -e "${GREEN}===============================================${NC}"

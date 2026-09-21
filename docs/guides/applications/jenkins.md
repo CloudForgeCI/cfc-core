@@ -1,8 +1,8 @@
 # Jenkins Application Guide
 
-Jenkins is an open-source automation server that enables developers to build, test, and deploy applications through continuous integration and continuous delivery (CI/CD) pipelines.
+Jenkins is an open-source automation server for building, testing, and deploying software through CI/CD pipelines.
 
-**Status**: Verified
+**Status**: Verified (deployed and exercised end to end by maintainers)
 
 ---
 
@@ -21,20 +21,17 @@ Jenkins is an open-source automation server that enables developers to build, te
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | Yes (Verified) |
+| **Supported Auth Modes** | `application-oidc` (default), `alb-oidc`, `none` |
 | **Database Required** | No |
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Pipeline-as-code with Jenkinsfile
+- Pipelines defined in a `Jenkinsfile`
 - Distributed builds with agents
-- Extensive plugin ecosystem (1,800+ plugins)
-- Configuration as Code (JCasC)
-- Blue Ocean modern UI
-- Role-based access control
-- Integration with Git, Docker, Kubernetes
+- Plugin ecosystem, including Configuration as Code (JCasC)
+- Integration with Git, Docker, and Kubernetes
 
 ---
 
@@ -51,7 +48,7 @@ Jenkins is an open-source automation server that enables developers to build, te
 }
 ```
 
-When enabled, Jenkins agents can connect via JNLP protocol on port 50000.
+When enabled, inbound agents connect over TCP port 50000.
 
 ---
 
@@ -59,49 +56,42 @@ When enabled, Jenkins agents can connect via JNLP protocol on port 50000.
 
 ### Supported Auth Modes
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `application-oidc` | **Verified** | Native OIDC via OpenID Connect Authentication Plugin |
-| `alb-oidc` | Verified | ALB-level authentication (works with any app) |
-| `none` | Available | No authentication (development only) |
+| Mode | Description |
+|------|-------------|
+| `application-oidc` | Jenkins signs users in through the OpenID Connect Authentication plugin (default) |
+| `alb-oidc` | The load balancer authenticates users before requests reach Jenkins |
+| `none` | No CloudForge-managed authentication; use for development only |
 
 ### OIDC Integration Details
 
-Jenkins uses the **OpenID Connect Authentication Plugin** (oic-auth) configured via Jenkins Configuration as Code (JCasC).
+With `application-oidc`, CloudForge configures the OpenID Connect Authentication plugin (`oic-auth`) through Jenkins Configuration as Code (JCasC):
 
-**Features:**
-- Auto-create users on first login
-- Group/role mapping from OIDC claims (`cognito:groups`)
-- Full user information synchronization
-- Token-based session management
-- Group-based authorization via project matrix
-- Escape hatch disabled for security (OIDC-only)
-- Logout integration with Cognito
+- Groups are read from the OIDC groups claim (`cognito:groups` for Cognito).
+- Authorization uses a project matrix keyed on those groups.
+- Sign-out also ends the Cognito session and returns to the Jenkins URL.
+- The plugin's escape-hatch (local fallback) login is disabled on EC2.
+- The setup wizard is skipped (`-Djenkins.install.runSetupWizard=false`).
 
 **Callback Path:** `/securityRealm/finishLogin`
 
 **Group-Based Authorization:**
-- Admin group: Full permissions
-- Developer group: Build, configure, create jobs
-- Viewer group: Read-only access
+- Admin group: `Overall/Administer`
+- Developer group: `Overall/Read` plus `Job/Build`, `Job/Configure`, `Job/Create`, `Job/Read`, and `Job/Workspace`
+- Viewer group: `Overall/Read` and `Job/Read`
 
 ---
 
 ## Environment Variables
 
-CloudForge automatically configures these environment variables:
+CloudForge sets these container environment variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `JAVA_OPTS` | JVM options for reverse proxy | `-Djenkins.install.runSetupWizard=false` |
-| `JENKINS_OPTS` | Jenkins-specific options | `--httpListenAddress=0.0.0.0` |
-| `JENKINS_URL` | External URL (if FQDN provided) | `https://jenkins.example.com` |
+| `JAVA_OPTS` | JVM system properties | `-Djenkins.model.Jenkins.rootUrl=https://jenkins.example.com/` |
+| `JENKINS_OPTS` | Jenkins launcher options | `--httpListenAddress=0.0.0.0 --httpsPort=-1` |
+| `JENKINS_URL` | External URL (set when an FQDN is configured) | `https://jenkins.example.com` |
 
-**JAVA_OPTS includes:**
-- X-Forwarded headers configuration for ALB
-- CSRF settings for reverse proxy
-- Root URL configuration
-- Setup wizard skip (when using OIDC)
+`JAVA_OPTS` includes the root URL and inbound-agent host name (when an FQDN is configured), a form-content size limit, a relaxed `DirectoryBrowserSupport.CSP`, and, for `application-oidc`, the setup-wizard skip. HTTPS is disabled on Jenkins itself because TLS terminates at the load balancer.
 
 ---
 
@@ -127,23 +117,24 @@ CloudForge automatically configures these environment variables:
 
 ## Deployment Context Examples
 
-### Development - Minimal Setup
+A Jenkins controller keeps its state in `JENKINS_HOME` and does not support running several controllers against the same data, so the examples below use a single instance. Scale build capacity with agents instead.
 
-Fastest way to get Jenkins running for local development or testing.
+### Development
+
+A minimal configuration without authentication.
 
 ```json
 {
   "stackName": "Jenkins-Dev",
   "applicationId": "jenkins",
   "applicationName": "Jenkins Dev",
-  "description": "Jenkins development environment",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",
@@ -156,19 +147,16 @@ Fastest way to get Jenkins running for local development or testing.
 }
 ```
 
-**Cost estimate:** ~$35/month
+### Development with Authentication
 
-### Development - With Authentication
-
-Jenkins with Cognito OIDC for team development.
+Jenkins with Cognito-backed OIDC sign-in.
 
 ```json
 {
   "stackName": "Jenkins-Dev-Auth",
   "applicationId": "jenkins",
   "applicationName": "Jenkins Dev",
-  "description": "Jenkins with Cognito authentication",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -196,18 +184,15 @@ Jenkins with Cognito OIDC for team development.
 }
 ```
 
-**Cost estimate:** ~$100/month
+### Staging with SOC 2 Controls
 
-### Staging - SOC2 Compliance
-
-Pre-production environment with compliance controls.
+A pre-production environment with the SOC 2 framework rules enabled.
 
 ```json
 {
   "stackName": "Jenkins-Staging",
   "applicationId": "jenkins",
   "applicationName": "Jenkins Staging",
-  "description": "Jenkins staging with SOC2 compliance",
   "environment": "staging",
 
   "runtime": "fargate",
@@ -233,11 +218,9 @@ Pre-production environment with compliance controls.
   "cpu": 2048,
   "memory": 4096,
   "minInstanceCapacity": 1,
-  "maxInstanceCapacity": 2,
-  "enableAutoScaling": true,
+  "maxInstanceCapacity": 1,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": true,
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "wafEnabled": true,
@@ -249,19 +232,16 @@ Pre-production environment with compliance controls.
 }
 ```
 
-**Cost estimate:** ~$220/month
+### Production with SOC 2 Controls and Build Agents
 
-### Production - SOC2 with Build Agents
-
-Full production deployment with agent support and high availability.
+An EC2 deployment with inbound agents enabled.
 
 ```json
 {
   "stackName": "Jenkins-Production",
   "applicationId": "jenkins",
   "applicationName": "Jenkins CI",
-  "description": "Production Jenkins with SOC2 compliance and build agents",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -284,15 +264,12 @@ Full production deployment with agent support and high availability.
   "cognitoUserGroupName": "JenkinsDevelopers",
 
   "instanceType": "t3.medium",
-  "minInstanceCapacity": 2,
-  "maxInstanceCapacity": 4,
-  "enableAutoScaling": true,
-  "cpuTargetUtilization": 60,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
 
   "enableAgents": true,
 
   "complianceFrameworks": "SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "createConfigInfrastructure": true,
   "guardDutyEnabled": true,
@@ -308,19 +285,16 @@ Full production deployment with agent support and high availability.
 }
 ```
 
-**Cost estimate:** ~$400-600/month
+### Production with PCI DSS Controls
 
-### Production - PCI-DSS (Payment Systems)
-
-For CI/CD pipelines deploying payment processing applications.
+For pipelines that deploy payment-processing applications.
 
 ```json
 {
   "stackName": "Jenkins-PCI",
   "applicationId": "jenkins",
   "applicationName": "Jenkins PCI",
-  "description": "Jenkins for PCI-DSS compliant deployments",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -343,15 +317,12 @@ For CI/CD pipelines deploying payment processing applications.
   "cognitoUserGroupName": "JenkinsDevelopers",
 
   "instanceType": "t3.large",
-  "minInstanceCapacity": 2,
-  "maxInstanceCapacity": 6,
-  "enableAutoScaling": true,
-  "cpuTargetUtilization": 50,
+  "minInstanceCapacity": 1,
+  "maxInstanceCapacity": 1,
 
   "enableAgents": true,
 
   "complianceFrameworks": "PCI-DSS,SOC2",
-  "scopeConfigRulesToDeployment": false,
   "awsConfigEnabled": true,
   "createConfigInfrastructure": true,
   "guardDutyEnabled": true,
@@ -366,8 +337,6 @@ For CI/CD pipelines deploying payment processing applications.
   "retainStorage": true
 }
 ```
-
-**Cost estimate:** ~$600-900/month
 
 ---
 
@@ -397,39 +366,38 @@ For CI/CD pipelines deploying payment processing applications.
 
 ## Compliance Considerations
 
-### SOC2
+Setting `complianceFrameworks` enables CloudForge's infrastructure controls and validation rules for those frameworks. It does not certify the deployment; certification requires an assessment of your whole environment and processes.
 
-**Automatic Controls:**
-- Encryption at rest (EBS/EFS)
-- Encryption in transit (TLS)
-- Network isolation (Security Groups)
+### SOC 2
+
+**Infrastructure controls CloudForge can configure:**
+- Encryption at rest (EBS/EFS) and in transit (TLS)
+- Network isolation with security groups
 - CloudWatch logging
-- IAM least privilege
+- Scoped IAM roles
 
-**User Responsibilities:**
-- [ ] Enable audit logging for all builds
-- [ ] Implement approval gates for production
-- [ ] Use secrets management (Credentials Plugin)
-- [ ] Configure artifact retention (30-90 days)
-- [ ] Enable OIDC authentication
-- [ ] Implement role-based access control
-- [ ] Separate dev/test/prod pipelines
+**Controls you configure in Jenkins and your processes:**
+- Build audit logging
+- Approval gates for production deployments
+- Secrets stored with the Credentials plugin
+- Artifact retention
+- OIDC authentication and role-based access control
+- Separate development, test, and production pipelines
 
-### PCI-DSS
+### PCI DSS
 
-Additional requirements when deploying to payment systems:
-- [ ] Separate development/test/production pipelines
-- [ ] Code review before production deployment
-- [ ] Automated security testing in pipeline
-- [ ] Change approval workflow
-- [ ] Audit trail for all deployments
+Additional practices for pipelines that deploy payment systems:
+- Separate development, test, and production pipelines
+- Code review and change approval before production deployment
+- Automated security testing in the pipeline
+- An audit trail for all deployments
 
 ### HIPAA
 
-Additional requirements when deploying healthcare applications:
-- [ ] Audit trail for all deployments
-- [ ] Access controls for PHI-related pipelines
-- [ ] Encryption of build artifacts
+Additional practices for pipelines that deploy healthcare applications:
+- An audit trail for all deployments
+- Access controls on pipelines that handle PHI
+- Encryption of build artifacts
 
 ---
 
@@ -439,28 +407,25 @@ Additional requirements when deploying healthcare applications:
 
 After deployment with `authMode: "application-oidc"`:
 
-1. Navigate to `https://jenkins.your-domain.com`
-2. Click "Sign in with OpenID Connect"
-3. Authenticate with Cognito
-4. First user in admin group gets full permissions
+1. Open `https://jenkins.example.com` (your configured FQDN).
+2. Sign in through Cognito.
+3. Users in the admin group receive `Overall/Administer`.
 
 ### 2. Configure Build Agents (if enabled)
 
 When `enableAgents: true`:
 
-1. Go to **Manage Jenkins** > **Manage Nodes**
-2. Create new agent with JNLP connection
-3. Use agent secret from Jenkins
-4. Connect via port 50000
+1. Go to **Manage Jenkins** > **Nodes**.
+2. Create an inbound agent.
+3. Start the agent with the secret Jenkins shows for it.
+4. The agent connects on port 50000.
 
 ### 3. Install Additional Plugins
 
-Recommended plugins for production:
-- Blue Ocean (modern UI)
-- Pipeline (if not installed)
-- Git plugin
+Commonly used plugins:
+- Pipeline
+- Git
 - Credentials Binding
-- Role-based Authorization Strategy
 
 ### 4. Configure Secrets
 
@@ -479,25 +444,26 @@ Recommended plugins for production:
 
 **Check logs:**
 ```bash
-# Fargate
-aws logs tail /aws/ecs/jenkins --follow
+# Fargate (log group name when storage is not retained; otherwise find the
+# stack's log group in the CloudWatch console)
+aws logs tail /aws/ecs/<stack-name>/fargate/<security-profile> --follow
 
-# EC2 (via SSM Session Manager — no port 22 or SSH key needed)
+# EC2 (via SSM Session Manager; no port 22 or SSH key needed)
 aws ssm start-session --target <instance-id>
 # then: tail -f /var/log/jenkins/jenkins.log
 ```
 
 ### OIDC login fails
 
-1. Verify Cognito domain prefix is globally unique
-2. Check callback URL is registered in Cognito
-3. Verify app client has correct OAuth settings
+1. Verify the Cognito domain prefix is globally unique.
+2. Check that the callback URL (`/securityRealm/finishLogin`) is registered in Cognito.
+3. Verify the app client's OAuth settings.
 
 ### Build agents can't connect
 
-1. Ensure `enableAgents: true` in deployment context
-2. Check security group allows port 50000
-3. Verify agent is using correct secret
+1. Ensure `enableAgents` is `true` in the deployment context.
+2. Check that the security group allows port 50000.
+3. Verify the agent is using the correct secret.
 
 ---
 

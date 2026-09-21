@@ -1,7 +1,7 @@
 # SOC2 CC7.4/7.5 - Incident Response Procedures
 
 **Control**: CC7.4 (Incident Response), CC7.5 (Incident Recovery)
-**Status**: Fully Documented
+**Status**: Procedure template
 **Last Updated**: 2025-12-16
 **Owner**: Security Operations
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document defines incident response and recovery procedures for organizations using CloudForge CI. These procedures ensure timely detection, response, and recovery from security incidents. These procedures satisfy SOC2 CC7.4 (Response to Identified Security Incidents) and CC7.5 (Recovery from Identified Security Incidents) requirements.
+This document defines incident response and recovery procedures for organizations using CloudForge CI. These procedures describe detection, response, and recovery for security incidents. These procedures are a template for addressing SOC2 CC7.4 (Response to Identified Security Incidents) and CC7.5 (Recovery from Identified Security Incidents) requirements.
 
 ---
 

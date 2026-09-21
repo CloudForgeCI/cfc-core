@@ -2,14 +2,13 @@
   "stackName": "Jenkins-Dev",
   "applicationId": "jenkins",
   "applicationName": "Jenkins Dev",
-  "description": "Jenkins development environment - minimal setup",
   "environment": "development",
 
   "runtime": "fargate",
   "securityProfile": "dev",
   "topology": "application-service",
 
-  "networkMode": "public-no-nat",
+  "networkMode": "public",
   "region": "us-east-1",
 
   "authMode": "none",

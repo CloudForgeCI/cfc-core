@@ -253,9 +253,8 @@ class RemediationIntegrationTest extends IntegrationTestBase {
         template.resourceCountIs("AWS::Config::ConfigurationRecorder", 1);
     }
 
-    // DATABASE REMEDIATION TESTS (Phase 3) - Removed due to pre-existing resource naming conflict bug
-    // Database remediation functionality is fully validated by ConfigRulesDeploymentIntegrationTest
-    // See DATABASE-PHASE3-COMPLETE.md for details on the known limitation
+    // Database remediation tests are omitted here because of a resource naming conflict; database
+    // remediation is covered by ConfigRulesDeploymentIntegrationTest.
 
     @Test
     void testRemediationNotificationConfiguration() {

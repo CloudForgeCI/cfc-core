@@ -1,23 +1,17 @@
 package com.cloudforgeci.api.core;
 
 /**
- * Single source of truth for "does this deployment's ALB HTTPS listener end up wearing a
- * publicly-trusted certificate" — the same three-way decision {@code FargateRuntimeConfiguration}
- * makes when choosing which certificate to actually provision (imported ARN, DNS-validated
- * public, or the untrusted AWS Private CA fallback), extracted here so {@code ContainerFactory}
- * doesn't carry its own independently-maintained copy of that logic (a real drift risk — the two
- * classes used to duplicate this inline, one computing which cert to create, the other computing
- * whether to tell cloudforge-manager the result is trustworthy; if they ever disagreed, Manager's
- * license page would report the wrong thing about its own installation).
+ * Single source of truth for whether a deployment's ALB HTTPS listener uses a publicly trusted
+ * certificate. Mirrors the three-way choice {@code FargateRuntimeConfiguration} makes when
+ * provisioning a certificate (imported ARN, DNS-validated public certificate, or the untrusted AWS
+ * Private CA fallback) so that {@code ContainerFactory} can report the result to the application
+ * (e.g. cloudforge-manager) without duplicating the logic.
  *
- * <p>Deliberately a pure function of plain deployment-context values, not of any CDK construct or
- * {@code SystemContext} Slot — the real decision inside {@code FargateRuntimeConfiguration} is
- * resolved asynchronously (Slot callbacks, once the ALB/zone exist), but "would this configuration
- * result in a trusted cert" doesn't actually depend on any of that; it's fully determined by the
- * same four inputs a customer configures up front. This lets {@code ContainerFactory} compute the
- * answer synchronously at container-env-build time, and lets both classes' behavior be verified
- * with a single, fast, CDK-synthesis-free unit test ({@code TlsTrustEvaluatorTest}) instead of
- * only ever being exercised indirectly through a full stack synthesis.</p>
+ * <p>A pure function of deployment-context values rather than CDK constructs or
+ * {@code SystemContext} slots: {@code FargateRuntimeConfiguration} resolves its decision
+ * asynchronously, but the outcome is fully determined by the inputs configured up front. This
+ * lets {@code ContainerFactory} compute it synchronously and lets {@code TlsTrustEvaluatorTest}
+ * verify it without synthesizing a stack.</p>
  */
 public final class TlsTrustEvaluator {
 

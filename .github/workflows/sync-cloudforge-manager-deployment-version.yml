@@ -1,0 +1,77 @@
+name: Sync cloudforge-manager-deployment.version
+
+# Keeps this repo's reference to cloudforge-manager-deployment's latest published SNAPSHOT
+# current (the root pom's <cloudforge-manager-deployment.version> property and its BOM
+# dependencyManagement entry).
+#
+# Managing the version in the BOM means every consumer that imports it (cloudforge-manager,
+# cfc-testing, and others) picks it up through `<scope>import</scope>`, with no per-consumer sync
+# pipeline. A BOM entry is only a coordinate + version, so this tracks, but does not couple,
+# cloudforge-manager-deployment's independent release cadence.
+#
+# Pull-based (this repo polls cloudforge-manager-deployment's published Central snapshots
+# metadata) and develop-only, like this repo's other scheduled workflows.
+
+on:
+  schedule:
+    - cron: '52 */6 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-cloudforge-manager-deployment-version
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync cloudforge-manager-deployment.version to its latest published SNAPSHOT
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Update cloudforge-manager-deployment.version to its own latest SNAPSHOT
+        run: >
+          mvn -B -q versions:update-property
+          -Dproperty=cloudforge-manager-deployment.version
+          -DallowSnapshots=true
+          -DgenerateBackupPoms=false
+          "-Dmaven.version.ignore=^[0-9]+\.[0-9]+\.[0-9]+$"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet -- pom.xml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No upstream version change detected; nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff -- pom.xml
+          fi
+
+      - name: Validate the BOM against the updated version
+        if: steps.diff.outputs.changed == 'true'
+        run: mvn -B -q validate
+
+      - name: Commit and push
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          DEPLOY_V=$(mvn -q help:evaluate -Dexpression=cloudforge-manager-deployment.version -DforceStdout)
+          git add pom.xml
+          git commit -m "chore(deps): sync cloudforge-manager-deployment.version=${DEPLOY_V} [skip ci]"
+          git pull --rebase origin develop
+          git push origin HEAD:develop

@@ -1,8 +1,8 @@
 # Harbor Application Guide
 
-Harbor is an open-source container registry that secures artifacts with policies and role-based access control, scans images for vulnerabilities, and signs images as trusted.
+Harbor is an open-source container registry with role-based access control, vulnerability scanning, and image signing.
 
-**Status**: Available (Not Yet Tested)
+**Status**: Available (not yet verified end to end)
 
 ---
 
@@ -21,23 +21,18 @@ Harbor is an open-source container registry that secures artifacts with policies
 | **Health Check Grace** | 300 seconds |
 | **Supports Fargate** | Yes |
 | **Supports EC2** | Yes |
-| **OIDC Support** | No (use ALB-OIDC) |
+| **Supported Auth Modes** | `none` |
 | **Database Required** | Yes (PostgreSQL) |
+
+> **Limitation:** CloudForge runs only the `goharbor/harbor-core` image. A complete Harbor installation also needs the portal, registry, job service, and Redis components, which CloudForge does not deploy.
 
 ---
 
-## Capabilities
+## Upstream Features
 
-- Container image registry
-- Image vulnerability scanning (Trivy)
-- Content trust with image signing (Notary)
-- Role-based access control
-- Image replication across registries
-- Garbage collection
-- Audit logging
-- Multi-tenancy with projects
-- Helm chart repository
-- OCI artifact support
+- OCI image and artifact registry with projects and role-based access control
+- Vulnerability scanning (Trivy) and image signing
+- Replication, garbage collection, and audit logging
 
 ---
 
@@ -47,6 +42,8 @@ Harbor is an open-source container registry that secures artifacts with policies
 |------|----------|-----------|--------------|-------------|
 | 4443 | TCP | Inbound | `enableNotary` | Content Trust (Notary) |
 | 8080 | TCP | Inbound | `enableTrivy` | Trivy Scanner |
+
+These flags only open security-group ports; CloudForge does not deploy Notary or Trivy containers.
 
 **Example enabling security features:**
 ```json
@@ -62,28 +59,25 @@ Harbor is an open-source container registry that secures artifacts with policies
 
 | Property | Value |
 |----------|-------|
-| Engine | PostgreSQL 13+ |
-| Instance Class | db.t3.medium (default) |
+| Engine | PostgreSQL 13 or later |
+| Instance Class | `db.t3.medium` (default) |
 | Storage | 50 GB (default) |
 | Database Name | `registry` |
 | Backup Retention | 30 days |
 
-**Database Parameters:**
-- `max_connections`: 250
-- `shared_buffers`: Optimized
+**Database parameters:** `max_connections=250`, `shared_buffers={DBInstanceClassMemory/4096}`, `work_mem=16MB`, `maintenance_work_mem=256MB`, `log_statement=ddl`.
 
 ---
 
 ## Authentication
 
-### Supported Auth Modes
+| Mode | Description |
+|------|-------------|
+| `none` | Harbor local accounts |
 
-| Mode | Status | Description |
-|------|--------|-------------|
-| `alb-oidc` | Available | ALB-level authentication |
-| `none` | Available | Local accounts only |
+Harbor declares only the `none` auth mode. When a context is prepared for a deployment target (the interactive deployer or `CloudForgeDeployment`), an unsupported `authMode` such as `alb-oidc` is replaced with `none` and a warning is printed. Compliance frameworks that require CloudForge-managed authentication, such as the SOC 2 CC6.2 rule, report a failure when `authMode` is `none`.
 
-**Note:** Harbor has built-in OIDC support, but CloudForge integration is pending. Use ALB-OIDC for SSO.
+Harbor supports OpenID Connect natively, but CloudForge does not configure it.
 
 ---
 
@@ -91,9 +85,11 @@ Harbor is an open-source container registry that secures artifacts with policies
 
 | Variable | Description |
 |----------|-------------|
-| `HARBOR_HOSTNAME` | External hostname |
-| `HARBOR_EXTERNAL_URL` | Full external URL |
-| `POSTGRESQL_*` | Database connection |
+| `HARBOR_HOSTNAME` | Deployment FQDN (set when a domain is configured) |
+| `HARBOR_EXTERNAL_URL` | `https://<fqdn>` or `http://<fqdn>` depending on `enableSsl` |
+| `POSTGRESQL_HOST`, `POSTGRESQL_PORT`, `POSTGRESQL_DATABASE`, `POSTGRESQL_USERNAME` | RDS connection |
+| `POSTGRESQL_SSLMODE` | `require` |
+| `POSTGRESQL_PASSWORD` | Injected from the database secret in Secrets Manager |
 
 ---
 
@@ -125,8 +121,7 @@ Harbor is an open-source container registry that secures artifacts with policies
   "stackName": "Harbor-Dev",
   "applicationId": "harbor",
   "applicationName": "Harbor Dev",
-  "description": "Harbor development registry",
-  "environment": "development",
+  "environment": "dev",
 
   "runtime": "fargate",
   "securityProfile": "dev",
@@ -152,15 +147,14 @@ Harbor is an open-source container registry that secures artifacts with policies
 }
 ```
 
-### Production - With Security Scanning
+### Production
 
 ```json
 {
   "stackName": "Harbor-Production",
   "applicationId": "harbor",
   "applicationName": "Harbor Registry",
-  "description": "Production container registry",
-  "environment": "production",
+  "environment": "prod",
 
   "runtime": "ec2",
   "securityProfile": "production",
@@ -173,10 +167,7 @@ Harbor is an open-source container registry that secures artifacts with policies
   "networkMode": "private-with-nat",
   "region": "us-east-1",
 
-  "authMode": "alb-oidc",
-  "cognitoAutoProvision": true,
-  "cognitoDomainPrefix": "harbor-prod-yourcompany",
-  "cognitoMfaEnabled": true,
+  "authMode": "none",
 
   "instanceType": "t3.large",
   "minInstanceCapacity": 2,
@@ -194,7 +185,6 @@ Harbor is an open-source container registry that secures artifacts with policies
   "enableNotary": true,
   "enableTrivy": true,
 
-  "complianceFrameworks": "SOC2",
   "awsConfigEnabled": true,
   "guardDutyEnabled": true,
   "wafEnabled": true,
@@ -206,25 +196,21 @@ Harbor is an open-source container registry that secures artifacts with policies
 }
 ```
 
-**Cost estimate:** ~$500/month
-
 ---
 
 ## Compliance Use Cases
 
-- **SOC2**: Container image provenance and audit trails
-- **PCI-DSS**: Secure storage of payment processing containers
-- **HIPAA**: Vulnerability scanning for healthcare containers
+A private registry with scanning and audit logs can support controls around image provenance and vulnerability management. Deploying Harbor does not by itself satisfy any framework's requirements.
 
 ---
 
 ## Post-Deployment Tasks
 
-1. **Initial Login**: Navigate to Harbor URL, default: `admin` / `Harbor12345`
-2. **Change Admin Password**: Immediately change default password
-3. **Create Projects**: Organize images by team/application
-4. **Configure Scanning**: Enable Trivy scanning policies
-5. **Set Up Replication**: Configure replication to/from other registries
+1. **Sign in** as `admin`. Harbor's upstream default password is `Harbor12345` unless overridden.
+2. **Change the admin password** immediately.
+3. **Create projects** to organize images.
+4. **Configure scanning policies** if a scanner is available.
+5. **Set up replication** to or from other registries if needed.
 
 ---
 

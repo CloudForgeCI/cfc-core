@@ -1,6 +1,8 @@
 # Audit Readiness Guide
 
-This guide helps you prepare for external compliance audits (SOC 2, HIPAA, PCI-DSS, GDPR) by explaining how to collect evidence, generate reports, and present CloudForge CI infrastructure to auditors.
+This guide describes how to collect evidence, generate reports, and present CloudForge CI infrastructure during external compliance audits (SOC 2, HIPAA, PCI-DSS, GDPR).
+
+CloudForge provides infrastructure controls and evidence sources. It does not make an organization audit-ready by itself: organizational policies, application controls, and the auditor's own testing remain out of scope. Commands below use example stack names; replace them with your own. Some examples use GNU `date -d`; on macOS use `date -v` instead.
 
 ## Table of Contents
 
@@ -16,11 +18,11 @@ This guide helps you prepare for external compliance audits (SOC 2, HIPAA, PCI-D
 
 ## Pre-Audit Preparation
 
-### 1. Run Compliance Validation (2 weeks before audit)
+### 1. Run Compliance Validation
 
 ```bash
-# Generate compliance report
-./scripts/generate-compliance-report.sh production-soc2
+# Generate compliance report (argument: stack name)
+./scripts/generate-compliance-report.sh CloudForge-Prod-SOC2
 
 # Check for non-compliant resources
 aws configservice describe-compliance-by-config-rule \
@@ -44,12 +46,16 @@ cat compliance-status.json | jq '.ComplianceByConfigRules[] | select(.Compliance
 
 # This creates:
 # - audit-evidence-2024/
-#   ├── cloudformation-template.yaml
-#   ├── config-rules-report.json
-#   ├── cloudtrail-logs/
-#   ├── config-snapshots/
-#   ├── compliance-matrix.md
-#   └── control-evidence/
+#   ├── AUDIT_EVIDENCE_README.md
+#   ├── infrastructure/   (template, stack metadata and resources)
+#   ├── iam/              (policies, roles, users, credential report)
+#   ├── config/           (rules, compliance status, recorders, remediation)
+#   ├── encryption/       (KMS, EFS, ACM, S3 encryption)
+#   ├── logging/          (CloudTrail, log groups, VPC Flow Logs)
+#   ├── monitoring/       (alarms, GuardDuty, SNS, Security Hub)
+#   ├── network/          (VPCs, security groups, NACLs, load balancers, WAF)
+#   └── compliance/       (compliance-matrix.md)
+# - audit-evidence-2024.tar.gz
 ```
 
 ### 3. Document Infrastructure Changes
@@ -69,12 +75,12 @@ git log --since="2024-01-01" --until="2024-12-31" \
 
 Collect these documents for auditors:
 
-- ✅ [Auditor Compliance Mapping](AUDITOR_COMPLIANCE_MAPPING.md) - Control implementation details
-- ✅ [Compliance Posture](COMPLIANCE_POSTURE.md) - Current compliance status
-- ✅ [Deployment Context](../examples/production-soc2.json) - Configuration
-- ✅ [CloudFormation Template](generated from `cdk synth`)
-- ✅ [CHANGELOG.md](https://github.com/CloudForgeCI/cfc-core/blob/main/CHANGELOG.md) - Version history and compliance changes
-- ✅ [Security Rules](guides/SECURITY_RULES_README.md) - Security control details
+- [Auditor Compliance Mapping](AUDITOR_COMPLIANCE_MAPPING.md) - Control implementation details
+- [Compliance Posture](COMPLIANCE_POSTURE.md) - Coverage by framework
+- The deployment context for each in-scope stack (for example [production-soc2.json](examples/production-soc2.json))
+- The CloudFormation template (from `cdk synth` or the evidence package)
+- [CHANGELOG.md](https://github.com/CloudForgeCI/cfc-core/blob/develop/CHANGELOG.md) - Version history
+- [Security Rules](guides/SECURITY_RULES_README.md) - Security control details
 
 ---
 
@@ -160,11 +166,12 @@ aws acm list-certificates --output json > acm-certificates.json
 # Export CloudTrail configuration
 aws cloudtrail describe-trails --output json > cloudtrail-config.json
 
-# Download CloudTrail logs for audit period
+# Sample CloudTrail events (lookup-events covers the last 90 days;
+# older events are in the trail's S3 bucket)
 aws cloudtrail lookup-events \
-  --start-time 2024-01-01 \
+  --start-time 2024-10-01 \
   --end-time 2024-12-31 \
-  --max-results 10000 \
+  --max-items 10000 \
   --output json > cloudtrail-events.json
 
 # Export Config timeline for a resource
@@ -200,7 +207,7 @@ aws configservice describe-compliance-by-config-rule \
 
 # Export Config remediation executions
 aws configservice describe-remediation-execution-status \
-  --config-rule-name s3-bucket-versioning-enabled \
+  --config-rule-name <rule-name> \
   --output json > remediation-executions.json
 ```
 
@@ -233,167 +240,32 @@ aws securityhub get-findings --output json > securityhub-findings.json
 
 ## Audit Artifacts
 
-### Automated Evidence Generation Script
+### Evidence Generation Script
 
-Create `scripts/generate-audit-evidence.sh`:
+`scripts/generate-audit-evidence.sh` collects the evidence listed above into a timestamped directory and archive. Options:
 
-```bash
-#!/bin/bash
-set -euo pipefail
+| Option | Default |
+|--------|---------|
+| `--stack-name NAME` | `CloudForge-Prod-SOC2` |
+| `--framework FRAMEWORK` | `SOC2` (also `HIPAA`, `PCI-DSS`, `GDPR`) |
+| `--start-date YYYY-MM-DD` | One year ago |
+| `--end-date YYYY-MM-DD` | Today |
+| `--output DIR` | `audit-evidence-<timestamp>` |
+| `--region REGION` | `AWS_DEFAULT_REGION` or `us-east-1` |
 
-STACK_NAME=${1:-CloudForge-Prod-SOC2}
-FRAMEWORK=${2:-SOC2}
-OUTPUT_DIR="audit-evidence-$(date +%Y%m%d)"
+See [Evidence Generation Output Example](EVIDENCE_GENERATION_OUTPUT_EXAMPLE.md) for sample output.
 
-echo "Generating audit evidence for $STACK_NAME ($FRAMEWORK)..."
-mkdir -p "$OUTPUT_DIR"/{config,iam,encryption,logging,monitoring}
+### Control Evidence Mapping (SOC 2 example)
 
-# 1. Infrastructure as Code
-echo "Exporting CloudFormation template..."
-aws cloudformation get-template \
-  --stack-name "$STACK_NAME" \
-  --query 'TemplateBody' > "$OUTPUT_DIR/cloudformation-template.yaml"
+| Control | Evidence | Related AWS Config rules | Validation |
+|---------|----------|--------------------------|------------|
+| CC6.1 - Logical access | `iam/policies.json`, `iam/roles.json`, Cognito user pool configuration | `IAM_PASSWORD_POLICY`, `IAM_USER_MFA_ENABLED` | `jq '.Policies[] \| select(.PolicyName \| contains("CloudForge"))' iam/policies.json` |
+| CC6.6 - Network segmentation | `network/security-groups.json`, `network/vpcs.json`, `AWS::EC2::SecurityGroup` resources in the template | `VPC_SG_OPEN_ONLY_TO_AUTHORIZED_PORTS` | `aws ec2 describe-security-groups --filters "Name=tag:aws:cloudformation:stack-name,Values=<stack-name>"` |
+| CC6.7 - Transmission security | `encryption/acm-certificates.json`, `AWS::ElasticLoadBalancingV2::Listener` resources | `ALB_HTTP_TO_HTTPS_REDIRECTION_CHECK` | `aws elbv2 describe-listeners --load-balancer-arn <alb-arn>` |
+| CC7.2 - System monitoring | `logging/cloudtrail-trails.json`, `monitoring/cloudwatch-alarms.json`, `monitoring/guardduty-detectors.json`, `config/config-rules.json` | All deployed rules | `aws cloudtrail get-trail-status --name cloudforge-cloudtrail-<stack-name>` |
+| A1.2 / A1.3 - Backup and recovery | `encryption/efs-filesystems.json`, `DeletionPolicy: Retain` resources in the template | `S3_BUCKET_VERSIONING_ENABLED` | `aws efs describe-file-systems` |
 
-# 2. IAM Configuration
-echo "Exporting IAM configuration..."
-aws iam list-policies --scope Local --output json > "$OUTPUT_DIR/iam/policies.json"
-aws iam list-roles --output json > "$OUTPUT_DIR/iam/roles.json"
-
-# 3. Config Rules
-echo "Exporting Config rules and compliance status..."
-aws configservice describe-config-rules --output json > "$OUTPUT_DIR/config/rules.json"
-aws configservice describe-compliance-by-config-rule --output json > "$OUTPUT_DIR/config/compliance.json"
-
-# 4. Encryption
-echo "Exporting encryption configuration..."
-aws kms list-keys --output json > "$OUTPUT_DIR/encryption/kms-keys.json"
-aws efs describe-file-systems --output json > "$OUTPUT_DIR/encryption/efs.json"
-
-# 5. Audit Logging
-echo "Exporting audit logging configuration..."
-aws cloudtrail describe-trails --output json > "$OUTPUT_DIR/logging/cloudtrail.json"
-aws logs describe-log-groups --output json > "$OUTPUT_DIR/logging/log-groups.json"
-
-# 6. Monitoring
-echo "Exporting monitoring configuration..."
-aws cloudwatch describe-alarms --output json > "$OUTPUT_DIR/monitoring/alarms.json"
-aws guardduty list-detectors --output json > "$OUTPUT_DIR/monitoring/guardduty.json"
-
-# 7. Generate compliance matrix
-echo "Generating compliance matrix..."
-cat > "$OUTPUT_DIR/compliance-matrix.md" <<EOF
-# Compliance Matrix - $FRAMEWORK
-Generated: $(date)
-Stack: $STACK_NAME
-
-## Controls Implemented
-
-$(cat docs/AUDITOR_COMPLIANCE_MAPPING.md | grep -A 5 "^### $FRAMEWORK")
-
-## Evidence Location
-
-- CloudFormation Template: cloudformation-template.yaml
-- IAM Configuration: iam/
-- Config Rules: config/
-- Encryption: encryption/
-- Audit Logging: logging/
-- Monitoring: monitoring/
-
-EOF
-
-# 8. Create evidence package
-echo "Creating evidence package..."
-tar -czf "${OUTPUT_DIR}.tar.gz" "$OUTPUT_DIR"
-
-echo "✅ Evidence package created: ${OUTPUT_DIR}.tar.gz"
-echo "📦 Size: $(du -h "${OUTPUT_DIR}.tar.gz" | cut -f1)"
-```
-
-### Control Evidence Mapping
-
-Create `scripts/map-controls-to-evidence.sh`:
-
-```bash
-#!/bin/bash
-# Maps compliance controls to specific evidence files
-
-FRAMEWORK=${1:-SOC2}
-OUTPUT="control-evidence-mapping.md"
-
-cat > "$OUTPUT" <<EOF
-# Control Evidence Mapping - $FRAMEWORK
-Generated: $(date)
-
-This document maps each compliance control to specific evidence artifacts.
-
-## SOC 2 Controls
-
-### CC6.1 - Logical and Physical Access Controls
-
-**Evidence:**
-- IAM policies: \`audit-evidence-*/iam/policies.json\`
-- IAM roles: \`audit-evidence-*/iam/roles.json\`
-- Cognito configuration: \`audit-evidence-*/iam/cognito-config.json\`
-- Config rule: \`iam-password-policy\`, \`iam-user-mfa-enabled\`
-
-**Validation:**
-\`\`\`bash
-jq '.Policies[] | select(.PolicyName | contains("CloudForge"))' iam/policies.json
-\`\`\`
-
-### CC6.6 - Network Segmentation
-
-**Evidence:**
-- Security groups: CloudFormation template section \`AWS::EC2::SecurityGroup\`
-- VPC configuration: CloudFormation template section \`AWS::EC2::VPC\`
-- Config rule: \`vpc-sg-open-only-to-authorized-ports\`
-
-**Validation:**
-\`\`\`bash
-aws ec2 describe-security-groups --filters "Name=tag:cloudforge:deployment,Values=CloudForge-Prod"
-\`\`\`
-
-### CC6.7 - Transmission Security
-
-**Evidence:**
-- ALB listener configuration: CloudFormation template \`AWS::ElasticLoadBalancingV2::Listener\`
-- ACM certificates: \`audit-evidence-*/encryption/acm-certificates.json\`
-- Config rule: \`alb-http-to-https-redirection-check\`
-
-**Validation:**
-\`\`\`bash
-aws elbv2 describe-listeners --output json | jq '.Listeners[] | select(.Protocol == "HTTPS")'
-\`\`\`
-
-### CC7.2 - System Monitoring
-
-**Evidence:**
-- CloudTrail configuration: \`audit-evidence-*/logging/cloudtrail.json\`
-- CloudWatch alarms: \`audit-evidence-*/monitoring/alarms.json\`
-- GuardDuty: \`audit-evidence-*/monitoring/guardduty.json\`
-- Config rules: All rules in \`audit-evidence-*/config/rules.json\`
-
-**Validation:**
-\`\`\`bash
-aws cloudtrail get-trail-status --name cloudforge-trail
-\`\`\`
-
-### CC7.3 - Backup and Recovery
-
-**Evidence:**
-- EFS configuration: \`audit-evidence-*/encryption/efs.json\`
-- S3 versioning: Config rule \`s3-bucket-versioning-enabled\`
-- Retention configuration: CloudFormation template \`DeletionPolicy: Retain\`
-
-**Validation:**
-\`\`\`bash
-aws efs describe-file-systems | jq '.FileSystems[] | {FileSystemId, SizeInBytes}'
-\`\`\`
-
-EOF
-
-echo "✅ Control evidence mapping created: $OUTPUT"
-```
+AWS Config rule names in your account are generated per stack; the identifiers above are the AWS managed rule source identifiers.
 
 ---
 
@@ -475,11 +347,13 @@ aws iam put-user-policy \
   --policy-name AuditorReadOnly \
   --policy-document file://auditor-policy.json
 
-# Generate temporary credentials (valid for 12 hours)
+# Create an access key (long-lived until deleted; prefer an assumable role
+# with a short session duration where your process allows it)
 aws iam create-access-key --user-name auditor-external
 
 # After audit, remove access
-aws iam delete-access-key --user-name auditor-external --access-key-id AKIA...
+aws iam delete-access-key --user-name auditor-external --access-key-id AKIAIOSFODNN7EXAMPLE
+aws iam delete-user-policy --user-name auditor-external --policy-name AuditorReadOnly
 aws iam delete-user --user-name auditor-external
 ```
 
@@ -540,7 +414,7 @@ aws guardduty list-findings --detector-id <detector-id>
 - KMS keys for sensitive data
 
 **Evidence:**
-- EFS encryption: [encryption/efs.json](file:encryption/efs.json)
+- EFS encryption: `encryption/efs-filesystems.json`
 - ALB listeners: CloudFormation template `AWS::ElasticLoadBalancingV2::Listener`
 - Config rule: `encrypted-volumes`, `s3-bucket-server-side-encryption-enabled`
 
@@ -570,7 +444,7 @@ aws elbv2 describe-listeners --query 'Listeners[?Protocol==`HTTPS`]'
 ```bash
 # Show auto-remediation configuration
 aws configservice describe-remediation-configurations \
-  --config-rule-names s3-bucket-versioning-enabled
+  --config-rule-names <rule-name>
 ```
 
 ### Q5: "How do you ensure infrastructure changes are authorized and tracked?"
@@ -602,7 +476,7 @@ aws cloudformation describe-stack-events --stack-name CloudForge-Prod \
 
 ### SOC 2 Type II
 
-**Audit Duration:** Minimum 6 months of continuous operation
+**Observation Period:** Commonly 6 to 12 months, agreed with the auditor
 
 **Key Focus Areas:**
 - CC6: Logical and physical access controls
@@ -615,10 +489,14 @@ aws cloudformation describe-stack-events --stack-name CloudForge-Prod \
 
 **Script:**
 ```bash
-./scripts/generate-audit-evidence.sh CloudForge-Prod-SOC2 SOC2 \
+./scripts/generate-audit-evidence.sh \
+  --stack-name CloudForge-Prod-SOC2 \
+  --framework SOC2 \
   --start-date $(date -d '6 months ago' +%Y-%m-%d) \
   --end-date $(date +%Y-%m-%d)
 ```
+
+CloudTrail `lookup-events` returns only the last 90 days; for longer periods, use the trail's S3 bucket or CloudTrail Lake.
 
 ### HIPAA
 
@@ -631,7 +509,7 @@ aws cloudformation describe-stack-events --stack-name CloudForge-Prod \
 - §164.312(e): Transmission security
 
 **Evidence Timeline:**
-- Prepare 6 years of audit logs (retention requirement)
+- HIPAA requires retaining required documentation for 6 years; CloudForge's HIPAA lifecycle rules retain compliance logs for 6 years
 - Access logs for PHI/ePHI
 - Encryption validation
 
@@ -721,7 +599,7 @@ aws s3api put-bucket-versioning \
 
 # Verify remediation
 aws configservice describe-compliance-by-config-rule \
-  --config-rule-names s3-bucket-versioning-enabled
+  --config-rule-names <rule-name>
 ```
 
 ### 4. Schedule Follow-Up
@@ -735,7 +613,7 @@ echo "Next audit: $(date -d '+1 year' +%Y-%m-%d)" >> audit-schedule.txt
 
 ## Audit Checklist
 
-### Pre-Audit (2 weeks before)
+### Pre-Audit
 - [ ] Run compliance validation scripts
 - [ ] Generate evidence package
 - [ ] Review and remediate non-compliant resources

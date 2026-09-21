@@ -47,6 +47,9 @@ The main files are:
 - `docs/web/.gitignore` - Generated-file exclusions
 - `docs/web/README.md` - Docusaurus-specific setup notes
 
+The Docusaurus site reads every Markdown file under `docs/` except `docs/web/`. Pages not
+listed in `sidebars.js` are still built but are not reachable from the sidebar.
+
 When adding or moving a document:
 
 1. Add or move the Markdown source under `docs/`.
@@ -109,7 +112,9 @@ mvn javadoc:aggregate
 # Output: target/site/apidocs/
 ```
 
-Review JavaDoc warnings and add or correct source comments where appropriate. The Maven configuration currently uses `<failOnError>false</failOnError>`, so warnings may not fail the build.
+Review JavaDoc warnings and add or correct source comments where appropriate. The `release`
+profile sets `<failOnError>false</failOnError>` for the JavaDoc plugin, so warnings do not fail
+a release build.
 
 ## Publishing Checks
 
@@ -158,4 +163,4 @@ Run `mvn javadoc:aggregate`, review the reported source locations, and update th
 
 - [Docusaurus documentation](https://docusaurus.io/docs)
 - [JavaDoc documentation comment specification](https://docs.oracle.com/en/java/javase/21/docs/specs/javadoc/doc-comment-spec.html)
-- [CloudForge issues](https://github.com/CloudForgeCI/cfc-core/issues)
+- [CloudForge CI issues](https://github.com/CloudForgeCI/cfc-core/issues)

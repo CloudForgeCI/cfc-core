@@ -7,6 +7,10 @@ actions based on enabled compliance frameworks (HIPAA, SOC2, PCI-DSS, and GDPR).
 framework requirements differ, the configuration applies the strictest encoded value.
 These controls can support a compliance program but do not establish certification.
 
+AWS Config rules and remediations are created only when `awsConfigEnabled` is `true`. The
+Config recorder and delivery channel are created only when `createConfigInfrastructure` is
+also `true`; AWS allows one of each per account and region.
+
 ## Key Features
 
 ### 1. Compliance-Driven Configuration
@@ -16,7 +20,7 @@ These controls can support a compliance program but do not establish certificati
 
 ### 2. Continuous Enforcement
 - **AWS Config Monitoring**: Continuously monitors resources for compliance
-- **Automatic Remediation**: Fixes non-compliant resources without human intervention
+- **Automatic Remediation**: Applies SSM Automation remediations to supported non-compliant resources
 - **Persistent Settings**: Account-level settings survive stack deletion
 
 ### 3. Audit Trail
@@ -31,13 +35,7 @@ These controls can support a compliance program but do not establish certificati
 ### Config Recorder Auto-Start
 
 **What It Does:**
-Automatically starts the AWS Config Recorder immediately upon deployment, ensuring compliance monitoring begins without manual intervention.
-
-**Why It's Required:**
-- **SOC2**: Requires continuous compliance monitoring from deployment
-- **HIPAA**: Zero-gap compliance recording for PHI-related resources
-- **PCI-DSS**: Immediate monitoring of cardholder data environment
-- **GDPR**: Continuous monitoring for data protection compliance
+When the stack creates the Config recorder (`createConfigInfrastructure: true`), a custom resource starts it during deployment so recording begins without a manual step.
 
 **How It Works:**
 1. Config Recorder and Delivery Channel are created via CloudFormation
@@ -55,21 +53,17 @@ AwsSdkCall startRecorderCall = AwsSdkCall.builder()
     .build();
 ```
 
-**Benefits:**
-- **Zero Compliance Gap**: No delay between deployment and monitoring
-- **Automatic**: No manual start command required
-- **Idempotent**: Safe to re-deploy without side effects
-- **Auditable**: Start action logged in CloudTrail
+The `StartConfigurationRecorder` call is recorded by CloudTrail.
 
 **Code Location:**
-- [ComplianceFactory.java:475-534](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java#L475-L534)
+- [`ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - `startConfigRecorder`
 
 ---
 
 ### S3 Lifecycle Policies
 
 **What It Does:**
-Automatically manages the lifecycle of audit logs and compliance data based on regulatory retention requirements.
+Applies lifecycle rules to compliance log buckets based on the retention period of the selected frameworks.
 
 **How It Works:**
 1. System detects which compliance frameworks are enabled
@@ -83,13 +77,13 @@ Automatically manages the lifecycle of audit logs and compliance data based on r
 | **HIPAA** | 6 years (2190 days) | N/A | Glacier (90d), Deep Archive (1y) |
 | **SOC2** | 2 years (730 days) | N/A | Glacier (90d), Deep Archive (1y) |
 | **PCI-DSS** | 1 year (365 days) | 3 months | Glacier (90d) |
-| **Default** | Based on security profile | N/A | Glacier (90d), Deep Archive (varies) |
+| **Default** | `production`: 6 years, `staging`: 2 years, `dev`: 1 year | N/A | Glacier (90d), Deep Archive (1y) when retention exceeds one year |
 
 **Storage Class Transitions:**
 ```
 0-90 days     → S3 Standard (immediate availability for PCI-DSS)
-90-365 days   → Glacier (cost optimization)
-365+ days     → Glacier Deep Archive (long-term compliance)
+90-365 days   → Glacier
+365+ days     → Glacier Deep Archive (retention longer than one year)
 Delete after  → Framework-specific retention period
 ```
 
@@ -100,24 +94,17 @@ Delete after  → Framework-specific retention period
 - ALB access logs
 
 **Code Location:**
-- [`ComplianceFactory.java:2040-2154`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java#L2040-L2154)
-- [`AlbFactory.java:164`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/ingress/AlbFactory.java#L164)
+- [`ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - `getLifecycleRulesForEnabledFrameworks`
 
 ---
 
 ### S3 Bucket Versioning
 
 **What It Does:**
-Enables versioning on all compliance-related S3 buckets to maintain immutable audit trails and prevent accidental deletion.
-
-**Why It's Required:**
-- **HIPAA**: Required for audit trail integrity
-- **SOC2**: Required for evidence preservation
-- **PCI-DSS**: Required for log file integrity
-- **GDPR**: Required for data protection and accountability
+Enables versioning on compliance log buckets so that overwritten or deleted objects keep their prior versions. Versioning does not prevent deletion of versions; use `s3ObjectLockEnabled` when write-once retention is required.
 
 **How It Works:**
-All compliance buckets are created with `.versioned(true)`:
+Compliance buckets are created with `.versioned(true)` (simplified):
 ```java
 Bucket bucket = Bucket.Builder.create(this, "ComplianceBucket")
     .versioned(true)  // Required for compliance
@@ -127,15 +114,8 @@ Bucket bucket = Bucket.Builder.create(this, "ComplianceBucket")
     .build();
 ```
 
-**Benefits:**
-- **Immutability**: Previous versions cannot be overwritten
-- **Audit Trail**: Complete history of all changes
-- **Recovery**: Ability to restore previous versions
-- **Compliance**: Meets regulatory requirements for data retention
-
 **Code Location:**
-- [`ComplianceFactory.java:2056`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java#L2056)
-- [`AlbFactory.java:164`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/ingress/AlbFactory.java#L164)
+- [`ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - `getOrCreateBucket`
 
 ---
 
@@ -145,12 +125,12 @@ Bucket bucket = Bucket.Builder.create(this, "ComplianceBucket")
 Automatically enables versioning on S3 buckets that fail the AWS Config versioning compliance check.
 
 **Configuration:**
-This feature is **optional** and can be enabled via deployment context:
+This feature is **optional** and requires `awsConfigEnabled`:
 
 ```json
 {
-  "enableS3VersioningRemediation": true,
-  "scopeConfigRulesToDeployment": true
+  "awsConfigEnabled": true,
+  "enableS3VersioningRemediation": true
 }
 ```
 
@@ -159,7 +139,7 @@ This feature is **optional** and can be enabled via deployment context:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `enableS3VersioningRemediation` | `false` | Enable automatic versioning remediation |
-| `scopeConfigRulesToDeployment` | `false` | Only monitor buckets from this stack |
+| `scopeConfigRulesToDeployment` | `false` | Only monitor buckets from this stack. `ComplianceFactory` reads this key, but it is not yet exposed through `DeploymentContext`, so setting it has no effect and the rule monitors all buckets. |
 
 **How It Works:**
 
@@ -168,7 +148,7 @@ This feature is **optional** and can be enabled via deployment context:
 3. **Automatic Remediation**: SSM Automation enables versioning on the bucket
 4. **Verification**: Config re-evaluates and confirms compliance
 
-**Scoping Behavior:**
+**Scoping Behavior** (once `scopeConfigRulesToDeployment` is exposed):
 
 - **Default (scopeConfigRulesToDeployment=false)**: Monitors ALL S3 buckets in the account
   - Useful for organization-wide compliance enforcement
@@ -204,12 +184,11 @@ This feature is **optional** and can be enabled via deployment context:
 4. Monitor storage costs when enabling automatic remediation
 
 **Code Location:**
-- [`ComplianceFactory.java:501-536`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java#L501-L536) - Config rule with scoping
-- [`ComplianceFactory.java:721-770`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java#L721-L770) - Remediation configuration
+- [`ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - `createS3ConfigRules` (Config rule with scoping) and `createS3VersioningRemediation` (remediation configuration)
 
 **Example Deployment Logs:**
 ```
-S3 versioning rule scoped to stack: jenkinsTSoc
+S3 versioning rule monitoring all account buckets
 S3 bucket versioning automatic remediation enabled
   SSM Document: AWS-ConfigureS3BucketVersioning
   Mode: Automatic (enables versioning on non-compliant buckets)
@@ -222,7 +201,7 @@ S3 bucket versioning automatic remediation enabled
 ### IAM Password Policy Auto-Remediation
 
 **What It Does:**
-Automatically enforces IAM password policy requirements based on compliance frameworks using AWS Config and AWS Systems Manager.
+Applies an IAM account password policy that matches the selected frameworks, using AWS Config and AWS Systems Manager. The Config rule is created whenever `awsConfigEnabled` is `true`; the remediation is attached when the stack also creates the Config recorder (`createConfigInfrastructure: true`).
 
 **How It Works:**
 
@@ -240,6 +219,8 @@ Automatically enforces IAM password policy requirements based on compliance fram
 | **PCI-DSS** | 8 characters | 90 days | 4 passwords | All required† |
 | **Default (PROD)** | 14 characters | 90 days | 12 passwords | All required† |
 | **Default (STAGING/DEV)** | 12 characters | 90 days | 12 passwords | All required† |
+
+PCI DSS v4.0.1 Req 8.3.6 requires 12 characters; the 8-character IAM account policy for PCI-DSS alone predates v4.0 and is a known gap. Select an additional framework or adjust the policy if IAM users access the cardholder data environment.
 
 † Complexity requirements include:
 - Uppercase letters (A-Z)
@@ -259,7 +240,7 @@ Automatically enforces IAM password policy requirements based on compliance fram
 - **Persistence**: Account-level setting survives stack deletion
 
 **Code Location:**
-- [`ComplianceFactory.java:512-705`](../../cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java#L512-L705)
+- [`ComplianceFactory.java`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cloudforge-api/src/main/java/com/cloudforgeci/api/observability/ComplianceFactory.java) - `createIAMConfigRules`, `getPasswordPolicyParameters`, and `createPasswordPolicyRemediation`
 
 **Example Deployment Logs:**
 ```
@@ -277,28 +258,41 @@ IAM password policy automatic remediation enabled
 
 ---
 
+### Account-Level Service Remediations
+
+For `production` stacks that create the Config recorder (`createConfigInfrastructure: true`), the framework-specific Config rules also get automatic remediations with custom SSM documents:
+
+| Remediation | Attached to |
+|-------------|-------------|
+| Enable GuardDuty | PCI-DSS `GUARDDUTY_ENABLED_CENTRALIZED` rule |
+| Enable Security Hub | SOC2 `SECURITYHUB_ENABLED` rule |
+| Enable Inspector | SOC2 Inspector rule |
+| Enable Macie | SOC2 Macie rule |
+
+These act on the whole account and region, not only on this stack's resources. `ComplianceFactory` reads `enableGuardDutyRemediation`, `enableSecurityHubRemediation`, `enableInspectorRemediation`, and `enableMacieRemediation` to override the default, but these keys are not yet exposed through `DeploymentContext`, so the `production` default always applies.
+
+---
+
 ## Configuration
 
 ### Enabling Compliance Frameworks
 
-Configure compliance frameworks in your deployment context:
+Configure compliance frameworks in the deployment context (`cdk.json` context or `deployment-context.json`):
 
-```java
-DeploymentContext cfc = new DeploymentContext();
-cfc.put("complianceFrameworks", "HIPAA,SOC2,PCI-DSS");
+```json
+{
+  "complianceFrameworks": "hipaa,soc2,pci-dss",
+  "awsConfigEnabled": true
+}
 ```
 
-**Supported Values:**
-- `HIPAA` - Health Insurance Portability and Accountability Act
-- `SOC2` - Service Organization Control 2
-- `PCI-DSS` (or `PCIDSS`) - Payment Card Industry Data Security Standard
-- `GDPR` - General Data Protection Regulation
+**Supported Values** (case-insensitive):
+- `hipaa` - Health Insurance Portability and Accountability Act
+- `soc2` - Service Organization Control 2
+- `pci-dss` (or `pci_dss`) - Payment Card Industry Data Security Standard
+- `gdpr` - General Data Protection Regulation
 
-**Multiple Frameworks:**
-Separate multiple frameworks with commas:
-```java
-cfc.put("complianceFrameworks", "HIPAA,PCI-DSS,SOC2");
-```
+Separate multiple frameworks with commas, spaces, or `+`. Any other value fails configuration parsing.
 
 When multiple frameworks are enabled, the **strictest requirement** is automatically applied.
 
@@ -317,9 +311,9 @@ When multiple frameworks are enabled, the **strictest requirement** is automatic
 | **Password Complexity** | ✅ All | ✅ All | ✅ All | Config + SSM |
 | **Password Rotation** | ✅ 90 days | ✅ 90 days | ✅ 90 days | Config + SSM |
 | **Password Reuse** | ✅ 24 | ✅ 12 | ✅ 4 | Config + SSM |
-| **Auto-Remediation** | ✅ Enabled | ✅ Enabled | ✅ Enabled | AWS Config |
-| **CloudTrail Logging** | ✅ All events | ✅ All events | ✅ All events | Advanced selectors |
-| **ALB Access Logs** | ✅ Required | ✅ Required | ✅ Required | S3 bucket |
+| **Password Policy Remediation** | ✅ Enabled | ✅ Enabled | ✅ Enabled | AWS Config |
+| **CloudTrail Logging** | ✅ Management and S3 data events | ✅ Management and S3 data events | ✅ Management and S3 data events | CloudTrail (`staging`/`production`) |
+| **ALB Access Logs** | ✅ Validated | ✅ Validated | ✅ Validated | `albAccessLogging` |
 | **Encryption in Transit** | ✅ TLS 1.2+ | ✅ TLS 1.2+ | ✅ TLS 1.2+ | ALB listener |
 
 ---
@@ -361,7 +355,7 @@ aws s3api get-bucket-versioning --bucket <bucket-name>
 
 ### CloudWatch Alarms
 
-Compliance-related alarms are created with SNS notifications:
+`AlarmFactory` creates CloudWatch alarms with SNS notifications, for example:
 - ALB 5xx errors
 - ALB 4xx errors
 - High response times
@@ -369,7 +363,7 @@ Compliance-related alarms are created with SNS notifications:
 Subscribe to the SNS topic to receive alerts:
 ```bash
 aws sns subscribe \
-  --topic-arn arn:aws:sns:region:account:alb-alarms-production \
+  --topic-arn <TOPIC_ARN> \
   --protocol email \
   --notification-endpoint your-email@example.com
 ```
@@ -419,8 +413,8 @@ aws sns subscribe \
 **Symptom:** AWS Config rules missing after deployment
 
 **Possible Causes:**
-1. AWS Config not enabled in the account
-2. Config recorder not created
+1. `awsConfigEnabled` is not `true`
+2. No Config recorder exists in the account and region (set `createConfigInfrastructure: true` on one stack)
 3. Insufficient IAM permissions
 
 **Solution:**
@@ -434,24 +428,9 @@ aws sns subscribe \
 
 ---
 
-## Cost Optimization
+## Cost Considerations
 
-### S3 Storage Costs
-
-Lifecycle policies automatically optimize storage costs:
-
-**Example Cost Savings (1 TB of logs):**
-- Month 1-3 (S3 Standard): $23/month
-- Month 3-12 (Glacier): $4/month
-- Year 2-6 (Deep Archive): $1/month
-
-**Annual Savings:** ~$200/TB compared to keeping all data in S3 Standard
-
-### AWS Config Costs
-
-- **Rule Evaluations**: $0.001 per evaluation
-- **Configuration Items**: $0.003 per item
-- **Estimated Monthly Cost**: $20-50 for typical deployment
+Lifecycle transitions move older log objects to lower-cost storage classes. AWS Config charges per configuration item recorded and per rule evaluation. Actual charges depend on region, resource count, log volume, and current AWS pricing; use the [AWS Pricing Calculator](https://calculator.aws.amazon.com/) for an estimate.
 
 **Cost Reduction Tips:**
 - Use periodic evaluation instead of continuous where acceptable
@@ -464,7 +443,7 @@ Lifecycle policies automatically optimize storage costs:
 
 ### Least Privilege Access
 
-All remediation actions use dedicated IAM roles with minimal permissions:
+Remediation actions run under a dedicated SSM Automation role scoped to the actions each remediation needs (simplified):
 
 ```java
 Role ssmAutomationRole = Role.Builder.create(this, "RemediationRole")
@@ -486,7 +465,7 @@ Role ssmAutomationRole = Role.Builder.create(this, "RemediationRole")
 
 ### Audit Trail
 
-All compliance actions are logged:
+Compliance-related activity is recorded in:
 - **CloudTrail**: API calls and account activity
 - **Config Timeline**: Resource configuration changes
 - **SSM Automation**: Remediation execution history
@@ -496,7 +475,7 @@ All compliance actions are logged:
 - **Encryption at Rest**: S3-managed encryption (SSE-S3)
 - **Encryption in Transit**: TLS 1.2+ for all data transfer
 - **Access Control**: Bucket policies and IAM policies restrict access
-- **Versioning**: Immutable audit trail
+- **Versioning**: Prior object versions retained on compliance buckets
 
 ---
 
@@ -523,6 +502,6 @@ All compliance actions are logged:
 ## Support
 
 For issues or questions:
-- GitHub Issues: [cfc-core/issues](https://github.com/cloudforgeci/cfc-core/issues)
+- GitHub Issues: [cfc-core/issues](https://github.com/CloudForgeCI/cfc-core/issues)
 - Documentation: [docs/compliance/](.)
 - Contact: support@cloudforgeci.com

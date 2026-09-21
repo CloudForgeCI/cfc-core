@@ -15,15 +15,12 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Live incident: a real cross-account deploy failed with {@code iam:CreateRole} denied on
- * {@code Intermediate-MySQL-RDS-IntermediateMySQLRDSApplicat-SWqnXHLIKH7c} — CloudFormation's
- * auto-generated name for the RDS Enhanced Monitoring role {@code DatabaseInstance} creates by
- * default, truncated by CloudFormation's own 64-character IAM role-name limit down to a fragment
- * with no stable substring left for {@code OperatorProvisioningPermissionMatrix}'s operator-role
- * grant to have matched in the first place. {@link RdsFactory#createDatabase} now builds this role
- * itself with an explicit {@code roleName} ending in a fixed suffix, specifically so it can never
- * be truncated unpredictably — these tests confirm that holds for both a short and a pathologically
- * long stack/app name.
+ * The RDS Enhanced Monitoring role that {@code DatabaseInstance} creates by default gets a
+ * CloudFormation-generated name that is truncated to IAM's 64-character limit (e.g.
+ * {@code Intermediate-MySQL-RDS-IntermediateMySQLRDSApplicat-SWqnXHLIKH7c}), leaving no stable
+ * substring for Manager's operator-role grant to match. {@link RdsFactory#createDatabase} therefore
+ * creates the role with an explicit {@code roleName} ending in a fixed suffix. These tests verify
+ * the suffix survives for both short and very long stack/app names.
  */
 class RdsMonitoringRoleTest {
 

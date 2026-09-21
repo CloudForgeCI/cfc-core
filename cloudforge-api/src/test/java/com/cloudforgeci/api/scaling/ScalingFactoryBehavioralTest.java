@@ -6,6 +6,7 @@ import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
+import com.cloudforgeci.api.application.cms.WordPressApplicationSpec;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
@@ -309,8 +310,13 @@ class ScalingFactoryBehavioralTest {
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.APPLICATION_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.DEV, IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV), cfc);
+        // JENKINS_SERVICE always installs JenkinsApplicationSpec (see TopologyRules), but this test
+        // is exercising generic multi-instance scaling mechanics, not Jenkins specifically -- and
+        // Jenkins does not support running more than one instance (see its
+        // supportsAutoScaling() override). Swap in an application that does.
+        ctx.applicationSpec.set(new WordPressApplicationSpec());
 
         // Create VPC for Fargate service
         Vpc vpc = Vpc.Builder.create(stack, "Vpc")
@@ -364,8 +370,10 @@ class ScalingFactoryBehavioralTest {
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.APPLICATION_SERVICE, RuntimeType.EC2,
                 SecurityProfile.PRODUCTION, IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION), cfc);
+        // See testFargateScalingWithValidConfiguration's own comment on why this is swapped out.
+        ctx.applicationSpec.set(new WordPressApplicationSpec());
 
         // Create VPC for ASG
         Vpc vpc = Vpc.Builder.create(stack, "Vpc")
@@ -404,8 +412,10 @@ class ScalingFactoryBehavioralTest {
         stack.getNode().setContext("cfc", cfcContext);
 
         DeploymentContext cfc = DeploymentContext.from(stack);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.APPLICATION_SERVICE, RuntimeType.EC2,
                 SecurityProfile.DEV, IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV), cfc);
+        // See testFargateScalingWithValidConfiguration's own comment on why this is swapped out.
+        ctx.applicationSpec.set(new WordPressApplicationSpec());
 
         Vpc vpc = Vpc.Builder.create(stack, "Vpc")
                 .maxAzs(2)

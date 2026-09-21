@@ -556,11 +556,9 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // Create user groups if enabled
         createUserGroups(userPool);
 
-        // An application whose runtime writes a role edit through to this pool's real group
-        // membership (e.g. AdminAddUserToGroup) instead of only updating its own local cache
-        // declares that via ApplicationSpec#requiresCognitoGroupManagementIam — see its own
-        // javadoc. Scoped to this one pool's ARN; harmless to grant even if the feature is never
-        // exercised for a given deployment. onSet (not a direct getter) because IAM-profile
+        // Applications that write role changes to this pool's group membership (e.g.
+        // AdminAddUserToGroup) declare it via ApplicationSpec#requiresCognitoGroupManagementIam.
+        // Scoped to this pool's ARN. onSet (not a direct getter) because IAM-profile
         // configuration (which creates fargateTaskRole) and Cognito provisioning have no fixed
         // ordering relative to each other.
         if (ctx != null && applicationSpec != null && applicationSpec.requiresCognitoGroupManagementIam()
@@ -638,12 +636,11 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 // Prevent user existence errors - profile-aware (enabled in staging/production)
                 .preventUserExistenceErrors(securityProfileConfig.isPreventUserExistenceErrorsEnabled());
         if (authMode == AuthMode.APPLICATION_OIDC) {
-            // Manager's own custom login form calls Cognito's InitiateAuth/RespondToAuthChallenge
-            // directly (ApplicationOidcAuthenticator#completeDirectLogin) instead of redirecting
-            // the browser to Cognito Hosted UI — needs USER_PASSWORD_AUTH enabled on the client to
-            // be accepted at all. Scoped to application-oidc only: alb-oidc's client secret is
-            // managed internally by Cognito and never reaches Manager's own app code (see below),
-            // so nothing would ever call InitiateAuth for it — least privilege, not just inertness.
+            // Applications with their own login form (e.g. CloudForge Manager) call Cognito's
+            // InitiateAuth/RespondToAuthChallenge directly instead of redirecting to the Hosted UI,
+            // which requires USER_PASSWORD_AUTH on the client. Enabled for application-oidc only:
+            // with alb-oidc the application never holds the client secret, so the flow is not
+            // needed (least privilege).
             appClientBuilder = appClientBuilder.authFlows(AuthFlow.builder().userPassword(true).build());
         }
         UserPoolClient appClient = appClientBuilder.build();
@@ -907,7 +904,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
     /**
      * Export Cognito OIDC endpoints to DeploymentContext for OidcAuthenticationFactory.
-     * This allows seamless integration between CognitoAuthenticationFactory and OidcAuthenticationFactory.
+     * OidcAuthenticationFactory reads these values to configure OIDC against the Cognito pool.
      */
     private void exportOidcEndpoints(String userPoolId, String clientId, String domainPrefix, String secretName) {
         String issuer = "https://cognito-idp." + region + ".amazonaws.com/" + userPoolId;

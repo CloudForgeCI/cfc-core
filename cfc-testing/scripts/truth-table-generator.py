@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Truth Table Generator for CloudForge Core Resource Validation
-Creates comprehensive test matrices and identifies which files need attention
+Creates test matrices and identifies which files need attention
 """
 
 import json
@@ -511,7 +511,7 @@ class TruthTableGenerator:
         """
         Generate CSV file for compliance framework validation tests.
 
-        Creates a comprehensive test matrix combining:
+        Creates a test matrix combining:
         - Compliance frameworks (SOC2, PCI-DSS, HIPAA, GDPR)
         - Runtimes (EC2, FARGATE)
         - Security profiles (PRODUCTION - required for compliance)
@@ -1127,7 +1127,7 @@ class TruthTableGenerator:
 
         This report is optimized for:
         - Developers: Understanding validation failures and how to fix them
-        - Auditors: Demonstrating comprehensive compliance coverage
+        - Auditors: Demonstrating compliance coverage
         - Compliance Officers: Proving multi-layer defense-in-depth
         """
         import datetime
