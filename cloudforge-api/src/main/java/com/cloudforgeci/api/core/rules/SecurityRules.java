@@ -89,13 +89,17 @@ public final class SecurityRules {
     // check's escape hatch for tokens with no ComplianceFrameworkType entry at all (e.g.
     // "ISO-27001", or "AWS-BEST-PRACTICES" for cdk-nag's own generic fallback pack below), read
     // directly off the construct tree rather than through DeploymentContext/DeploymentConfig
-    // since it deliberately can't round-trip through either.
+    // since it deliberately can't round-trip through either. Validated against a fixed charset
+    // (rather than trusted verbatim) since it never passes through ComplianceFrameworkType's own
+    // enum parsing the way the comma-separated field above does -- every valid token this feature
+    // actually offers (see ComplianceService#checkableFrameworks) is already upper-case
+    // letters/digits/hyphens, so anything else is dropped rather than logged or installed.
     Object rawOverride = ctx.getNode().tryGetContext("complianceFrameworksRawOverride");
     if (rawOverride instanceof String rawOverrideText && !rawOverrideText.isBlank()) {
         for (String token : rawOverrideText.split(",")) {
-            String trimmed = token.trim();
-            if (!trimmed.isEmpty()) {
-                enabledFrameworks.add(trimmed.toUpperCase());
+            String candidate = token.trim().toUpperCase(java.util.Locale.ROOT);
+            if (candidate.matches("[A-Z0-9-]{1,64}")) {
+                enabledFrameworks.add(candidate);
             }
         }
     }
