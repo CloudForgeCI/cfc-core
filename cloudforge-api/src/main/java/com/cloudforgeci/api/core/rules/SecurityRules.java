@@ -186,11 +186,11 @@ public final class SecurityRules {
       if (pack != null) {
         Aspects.of(ctx.getNode().getRoot()).add(pack);
         appliedCount++;
-        LOG.info("  ✓ Applied cdk-nag pack for " + framework);
       }
     }
 
-    LOG.info("Applied " + appliedCount + " cdk-nag validation packs");
+    LOG.info("Applied " + appliedCount + " cdk-nag validation pack(s) across "
+        + enabledFrameworks.size() + " enabled framework(s)");
   }
 
   /**
@@ -228,12 +228,12 @@ public final class SecurityRules {
       // FEDRAMP: Handled by existing FedRampRules.java plugin only
       // Not integrated with cdk-nag to avoid conflicts with FedRampRules.
       case "FEDRAMP", "FEDRAMPHIGH" -> {
-        LOG.info("  - Skipping cdk-nag for " + framework + " (uses existing FedRampRules.java)");
+        LOG.info("  - Skipping cdk-nag for a FedRAMP framework (uses existing FedRampRules.java)");
         yield null;
       }
       // Custom frameworks: fallback to AWS Solutions best practices
       default -> {
-        LOG.info("  - Applying AwsSolutionsChecks (fallback) for custom framework: " + framework);
+        LOG.info("  - Applying AwsSolutionsChecks (fallback) for an unrecognized/custom framework");
         yield AwsSolutionsChecks.Builder.create()
             .logIgnores(!enforce)
             .reports(true)
