@@ -138,16 +138,13 @@ public final class ManagerOperatorIamSupport {
      * operator role must be able to create, manage, and delete (see {@code iamRoleCreate}/{@code
      * iamRoleManage} below for why this is not a tag condition). Each pattern targets a name
      * segment that survives CloudFormation's physical-name truncation (IAM's 64-character limit
-     * keeps only a prefix of the logical id plus a random suffix).
-     *
-     * <p><b>Known gap:</b> {@code VpcFlowlogIAMRole}, {@code BackupSelectionRole}, and
-     * {@code ComplianceCloudTrailLogsRole} are nested deeply enough (e.g.
-     * {@code <App>Application/<App>Vpc/VpcFlowlogIAMRole}) that, for long stack/app names,
-     * truncation removes the identifying segment entirely, so no name pattern can match them.
-     * TODO: assign a shared IAM {@code path} to every role CloudForge factories create (paths are
-     * not truncated) and scope this policy by path instead. Until then, a rollback that must delete
-     * one of these roles ends in {@code ROLLBACK_FAILED} and needs manual cleanup with elevated
-     * credentials.</p>
+     * keeps only a prefix of the logical id plus a random suffix) -- for a role nested deeply
+     * enough (e.g. {@code <App>Application/<App>Vpc/VpcFlowlogIAMRole}), that segment can be
+     * truncated away entirely for long stack/app names, leaving nothing stable to match. RDS
+     * Enhanced Monitoring, AWS Backup selection, and VPC Flow Log roles are all covered by giving
+     * them an explicit {@code roleName} at creation instead (see each pattern's own comment below).
+     * {@code ComplianceCloudTrailLogsRole} remains a known gap -- see the comment right after this
+     * list for why.
      */
     private static final List<String> IAM_ROLE_MANAGE_RESOURCES = List.of(
         // Task/task-execution roles for each IAMProfile (Extended/Standard/MinimalIAMConfiguration).
