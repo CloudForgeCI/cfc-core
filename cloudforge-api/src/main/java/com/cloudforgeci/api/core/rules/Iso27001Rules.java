@@ -19,17 +19,15 @@ import java.util.Set;
  * plugin architecture. External contributors can use this as a template for
  * implementing additional compliance frameworks.</p>
  *
- * <h2>ISO 27001 Coverage:</h2>
+ * <h2>ISO 27001:2022 Coverage</h2>
+ * <p>The 2022 edition organizes Annex A into four themes (organizational, people, physical,
+ * technological) instead of the 2013 edition's 14 numbered clauses. This class checks controls
+ * from:
  * <ul>
- *   <li><strong>A.5:</strong> Information Security Policies</li>
- *   <li><strong>A.8:</strong> Asset Management</li>
- *   <li><strong>A.9:</strong> Access Control</li>
- *   <li><strong>A.10:</strong> Cryptography</li>
- *   <li><strong>A.12:</strong> Operations Security</li>
- *   <li><strong>A.13:</strong> Communications Security</li>
- *   <li><strong>A.14:</strong> System Acquisition, Development and Maintenance</li>
- *   <li><strong>A.17:</strong> Business Continuity Management</li>
- *   <li><strong>A.18:</strong> Compliance</li>
+ *   <li><strong>A.5:</strong> Organizational Controls (access control, authentication
+ *       information, information security during disruption)</li>
+ *   <li><strong>A.8:</strong> Technological Controls (cryptography, logging, monitoring
+ *       activities, application security)</li>
  * </ul>
  *
  * <h2>Usage:</h2>
@@ -75,19 +73,19 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();
 
-            // A.9 - Access Control
+            // A.5.15 / A.8.16 - Access Control & Monitoring Activities
             rules.addAll(validateAccessControl(ctx));
 
-            // A.10 - Cryptography
+            // A.8.24 - Use of Cryptography
             rules.addAll(validateCryptography(ctx));
 
-            // A.12 - Operations Security
+            // A.8.15 / A.8.16 - Logging & Monitoring Activities
             rules.addAll(validateOperationsSecurity(ctx));
 
-            // A.13 - Communications Security
+            // A.8.16 - Monitoring Activities (network traffic)
             rules.addAll(validateCommunicationsSecurity(ctx));
 
-            // A.17 - Business Continuity
+            // A.5.29 - Information Security During Disruption
             rules.addAll(validateBusinessContinuity(ctx));
 
             // Get all failed rules
@@ -127,7 +125,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * A.9 - Access Control.
+     * A.5.15 / A.8.16 - Access Control &amp; Monitoring Activities.
      *
      * <p>Validates that access to information and systems is properly controlled.</p>
      */
@@ -138,31 +136,31 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
         );
 
-        // A.9.1.2 - Access to networks and network services
+        // A.8.16 - Monitoring Activities (network access monitoring)
         if (!config.isSecurityMonitoringEnabled()) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.9.1.2",
-                "Network access monitoring required (ISO 27001 A.9.1.2)",
+                "ISO-27001-A.8.16",
+                "Network access monitoring required (ISO 27001 A.8.16)",
                 "Enable security monitoring for network access control"
             ));
         } else {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.9.1.2",
-                "Network access monitoring enabled (ISO 27001 A.9.1.2)"
+                "ISO-27001-A.8.16",
+                "Network access monitoring enabled (ISO 27001 A.8.16)"
             ));
         }
 
-        // A.9.4.1 - Information access restriction
+        // A.8.26 - Application Security Requirements (WAF)
         if (!config.isWafEnabled() && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.9.4.1",
-                "WAF required for access restriction in production (ISO 27001 A.9.4.1)",
+                "ISO-27001-A.8.26",
+                "WAF required for access restriction in production (ISO 27001 A.8.26)",
                 "Enable WAF to restrict malicious access"
             ));
         } else if (config.isWafEnabled()) {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.9.4.1",
-                "WAF enabled for access restriction (ISO 27001 A.9.4.1)"
+                "ISO-27001-A.8.26",
+                "WAF enabled for access restriction (ISO 27001 A.8.26)"
             ));
         }
 
@@ -170,7 +168,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * A.10 - Cryptography.
+     * A.8.24 - Use of Cryptography.
      *
      * <p>Validates proper use of cryptographic controls.</p>
      */
@@ -179,43 +177,44 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
 
         var config = ctx.securityProfileConfig.get().orElseThrow();
 
-        // A.10.1.1 - Policy on the use of cryptographic controls
+        // A.8.24 - Use of Cryptography (data at rest)
         if (!config.isEbsEncryptionEnabled()) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.10.1.1-EBS",
-                "EBS encryption required (ISO 27001 A.10.1.1)",
+                "ISO-27001-A.8.24-EBS",
+                "EBS encryption required (ISO 27001 A.8.24)",
                 "Enable EBS encryption for data at rest"
             ));
         } else {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.10.1.1-EBS",
-                "EBS encryption enabled (ISO 27001 A.10.1.1)"
+                "ISO-27001-A.8.24-EBS",
+                "EBS encryption enabled (ISO 27001 A.8.24)"
             ));
         }
 
         if (!config.isEfsEncryptionAtRestEnabled()) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.10.1.1-EFS-Rest",
-                "EFS encryption at rest required (ISO 27001 A.10.1.1)",
+                "ISO-27001-A.8.24-EFS-Rest",
+                "EFS encryption at rest required (ISO 27001 A.8.24)",
                 "Enable EFS encryption at rest"
             ));
         } else {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.10.1.1-EFS-Rest",
-                "EFS encryption at rest enabled (ISO 27001 A.10.1.1)"
+                "ISO-27001-A.8.24-EFS-Rest",
+                "EFS encryption at rest enabled (ISO 27001 A.8.24)"
             ));
         }
 
+        // A.8.24 - Use of Cryptography (data in transit)
         if (!config.isEfsEncryptionInTransitEnabled()) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.10.1.1-EFS-Transit",
-                "EFS encryption in transit required (ISO 27001 A.10.1.1)",
+                "ISO-27001-A.8.24-EFS-Transit",
+                "EFS encryption in transit required (ISO 27001 A.8.24)",
                 "Enable EFS encryption in transit (TLS)"
             ));
         } else {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.10.1.1-EFS-Transit",
-                "EFS encryption in transit enabled (ISO 27001 A.10.1.1)"
+                "ISO-27001-A.8.24-EFS-Transit",
+                "EFS encryption in transit enabled (ISO 27001 A.8.24)"
             ));
         }
 
@@ -223,7 +222,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * A.12 - Operations Security.
+     * A.8.15 / A.8.16 - Logging &amp; Monitoring Activities.
      *
      * <p>Validates operational procedures and responsibilities.</p>
      */
@@ -232,32 +231,32 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
 
         var config = ctx.securityProfileConfig.get().orElseThrow();
 
-        // A.12.4.1 - Event logging
+        // A.8.15 - Logging (event logging)
         if (!config.isCloudTrailEnabled()) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.12.4.1",
-                "CloudTrail logging required (ISO 27001 A.12.4.1)",
+                "ISO-27001-A.8.15",
+                "CloudTrail logging required (ISO 27001 A.8.15)",
                 "Enable CloudTrail for API event tracking"
             ));
         } else {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.12.4.1",
-                "CloudTrail logging enabled (ISO 27001 A.12.4.1)"
+                "ISO-27001-A.8.15",
+                "CloudTrail logging enabled (ISO 27001 A.8.15)"
             ));
         }
 
-        // A.12.6.1 - Management of technical vulnerabilities
+        // A.8.16 - Monitoring Activities (threat detection)
         if (!config.isGuardDutyEnabled() && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.12.6.1",
-                "Vulnerability detection required for production (ISO 27001 A.12.6.1)",
+                "ISO-27001-A.8.16-ThreatDetection",
+                "Vulnerability detection required for production (ISO 27001 A.8.16)",
                 "GuardDutyEnabled",
                 "Enable AWS GuardDuty for vulnerability and threat detection"
             ));
         } else if (config.isGuardDutyEnabled()) {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.12.6.1",
-                "Vulnerability detection enabled (ISO 27001 A.12.6.1)",
+                "ISO-27001-A.8.16-ThreatDetection",
+                "Vulnerability detection enabled (ISO 27001 A.8.16)",
                 "GuardDutyEnabled"
             ));
         }
@@ -266,7 +265,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * A.13 - Communications Security.
+     * A.8.16 - Monitoring Activities (network traffic).
      *
      * <p>Validates security of network communications.</p>
      */
@@ -275,18 +274,18 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
 
         var config = ctx.securityProfileConfig.get().orElseThrow();
 
-        // A.13.1.1 - Network controls
+        // A.8.16 - Monitoring Activities (network traffic)
         if (!config.isFlowLogsEnabled()) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.13.1.1",
-                "Network traffic logging required (ISO 27001 A.13.1.1)",
+                "ISO-27001-A.8.16-NetworkTraffic",
+                "Network traffic logging required (ISO 27001 A.8.16)",
                 "VpcFlowLogsEnabled",
                 "Enable VPC Flow Logs for network traffic monitoring"
             ));
         } else {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.13.1.1",
-                "Network traffic logging enabled (ISO 27001 A.13.1.1)",
+                "ISO-27001-A.8.16-NetworkTraffic",
+                "Network traffic logging enabled (ISO 27001 A.8.16)",
                 "VpcFlowLogsEnabled"
             ));
         }
@@ -295,7 +294,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * A.17 - Business Continuity Management.
+     * A.5.29 - Information Security During Disruption.
      *
      * <p>Validates availability and disaster recovery controls.</p>
      */
@@ -304,17 +303,17 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
 
         var config = ctx.securityProfileConfig.get().orElseThrow();
 
-        // A.17.2.1 - Availability of information processing facilities
+        // A.5.29 - Information Security During Disruption (Multi-AZ availability)
         if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !config.isMultiAzEnforced()) {
             rules.add(ComplianceRule.fail(
-                "ISO-27001-A.17.2.1",
-                "Multi-AZ deployment required for production availability (ISO 27001 A.17.2.1)",
+                "ISO-27001-A.5.29",
+                "Multi-AZ deployment required for production availability (ISO 27001 A.5.29)",
                 "Enable Multi-AZ for high availability"
             ));
         } else if (config.isMultiAzEnforced()) {
             rules.add(ComplianceRule.pass(
-                "ISO-27001-A.17.2.1",
-                "Multi-AZ deployment enabled (ISO 27001 A.17.2.1)"
+                "ISO-27001-A.5.29",
+                "Multi-AZ deployment enabled (ISO 27001 A.5.29)"
             ));
         }
 

@@ -42,10 +42,16 @@ import java.util.Set;
 public class PciDssRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(PciDssRules.class.getName());
 
-    /** Controls that still block STAGING synthesis: authentication, network isolation, and
-     *  SSL/TLS in transit. Everything else in STAGING is a visible, non-blocking finding. */
+    /** Controls that still block STAGING synthesis: authentication, network isolation,
+     *  SSL/TLS in transit, encryption at rest, and audit logging -- cardholder data may exist
+     *  in STAGING, so these can't be downgraded to a non-blocking finding there.
+     *  Everything else in STAGING is a visible, non-blocking finding. */
     private static final Set<String> STAGING_BLOCKING_RULES = Set.of(
-        "PCI-DSS-Req-8.2-Auth", "PCI-DSS-Req-1.3-Network", "PCI-DSS-Req-4.1-SSL", "PCI-DSS-Req-4.1-TLS"
+        "PCI-DSS-Req-8.2-Auth", "PCI-DSS-Req-1.3-Network", "PCI-DSS-Req-4.1-SSL", "PCI-DSS-Req-4.1-TLS",
+        "PCI-DSS-Req-4.1-HTTPSStrict",
+        "PCI-DSS-Req-3.4-EBS", "PCI-DSS-Req-3.4-EFS", "PCI-DSS-Req-3.4-S3", "PCI-DSS-Req-3.4-LogEncryption",
+        "PCI-DSS-Req-10.2-CloudTrail", "PCI-DSS-Req-10.3-FlowLogs", "PCI-DSS-Req-10.5-ALB",
+        "PCI-DSS-Req-10.7-AuditLogImmutability"
     );
 
     // PCI DSS v4.0 Req 8.3.6: Minimum 12 character passwords (increased from 7 in v3.2.1)

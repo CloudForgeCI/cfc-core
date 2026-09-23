@@ -30,6 +30,8 @@ public class InspectorFactory extends BaseFactory {
 
     private static final Logger LOG = Logger.getLogger(InspectorFactory.class.getName());
 
+    private static final List<String> ALL_RESOURCE_TYPES = List.of("EC2", "ECR");
+
     @DeploymentContext("inspectorEnabled")
     private Boolean inspectorEnabled;
 
@@ -73,6 +75,32 @@ public class InspectorFactory extends BaseFactory {
         String account = Stack.of(this).getAccount();
         String region = Stack.of(this).getRegion();
 
+        // Inspector2:Enable only turns on the resource types listed -- it never turns off a type
+        // that was previously enabled and is now absent from the list. Reset every known resource
+        // type to disabled on every create/update before re-enabling just the ones currently
+        // selected, so flipping e.g. inspectorEcrScanning from true to false disables ECR scanning
+        // instead of leaving it running indefinitely.
+        AwsSdkCall resetCall = AwsSdkCall.builder()
+            .service("Inspector2")
+            .action("disable")
+            .parameters(Map.of(
+                "accountIds", List.of(account),
+                "resourceTypes", ALL_RESOURCE_TYPES
+            ))
+            .physicalResourceId(PhysicalResourceId.of("inspector2-reset-" + account + "-" + region))
+            .region(region)
+            .build();
+
+        AwsCustomResource resetResource = AwsCustomResource.Builder.create(this, "Inspector2Reset")
+            .onCreate(resetCall)
+            .onUpdate(resetCall)
+            .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                SdkCallsPolicyOptions.builder()
+                    .resources(List.of("*"))
+                    .build()
+            ))
+            .build();
+
         AwsSdkCall enableCall = AwsSdkCall.builder()
             .service("Inspector2")
             .action("enable")
@@ -96,7 +124,7 @@ public class InspectorFactory extends BaseFactory {
             .build();
 
         // inspector2:Enable provisions a service-linked role on first use.
-        AwsCustomResource.Builder.create(this, "Inspector2Enable")
+        AwsCustomResource enableResource = AwsCustomResource.Builder.create(this, "Inspector2Enable")
             .onCreate(enableCall)
             .onUpdate(enableCall)
             .onDelete(disableCall)
@@ -106,6 +134,7 @@ public class InspectorFactory extends BaseFactory {
                     .build()
             ))
             .build();
+        enableResource.getNode().addDependency(resetResource);
 
         LOG.info("Inspector enabled: " + resourceTypes);
     }

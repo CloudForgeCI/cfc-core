@@ -1188,6 +1188,14 @@ public class ComplianceFactory extends BaseFactory {
                         .build())
                 .build();
         addConfigRuleDependencies(rootAccessKeyRule, recorder, starterResource);
+
+        CfnConfigRule adminAccessRule = CfnConfigRule.Builder.create(this, "IAMNoAdminAccessRule")
+                .source(CfnConfigRule.SourceProperty.builder()
+                        .owner("AWS")
+                        .sourceIdentifier(ManagedRuleIdentifiers.IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS)
+                        .build())
+                .build();
+        addConfigRuleDependencies(adminAccessRule, recorder, starterResource);
     }
 
     /**

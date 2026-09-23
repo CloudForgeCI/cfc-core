@@ -45,6 +45,15 @@ public class LoggingCwFactory extends BaseFactory {
         super(scope, id);
     }
 
+    private boolean isFedRampSelected() {
+        String frameworks = ctx.cfc.complianceFrameworks();
+        if (frameworks == null) {
+            return false;
+        }
+        String normalized = frameworks.toLowerCase();
+        return normalized.contains("fedramp");
+    }
+
     @Override
     public void create() {
         try {
@@ -88,6 +97,13 @@ public class LoggingCwFactory extends BaseFactory {
                 // Use RetentionDaysConverter for consistent retention mapping across all factories
                 // This ensures compliance-aware thresholds (PCI-DSS, HIPAA, etc.) are properly handled
                 retentionDays = RetentionDaysConverter.fromDays(logRetentionDays);
+            } else if (security == SecurityProfile.DEV && isFedRampSelected()) {
+                // FedRampRules.install() only enforces AU-11 (3-year retention) for PRODUCTION/
+                // STAGING -- DEV is intentionally out of scope there -- but the fedramp-nist-800-53
+                // Layer 3 guard file has no profile signal and requires >=1095 days on every log
+                // group regardless of profile. Without this, a FedRAMP DEV deployment's default
+                // 7-day retention would fail Layer 3 even though Layer 2 considers it compliant.
+                retentionDays = RetentionDaysConverter.fromDays(1095);
             }
 
             // Create log group with explicit name and removal policy

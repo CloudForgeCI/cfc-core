@@ -49,12 +49,17 @@ import java.util.Set;
 public class HipaaRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(HipaaRules.class.getName());
 
-    /** Controls that still block STAGING synthesis: authentication, network isolation, and
-     *  SSL/TLS in transit. Everything else in STAGING is a visible, non-blocking finding. */
+    /** Controls that still block STAGING synthesis: authentication, network isolation,
+     *  SSL/TLS in transit, encryption at rest, audit logging, and backups -- PHI may exist
+     *  in STAGING, so these can't be downgraded to a non-blocking finding there.
+     *  Everything else in STAGING is a visible, non-blocking finding. */
     private static final Set<String> STAGING_BLOCKING_RULES = Set.of(
         "HIPAA-164.312(a)(2)(i)-Auth", "HIPAA-164.312(d)-Auth",
         "HIPAA-164.312(a)(1)-NetworkAccess", "HIPAA-164.312(e)(1)-Network",
-        "HIPAA-164.312(e)(2)(i)-SSL", "HIPAA-164.312(e)(2)(i)-TLS"
+        "HIPAA-164.312(e)(2)(i)-SSL", "HIPAA-164.312(e)(2)(i)-TLS",
+        "HIPAA-164.312(a)(2)(iv)-EncryptionAtRest", "HIPAA-164.312(a)(2)(iv)-LogEncryption",
+        "HIPAA-164.312(b)-CloudTrail", "HIPAA-164.312(b)-FlowLogs", "HIPAA-164.312(b)-ALB",
+        "HIPAA-164.312(c)(1)-AuditLogImmutability", "HIPAA-164.310(d)(2)(iii)-Backup"
     );
 
     // HIPAA requires 6 years retention for documentation

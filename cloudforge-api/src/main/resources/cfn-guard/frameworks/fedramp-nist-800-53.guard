@@ -14,10 +14,13 @@
 # lambda-security.guard, advanced-monitoring.guard, incident-response.guard, threat-protection.guard)
 # are not restated here -- see the per-section notes below for which family that closes.
 #
-# SC-13 (FIPS 140-2 validated cryptographic modules) has no template-visible signal -- it's an
-# endpoint/algorithm-selection property CloudFormation doesn't expose -- and is not checked at any
-# layer. AC-6 (least privilege), CM-2 (baseline configuration), IA-5 (authenticator management), and
-# SC-12 (cryptographic key establishment) are pass-through at Layer 2 too, for the same reason.
+# CM-2 (baseline configuration) has no template-visible signal -- it's satisfied structurally by
+# this codebase's infrastructure-as-code deployment model, not something to assert against a single
+# resource -- and is not checked at any layer. AC-6 (least privilege), IA-5 (authenticator
+# management), SC-12 (cryptographic key establishment), and SC-13 (cryptographic protection) are
+# all Layer 2 checks now (FedRampRules.validateAccessControl/validateIdentificationAuthentication/
+# validateSystemCommunications); they have no template-visible signal cfn-guard could assert on
+# independently, so Layer 3 doesn't restate them.
 
 # ============================================================================
 # AC - Access Control

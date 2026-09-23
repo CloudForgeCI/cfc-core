@@ -68,14 +68,19 @@ import java.util.Set;
 public class FedRampRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(FedRampRules.class.getName());
 
-    /** Controls that still block STAGING synthesis: authentication (IA-2, IA-2(1) MFA, AC-7 lockout),
-     *  network isolation (AC-17, AC-17(2) encrypted remote access, SC-7(5) default deny), and
-     *  SSL/TLS in transit (SC-8). AC-3/AC-4/SC-7/SC-7-WAF are access-enforcement/flow-logging/WAF
-     *  controls, not auth/network-isolation/SSL themselves, so they stay non-blocking like every
-     *  other STAGING finding. IA-5/IA-5(1) never fail (no fail branch exists), so they're excluded. */
+    /** Controls that still block STAGING synthesis: authentication (IA-2, IA-2(1) MFA, IA-5/IA-5(1)
+     *  password policy, AC-7 lockout), network isolation (AC-17, AC-17(2) encrypted remote access,
+     *  SC-7(5) default deny), SSL/TLS in transit (SC-8, SC-8(1) HTTPS-strict), encryption at rest
+     *  (SC-28), and audit logging (AU-2/AU-3/AU-6/AU-9/AU-11/AU-12) -- federal data may exist in
+     *  STAGING, so these can't be downgraded to a non-blocking finding there. AC-3/AC-4/SC-7/SC-7-WAF
+     *  are access-enforcement/flow-logging/WAF controls, not auth/network-isolation/SSL themselves,
+     *  so they stay non-blocking like every other STAGING finding. */
     private static final Set<String> STAGING_BLOCKING_RULES = Set.of(
-        "FEDRAMP-IA-2", "FEDRAMP-IA-2(1)", "FEDRAMP-AC-7",
-        "FEDRAMP-AC-17", "FEDRAMP-AC-17(2)", "FEDRAMP-SC-7(5)", "FEDRAMP-SC-8"
+        "FEDRAMP-IA-2", "FEDRAMP-IA-2(1)", "FEDRAMP-IA-5", "FEDRAMP-IA-5(1)", "FEDRAMP-AC-7",
+        "FEDRAMP-AC-17", "FEDRAMP-AC-17(2)", "FEDRAMP-SC-7(5)", "FEDRAMP-SC-8", "FEDRAMP-SC-8(1)-HTTPSStrict",
+        "FEDRAMP-SC-28", "FEDRAMP-AU-2", "FEDRAMP-AU-3", "FEDRAMP-AU-6", "FEDRAMP-AU-9",
+        "FEDRAMP-AU-9-LogEncryption", "FEDRAMP-AU-9-AuditLogImmutability", "FEDRAMP-AU-11",
+        "FEDRAMP-AU-12", "FEDRAMP-AU-12-ALB", "FEDRAMP-CP-9"
     );
 
     // FedRAMP requires 3-year retention for audit records (AU-11)
@@ -254,13 +259,23 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // AC-6: Least Privilege - IAM policies should follow least privilege
-        // Validated by AWS Config rule: iam-policy-no-statements-with-admin-access
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-AC-6",
-            "Least privilege enforced via IAM policies (NIST AC-6)",
-            "iam-policy-no-statements-with-admin-access"
-        ));
+        // AC-6: Least Privilege - continuously validated by AWS Config's
+        // iam-policy-no-statements-with-admin-access managed rule, provisioned by
+        // ComplianceFactory only when AWS Config is enabled.
+        if (!config.isAwsConfigEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-AC-6",
+                "Least privilege requires continuous IAM policy monitoring via AWS Config (NIST AC-6)",
+                "iam-policy-no-statements-with-admin-access",
+                "Set awsConfigEnabled = true to provision the least-privilege Config rule."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-AC-6",
+                "Least privilege enforced via IAM policies (NIST AC-6)",
+                "iam-policy-no-statements-with-admin-access"
+            ));
+        }
 
         // AC-7: Unsuccessful Logon Attempts - Cognito lockout policy
         AuthMode authMode = ctx.cfc.authMode();
@@ -692,20 +707,38 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
             }
         }
 
-        // IA-5: Authenticator Management - Password policy validation
-        // FedRAMP requires minimum 12-character passwords
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-IA-5",
-            "Authenticator management enforced via IAM password policy (NIST IA-5)",
-            "iam-password-policy"
-        ));
-
-        // IA-5(1): Password-based Authentication requirements
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-IA-5(1)",
-            "Password complexity requirements enforced (NIST IA-5(1)) - minimum 12 characters",
-            "iam-password-policy"
-        ));
+        // IA-5 / IA-5(1): Authenticator Management - FedRAMP requires minimum 12-character passwords
+        var config = ctx.securityProfileConfig.get().orElseThrow(
+            () -> new IllegalStateException("SecurityProfileConfiguration not set")
+        );
+        int passwordLength = config.getMinimumPasswordLength();
+        if (passwordLength < FEDRAMP_MIN_PASSWORD_LENGTH) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-IA-5",
+                "Authenticator management requires a minimum " + FEDRAMP_MIN_PASSWORD_LENGTH
+                    + "-character password policy (NIST IA-5)",
+                "iam-password-policy",
+                "Current: " + passwordLength + " characters. Update SecurityProfileConfiguration.getMinimumPasswordLength()."
+            ));
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-IA-5(1)",
+                "Password complexity requirements not met (NIST IA-5(1)) - minimum "
+                    + FEDRAMP_MIN_PASSWORD_LENGTH + " characters required",
+                "iam-password-policy",
+                "Current: " + passwordLength + " characters."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-IA-5",
+                "Authenticator management enforced via IAM password policy (NIST IA-5)",
+                "iam-password-policy"
+            ));
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-IA-5(1)",
+                "Password complexity requirements enforced (NIST IA-5(1)) - " + passwordLength + " characters",
+                "iam-password-policy"
+            ));
+        }
 
         return rules;
     }
@@ -993,18 +1026,37 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // SC-12: Cryptographic Key Management - KMS with rotation
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-SC-12",
-            "Cryptographic key management via AWS KMS (NIST SC-12)",
-            "kms-cmk-not-scheduled-for-deletion"
-        ));
+        // SC-12: Cryptographic Key Management - customer-managed KMS key with rotation
+        if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-SC-12",
+                "Cryptographic key establishment and management requires a customer-managed KMS key (NIST SC-12)",
+                "kms-cmk-not-scheduled-for-deletion",
+                "Set cloudWatchLogsKmsEncryptionEnabled = true to provision a rotating customer-managed key."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-SC-12",
+                "Cryptographic key management via AWS KMS (NIST SC-12)",
+                "kms-cmk-not-scheduled-for-deletion"
+            ));
+        }
 
-        // SC-13: Cryptographic Protection - AES-256
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-SC-13",
-            "FIPS 140-2 validated cryptographic protection (NIST SC-13)"
-        ));
+        // SC-13: Cryptographic Protection - AES-256 encryption applied to data at rest
+        if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-SC-13",
+                "Cryptographic protection requires AES-256 encryption of data at rest (NIST SC-13)",
+                "encrypted-volumes",
+                "Enable encryption at rest for all storage."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-SC-13",
+                "FIPS 140-2 validated cryptographic protection (NIST SC-13)",
+                "encrypted-volumes"
+            ));
+        }
 
         // SC-28: Protection of Information at Rest
         if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()) {
@@ -1315,7 +1367,7 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         report.append("IA - Identification & Authentication:\n");
         report.append("  ✓ IA-2 (Authentication): ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ IA-2(1) (MFA): ").append(Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled()) ? "ENABLED" : "CHECK MANUALLY").append("\n");
-        report.append("  ✓ IA-5 (Password Policy): ENFORCED VIA IAM\n");
+        report.append("  ✓ IA-5 (Password Policy): ").append(config.getMinimumPasswordLength() >= FEDRAMP_MIN_PASSWORD_LENGTH ? "ENFORCED VIA IAM (" + config.getMinimumPasswordLength() + " chars)" : "BELOW MINIMUM (" + config.getMinimumPasswordLength() + " chars)").append("\n");
         report.append("\n");
 
         // IR - Incident Response

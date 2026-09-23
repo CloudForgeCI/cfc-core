@@ -68,7 +68,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             rules.addAll(validateRdsSecurity(ctx));
 
             // Database access control (public access restriction + IAM auth) -- runs against
-            // ctx.dbConnection, independent of the self-attested checks above
+            // ctx.dbConnection, same real-infrastructure gate validateRdsSecurity now uses
             rules.addAll(validateDatabaseAccessControl(ctx));
 
             // DynamoDB security validation
@@ -118,9 +118,12 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
     private List<ComplianceRule> validateRdsSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        boolean rdsEnabled = getBooleanSetting(ctx, "rdsEnabled", false);
-
-        if (!rdsEnabled) {
+        // Gate on ctx.dbConnection, the "was a database provisioned" signal every other
+        // matrix-controls check in this class uses (see validateDatabaseAccessControl), not the
+        // self-attested "rdsEnabled" flag -- a stale/mismatched flag would otherwise skip
+        // encryption/backup/multi-AZ checks against a provisioned database, or evaluate them
+        // against config that drives no infrastructure.
+        if (ctx.dbConnection.get().isEmpty()) {
             // No RDS in use, skip validation
             rules.add(ComplianceRule.pass(
                 "RDS-NOT-USED",
@@ -480,14 +483,11 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
      * upgrade and backup-retention-period length are conditional checks with no corresponding
      * {@link ComplianceMatrix.SecurityControl} entry, so they aren't claimed here.
      *
-     * <p>Worth flagging separately from the per-control gaps: every other check in {@code
-     * validateRdsSecurity} gates on a self-attested {@code rdsEnabled} context flag, never on
-     * {@code ctx.dbConnection} (the signal {@link #validateDatabaseAccessControl} and every other
-     * framework's matrix-controls checks use for "was a database provisioned"). That means this
-     * class can validate a database that doesn't exist, or skip one that does, for
-     * RDS-ENCRYPTION/RDS-BACKUP/RDS-MULTI-AZ/etc, depending on whether {@code rdsEnabled} happens
-     * to agree with reality. Making the rest of this class read {@code ctx.dbConnection} too is a
-     * bigger, separate fix than DATABASE_ACCESS_CONTROL alone.
+     * <p>{@code validateRdsSecurity} and {@link #validateDatabaseAccessControl} both gate on
+     * {@code ctx.dbConnection} -- the "was a database provisioned" signal every other framework's
+     * matrix-controls checks use -- rather than a self-attested context flag, so
+     * RDS-ENCRYPTION/RDS-BACKUP/RDS-MULTI-AZ/etc can't validate a database that doesn't exist or
+     * skip one that does.
      */
     @Override
     public Set<String> claimedControls() {
