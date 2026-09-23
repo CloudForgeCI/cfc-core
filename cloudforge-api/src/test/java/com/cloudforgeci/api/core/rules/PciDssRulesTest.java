@@ -3476,6 +3476,8 @@ class PciDssRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -3545,6 +3547,8 @@ class PciDssRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -3617,6 +3621,8 @@ class PciDssRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -3690,6 +3696,8 @@ class PciDssRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         // Note: TestInfrastructureBuilder uses JENKINS_SERVICE topology by default
@@ -3760,6 +3768,8 @@ class PciDssRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(

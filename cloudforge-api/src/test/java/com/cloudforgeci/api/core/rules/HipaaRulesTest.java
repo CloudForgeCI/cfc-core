@@ -1995,18 +1995,25 @@ class HipaaRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        // Comprehensive checks for all HIPAA requirements when ENFORCE + PRODUCTION; STAGING never blocks
+        // Comprehensive checks for all HIPAA requirements when ENFORCE + PRODUCTION. STAGING now
+        // blocks too, but only on the subset in HipaaRules.STAGING_BLOCKING_RULES -- of the factors
+        // this test varies, that's cloudTrail/flowLogs (HIPAA-164.312(b)-CloudTrail/FlowLogs);
+        // MFA/monitoring/EFS-transit/network-mode/retention/cross-region-backup stay non-blocking
+        // at STAGING.
         NetworkMode mode = NetworkMode.fromString(networkMode);
         boolean shouldFail = "ENFORCE".equals(complianceMode) &&
-                           secProfile == SecurityProfile.PRODUCTION &&
-                           (authMode.equals("none") ||                           // No auth
-                            !cognitoMfa ||                                       // No MFA
-                            (!secMonitoring || !guardDuty) ||                    // Missing monitoring
-                            (!cloudTrail || !flowLogs) ||                        // Missing audit logs
-                            !efsTransit ||                                       // No EFS transit encryption
-                            mode == NetworkMode.PUBLIC ||                        // Public network (includes legacy "public-no-nat")
-                            retention < 2190 ||                                  // Insufficient retention (6 years minimum)
-                            !crossRegion);                                       // PROD needs cross-region backup
+                           ((secProfile == SecurityProfile.PRODUCTION &&
+                             (authMode.equals("none") ||                           // No auth
+                              !cognitoMfa ||                                       // No MFA
+                              (!secMonitoring || !guardDuty) ||                    // Missing monitoring
+                              (!cloudTrail || !flowLogs) ||                        // Missing audit logs
+                              !efsTransit ||                                       // No EFS transit encryption
+                              mode == NetworkMode.PUBLIC ||                        // Public network (includes legacy "public-no-nat")
+                              retention < 2190 ||                                  // Insufficient retention (6 years minimum)
+                              !crossRegion))                                       // PROD needs cross-region backup
+                            ||
+                            (secProfile == SecurityProfile.STAGING &&
+                             (!cloudTrail || !flowLogs)));                         // STAGING blocks on audit logging too
 
         if (shouldFail) {
             assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),

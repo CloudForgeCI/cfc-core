@@ -54,7 +54,9 @@ class InspectorFactoryTest {
         new InspectorFactory(builder.getStack(), "Inspector").create();
 
         Template template = Template.fromStack(builder.getStack());
-        template.resourceCountIs("Custom::AWS", 1);
+        // Two Custom::AWS resources: Inspector2Reset (disables every resource type before
+        // re-enabling) and Inspector2Enable (enables the currently-selected types).
+        template.resourceCountIs("Custom::AWS", 2);
     }
 
     @Test
