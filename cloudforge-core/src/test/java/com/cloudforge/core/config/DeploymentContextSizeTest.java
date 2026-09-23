@@ -13,10 +13,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Verifies that a fully-populated {@link DeploymentConfig} (every field set, not just the
- * handful a typical deploy uses) fits inside a single AWS Systems Manager Standard parameter
- * (4,096 bytes), so deployment-context can be persisted alongside a stack rather than only in
+ * handful a typical deploy uses) fits inside a single AWS Systems Manager Advanced parameter
+ * (8,192 bytes), so deployment-context can be persisted alongside a stack rather than only in
  * Manager's local file storage, which doesn't survive a container restart or a different Manager
  * instance taking over the same account.
+ *
+ * <p>Sized against the Advanced tier rather than Standard (4,096 bytes): field growth from
+ * compliance coverage (Security Hub standard versions, Macie/GuardDuty/Inspector flags, RDS
+ * override fields, etc.) has already pushed a fully-populated context past Standard, and nothing
+ * in this codebase writes to SSM yet, so there's no cost/throughput tradeoff to weigh here --
+ * only a budget for when that integration is built.
  *
  * <p>Populates every declared field via reflection with a realistic, plausible value (a plausible
  * stack/domain/application name — not an artificially padded worst-case string) rather than
@@ -26,10 +32,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DeploymentContextSizeTest {
 
-    private static final int SSM_STANDARD_PARAMETER_LIMIT_BYTES = 4096;
+    private static final int SSM_ADVANCED_PARAMETER_LIMIT_BYTES = 8192;
 
     @Test
-    void fullyPopulatedDeploymentConfigFitsInAnSsmStandardParameter() throws Exception {
+    void fullyPopulatedDeploymentConfigFitsInAnSsmAdvancedParameter() throws Exception {
         DeploymentConfig config = new DeploymentConfig();
         populateEveryField(config);
 
@@ -37,11 +43,11 @@ class DeploymentContextSizeTest {
         int bytes = json.getBytes(StandardCharsets.UTF_8).length;
 
         System.out.println("Fully-populated DeploymentConfig JSON size: " + bytes + " bytes "
-            + "(SSM Standard parameter limit: " + SSM_STANDARD_PARAMETER_LIMIT_BYTES + " bytes)");
+            + "(SSM Advanced parameter limit: " + SSM_ADVANCED_PARAMETER_LIMIT_BYTES + " bytes)");
 
-        assertTrue(bytes <= SSM_STANDARD_PARAMETER_LIMIT_BYTES,
+        assertTrue(bytes <= SSM_ADVANCED_PARAMETER_LIMIT_BYTES,
             "Fully-populated deployment context is " + bytes + " bytes, over the "
-                + SSM_STANDARD_PARAMETER_LIMIT_BYTES + "-byte SSM Standard parameter limit");
+                + SSM_ADVANCED_PARAMETER_LIMIT_BYTES + "-byte SSM Advanced parameter limit");
     }
 
     /** Sets every declared instance field on {@code config} to a realistic value based on its

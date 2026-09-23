@@ -46,7 +46,7 @@ class Ec2FactorySecurityTest {
 
     private static List<JsonNode> ofType(JsonNode resources, String type) {
         List<JsonNode> matches = new ArrayList<>();
-        resources.fields().forEachRemaining(e -> {
+        resources.properties().forEach(e -> {
             if (type.equals(e.getValue().path("Type").asText())) {
                 matches.add(e.getValue());
             }
@@ -56,7 +56,7 @@ class Ec2FactorySecurityTest {
 
     private static JsonNode instanceLogGroup(JsonNode resources) {
         List<JsonNode> groups = new ArrayList<>();
-        resources.fields().forEachRemaining(e -> {
+        resources.properties().forEach(e -> {
             if ("AWS::Logs::LogGroup".equals(e.getValue().path("Type").asText()) && e.getKey().contains("Ec2Logs")) {
                 groups.add(e.getValue());
             }

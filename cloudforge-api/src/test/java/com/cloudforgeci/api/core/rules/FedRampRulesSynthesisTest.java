@@ -98,8 +98,7 @@ class FedRampRulesSynthesisTest {
 
     @Test
     void stagingIsHeldToTheSameControlsAsProduction() {
-        TestInfrastructureBuilder builder = passingProductionBuilder("FedRampStagingPass", ComplianceMode.ENFORCE);
-        // Re-derive a STAGING variant of the same passing configuration.
+        // A STAGING variant of the same passing configuration as passingProductionBuilder().
         Map<String, Object> context = new HashMap<>();
         context.put("authMode", "alb-oidc");
         context.put("enableSsl", "true");
