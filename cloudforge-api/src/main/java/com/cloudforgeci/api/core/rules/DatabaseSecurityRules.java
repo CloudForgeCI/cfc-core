@@ -173,9 +173,14 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // Multi-AZ for production - use ComplianceMatrix. Read the field RdsFactory
-        // actually consumes (databaseMultiAz), not the disconnected "rdsMultiAz" name.
-        boolean rdsMultiAz = getBooleanSetting(ctx, "databaseMultiAz", false);
+        // Multi-AZ for production - use ComplianceMatrix. Mirror RdsFactory.createDatabase's own
+        // override-then-profile-default resolution (databaseMultiAz context override, falling back
+        // to SecurityProfileConfiguration.isRdsDatabaseMultiAzEnabled(), which PRODUCTION defaults
+        // to true for even with no override set) -- reading the raw override flag alone with a
+        // hardcoded false default would flag a database RdsFactory actually built with Multi-AZ on.
+        Boolean multiAzOverride = ctx.cfc.databaseMultiAz();
+        boolean rdsMultiAz = multiAzOverride != null ? multiAzOverride
+            : ctx.securityProfileConfig.get().map(c -> c.isRdsDatabaseMultiAzEnabled()).orElse(false);
 
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
