@@ -18,6 +18,8 @@ import software.amazon.awssdk.services.cloudformation.model.ChangeSetStatus;
 import software.amazon.awssdk.services.cloudformation.model.ChangeSetType;
 import software.amazon.awssdk.services.cloudformation.model.CloudFormationException;
 import software.amazon.awssdk.services.cloudformation.model.CreateChangeSetRequest;
+import software.amazon.awssdk.services.cloudformation.model.CreateStackRequest;
+import software.amazon.awssdk.services.cloudformation.model.UpdateStackRequest;
 import software.amazon.awssdk.services.cloudformation.model.DeleteChangeSetRequest;
 import software.amazon.awssdk.services.cloudformation.model.DeleteStackRequest;
 import software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetRequest;
@@ -162,27 +164,101 @@ public final class LocalStackDeployer implements LocalDeployer {
             changeSetBuilder.templateBody(templateBody);
         }
 
-        cloudFormation.createChangeSet(changeSetBuilder.build());
+        List<LocalResourceChange> changes;
+        try {
+            cloudFormation.createChangeSet(changeSetBuilder.build());
 
-        var changeSet = waitForChangeSet(stackName, changeSetName);
-        if (changeSet.status() == ChangeSetStatus.FAILED) {
-            String reason = changeSet.statusReason() == null ? "" : changeSet.statusReason();
-            deleteChangeSet(stackName, changeSetName);
-            if (isNoOp(reason)) {
-                reconcilePostDeployState(stackName, templateBody);
-                return new LocalDeployResult(stackName, false, true, List.of(), outputs(stackName));
+            var changeSet = waitForChangeSet(stackName, changeSetName);
+            if (changeSet.status() == ChangeSetStatus.FAILED) {
+                String reason = changeSet.statusReason() == null ? "" : changeSet.statusReason();
+                deleteChangeSet(stackName, changeSetName);
+                if (isNoOp(reason)) {
+                    reconcilePostDeployState(stackName, templateBody);
+                    return new LocalDeployResult(stackName, false, true, List.of(), outputs(stackName));
+                }
+                throw new IOException("LocalStack change set failed: " + reason);
             }
-            throw new IOException("LocalStack change set failed: " + reason);
+
+            changes = changeSet.changes().stream()
+                .map(change -> toChange(change.resourceChange()))
+                .toList();
+            cloudFormation.executeChangeSet(ExecuteChangeSetRequest.builder()
+                .stackName(stackName)
+                .changeSetName(changeSetName)
+                .build());
+        } catch (CloudFormationException e) {
+            if (!isLocalStackInternalError(e)) {
+                throw e;
+            }
+            // LocalStack's own change-set emulation (CreateChangeSet/DescribeChangeSet) can break
+            // outright on larger/more deeply-nested templates -- a Python "maximum recursion depth
+            // exceeded" 500 from LocalStack itself, not a real template or business-logic problem
+            // (CreateChangeSet already succeeded; it's LocalStack's own dependency-graph walk over
+            // the result that recurses without a base case). Change sets are a preview/review
+            // feature with no purpose against a throwaway local emulator anyway, so fall back to
+            // creating/updating the stack directly, which exercises a much simpler LocalStack code
+            // path. The only real cost is the itemized per-resource change list this run won't
+            // have, which no caller currently treats as more than informational.
+            System.out.println("   ⚠️  LocalStack change-set emulation failed internally ("
+                + e.getMessage() + ") -- falling back to a direct stack create/update");
+            deleteChangeSetQuietly(stackName, changeSetName);
+            changes = List.of();
+            deployStackDirectly(stackName, templateBody, exists);
         }
 
-        List<LocalResourceChange> changes = changeSet.changes().stream()
-            .map(change -> toChange(change.resourceChange()))
-            .toList();
-        cloudFormation.executeChangeSet(ExecuteChangeSetRequest.builder()
-            .stackName(stackName)
-            .changeSetName(changeSetName)
-            .build());
+        awaitStackSettled(stackName, exists);
+        reconcilePostDeployState(stackName, templateBody);
+        return new LocalDeployResult(stackName, !exists, false, changes, outputs(stackName));
+    }
 
+    /** Whether {@code e} is LocalStack's own CloudFormation emulation breaking internally (HTTP
+     *  500 / {@code InternalError}), as opposed to a real, meaningful failure (validation error,
+     *  resource-creation failure, etc.) that should propagate and fail the deploy normally.
+     *  Package-private, not private: unit-tested directly since exercising the real fallback
+     *  requires a live (or faked) CloudFormation endpoint that this module's other tests avoid. */
+    static boolean isLocalStackInternalError(CloudFormationException e) {
+        return e.statusCode() == 500
+            || "InternalError".equals(e.awsErrorDetails() == null ? null : e.awsErrorDetails().errorCode());
+    }
+
+    private void deleteChangeSetQuietly(String stackName, String changeSetName) {
+        try {
+            deleteChangeSet(stackName, changeSetName);
+        } catch (CloudFormationException ignored) {
+            // Best-effort cleanup of a change set LocalStack itself couldn't fully process --
+            // nothing meaningful to do if even the delete fails the same way.
+        }
+    }
+
+    /** {@link #deploy}'s change-set-based path, minus the change set: creates or updates the
+     *  stack directly via {@code CreateStack}/{@code UpdateStack}, the fallback {@link #deploy}
+     *  reaches when LocalStack's own change-set emulation breaks (see {@link
+     *  #isLocalStackInternalError}). */
+    private void deployStackDirectly(String stackName, String templateBody, boolean exists) throws IOException {
+        if (exists) {
+            UpdateStackRequest.Builder updateBuilder = UpdateStackRequest.builder()
+                .stackName(stackName)
+                .capabilities(Capability.CAPABILITY_IAM, Capability.CAPABILITY_NAMED_IAM);
+            if (templateBody.getBytes(StandardCharsets.UTF_8).length > MAX_INLINE_TEMPLATE_BYTES) {
+                updateBuilder.templateURL(uploadTemplateToS3(stackName, templateBody));
+            } else {
+                updateBuilder.templateBody(templateBody);
+            }
+            cloudFormation.updateStack(updateBuilder.build());
+        } else {
+            CreateStackRequest.Builder createBuilder = CreateStackRequest.builder()
+                .stackName(stackName)
+                .capabilities(Capability.CAPABILITY_IAM, Capability.CAPABILITY_NAMED_IAM);
+            if (templateBody.getBytes(StandardCharsets.UTF_8).length > MAX_INLINE_TEMPLATE_BYTES) {
+                createBuilder.templateURL(uploadTemplateToS3(stackName, templateBody));
+            } else {
+                createBuilder.templateBody(templateBody);
+            }
+            cloudFormation.createStack(createBuilder.build());
+        }
+    }
+
+    private void awaitStackSettled(String stackName, boolean exists) throws IOException {
         var request = DescribeStacksRequest.builder().stackName(stackName).build();
         try {
             if (exists) {
@@ -196,9 +272,6 @@ public final class LocalStackDeployer implements LocalDeployer {
                 e
             );
         }
-
-        reconcilePostDeployState(stackName, templateBody);
-        return new LocalDeployResult(stackName, !exists, false, changes, outputs(stackName));
     }
 
     private void reconcilePostDeployState(String stackName, String adaptedTemplateBody) {
