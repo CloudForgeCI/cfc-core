@@ -7,15 +7,19 @@
   "runtime": "FARGATE",
   "securityProfile": "STAGING",
   "topology": "APPLICATION_SERVICE",
-  "networkMode": "public-no-nat",
+  "networkMode": "private-with-nat",
   "region": "us-east-1",
-  "authMode": "none",
+  "authMode": "application-oidc",
   "provisionDatabase": true,
   "databaseEngine": "postgres",
+  "databaseVersion": "15",
   "complianceFrameworks": "SOC2",
   "cpu": 512,
   "memory": 1024,
   "minInstanceCapacity": 1,
   "maxInstanceCapacity": 1,
-  "awsConfigEnabled": true
+  "awsConfigEnabled": true,
+  "auditManagerEnabled": true,
+  "enableSsl": true,
+  "wafEnabled": true
 }

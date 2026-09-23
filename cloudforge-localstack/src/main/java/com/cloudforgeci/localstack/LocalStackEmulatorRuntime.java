@@ -46,10 +46,12 @@ public final class LocalStackEmulatorRuntime extends AbstractLocalEmulatorRuntim
             "-e", "GATEWAY_LISTEN=0.0.0.0:4566",
             "-e", "DEBUG=0",
             // Cognito's hosted login page is served by the emulator. Allow the named
-            // local application hosts that the edge routes to it for application OIDC.
+            // local application hosts that the edge routes to it for application OIDC, plus
+            // localhost:8080, the origin Jenkins is served from. Requests from any other origin
+            // are answered with 403.
             "-e", "EXTRA_CORS_ALLOWED_ORIGINS=http://localstack.cloudforge.localhost,"
                 + "http://manager.cloudforge.localhost,http://jenkins.cloudforge.localhost,"
-                + "http://gitlab.cloudforge.localhost",
+                + "http://gitlab.cloudforge.localhost,http://localhost:8080",
             "-e", "DOCKER_HOST=unix:///var/run/docker.sock",
             "-e", "RDS_MYSQL_DOCKER=1",
             "-v", volumeDir.toAbsolutePath() + ":/var/lib/localstack",

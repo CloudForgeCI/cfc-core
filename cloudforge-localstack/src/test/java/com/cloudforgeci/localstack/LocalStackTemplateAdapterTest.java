@@ -552,6 +552,39 @@ class LocalStackTemplateAdapterTest {
     }
 
     @Test
+    void dropsAsgTargetGroupAttachmentsBecauseTheEmulatorCannotResolveThem() {
+        ObjectNode canonical = MAPPER.createObjectNode();
+        ObjectNode resources = canonical.putObject("Resources");
+        ObjectNode asg = resources.putObject("Asg");
+        asg.put("Type", "AWS::AutoScaling::AutoScalingGroup");
+        ObjectNode properties = asg.putObject("Properties");
+        properties.put("HealthCheckType", "ELB");
+        properties.putArray("TargetGroupARNs").addObject().put("Ref", "Tg");
+        resources.putObject("Tg").put("Type", "AWS::ElasticLoadBalancingV2::TargetGroup");
+
+        var result = adaptBase(canonical, "Jtest");
+        ObjectNode adaptedAsg = (ObjectNode) result.template().path("Resources").path("Asg").path("Properties");
+
+        assertFalse(adaptedAsg.has("TargetGroupARNs"));
+        assertTrue(adaptedAsg.path("HealthCheckType").asText().equals("EC2"));
+        assertTrue(result.adaptations().stream()
+            .anyMatch(a -> a.path().contains("Asg.Properties.TargetGroupARNs")));
+    }
+
+    @Test
+    void leavesAsgsWithoutTargetGroupsUntouched() {
+        ObjectNode canonical = MAPPER.createObjectNode();
+        ObjectNode asg = canonical.putObject("Resources").putObject("Asg");
+        asg.put("Type", "AWS::AutoScaling::AutoScalingGroup");
+        asg.putObject("Properties").put("HealthCheckType", "ELB");
+
+        var result = adaptBase(canonical, "Jtest");
+
+        assertTrue(result.template().path("Resources").path("Asg").path("Properties")
+            .path("HealthCheckType").asText().equals("ELB"));
+    }
+
+    @Test
     void removesRoute53AliasesBecauseTheEmulatorEdgeOwnsLocalHostRouting() {
         ObjectNode canonical = MAPPER.createObjectNode();
         ObjectNode resources = canonical.putObject("Resources");

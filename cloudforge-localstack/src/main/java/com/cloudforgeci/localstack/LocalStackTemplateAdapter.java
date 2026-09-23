@@ -111,6 +111,7 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
         // redirect ALB actions to the path-style browser entry point after port fixes.
         replaceUnsupportedEfsWithHostBindMounts(local, adaptations, stackName, snapshot);
         removeUnsupportedBackupResources(local, adaptations, snapshot);
+        removeAsgTargetGroupAttachments(local, adaptations);
         inlineUnsupportedSecurityGroupIngress(local, adaptations);
         resolveCdkBootstrapParameters(local, adaptations);
         rewriteDummyAvailabilityZones(local, adaptations);
@@ -811,6 +812,37 @@ public final class LocalStackTemplateAdapter implements TemplateAdapter {
         }
         String image = container.path("Image").asText("").toLowerCase(Locale.ROOT);
         return image.contains("cloudforge-manager");
+    }
+
+    /**
+     * Removes target group attachments from Auto Scaling groups: LocalStack's Auto Scaling provider
+     * does not resolve ELBv2 target groups in {@code CreateAutoScalingGroup}. The health check falls
+     * back to EC2, since no target group remains to check against.
+     */
+    private static void removeAsgTargetGroupAttachments(
+            ObjectNode template, List<TemplateAdaptation> adaptations) {
+        ObjectNode resources = asObject(template.get("Resources"));
+        if (resources == null) {
+            return;
+        }
+        resources.properties().forEach(entry -> {
+            if (!"AWS::AutoScaling::AutoScalingGroup".equals(entry.getValue().path("Type").asText())) {
+                return;
+            }
+            ObjectNode properties = asObject(entry.getValue().get("Properties"));
+            if (properties == null || !properties.has("TargetGroupARNs")) {
+                return;
+            }
+            adaptations.add(new TemplateAdaptation(
+                "Resources." + entry.getKey() + ".Properties.TargetGroupARNs",
+                "LocalStack Auto Scaling cannot resolve ELBv2 target groups on CreateAutoScalingGroup",
+                properties.get("TargetGroupARNs").deepCopy()
+            ));
+            properties.remove("TargetGroupARNs");
+            if ("ELB".equals(properties.path("HealthCheckType").asText())) {
+                properties.put("HealthCheckType", "EC2");
+            }
+        });
     }
 
     private static void removeUnsupportedBackupResources(

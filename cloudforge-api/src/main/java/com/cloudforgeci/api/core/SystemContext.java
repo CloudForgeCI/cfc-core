@@ -239,6 +239,10 @@ public final class SystemContext extends Construct {
 
   // Logging
   public final Slot<FlowLogOptions> flowlogs = new Slot<>();
+  // Populated by ComplianceFactory when it builds the real CloudTrail trail -- lets a
+  // compliance check confirm CloudTrail was actually built instead of relying on the
+  // cloudTrailEnabled flag, which only gates which Config rules attach, not the trail itself.
+  public final Slot<software.amazon.awscdk.services.cloudtrail.Trail> cloudTrail = new Slot<>();
 
   // Security
   public final Slot<software.amazon.awscdk.services.wafv2.CfnWebACL> wafWebAcl = new Slot<>();
@@ -485,6 +489,36 @@ public final class SystemContext extends Construct {
   public void createGuardDutyFactory(Construct scope, String idPrefix) {
     GuardDutyFactory guardDutyFactory = new GuardDutyFactory(scope, idPrefix + "GuardDuty");
     guardDutyFactory.create();
+  }
+
+  /**
+   * Creates Security Hub (hub + standards subscriptions) factory.
+   * Conditionally enabled based on security profile or explicit configuration.
+   */
+  public void createSecurityHubFactory(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.SecurityHubFactory securityHubFactory =
+        new com.cloudforgeci.api.observability.SecurityHubFactory(scope, idPrefix + "SecurityHub");
+    securityHubFactory.create();
+  }
+
+  /**
+   * Creates Macie (sensitive-data discovery) factory.
+   * Conditionally enabled based on security profile or explicit configuration.
+   */
+  public void createMacieFactory(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.MacieFactory macieFactory =
+        new com.cloudforgeci.api.observability.MacieFactory(scope, idPrefix + "Macie");
+    macieFactory.create();
+  }
+
+  /**
+   * Creates Inspector (vulnerability scanning) factory.
+   * Conditionally enabled based on security profile or explicit configuration.
+   */
+  public void createInspectorFactory(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.InspectorFactory inspectorFactory =
+        new com.cloudforgeci.api.observability.InspectorFactory(scope, idPrefix + "Inspector");
+    inspectorFactory.create();
   }
 
   /**

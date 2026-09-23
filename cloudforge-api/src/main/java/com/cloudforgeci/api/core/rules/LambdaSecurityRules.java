@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Lambda security compliance validation rules.
@@ -51,10 +52,28 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
         ctx.getNode().addValidation(() -> {
             List<ComplianceRule> rules = new ArrayList<>();
 
-            // Check if Lambda is being used
+            // Public access restriction (matrix: LAMBDA_SECURITY's "public access restriction"
+            // half). Unlike the checks below, this runs unconditionally -- it's a fact about
+            // CloudForge's own infrastructure, not about whether a user declared app-level Lambda
+            // usage. Every Lambda function this codebase creates today is a CDK custom-resource
+            // provider (ComplianceFactory, AlbFactory, the Cognito/SAML/OIDC factories) invoked only
+            // through CloudFormation's own custom-resource protocol -- none of them ever gets a
+            // Function URL, a public resource-policy grant, or addPermission with a public principal
+            // anywhere in this codebase, so there is no public invocation path to restrict. This is
+            // a statement about the current architecture, not a configurable control: revisit when
+            // a library upgrade adds a user-facing Lambda implementation, which needs a
+            // non-structural check instead.
+            rules.add(ComplianceRule.pass(
+                "LAMBDA-PUBLIC-ACCESS",
+                "No public Lambda invocation path exists -- every Lambda function is a CDK " +
+                "custom-resource provider invoked only by CloudFormation, never a user-facing function"
+            ));
+
+            // Check if app-level Lambda is being used
             boolean lambdaEnabled = getBooleanSetting(ctx, "lambdaEnabled", false);
             if (!lambdaEnabled) {
-                // Lambda not in use, skip validation
+                // No app-level Lambda in use, skip the remaining (app-Lambda-specific) checks.
+                // LAMBDA-PUBLIC-ACCESS above always passes, so there's nothing to report either way.
                 return List.of();
             }
 
@@ -109,7 +128,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Lambda VPC deployment - use ComplianceMatrix for network segmentation
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean lambdaInVpc = getBooleanSetting(ctx, "lambdaInVpc", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -128,9 +147,10 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Lambda VPC deployment recommended for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "LAMBDA-VPC-DEPLOYMENT",
-                    "Lambda VPC deployment recommended but not required"
+                    "Lambda VPC deployment recommended but not required for " + complianceFrameworks,
+                    "Deploy the Lambda function into the VPC to restrict its network access."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -139,6 +159,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             }
         }
+
 
         return rules;
     }
@@ -158,7 +179,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Lambda environment variable encryption - use ComplianceMatrix
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean lambdaEnvEncryption = getBooleanSetting(ctx, "lambdaEnvEncryption", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -178,9 +199,10 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Lambda environment encryption recommended for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "LAMBDA-ENV-ENCRYPTION",
-                    "Lambda environment encryption recommended but not required"
+                    "Lambda environment encryption recommended but not required for " + complianceFrameworks,
+                    "Encrypt Lambda environment variables with a customer-managed KMS key."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -208,7 +230,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Lambda X-Ray tracing - use ComplianceMatrix for security monitoring
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean xrayTracing = getBooleanSetting(ctx, "lambdaXrayTracing", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -227,9 +249,10 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Lambda X-Ray tracing recommended for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "LAMBDA-XRAY-TRACING",
-                    "Lambda X-Ray tracing recommended but not required"
+                    "Lambda X-Ray tracing recommended but not required for " + complianceFrameworks,
+                    "Enable X-Ray tracing for request-level observability."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -249,7 +272,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Lambda dead letter queue - advisory for all frameworks
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean lambdaDlq = getBooleanSetting(ctx, "lambdaDeadLetterQueue", false);
 
             if (!lambdaDlq) {
@@ -306,5 +329,27 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. Dead letter queue
+     * configuration is a conditional check with no corresponding matrix control and is not
+     * claimed.
+     *
+     * <p>{@code LAMBDA_SECURITY} is claimed on the strength of LAMBDA-PUBLIC-ACCESS alone, which
+     * runs unconditionally and is verified against the code (no Function URL, public
+     * resource-policy grant, or public {@code addPermission} exists anywhere in this codebase) --
+     * see its comment in {@code install()}. The app-level checks below it (VPC placement,
+     * encryption, monitoring, DLQ) are gated on a self-attested {@code lambdaEnabled} flag with no
+     * Lambda construct behind it, since no {@code LambdaFactory} exists yet; those remain
+     * decorative until app-level Lambda support is added -- not claimed on that basis, only on
+     * LAMBDA-PUBLIC-ACCESS's structural guarantee.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "NETWORK_SEGMENTATION", "ENCRYPTION_AT_REST", "SECURITY_MONITORING", "LAMBDA_SECURITY"
+        );
     }
 }

@@ -5,15 +5,17 @@ import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
-import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforge.core.interfaces.FrameworkRules;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * GDPR (General Data Protection Regulation) compliance validation.
@@ -40,6 +42,15 @@ import java.util.logging.Logger;
 )
 public class GdprRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(GdprRules.class.getName());
+
+    /** Controls that still block STAGING synthesis: authentication, network isolation,
+     *  SSL/TLS in transit, and data residency. Data residency is a legal boundary on where
+     *  data may live (Art. 44-50), not a soft finding, so it stays blocking alongside network
+     *  isolation. Everything else in STAGING is a visible, non-blocking finding. */
+    private static final Set<String> STAGING_BLOCKING_RULES = Set.of(
+        "GDPR-AUTHENTICATION", "GDPR-ACCESS-CONTROL", "GDPR-NETWORK-ISOLATION",
+        "GDPR-SSL-ENCRYPTION", "GDPR-TLS-ENCRYPTION", "GDPR-DATA-RESIDENCY"
+    );
 
 
     /**
@@ -81,6 +92,17 @@ public class GdprRules implements FrameworkRules<SystemContext> {
             // Article 33: Breach Detection and Notification
             rules.addAll(validateBreachDetection(ctx));
 
+            // Matrix-required controls not covered above
+            rules.addAll(validateMatrixControls(ctx));
+
+            // Advisory findings never block synthesis, logged regardless of complianceMode so they
+            // show up in the compliance report and the matrix runner's log capture.
+            List<ComplianceRule> advisoryRules = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+            if (!advisoryRules.isEmpty()) {
+                LOG.info("GDPR validation found " + advisoryRules.size() + " advisory recommendations (non-blocking):");
+                advisoryRules.forEach(r -> LOG.info("  [ADVISORY] " + r.ruleId() + ": " + r.description()));
+            }
+
             // Filter to only failed rules
             List<ComplianceRule> failedRules = rules.stream()
                 .filter(rule -> !rule.passed())
@@ -99,6 +121,19 @@ public class GdprRules implements FrameworkRules<SystemContext> {
                     errors.forEach(error -> LOG.warning("  - " + error));
                     ComplianceFindingsCollector.record(failedRules);
                     return List.of(); // No errors = synthesis proceeds
+                } else if (ctx.security == SecurityProfile.STAGING) {
+                    // STAGING runs the same checks as PRODUCTION; only authentication, network
+                    // isolation and SSL/TLS still block. Everything else is a visible finding.
+                    List<String> blocking = failedRules.stream()
+                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
+                        .map(ComplianceRule::toErrorString)
+                        .flatMap(Optional::stream)
+                        .toList();
+                    LOG.warning("GDPR validation found " + errors.size() + " violations (STAGING - "
+                        + blocking.size() + " blocking):");
+                    errors.forEach(error -> LOG.warning("  - " + error));
+                    ComplianceFindingsCollector.record(failedRules);
+                    return blocking;
                 } else {
                     LOG.severe("GDPR validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment):");
                     errors.forEach(error -> LOG.severe("  - " + error));
@@ -237,7 +272,8 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // Art. 25: Network isolation for data protection
-        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC && ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC
+                && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
             rules.add(ComplianceRule.fail(
                 "GDPR-NETWORK-ISOLATION",
                 "Private network mode recommended for production systems (GDPR Art. 25(1))",
@@ -432,14 +468,15 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // Art. 32(1)(c): Backup for availability and resilience
-        if (!config.isAutomatedBackupEnabled() && ctx.security == SecurityProfile.PRODUCTION) {
+        boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
+        if (!config.isAutomatedBackupEnabled() && isProdOrStaging) {
             rules.add(ComplianceRule.fail(
                 "GDPR-AUTOMATED-BACKUP",
                 "Automated backups required to restore availability (GDPR Art. 32(1)(c))",
                 "EfsBackupEnabled",
                 "Automated backups are disabled for production. Enable automated backups to ensure personal data can be recovered."
             ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION) {
+        } else if (isProdOrStaging) {
             rules.add(ComplianceRule.pass(
                 "GDPR-AUTOMATED-BACKUP",
                 "Automated backups required to restore availability (GDPR Art. 32(1)(c))",
@@ -448,14 +485,14 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // Art. 32(1)(d): Testing and evaluation through Config
-        if (!config.isAwsConfigEnabled() && ctx.security == SecurityProfile.PRODUCTION) {
+        if (!config.isAwsConfigEnabled() && isProdOrStaging) {
             rules.add(ComplianceRule.fail(
                 "GDPR-AWS-CONFIG",
                 "AWS Config recommended for regularly assessing security measures (GDPR Art. 32(1)(d))",
                 "ConfigEnabled",
                 "AWS Config is disabled for production. Enable AWS Config to continuously evaluate security configurations."
             ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION) {
+        } else if (isProdOrStaging) {
             rules.add(ComplianceRule.pass(
                 "GDPR-AWS-CONFIG",
                 "AWS Config recommended for regularly assessing security measures (GDPR Art. 32(1)(d))",
@@ -485,6 +522,13 @@ public class GdprRules implements FrameworkRules<SystemContext> {
                 "GDPR-GUARDDUTY",
                 "GuardDuty enabled for breach detection (GDPR Art. 33(1))",
                 "GuardDutyEnabled"
+            ));
+        } else {
+            rules.add(ComplianceRule.advisory(
+                "GDPR-GUARDDUTY",
+                "GuardDuty is advisory for GDPR (recommended but not required, Art. 33(1))",
+                "GuardDutyEnabled",
+                "Enable guardDutyEnabled for automated breach detection."
             ));
         }
 
@@ -519,14 +563,15 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // WAF for preventing breaches
-        if (!config.isWafEnabled() && ctx.security == SecurityProfile.PRODUCTION) {
+        boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
+        if (!config.isWafEnabled() && isProdOrStaging) {
             rules.add(ComplianceRule.fail(
                 "GDPR-WAF-PROTECTION",
                 "WAF recommended to prevent web-based data breaches (GDPR Art. 32(1))",
                 "WafEnabled",
                 "WAF is disabled for production. Enable WAF to protect against common attack vectors."
             ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION) {
+        } else if (isProdOrStaging) {
             rules.add(ComplianceRule.pass(
                 "GDPR-WAF-PROTECTION",
                 "WAF recommended to prevent web-based data breaches (GDPR Art. 32(1))",
@@ -565,6 +610,88 @@ public class GdprRules implements FrameworkRules<SystemContext> {
                retention == RetentionDays.NINE_YEARS ||
                retention == RetentionDays.TEN_YEARS ||
                retention == RetentionDays.INFINITE;
+    }
+
+    /**
+     * Controls that {@link ComplianceMatrix} marks REQUIRED for GDPR and that the checks above do
+     * not already cover.
+     */
+    private List<ComplianceRule> validateMatrixControls(SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+
+        var config = ctx.securityProfileConfig.get().orElseThrow(
+            () -> new IllegalStateException("SecurityProfileConfiguration not set")
+        );
+
+        // Production-tier controls: STAGING leaves them off by design, matching the pattern used
+        // for the equivalent production-only checks in Soc2Rules/HipaaRules.
+        if (ctx.security == SecurityProfile.PRODUCTION) {
+            // Art. 32(1)(a): CloudWatch Logs may contain personal data in application log output.
+            if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
+                rules.add(ComplianceRule.fail(
+                    "GDPR-Art32-LogEncryption",
+                    "CloudWatch log groups must be encrypted with a customer-managed KMS key (Art. 32(1)(a))",
+                    "Enable cloudWatchLogsKmsEncryptionEnabled."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "GDPR-Art32-LogEncryption",
+                    "CloudWatch log groups encrypted with a customer-managed KMS key (Art. 32(1)(a))"
+                ));
+            }
+
+            // Art. 32(1)(d): change control -- CloudTrail plus AWS Config together give a record of
+            // every change and detect drift from the deployed baseline.
+            if (config.isCloudTrailEnabled() && config.isAwsConfigEnabled()) {
+                rules.add(ComplianceRule.pass(
+                    "GDPR-Art32-ChangeManagement",
+                    "Change tracking enabled via CloudTrail and AWS Config (Art. 32(1)(d))"
+                ));
+            } else {
+                rules.add(ComplianceRule.fail(
+                    "GDPR-Art32-ChangeManagement",
+                    "Change control tracking required (Art. 32(1)(d))",
+                    "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."
+                ));
+            }
+        }
+
+        // EC2_IMDSV2 is ADVISORY for GDPR (an access-security measure, not itself an Art. 32
+        // requirement); only checked for EC2 -- Fargate has no instance metadata service.
+        if (ctx.runtime == RuntimeType.EC2) {
+            if (config.isImdsv2Required()) {
+                rules.add(ComplianceRule.pass(
+                    "GDPR-IMDSV2",
+                    "EC2 instances require IMDSv2 tokens (Art. 32(1)(b) access security)"
+                ));
+            } else {
+                rules.add(ComplianceRule.advisory(
+                    "GDPR-IMDSV2",
+                    "IMDSv2 is advisory for GDPR (recommended access-security measure, not required)",
+                    "Set imdsv2Required = true to block the legacy IMDSv1 endpoint."
+                ));
+            }
+        }
+
+        return rules;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. GuardDuty is read in
+     * {@link #validateBreachDetection}, now producing an advisory finding (not just a pass) when
+     * off, since it's ADVISORY for GDPR per ComplianceMatrix. HTTPS_STRICT and SECURITY_HUB are
+     * ADVISORY for GDPR per the matrix and unchecked in this class. LAMBDA_SECURITY and
+     * DATABASE_ACCESS_CONTROL are genuine gaps -- no class anywhere checks them.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "ENCRYPTION_AT_REST", "ACCESS_CONTROL", "NETWORK_SEGMENTATION", "AUDIT_LOGGING",
+            "NETWORK_FLOW_LOGS", "LOG_RETENTION", "ENCRYPTION_IN_TRANSIT", "AUTHENTICATION",
+            "SECURITY_MONITORING", "BACKUP_RECOVERY", "VULNERABILITY_MANAGEMENT", "WAF_PROTECTION",
+            "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "CHANGE_MANAGEMENT"
+        );
     }
 
     /**
@@ -616,6 +743,34 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         report.append("  ⚠ DPIA: Conduct Data Protection Impact Assessment for high-risk processing (Art. 35)\n");
         report.append("\n");
 
+        appendAdvisorySection(report, ctx);
+
         return report.toString();
+    }
+
+    /**
+     * Recommendations for controls that are ADVISORY-tier (not blocking) and currently off.
+     * Runs the same checks {@link #install} does, so this reflects live findings, not a
+     * separate hand-maintained list.
+     */
+    private void appendAdvisorySection(StringBuilder report, SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+        rules.addAll(validateDataResidency(ctx));
+        rules.addAll(validateDataProtectionByDesign(ctx));
+        rules.addAll(validateProcessingRecords(ctx));
+        rules.addAll(validateSecurityMeasures(ctx));
+        rules.addAll(validateBreachDetection(ctx));
+        rules.addAll(validateMatrixControls(ctx));
+
+        List<ComplianceRule> advisories = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+        if (advisories.isEmpty()) {
+            return;
+        }
+        report.append("Recommendations (advisory, non-blocking):\n");
+        for (ComplianceRule rule : advisories) {
+            report.append("  - ").append(rule.ruleId()).append(": ").append(rule.description()).append("\n");
+            rule.recommendation().ifPresent(r -> report.append("      ").append(r).append("\n"));
+        }
+        report.append("\n");
     }
 }

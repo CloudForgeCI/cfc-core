@@ -1864,6 +1864,9 @@ class PciDssRulesTest {
                 customContext.putIfAbsent("cognitoMfaEnabled", "true");
                 customContext.putIfAbsent("cognitoAutoProvision", "true");
                 customContext.putIfAbsent("wafEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("httpsStrictEnabled", "true");
             }
         }
 
@@ -1873,6 +1876,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
@@ -1937,6 +1941,9 @@ class PciDssRulesTest {
                 customContext.putIfAbsent("cognitoMfaEnabled", "true");
                 customContext.putIfAbsent("cognitoAutoProvision", "true");
                 customContext.putIfAbsent("wafEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("httpsStrictEnabled", "true");
             }
         }
 
@@ -1946,6 +1953,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
@@ -2010,6 +2018,9 @@ class PciDssRulesTest {
                 customContext.putIfAbsent("cognitoMfaEnabled", "true");
                 customContext.putIfAbsent("cognitoAutoProvision", "true");
                 customContext.putIfAbsent("wafEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("httpsStrictEnabled", "true");
             }
         }
 
@@ -2019,6 +2030,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
@@ -2085,6 +2097,9 @@ class PciDssRulesTest {
                 customContext.putIfAbsent("cognitoMfaEnabled", "true");
                 customContext.putIfAbsent("cognitoAutoProvision", "true");
                 customContext.putIfAbsent("wafEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("httpsStrictEnabled", "true");
             }
         }
 
@@ -2094,6 +2109,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
@@ -2337,6 +2353,9 @@ class PciDssRulesTest {
                 customContext.putIfAbsent("cognitoMfaEnabled", "true");
                 customContext.putIfAbsent("cognitoAutoProvision", "true");
                 customContext.putIfAbsent("wafEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("httpsStrictEnabled", "true");
             }
         }
 
@@ -2346,6 +2365,7 @@ class PciDssRulesTest {
 
         builder.createMinimalInfrastructure();
         builder.createMockCertificate();
+        builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 

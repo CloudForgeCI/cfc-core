@@ -4,6 +4,7 @@ import com.cloudforge.core.annotation.ComplianceFramework;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Interface for pluggable compliance framework validators.
@@ -180,5 +181,29 @@ public interface FrameworkRules<T> {
      */
     default Map<String, Object> getRequiredConfiguration() {
         return Collections.emptyMap();
+    }
+
+    /**
+     * Declares which shared security controls this framework's {@link #install} actually checks.
+     *
+     * <p>CloudForge maintains a central compliance matrix (a control-to-framework requirement
+     * table) independent of any one plugin. That matrix drives infrastructure defaults, but
+     * nothing ties a plugin's own validation logic back to it automatically -- a plugin can check
+     * a control the matrix never requires, or omit one it does, and nothing notices. This method
+     * is that missing link: it lets a sync-enforcement test compare what the matrix says a
+     * framework requires against what the plugin actually validates, and fail loudly on drift
+     * instead of leaving a documented-but-unchecked control to be found by accident.</p>
+     *
+     * <p>Return the plain names of the controls this plugin checks (matching the control
+     * identifiers used by the matrix -- this module doesn't depend on the module the matrix
+     * itself lives in, so identity is by name, not by shared enum type). An empty return means
+     * "not yet declared" -- a plugin with matrix-required controls that returns an empty set
+     * simply hasn't opted into sync enforcement yet, not that it has nothing to check.</p>
+     *
+     * @return the control identifiers this framework's install() validates; empty if undeclared
+     * @since 4.0.0
+     */
+    default Set<String> claimedControls() {
+        return Collections.emptySet();
     }
 }

@@ -596,32 +596,19 @@ class TruthTableValidationTest {
         // Validate remediation actions
         complianceValidator.validateRemediationActions(complianceFramework, true);
 
-        // Separate known gaps from actual failures
+        // No violation is ever tagged "[KNOWN GAP]" (nothing in the codebase emits that string), so
+        // every violation below is asserted directly rather than through a downgrade filter that
+        // never filters anything.
         List<String> violations = complianceValidator.getViolations();
-        List<String> knownGaps = violations.stream()
-            .filter(v -> v.contains("[KNOWN GAP]"))
-            .toList();
-        List<String> actualFailures = violations.stream()
-            .filter(v -> !v.contains("[KNOWN GAP]"))
-            .toList();
-
-        // Report known gaps as warnings
-        if (!knownGaps.isEmpty()) {
-            System.out.println("   ⚠️  Known Config gaps detected:");
-            knownGaps.forEach(gap -> System.out.println("      " + gap));
-        }
-
-        // Only fail on actual violations (not known gaps)
-        if (!actualFailures.isEmpty()) {
+        if (!violations.isEmpty()) {
             throw new AssertionError(
                 "AWS Config validation failed for " + configName + " [" + complianceFramework + "]:\n" +
                 "  Actual failures:\n" +
-                actualFailures.stream().map(f -> "    - " + f).reduce("", (a, b) -> a + b + "\n")
+                violations.stream().map(f -> "    - " + f).reduce("", (a, b) -> a + b + "\n")
             );
         }
 
-        System.out.println("   ✅ AWS Config validation passed: " + complianceFramework +
-            (knownGaps.isEmpty() ? "" : " (with " + knownGaps.size() + " known gaps)"));
+        System.out.println("   ✅ AWS Config validation passed: " + complianceFramework);
     }
 
     /**
@@ -777,7 +764,7 @@ class TruthTableValidationTest {
                     cfcContext.put("fileIntegrityMonitoring", true);
                 }
                 // PCI-DSS Req 8.3: MFA required for OIDC (only when using Cognito/OIDC auth)
-                if ("alb-oidc".equals(authMode)) {
+                if ("alb-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
                     cfcContext.put("cognitoAutoProvision", true);
                     cfcContext.put("cognitoMfaEnabled", true);
                 }
@@ -793,7 +780,7 @@ class TruthTableValidationTest {
                 // HIPAA §164.308(a)(1)(ii)(D): GuardDuty for security incident procedures (REQUIRED)
                 cfcContext.put("guardDutyEnabled", true);
                 // HIPAA §164.312(d): MFA recommended for ePHI access (only when using Cognito/OIDC auth)
-                if ("alb-oidc".equals(authMode)) {
+                if ("alb-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
                     cfcContext.put("cognitoAutoProvision", true);
                     cfcContext.put("cognitoMfaEnabled", true);
                 }
@@ -852,7 +839,7 @@ class TruthTableValidationTest {
         List<String> layer1Failures = new ArrayList<>();
         List<String> layer2Failures = new ArrayList<>();
         List<String> layer3Failures = new ArrayList<>();
-        List<String> knownGaps = new ArrayList<>();
+        List<String> layer4Failures = new ArrayList<>();
         Template template = null;
 
         // Layer 0: DeploymentContext validation (catches early validation errors like OIDC without SSL)
@@ -1024,13 +1011,9 @@ class TruthTableValidationTest {
                 ComplianceValidationMatrix complianceValidator = new ComplianceValidationMatrix(template);
                 complianceValidator.validateCompliance(complianceFramework, secProfile);
 
-                List<String> violations = complianceValidator.getViolations();
-                knownGaps = violations.stream()
-                    .filter(v -> v.contains("[KNOWN GAP]"))
-                    .toList();
-                List<String> postSynthViolations = violations.stream()
-                    .filter(v -> !v.contains("[KNOWN GAP]"))
-                    .toList();
+                // No violation is ever tagged "[KNOWN GAP]" -- see the note in
+                // testAwsConfigRuleDeployment. Every violation here is asserted as a failure.
+                List<String> postSynthViolations = complianceValidator.getViolations();
 
                 // Add to existing layer2Failures from synthesis
                 layer2Failures.addAll(postSynthViolations);
@@ -1045,13 +1028,6 @@ class TruthTableValidationTest {
                     System.out.println("   " + "=".repeat(70) + "\n");
                 }
 
-                if (!knownGaps.isEmpty()) {
-                    System.out.println("   ⚠️  Known gaps: " + knownGaps.size());
-                    System.out.println("\n   📋 Known Gaps (Not Blocking):");
-                    System.out.println("   " + "=".repeat(70));
-                    knownGaps.forEach(g -> System.out.println("   • " + g));
-                    System.out.println("   " + "=".repeat(70) + "\n");
-                }
             } catch (Exception e) {
                 layer2Failures.add("Layer 2 exception: " + e.getMessage());
                 System.out.println("   ❌ Layer 2 (FrameworkRules): Exception - " + e.getMessage());
@@ -1069,13 +1045,20 @@ class TruthTableValidationTest {
             writeCloudFormationTemplateYaml(template, configName);  // YAML for download
         }
 
-        // Layer 3: cfn-guard validation (only if synthesis succeeded)
+        // Layer 3: cfn-guard validation (only if synthesis succeeded). cfnGuardRan distinguishes
+        // an executed pass from a skip (missing binary, missing template, blocked by an earlier
+        // layer) -- layer3Failures alone can't: it's empty in both cases, so inferring "passed"
+        // from an empty list silently reported a skip as a pass in the JSONL report and the row
+        // summary.
+        boolean cfnGuardRan = false;
         // Now validates the actual generated template file, not a temp copy
         if (template != null && "enforce".equals(cfcContext.get("complianceMode"))) {
             try {
                 runCfnGuardValidation(templateJsonPath, complianceFramework, configName);
+                cfnGuardRan = true;
                 System.out.println("   ✅ Layer 3 (cfn-guard): Validation passed");
             } catch (AssertionError e) {
+                cfnGuardRan = true;
                 layer3Failures.add(e.getMessage());
                 System.out.println("   ❌ Layer 3 (cfn-guard): Validation failed");
                 System.out.println("\n   📋 cfn-guard Failure Details:");
@@ -1100,6 +1083,7 @@ class TruthTableValidationTest {
 
         // Layer 4: AWS Config (count rules that would actually be deployed based on conditions)
         int configRuleCount = 0;
+        List<String> configRuleNames = new ArrayList<>();
         if (template != null) {
             try {
                 // Get active framework conditions from the template
@@ -1168,7 +1152,6 @@ class TruthTableValidationTest {
                 }
 
                 // Count AWS::Config::ConfigRule resources that will actually be deployed
-                List<String> configRuleNames = new ArrayList<>();
                 Object resourcesObj = templateMap.get("Resources");
                 if (resourcesObj instanceof Map) {
                     @SuppressWarnings("unchecked")
@@ -1213,6 +1196,40 @@ class TruthTableValidationTest {
                 } else {
                     System.out.println("   ⏭️  Layer 4 (AWS Config): Skipped (no Config rules in template)");
                 }
+
+                // Assert a minimum for PASS rows with a compliance framework enabled. Without
+                // this, a scenario that registers ZERO Config rules would still "pass" Layer 4 as
+                // long as counting didn't throw -- see expectedConfigRuleMarkers() above for how
+                // the minimum is grounded in what ComplianceFactory unconditionally registers.
+                // FAIL rows (and rows with no framework) are exempt: their rejection is expected to
+                // come from a different layer, not from Config rule coverage.
+                if (!expectFailure && complianceFramework != null && !complianceFramework.trim().isEmpty()) {
+                    List<String> expectedMarkers = expectedConfigRuleMarkers(complianceFramework, securityProfile);
+                    List<String> missingMarkers = new ArrayList<>();
+                    for (String marker : expectedMarkers) {
+                        boolean present = configRuleNames.stream().anyMatch(name -> name.contains(marker));
+                        if (!present) {
+                            missingMarkers.add(marker);
+                        }
+                    }
+
+                    int minimumExpected = expectedMarkers.size();
+                    if (configRuleCount < minimumExpected) {
+                        String detail = missingMarkers.isEmpty()
+                            ? "(count mismatch, but every expected rule marker was individually found -- " +
+                              "possible double count or overlapping markers)"
+                            : "missing expected rules: " + missingMarkers;
+                        layer4Failures.add(
+                            "Layer 4 (AWS Config): only " + configRuleCount + " Config rule(s) registered for " +
+                            configName + " [" + complianceFramework + "/" + securityProfile + "], expected at least " +
+                            minimumExpected + " -- " + detail
+                        );
+                        System.out.println("   ❌ Layer 4 (AWS Config): Minimum coverage check failed - " + detail);
+                    } else {
+                        System.out.println("   ✅ Layer 4 (AWS Config): Minimum coverage check passed (>= " +
+                            minimumExpected + " expected rules)");
+                    }
+                }
             } catch (Exception e) {
                 System.out.println("   ⏭️  Layer 4 (AWS Config): Unable to count rules - " + e.getMessage());
             }
@@ -1233,6 +1250,7 @@ class TruthTableValidationTest {
         allFailures.addAll(layer1Failures);
         allFailures.addAll(layer2Failures);
         allFailures.addAll(layer3Failures);
+        allFailures.addAll(layer4Failures);
 
         boolean hasFailures = !allFailures.isEmpty();
 
@@ -1240,8 +1258,10 @@ class TruthTableValidationTest {
         Map<String, String> layerResults = new LinkedHashMap<>();
         layerResults.put("cdk_nag", layer1Failures.isEmpty() ? "passed" : "failed");
         layerResults.put("framework_rules", layer2Failures.isEmpty() ? "passed" : "failed");
-        layerResults.put("cfn_guard", layer3Failures.isEmpty() ? "passed" : "failed");
-        layerResults.put("aws_config", configRuleCount > 0 ? configRuleCount + " rules" : "skipped");
+        layerResults.put("cfn_guard",
+            !layer3Failures.isEmpty() ? "failed" : (cfnGuardRan ? "passed" : "skipped"));
+        layerResults.put("aws_config",
+            !layer4Failures.isEmpty() ? "failed" : (configRuleCount > 0 ? configRuleCount + " rules" : "skipped"));
 
         // Evaluate test result based on expectation
         if (expectFailure) {
@@ -1277,8 +1297,7 @@ class TruthTableValidationTest {
                     allFailures.stream().map(f -> "  - " + f).reduce("", (a, b) -> a + b + "\n")
                 );
             } else {
-                System.out.println("   ✅ Compliance validation passed: " + complianceFramework +
-                    (knownGaps.isEmpty() ? "" : " (with " + knownGaps.size() + " known gaps)"));
+                System.out.println("   ✅ Compliance validation passed: " + complianceFramework);
 
                 // Write success to JSONL for report
                 appendToJsonlReport(configName, complianceFramework, runtime, networkMode,
@@ -1398,6 +1417,109 @@ class TruthTableValidationTest {
         }
         json.append("}");
         return json.toString();
+    }
+
+    // ============================================================================
+    // LAYER 4 (AWS CONFIG) MINIMUM RULE COUNT
+    // ============================================================================
+    //
+    // These construct-id markers and counts are grounded directly in
+    // ComplianceFactory.java's rule-creation methods (see createConfigRulesWithoutRecorder()
+    // and createXxxConfigRulesWithoutRecorder()), which is the code path this test exercises
+    // because the CSV-driven scenarios always set createConfigInfrastructure = false.
+    //
+    // Only rules that are UNCONDITIONAL for a given (securityProfile, framework) pair are
+    // counted here -- i.e. rules gated solely on "is this framework enabled" (which is always
+    // true for a PASS row that sets that framework), never rules additionally gated on
+    // provisionDatabase (the *Rds* CfnConditions), since a PASS row is not guaranteed to
+    // provision a database. This makes the floor a lower bound: a deployment will often
+    // register more rules (collected per-factory rules, RDS rules, auth rules), never fewer.
+    //
+    // CDK derives each resource's CloudFormation logical id from this construct id plus a hash
+    // suffix, so matching is done with String#contains against the template's resource names
+    // rather than equality.
+
+    /** Config rules created unconditionally by createConfigRulesWithoutRecorder(), regardless of framework. */
+    private static final List<String> BASELINE_CONFIG_RULE_MARKERS = List.of(
+        "EbsEncryptionRule", "S3BucketEncryptionRule", "S3PublicAccessBlockRule", "S3VersioningRule",
+        "IAMPasswordPolicyRule", "IAMRootAccessKeyRule"
+    );
+
+    /** Additional unconditional rules createProductionConfigRulesWithoutRecorder() adds for PRODUCTION only. */
+    private static final List<String> PRODUCTION_CONFIG_RULE_MARKERS = List.of(
+        "CloudTrailEnabledRule", "CloudTrailLogFileValidationRule", "VpcFlowLogsRule"
+    );
+
+    /** PCI-DSS rules from createPciDssConfigRulesWithoutRecorder() NOT gated on the RDS/database condition. */
+    private static final List<String> PCIDSS_CONFIG_RULE_MARKERS = List.of(
+        "PciDssVpcDefaultSecurityGroupClosed", "PciDssEc2ManagedBySsm", "PciDssElbTlsOnly",
+        "PciDssIamNoAdminPolicy", "PciDssIamMfaEnabled", "PciDssCloudWatchAlarmAction", "PciDssGuardDutyEnabled"
+    );
+
+    /** SOC2 rules from createSoc2ConfigRulesWithoutRecorder() NOT gated on the RDS/database condition. */
+    private static final List<String> SOC2_CONFIG_RULE_MARKERS = List.of(
+        "Soc2IamUserNoPolicies", "Soc2RestrictedSsh", "Soc2AlbHttpsRedirection",
+        "Soc2SecurityHubEnabled", "Soc2CloudTrailS3DataEvents"
+    );
+
+    /** SOC2 rule createSoc2ConfigRulesWithoutRecorder() adds for PRODUCTION only (still not RDS-gated). */
+    private static final List<String> SOC2_PRODUCTION_CONFIG_RULE_MARKERS = List.of(
+        "Soc2ElbDeletionProtection"
+    );
+
+    /** HIPAA rules from createHipaaConfigRulesWithoutRecorder() NOT gated on the RDS/database condition. */
+    private static final List<String> HIPAA_CONFIG_RULE_MARKERS = List.of(
+        "HipaaCloudTrailCloudWatchLogs", "HipaaIamGroupMembership", "HipaaDynamoDbPitr",
+        "HipaaRootMfaEnabled", "HipaaAlbWafEnabled", "HipaaCloudTrailEncryption", "HipaaElbAcmCertificate"
+    );
+
+    /** GDPR rules from createGdprConfigRulesWithoutRecorder(); none of these are RDS-gated. */
+    private static final List<String> GDPR_CONFIG_RULE_MARKERS = List.of(
+        "GdprEc2EbsOptimized", "GdprVpcFlowLogs", "GdprS3DefaultEncryptionKms",
+        "GdprKmsKeyRotation", "GdprRestrictedRdp", "GdprGuardDutyFindings"
+    );
+
+    /** GDPR rules createGdprConfigRulesWithoutRecorder() adds for PRODUCTION only. */
+    private static final List<String> GDPR_PRODUCTION_CONFIG_RULE_MARKERS = List.of(
+        "GdprDynamoDbAutoscaling", "GdprS3Replication"
+    );
+
+    /**
+     * Build the list of Config-rule construct-id markers that MUST be present (as substrings of
+     * the CloudFormation logical ids) for a PASS scenario with the given compliance
+     * framework(s) and security profile. Grounded in ComplianceFactory's rule-creation methods --
+     * see the comment block above this method.
+     */
+    private static List<String> expectedConfigRuleMarkers(String complianceFramework, String securityProfile) {
+        boolean isProduction = "PRODUCTION".equalsIgnoreCase(securityProfile);
+        List<String> markers = new ArrayList<>(BASELINE_CONFIG_RULE_MARKERS);
+        if (isProduction) {
+            markers.addAll(PRODUCTION_CONFIG_RULE_MARKERS);
+        }
+
+        String normalized = complianceFramework != null
+            ? complianceFramework.toUpperCase().replace("-", "").replace("_", "")
+            : "";
+
+        if (normalized.contains("PCIDSS")) {
+            markers.addAll(PCIDSS_CONFIG_RULE_MARKERS);
+        }
+        if (normalized.contains("SOC2")) {
+            markers.addAll(SOC2_CONFIG_RULE_MARKERS);
+            if (isProduction) {
+                markers.addAll(SOC2_PRODUCTION_CONFIG_RULE_MARKERS);
+            }
+        }
+        if (normalized.contains("HIPAA")) {
+            markers.addAll(HIPAA_CONFIG_RULE_MARKERS);
+        }
+        if (normalized.contains("GDPR")) {
+            markers.addAll(GDPR_CONFIG_RULE_MARKERS);
+            if (isProduction) {
+                markers.addAll(GDPR_PRODUCTION_CONFIG_RULE_MARKERS);
+            }
+        }
+        return markers;
     }
 
     /**
@@ -1596,6 +1718,7 @@ class TruthTableValidationTest {
             case "SOC2" -> "soc2-trust-services.guard";
             case "GDPR" -> "gdpr-data-protection.guard";
             case "ISO-27001", "ISO27001" -> "iso-27001-controls.guard";
+            case "FEDRAMP", "FEDRAMPHIGH" -> "fedramp-nist-800-53.guard";
             // Cross-framework guards (service-focused, apply to all)
             case "KEYMANAGEMENT" -> "key-management.guard";
             case "DATABASESECURITY" -> "database-security.guard";
@@ -1719,10 +1842,16 @@ class TruthTableValidationTest {
 
         Aspects.of(app).add(AwsSolutionsChecks.Builder.create().verbose(false).build());
 
+        // complianceFramework can list several frameworks ("SOC2,HIPAA"); matching the whole string
+        // against a single token (as a plain switch on the joined string would) never matches
+        // anything once more than one framework is selected, so each token is applied separately.
         if (complianceFramework != null) {
-            switch (complianceFramework.toUpperCase().replace("-", "").replace("_", "")) {
-                case "HIPAA" -> Aspects.of(app).add(HIPAASecurityChecks.Builder.create().verbose(false).build());
-                case "PCIDSS", "PCI" -> Aspects.of(app).add(PCIDSS321Checks.Builder.create().verbose(false).build());
+            for (String token : complianceFramework.split("[,\s+]+")) {
+                switch (token.toUpperCase().replace("-", "").replace("_", "")) {
+                    case "HIPAA" -> Aspects.of(app).add(HIPAASecurityChecks.Builder.create().verbose(false).build());
+                    case "PCIDSS", "PCI" -> Aspects.of(app).add(PCIDSS321Checks.Builder.create().verbose(false).build());
+                    default -> { /* SOC2, GDPR and unrecognized tokens fall back to AwsSolutionsChecks only. */ }
+                }
             }
         }
     }
@@ -1864,8 +1993,12 @@ class TruthTableValidationTest {
         context.put("enableSsl", sslEnabled);
 
         // Auth mode
-        if ("alb-oidc".equals(authMode)) {
-            context.put("authMode", "alb-oidc");
+        // Both OIDC modes (alb-oidc, application-oidc) use Cognito auto-provisioning the same
+        // way here - application-oidc additionally requires the target ApplicationSpec to
+        // support OIDC integration (e.g. Jenkins via the oic-auth plugin), which the CSV rows
+        // that use it must account for.
+        if ("alb-oidc".equals(authMode) || "application-oidc".equals(authMode)) {
+            context.put("authMode", authMode);
             context.put("cognitoAutoProvision", true);
             context.put("cognitoDomainPrefix", configName.toLowerCase().replaceAll("[^a-z0-9-]", "-"));
             context.put("cognitoMfaEnabled", true);  // MFA for OIDC auth

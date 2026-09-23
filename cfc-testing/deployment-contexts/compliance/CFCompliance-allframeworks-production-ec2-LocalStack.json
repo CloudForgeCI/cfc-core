@@ -12,6 +12,7 @@
   "authMode": "none",
   "provisionDatabase": true,
   "databaseEngine": "postgres",
+  "databaseVersion": "15",
   "complianceFrameworks": "SOC2,PCI-DSS,HIPAA,GDPR",
   "instanceType": "t3.small",
   "minInstanceCapacity": 1,

@@ -21,7 +21,9 @@ import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueReques
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -77,7 +79,14 @@ final class LocalStackOidcClientSecretReconciler {
             return false;
         }
 
-        String secretName = resolveOidcSecretName(cloudFormation, stackName);
+        Map<String, String> physicalIds = new HashMap<>();
+        for (StackResource resource : resources) {
+            if (resource.logicalResourceId() != null && resource.physicalResourceId() != null) {
+                physicalIds.put(resource.logicalResourceId(), resource.physicalResourceId());
+            }
+        }
+
+        String secretName = resolveOidcSecretName(cloudFormation, stackName, physicalIds);
         if (secretName == null) {
             return false;
         }
@@ -134,7 +143,8 @@ final class LocalStackOidcClientSecretReconciler {
      *  literal {@code secret:<name>} suffix, sometimes with a trailing {@code -??????} version
      *  wildcard from the L1 escape hatch) rather than a plain string, so it's reassembled from the
      *  join's parts instead of read as text directly. */
-    private static String resolveOidcSecretName(CloudFormationClient cloudFormation, String stackName) {
+    private static String resolveOidcSecretName(
+            CloudFormationClient cloudFormation, String stackName, Map<String, String> physicalIds) {
         try {
             JsonNode template = MAPPER.readTree(
                 cloudFormation.getTemplate(GetTemplateRequest.builder().stackName(stackName).build())
@@ -147,7 +157,7 @@ final class LocalStackOidcClientSecretReconciler {
                     if (!SID.equals(statement.path("Sid").asText())) {
                         continue;
                     }
-                    String name = secretNameFromResourceArn(statement.path("Resource"));
+                    String name = secretNameFromResourceArn(statement.path("Resource"), physicalIds);
                     if (name != null) {
                         return name;
                     }
@@ -159,7 +169,14 @@ final class LocalStackOidcClientSecretReconciler {
         return null;
     }
 
-    private static String secretNameFromResourceArn(JsonNode resourceNode) {
+    /** A Cognito-provisioned client secret is granted by {@code Ref} to the secret resource, which
+     *  has no literal {@code :secret:<name>} text to extract, so that case resolves to the
+     *  secret's physical id (its ARN) instead. */
+    static String secretNameFromResourceArn(JsonNode resourceNode, Map<String, String> physicalIds) {
+        JsonNode ref = resourceNode.path("Ref");
+        if (ref.isTextual()) {
+            return physicalIds.get(ref.asText());
+        }
         JsonNode joinParts = resourceNode.path("Fn::Join").path(1);
         if (!joinParts.isArray()) {
             return resourceNode.isTextual() ? afterSecretMarker(resourceNode.asText()) : null;

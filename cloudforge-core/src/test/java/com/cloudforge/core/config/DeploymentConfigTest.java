@@ -287,6 +287,17 @@ class DeploymentConfigTest {
     }
 
     @Test
+    void databaseMultiAzIsUnsetByDefaultSoTheSecurityProfileDecides() {
+        // A non-null default would be read downstream as an explicit override of the profile.
+        assertNull(new DeploymentConfig().databaseMultiAz);
+    }
+
+    @Test
+    void crossRegionBackupVaultIsUnsetByDefaultSoNoCopyIsAssumed() {
+        assertNull(new DeploymentConfig().backupCrossRegionVaultArn);
+    }
+
+    @Test
     void testSetCognitoFields() {
         config.cognitoAutoProvision = true;
         config.cognitoUserPoolName = "my-pool";

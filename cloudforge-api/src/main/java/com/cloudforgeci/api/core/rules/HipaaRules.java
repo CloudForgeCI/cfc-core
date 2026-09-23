@@ -4,15 +4,18 @@ import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * HIPAA Security Rule compliance validation.
@@ -45,6 +48,14 @@ import java.util.logging.Logger;
 )
 public class HipaaRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(HipaaRules.class.getName());
+
+    /** Controls that still block STAGING synthesis: authentication, network isolation, and
+     *  SSL/TLS in transit. Everything else in STAGING is a visible, non-blocking finding. */
+    private static final Set<String> STAGING_BLOCKING_RULES = Set.of(
+        "HIPAA-164.312(a)(2)(i)-Auth", "HIPAA-164.312(d)-Auth",
+        "HIPAA-164.312(a)(1)-NetworkAccess", "HIPAA-164.312(e)(1)-Network",
+        "HIPAA-164.312(e)(2)(i)-SSL", "HIPAA-164.312(e)(2)(i)-TLS"
+    );
 
     // HIPAA requires 6 years retention for documentation
     private static final int HIPAA_MIN_RETENTION_DAYS = 365 * 6; // 2190 days
@@ -88,6 +99,17 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
             // Organizational Requirements
             rules.addAll(validateRetentionRequirements(ctx));
 
+            // Matrix-required controls not covered above
+            rules.addAll(validateMatrixControls(
+                ctx.securityProfileConfig.get().orElseThrow(
+                    () -> new IllegalStateException("SecurityProfileConfiguration not set")),
+                ctx.security,
+                ctx.runtime,
+                ctx.dbConnection.get().isPresent(),
+                ctx.maxInstanceCapacity.get().orElse(ctx.cfc.maxInstanceCapacity()),
+                ctx.applicationSpec.get()
+                    .map(com.cloudforge.core.interfaces.ApplicationSpec::supportsAutoScaling).orElse(true)));
+
             // Get all failed rules
             List<ComplianceRule> failedRules = rules.stream()
                 .filter(rule -> !rule.passed())
@@ -106,6 +128,19 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
                     errors.forEach(err -> LOG.warning("  - " + err));
                     ComplianceFindingsCollector.record(failedRules);
                     return List.of(); // Return empty list = no CDK synthesis errors
+                } else if (ctx.security == SecurityProfile.STAGING) {
+                    // STAGING runs the same checks as PRODUCTION; only authentication, network
+                    // isolation and SSL/TLS still block. Everything else is a visible finding.
+                    List<String> blocking = failedRules.stream()
+                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
+                        .map(ComplianceRule::toErrorString)
+                        .flatMap(Optional::stream)
+                        .toList();
+                    LOG.warning("HIPAA validation found " + errors.size() + " violations (STAGING - "
+                        + blocking.size() + " blocking)");
+                    errors.forEach(err -> LOG.warning("  - " + err));
+                    ComplianceFindingsCollector.record(failedRules);
+                    return blocking;
                 } else {
                     // Enforce mode: Fail synthesis
                     LOG.severe("HIPAA validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");
@@ -216,13 +251,14 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         }
 
         // Cross-region backup for disaster recovery
-        if (ctx.security == SecurityProfile.PRODUCTION && !config.isCrossRegionBackupEnabled()) {
+        boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
+        if (isProdOrStaging && !config.isCrossRegionBackupEnabled()) {
             rules.add(ComplianceRule.fail(
                 "HIPAA-164.310(d)(2)(iii)-CrossRegion",
                 "Cross-region backup recommended for production PHI (HIPAA §164.310(d)(2)(iii))",
                 "Implement geographic redundancy for disaster recovery."
             ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION) {
+        } else if (isProdOrStaging) {
             rules.add(ComplianceRule.pass(
                 "HIPAA-164.310(d)(2)(iii)-CrossRegion",
                 "Cross-region backup enabled for production PHI (HIPAA §164.310(d)(2)(iii))"
@@ -538,6 +574,176 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
     }
 
     /**
+     * §164.312(a)(2)(iv) - Encryption and Decryption, and other {@link ComplianceMatrix} controls
+     * REQUIRED for HIPAA that the checks above do not already cover. Each check reads the security
+     * profile, so it fails only when the profile leaves a required control off. Controls already
+     * owned by the always-load cross-framework rule classes (KMS rotation, Secrets Manager, database
+     * access control, and similar) are left to those classes rather than duplicated here.
+     */
+    List<ComplianceRule> validateMatrixControls(
+            SecurityProfileConfiguration config,
+            SecurityProfile profile,
+            RuntimeType runtime,
+            boolean databaseProvisioned,
+            Integer maxInstances,
+            boolean specSupportsScaling) {
+        List<ComplianceRule> rules = new ArrayList<>();
+
+        // §164.312(a)(2)(iv): encryption at rest for EBS, EFS and S3 -- REQUIRED, and previously
+        // unchecked here despite generateComplianceReport() printing its status.
+        if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()
+                || !config.isS3EncryptionEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "HIPAA-164.312(a)(2)(iv)-EncryptionAtRest",
+                "Encryption at rest required for EBS, EFS and S3 storing ePHI (HIPAA §164.312(a)(2)(iv))",
+                "EbsEncryptionRule",
+                "Enable encryption for all storage volumes and buckets that may hold ePHI."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "HIPAA-164.312(a)(2)(iv)-EncryptionAtRest",
+                "Encryption at rest enabled for EBS, EFS and S3 (HIPAA §164.312(a)(2)(iv))",
+                "EbsEncryptionRule"
+            ));
+        }
+
+        // §164.312(a)(2)(iv): CloudWatch Logs may contain ePHI in application log output.
+        if (profile == SecurityProfile.PRODUCTION) {
+            if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
+                rules.add(ComplianceRule.fail(
+                    "HIPAA-164.312(a)(2)(iv)-LogEncryption",
+                    "CloudWatch log groups must be encrypted with a customer-managed KMS key (HIPAA §164.312(a)(2)(iv))",
+                    "Enable cloudWatchLogsKmsEncryptionEnabled."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "HIPAA-164.312(a)(2)(iv)-LogEncryption",
+                    "CloudWatch log groups encrypted with a customer-managed KMS key (HIPAA §164.312(a)(2)(iv))"
+                ));
+            }
+
+            // §164.312(c)(1): audit logs must be tamper-evident.
+            if (!config.isS3ObjectLockEnabled()) {
+                rules.add(ComplianceRule.fail(
+                    "HIPAA-164.312(c)(1)-AuditLogImmutability",
+                    "S3 Object Lock required so audit logs cannot be altered or deleted (HIPAA §164.312(c)(1))",
+                    "Enable S3 Object Lock on the audit-log buckets."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "HIPAA-164.312(c)(1)-AuditLogImmutability",
+                    "S3 Object Lock enabled on audit-log buckets (HIPAA §164.312(c)(1))"
+                ));
+            }
+
+            // §164.308(a)(8): evaluation of security measures -- CloudTrail plus AWS Config
+            // together give a record of every change and detect drift from the deployed baseline.
+            if (config.isCloudTrailEnabled() && config.isAwsConfigEnabled()) {
+                rules.add(ComplianceRule.pass(
+                    "HIPAA-164.308(a)(8)-ChangeManagement",
+                    "Change tracking enabled via CloudTrail and AWS Config (HIPAA §164.308(a)(8))"
+                ));
+            } else {
+                rules.add(ComplianceRule.fail(
+                    "HIPAA-164.308(a)(8)-ChangeManagement",
+                    "Change control tracking required (HIPAA §164.308(a)(8))",
+                    "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."
+                ));
+            }
+        }
+
+        // §164.312(a)(1): EC2 instance metadata is a documented credential-theft vector.
+        if (runtime == RuntimeType.EC2) {
+            if (!config.isImdsv2Required()) {
+                rules.add(ComplianceRule.fail(
+                    "HIPAA-164.312(a)(1)-IMDSv2",
+                    "EC2 instances must require IMDSv2 (HIPAA §164.312(a)(1))",
+                    "Set imdsv2Required=true."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "HIPAA-164.312(a)(1)-IMDSv2",
+                    "EC2 instances require IMDSv2 tokens (HIPAA §164.312(a)(1))"
+                ));
+            }
+        }
+
+        // §164.308(a)(7)(ii)(B): contingency plan / disaster recovery -- database availability and
+        // protection, only when a database was actually provisioned.
+        if (profile == SecurityProfile.PRODUCTION && databaseProvisioned) {
+            if (!config.isRdsDatabaseMultiAzEnabled()) {
+                rules.add(ComplianceRule.fail(
+                    "HIPAA-164.308(a)(7)(ii)(B)-DatabaseMultiAZ",
+                    "RDS Multi-AZ required for database availability (HIPAA §164.308(a)(7)(ii)(B))",
+                    "Enable Multi-AZ on the RDS instance."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "HIPAA-164.308(a)(7)(ii)(B)-DatabaseMultiAZ",
+                    "RDS Multi-AZ enabled for database availability (HIPAA §164.308(a)(7)(ii)(B))"
+                ));
+            }
+            if (!config.isRdsDeletionProtectionEnabled()) {
+                rules.add(ComplianceRule.fail(
+                    "HIPAA-164.310(d)(2)(iii)-DatabaseDeletionProtection",
+                    "RDS deletion protection required to prevent accidental loss of ePHI (HIPAA §164.310(d)(2)(iii))",
+                    "Enable RDS deletion protection."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "HIPAA-164.310(d)(2)(iii)-DatabaseDeletionProtection",
+                    "RDS deletion protection enabled (HIPAA §164.310(d)(2)(iii))"
+                ));
+            }
+        }
+
+        // §164.308(a)(7)(ii)(B): high availability, for applications that can run more than one
+        // instance -- a single-instance deployment has nothing to make highly available.
+        if (profile == SecurityProfile.PRODUCTION) {
+            if (Soc2Rules.autoScalingApplies(specSupportsScaling, maxInstances)) {
+                if (!config.isMultiAzEnforced() || !config.isAutoScalingEnabled()) {
+                    rules.add(ComplianceRule.fail(
+                        "HIPAA-164.308(a)(7)(ii)(B)-HighAvailability",
+                        "Multi-AZ deployment and auto-scaling required for high availability (HIPAA §164.308(a)(7)(ii)(B))",
+                        "Deploy across multiple availability zones and enable auto-scaling."
+                    ));
+                } else {
+                    rules.add(ComplianceRule.pass(
+                        "HIPAA-164.308(a)(7)(ii)(B)-HighAvailability",
+                        "Multi-AZ deployment and auto-scaling enabled (HIPAA §164.308(a)(7)(ii)(B))"
+                    ));
+                }
+            }
+        }
+
+        return rules;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above (not just {@link
+     * #validateMatrixControls}) -- see {@link FrameworkRules#claimedControls}. Controls the matrix
+     * marks REQUIRED for HIPAA but left off this list (KMS_KEY_ROTATION, SECRETS_MANAGER,
+     * SECRETS_ROTATION, DATABASE_PITR, CLOUDTRAIL_INSIGHTS, ROOT_ACCOUNT_PROTECTION,
+     * CREDENTIAL_ROTATION, DATABASE_ACCESS_CONTROL, CONTAINER_SECURITY, API_SECURITY,
+     * LAMBDA_SECURITY, DATABASE_LOGGING, SNS_KMS_ENCRYPTION, SENSITIVE_DATA_DISCOVERY,
+     * VULNERABILITY_MANAGEMENT) are intentionally owned by the always-load
+     * cross-framework classes instead (KeyManagementRules, DatabaseSecurityRules, IamSecurityRules,
+     * and similar) -- a sync check needs the union of every installed framework's claims, not just
+     * this one's, to see the full picture.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "SECURITY_MONITORING", "THREAT_DETECTION", "ACCESS_CONTROL", "BACKUP_RECOVERY",
+            "AUTHENTICATION", "NETWORK_SEGMENTATION", "AUDIT_LOGGING", "NETWORK_FLOW_LOGS",
+            "HTTPS_STRICT", "ENCRYPTION_IN_TRANSIT", "LOG_RETENTION",
+            "ENCRYPTION_AT_REST", "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "S3_OBJECT_LOCK",
+            "EC2_IMDSV2", "DATABASE_MULTI_AZ", "DELETION_PROTECTION", "HIGH_AVAILABILITY",
+            "CHANGE_MANAGEMENT"
+        );
+    }
+
+    /**
      * Generate HIPAA Security Rule compliance report.
      */
     public String generateComplianceReport(SystemContext ctx) {
@@ -582,6 +788,37 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         report.append("Note: HIPAA requires 6-year retention. Implement S3 archival for logs older than CloudWatch retention.\n");
         report.append("\n");
 
+        appendAdvisorySection(report, ctx);
+
         return report.toString();
+    }
+
+    /**
+     * Recommendations for controls that are ADVISORY-tier (not blocking) and currently off.
+     * Runs the same checks {@link #install} does, so this reflects live findings, not a
+     * separate hand-maintained list.
+     */
+    private void appendAdvisorySection(StringBuilder report, SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+        rules.addAll(validateSecurityManagement(ctx));
+        rules.addAll(validateAccessManagement(ctx));
+        rules.addAll(validatePhysicalSafeguards(ctx));
+        rules.addAll(validateAccessControls(ctx));
+        rules.addAll(validateAuditControls(ctx));
+        rules.addAll(validateIntegrityControls(ctx));
+        rules.addAll(validateAuthenticationControls(ctx));
+        rules.addAll(validateTransmissionSecurity(ctx));
+        rules.addAll(validateRetentionRequirements(ctx));
+
+        List<ComplianceRule> advisories = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+        if (advisories.isEmpty()) {
+            return;
+        }
+        report.append("Recommendations (advisory, non-blocking):\n");
+        for (ComplianceRule rule : advisories) {
+            report.append("  - ").append(rule.ruleId()).append(": ").append(rule.description()).append("\n");
+            rule.recommendation().ifPresent(r -> report.append("      ").append(r).append("\n"));
+        }
+        report.append("\n");
     }
 }

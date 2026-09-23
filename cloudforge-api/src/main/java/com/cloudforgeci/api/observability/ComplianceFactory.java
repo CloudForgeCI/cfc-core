@@ -559,6 +559,7 @@ public class ComplianceFactory extends BaseFactory {
         // Store trail for later configuration
         this.trail = trail;
         this.trailBucket = trailBucket;
+        ctx.cloudTrail.set(trail);
 
         // CloudTrail trail can be safely deleted - all audit logs are stored in the S3 bucket
         // The S3 bucket has its own RETAIN policy to preserve the actual log data

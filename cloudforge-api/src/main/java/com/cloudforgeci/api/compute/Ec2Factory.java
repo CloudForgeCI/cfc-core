@@ -1,5 +1,6 @@
 package com.cloudforgeci.api.compute;
 
+import com.cloudforgeci.api.observability.LogsKmsKey;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
@@ -15,6 +16,8 @@ import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 
 import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.autoscaling.AdditionalHealthCheckType;
 import software.amazon.awscdk.services.autoscaling.AdditionalHealthChecksOptions;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -363,9 +366,16 @@ public class Ec2Factory extends BaseFactory {
 
   private LogGroup createLogGroup() {
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
-    return LogGroup.Builder.create(this, appId + "Ec2Logs")
-            .retention(config.getLogRetentionDays())
-            .build();
+    LogGroup.Builder builder = LogGroup.Builder.create(this, appId + "Ec2Logs")
+            .retention(config.getLogRetentionDays());
+
+    // Encrypt the instance log group with a rotating KMS key when the profile requires log encryption.
+    if (config.isCloudWatchLogsKmsEncryptionEnabled()) {
+      Key logsKey = LogsKmsKey.create(this, appId + "Ec2LogsKmsKey",
+          "KMS key for the " + appId + " EC2 CloudWatch log group", config.getLogRemovalPolicy());
+      builder.encryptionKey(logsKey);
+    }
+    return builder.build();
   }
 
   private UserData createUserData() {

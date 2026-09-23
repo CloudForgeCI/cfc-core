@@ -9,6 +9,7 @@ import com.cloudforgeci.api.core.SystemContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * FedRAMP High Impact Level compliance validator.
@@ -295,5 +296,20 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
         }
 
         return rules;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. The compliance matrix has no
+     * "FEDRAMP-HIGH" column (only "FEDRAMP"), so this declaration isn't enforced against it yet the
+     * way the Moderate baseline is -- it documents current coverage now so it's ready the moment a
+     * High column exists.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "VULNERABILITY_MANAGEMENT", "THREAT_DETECTION", "BACKUP_RECOVERY",
+            "HIGH_AVAILABILITY", "SECURITY_MONITORING", "NETWORK_SEGMENTATION"
+        );
     }
 }

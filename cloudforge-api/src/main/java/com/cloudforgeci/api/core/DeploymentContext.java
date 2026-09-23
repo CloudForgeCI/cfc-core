@@ -292,7 +292,15 @@ public final class DeploymentContext {
     public Boolean macieEnabled() { return config.macieEnabled; }
     public Boolean macieAutomatedDiscoveryEnabled() { return config.macieAutomatedDiscovery; }
     public Boolean securityHubEnabled() { return config.securityHubEnabled; }
+    public Boolean securityHubCisEnabled() { return config.securityHubCisEnabled; }
+    public String securityHubCisVersion() { return config.securityHubCisVersion; }
+    public Boolean securityHubAwsFoundationalEnabled() { return config.securityHubAwsFoundationalEnabled; }
+    public String securityHubFsbpVersion() { return config.securityHubFsbpVersion; }
+    public Boolean securityHubPciDssEnabled() { return config.securityHubPciDssEnabled; }
+    public String securityHubPciDssVersion() { return config.securityHubPciDssVersion; }
     public Boolean inspectorEnabled() { return config.inspectorEnabled; }
+    public Boolean inspectorEc2Scanning() { return config.inspectorEc2Scanning; }
+    public Boolean inspectorEcrScanning() { return config.inspectorEcrScanning; }
     public Boolean antiMalwareEnabled() { return config.antiMalwareEnabled; }
     public Boolean fileIntegrityMonitoringEnabled() { return config.fileIntegrityMonitoring; }
     public Boolean containerRuntimeSecurityEnabled() { return config.containerRuntimeSecurity; }
@@ -303,6 +311,15 @@ public final class DeploymentContext {
     public Boolean cloudTrailInsightsEnabled() { return config.cloudTrailInsightsEnabled; }
     public Boolean route53QueryLoggingEnabled() { return config.route53QueryLoggingEnabled; }
     public Boolean s3ObjectLockEnabled() { return config.s3ObjectLockEnabled; }
+    public Boolean ebsEncryptionEnabled() { return config.ebsEncryptionEnabled; }
+    public Boolean efsEncryptionAtRestEnabled() { return config.efsEncryptionAtRestEnabled; }
+    public Boolean s3EncryptionEnabled() { return config.s3EncryptionEnabled; }
+    public Boolean backupVaultLockEnabled() { return config.backupVaultLockEnabled; }
+    public Boolean backupVaultRetentionEnabled() { return config.backupVaultRetentionEnabled; }
+    public Boolean rdsDeletionProtectionEnabled() { return config.rdsDeletionProtectionEnabled; }
+    public Boolean rdsDatabaseMultiAzEnabled() { return config.rdsDatabaseMultiAzEnabled; }
+    public Boolean snsKmsEncryptionEnabled() { return config.snsKmsEncryptionEnabled; }
+    public Boolean imdsv2Required() { return config.imdsv2Required; }
 
     public Boolean cloudfrontEnabled() { return config.cloudfrontEnabled; }
     public LoadBalancerType lbType() { return config.lbType; }
@@ -322,6 +339,7 @@ public final class DeploymentContext {
     public Boolean efsEncryptionInTransitEnabled() { return config.efsEncryptionInTransitEnabled; }
     public Boolean restrictSecurityGroupEgress() { return config.restrictSecurityGroupEgress; }
     public Boolean automatedBackupEnabled() { return config.automatedBackupEnabled; }
+    public String backupCrossRegionVaultArn() { return config.backupCrossRegionVaultArn; }
     public Boolean crossRegionBackupEnabled() { return config.crossRegionBackupEnabled; }
 
     // Security - SSH Access Control
@@ -337,6 +355,7 @@ public final class DeploymentContext {
     public Boolean awsConfigEnabled() { return config.awsConfigEnabled; }
     public Boolean createConfigInfrastructure() { return config.createConfigInfrastructure; }
     public Boolean auditManagerEnabled() { return config.auditManagerEnabled; }
+    public Boolean auditManagerServiceEnabled() { return config.auditManagerServiceEnabled; }
     public Boolean managerDirectDeployEnabled() { return config.managerDirectDeployEnabled; }
     public Boolean marketplaceDeploymentEnabled() { return config.marketplaceDeploymentEnabled; }
     public String complianceFrameworks() { return complianceFrameworks; }
@@ -371,6 +390,12 @@ public final class DeploymentContext {
     public Boolean databaseMultiAz() { return raw.containsKey("databaseMultiAz") ? config.databaseMultiAz : null; }
     public Integer databaseBackupRetentionDays() { return raw.containsKey("databaseBackupRetentionDays") ? config.databaseBackupRetentionDays : null; }
     public Boolean enableAutoScaling() { return raw.containsKey("enableAutoScaling") ? config.enableAutoScaling : null; }
+
+    // No class-level default on any of these four -- a plain forwarding getter already
+    // distinguishes "unset" (null, profile/RdsFactory default applies) from an explicit override.
+    public Boolean rdsAutoMinorVersionUpgrade() { return config.rdsAutoMinorVersionUpgrade; }
+    public Boolean performanceInsightsEnabled() { return config.performanceInsightsEnabled; }
+    public Boolean rdsEnhancedMonitoringEnabled() { return config.rdsEnhancedMonitoringEnabled; }
 
     public Boolean provisionManagerRedisSessions() { return config.provisionManagerRedisSessions; }
     public Boolean provisionManagerAccountCipherKey() { return config.provisionManagerAccountCipherKey; }

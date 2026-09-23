@@ -58,13 +58,14 @@ class CloudForgeSynthesizerTest {
         config.runtime = RuntimeType.FARGATE;
         config.securityProfile = SecurityProfile.PRODUCTION;
         config.authMode = com.cloudforge.core.enums.AuthMode.NONE;
+        // An explicit single-AZ database is a genuine AwsSolutions-RDS3 finding; PRODUCTION alone is Multi-AZ.
+        config.databaseMultiAz = false;
         return config;
     }
 
     /**
-     * WordPress on Fargate produces an {@code AwsSolutions-RDS3} finding (its RDS instance is not
-     * Multi-AZ), so this exercises {@code ComplianceMode.ENFORCE} against an actual violation
-     * rather than a synthetic one.
+     * WordPress on Fargate with a single-AZ database produces an {@code AwsSolutions-RDS3} finding, so this
+     * exercises {@code ComplianceMode.ENFORCE} against a violation cdk-nag reports on its own, not a synthetic one.
      */
     @Test
     void enforceModeBlocksSynthesisWhenComplianceFrameworkFindsARealViolation() {

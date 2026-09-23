@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * ISO/IEC 27001:2022 Information Security Management compliance validation.
@@ -106,6 +107,13 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
                     errors.forEach(err -> LOG.warning("  - " + err));
                     ComplianceFindingsCollector.record(failedRules);
                     return List.of(); // Don't block synthesis
+                } else if (ctx.security == SecurityProfile.STAGING) {
+                    // STAGING runs the same checks as PRODUCTION but never blocks on them -- the
+                    // finding is still visible, synthesis still succeeds.
+                    LOG.warning("ISO 27001 validation found " + errors.size() + " violations (STAGING - not blocking)");
+                    errors.forEach(err -> LOG.warning("  - " + err));
+                    ComplianceFindingsCollector.record(failedRules);
+                    return List.of();
                 } else {
                     LOG.severe("ISO 27001 validation failed with " + errors.size() + " violations (ENFORCE mode)");
                     errors.forEach(err -> LOG.severe("  - " + err));
@@ -145,7 +153,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         }
 
         // A.9.4.1 - Information access restriction
-        if (!config.isWafEnabled() && ctx.security == SecurityProfile.PRODUCTION) {
+        if (!config.isWafEnabled() && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
             rules.add(ComplianceRule.fail(
                 "ISO-27001-A.9.4.1",
                 "WAF required for access restriction in production (ISO 27001 A.9.4.1)",
@@ -239,7 +247,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         }
 
         // A.12.6.1 - Management of technical vulnerabilities
-        if (!config.isGuardDutyEnabled() && ctx.security == SecurityProfile.PRODUCTION) {
+        if (!config.isGuardDutyEnabled() && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
             rules.add(ComplianceRule.fail(
                 "ISO-27001-A.12.6.1",
                 "Vulnerability detection required for production (ISO 27001 A.12.6.1)",
@@ -297,7 +305,7 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         var config = ctx.securityProfileConfig.get().orElseThrow();
 
         // A.17.2.1 - Availability of information processing facilities
-        if (ctx.security == SecurityProfile.PRODUCTION && !config.isMultiAzEnforced()) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !config.isMultiAzEnforced()) {
             rules.add(ComplianceRule.fail(
                 "ISO-27001-A.17.2.1",
                 "Multi-AZ deployment required for production availability (ISO 27001 A.17.2.1)",
@@ -311,5 +319,20 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         }
 
         return rules;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. {@link ComplianceMatrix}
+     * now has an ISO-27001 column; this declaration is kept in sync with it like the other
+     * infrastructure frameworks (PCI-DSS/HIPAA/SOC2/GDPR).
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "SECURITY_MONITORING", "WAF_PROTECTION", "ENCRYPTION_AT_REST",
+            "ENCRYPTION_IN_TRANSIT", "AUDIT_LOGGING", "THREAT_DETECTION",
+            "NETWORK_FLOW_LOGS", "HIGH_AVAILABILITY"
+        );
     }
 }

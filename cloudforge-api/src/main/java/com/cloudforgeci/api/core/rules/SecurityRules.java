@@ -16,6 +16,7 @@ import io.github.cdklabs.cdknag.AwsSolutionsChecks;
 import io.github.cdklabs.cdknag.HIPAASecurityChecks;
 import io.github.cdklabs.cdknag.NagReportFormat;
 import io.github.cdklabs.cdknag.PCIDSS321Checks;
+import io.github.cdklabs.cdknag.NIST80053R5Checks;
 import io.github.cdklabs.cdknag.NagPack;
 import software.amazon.awscdk.Aspects;
 
@@ -225,12 +226,15 @@ public final class SecurityRules {
           .reports(true)
           .reportFormats(reportFormats)
           .build();
-      // FEDRAMP: Handled by existing FedRampRules.java plugin only
-      // Not integrated with cdk-nag to avoid conflicts with FedRampRules.
-      case "FEDRAMP", "FEDRAMPHIGH" -> {
-        LOG.info("  - Skipping cdk-nag for a FedRAMP framework (uses existing FedRampRules.java)");
-        yield null;
-      }
+      // FEDRAMP/FEDRAMPHIGH: NIST 800-53 Rev 5 is the control baseline both share -- cdk-nag has
+      // no separate Low/Moderate/High pack, so one mapping covers both tokens. Runs alongside
+      // FedRampRules.java rather than replacing it, same as HIPAA/PCI-DSS/SOC2 pairing a cdk-nag
+      // pack with their own FrameworkRules validator.
+      case "FEDRAMP", "FEDRAMPHIGH" -> NIST80053R5Checks.Builder.create()
+          .logIgnores(!enforce)
+          .reports(true)
+          .reportFormats(reportFormats)
+          .build();
       // Custom frameworks: fallback to AWS Solutions best practices
       default -> {
         LOG.info("  - Applying AwsSolutionsChecks (fallback) for an unrecognized/custom framework");

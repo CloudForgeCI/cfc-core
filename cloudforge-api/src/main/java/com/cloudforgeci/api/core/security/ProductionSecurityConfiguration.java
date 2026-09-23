@@ -213,6 +213,13 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         // GuardDutyFactory will check security profile configuration
         c.createGuardDutyFactory(c, "Production");
 
+        // Create Security Hub, Macie, and Inspector (each self-gates on its own flag --
+        // see SecurityHubFactory/MacieFactory/InspectorFactory). PRODUCTION-only, same
+        // scoping as GuardDuty above.
+        c.createSecurityHubFactory(c, "Production");
+        c.createMacieFactory(c, "Production");
+        c.createInspectorFactory(c, "Production");
+
         // Configure logging retention (extended for compliance)
         if (profileConfig.getLogRetentionDays() != null) {
             LOG.info("PRODUCTION profile configured with log retention: " + profileConfig.getLogRetentionDays());

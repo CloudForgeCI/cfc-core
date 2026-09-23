@@ -254,6 +254,26 @@ public class RdsFactory {
         // Build instance identifier with 63 character limit (RDS constraint)
         String dbInstanceIdentifier = truncateDbIdentifier(stackName + "-" + instanceId, 63);
 
+        // Auto minor-version upgrade, Performance Insights, and Enhanced Monitoring each take a
+        // deployment context override, falling back to the PRODUCTION-only default when unset --
+        // same override-then-profile-default shape as multiAzOverride above.
+        boolean autoMinorVersionUpgrade = ctx.cfc.rdsAutoMinorVersionUpgrade() != null
+            ? ctx.cfc.rdsAutoMinorVersionUpgrade()
+            : (security == SecurityProfile.PRODUCTION);
+
+        boolean performanceInsightsRequested = ctx.cfc.performanceInsightsEnabled() != null
+            ? ctx.cfc.performanceInsightsEnabled()
+            : (security == SecurityProfile.PRODUCTION);
+        // RDS rejects EnablePerformanceInsights outright ("Performance Insights not supported for
+        // this configuration") on the smallest burstable sizes (db.t2/t3/t4g.micro) across every
+        // engine, regardless of what was requested.
+        boolean performanceInsightsEnabled = performanceInsightsRequested
+            && supportsPerformanceInsights(requirement.instanceClass());
+
+        boolean enhancedMonitoringEnabled = ctx.cfc.rdsEnhancedMonitoringEnabled() != null
+            ? ctx.cfc.rdsEnhancedMonitoringEnabled()
+            : (security == SecurityProfile.PRODUCTION);
+
         // Create database instance builder
         DatabaseInstance.Builder instanceBuilder = DatabaseInstance.Builder.create(scope, instanceId)
             .instanceIdentifier(dbInstanceIdentifier)
@@ -276,7 +296,7 @@ public class RdsFactory {
             .deletionProtection(ctx.securityProfileConfig.get()
                 .map(config -> config.isRdsDeletionProtectionEnabled())
                 .orElse(false))
-            .autoMinorVersionUpgrade(security == SecurityProfile.PRODUCTION)
+            .autoMinorVersionUpgrade(autoMinorVersionUpgrade)
             .iamAuthentication(security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING)
 
             // Backup configurations
@@ -298,28 +318,28 @@ public class RdsFactory {
 
             .cloudwatchLogsExports(getCloudWatchLogsExports(requirement.engine()));
 
-        // Conditionally enable Performance Insights for PRODUCTION only — and only when the
-        // instance class supports it. RDS rejects EnablePerformanceInsights outright
-        // ("Performance Insights not supported for this configuration") on the smallest burstable
-        // sizes (db.t2/t3/t4g.micro) across every engine — cloudforge-manager's own PRODUCTION
-        // preset pins db.t3.micro. Falling through to
-        // the else branch for a micro instance keeps PRODUCTION's other monitoring knobs
-        // (autoMinorVersionUpgrade, iamAuthentication, deletion protection, backup retention)
-        // intact — only Performance Insights itself is unsupported at this size.
-        if (security == SecurityProfile.PRODUCTION && supportsPerformanceInsights(requirement.instanceClass())) {
+        // Performance Insights and Enhanced Monitoring are independent RDS features with
+        // independent overrides -- cloudwatchLogsRetention stays tied to whichever of the two
+        // is on, matching the longer retention either one previously implied.
+        if (performanceInsightsEnabled) {
             instanceBuilder
                 .enablePerformanceInsights(true)
                 .performanceInsightRetention(PerformanceInsightRetention.LONG_TERM)
-                .performanceInsightEncryptionKey(encryptionKey)
-                .monitoringInterval(Duration.seconds(60))
-                .monitoringRole(createMonitoringRole(scope, stackName, instanceId))
-                .cloudwatchLogsRetention(RetentionDays.ONE_YEAR);
+                .performanceInsightEncryptionKey(encryptionKey);
         } else {
-            instanceBuilder
-                .enablePerformanceInsights(false)
-                .monitoringInterval(Duration.seconds(0))
-                .cloudwatchLogsRetention(RetentionDays.ONE_MONTH);
+            instanceBuilder.enablePerformanceInsights(false);
         }
+
+        if (enhancedMonitoringEnabled) {
+            instanceBuilder
+                .monitoringInterval(Duration.seconds(60))
+                .monitoringRole(createMonitoringRole(scope, stackName, instanceId));
+        } else {
+            instanceBuilder.monitoringInterval(Duration.seconds(0));
+        }
+
+        instanceBuilder.cloudwatchLogsRetention(
+            (performanceInsightsEnabled || enhancedMonitoringEnabled) ? RetentionDays.ONE_YEAR : RetentionDays.ONE_MONTH);
 
         DatabaseInstance instance = instanceBuilder.build();
         List<String> readReplicaEndpoints = new ArrayList<>();

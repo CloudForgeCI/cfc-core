@@ -9,7 +9,7 @@
     <properties>
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
-        <cloudforge.version>3.2.17-SNAPSHOT</cloudforge.version>
+        <cloudforge.version>3.2.18-SNAPSHOT</cloudforge.version>
         <testcontainers.version>1.21.0</testcontainers.version>
         <aws.sdk.version>2.25.0</aws.sdk.version>
     </properties>

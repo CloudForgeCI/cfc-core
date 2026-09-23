@@ -12,6 +12,7 @@
   "authMode": "none",
   "provisionDatabase": true,
   "databaseEngine": "postgres",
+  "databaseVersion": "15",
   "complianceFrameworks": "HIPAA",
   "cpu": 512,
   "memory": 1024,

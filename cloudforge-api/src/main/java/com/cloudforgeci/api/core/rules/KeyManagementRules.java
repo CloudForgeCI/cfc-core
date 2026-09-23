@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Key Management compliance validation rules.
@@ -137,7 +138,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "KMS-ROTATION",
@@ -148,9 +149,10 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("KMS key rotation recommended but not required for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "KMS-ROTATION",
-                    "KMS key rotation is advisory for " + complianceFrameworks + " (recommended but not required)"
+                    "KMS key rotation is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "Enable automatic annual rotation on customer-managed KMS keys."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -210,7 +212,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "CERT-EXPIRATION-MONITOR",
@@ -221,10 +223,11 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Certificate expiration monitoring recommended but not required for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "CERT-EXPIRATION-MONITOR",
                     "Certificate expiration monitoring is advisory for " + complianceFrameworks + " (recommended but not required)",
-                    "CertificateExpirationAlarm"
+                    "CertificateExpirationAlarm",
+                    "Enable certificateExpirationMonitoring = true for CloudWatch alarms on cert expiry."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -291,7 +294,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (smResult == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "SECRETS-MANAGER",
@@ -302,10 +305,11 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (smResult == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Secrets Manager recommended but not required for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "SECRETS-MANAGER",
                     "Secrets Manager is advisory for " + complianceFrameworks + " (recommended but not required)",
-                    "SecretsManagerInUse"
+                    "SecretsManagerInUse",
+                    "Store database and API credentials in Secrets Manager instead of plain config."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -337,10 +341,11 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
                     ));
                 } else if (rotationResult == ComplianceMatrix.ValidationResult.WARN) {
                     LOG.warning("Secret rotation recommended but not required for " + complianceFrameworks);
-                    rules.add(ComplianceRule.pass(
+                    rules.add(ComplianceRule.advisory(
                         "SECRET-ROTATION",
                         "Secret rotation is advisory for " + complianceFrameworks + " (recommended but not required)",
-                        "SecretsManagerRotation"
+                        "SecretsManagerRotation",
+                        "Enable automatic rotation (90 days or less) on secrets in Secrets Manager."
                     ));
                 } else {
                     rules.add(ComplianceRule.pass(
@@ -380,5 +385,17 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "KMS_KEY_ROTATION", "CERTIFICATE_EXPIRATION_MONITORING", "CERTIFICATE_MANAGEMENT",
+            "SECRETS_MANAGER", "SECRETS_ROTATION"
+        );
     }
 }

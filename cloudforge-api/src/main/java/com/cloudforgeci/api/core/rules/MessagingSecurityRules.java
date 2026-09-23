@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Messaging security compliance validation rules.
@@ -60,6 +61,14 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
             // Error handling (DLQ)
             rules.addAll(validateErrorHandling(ctx));
 
+            // Advisory findings never block synthesis, logged regardless of profile so they show up
+            // in the matrix runner's log capture.
+            List<ComplianceRule> advisoryRules = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+            if (!advisoryRules.isEmpty()) {
+                LOG.info("Messaging Security validation found " + advisoryRules.size() + " advisory recommendations (non-blocking):");
+                advisoryRules.forEach(r -> LOG.info("  [ADVISORY] " + r.ruleId() + ": " + r.description()));
+            }
+
             // Get all failed rules
             List<ComplianceRule> failedRules = rules.stream()
                 .filter(rule -> !rule.passed())
@@ -103,13 +112,16 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
-        // SQS/SNS encryption at rest
-        if (ctx.security == SecurityProfile.PRODUCTION) {
-            // Use S3 encryption as proxy for overall encryption stance
-            boolean encryptionEnabled = config.isS3EncryptionEnabled();
+        // SQS/SNS encryption at rest -- reads the SNS KMS-encryption flag directly (see
+        // Ec2Factory#createNotificationsTopic, which wires a customer-managed key onto the ASG
+        // notifications topic when this is true), not a stand-in for a different resource's
+        // encryption. Previously used S3 bucket encryption "as a proxy", which meant a deployment
+        // with encrypted S3 but no SNS key still reported this control as satisfied.
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
+            boolean encryptionEnabled = config.isSnsKmsEncryptionEnabled();
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
-                ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
+                ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION,
                 complianceFrameworks,
                 encryptionEnabled,
                 complianceMode
@@ -118,9 +130,15 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
             if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "MESSAGING-ENCRYPTION",
-                    "Messaging services (SQS/SNS) must use encryption at rest",
-                    "Enable KMS encryption for SQS queues and SNS topics. " +
-                    "Required for PCI-DSS Req 3.4 and HIPAA encryption requirements."
+                    "Messaging services (SQS/SNS) must use customer-managed KMS encryption",
+                    "Set snsKmsEncryptionEnabled = true to encrypt SNS topics with a customer-managed key."
+                ));
+            } else if (result == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("SNS KMS encryption recommended but not required for " + complianceFrameworks);
+                rules.add(ComplianceRule.advisory(
+                    "MESSAGING-ENCRYPTION",
+                    "SNS KMS encryption is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "Set snsKmsEncryptionEnabled = true to encrypt SNS topics with a customer-managed key."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -159,7 +177,7 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Secrets Manager usage and rotation
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             // Secrets Manager rotation
             ComplianceMatrix.ValidationResult rotationResult = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.SECRETS_ROTATION,
@@ -211,7 +229,7 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Dead letter queue configuration for production
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean dlqConfigured = getBooleanSetting(ctx, "deadLetterQueueEnabled", false);
 
             if (!dlqConfigured) {
@@ -266,5 +284,23 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. MESSAGING-ENCRYPTION now
+     * reads {@code config.isSnsKmsEncryptionEnabled()} directly (previously used S3 bucket
+     * encryption "as a proxy", which never reflected the SNS topic's own encryption state).
+     * SECRETS-ROTATION calls the matrix with {@code SECRETS_ROTATION}, but the boolean passed in
+     * is a hardcoded {@code true}, so {@code rotationResult} can never be FAIL and the fail branch
+     * is dead regardless of the {@code secretsRotationEnabled} setting -- not claimed.
+     * Kinesis encryption, Secrets Manager KMS encryption, and DLQ configuration are
+     * conditional checks with no corresponding matrix control and are not claimed.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "SNS_KMS_ENCRYPTION"
+        );
     }
 }
