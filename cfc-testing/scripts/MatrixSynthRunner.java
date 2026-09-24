@@ -45,7 +45,7 @@ public class MatrixSynthRunner {
     // A rule id: an uppercase-led token, then one or more "-segment" groups where a segment can
     // hold letters/digits/dots/parens (covers "SOC2-CC6.7-SSL", "HIPAA-164.312(a)(2)(i)-Auth",
     // "PCI-DSS-Req-2.2-IMDSv2", "GDPR-IMDSV2", and bare always-load ids like "MESSAGING-ENCRYPTION").
-    static final Pattern RULE = Pattern.compile("\\b([A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9.()]+)+)\\b");
+    static final Pattern RULE = Pattern.compile("\\b([A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9.()]+)+)(?![A-Za-z0-9.()-])");
 
     public static void main(String[] args) throws Exception {
         Path matrix = Path.of(args[0]);

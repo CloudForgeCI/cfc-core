@@ -13,10 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * {@code FedRampHighRules} is not registered in {@code META-INF/services} and {@code
- * ComplianceFrameworkType} has no FEDRAMP-HIGH entry, so nothing in a real deployment ever calls
- * {@code install}. These tests call it directly, exercising the validator logic itself, which is
- * otherwise completely untested. Mirrors {@code FedRampRulesSynthesisTest} for the Moderate baseline.
+ * {@code FedRampHighRules} is registered in {@code META-INF/services} and {@code
+ * ComplianceFrameworkType} has a FEDRAMP_HIGH entry, so a real deployment can reach {@code
+ * install}. These tests call it directly, exercising the validator logic itself. Mirrors {@code
+ * FedRampRulesSynthesisTest} for the Moderate baseline.
  */
 class FedRampHighRulesSynthesisTest {
 
@@ -49,6 +49,12 @@ class FedRampHighRulesSynthesisTest {
     void productionBlocksSynthesisWhenControlsAreMissing() {
         Map<String, Object> context = new HashMap<>();
         context.put("networkMode", "public");
+        // DeploymentConfig.securityProfile defaults to DEV (which resolves complianceMode to
+        // ADVISORY) unless "securityProfile" is set in the raw context -- the PRODUCTION passed
+        // to TestInfrastructureBuilder below only drives ctx.security, a separate field. Set both
+        // explicitly so this test actually exercises ENFORCE-mode blocking.
+        context.put("securityProfile", "PRODUCTION");
+        context.put("complianceMode", "ENFORCE");
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "FedRampHighAllFail", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, context);
         builder.createMinimalInfrastructure();
@@ -87,6 +93,8 @@ class FedRampHighRulesSynthesisTest {
         context.put("securityMonitoringEnabled", "true");
         context.put("multiAzEnforced", "true");
         context.put("crossRegionBackupEnabled", "false");
+        context.put("securityProfile", "PRODUCTION");
+        context.put("complianceMode", "ENFORCE");
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "FedRampHighNoCrossRegion", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, context);
         builder.createMinimalInfrastructure();
@@ -96,19 +104,17 @@ class FedRampHighRulesSynthesisTest {
     }
 
     @Test
-    void enforcementIgnoresComplianceModeUnlikeTheModerateBaseline() {
-        // Unlike FedRampRules, FedRampHighRules never reads ctx.cfc.complianceMode() -- a failing
-        // control always blocks synthesis here, even when the deployment context requests ADVISORY.
-        // This documents that behavior rather than asserting it is correct; see the compliance
-        // audit notes on FedRAMP High before changing it.
+    void advisoryModeDoesNotBlockSynthesisOnFailingControls() {
+        // A failing control produces a visible finding in ADVISORY mode, same as FedRampRules,
+        // but must not block synthesis.
         Map<String, Object> context = new HashMap<>();
         context.put("networkMode", "public");
         context.put("complianceMode", "ADVISORY");
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
-            "FedRampHighIgnoresAdvisory", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, context);
+            "FedRampHighAdvisoryDoesNotBlock", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, context);
         builder.createMinimalInfrastructure();
         new FedRampHighRules().install(builder.getSystemContext());
 
-        assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()));
+        assertDoesNotThrow(() -> Template.fromStack(builder.getStack()));
     }
 }

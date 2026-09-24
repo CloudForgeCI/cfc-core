@@ -88,39 +88,10 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
             // A.5.29 - Information Security During Disruption
             rules.addAll(validateBusinessContinuity(ctx));
 
-            // Get all failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
-
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    LOG.warning("ISO 27001 validation found " + errors.size() + " recommendations (ADVISORY mode)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return List.of(); // Don't block synthesis
-                } else if (ctx.security == SecurityProfile.STAGING) {
-                    // STAGING runs the same checks as PRODUCTION but never blocks on them -- the
-                    // finding is still visible, synthesis still succeeds.
-                    LOG.warning("ISO 27001 validation found " + errors.size() + " violations (STAGING - not blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return List.of();
-                } else {
-                    LOG.severe("ISO 27001 validation failed with " + errors.size() + " violations (ENFORCE mode)");
-                    errors.forEach(err -> LOG.severe("  - " + err));
-                    return errors; // Block synthesis
-                }
-            } else {
-                LOG.info("ISO 27001 validation passed (" + rules.size() + " checks)");
-                return List.of();
-            }
+            // ISO 27001 never blocks STAGING on anything -- pass Set.of() so every STAGING
+            // finding is visible but non-blocking, matching this class's prior behavior.
+            return ComplianceEnforcement.resolve(
+                "ISO 27001", rules, complianceMode, ctx.security, Set.of(), LOG);
         });
     }
 

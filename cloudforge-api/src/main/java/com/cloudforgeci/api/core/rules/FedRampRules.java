@@ -80,7 +80,7 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         "FEDRAMP-AC-17", "FEDRAMP-AC-17(2)", "FEDRAMP-SC-7(5)", "FEDRAMP-SC-8", "FEDRAMP-SC-8(1)-HTTPSStrict",
         "FEDRAMP-SC-28", "FEDRAMP-AU-2", "FEDRAMP-AU-3", "FEDRAMP-AU-6", "FEDRAMP-AU-9",
         "FEDRAMP-AU-9-LogEncryption", "FEDRAMP-AU-9-AuditLogImmutability", "FEDRAMP-AU-11",
-        "FEDRAMP-AU-12", "FEDRAMP-AU-12-ALB", "FEDRAMP-CP-9"
+        "FEDRAMP-AU-12", "FEDRAMP-AU-12-ALB", "FEDRAMP-CP-9", "FEDRAMP-MP-5-EFS"
     );
 
     // FedRAMP requires 3-year retention for audit records (AU-11)
@@ -151,43 +151,8 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
                 ctx.runtime,
                 ctx.dbConnection.get().isPresent()));
 
-            // Get all failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
-
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    LOG.warning("FedRAMP validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    return List.of();
-                } else if (ctx.security == SecurityProfile.STAGING) {
-                    // STAGING runs the same checks as PRODUCTION; only authentication, network
-                    // isolation and SSL/TLS still block. Everything else is a visible finding.
-                    List<String> blocking = failedRules.stream()
-                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
-                        .map(ComplianceRule::toErrorString)
-                        .flatMap(Optional::stream)
-                        .toList();
-                    LOG.warning("FedRAMP validation found " + errors.size() + " violations (STAGING - "
-                        + blocking.size() + " blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    return blocking;
-                } else {
-                    LOG.severe("FedRAMP validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");
-                    errors.forEach(err -> LOG.severe("  - " + err));
-                    return errors;
-                }
-            } else {
-                LOG.info("FedRAMP Moderate validation passed (" + rules.size() + " checks) - all technical controls enabled");
-                return List.of();
-            }
+            return ComplianceEnforcement.resolve(
+                "FedRAMP Moderate", rules, complianceMode, ctx.security, STAGING_BLOCKING_RULES, LOG);
         });
     }
 

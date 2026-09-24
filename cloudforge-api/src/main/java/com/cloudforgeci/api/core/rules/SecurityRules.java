@@ -230,7 +230,7 @@ public final class SecurityRules {
       // no separate Low/Moderate/High pack, so one mapping covers both tokens. Runs alongside
       // FedRampRules.java rather than replacing it, same as HIPAA/PCI-DSS/SOC2 pairing a cdk-nag
       // pack with their own FrameworkRules validator.
-      case "FEDRAMP", "FEDRAMPHIGH" -> NIST80053R5Checks.Builder.create()
+      case "FEDRAMP", "FEDRAMP-HIGH", "FEDRAMPHIGH" -> NIST80053R5Checks.Builder.create()
           .logIgnores(!enforce)
           .reports(true)
           .reportFormats(reportFormats)

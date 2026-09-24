@@ -183,8 +183,8 @@ class AdvisoryFindingsTest {
     }
 
     @Test
-    void snsKmsEncryptionOffFailsForHipaaRequired() {
-        // Contrast case: SNS_KMS_ENCRYPTION is REQUIRED for HIPAA, so the same override blocks.
+    void snsKmsEncryptionOverrideIsIgnoredWhenHipaaRequiresIt() {
+        // Contrast case: SNS_KMS_ENCRYPTION is REQUIRED for HIPAA, so the profile forces it on.
         Map<String, Object> ctx = baseline("HIPAA");
         ctx.put("snsKmsEncryptionEnabled", false);
         assertDoesNotThrow(() -> {

@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent
 MATRIX_DIR = ROOT / "compliance-matrix"
 
 COLUMNS = ["rowId", "framework", "tier", "app", "runtime", "profile", "authMode", "expected", "expectedRule",
-           "overrides", "status", "checks", "deployStatus", "verified", "verifiedAt", "notes"]
+           "overrides", "status", "checks", "deployStatus", "verified", "verifiedAt", "notes",
+           "deploymentDetails", "resourceTypes"]
 
 # Apps excluded from compliance matrices: the Manager is the console, not a compliance subject, and the two
 # Mattermost editions are one application (the free edition deploys without a license).
@@ -643,7 +644,8 @@ def write(framework, rows):
     for r in rows:
         old = previous.get(r["rowId"])
         if old and old["overrides"] == r["overrides"]:
-            for col in ("status", "checks", "deployStatus", "verified", "verifiedAt", "notes"):
+            for col in ("status", "checks", "deployStatus", "verified", "verifiedAt", "notes",
+                        "deploymentDetails", "resourceTypes"):
                 r[col] = old[col]
             kept += 1
     with open(path, "w", newline="") as f:

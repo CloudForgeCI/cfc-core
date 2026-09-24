@@ -11,14 +11,10 @@ import java.util.logging.Logger;
 /**
  * Factory for AWS GuardDuty threat detection and compliance automation.
  *
- * <p>GuardDuty automatically enables for compliance frameworks requiring threat detection:
- * <ul>
- *   <li>SOC2 (Common Criteria CC7.2 - Threat detection and response)</li>
- *   <li>PCI-DSS Requirement 11.4 (Intrusion Detection/Prevention Systems)</li>
- * </ul>
- *
- * <p><b>Auto-Enablement:</b> When {@code complianceFrameworks} contains "SOC2" or "PCI-DSS",
- * GuardDuty detector is automatically created without manual configuration.
+ * <p>{@code SecurityProfileConfiguration#isGuardDutyEnabled()} resolves whether GuardDuty is
+ * required -- the compliance matrix first (SOC2 CC7.2, PCI-DSS Req 11.4), then an explicit
+ * override, then "always on for PRODUCTION" as the final default. This factory only inherits
+ * that resolved value when {@code guardDutyEnabled} isn't set explicitly in deployment context.
  *
  * <p><b>Cost:</b> $30-100/month based on CloudTrail, VPC Flow Logs, and DNS log volume.
  */
@@ -38,31 +34,23 @@ public class GuardDutyFactory extends BaseFactory {
     @DeploymentContext("createGuardDutyDetector")
     private Boolean createGuardDutyDetector;
 
-    @DeploymentContext("complianceFrameworks")
-    private String complianceFrameworks;
-
     public GuardDutyFactory(Construct scope, String id) {
         super(scope, id);
     }
 
     @Override
     public void create() {
-        boolean autoEnable = shouldAutoEnableForCompliance();
-
         var securityProfileConfig = ctx.securityProfileConfig.get().orElse(null);
         if (securityProfileConfig != null && guardDutyEnabled == null) {
+            // isGuardDutyEnabled() already applies the compliance-matrix requirement (SOC2/
+            // PCI-DSS) and then the profile default (always on for PRODUCTION) -- no need to
+            // duplicate that logic here.
             guardDutyEnabled = securityProfileConfig.isGuardDutyEnabled();
             LOG.info("GuardDuty inherited from security profile: " + guardDutyEnabled);
-            // If security profile enables GuardDuty and createGuardDutyDetector not explicitly set, enable it
-            if (Boolean.TRUE.equals(guardDutyEnabled) && createGuardDutyDetector == null) {
-                createGuardDutyDetector = true;
-            }
         }
 
-        if (autoEnable && guardDutyEnabled == null) {
-            guardDutyEnabled = true;
+        if (Boolean.TRUE.equals(guardDutyEnabled) && createGuardDutyDetector == null) {
             createGuardDutyDetector = true;
-            LOG.info("GuardDuty auto-enabled for " + complianceFrameworks + " compliance");
         }
 
         if (Boolean.FALSE.equals(guardDutyEnabled)) {
@@ -77,23 +65,6 @@ public class GuardDutyFactory extends BaseFactory {
 
         enableGuardDuty();
         LOG.info("GuardDuty enabled: " + region + " (CloudTrail, VPC Flow, DNS monitoring)");
-    }
-
-    /**
-     * Determines if GuardDuty should be auto-enabled based on compliance frameworks.
-     * GuardDuty is required for:
-     * - SOC2 (Common Criteria CC7.2 - Threat detection and response)
-     * - PCI-DSS Requirement 11.4 (Intrusion Detection/Prevention Systems)
-     *
-     * @return true if compliance frameworks require GuardDuty
-     */
-    private boolean shouldAutoEnableForCompliance() {
-        if (complianceFrameworks == null || complianceFrameworks.isEmpty()) {
-            return false;
-        }
-
-        String frameworks = complianceFrameworks.toUpperCase();
-        return frameworks.contains("SOC2") || frameworks.contains("PCI-DSS") || frameworks.contains("PCIDSS");
     }
 
     private void enableGuardDuty() {

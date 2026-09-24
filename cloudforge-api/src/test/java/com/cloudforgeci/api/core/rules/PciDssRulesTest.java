@@ -3580,10 +3580,11 @@ class PciDssRulesTest {
         "PRODUCTION,EC2,365,ENFORCE,false",         // EC2 with 1 year - PASS
         "PRODUCTION,EC2,90,ENFORCE,true",           // EC2 with 90 days - FAIL
 
-        // STAGING - reduced retention allowed
-        "STAGING,FARGATE,90,ENFORCE,false",         // STAGING 90 days - PASS
-        "STAGING,FARGATE,14,ENFORCE,false",         // STAGING 14 days - PASS
-        "STAGING,EC2,30,ENFORCE,false",             // STAGING EC2 30 days - PASS
+        // STAGING - retention is in STAGING_BLOCKING_RULES, so it's enforced same as PRODUCTION
+        "STAGING,FARGATE,365,ENFORCE,false",        // STAGING 1 year - PASS
+        "STAGING,FARGATE,90,ENFORCE,true",          // STAGING 90 days - FAIL (< 365)
+        "STAGING,FARGATE,14,ENFORCE,true",          // STAGING 14 days - FAIL (< 365)
+        "STAGING,EC2,30,ENFORCE,true",              // STAGING EC2 30 days - FAIL (< 365)
 
         // DEV - minimal retention
         "DEV,FARGATE,7,ENFORCE,false",              // DEV 7 days - PASS
@@ -3730,9 +3731,10 @@ class PciDssRulesTest {
         "PRODUCTION,EC2,false,false,90,ENFORCE,true",           // EC2 multi-violation - FAIL
         "PRODUCTION,EC2,true,true,365,ENFORCE,false",           // EC2 all requirements - PASS
 
-        // STAGING - partial requirements OK
-        "STAGING,FARGATE,false,false,14,ENFORCE,false",         // STAGING minimal - PASS
-        "STAGING,FARGATE,true,true,90,ENFORCE,false",           // STAGING full - PASS
+        // STAGING - WAF/flow logs stay non-blocking, but retention is in STAGING_BLOCKING_RULES
+        "STAGING,FARGATE,false,false,365,ENFORCE,false",        // STAGING minimal, 1yr retention - PASS
+        "STAGING,FARGATE,true,true,365,ENFORCE,false",          // STAGING full - PASS
+        "STAGING,FARGATE,false,false,90,ENFORCE,true",          // STAGING retention < 1yr - FAIL
 
         // ADVISORY mode - all pass
         "PRODUCTION,FARGATE,false,false,90,ADVISORY,false"      // PRODUCTION advisory multi-violation - PASS

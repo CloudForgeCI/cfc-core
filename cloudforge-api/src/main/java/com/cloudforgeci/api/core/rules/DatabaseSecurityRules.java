@@ -57,6 +57,12 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
      *
      * @param ctx System context
      */
+    /** Controls that still block STAGING synthesis: encryption at rest -- PHI/cardholder/federal
+     *  data may exist in a provisioned STAGING database, same rationale as the encryption-at-rest
+     *  entries in HipaaRules/PciDssRules/FedRampRules' own STAGING_BLOCKING_RULES. Everything else
+     *  here (backup, Multi-AZ, PITR, activity-streams monitoring) stays non-blocking. */
+    private static final Set<String> STAGING_BLOCKING_RULES = Set.of("RDS-ENCRYPTION", "DYNAMODB-ENCRYPTION");
+
     @Override
     public void install(SystemContext ctx) {
         LOG.info("Installing database security compliance validation rules for " + ctx.security);
@@ -87,10 +93,16 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
                 failedRules.forEach(rule ->
                     LOG.warning("  - " + rule.description() + ": " + rule.errorMessage().orElse("")));
 
-                // For DEV and STAGING, these are advisory only -- same checks as PRODUCTION, but
-                // never blocking.
-                if (ctx.security == SecurityProfile.DEV || ctx.security == SecurityProfile.STAGING) {
+                // DEV is advisory only. STAGING blocks on the subset in STAGING_BLOCKING_RULES
+                // (encryption at rest); everything else is a visible, non-blocking finding.
+                if (ctx.security == SecurityProfile.DEV) {
                     return List.of();
+                }
+                if (ctx.security == SecurityProfile.STAGING) {
+                    return failedRules.stream()
+                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
+                        .map(rule -> rule.description() + ": " + rule.errorMessage().orElse(""))
+                        .toList();
                 }
 
                 // For PRODUCTION, convert to error strings
@@ -380,9 +392,14 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
     private List<ComplianceRule> validateDatabaseMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
+        // Gate on either signal, not the self-attested "rdsEnabled" flag alone -- a real
+        // ctx.dbConnection with no flag set would otherwise skip validation for a database that
+        // was actually provisioned. Keep the flag as an alternate trigger too: DB-ACTIVITY-STREAMS
+        // below specifically checks ctx.dbConnection itself, so it still needs to run (and fail)
+        // when the flag claims a database but ctx.dbConnection is empty -- that mismatch is
+        // exactly what it exists to catch.
         boolean rdsEnabled = getBooleanSetting(ctx, "rdsEnabled", false);
-
-        if (!rdsEnabled) {
+        if (!rdsEnabled && ctx.dbConnection.get().isEmpty()) {
             return rules; // Skip if RDS not in use
         }
 

@@ -348,8 +348,6 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "NETWORK_SEGMENTATION", "ENCRYPTION_AT_REST", "SECURITY_MONITORING", "LAMBDA_SECURITY"
-        );
+        return Set.of("LAMBDA_SECURITY");
     }
 }

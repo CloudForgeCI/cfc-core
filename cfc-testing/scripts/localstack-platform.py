@@ -7,6 +7,7 @@ The menu numbers platforms in an order that can change between runs, so the plat
 this reads the printed menu and answers with the matching number. Run from cfc-testing. The classpath
 defaults to target/classes plus target/dependency and can be overridden with CFC_CLASSPATH.
 """
+import json
 import os
 import re
 import subprocess
@@ -47,14 +48,17 @@ def control(platform, action):
 
 
 def wait_healthy(timeout=180):
-    """True once LocalStack reports CloudFormation available."""
+    """True once LocalStack reports CloudFormation available or running -- "available" means not
+    yet started, "running" means a started service, both usable; parsing JSON instead of matching
+    a byte string also survives whitespace differences in the response."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(HEALTH_URL, timeout=5) as response:
-                if b'"cloudformation": "available"' in response.read():
+                services = json.loads(response.read()).get("services", {})
+                if services.get("cloudformation") in ("available", "running"):
                     return True
-        except OSError:
+        except (OSError, ValueError):
             pass
         time.sleep(4)
     return False
