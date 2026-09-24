@@ -8,6 +8,8 @@ import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
 import software.amazon.awscdk.customresources.AwsSdkCall;
 import software.amazon.awscdk.customresources.PhysicalResourceId;
 import software.amazon.awscdk.customresources.SdkCallsPolicyOptions;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.constructs.Construct;
 
 import java.util.ArrayList;
@@ -41,10 +43,14 @@ public class InspectorFactory extends BaseFactory {
     @DeploymentContext("inspectorEcrScanning")
     private Boolean inspectorEcrScanning;
 
+    /** @param scope parent construct
+     *  @param id construct ID */
     public InspectorFactory(Construct scope, String id) {
         super(scope, id);
     }
 
+    /** Resolves whether Inspector is required, then enables it via the account-scoped
+     *  {@code inspector2:Enable} SDK call for the currently-selected resource types. */
     @Override
     public void create() {
         if (inspectorEnabled == null) {
@@ -76,30 +82,41 @@ public class InspectorFactory extends BaseFactory {
         String region = Stack.of(this).getRegion();
 
         // Inspector2:Enable only turns on the resource types listed -- it never turns off a type
-        // that was previously enabled and is now absent from the list. Reset every known resource
-        // type to disabled on every create/update before re-enabling just the ones currently
-        // selected, so flipping e.g. inspectorEcrScanning from true to false disables ECR scanning
-        // instead of leaving it running indefinitely.
-        AwsSdkCall resetCall = AwsSdkCall.builder()
-            .service("Inspector2")
-            .action("disable")
-            .parameters(Map.of(
-                "accountIds", List.of(account),
-                "resourceTypes", ALL_RESOURCE_TYPES
-            ))
-            .physicalResourceId(PhysicalResourceId.of("inspector2-reset-" + account + "-" + region))
-            .region(region)
-            .build();
+        // that was previously enabled and is now absent from the list. Disable exactly the
+        // deselected types (the complement of resourceTypes) before re-enabling the selected
+        // ones, so flipping e.g. inspectorEcrScanning from true to false disables ECR scanning
+        // instead of leaving it running indefinitely. Deriving the disable list from the current
+        // selection (rather than always disabling everything) also means this resource's declared
+        // parameters change whenever the selection changes, so CloudFormation actually invokes its
+        // onUpdate call instead of treating it as unchanged.
+        List<String> deselectedTypes = ALL_RESOURCE_TYPES.stream()
+            .filter(type -> !resourceTypes.contains(type))
+            .toList();
 
-        AwsCustomResource resetResource = AwsCustomResource.Builder.create(this, "Inspector2Reset")
-            .onCreate(resetCall)
-            .onUpdate(resetCall)
-            .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                SdkCallsPolicyOptions.builder()
-                    .resources(List.of("*"))
-                    .build()
-            ))
-            .build();
+        AwsCustomResource resetResource = null;
+        if (!deselectedTypes.isEmpty()) {
+            AwsSdkCall resetCall = AwsSdkCall.builder()
+                .service("Inspector2")
+                .action("disable")
+                .parameters(Map.of(
+                    "accountIds", List.of(account),
+                    "resourceTypes", deselectedTypes
+                ))
+                .physicalResourceId(PhysicalResourceId.of(
+                    "inspector2-reset-" + account + "-" + region + "-" + String.join("-", deselectedTypes)))
+                .region(region)
+                .build();
+
+            resetResource = AwsCustomResource.Builder.create(this, "Inspector2Reset")
+                .onCreate(resetCall)
+                .onUpdate(resetCall)
+                .policy(AwsCustomResourcePolicy.fromSdkCalls(
+                    SdkCallsPolicyOptions.builder()
+                        .resources(List.of("*"))
+                        .build()
+                ))
+                .build();
+        }
 
         AwsSdkCall enableCall = AwsSdkCall.builder()
             .service("Inspector2")
@@ -112,29 +129,33 @@ public class InspectorFactory extends BaseFactory {
             .region(region)
             .build();
 
-        AwsSdkCall disableCall = AwsSdkCall.builder()
-            .service("Inspector2")
-            .action("disable")
-            .parameters(Map.of(
-                "accountIds", List.of(account),
-                "resourceTypes", resourceTypes
-            ))
-            .physicalResourceId(PhysicalResourceId.of("inspector2-enable-" + account + "-" + region))
-            .region(region)
-            .build();
-
-        // inspector2:Enable provisions a service-linked role on first use.
+        // No onDelete: Inspector2:Disable applies to the whole account and region, not to this
+        // stack alone. Deleting this stack must not disable vulnerability scanning for every
+        // other stack or operator relying on it in the same account/region.
         AwsCustomResource enableResource = AwsCustomResource.Builder.create(this, "Inspector2Enable")
             .onCreate(enableCall)
             .onUpdate(enableCall)
-            .onDelete(disableCall)
             .policy(AwsCustomResourcePolicy.fromSdkCalls(
                 SdkCallsPolicyOptions.builder()
                     .resources(List.of("*"))
                     .build()
             ))
             .build();
-        enableResource.getNode().addDependency(resetResource);
+
+        // inspector2:Enable provisions the AWSServiceRoleForAmazonInspector2 service-linked role
+        // on first use in the account; fromSdkCalls only infers the inspector2:Enable/Disable
+        // actions, not this IAM side effect, so it needs an explicit grant.
+        enableResource.getGrantPrincipal().addToPrincipalPolicy(PolicyStatement.Builder.create()
+            .effect(Effect.ALLOW)
+            .actions(List.of("iam:CreateServiceLinkedRole"))
+            .resources(List.of(
+                "arn:aws:iam::" + account + ":role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2"))
+            .conditions(Map.of("StringEquals", Map.of("iam:AWSServiceName", "inspector2.amazonaws.com")))
+            .build());
+
+        if (resetResource != null) {
+            enableResource.getNode().addDependency(resetResource);
+        }
 
         LOG.info("Inspector enabled: " + resourceTypes);
     }

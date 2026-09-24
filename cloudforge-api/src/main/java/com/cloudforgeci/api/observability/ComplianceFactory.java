@@ -1972,6 +1972,13 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier(ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK)
                         .build())
                 .build();
+
+        CfnConfigRule.Builder.create(this, "IAMNoAdminAccessRule")
+                .source(CfnConfigRule.SourceProperty.builder()
+                        .owner("AWS")
+                        .sourceIdentifier(ManagedRuleIdentifiers.IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS)
+                        .build())
+                .build();
     }
 
     /**

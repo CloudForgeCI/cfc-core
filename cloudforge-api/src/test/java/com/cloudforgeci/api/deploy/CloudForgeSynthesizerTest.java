@@ -116,6 +116,10 @@ class CloudForgeSynthesizerTest {
         // to this test's own purpose, worked around the same way its own error message says to.
         config.macieEnabled = true;
         config.macieAutomatedDiscovery = true;
+        // DatabaseSecurityRules is the same kind of "always load" validator that doesn't honor
+        // ComplianceMode -- it hard-blocks PRODUCTION on any failed database check, including this
+        // one, regardless of ADVISORY mode. WordPress provisions a real database, so this fires.
+        config.rdsEnhancedMonitoringEnabled = true;
 
         CloudForgeSynthesizer.ComplianceCheckResult result =
             CloudForgeSynthesizer.synthesizeAdvisoryDryRun(config, tempDir.resolve("cdk.out"));
@@ -163,6 +167,8 @@ class CloudForgeSynthesizerTest {
         config.auditManagerEnabled = true;
         config.macieEnabled = true;
         config.macieAutomatedDiscovery = true;
+        // Same DatabaseSecurityRules ADVISORY gap as advisoryDryRunNeverThrowsAndReturnsBoth... above.
+        config.rdsEnhancedMonitoringEnabled = true;
 
         CloudForgeSynthesizer.ComplianceCheckResult result =
             CloudForgeSynthesizer.synthesizeAdvisoryDryRun(config, tempDir.resolve("cdk.out"));

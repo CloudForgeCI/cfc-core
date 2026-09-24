@@ -522,6 +522,49 @@ public final class SystemContext extends Construct {
   }
 
   /**
+   * Verifies Security Hub is already enabled centrally, instead of enabling it from this stack --
+   * see {@link com.cloudforgeci.api.observability.SecurityHubVerificationFactory}. This is what
+   * {@link com.cloudforgeci.api.core.security.ProductionSecurityConfiguration}/
+   * {@link com.cloudforgeci.api.core.security.StagingSecurityConfiguration} actually call;
+   * {@link #createSecurityHubFactory} is kept for a future deployment model that wants CFC to own
+   * provisioning again.
+   */
+  public void createSecurityHubVerification(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.SecurityHubVerificationFactory verification =
+        new com.cloudforgeci.api.observability.SecurityHubVerificationFactory(scope, idPrefix + "SecurityHub");
+    verification.create();
+  }
+
+  /**
+   * Verifies Macie is already enabled centrally, instead of enabling it from this stack -- see
+   * {@link com.cloudforgeci.api.observability.MacieVerificationFactory}. This is what
+   * {@link com.cloudforgeci.api.core.security.ProductionSecurityConfiguration}/
+   * {@link com.cloudforgeci.api.core.security.StagingSecurityConfiguration} actually call;
+   * {@link #createMacieFactory} is kept for a future deployment model that wants CFC to own
+   * provisioning again.
+   */
+  public void createMacieVerification(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.MacieVerificationFactory verification =
+        new com.cloudforgeci.api.observability.MacieVerificationFactory(scope, idPrefix + "Macie");
+    verification.create();
+  }
+
+  /**
+   * Verifies Inspector is reachable for this account, instead of enabling it from this stack --
+   * see {@link com.cloudforgeci.api.observability.InspectorVerificationFactory} for why this is a
+   * narrower guarantee than the Security Hub/Macie checks. This is what
+   * {@link com.cloudforgeci.api.core.security.ProductionSecurityConfiguration}/
+   * {@link com.cloudforgeci.api.core.security.StagingSecurityConfiguration} actually call;
+   * {@link #createInspectorFactory} is kept for a future deployment model that wants CFC to own
+   * provisioning again.
+   */
+  public void createInspectorVerification(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.InspectorVerificationFactory verification =
+        new com.cloudforgeci.api.observability.InspectorVerificationFactory(scope, idPrefix + "Inspector");
+    verification.create();
+  }
+
+  /**
    * Creates security-related factories (Certificate, OIDC, Identity Center).
    * These factories are conditionally created based on context configuration.
    *

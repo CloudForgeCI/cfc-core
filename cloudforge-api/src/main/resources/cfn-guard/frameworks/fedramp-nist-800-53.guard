@@ -89,8 +89,11 @@ rule fedramp_s3_object_lock when
 rule fedramp_log_retention_3yr when
     resourceType == 'AWS::Logs::LogGroup' {
 
-    Properties.RetentionInDays exists <<[FedRAMP AU-11] CloudWatch logs must have retention configured>>
-    Properties.RetentionInDays >= 1095 <<[FedRAMP AU-11] CloudWatch logs must retain for at least 3 years (1095 days)>>
+    # Absent RetentionInDays means the log group never expires (RetentionDays.INFINITE), which
+    # satisfies AU-11 -- FedRampRules.isRetentionSufficient already accepts it as compliant.
+    when Properties.RetentionInDays exists {
+        Properties.RetentionInDays >= 1095 <<[FedRAMP AU-11] CloudWatch logs must retain for at least 3 years (1095 days)>>
+    }
 }
 
 # AU-12 - Audit Record Generation (ALB access logs)

@@ -586,8 +586,12 @@ class DatabaseSecurityRulesTest {
             if (!encryption || !backup || !multiAz || retentionDays < 7 || !autoUpgrade) {
                 shouldFail = true;
             }
+        } else if (rdsEnabled && secProfile == SecurityProfile.STAGING && !encryption) {
+            // STAGING blocks on RDS-ENCRYPTION only (DatabaseSecurityRules.STAGING_BLOCKING_RULES);
+            // backup/multiAz/retention/autoUpgrade stay advisory.
+            shouldFail = true;
         }
-        // STAGING and DEV are advisory only - never fail
+        // DEV is advisory only - never fails
 
         // Trigger synthesis to execute validations
         if (shouldFail) {
@@ -666,8 +670,12 @@ class DatabaseSecurityRulesTest {
                 if (!encryption || !pitr) {
                     shouldFail = true;
                 }
+            } else if (secProfile == SecurityProfile.STAGING && !encryption) {
+                // STAGING blocks on DYNAMODB-ENCRYPTION only (DatabaseSecurityRules.
+                // STAGING_BLOCKING_RULES); PITR stays advisory.
+                shouldFail = true;
             }
-            // STAGING and DEV are advisory only - never fail
+            // DEV is advisory only - never fails
         }
 
         // Trigger synthesis to execute validations

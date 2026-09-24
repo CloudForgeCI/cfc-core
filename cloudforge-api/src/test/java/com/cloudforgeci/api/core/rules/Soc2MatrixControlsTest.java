@@ -32,7 +32,7 @@ class Soc2MatrixControlsTest {
         Map.entry("isCloudTrailInsightsEnabled", "SOC2-CC7.2-CloudTrailInsights"),
         Map.entry("isRoute53QueryLoggingEnabled", "SOC2-CC7.2-Route53QueryLogging"),
         Map.entry("isS3ObjectLockEnabled", "SOC2-CC7.2-AuditLogImmutability"),
-        Map.entry("getLogRetentionDays", "SOC2-CC7.2-LogRetention"),
+        Map.entry("getLogRetentionDays", "SOC2-CC7.2-MatrixLogRetention"),
         Map.entry("isRdsDatabaseMultiAzEnabled", "SOC2-A1.2-DatabaseMultiAZ"),
         Map.entry("isRdsDeletionProtectionEnabled", "SOC2-A1.3-DatabaseDeletionProtection"),
         Map.entry("isAuditManagerEnabled", "SOC2-CC7.2-AuditManager"));
@@ -55,11 +55,13 @@ class Soc2MatrixControlsTest {
             });
     }
 
+    /** Runs {@code validateMatrixControls} against a profile with the given controls disabled. */
     private static List<ComplianceRule> evaluate(Set<String> disabled, SecurityProfile security,
                                                  RuntimeType runtime, AuthMode auth, boolean database) {
         return new Soc2Rules().validateMatrixControls(profile(disabled), security, runtime, auth, database);
     }
 
+    /** @return the rule IDs of every failed rule in {@code rules}. */
     private static Set<String> failedIds(List<ComplianceRule> rules) {
         return rules.stream().filter(r -> !r.passed()).map(ComplianceRule::ruleId).collect(Collectors.toSet());
     }
@@ -82,7 +84,7 @@ class Soc2MatrixControlsTest {
         "isCloudTrailInsightsEnabled,SOC2-CC7.2-CloudTrailInsights",
         "isRoute53QueryLoggingEnabled,SOC2-CC7.2-Route53QueryLogging",
         "isS3ObjectLockEnabled,SOC2-CC7.2-AuditLogImmutability",
-        "getLogRetentionDays,SOC2-CC7.2-LogRetention",
+        "getLogRetentionDays,SOC2-CC7.2-MatrixLogRetention",
         "isRdsDatabaseMultiAzEnabled,SOC2-A1.2-DatabaseMultiAZ",
         "isRdsDeletionProtectionEnabled,SOC2-A1.3-DatabaseDeletionProtection",
         "isAuditManagerEnabled,SOC2-CC7.2-AuditManager"

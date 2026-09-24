@@ -2024,6 +2024,78 @@ class HipaaRulesTest {
         }
     }
 
+    /** Every HIPAA control set to compliant -- callers override just the one control under test. */
+    private Map<String, Object> fullyCompliantStagingContext() {
+        Map<String, Object> ctx = new HashMap<>();
+        ctx.put("authMode", "jenkins-oidc");
+        ctx.put("enableSsl", "true");
+        ctx.put("fqdn", "jenkins.example.com");
+        ctx.put("cognitoAutoProvision", "true");
+        ctx.put("cognitoMfaEnabled", "true");
+        ctx.put("securityMonitoringEnabled", "true");
+        ctx.put("guardDutyEnabled", "true");
+        ctx.put("cloudTrailEnabled", "true");
+        ctx.put("enableFlowlogs", "true");
+        ctx.put("crossRegionBackupEnabled", "true");
+        ctx.put("efsEncryptionInTransitEnabled", "true");
+        ctx.put("networkMode", "private-with-nat");
+        ctx.put("logRetentionDays", "2190");
+        ctx.put("automatedBackupEnabled", "true");
+        ctx.put("albAccessLogging", "true");
+        ctx.put("awsConfigEnabled", "true");
+        ctx.put("ebsEncryptionEnabled", "true");
+        ctx.put("efsEncryptionAtRestEnabled", "true");
+        ctx.put("s3EncryptionEnabled", "true");
+        ctx.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        ctx.put("s3ObjectLockEnabled", "true");
+        ctx.put("imdsv2Required", "true");
+        ctx.put("rdsDatabaseMultiAzEnabled", "true");
+        ctx.put("rdsDeletionProtectionEnabled", "true");
+        ctx.put("multiAzEnforced", "true");
+        ctx.put("autoScalingEnabled", "true");
+        ctx.put("complianceMode", "ENFORCE");
+        return ctx;
+    }
+
+    /** STAGING/ENFORCE with every HIPAA control compliant except authentication, isolated from
+     *  every other control -- HIPAA-164.312(a)(2)(i)-Auth/164.312(d)-Auth are both in
+     *  STAGING_BLOCKING_RULES, so this alone must block synthesis. */
+    @Test
+    void stagingEnforceBlocksOnAuthenticationAlone() {
+        Map<String, Object> ctx = fullyCompliantStagingContext();
+        ctx.put("authMode", "none");
+        ctx.remove("enableSsl");
+        ctx.remove("fqdn");
+        ctx.remove("cognitoAutoProvision");
+        ctx.remove("cognitoMfaEnabled");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestHipaaStagingAuthOnly", SecurityProfile.STAGING, RuntimeType.FARGATE, ctx);
+        builder.createMinimalInfrastructure();
+        new HipaaRules().install(builder.getSystemContext());
+
+        assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+            "STAGING/ENFORCE with authMode=none and every other control compliant must fail");
+    }
+
+    /** STAGING/ENFORCE with every HIPAA control compliant except network isolation, isolated from
+     *  every other control -- HIPAA-164.312(a)(1)-NetworkAccess/164.312(e)(1)-Network are both in
+     *  STAGING_BLOCKING_RULES, so this alone must block synthesis. */
+    @Test
+    void stagingEnforceBlocksOnPublicNetworkAlone() {
+        Map<String, Object> ctx = fullyCompliantStagingContext();
+        ctx.put("networkMode", "public-no-nat");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestHipaaStagingNetworkOnly", SecurityProfile.STAGING, RuntimeType.FARGATE, ctx);
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        new HipaaRules().install(builder.getSystemContext());
+
+        assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+            "STAGING/ENFORCE with networkMode=public-no-nat and every other control compliant must fail");
+    }
+
     // ========================================
     // EXPANDED DEEP UNIT TEST BRANCHING
     // ========================================
@@ -2558,6 +2630,8 @@ class HipaaRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2625,6 +2699,8 @@ class HipaaRulesTest {
             customContext.put("fqdn", "hipaa.example.com");
             customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2697,6 +2773,8 @@ class HipaaRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2764,6 +2842,8 @@ class HipaaRulesTest {
             customContext.put("fqdn", "hipaa.example.com");
             customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(

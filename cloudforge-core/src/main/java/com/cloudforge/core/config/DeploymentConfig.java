@@ -1307,16 +1307,22 @@ public class DeploymentConfig {
     )
     public Boolean createConfigInfrastructure = false;
 
-    /** Enable GuardDuty threat detection */
+    /** Enable GuardDuty threat detection.
+     *  Deliberately no static default -- see {@link #macieEnabled}. isGuardDutyEnabled() falls
+     *  back to "always enabled for production" when unset; a {@code false} initializer here
+     *  would make every deployment look like an explicit opt-out, permanently skipping both that
+     *  fallback and the compliance-matrix requirement check ahead of it. */
     @ConfigField(
         displayName = "Enable GuardDuty",
         description = "Enable Amazon GuardDuty for threat detection",
         category = "compliance",
         order = 50
     )
-    public Boolean guardDutyEnabled = false;
+    public Boolean guardDutyEnabled;
 
-    /** Create GuardDuty detector (account-region singleton) */
+    /** Create GuardDuty detector (account-region singleton).
+     *  Deliberately no static default -- see {@link #guardDutyEnabled} above; GuardDutyFactory
+     *  only auto-sets this to true when it's unset. */
     @ConfigField(
         displayName = "Create GuardDuty Detector",
         description = "Create GuardDuty detector (only one per account/region)",
@@ -1324,7 +1330,7 @@ public class DeploymentConfig {
         visibleWhen = "guardDutyEnabled == true",
         order = 60
     )
-    public Boolean createGuardDutyDetector = false;
+    public Boolean createGuardDutyDetector;
 
     /** GuardDuty alerts configured (EventBridge to SNS/SIEM) */
     @ConfigField(
@@ -1413,7 +1419,11 @@ public class DeploymentConfig {
 
     // ========== Advanced Monitoring & Threat Protection ==========
 
-    /** Enable Amazon Macie for PII/PHI discovery (HIPAA/GDPR) */
+    /** Enable Amazon Macie for PII/PHI discovery (HIPAA/GDPR).
+     *  Deliberately no static default -- see {@link #crossRegionBackupEnabled}. Left unset,
+     *  isMacieEnabled() falls through to the compliance-matrix requirement and then the
+     *  profile default; a {@code false} initializer here would make every deployment look like
+     *  an explicit opt-out, permanently skipping both. */
     @ConfigField(
         displayName = "Enable Macie",
         description = "Enable Amazon Macie for PII/PHI discovery (required for HIPAA/GDPR)",
@@ -1421,7 +1431,7 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 80
     )
-    public Boolean macieEnabled = false;
+    public Boolean macieEnabled;
 
     /** Enable Macie automated discovery jobs */
     @ConfigField(
@@ -1433,16 +1443,19 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 90
     )
-    public Boolean macieAutomatedDiscovery = false;
+    // Deliberately no static default -- see macieEnabled above; isMacieAutomatedDiscoveryEnabled()
+    // falls back to isMacieEnabled() when unset.
+    public Boolean macieAutomatedDiscovery;
 
-    /** Enable AWS Security Hub for centralized security findings */
+    /** Enable AWS Security Hub for centralized security findings.
+     *  Deliberately no static default -- see {@link #macieEnabled} above. */
     @ConfigField(
         displayName = "Enable Security Hub",
         description = "Enable AWS Security Hub for centralized security findings",
         category = "compliance",
         order = 100
     )
-    public Boolean securityHubEnabled = false;
+    public Boolean securityHubEnabled;
 
     /** Enable the CIS AWS Foundations Benchmark standard in Security Hub */
     @ConfigField(
@@ -1524,14 +1537,15 @@ public class DeploymentConfig {
     )
     public String securityHubPciDssVersion = "4.0.1";
 
-    /** Enable Amazon Inspector for vulnerability scanning */
+    /** Enable Amazon Inspector for vulnerability scanning.
+     *  Deliberately no static default -- see {@link #macieEnabled} above. */
     @ConfigField(
         displayName = "Enable Inspector",
         description = "Enable Amazon Inspector for vulnerability scanning",
         category = "compliance",
         order = 110
     )
-    public Boolean inspectorEnabled = false;
+    public Boolean inspectorEnabled;
 
     /** Enable Inspector EC2 instance scanning */
     @ConfigField(

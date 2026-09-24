@@ -58,11 +58,13 @@ class HipaaMatrixControlsTest {
             });
     }
 
+    /** Runs {@code validateMatrixControls} against a profile with the given controls disabled. */
     private static List<ComplianceRule> evaluate(Set<String> disabled, SecurityProfile security,
                                                  RuntimeType runtime, boolean database) {
         return new HipaaRules().validateMatrixControls(profile(disabled), security, runtime, database, 3, true);
     }
 
+    /** @return the rule IDs of every failed rule in {@code rules}. */
     private static Set<String> failedIds(List<ComplianceRule> rules) {
         return rules.stream().filter(r -> !r.passed()).map(ComplianceRule::ruleId).collect(Collectors.toSet());
     }
@@ -115,13 +117,23 @@ class HipaaMatrixControlsTest {
 
     @Test
     void productionTierControlsAreNotCheckedInStaging() {
+        // isMultiAzEnforced (HighAvailability) stays PRODUCTION-only.
+        // isCloudWatchLogsKmsEncryptionEnabled/isS3ObjectLockEnabled/isCloudTrailEnabled
+        // (LogEncryption/AuditLogImmutability/ChangeManagement) share the same profile gate,
+        // which now covers STAGING too -- the first two are in HipaaRules.STAGING_BLOCKING_RULES,
+        // so they need a finding at STAGING to block on; ChangeManagement isn't blocking but still
+        // runs and reports there.
         Set<String> productionOnly = Set.of("isCloudWatchLogsKmsEncryptionEnabled", "isS3ObjectLockEnabled",
             "isMultiAzEnforced", "isCloudTrailEnabled");
 
         List<ComplianceRule> rules = evaluate(productionOnly, SecurityProfile.STAGING, RuntimeType.EC2, false);
 
-        assertTrue(failedIds(rules).isEmpty());
-        assertEquals(Set.of("HIPAA-164.312(a)(2)(iv)-EncryptionAtRest", "HIPAA-164.312(a)(1)-IMDSv2"),
+        assertEquals(Set.of("HIPAA-164.312(a)(2)(iv)-LogEncryption", "HIPAA-164.312(c)(1)-AuditLogImmutability",
+                "HIPAA-164.308(a)(8)-ChangeManagement"),
+            failedIds(rules));
+        assertEquals(Set.of("HIPAA-164.312(a)(2)(iv)-EncryptionAtRest", "HIPAA-164.312(a)(1)-IMDSv2",
+                "HIPAA-164.312(a)(2)(iv)-LogEncryption", "HIPAA-164.312(c)(1)-AuditLogImmutability",
+                "HIPAA-164.308(a)(8)-ChangeManagement"),
             rules.stream().map(ComplianceRule::ruleId).collect(Collectors.toSet()));
     }
 

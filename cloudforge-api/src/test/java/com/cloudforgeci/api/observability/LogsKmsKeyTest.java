@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LogsKmsKeyTest {
 
+    /** Synthesizes a stack containing just a {@code LogsKmsKey} with the given removal policy. */
     private Template synth(RemovalPolicy removalPolicy) {
         Stack stack = new Stack(new App(), "LogsKeyTest");
         LogsKmsKey.create(stack, "LogsKey", "logs key", removalPolicy);

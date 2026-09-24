@@ -1614,6 +1614,7 @@ class TruthTableGenerator:
         csv_destination = os.path.join(
             os.path.dirname(self.output_dir),
             "..",
+            "..",
             "cloudforge-api",
             "src",
             "test",

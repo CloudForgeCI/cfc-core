@@ -38,7 +38,8 @@ DEPLOY_TIMEOUT_SECONDS = 1800
 APP_WAIT_SECONDS = 240
 
 COLUMNS = ["rowId", "framework", "tier", "app", "runtime", "profile", "authMode", "expected", "expectedRule",
-           "overrides", "status", "checks", "deployStatus", "verified", "verifiedAt", "notes"]
+           "overrides", "status", "checks", "deployStatus", "verified", "verifiedAt", "notes",
+           "deploymentDetails", "resourceTypes"]
 
 AWS_ENV = {**os.environ, "AWS_ENDPOINT_URL": ENDPOINT, "AWS_DEFAULT_REGION": "us-east-1",
            "AWS_ACCESS_KEY_ID": "test", "AWS_SECRET_ACCESS_KEY": "test"}
@@ -141,7 +142,7 @@ def deploy_row(row, base, platform):
         return {"deploy": f"TIMEOUT after {DEPLOY_TIMEOUT_SECONDS}s", "checks": "", "detail": "", "summary": None}
 
     log_text = log_path.read_text(errors="replace")
-    checks = re.search(r"SOC 2 Trust Services Criteria validation passed \((\d+) checks\)", log_text)
+    checks = re.search(r"validation passed \((\d+) checks\)", log_text)
     summary = stack_summary(stack_name)
     detail = []
     if summary["status"] == "CREATE_COMPLETE":
@@ -183,11 +184,7 @@ def write_dashboard_tsv(framework, rows):
         for r in rows:
             if not r["deployStatus"]:
                 continue
-            counts = {}
-            for token in r.get("notes", "").split(";"):
-                token = token.strip()
-                if token.startswith("types="):
-                    counts = json.loads(token[6:])
+            counts = json.loads(r.get("resourceTypes", "") or "{}")
             ok = r["deployStatus"].startswith("CREATE_COMPLETE")
             f.write("\t".join([
                 r["rowId"], r["framework"].upper(), r["profile"], r["runtime"], "PASS" if ok else "FAIL",
@@ -236,8 +233,12 @@ def main():
         target["deployStatus"] = outcome["deploy"]
         if outcome["checks"]:
             target["checks"] = outcome["checks"]
-        types = json.dumps(outcome["summary"]["types"], sort_keys=True) if outcome["summary"] else "{}"
-        target["notes"] = "; ".join(x for x in [outcome["detail"], "types=" + types] if x)
+        # Separate columns from "notes" -- merge() in compliance-matrix.py overwrites "notes"
+        # with the synthesis verdict, which would otherwise erase this deploy-time detail (or
+        # vice versa, depending on run order). resourceTypes is structured data (a JSON object),
+        # not free text, so it gets its own column rather than being embedded in deploymentDetails.
+        target["deploymentDetails"] = outcome["detail"]
+        target["resourceTypes"] = json.dumps(outcome["summary"]["types"], sort_keys=True) if outcome["summary"] else "{}"
         target["verifiedAt"] = datetime.date.today().isoformat()
         write_matrix(matrix_path, rows)
         print(f"    {outcome['deploy']} | {outcome['detail']}", flush=True)

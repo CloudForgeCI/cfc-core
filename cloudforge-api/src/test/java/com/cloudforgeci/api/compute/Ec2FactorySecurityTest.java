@@ -29,6 +29,7 @@ class Ec2FactorySecurityTest {
     @TempDir
     Path tempDir;
 
+    /** Synthesizes an EC2-runtime stack and returns its template's {@code Resources} node. */
     private JsonNode synthesize(String stackName, SecurityProfile profile, String frameworks) throws IOException {
         DeploymentConfig config = new DeploymentConfig();
         config.stackName = stackName;
@@ -44,6 +45,7 @@ class Ec2FactorySecurityTest {
         return MAPPER.readTree(result.templateFile().toFile()).path("Resources");
     }
 
+    /** Returns every resource in {@code resources} whose CloudFormation {@code Type} matches. */
     private static List<JsonNode> ofType(JsonNode resources, String type) {
         List<JsonNode> matches = new ArrayList<>();
         resources.properties().forEach(e -> {
@@ -54,6 +56,7 @@ class Ec2FactorySecurityTest {
         return matches;
     }
 
+    /** Finds the EC2 instance's own log group (as opposed to any other stack log group). */
     private static JsonNode instanceLogGroup(JsonNode resources) {
         List<JsonNode> groups = new ArrayList<>();
         resources.properties().forEach(e -> {

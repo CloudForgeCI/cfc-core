@@ -32,6 +32,7 @@ class HipaaOrganizationalRulesSynthesisTest {
         Map.entry("breachNotificationProcedures", "true"),
         Map.entry("breachDetectionAutomation", "true"));
 
+    /** Builds a HIPAA-scoped test infrastructure fixture with the given organizational attestations. */
     private TestInfrastructureBuilder builderFor(String stackName, SecurityProfile profile,
                                                  Map<String, Object> attestations) {
         Map<String, Object> context = new java.util.HashMap<>(attestations);

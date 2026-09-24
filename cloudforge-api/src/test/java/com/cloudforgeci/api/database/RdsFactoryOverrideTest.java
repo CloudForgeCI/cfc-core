@@ -24,6 +24,7 @@ import java.util.Map;
  */
 class RdsFactoryOverrideTest {
 
+    /** Synthesizes a WordPress/RDS stack with the given context overrides applied. */
     private Template synthWordPress(String stackName, Map<String, Object> overrides) {
         App app = new App();
         Stack stack = new Stack(app, stackName);

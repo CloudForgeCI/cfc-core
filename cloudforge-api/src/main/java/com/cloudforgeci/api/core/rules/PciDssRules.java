@@ -51,7 +51,8 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         "PCI-DSS-Req-4.1-HTTPSStrict",
         "PCI-DSS-Req-3.4-EBS", "PCI-DSS-Req-3.4-EFS", "PCI-DSS-Req-3.4-S3", "PCI-DSS-Req-3.4-LogEncryption",
         "PCI-DSS-Req-10.2-CloudTrail", "PCI-DSS-Req-10.3-FlowLogs", "PCI-DSS-Req-10.5-ALB",
-        "PCI-DSS-Req-10.7-AuditLogImmutability"
+        "PCI-DSS-Req-10.7-AuditLogImmutability", "PCI-DSS-Req-8.3-MFA", "PCI-DSS-Req-4.1-EFS-Transit",
+        "PCI-DSS-Req-8.3.6-Password", "PCI-DSS-Req-10.7-Retention"
     );
 
     // PCI DSS v4.0 Req 8.3.6: Minimum 12 character passwords (increased from 7 in v3.2.1)
@@ -135,45 +136,8 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
                 advisoryRules.forEach(r -> LOG.info("  [ADVISORY] " + r.ruleId() + ": " + r.description()));
             }
 
-            // Get all failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
-
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    LOG.warning("PCI-DSS validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return List.of();
-                } else if (ctx.security == SecurityProfile.STAGING) {
-                    // STAGING runs the same checks as PRODUCTION; only authentication, network
-                    // isolation and SSL/TLS still block. Everything else is a visible finding.
-                    List<String> blocking = failedRules.stream()
-                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
-                        .map(ComplianceRule::toErrorString)
-                        .flatMap(Optional::stream)
-                        .toList();
-                    LOG.warning("PCI-DSS validation found " + errors.size() + " violations (STAGING - "
-                        + blocking.size() + " blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return blocking;
-                } else {
-                    LOG.severe("PCI-DSS validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");
-                    errors.forEach(err -> LOG.severe("  - " + err));
-                    return errors;
-                }
-            } else {
-                LOG.info("PCI-DSS validation passed (" + rules.size() + " checks)");
-                return List.of();
-            }
+            return ComplianceEnforcement.resolve(
+                "PCI-DSS", rules, complianceMode, ctx.security, STAGING_BLOCKING_RULES, LOG);
         });
     }
 

@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class SecurityHubFactoryTest {
 
+    /** A minimal stack with the given security profile, for synthesizing Security Hub in isolation. */
     private Stack createTestStack(App app, String stackName, SecurityProfile profile) {
         Stack stack = new Stack(app, stackName);
 
@@ -96,9 +97,13 @@ class SecurityHubFactoryTest {
         builder.createMinimalInfrastructure();
         new SecurityHubFactory(builder.getStack(), "SecurityHub").create();
 
-        // Hub + all three standards should synthesize.
+        // Hub (a Custom::AWS resource, not AWS::SecurityHub::Hub -- see class javadoc) + all
+        // three standards should synthesize.
         Template template = Template.fromStack(builder.getStack());
-        template.resourceCountIs("AWS::SecurityHub::Hub", 1);
+        long hubCustomResources = template.findResources("Custom::AWS").keySet().stream()
+            .filter(id -> id.contains("SecurityHub") && !id.contains("Standard"))
+            .count();
+        assertEquals(1, hubCustomResources);
         template.resourceCountIs("AWS::SecurityHub::Standard", 3);
     }
 
@@ -121,6 +126,68 @@ class SecurityHubFactoryTest {
         template.hasResourceProperties("AWS::SecurityHub::Standard", Map.of(
             "StandardsArn", "arn:aws:securityhub:us-east-1::standards/pci-dss/v/4.0.1"
         ));
+    }
+
+    /** Multi-stack safety: a second PRODUCTION stack enabling Security Hub in the same
+     *  account/Region must not fail synthesis, and its enablement call must ignore the
+     *  ResourceConflictException securityhub:EnableSecurityHub throws when the account is
+     *  already subscribed -- the real-world scenario this factory exists to handle. CDK
+     *  synthesis itself can't reproduce the AWS API conflict (that only happens at deploy time),
+     *  so this asserts the adoption behavior is wired into the synthesized custom resource call
+     *  instead. */
+    @Test
+    void secondStackSynthesizesCleanlyAndIgnoresTheConflictExceptionSecurityHubThrowsOnASecondSubscription() {
+        Map<String, Object> contextA = new HashMap<>();
+        contextA.put("stackName", "TestSecurityHubStackA");
+        contextA.put("securityProfile", "PRODUCTION");
+        contextA.put("region", "us-east-1");
+        contextA.put("securityHubEnabled", "true");
+        TestInfrastructureBuilder builderA = new TestInfrastructureBuilder(
+            "TestSecurityHubStackA", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, contextA);
+        builderA.createMinimalInfrastructure();
+        new SecurityHubFactory(builderA.getStack(), "SecurityHub").create();
+
+        Map<String, Object> contextB = new HashMap<>();
+        contextB.put("stackName", "TestSecurityHubStackB");
+        contextB.put("securityProfile", "PRODUCTION");
+        contextB.put("region", "us-east-1");
+        contextB.put("securityHubEnabled", "true");
+        TestInfrastructureBuilder builderB = new TestInfrastructureBuilder(
+            "TestSecurityHubStackB", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, contextB);
+        builderB.createMinimalInfrastructure();
+        new SecurityHubFactory(builderB.getStack(), "SecurityHub").create();
+
+        Template templateA = assertDoesNotThrow(() -> Template.fromStack(builderA.getStack()));
+        Template templateB = assertDoesNotThrow(() -> Template.fromStack(builderB.getStack()));
+
+        for (Template template : java.util.List.of(templateA, templateB)) {
+            String json = template.toJSON().toString();
+            assertTrue(json.contains("\"action\":\"enableSecurityHub\""),
+                "expected the enableSecurityHub SDK call: " + json);
+            assertTrue(json.contains("\"ignoreErrorCodesMatching\":\"ResourceConflictException\""),
+                "expected the second stack's enableSecurityHub call to ignore an existing subscription: " + json);
+        }
+    }
+
+    /** Safe teardown: deleting this stack must not disable Security Hub for the account/Region --
+     *  another stack may still depend on it. */
+    @Test
+    void deletingTheStackDoesNotDisableSecurityHubForTheAccount() {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestSecurityHubTeardown");
+        customContext.put("securityProfile", "PRODUCTION");
+        customContext.put("region", "us-east-1");
+        customContext.put("securityHubEnabled", "true");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestSecurityHubTeardown", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, customContext);
+        builder.createMinimalInfrastructure();
+        new SecurityHubFactory(builder.getStack(), "SecurityHub").create();
+
+        Template template = Template.fromStack(builder.getStack());
+        String json = template.toJSON().toString();
+        assertFalse(json.contains("\"action\":\"disableSecurityHub\""),
+            "SecurityHubFactory must not call disableSecurityHub on stack delete: " + json);
     }
 
     @Test

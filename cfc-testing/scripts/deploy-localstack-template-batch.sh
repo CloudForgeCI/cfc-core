@@ -58,9 +58,7 @@ reset_localstack() {
     wait_for_health || echo "⚠️  LocalStack didn't report healthy within 90s after restart"
     docker exec "$LOCALSTACK_CONTAINER_ID" apt-get install -y libpython3.14 >/dev/null 2>&1 || true
   else
-    java -cp "$CP" StartLocalStack stop >/dev/null 2>&1 || true
-    docker ps -aq --filter "name=^ls-" | xargs -r docker rm -f > /dev/null 2>&1 || true
-    java -cp "$CP" StartLocalStack start
+    cloudforge-cli emulator restart --target localstack
     wait_for_health || echo "⚠️  LocalStack didn't report healthy within 90s after restart"
     docker exec cfc-localstack apt-get install -y libpython3.14 >/dev/null 2>&1 || true
   fi

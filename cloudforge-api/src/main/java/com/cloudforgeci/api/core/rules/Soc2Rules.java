@@ -107,47 +107,8 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
                 advisoryRules.forEach(r -> LOG.info("  [ADVISORY] " + r.ruleId() + ": " + r.description()));
             }
 
-            // Get all failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
-
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    // Advisory mode: Log warnings but don't fail synthesis
-                    LOG.warning("SOC 2 validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return List.of(); // Return empty list = no CDK synthesis errors
-                } else if (ctx.security == SecurityProfile.STAGING) {
-                    // STAGING runs the same checks as PRODUCTION; only authentication, network
-                    // isolation and SSL/TLS still block. Everything else is a visible finding.
-                    List<String> blocking = failedRules.stream()
-                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
-                        .map(ComplianceRule::toErrorString)
-                        .flatMap(Optional::stream)
-                        .toList();
-                    LOG.warning("SOC 2 validation found " + errors.size() + " violations (STAGING - "
-                        + blocking.size() + " blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return blocking;
-                } else {
-                    // Enforce mode: Fail synthesis
-                    LOG.severe("SOC 2 validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");
-                    errors.forEach(err -> LOG.severe("  - " + err));
-                    return errors; // Return errors = CDK synthesis fails
-                }
-            } else {
-                LOG.info("SOC 2 Trust Services Criteria validation passed (" + rules.size() + " checks)");
-                return List.of();
-            }
+            return ComplianceEnforcement.resolve(
+                "SOC 2", rules, complianceMode, ctx.security, STAGING_BLOCKING_RULES, LOG);
         });
     }
 
@@ -502,10 +463,10 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             // HIPAA (6 years) or FedRAMP (3 years) do, so this uses PCI-DSS's 1-year minimum as a
             // reasonable floor for forensic analysis; SOC2 audits typically examine a trailing
             // 12-month period.
-            addRequired(rules, ComplianceMatrix.SecurityControl.LOG_RETENTION, "SOC2-CC7.2-LogRetention",
+            addRequired(rules, ComplianceMatrix.SecurityControl.LOG_RETENTION, "SOC2-CC7.2-MatrixLogRetention",
                 "Log retention must be at least 1 year for forensic analysis (CC7.2)",
                 "Set logRetentionDays to at least 365.",
-                isRetentionSufficientForSoc2(config.getLogRetentionDays()));
+                isRetentionSufficient(config.getLogRetentionDays()));
         }
 
         // A1.2/A1.3: database availability and protection, only when a database was actually provisioned
@@ -532,22 +493,6 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         rules.add(enabled
             ? ComplianceRule.pass(ruleId, description)
             : ComplianceRule.fail(ruleId, description, remediation));
-    }
-
-    /** SOC2-CC7.2-LogRetention's 1-year floor -- see {@link #validateMatrixControls}. */
-    private static boolean isRetentionSufficientForSoc2(RetentionDays retention) {
-        return retention == RetentionDays.ONE_YEAR ||
-               retention == RetentionDays.THIRTEEN_MONTHS ||
-               retention == RetentionDays.EIGHTEEN_MONTHS ||
-               retention == RetentionDays.TWO_YEARS ||
-               retention == RetentionDays.THREE_YEARS ||
-               retention == RetentionDays.FIVE_YEARS ||
-               retention == RetentionDays.SIX_YEARS ||
-               retention == RetentionDays.SEVEN_YEARS ||
-               retention == RetentionDays.EIGHT_YEARS ||
-               retention == RetentionDays.NINE_YEARS ||
-               retention == RetentionDays.TEN_YEARS ||
-               retention == RetentionDays.INFINITE;
     }
 
     /**

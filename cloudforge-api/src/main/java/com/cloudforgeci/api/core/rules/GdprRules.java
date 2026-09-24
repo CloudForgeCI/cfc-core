@@ -103,46 +103,8 @@ public class GdprRules implements FrameworkRules<SystemContext> {
                 advisoryRules.forEach(r -> LOG.info("  [ADVISORY] " + r.ruleId() + ": " + r.description()));
             }
 
-            // Filter to only failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
-
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            // Log results based on compliance mode
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    LOG.warning("GDPR validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking):");
-                    errors.forEach(error -> LOG.warning("  - " + error));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return List.of(); // No errors = synthesis proceeds
-                } else if (ctx.security == SecurityProfile.STAGING) {
-                    // STAGING runs the same checks as PRODUCTION; only authentication, network
-                    // isolation and SSL/TLS still block. Everything else is a visible finding.
-                    List<String> blocking = failedRules.stream()
-                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
-                        .map(ComplianceRule::toErrorString)
-                        .flatMap(Optional::stream)
-                        .toList();
-                    LOG.warning("GDPR validation found " + errors.size() + " violations (STAGING - "
-                        + blocking.size() + " blocking):");
-                    errors.forEach(error -> LOG.warning("  - " + error));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return blocking;
-                } else {
-                    LOG.severe("GDPR validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment):");
-                    errors.forEach(error -> LOG.severe("  - " + error));
-                    return errors;
-                }
-            } else {
-                LOG.info("GDPR technical safeguards validation passed (" + rules.size() + " checks)");
-                return List.of();
-            }
+            return ComplianceEnforcement.resolve(
+                "GDPR", rules, complianceMode, ctx.security, STAGING_BLOCKING_RULES, LOG);
         });
     }
 

@@ -41,6 +41,7 @@ class BackupFactoryTest {
 
     private static final String DR_VAULT_ARN = "arn:aws:backup:us-west-2:123456789012:backup-vault:dr-vault";
 
+    /** Synthesizes a stack and returns its {@code AWS::Backup::BackupPlan} resource as JSON. */
     private String backupPlanJson(SecurityProfile profile, Map<String, Object> context) {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "BackupCrossRegion" + profile, profile, RuntimeType.FARGATE, context);

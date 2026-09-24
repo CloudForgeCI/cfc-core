@@ -82,14 +82,20 @@ class ComplianceMatrixSyncTest {
         "PCI-DSS", Set.of(),
         "GDPR", Set.of(),
         "FEDRAMP", Set.of(),
-        // Iso27001Rules doesn't check these four itself, but every always-load class (see
+        // Iso27001Rules doesn't check these five itself, but every always-load class (see
         // ALWAYS_LOAD_RULES) covers the rest of ISO-27001's REQUIRED controls, so this is the
-        // real gap, not the plugin's claimedControls() read in isolation.
+        // real gap, not the plugin's claimedControls() read in isolation. NETWORK_SEGMENTATION
+        // was previously masked by LambdaSecurityRules over-claiming it despite its checks being
+        // gated behind the disabled-by-default lambdaEnabled flag -- see
+        // LambdaSecurityRules#claimedControls().
         "ISO-27001", Set.of(
-            "LOG_RETENTION", "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "S3_OBJECT_LOCK", "CHANGE_MANAGEMENT"
+            "LOG_RETENTION", "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "S3_OBJECT_LOCK", "CHANGE_MANAGEMENT",
+            "NETWORK_SEGMENTATION"
         )
     );
 
+    /** @return every {@code FrameworkRules} plugin that claims at least one control -- the
+     *      parameterized source for this test's per-framework checks. */
     static Stream<FrameworkRules<?>> declaredFrameworks() {
         return FRAMEWORK_RULES.stream().filter(r -> !r.claimedControls().isEmpty());
     }

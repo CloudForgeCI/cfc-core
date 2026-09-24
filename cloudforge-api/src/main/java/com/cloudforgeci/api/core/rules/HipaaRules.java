@@ -59,7 +59,8 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         "HIPAA-164.312(e)(2)(i)-SSL", "HIPAA-164.312(e)(2)(i)-TLS",
         "HIPAA-164.312(a)(2)(iv)-EncryptionAtRest", "HIPAA-164.312(a)(2)(iv)-LogEncryption",
         "HIPAA-164.312(b)-CloudTrail", "HIPAA-164.312(b)-FlowLogs", "HIPAA-164.312(b)-ALB",
-        "HIPAA-164.312(c)(1)-AuditLogImmutability", "HIPAA-164.310(d)(2)(iii)-Backup"
+        "HIPAA-164.312(c)(1)-AuditLogImmutability", "HIPAA-164.310(d)(2)(iii)-Backup",
+        "HIPAA-164.312(e)(2)(ii)-EFS"
     );
 
     // HIPAA requires 6 years retention for documentation
@@ -115,47 +116,8 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
                 ctx.applicationSpec.get()
                     .map(com.cloudforge.core.interfaces.ApplicationSpec::supportsAutoScaling).orElse(true)));
 
-            // Get all failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
-
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    // Advisory mode: Log warnings but don't fail synthesis
-                    LOG.warning("HIPAA validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return List.of(); // Return empty list = no CDK synthesis errors
-                } else if (ctx.security == SecurityProfile.STAGING) {
-                    // STAGING runs the same checks as PRODUCTION; only authentication, network
-                    // isolation and SSL/TLS still block. Everything else is a visible finding.
-                    List<String> blocking = failedRules.stream()
-                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
-                        .map(ComplianceRule::toErrorString)
-                        .flatMap(Optional::stream)
-                        .toList();
-                    LOG.warning("HIPAA validation found " + errors.size() + " violations (STAGING - "
-                        + blocking.size() + " blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return blocking;
-                } else {
-                    // Enforce mode: Fail synthesis
-                    LOG.severe("HIPAA validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");
-                    errors.forEach(err -> LOG.severe("  - " + err));
-                    return errors; // Return errors = CDK synthesis fails
-                }
-            } else {
-                LOG.info("HIPAA Security Rule validation passed (" + rules.size() + " checks) - all technical safeguards enabled");
-                return List.of();
-            }
+            return ComplianceEnforcement.resolve(
+                "HIPAA", rules, complianceMode, ctx.security, STAGING_BLOCKING_RULES, LOG);
         });
     }
 
@@ -613,7 +575,10 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         }
 
         // §164.312(a)(2)(iv): CloudWatch Logs may contain ePHI in application log output.
-        if (profile == SecurityProfile.PRODUCTION) {
+        // Both findings are in STAGING_BLOCKING_RULES, so they must be generated at STAGING too,
+        // not just PRODUCTION -- otherwise a disabled setting in STAGING produces no finding at
+        // all for the blocking set to catch.
+        if (profile == SecurityProfile.PRODUCTION || profile == SecurityProfile.STAGING) {
             if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
                 rules.add(ComplianceRule.fail(
                     "HIPAA-164.312(a)(2)(iv)-LogEncryption",
