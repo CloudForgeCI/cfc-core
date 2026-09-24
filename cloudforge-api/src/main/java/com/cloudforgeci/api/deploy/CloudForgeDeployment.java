@@ -175,7 +175,14 @@ public final class CloudForgeDeployment {
             switch (request.mode()) {
                 case DRY_RUN -> {
                     // No adaptation pipeline for AWS — the canonical template deploys as-is.
-                    // Nothing to do beyond preflight (already run above).
+                    // previewChangeSet is the create-time equivalent of `cdk deploy --no-execute`:
+                    // creates a real change set, reports what it would do, deletes it unexecuted.
+                    AwsStackDeployResult preview = deployer.previewChangeSet(stackName, request.canonicalTemplate());
+                    messages.add(preview.noOp()
+                        ? "No changes for " + stackName
+                        : "Would " + (preview.created() ? "create " : "update ") + stackName
+                            + " (" + preview.changeSummaries().size() + " resource changes)");
+                    messages.addAll(preview.changeSummaries());
                 }
                 case DEPLOY -> {
                     AwsStackDeployResult result = deployer.deploy(stackName, request.canonicalTemplate());

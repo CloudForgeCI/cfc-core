@@ -36,7 +36,7 @@ on:
       - main
     paths:
       - 'cloudforge-api/src/main/java/**'
-      - 'cfc-testing/**'
+      - 'validation/**'
       - 'pom.xml'
       - '.github/workflows/deployment-testing.yml'
 
@@ -113,8 +113,14 @@ jobs:
           java-version: '25'
           cache: 'maven'
 
-      - name: Install AWS CDK
-        run: npm install -g aws-cdk
+      - name: Install cloudforge-cli
+        run: |
+          CLI_TAG="$(curl -sf https://api.github.com/repos/CloudForgeCI/cloudforge-cli/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+          CLI_VERSION="${CLI_TAG#v}"
+          curl -sfL -o /tmp/cloudforge-cli.tar.gz \
+            "https://github.com/CloudForgeCI/cloudforge-cli/releases/download/${CLI_TAG}/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz"
+          tar xzf /tmp/cloudforge-cli.tar.gz -C /tmp
+          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
 
       - name: Configure AWS credentials (for CDK context lookups)
         uses: aws-actions/configure-aws-credentials@v4
@@ -124,22 +130,18 @@ jobs:
           aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
       - name: Build project
-        run: |
-          mvn clean install -DskipTests -f pom.xml
-          # Now build cfc-testing module
-          cd cfc-testing
-          mvn clean package -DskipTests
+        run: mvn clean install -DskipTests -f pom.xml
 
       - name: Download historical metrics
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: deployment-metrics-history
-          path: cfc-testing/test-results/deployment-reports/historical/
+          path: validation/test-results/deployment-reports/historical/
 
       - name: Run quick synthesis test
         run: |
-          cd cfc-testing
+          cd validation
           # Run deployment-dry-run-tracker with quick subset (synthesis-only, no AWS)
           timeout 30m bash scripts/deployment-dry-run-tracker.sh || exit_code=$?
           if [ ${exit_code:-0} -eq 124 ]; then
@@ -154,8 +156,8 @@ jobs:
         with:
           name: quick-test-results-${{ github.run_number }}
           path: |
-            cfc-testing/test-results/deployment-reports/*.txt
-            cfc-testing/test-results/deployment-reports/*.log
+            validation/test-results/deployment-reports/*.txt
+            validation/test-results/deployment-reports/*.log
           retention-days: 30
 
       - name: Upload historical metrics
@@ -163,13 +165,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deployment-metrics-history
-          path: cfc-testing/test-results/deployment-reports/historical/deployment-metrics.csv
+          path: validation/test-results/deployment-reports/historical/deployment-metrics.csv
           retention-days: 365
 
       - name: Generate deployment dashboard
         if: always()
         run: |
-          cd cfc-testing
+          cd validation
           if [ -f test-results/deployment-reports/historical/deployment-metrics.csv ]; then
             echo "Generating interactive deployment dashboard..."
             python3 scripts/deployment-metrics-dashboard.py
@@ -183,8 +185,8 @@ jobs:
         with:
           name: deployment-dashboard-${{ github.run_number }}
           path: |
-            cfc-testing/test-results/deployment-reports/dashboard/deployment-dashboard.html
-            cfc-testing/test-results/deployment-reports/dashboard/deployment-analysis.json
+            validation/test-results/deployment-reports/dashboard/deployment-dashboard.html
+            validation/test-results/deployment-reports/dashboard/deployment-analysis.json
           retention-days: 90
 
   enhanced-synthesis-test:
@@ -203,8 +205,14 @@ jobs:
           java-version: '25'
           cache: 'maven'
 
-      - name: Install AWS CDK
-        run: npm install -g aws-cdk
+      - name: Install cloudforge-cli
+        run: |
+          CLI_TAG="$(curl -sf https://api.github.com/repos/CloudForgeCI/cloudforge-cli/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+          CLI_VERSION="${CLI_TAG#v}"
+          curl -sfL -o /tmp/cloudforge-cli.tar.gz \
+            "https://github.com/CloudForgeCI/cloudforge-cli/releases/download/${CLI_TAG}/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz"
+          tar xzf /tmp/cloudforge-cli.tar.gz -C /tmp
+          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
 
       - name: Configure AWS credentials (for CDK context lookups)
         uses: aws-actions/configure-aws-credentials@v4
@@ -214,16 +222,11 @@ jobs:
           aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
       - name: Build project
-        run: |
-          # First install parent project dependencies to local Maven repo
-          mvn clean install -DskipTests -f pom.xml
-          # Now build cfc-testing module
-          cd cfc-testing
-          mvn clean package -DskipTests
+        run: mvn clean install -DskipTests -f pom.xml
 
       - name: Run enhanced synthesis test
         run: |
-          cd cfc-testing
+          cd validation
           timeout 60m bash scripts/enhanced-synth-test.sh || exit_code=$?
           if [ ${exit_code:-0} -eq 124 ]; then
             echo "Test timed out after 60 minutes"
@@ -237,14 +240,14 @@ jobs:
         with:
           name: enhanced-test-results-${{ github.run_number }}
           path: |
-            cfc-testing/test-results/enhanced-synth-results/
-            cfc-testing/test-results/enhanced-synth-results/*.csv
+            validation/test-results/enhanced-synth-results/
+            validation/test-results/enhanced-synth-results/*.csv
           retention-days: 30
 
       - name: Generate performance report
         if: always()
         run: |
-          cd cfc-testing
+          cd validation
           if [ -f test-results/enhanced-synth-results/synthesis-metrics.csv ]; then
             echo "# Enhanced Synthesis Test Report" > test-results/enhanced-synth-results/report.md
             echo "Run: ${{ github.run_number }}" >> test-results/enhanced-synth-results/report.md
@@ -264,7 +267,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: performance-report-${{ github.run_number }}
-          path: cfc-testing/test-results/enhanced-synth-results/report.md
+          path: validation/test-results/enhanced-synth-results/report.md
           retention-days: 90
 
   deployment-dry-run:
@@ -283,8 +286,14 @@ jobs:
           java-version: '25'
           cache: 'maven'
 
-      - name: Install AWS CDK
-        run: npm install -g aws-cdk
+      - name: Install cloudforge-cli
+        run: |
+          CLI_TAG="$(curl -sf https://api.github.com/repos/CloudForgeCI/cloudforge-cli/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+          CLI_VERSION="${CLI_TAG#v}"
+          curl -sfL -o /tmp/cloudforge-cli.tar.gz \
+            "https://github.com/CloudForgeCI/cloudforge-cli/releases/download/${CLI_TAG}/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz"
+          tar xzf /tmp/cloudforge-cli.tar.gz -C /tmp
+          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -294,25 +303,20 @@ jobs:
           aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
 
       - name: Build project
-        run: |
-          # First install parent project dependencies to local Maven repo
-          mvn clean install -DskipTests -f pom.xml
-          # Now build cfc-testing module
-          cd cfc-testing
-          mvn clean package -DskipTests
+        run: mvn clean install -DskipTests -f pom.xml
 
       - name: Download historical metrics
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: deployment-metrics-history
-          path: cfc-testing/test-results/deployment-reports/historical/
+          path: validation/test-results/deployment-reports/historical/
 
       - name: Run deployment dry-run with AWS
         env:
           DOMAIN: ${{ secrets.DEPLOYMENT_TEST_DOMAIN || 'cloudforgeci.com' }}
         run: |
-          cd cfc-testing
+          cd validation
           timeout 90m bash scripts/deployment-dry-run-tracker.sh || exit_code=$?
           if [ ${exit_code:-0} -eq 124 ]; then
             echo "Test timed out after 90 minutes"
@@ -326,8 +330,8 @@ jobs:
         with:
           name: deployment-reports-${{ github.run_number }}
           path: |
-            cfc-testing/test-results/deployment-reports/*.txt
-            cfc-testing/test-results/deployment-reports/*.log
+            validation/test-results/deployment-reports/*.txt
+            validation/test-results/deployment-reports/*.log
           retention-days: 90
 
       - name: Upload historical metrics
@@ -335,13 +339,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deployment-metrics-history
-          path: cfc-testing/test-results/deployment-reports/historical/deployment-metrics.csv
+          path: validation/test-results/deployment-reports/historical/deployment-metrics.csv
           retention-days: 365
 
       - name: Generate deployment dashboard
         if: always()
         run: |
-          cd cfc-testing
+          cd validation
           if [ -f test-results/deployment-reports/historical/deployment-metrics.csv ]; then
             echo "Generating interactive deployment dashboard..."
             python3 scripts/deployment-metrics-dashboard.py
@@ -352,7 +356,7 @@ jobs:
       - name: Generate trends markdown
         if: always()
         run: |
-          cd cfc-testing/test-results/deployment-reports/historical
+          cd validation/test-results/deployment-reports/historical
           if [ -f deployment-metrics.csv ]; then
             echo "# Deployment Metrics Trends" > trends.md
             echo "Generated: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> trends.md
@@ -391,8 +395,8 @@ jobs:
         with:
           name: deployment-dashboard-${{ github.run_number }}
           path: |
-            cfc-testing/test-results/deployment-reports/dashboard/deployment-dashboard.html
-            cfc-testing/test-results/deployment-reports/dashboard/deployment-analysis.json
+            validation/test-results/deployment-reports/dashboard/deployment-dashboard.html
+            validation/test-results/deployment-reports/dashboard/deployment-analysis.json
           retention-days: 90
 
       - name: Upload trends report
@@ -400,7 +404,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deployment-trends-${{ github.run_number }}
-          path: cfc-testing/test-results/deployment-reports/historical/trends.md
+          path: validation/test-results/deployment-reports/historical/trends.md
           retention-days: 90
 
   changeset-validation:
@@ -419,8 +423,14 @@ jobs:
           java-version: '25'
           cache: 'maven'
 
-      - name: Install AWS CDK
-        run: npm install -g aws-cdk
+      - name: Install cloudforge-cli
+        run: |
+          CLI_TAG="$(curl -sf https://api.github.com/repos/CloudForgeCI/cloudforge-cli/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+          CLI_VERSION="${CLI_TAG#v}"
+          curl -sfL -o /tmp/cloudforge-cli.tar.gz \
+            "https://github.com/CloudForgeCI/cloudforge-cli/releases/download/${CLI_TAG}/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz"
+          tar xzf /tmp/cloudforge-cli.tar.gz -C /tmp
+          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -435,19 +445,14 @@ jobs:
           echo "AWS Region: ${AWS_DEFAULT_REGION:-us-east-1}"
 
       - name: Build project
-        run: |
-          # First install parent project dependencies to local Maven repo
-          mvn clean install -DskipTests -f pom.xml
-          # Now build cfc-testing module
-          cd cfc-testing
-          mvn clean package -DskipTests
+        run: mvn clean install -DskipTests -f pom.xml
 
       - name: Download historical changeset metrics
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: changeset-metrics-history
-          path: cfc-testing/test-results/changeset-reports/historical/
+          path: validation/test-results/changeset-reports/historical/
 
       - name: Run changeset validation
         env:
@@ -455,7 +460,7 @@ jobs:
           RANDOM_SUBSET_COUNT: ${{ github.event.inputs.random_subset_count || '1' }}
           USE_CSV_CONFIGS: 'true'
         run: |
-          cd cfc-testing
+          cd validation
           echo "Running changeset validation with $RANDOM_SUBSET_COUNT random configs from CSV..."
           timeout 90m bash scripts/deployment-changeset-validator.sh || exit_code=$?
           if [ "${exit_code:-0}" -eq 124 ]; then
@@ -470,8 +475,8 @@ jobs:
         with:
           name: changeset-reports-${{ github.run_number }}
           path: |
-            cfc-testing/test-results/changeset-reports/*.txt
-            cfc-testing/test-results/changeset-reports/*.log
+            validation/test-results/changeset-reports/*.txt
+            validation/test-results/changeset-reports/*.log
           retention-days: 90
 
       - name: Upload changeset metrics
@@ -479,13 +484,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: changeset-metrics-history
-          path: cfc-testing/test-results/changeset-reports/historical/changeset-metrics.csv
+          path: validation/test-results/changeset-reports/historical/changeset-metrics.csv
           retention-days: 365
 
       - name: Analyze changeset trends
         if: always()
         run: |
-          cd cfc-testing/test-results/changeset-reports/historical
+          cd validation/test-results/changeset-reports/historical
           if [ -f changeset-metrics.csv ]; then
             echo "# Changeset Validation Trends" > changeset-trends.md
             echo "Generated: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> changeset-trends.md
@@ -521,7 +526,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: changeset-trends-${{ github.run_number }}
-          path: cfc-testing/test-results/changeset-reports/historical/changeset-trends.md
+          path: validation/test-results/changeset-reports/historical/changeset-trends.md
           retention-days: 90
 
   full-resource-validation:
@@ -540,8 +545,14 @@ jobs:
           java-version: '25'
           cache: 'maven'
 
-      - name: Install AWS CDK
-        run: npm install -g aws-cdk
+      - name: Install cloudforge-cli
+        run: |
+          CLI_TAG="$(curl -sf https://api.github.com/repos/CloudForgeCI/cloudforge-cli/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+          CLI_VERSION="${CLI_TAG#v}"
+          curl -sfL -o /tmp/cloudforge-cli.tar.gz \
+            "https://github.com/CloudForgeCI/cloudforge-cli/releases/download/${CLI_TAG}/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz"
+          tar xzf /tmp/cloudforge-cli.tar.gz -C /tmp
+          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
 
       - name: Install additional dependencies
         run: |
@@ -549,16 +560,11 @@ jobs:
           sudo apt-get install -y jq bc
 
       - name: Build project
-        run: |
-          # First install parent project dependencies to local Maven repo
-          mvn clean install -DskipTests -f pom.xml
-          # Now build cfc-testing module
-          cd cfc-testing
-          mvn clean package -DskipTests
+        run: mvn clean install -DskipTests -f pom.xml
 
       - name: Run comprehensive resource validation
         run: |
-          cd cfc-testing
+          cd validation
           timeout 180m bash scripts/comprehensive-resource-validator.sh || exit_code=$?
           if [ ${exit_code:-0} -eq 124 ]; then
             echo "Validation timed out after 180 minutes"
@@ -572,14 +578,14 @@ jobs:
         with:
           name: validation-results-${{ github.run_number }}
           path: |
-            cfc-testing/scripts/validation-results/
-            cfc-testing/scripts/validation-results/drift-report.txt
+            validation/scripts/validation-results/
+            validation/scripts/validation-results/drift-report.txt
           retention-days: 90
 
       - name: Check for validation failures
         if: always()
         run: |
-          cd cfc-testing
+          cd validation
           if [ -f scripts/validation-results/drift-report.txt ]; then
             failures=$(grep -c "MISSING_RESOURCES\|SYNTHESIS_FAILED" scripts/validation-results/drift-report.txt || echo "0")
             if [ "$failures" -gt 0 ]; then
@@ -711,7 +717,7 @@ jobs:
 
               if [ "$line_count" -gt 1 ]; then
                 echo "✅ CSV has data, generating dashboard with Python script..."
-                python3 cfc-testing/scripts/deployment-metrics-dashboard.py \
+                python3 validation/scripts/deployment-metrics-dashboard.py \
                   metrics-dashboards/deployment-metrics/data/deployment-metrics.csv \
                   metrics-dashboards/deployment-metrics
                 # Rename to index.html for GitHub Pages
@@ -1143,7 +1149,7 @@ jobs:
                   <div class="header">
                       <h1>☁️ Changeset Validation Results</h1>
                       <p>AWS CloudFormation changeset creation & validation</p>
-                      <div class="badge">🔒 Uses cdk deploy --no-execute</div>
+                      <div class="badge">🔒 Uses cloudforge-cli deploy --dry-run</div>
                   </div>
 
                   <div class="timestamp">

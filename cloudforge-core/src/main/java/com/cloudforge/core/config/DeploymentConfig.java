@@ -40,7 +40,7 @@ import java.util.Map;
  *
  * <p><b>Architecture:</b> This class lives in cloudforge-core (the contract layer) as
  * it defines the data model interface between libraries and consumers. This ensures
- * cfc-testing and other consumers always use the latest configuration schema without
+ * cloudforge-cli and other consumers always use the latest configuration schema without
  * duplication.</p>
  *
  * @since CloudForge 3.0.0
@@ -1094,7 +1094,7 @@ public class DeploymentConfig {
      * as a shared session store (CFC_MANAGER_SESSION_MODE=redis), so every Manager instance
      * behind the same ALB recognizes sessions any of the others created — the missing piece for
      * running Manager itself horizontally scaled. Only {@code ApplicationFactory} acts on this,
-     * and only when {@code applicationId == cloudforge-manager}; {@code visibleWhen} below keeps
+     * and only when {@code applicationId == "cloudforge-manager"}; {@code visibleWhen} below keeps
      * it out of every other application's deploy form for the same reason. Requires RDS
      * (embedded H2 isn't safe to share across instances) — see {@code
      * ManagerDeploymentPreset.rdsWithRedisSessions(...)} in cloudforge-manager-deployment, the
@@ -1106,7 +1106,7 @@ public class DeploymentConfig {
         description = "Provision ElastiCache Redis and share sessions across every CloudForge "
             + "Manager instance — required for running Manager itself horizontally scaled behind an ALB",
         category = "database",
-        visibleWhen = "applicationId == cloudforge-manager && provisionDatabase",
+        visibleWhen = "applicationId == \"cloudforge-manager\" && provisionDatabase",
         dependsOn = "provisionDatabase",
         tags = {FieldTag.BILLING_IMPACT},
         order = 90
@@ -1134,7 +1134,7 @@ public class DeploymentConfig {
             + "to encrypt cross-account connection secrets — leave enabled unless you are "
             + "supplying CFC_MANAGER_ACCOUNT_SECRET_KEY through another mechanism",
         category = "database",
-        visibleWhen = "applicationId == cloudforge-manager",
+        visibleWhen = "applicationId == \"cloudforge-manager\"",
         tags = {FieldTag.BILLING_IMPACT},
         order = 91
     )
@@ -1164,7 +1164,7 @@ public class DeploymentConfig {
         description = "LicenseSeat customer license key (LS-XXXX-XXXX-XXXX-XXXX) to activate this "
             + "install with on first boot, delivered via a dedicated Secrets Manager entry",
         category = "database",
-        visibleWhen = "applicationId == cloudforge-manager",
+        visibleWhen = "applicationId == \"cloudforge-manager\"",
         sensitive = true,
         order = 92
     )
@@ -2107,7 +2107,7 @@ public class DeploymentConfig {
             + "ProvisionProduct), scoped to CloudForge-tagged resources. Only applies when "
             + "applicationId is cloudforge-manager.",
         category = "operations",
-        visibleWhen = "applicationId == cloudforge-manager",
+        visibleWhen = "applicationId == \"cloudforge-manager\"",
         required = false,
         tags = {FieldTag.REQUIRES_APPROVAL, FieldTag.EXPERIMENTAL},
         propertyKey = "cfc.manager.direct-deploy-enabled",
@@ -2140,7 +2140,7 @@ public class DeploymentConfig {
             + "the check on, it never selects which product is checked. Only applies when "
             + "applicationId is cloudforge-manager.",
         category = "operations",
-        visibleWhen = "applicationId == cloudforge-manager",
+        visibleWhen = "applicationId == \"cloudforge-manager\"",
         required = false,
         tags = {FieldTag.EXPERIMENTAL},
         propertyKey = "cfc.manager.marketplace-deployment",

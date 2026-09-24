@@ -1,41 +1,31 @@
 # Local Emulator Quick Start
 
-Use the Interactive Deployer for every local platform action and application deployment.
-MiniStack and LocalStack share gateway port `4566`, so run only one at a time.
+Use [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli) for every local platform
+action and application deployment. MiniStack and LocalStack share gateway port `4566`, so run
+only one at a time.
 
 ## Prerequisites
 
-- Java 25, Maven 3.9+, and Docker.
+- [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli): `brew install CloudForgeCI/tap/cloudforge-cli`
+- Docker.
 - `LOCALSTACK_AUTH_TOKEN` only when using LocalStack.
 - Optional friendly hostnames: `./scripts/setup-cloudforge-local-hosts.sh`.
-
-## Build
-
-```bash
-git clone https://github.com/CloudForgeCI/cfc-core.git
-cd cfc-core
-mvn clean install                  # tests are skipped by default
-mvn -f cfc-testing/pom.xml package -Dmaven.test.skip=true
-```
 
 ## Start a platform
 
 The lifecycle implementation lives in `cloudforge-ministack` and `cloudforge-localstack`;
-`cfc-testing` discovers and invokes it through `PlatformRuntimeProvider`.
+`cloudforge-cli` discovers and invokes it through `PlatformRuntimeProvider`.
 
 ```bash
-# Required before selecting LocalStack in the menu.
+# Required before starting LocalStack.
 export LOCALSTACK_AUTH_TOKEN=...
 
-cd cfc-testing
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer --platform
+cloudforge-cli emulator start --target localstack   # or --target ministack
 ```
 
-Choose `ministack` or `localstack`, then `start`. This starts the emulator and its companions
-(the StackPort resource browser on port 8888 and the nginx emulator edge on port 80) and
-reconciles host routes. Use the same menu
-for `stop`, `restart`, `status`, or `reconcile_edge`.
+This starts the emulator and its companions (the StackPort resource browser on port 8888 and
+the nginx emulator edge on port 80) and reconciles host routes. `stop`, `restart`, and `status`
+work the same way; `restart` reconciles the edge again as part of the same call.
 
 Verify the selected platform:
 
@@ -48,24 +38,21 @@ curl -s http://localhost:4566/_ministack/health
 ## Deploy an application
 
 ```bash
-cd cfc-testing
 export AWS_ENDPOINT_URL=http://localhost:4566
 export AWS_DEFAULT_REGION=us-east-1
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer
+cloudforge-cli deploy --context cfc-testing/deployment-contexts/Jenkins-Stack.json --target localstack
 ```
 
-Answer the prompts (or pass `--context <file>`), then choose option **6** for MiniStack or
-**8** for LocalStack. Both synthesize the canonical template, adapt it for the target, run a
-preflight check, and deploy it. The stack is named `<stackName>-ministack` or
+`--target` is `localstack` or `ministack`. Both synthesize the canonical template, adapt it for
+the target, run a preflight check, and deploy it. The stack is named `<stackName>-ministack` or
 `<stackName>-localstack`.
 
 ## Deploy CloudForge Manager
 
 CloudForge Manager is provided by the `cloudforge-manager-deployment` artifact, which
-`cfc-testing` depends on. Select **CloudForge Manager** from the application list (or use
-`--context deployment-contexts/CloudForgeManager-Fresh.json`) and choose option 6 or 8. For
-MiniStack and LocalStack, its deployment extension:
+`cfc-testing` depends on. Deploy it with
+`cloudforge-cli deploy --context deployment-contexts/CloudForgeManager-Fresh.json --target localstack`
+(or `--target ministack`). For MiniStack and LocalStack, its deployment extension:
 
 1. uses the `cloudforgeci/cloudforge-manager` image, building it from a sibling
    `cloudforge-manager` source checkout when one exists, otherwise pulling the published
@@ -84,11 +71,11 @@ CloudForge Manager itself is developed in a separate repository.
 
 | Symptom | Resolution |
 |---|---|
-| Docker daemon unavailable | Start Docker Desktop, then select platform `start` again. |
-| Port `4566` busy | Use the platform menu to stop the other emulator. |
+| Docker daemon unavailable | Start Docker Desktop, then `cloudforge-cli emulator start` again. |
+| Port `4566` busy | `cloudforge-cli emulator stop --target <other platform>`. |
 | LocalStack refuses to start | Export a valid `LOCALSTACK_AUTH_TOKEN`. |
-| Application URL missing | Select `reconcile_edge` from the platform menu. |
-| Manager health check fails | Confirm option 6 or 8 was used, run `reconcile_edge`, and inspect the Manager ECS task logs. |
+| Application URL missing | `cloudforge-cli emulator restart --target <platform>` to reconcile the edge. |
+| Manager health check fails | Confirm the deploy targeted `localstack` or `ministack`, restart to reconcile the edge, and inspect the Manager ECS task logs. |
 
-See [MiniStack](../ministack/README.md), [LocalStack](../localstack/README.md), and
-[Interactive Deployer](INTERACTIVE_DEPLOYER.md) for target-specific detail.
+See [MiniStack](../ministack/README.md) and [LocalStack](../localstack/README.md) for
+target-specific detail.
