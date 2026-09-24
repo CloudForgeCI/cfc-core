@@ -1,12 +1,14 @@
 name: Publish to Maven Central
 
-# Publishes the OSS deployment library: cfc-core's own root/BOM pom, cloudforge-core,
-# cloudforge-api, cloudforge-localstack, and cloudforge-ministack.
-#
-# cloudforge-localstack must stay in this list: cloudforge-manager depends on it directly, and a
-# fresh CI runner can only resolve what is actually published.
+# Publishes the OSS deployment library: cfc-core's own root/BOM pom, cloudforge-core, and
+# cloudforge-api.
 #
 # Not published here (each is released from its own repository and cadence):
+#   - cloudforge-ministack, cloudforge-localstack: declare cfc-core as their Maven <parent>
+#     (resolved from Central), which lets them inherit this release profile while publishing
+#     independently, in lockstep with this pom's version. cloudforge-manager depends on
+#     cloudforge-localstack directly, and a fresh CI runner can only resolve what is actually
+#     published -- their own repos' sync-versions.yml keeps them current with cfc-core's releases.
 #   - cloudforge-synth-service: its only Maven consumer is cloudforge-manager's test scope, which
 #     installs it from a sibling checkout.
 #   - cloudforge-manager-deployment: declares cfc-core as its Maven <parent> (resolved from
@@ -36,8 +38,6 @@ on:
       - 'pom.xml'
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
-      - 'cloudforge-localstack/**'
-      - 'cloudforge-ministack/**'
       - '.github/workflows/publish-maven-central.yml'
   workflow_dispatch:
     inputs:
@@ -183,12 +183,12 @@ jobs:
           </settings>
           EOF
 
-      - name: Build, test, sign, and publish cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack + cloudforge-ministack
+      - name: Build, test, sign, and publish cfc-core + cloudforge-core + cloudforge-api
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api + cloudforge-localstack + cloudforge-ministack..."
-          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+          echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api..."
+          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
@@ -201,7 +201,7 @@ jobs:
           VERSION="${{ needs.check-version.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "Publish v$VERSION to Maven Central (cfc-core, cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack)"
+          git tag -a "v$VERSION" -m "Publish v$VERSION to Maven Central (cfc-core, cloudforge-core, cloudforge-api)"
           git push origin "v$VERSION"
 
       - name: Publish summary
@@ -210,6 +210,6 @@ jobs:
           echo "## Maven Central Publish" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ needs.check-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack" >> $GITHUB_STEP_SUMMARY
+          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Central Portal validates and auto-publishes asynchronously — check https://central.sonatype.com/publishing/deployments for final status; artifacts typically become searchable on Central within 15-30 minutes of a successful upload." >> $GITHUB_STEP_SUMMARY

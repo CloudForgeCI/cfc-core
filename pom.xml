@@ -9,9 +9,12 @@
   <name>CloudForge Core BOM</name>
   <description>
     Bill of Materials (BOM) for CloudForge — import as type pom / scope import.
-    Modules: cloudforge-core, cloudforge-api, cloudforge-ministack, cloudforge-localstack.
+    Reactor modules: cloudforge-core, cloudforge-api. cloudforge-ministack and
+    cloudforge-localstack are managed BOM coordinates but not reactor modules — each lives in its
+    own repo (CloudForgeCI/cloudforge-ministack, CloudForgeCI/cloudforge-localstack), declares
+    this pom as its Maven parent, and publishes independently in lockstep with this pom's version.
     Sample entrypoint: cfc-testing (not in BOM). cloudforge-manager-deployment and
-    cloudforge-manager are no longer part of this BOM/reactor — split into their own private repos
+    cloudforge-manager are also not part of this BOM/reactor — split into their own private repos
     (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager), each with a
     standalone pom.xml and independent versioning.
     See docs/architecture/cloudforge-sample-bom.template.md and
@@ -100,6 +103,19 @@
     <flatten.plugin.version>1.7.3</flatten.plugin.version>
   </properties>
 
+  <!-- Maven doesn't check the Central Portal's snapshots URL by default — needed here now that
+       cloudforge-api (a reactor member) has a compile-scope dependency on cloudforge-localstack
+       and cloudforge-ministack, which publish independently from their own repos rather than as
+       reactor siblings. Release (non-SNAPSHOT) builds never use this repository. -->
+  <repositories>
+    <repository>
+      <id>central-snapshots</id>
+      <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+      <releases><enabled>false</enabled></releases>
+      <snapshots><enabled>true</enabled></snapshots>
+    </repository>
+  </repositories>
+
   <dependencyManagement>
     <dependencies>
       <!--
@@ -107,8 +123,12 @@
 
         cloudforge-core            Shared contracts, DeploymentConfig, com.cloudforge.core.local
         cloudforge-api             CloudForgeDeployment, ApplicationSpecs, CMS, CDK factories
-        cloudforge-ministack       MiniStack adapter/deployer/pipeline (depends: core)
-        cloudforge-localstack      LocalStack adapter/deployer/pipeline (depends: core)
+        cloudforge-ministack       MiniStack adapter/deployer/pipeline (depends: core); released
+                                   from its own repo (CloudForgeCI/cloudforge-ministack) in
+                                   lockstep with this pom's version, not a reactor module
+        cloudforge-localstack      LocalStack adapter/deployer/pipeline (depends: core); released
+                                   from its own repo (CloudForgeCI/cloudforge-localstack) in
+                                   lockstep with this pom's version, not a reactor module
         cloudforge-manager-deployment   ApplicationSpec/deploy presets for CloudForge Manager
                                         (CloudForgeCI/cloudforge-manager-deployment); released
                                         from its own repo on its own cadence. Listed here as a
@@ -297,29 +317,36 @@
   </scm>
 
   <modules>
-    <!-- Reactor order: core → target adapters → api → api-dependent leaves. -->
+    <!-- Reactor order: core → api. -->
     <module>cloudforge-core</module>
-    <module>cloudforge-ministack</module>
-    <module>cloudforge-localstack</module>
     <module>cloudforge-api</module>
-    <!-- cloudforge-synth-service, cloudforge-manager-deployment and cloudforge-manager live in
-         their own repositories (CloudForgeCI/cloudforge-synth-service,
-         CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager) and are not
-         reactor modules; each builds with its own standalone invocation. The manager and
-         manager-deployment directories may exist in a local working tree for development, but are
-         gitignored.
+    <!-- cloudforge-ministack, cloudforge-localstack, cloudforge-synth-service,
+         cloudforge-manager-deployment and cloudforge-manager live in their own repositories
+         (CloudForgeCI/cloudforge-ministack, CloudForgeCI/cloudforge-localstack,
+         CloudForgeCI/cloudforge-synth-service, CloudForgeCI/cloudforge-manager-deployment,
+         CloudForgeCI/cloudforge-manager) and are not reactor modules; each builds with its own
+         standalone invocation. Local working-tree checkouts of any of them are gitignored.
 
-         cloudforge-manager-deployment and cloudforge-synth-service declare this pom as their
-         Maven <parent>, resolved from the repository via an empty <relativePath/> (never from a
-         local checkout), so they inherit its dependencyManagement and release profile without
-         being reactor members. cloudforge-manager-deployment publishes to Maven Central (see
-         .github/workflows/publish-maven-central.yml); cloudforge-synth-service does not, since
+         cloudforge-ministack, cloudforge-localstack, cloudforge-manager-deployment and
+         cloudforge-synth-service all declare this pom as their Maven <parent>, resolved from the
+         repository via an empty <relativePath/> (never from a local checkout), so they inherit
+         its dependencyManagement and release profile without being reactor members.
+         cloudforge-ministack and cloudforge-localstack stay in lockstep with this pom's own
+         version (see their dependencyManagement entries below, both ${project.version}) and each
+         publish to Maven Central on their own schedule, polling for a new cfc-core release; a
+         cloudforge-api build here needs whichever version they most recently published, which is
+         why cloudforge-api still depends on them (compile scope) despite not being a reactor
+         sibling anymore — see the central-snapshots repository below for how that SNAPSHOT
+         resolution works. cloudforge-manager-deployment also publishes to Maven Central (see
+         .github/workflows/publish-maven-central.yml) but on its own independent version, not
+         locked to this pom's; cloudforge-synth-service does not publish to Central at all, since
          its only Maven consumer is cloudforge-manager's test scope, which installs it from a
          sibling checkout. cloudforge-manager is a standalone pom with no parent, released from
          its own repository.
 
          cfc-testing does not depend on cloudforge-manager-deployment; cfc-core's CI only tests
-         cloudforge-api, cloudforge-core, cloudforge-localstack and cloudforge-ministack.
+         cloudforge-api and cloudforge-core directly, resolving cloudforge-localstack and
+         cloudforge-ministack as regular published dependencies like any other consumer.
     -->
     <!-- cfc-testing: independent consumer / cloudforge-sample entrypoint (BOM import, not in reactor) -->
   </modules>

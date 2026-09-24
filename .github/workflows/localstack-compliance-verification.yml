@@ -43,7 +43,7 @@ on:
   push:
     branches: [ develop ]
     paths:
-      - 'cloudforge-localstack/**'
+      - 'cloudforge-api/**'
       - 'cfc-testing/scripts/deploy-localstack-compliance-matrix.sh'
       - 'cfc-testing/deployment-contexts/compliance/**'
       - '.github/workflows/localstack-compliance-verification.yml'
@@ -115,8 +115,8 @@ jobs:
           curl -s http://localhost:4566/_localstack/health || true
           exit 1
 
-      - name: Build cloudforge-core, cloudforge-api, cloudforge-localstack
-        run: mvn -B -pl cloudforge-core,cloudforge-api,cloudforge-localstack -am install -DskipTests
+      - name: Build cloudforge-core, cloudforge-api
+        run: mvn -B -pl cloudforge-core,cloudforge-api -am install -DskipTests
 
       - name: Build cfc-testing
         run: |
@@ -235,7 +235,7 @@ jobs:
         run: cfn-guard --version
 
       - name: Build reactor
-        run: mvn -B -pl cloudforge-core,cloudforge-api,cloudforge-localstack -am install -DskipTests
+        run: mvn -B -pl cloudforge-core,cloudforge-api -am install -DskipTests
 
       - name: Run the compliance test suite to produce cfn-templates/
         run: |
@@ -316,8 +316,8 @@ jobs:
           curl -s http://localhost:4566/_localstack/health || true
           exit 1
 
-      - name: Build cloudforge-core, cloudforge-api, cloudforge-localstack
-        run: mvn -B -pl cloudforge-core,cloudforge-api,cloudforge-localstack -am install -DskipTests
+      - name: Build cloudforge-core, cloudforge-api
+        run: mvn -B -pl cloudforge-core,cloudforge-api -am install -DskipTests
 
       - name: Build cfc-testing
         run: |

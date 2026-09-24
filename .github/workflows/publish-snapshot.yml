@@ -1,10 +1,14 @@
 name: Publish Snapshot & Auto-Release
 
 # Continuous delivery for cfc-core's OSS deployment library (cfc-core's own root/BOM pom,
-# cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack). The pom.xml
-# always carries a -SNAPSHOT version.
+# cloudforge-core, cloudforge-api). The pom.xml always carries a -SNAPSHOT version.
 #
-# cloudforge-synth-service is not published here; see publish-maven-central.yml's header.
+# cloudforge-ministack and cloudforge-localstack are not published here: each lives in its own
+# repo (CloudForgeCI/cloudforge-ministack, CloudForgeCI/cloudforge-localstack), declares this
+# pom as its Maven parent, and publishes independently in lockstep with this pom's version --
+# see their own repos' sync-versions.yml/publish-maven-central.yml.
+#
+# cloudforge-synth-service is not published here either; see publish-maven-central.yml's header.
 #
 #   1. build-test       — full build + test. Nothing downstream runs unless this passes.
 #   2. publish-snapshot — deploys the current -SNAPSHOT version to Central Portal's snapshots
@@ -39,8 +43,6 @@ on:
       - 'pom.xml'
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
-      - 'cloudforge-localstack/**'
-      - 'cloudforge-ministack/**'
       - '.github/workflows/publish-snapshot.yml'
   push:
     branches: [ develop ] # release on every push to develop (normally a PR merge). No path
@@ -69,7 +71,7 @@ jobs:
           cache: 'maven'
 
       - name: Build and test
-        run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean verify
+        run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api -am clean verify
 
   publish-snapshot:
     name: Publish SNAPSHOT to Central
@@ -164,12 +166,12 @@ jobs:
           echo "=== free vs used (approx, via vm_stat page counts) ==="
           top -l 1 -n 0 | grep "PhysMem"
 
-      - name: Deploy SNAPSHOT (cfc-core + cloudforge-core + cloudforge-api + cloudforge-localstack)
+      - name: Deploy SNAPSHOT (cfc-core + cloudforge-core + cloudforge-api)
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         # No re-test: build-test already ran the suite with -Pci and gates this job. -DskipTests
         # is explicit so this step does not depend on the pom's skipTests default.
-        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
@@ -277,7 +279,7 @@ jobs:
         if: steps.versions.outputs.already_released == 'false'
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack -am clean deploy -DskipTests -Djacoco.skip=true "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests -Djacoco.skip=true "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
@@ -290,7 +292,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.versions.outputs.release_version }}" -m "Publish v${{ steps.versions.outputs.release_version }} to Maven Central (cfc-core, cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack)"
+          git tag -a "v${{ steps.versions.outputs.release_version }}" -m "Publish v${{ steps.versions.outputs.release_version }} to Maven Central (cfc-core, cloudforge-core, cloudforge-api)"
           git push origin "v${{ steps.versions.outputs.release_version }}"
 
       - name: Publish summary
@@ -304,7 +306,7 @@ jobs:
           else
             echo "**Release published:** ${{ steps.versions.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
           fi
-          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api, cloudforge-localstack, cloudforge-ministack" >> $GITHUB_STEP_SUMMARY
+          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api" >> $GITHUB_STEP_SUMMARY
 
   bump-develop:
     name: Bump develop to next SNAPSHOT
