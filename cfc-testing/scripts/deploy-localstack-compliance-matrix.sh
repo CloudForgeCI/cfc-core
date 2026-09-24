@@ -7,8 +7,10 @@
 # full reset to be worth avoiding.
 #
 # Requires LOCALSTACK_AUTH_TOKEN. Two ways to run:
-#   Local dev:  a StartLocalStack.class driver (wrapping LocalStackEmulatorRuntime.start()/stop())
-#               on LOCALSTACK_STARTER_CP controls a container named cfc-localstack.
+#   Local dev:  `cloudforge-cli emulator restart --target localstack` (the brew-installed CLI,
+#               also buildable from ~/projects/cloudforge-cli) drives the cfc-localstack
+#               container -- stop, ls-* cleanup, start, health wait, edge reconciliation, all
+#               in one call.
 #   CI:         set LOCALSTACK_CONTAINER_ID to the id of an already-running GitHub Actions
 #               `services: localstack:` container (${{ job.services.localstack.id }}) -- restarts
 #               that container directly instead, since the services: block owns its lifecycle.
@@ -27,7 +29,6 @@ unset CFC_DEPLOYING
 
 CP="target/classes:target/dependency/*"
 DEPLOYER="com.cloudforgeci.samples.app.InteractiveDeployer"
-STARTER_CP="${LOCALSTACK_STARTER_CP:-$CP}"
 RESULTS="${1:-scripts/validation-results/localstack-compliance-matrix-results.tsv}"
 mkdir -p "$(dirname "$RESULTS")"
 echo -e "config\tframework\tprofile\truntime\tresult\tstack_status\tconfig_rules\tguardduty\tcloudtrail\twaf" > "$RESULTS"
@@ -49,9 +50,7 @@ reset_localstack() {
     wait_for_health || echo "⚠️  LocalStack didn't report healthy within 90s after restart"
     docker exec "$LOCALSTACK_CONTAINER_ID" apt-get install -y libpython3.14 >/dev/null 2>&1 || true
   else
-    java -cp "$STARTER_CP" StartLocalStack stop >/dev/null 2>&1 || true
-    docker ps -aq --filter "name=^ls-" | xargs -r docker rm -f > /dev/null 2>&1 || true
-    java -cp "$STARTER_CP" StartLocalStack start
+    cloudforge-cli emulator restart --target localstack
     wait_for_health || echo "⚠️  LocalStack didn't report healthy within 90s after restart"
     # Postgres/MySQL RDS emulation needs this on arm64 hosts (missing from the base image) --
     # see LocalStackRdsSupportTest for details on the libpython3.14 gap.
