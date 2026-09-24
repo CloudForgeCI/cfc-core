@@ -24,5 +24,6 @@
   "memory": 2048,
   "minInstanceCapacity": 1,
   "maxInstanceCapacity": 1,
-  "databaseMultiAz": true
+  "databaseMultiAz": true,
+  "rdsEnhancedMonitoringEnabled": true
 }
