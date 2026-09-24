@@ -45,6 +45,7 @@ public class LoggingCwFactory extends BaseFactory {
         super(scope, id);
     }
 
+    /** @return true if "fedramp" or "fedramp-high" is among the selected compliance frameworks */
     private boolean isFedRampSelected() {
         String frameworks = ctx.cfc.complianceFrameworks();
         if (frameworks == null) {
@@ -54,6 +55,8 @@ public class LoggingCwFactory extends BaseFactory {
         return normalized.contains("fedramp");
     }
 
+    /** Creates the profile's CloudWatch log group, floors retention for FedRAMP where needed, and
+     *  encrypts it with a customer-managed KMS key when the profile requires log encryption. */
     @Override
     public void create() {
         try {

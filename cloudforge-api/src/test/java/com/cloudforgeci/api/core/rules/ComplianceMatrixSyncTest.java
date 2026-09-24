@@ -94,6 +94,8 @@ class ComplianceMatrixSyncTest {
         )
     );
 
+    /** @return every {@code FrameworkRules} plugin that claims at least one control -- the
+     *      parameterized source for this test's per-framework checks. */
     static Stream<FrameworkRules<?>> declaredFrameworks() {
         return FRAMEWORK_RULES.stream().filter(r -> !r.claimedControls().isEmpty());
     }

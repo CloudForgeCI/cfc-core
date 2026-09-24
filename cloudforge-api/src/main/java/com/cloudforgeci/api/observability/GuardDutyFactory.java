@@ -38,6 +38,8 @@ public class GuardDutyFactory extends BaseFactory {
         super(scope, id);
     }
 
+    /** Resolves whether GuardDuty is required, then creates the detector (an account/Region
+     *  singleton) and registers its AWS Config rule when it is. */
     @Override
     public void create() {
         var securityProfileConfig = ctx.securityProfileConfig.get().orElse(null);

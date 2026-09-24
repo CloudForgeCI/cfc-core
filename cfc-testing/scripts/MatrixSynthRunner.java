@@ -47,6 +47,9 @@ public class MatrixSynthRunner {
     // "PCI-DSS-Req-2.2-IMDSv2", "GDPR-IMDSV2", and bare always-load ids like "MESSAGING-ENCRYPTION").
     static final Pattern RULE = Pattern.compile("\\b([A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9.()]+)+)(?![A-Za-z0-9.()-])");
 
+    /**
+     * @param args matrix.csv base-context.json results.tsv tier[,tier] [rowIdContains]
+     */
     public static void main(String[] args) throws Exception {
         Path matrix = Path.of(args[0]);
         ObjectNode base = (ObjectNode) MAPPER.readTree(Files.readString(Path.of(args[1])));

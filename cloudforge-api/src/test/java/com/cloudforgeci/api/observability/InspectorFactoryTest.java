@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class InspectorFactoryTest {
 
+    /** A minimal stack with the given security profile, for synthesizing Inspector in isolation. */
     private Stack createTestStack(App app, String stackName, SecurityProfile profile) {
         Stack stack = new Stack(app, stackName);
 
@@ -47,6 +48,8 @@ class InspectorFactoryTest {
         return stack;
     }
 
+    /** @return the logical IDs of every {@code Custom::AWS} resource belonging to Inspector,
+     *      distinguished from unrelated custom resources (e.g. ALB logging) elsewhere in the stack. */
     private static Set<String> inspectorCustomResourceIds(Template template) {
         // CDK prefixes the child construct's logical ID with its parent's ("Inspector" here),
         // so match on substring rather than prefix.

@@ -55,11 +55,13 @@ class Soc2MatrixControlsTest {
             });
     }
 
+    /** Runs {@code validateMatrixControls} against a profile with the given controls disabled. */
     private static List<ComplianceRule> evaluate(Set<String> disabled, SecurityProfile security,
                                                  RuntimeType runtime, AuthMode auth, boolean database) {
         return new Soc2Rules().validateMatrixControls(profile(disabled), security, runtime, auth, database);
     }
 
+    /** @return the rule IDs of every failed rule in {@code rules}. */
     private static Set<String> failedIds(List<ComplianceRule> rules) {
         return rules.stream().filter(r -> !r.passed()).map(ComplianceRule::ruleId).collect(Collectors.toSet());
     }

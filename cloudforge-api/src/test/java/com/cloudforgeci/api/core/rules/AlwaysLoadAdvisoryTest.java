@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
  */
 class AlwaysLoadAdvisoryTest {
 
+    /** A fully-compliant PRODUCTION context; individual tests unset one control from this. */
     private Map<String, Object> baseline() {
         Map<String, Object> ctx = new HashMap<>();
         ctx.put("stackName", "AlwaysLoadAdvisory");

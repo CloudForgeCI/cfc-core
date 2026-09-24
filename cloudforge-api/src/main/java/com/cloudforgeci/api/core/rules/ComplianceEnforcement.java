@@ -34,6 +34,7 @@ import java.util.logging.Logger;
  */
 public final class ComplianceEnforcement {
 
+    /** Static utility only -- no instances. */
     private ComplianceEnforcement() {
     }
 

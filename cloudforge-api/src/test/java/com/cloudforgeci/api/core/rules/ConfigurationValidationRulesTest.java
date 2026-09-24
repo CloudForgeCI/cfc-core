@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class ConfigurationValidationRulesTest {
 
+    /** Builds a synthesizable test infrastructure fixture for the given context overrides. */
     private TestInfrastructureBuilder builderFor(String stackName, Map<String, Object> context) {
         TestInfrastructureBuilder builder =
             new TestInfrastructureBuilder(stackName, SecurityProfile.DEV, RuntimeType.FARGATE, context);

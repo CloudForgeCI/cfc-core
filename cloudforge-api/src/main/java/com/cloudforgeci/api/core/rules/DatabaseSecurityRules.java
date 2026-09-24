@@ -51,18 +51,18 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(DatabaseSecurityRules.class.getName());
 
-    /**
-     * Install database security validation rules.
-     * These rules apply primarily to PRODUCTION environments.
-     *
-     * @param ctx System context
-     */
     /** Controls that still block STAGING synthesis: encryption at rest -- PHI/cardholder/federal
      *  data may exist in a provisioned STAGING database, same rationale as the encryption-at-rest
      *  entries in HipaaRules/PciDssRules/FedRampRules' own STAGING_BLOCKING_RULES. Everything else
      *  here (backup, Multi-AZ, PITR, activity-streams monitoring) stays non-blocking. */
     private static final Set<String> STAGING_BLOCKING_RULES = Set.of("RDS-ENCRYPTION", "DYNAMODB-ENCRYPTION");
 
+    /**
+     * Install database security validation rules.
+     * These rules apply primarily to PRODUCTION environments.
+     *
+     * @param ctx System context
+     */
     @Override
     public void install(SystemContext ctx) {
         LOG.info("Installing database security compliance validation rules for " + ctx.security);

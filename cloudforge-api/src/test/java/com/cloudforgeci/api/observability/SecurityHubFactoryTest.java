@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class SecurityHubFactoryTest {
 
+    /** A minimal stack with the given security profile, for synthesizing Security Hub in isolation. */
     private Stack createTestStack(App app, String stackName, SecurityProfile profile) {
         Stack stack = new Stack(app, stackName);
 

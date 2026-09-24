@@ -34,12 +34,15 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class MacieFactoryTest {
 
+    /** @return the logical IDs of every {@code Custom::AWS} resource belonging to Macie,
+     *      distinguished from unrelated custom resources (e.g. ALB logging) elsewhere in the stack. */
     private static Set<String> macieCustomResourceIds(Template template) {
         return template.findResources("Custom::AWS").keySet().stream()
             .filter(id -> id.contains("MacieSession"))
             .collect(java.util.stream.Collectors.toSet());
     }
 
+    /** A minimal stack with the given security profile, for synthesizing Macie in isolation. */
     private Stack createTestStack(App app, String stackName, SecurityProfile profile) {
         Stack stack = new Stack(app, stackName);
 

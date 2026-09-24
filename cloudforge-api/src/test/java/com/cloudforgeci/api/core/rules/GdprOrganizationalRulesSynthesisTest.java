@@ -33,6 +33,7 @@ class GdprOrganizationalRulesSynthesisTest {
         Map.entry("gdprDataRetentionPolicyDefined", "true"),
         Map.entry("gdprRecordsOfProcessingActivities", "true"));
 
+    /** Builds a GDPR-scoped test infrastructure fixture with the given organizational attestations. */
     private TestInfrastructureBuilder builderFor(String stackName, SecurityProfile profile, String region,
                                                  Map<String, Object> attestations) {
         Map<String, Object> context = new HashMap<>(attestations);

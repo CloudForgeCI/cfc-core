@@ -13,6 +13,7 @@ class LocalStackOidcClientSecretReconcilerTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String SECRET_ARN = "arn:aws:secretsmanager:us-east-1:000000000000:secret:cognito-client-AbCdEf";
 
+    /** Parses a JSON literal into a {@code JsonNode} for assertions. */
     private static JsonNode json(String text) throws Exception {
         return MAPPER.readTree(text);
     }

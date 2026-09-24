@@ -62,6 +62,13 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(FedRampHighRules.class.getName());
 
+    /**
+     * Install FedRAMP High compliance validation rules. Only applies to PRODUCTION -- the High
+     * baseline is for systems with a HIGH confidentiality/integrity/availability impact, which
+     * STAGING/DEV deployments aren't.
+     *
+     * @param ctx System context
+     */
     @Override
     public void install(SystemContext ctx) {
         // FedRAMP High only applies to PRODUCTION (High baseline is for critical systems)

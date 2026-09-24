@@ -364,6 +364,8 @@ public class Ec2Factory extends BaseFactory {
     };
   }
 
+  /** Creates the EC2 instance's log group, encrypting it with a customer-managed KMS key when
+   *  the profile requires log encryption. */
   private LogGroup createLogGroup() {
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
     LogGroup.Builder builder = LogGroup.Builder.create(this, appId + "Ec2Logs")

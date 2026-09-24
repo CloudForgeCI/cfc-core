@@ -74,10 +74,15 @@ public class SecurityHubFactory extends BaseFactory {
     @DeploymentContext("securityHubPciDssVersion")
     private String securityHubPciDssVersion;
 
+    /** @param scope parent construct
+     *  @param id construct ID */
     public SecurityHubFactory(Construct scope, String id) {
         super(scope, id);
     }
 
+    /** Resolves whether Security Hub is required, then enables the account/Region hub (adopting
+     *  an existing one if another stack already created it) and subscribes it to each enabled
+     *  standard. */
     @Override
     public void create() {
         if (securityHubEnabled == null) {
@@ -135,6 +140,8 @@ public class SecurityHubFactory extends BaseFactory {
         LOG.info("Security Hub enabled (hub + standards subscriptions)");
     }
 
+    /** Subscribes the hub to one standard by ARN, depending on the hub's own enablement so the
+     *  subscription can't synthesize before it. */
     private void addStandard(String id, String standardsArn, AwsCustomResource hub) {
         CfnStandard standard = CfnStandard.Builder.create(this, id)
             .standardsArn(standardsArn)

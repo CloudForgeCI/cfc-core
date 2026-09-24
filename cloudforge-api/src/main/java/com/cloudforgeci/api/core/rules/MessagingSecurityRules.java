@@ -45,6 +45,12 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(MessagingSecurityRules.class.getName());
 
+    /**
+     * Install messaging (SQS/SNS) security validation rules. An always-load, cross-framework
+     * class -- runs for every deployment regardless of which compliance frameworks are selected.
+     *
+     * @param ctx System context
+     */
     @Override
     public void install(SystemContext ctx) {
         LOG.info("Installing messaging security compliance validation rules for " + ctx.security);

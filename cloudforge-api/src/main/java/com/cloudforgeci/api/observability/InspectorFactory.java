@@ -43,10 +43,14 @@ public class InspectorFactory extends BaseFactory {
     @DeploymentContext("inspectorEcrScanning")
     private Boolean inspectorEcrScanning;
 
+    /** @param scope parent construct
+     *  @param id construct ID */
     public InspectorFactory(Construct scope, String id) {
         super(scope, id);
     }
 
+    /** Resolves whether Inspector is required, then enables it via the account-scoped
+     *  {@code inspector2:Enable} SDK call for the currently-selected resource types. */
     @Override
     public void create() {
         if (inspectorEnabled == null) {

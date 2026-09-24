@@ -45,6 +45,12 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(LambdaSecurityRules.class.getName());
 
+    /**
+     * Install Lambda security validation rules. An always-load, cross-framework class -- runs for
+     * every deployment regardless of which compliance frameworks are selected.
+     *
+     * @param ctx System context
+     */
     @Override
     public void install(SystemContext ctx) {
         LOG.info("Installing Lambda security compliance validation rules for " + ctx.security);

@@ -12,6 +12,7 @@ import java.util.List;
 /** Creates the customer-managed KMS key used to encrypt CloudWatch log groups. */
 public final class LogsKmsKey {
 
+    /** Static factory only -- no instances. */
     private LogsKmsKey() {
     }
 

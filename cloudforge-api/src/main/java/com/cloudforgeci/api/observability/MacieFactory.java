@@ -37,10 +37,14 @@ public class MacieFactory extends BaseFactory {
     @DeploymentContext("macieEnabled")
     private Boolean macieEnabled;
 
+    /** @param scope parent construct
+     *  @param id construct ID */
     public MacieFactory(Construct scope, String id) {
         super(scope, id);
     }
 
+    /** Resolves whether Macie is required, then enables the account/Region session, adopting an
+     *  existing one if another stack already created it. */
     @Override
     public void create() {
         if (macieEnabled == null) {

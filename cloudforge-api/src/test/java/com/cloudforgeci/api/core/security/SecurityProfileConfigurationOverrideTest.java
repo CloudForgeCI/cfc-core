@@ -37,12 +37,14 @@ class SecurityProfileConfigurationOverrideTest {
         stack = new Stack(app, "OverrideTest");
     }
 
+    /** A {@code DeploymentContext} backed by a fresh stack with the given {@code cfc} context overrides. */
     private DeploymentContext cfcWith(Map<String, Object> overrides) {
         Stack s = new Stack(app, "OverrideTest" + java.util.UUID.randomUUID());
         s.getNode().setContext("cfc", new HashMap<>(overrides));
         return DeploymentContext.from(s);
     }
 
+    /** A {@code DeploymentContext} backed by a fresh stack with no {@code cfc} context set. */
     private DeploymentContext cfcUnset() {
         Stack s = new Stack(app, "OverrideTest" + java.util.UUID.randomUUID());
         return DeploymentContext.from(s);
