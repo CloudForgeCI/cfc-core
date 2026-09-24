@@ -1,8 +1,8 @@
 # Sample Project Template
 
 Use this template to create a standalone deployment project that consumes CloudForge, such as
-[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample). The
-[`cfc-testing`](https://github.com/CloudForgeCI/cfc-core/tree/develop/cfc-testing) module in this repository is the reference implementation.
+[cloudforge-sample](https://github.com/CloudForgeCI/cloudforge-sample), the reference
+implementation.
 
 ---
 
@@ -46,8 +46,6 @@ A starter POM is in [docs/examples/cloudforge-sample/pom.xml](../examples/cloudf
 | `cloudforge-ministack` | To deploy to MiniStack |
 | `cloudforge-localstack` | To deploy to LocalStack |
 
-`cfc-testing` is not published as a library; copy from it rather than depending on it.
-
 Minimal dependency set for deploying to LocalStack:
 
 ```xml
@@ -79,6 +77,10 @@ Minimal dependency set for deploying to LocalStack:
 
 ## Project layout
 
+A CDK app entry point is the only thing this template requires. Everything else — synthesis,
+deployment, and emulator lifecycle — is handled by
+[cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli).
+
 ```text
 your-sample/
 ├── pom.xml
@@ -87,10 +89,7 @@ your-sample/
 └── src/
     ├── main/java/.../
     │   ├── app/
-    │   │   ├── InteractiveDeployer.java      # optional: copy from cfc-testing
-    │   │   ├── LocalDeploymentShell.java
-    │   │   ├── DeploymentResultPrinter.java
-    │   │   └── CloudForgeCommunitySample.java
+    │   │   └── YourSampleApp.java             # builds a stack from deployment-context.json
     │   ├── launchers/
     │   │   ├── ApplicationFargateStack.java
     │   │   └── ApplicationEc2Stack.java
@@ -101,60 +100,47 @@ your-sample/
     └── test/java/...
 ```
 
+See `cloudforge-sample`'s own `CloudForgeCommunitySample.java` for a working entry point: it
+reads `deployment-context.json` (or `cfc.*` CDK context values) into a `DeploymentContext`, then
+builds `ApplicationFargateStack`/`ApplicationEc2Stack` from it.
+
 ---
 
 ## Deploying after synthesis
 
-`LocalDeploymentShell` in `cfc-testing` wraps `CloudForgeDeployment` for local targets:
+Deploy with `cloudforge-cli` — it drives the same `CloudForgeDeployment` engine directly, no
+custom deploy code needed:
 
-```java
-DeploymentConfig config = DeploymentConfig.fromFile("deployment-context.json");
-CloudAssembly assembly = app.synth();
-
-DeploymentResult result = LocalDeploymentShell.deploy(
-    config,
-    DeploymentTarget.LOCALSTACK,
-    assembly,
-    DeployOptions.defaults());
-
-DeploymentResultPrinter.printOutcome(result, "LocalStack", config.applicationId);
+```bash
+cloudforge-cli deploy --context deployment-context.json --target localstack
 ```
 
-Call `CloudForgeDeployment.deploy(DeploymentRequest)` from `cloudforge-api` directly if you do
-not need the sample shell.
+Call `CloudForgeDeployment.deploy(DeploymentRequest)` from `cloudforge-api` directly instead if
+your project needs deploy logic `cloudforge-cli` doesn't cover.
 
 ---
 
 ## Build and run
 
 ```bash
-# Build CloudForge from source (skip when using published artifacts)
-cd /path/to/cfc-core
-mvn clean install -DskipTests
+# Install cloudforge-cli
+brew install CloudForgeCI/tap/cloudforge-cli
 
 # Manage emulators (LocalStack and MiniStack both use port 4566, so run one at a time)
-cd cfc-testing
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer --platform
+cloudforge-cli emulator start --target localstack
 
-# Run the deployer from your project
+# Build and deploy your project
 cd /path/to/your-sample
 mvn package
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer \
-  --context deployment-context.json
+cloudforge-cli deploy --context deployment-context.json --target localstack
 ```
-
-The runtime classpath above assumes the project copies its dependencies to
-`target/dependency` during `package`, as the starter POM does. In the deployer menu, option 6
-deploys to MiniStack and option 8 deploys to LocalStack.
 
 ### Emulator lifecycle
 
 `cloudforge-ministack` and `cloudforge-localstack` expose lifecycle actions through
-`PlatformRuntimeProvider`. `InteractiveDeployer --platform` lists the available targets and
-offers `start`, `stop`, `restart`, `status`, and `reconcile_edge`. Emulator companion
-containers are managed by the target module, not by the root `docker-compose.yml`.
+`PlatformRuntimeProvider`. `cloudforge-cli emulator` lists the available targets and offers
+`start`, `stop`, `restart`, and `status`. Emulator companion containers are managed by the
+target module, not by the root `docker-compose.yml`.
 
 The same operations are available programmatically when `cloudforge-core` and the target
 module are on the classpath:
@@ -189,10 +175,8 @@ EmulatorEdgeLifecycle.execute(EmulatorEdgeLifecycleAction.RECONCILE);
 1. Implement `ApplicationSpec` (and `CmsSpec` or `DatabaseSpec` if needed), or
    `FrameworkRules<SystemContext>` for compliance rules.
 2. Register the class under `src/main/resources/META-INF/services/`.
-3. Use [`CraftCmsApplicationSpec`](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/src/main/java/com/cloudforgeci/samples/plugins/cms/CraftCmsApplicationSpec.java)
-   as a reference.
 
-See the [plugin documentation](../plugins/README.md) for details.
+See the [plugin documentation](../plugins/README.md) for details and examples.
 
 ---
 

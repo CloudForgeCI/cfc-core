@@ -55,7 +55,16 @@ Published test, coverage, and compliance reports: <https://cloudforgeci.github.i
 
 ## Quick Start
 
-### 1. Build
+### 1. Install cloudforge-cli
+
+[cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli) deploys applications and
+manages local emulators. Install it from the CloudForgeCI Homebrew tap:
+
+```bash
+brew install CloudForgeCI/tap/cloudforge-cli
+```
+
+### 2. Build the sample application
 
 ```bash
 git clone https://github.com/CloudForgeCI/cfc-core.git
@@ -64,46 +73,36 @@ mvn clean install                                      # tests are skipped by de
 mvn -f cfc-testing/pom.xml package -Dmaven.test.skip=true
 ```
 
-`cfc-testing` is the sample application in this repository. It contains the Interactive
-Deployer, a command-line tool that prompts for a configuration, saves it to
-`deployment-context.json`, and then synthesizes or deploys it.
+`cfc-testing` is the sample application in this repository: `CloudForgeCommunitySample`
+builds a stack from `deployment-context.json`.
 
-### 2. Run locally without an AWS account
+### 3. Run locally without an AWS account
 
-Start an emulator from the platform menu (choose `ministack` or `localstack`, then `start`):
-
-```bash
-cd cfc-testing
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer --platform
-```
-
-Then configure and deploy an application:
+Start an emulator (`ministack` or `localstack`):
 
 ```bash
-export AWS_ENDPOINT_URL=http://localhost:4566
-export AWS_DEFAULT_REGION=us-east-1
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer
+cloudforge-cli emulator start --target localstack
 ```
 
-Answer the prompts, then choose **6** (Deploy to MiniStack) or **8** (Deploy to LocalStack).
+Then deploy an application against it:
+
+```bash
+cloudforge-cli deploy --context cfc-testing/deployment-contexts/Jenkins-Stack.json --target localstack
+```
+
 MiniStack and LocalStack share port 4566, so run one at a time. See the
 [Local Emulator Quick Start](docs/guides/LOCAL_EMULATOR_QUICK_START.md) for details.
 
-### 3. Deploy to AWS
+### 4. Deploy to AWS
 
 ```bash
 cd cfc-testing
 cdk bootstrap          # once per account and region
-java -cp "target/classes:target/dependency/*" \
-  com.cloudforgeci.samples.app.InteractiveDeployer
 ```
 
-Choose **2** (Deploy to AWS). After the Interactive Deployer has saved
-`deployment-context.json`, you can also use the CDK CLI directly. `cdk.json` runs the same
-entry point, which synthesizes that file without prompting (and synthesizes nothing if the
-file does not exist):
+Write a `deployment-context.json` (see [Minimal deployment context](#minimal-deployment-context)
+below), then use the CDK CLI directly. `cdk.json` runs `CloudForgeCommunitySample`, which
+synthesizes that file without prompting (and synthesizes nothing if the file does not exist):
 
 ```bash
 cdk diff
@@ -174,7 +173,8 @@ application specification. Add a domain, TLS, and Cognito sign-in with:
   authentication, databases, backups, scaling, compliance, local emulators, testing, and
   command-line reference
 - [Documentation index](docs/README.md)
-- [Interactive Deployer](docs/guides/INTERACTIVE_DEPLOYER.md)
+- [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli): deploy and manage local
+  emulators from the command line
 - [Application guides](docs/guides/applications/README.md) and
   [CMS guides](docs/guides/cms/README.md)
 - [Compliance documentation](docs/compliance/README.md)

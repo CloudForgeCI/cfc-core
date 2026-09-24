@@ -326,22 +326,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
         }
 
         String changeSetName = "cfc-" + UUID.randomUUID().toString().substring(0, 8);
-        CreateChangeSetRequest.Builder changeSetBuilder = CreateChangeSetRequest.builder()
-            .stackName(physical)
-            .changeSetName(changeSetName)
-            .changeSetType(exists ? ChangeSetType.UPDATE : ChangeSetType.CREATE)
-            .capabilities(Capability.CAPABILITY_IAM, Capability.CAPABILITY_NAMED_IAM)
-            .tags(managedTags());
-
-        if (templateBody.getBytes(StandardCharsets.UTF_8).length > MAX_INLINE_TEMPLATE_BYTES) {
-            changeSetBuilder.templateURL(uploadTemplateToS3(physical, templateBody));
-        } else {
-            changeSetBuilder.templateBody(templateBody);
-        }
-
-        cloudFormation.createChangeSet(changeSetBuilder.build());
-
-        var changeSet = waitForChangeSet(physical, changeSetName);
+        var changeSet = createAndWaitForChangeSet(physical, templateBody, exists, changeSetName);
         if (changeSet.status() == ChangeSetStatus.FAILED) {
             String reason = changeSet.statusReason() == null ? "" : changeSet.statusReason();
             deleteChangeSet(physical, changeSetName);
@@ -383,6 +368,49 @@ public final class AwsDirectDeployer implements AutoCloseable {
 
         return new AwsStackDeployResult(
             stackName, !exists, false, changeSummaries, outputs(physical));
+    }
+
+    /**
+     * Creates a change set for {@code stackName} from {@code template} and returns its
+     * resource-change summary without executing it — the create-time equivalent of
+     * {@code cdk deploy --no-execute}. The change set is deleted immediately after being
+     * described, so nothing in the account outlives this call; unlike the CDK CLI's own
+     * {@code --no-execute}, there's no changeset left behind to inspect or execute later, since
+     * this is a one-shot preview, not a staged deploy. No-op (returns {@code noOp = true}) when
+     * the stack already matches the candidate template, exactly like {@link #deploy}.
+     */
+    public AwsStackDeployResult previewChangeSet(String stackName, Path template) throws IOException {
+        String physical = physicalStackName(stackName);
+        LocalStackCdkAssetPublisher.publish(
+            template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
+
+        boolean exists = stackExists(physical) && stackIsDeployable(physical);
+        String templateBody = Files.readString(template);
+        if (localEmulatorTarget) {
+            templateBody = resolveCdkBootstrapParameters(templateBody);
+        }
+
+        if (exists && templateMatches(physical, templateBody)) {
+            return new AwsStackDeployResult(stackName, false, true, List.of(), Map.of());
+        }
+
+        String changeSetName = "cfc-preview-" + UUID.randomUUID().toString().substring(0, 8);
+        var changeSet = createAndWaitForChangeSet(physical, templateBody, exists, changeSetName);
+        if (changeSet.status() == ChangeSetStatus.FAILED) {
+            String reason = changeSet.statusReason() == null ? "" : changeSet.statusReason();
+            deleteChangeSet(physical, changeSetName);
+            if (isNoOp(reason)) {
+                return new AwsStackDeployResult(stackName, false, true, List.of(), Map.of());
+            }
+            throw new IOException("AWS change set failed for " + physical + ": " + reason);
+        }
+
+        List<String> changeSummaries = changeSet.changes().stream()
+            .map(change -> summarize(change.resourceChange()))
+            .toList();
+        deleteChangeSet(physical, changeSetName);
+
+        return new AwsStackDeployResult(stackName, !exists, false, changeSummaries, Map.of());
     }
 
     public void delete(String stackName) throws IOException {
@@ -515,6 +543,32 @@ public final class AwsDirectDeployer implements AutoCloseable {
         } catch (Exception e) {
             throw new IOException("Unable to compare deployed AWS template", e);
         }
+    }
+
+    /**
+     * Creates a change set for {@code physical} from {@code templateBody} and waits for it to
+     * settle. Shared by {@link #deploy} (which executes the result) and {@link #previewChangeSet}
+     * (which deletes it unexecuted) — both need the identical creation and template-size-based
+     * inline-vs-S3 branching.
+     */
+    private software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetResponse
+            createAndWaitForChangeSet(String physical, String templateBody, boolean exists, String changeSetName)
+            throws IOException {
+        CreateChangeSetRequest.Builder changeSetBuilder = CreateChangeSetRequest.builder()
+            .stackName(physical)
+            .changeSetName(changeSetName)
+            .changeSetType(exists ? ChangeSetType.UPDATE : ChangeSetType.CREATE)
+            .capabilities(Capability.CAPABILITY_IAM, Capability.CAPABILITY_NAMED_IAM)
+            .tags(managedTags());
+
+        if (templateBody.getBytes(StandardCharsets.UTF_8).length > MAX_INLINE_TEMPLATE_BYTES) {
+            changeSetBuilder.templateURL(uploadTemplateToS3(physical, templateBody));
+        } else {
+            changeSetBuilder.templateBody(templateBody);
+        }
+
+        cloudFormation.createChangeSet(changeSetBuilder.build());
+        return waitForChangeSet(physical, changeSetName);
     }
 
     private software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetResponse

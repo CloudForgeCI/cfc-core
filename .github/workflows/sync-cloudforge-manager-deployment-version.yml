@@ -4,8 +4,8 @@ name: Sync cloudforge-manager-deployment.version
 # current (the root pom's <cloudforge-manager-deployment.version> property and its BOM
 # dependencyManagement entry).
 #
-# Managing the version in the BOM means every consumer that imports it (cloudforge-manager,
-# cfc-testing, and others) picks it up through `<scope>import</scope>`, with no per-consumer sync
+# Managing the version in the BOM means every consumer that imports it (cloudforge-manager
+# and others) picks it up through `<scope>import</scope>`, with no per-consumer sync
 # pipeline. A BOM entry is only a coordinate + version, so this tracks, but does not couple,
 # cloudforge-manager-deployment's independent release cadence.
 #

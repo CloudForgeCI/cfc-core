@@ -7,8 +7,8 @@ name: LocalStack Compliance Verification
 #
 #   compliance-matrix    The 13 representative compliance configs (4 frameworks x 3 security
 #                         profiles on Fargate, plus one EC2 all-frameworks sample), via
-#                         InteractiveDeployer + full deployment-context JSON, the same path as a
-#                         user deploy. Verifies LocalStackTemplateAdapter produces a deployable
+#                         `cloudforge-cli deploy` + full deployment-context JSON, the same path as
+#                         a user deploy. Verifies LocalStackTemplateAdapter produces a deployable
 #                         template for these representative configs.
 #
 #   template-sweep       Every individual CFN template the compliance test suite itself
@@ -44,8 +44,8 @@ on:
     branches: [ develop ]
     paths:
       - 'cloudforge-api/**'
-      - 'cfc-testing/scripts/deploy-localstack-compliance-matrix.sh'
-      - 'cfc-testing/deployment-contexts/compliance/**'
+      - 'validation/scripts/deploy-localstack-compliance-matrix.sh'
+      - 'validation/deployment-contexts/compliance/**'
       - '.github/workflows/localstack-compliance-verification.yml'
 
 jobs:
@@ -118,13 +118,6 @@ jobs:
       - name: Build cloudforge-core, cloudforge-api
         run: mvn -B -pl cloudforge-core,cloudforge-api -am install -DskipTests
 
-      - name: Build cfc-testing
-        run: |
-          cd cfc-testing
-          mvn -B -U clean package -DskipTests
-          mvn -B dependency:copy-dependencies -DoutputDirectory=target/dependency -q
-          chmod +x scripts/*.sh
-
       # Every compliance config deploys applicationId: cloudforge-manager, which
       # CloudForgeManagerDeploymentExtension builds from local source when the cloudforge-manager/
       # sibling checkout is present, or pulls from GHCR otherwise -- always the pull path here,
@@ -138,11 +131,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PULL_TOKEN }}
 
+      # deploy-localstack-compliance-matrix.sh drives every deploy through cloudforge-cli's
+      # non-interactive `deploy` command -- the release tarball is a plain classpath-launch bundle
+      # (java -cp classes:dependency/*, no shaded jar, nothing native) built by
+      # cloudforge-cli/scripts/assemble-release.sh; despite being named "-darwin" nothing in it is
+      # macOS-specific, so it runs unmodified on this Linux runner given the JDK 25 already set up
+      # above.
+      - name: Install cloudforge-cli
+        run: |
+          CLI_TAG="$(curl -sf https://api.github.com/repos/CloudForgeCI/cloudforge-cli/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+          CLI_VERSION="${CLI_TAG#v}"
+          curl -sfL -o /tmp/cloudforge-cli.tar.gz \
+            "https://github.com/CloudForgeCI/cloudforge-cli/releases/download/${CLI_TAG}/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz"
+          tar xzf /tmp/cloudforge-cli.tar.gz -C /tmp
+          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
+
       - name: Run the compliance matrix against LocalStack
         env:
           LOCALSTACK_CONTAINER_ID: ${{ job.services.localstack.id }}
         run: |
-          cd cfc-testing
+          cd validation
+          chmod +x scripts/*.sh
           bash scripts/deploy-localstack-compliance-matrix.sh
 
       - name: Dump LocalStack container logs
@@ -153,13 +162,13 @@ jobs:
         if: always()
         run: |
           mkdir -p localstack-compliance-artifact/cdk-out
-          cp cfc-testing/scripts/validation-results/localstack-compliance-matrix-results.tsv \
+          cp validation/scripts/validation-results/localstack-compliance-matrix-results.tsv \
             localstack-compliance-artifact/ 2>/dev/null || true
           # The .localstack.template.json / .localstack-adaptations.json files are what
           # compliance-report-generator.py's match_real_deploy_config looks for; the canonical
           # .template.json travels too so the standalone comparison script has both sides without
           # needing a fresh synth.
-          find cfc-testing/cdk.out -maxdepth 1 \( -name 'CFCompliance-*.template.json' \
+          find validation/cdk.out -maxdepth 1 \( -name 'CFCompliance-*.template.json' \
             -o -name 'CFCompliance-*.localstack.template.json' \
             -o -name 'CFCompliance-*.localstack-adaptations.json' \) \
             -exec cp {} localstack-compliance-artifact/cdk-out/ \; 2>/dev/null || true
@@ -239,12 +248,7 @@ jobs:
 
       - name: Run the compliance test suite to produce cfn-templates/
         run: |
-          cd cfc-testing
-          # -U forces Maven to re-check the snapshot repo for cloudforge-manager-deployment
-          # instead of trusting actions/setup-java's maven cache, which otherwise re-validates
-          # SNAPSHOT dependencies only once per day and can resolve a stale jar.
-          mvn -B -U clean package -DskipTests
-          cd scripts
+          cd validation/scripts
           mkdir -p validation-results
           # TruthTableValidationTest's @BeforeAll requires truth-table.json to already exist --
           # it's gitignored, so a fresh checkout never has it, and every test method
@@ -262,7 +266,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cfn-templates-for-localstack
-          path: cfc-testing/scripts/validation-results/cfn-templates/
+          path: validation/scripts/validation-results/cfn-templates/
           retention-days: 7
           if-no-files-found: error
 
@@ -319,27 +323,18 @@ jobs:
       - name: Build cloudforge-core, cloudforge-api
         run: mvn -B -pl cloudforge-core,cloudforge-api -am install -DskipTests
 
-      - name: Build cfc-testing
-        run: |
-          cd cfc-testing
-          # -U forces Maven to re-check the snapshot repo for cloudforge-manager-deployment
-          # instead of trusting actions/setup-java's maven cache, which otherwise re-validates
-          # SNAPSHOT dependencies only once per day and can resolve a stale jar.
-          mvn -B -U clean package -DskipTests
-          mvn -B dependency:copy-dependencies -DoutputDirectory=target/dependency -q
-          chmod +x scripts/*.sh
-
       - name: Download cfn-templates artifact
         uses: actions/download-artifact@v4
         with:
           name: cfn-templates-for-localstack
-          path: cfc-testing/scripts/validation-results/cfn-templates
+          path: validation/scripts/validation-results/cfn-templates
 
       - name: Deploy this batch's templates
         env:
           LOCALSTACK_CONTAINER_ID: ${{ job.services.localstack.id }}
         run: |
-          cd cfc-testing
+          cd validation
+          chmod +x scripts/*.sh
           bash scripts/deploy-localstack-template-batch.sh \
             scripts/validation-results/cfn-templates \
             "scripts/validation-results/localstack-template-batch-${{ matrix.batch }}-results.tsv" \
@@ -354,7 +349,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: localstack-template-batch-${{ matrix.batch }}-results
-          path: cfc-testing/scripts/validation-results/localstack-template-batch-${{ matrix.batch }}-results.tsv
+          path: validation/scripts/validation-results/localstack-template-batch-${{ matrix.batch }}-results.tsv
           retention-days: 7
           if-no-files-found: warn
 

@@ -178,7 +178,7 @@ DeploymentConfig
 
 ## Related Documentation
 
-- [Interactive Deployer](../guides/INTERACTIVE_DEPLOYER.md): full configuration options
+- [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli): deploy and manage the emulator from the command line
 - [Docker Local Dev](../guides/DOCKER_LOCAL_DEV_README.md): broader docker-compose environment
 - [cfc-testing README](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/README.md): testing platform overview
 - [LocalStack](../localstack/README.md): the other supported local emulator

@@ -13,8 +13,8 @@
     cloudforge-localstack are managed BOM coordinates but not reactor modules — each lives in its
     own repo (CloudForgeCI/cloudforge-ministack, CloudForgeCI/cloudforge-localstack), declares
     this pom as its Maven parent, and publishes independently in lockstep with this pom's version.
-    Sample entrypoint: cfc-testing (not in BOM). cloudforge-manager-deployment and
-    cloudforge-manager are also not part of this BOM/reactor — split into their own private repos
+    cloudforge-manager-deployment and cloudforge-manager are also not part of this
+    BOM/reactor — split into their own private repos
     (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager), each with a
     standalone pom.xml and independent versioning.
     See docs/architecture/cloudforge-sample-bom.template.md and
@@ -56,7 +56,7 @@
     <!-- Latest published cloudforge-manager-deployment SNAPSHOT. Kept current by
          .github/workflows/sync-cloudforge-manager-deployment-version.yml, which polls the
          Central snapshots metadata and opens a PR with the bump. Managing the version in this
-         BOM gives every consumer (cloudforge-manager, cfc-testing) a single sync point; a BOM
+         BOM gives every consumer (cloudforge-manager and others) a single sync point; a BOM
          entry is only a coordinate + version, so it does not tie that project's release cadence
          to cfc-core's. -->
     <cloudforge-manager-deployment.version>3.2.9-SNAPSHOT</cloudforge-manager-deployment.version>
@@ -143,9 +143,8 @@
         everything below without being listed here. cloudforge-manager imports this BOM like any
         other consumer.
 
-        Consumer sample: docs/architecture/cloudforge-sample-bom.template.md
-        Not in BOM: cfc-testing (monorepo entrypoint / cloudforge-sample reference); it imports
-        this BOM like any consumer but is not itself a managed coordinate.
+        Consumer sample: docs/architecture/cloudforge-sample-bom.template.md, the reference
+        layout for a standalone project that imports this BOM like any other consumer.
       -->
       <dependency>
         <groupId>com.cloudforgeci</groupId>
@@ -344,11 +343,10 @@
          sibling checkout. cloudforge-manager is a standalone pom with no parent, released from
          its own repository.
 
-         cfc-testing does not depend on cloudforge-manager-deployment; cfc-core's CI only tests
-         cloudforge-api and cloudforge-core directly, resolving cloudforge-localstack and
-         cloudforge-ministack as regular published dependencies like any other consumer.
+         cfc-core's CI only tests cloudforge-api and cloudforge-core directly, resolving
+         cloudforge-localstack and cloudforge-ministack as regular published dependencies like
+         any other consumer.
     -->
-    <!-- cfc-testing: independent consumer / cloudforge-sample entrypoint (BOM import, not in reactor) -->
   </modules>
 
   <profiles>

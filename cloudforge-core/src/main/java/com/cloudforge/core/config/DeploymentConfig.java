@@ -40,7 +40,7 @@ import java.util.Map;
  *
  * <p><b>Architecture:</b> This class lives in cloudforge-core (the contract layer) as
  * it defines the data model interface between libraries and consumers. This ensures
- * cfc-testing and other consumers always use the latest configuration schema without
+ * cloudforge-cli and other consumers always use the latest configuration schema without
  * duplication.</p>
  *
  * @since CloudForge 3.0.0
