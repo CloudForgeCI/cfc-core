@@ -61,15 +61,6 @@ jobs:
           pip3 install --upgrade pip
           echo "Dependencies installed"
 
-      - name: Install cloudforge-cli
-        run: |
-          CLI_TAG="$(curl -sf https://api.github.com/repos/CloudForgeCI/cloudforge-cli/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
-          CLI_VERSION="${CLI_TAG#v}"
-          curl -sfL -o /tmp/cloudforge-cli.tar.gz \
-            "https://github.com/CloudForgeCI/cloudforge-cli/releases/download/${CLI_TAG}/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz"
-          tar xzf /tmp/cloudforge-cli.tar.gz -C /tmp
-          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
-
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -83,6 +74,29 @@ jobs:
           echo "Building and testing CFC Core..."
           mvn clean install -Pci -B -V
           echo "Build and tests complete"
+
+      # Building from source (not downloading the latest release) so this PR's cloudforge-core/
+      # cloudforge-api changes are what validation actually exercises -- the released binary is
+      # pinned to whatever cfc-core version cloudforge-cli's own pom last synced to, which never
+      # reflects an in-flight PR. `mvn install` above already put this checkout's artifacts in the
+      # local .m2 cache; overriding cfc-core.version to match makes cloudforge-cli's own build
+      # resolve those instead of whatever it has published to Central.
+      - name: Build cloudforge-cli from source against this PR's cfc-core build
+        run: |
+          CFC_CORE_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
+          git clone --depth 1 -b develop https://github.com/CloudForgeCI/cloudforge-cli.git /tmp/cloudforge-cli-src
+          cd /tmp/cloudforge-cli-src
+          mvn -q -B versions:set-property -Dproperty=cfc-core.version \
+            -DnewVersion="$CFC_CORE_VERSION" -DgenerateBackupPoms=false
+          # assemble-release.sh builds offline (-o), assuming a developer machine that already
+          # has every dependency cached -- a fresh CI runner doesn'''t, so warm the local repo with
+          # a real (online) build first (dependency:go-offline is too aggressive here and chases
+          # an unrelated, already-broken transitive resolution path).
+          mvn -q -B clean package -DskipTests
+          bash scripts/assemble-release.sh
+          CLI_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
+          tar xzf "release/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz" -C /tmp
+          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
 
       - name: Set up validation environment
         run: |

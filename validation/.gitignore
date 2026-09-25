@@ -60,3 +60,14 @@ benchmark-results
 # Local MiniStack bind-mount data (Jenkins home, etc.)
 .ministack-volumes/
 .localstack-volumes/
+
+# Runtime output written by the local panel/deploy tooling and the compliance-matrix/truth-table
+# generator scripts when they run, not source fixtures.
+panel-stacks.json
+deployment-context.jsonBAK
+compliance-matrix/
+deployment-contexts/*-app-*.json
+deployment-contexts/CFCompliance-*.json
+!deployment-contexts/CFCompliance-allframeworks-production-ec2-LocalStack.json
+deployment-contexts/Jenkins-Ec2-Probe.json
+deployment-contexts/compliance/*-jenkins*.json
