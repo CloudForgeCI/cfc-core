@@ -55,8 +55,8 @@ check_prerequisites() {
         missing_deps+=("python3")
     fi
     
-    if ! command -v cdk &> /dev/null; then
-        missing_deps+=("aws-cdk")
+    if ! command -v cloudforge-cli &> /dev/null; then
+        missing_deps+=("cloudforge-cli")
     fi
     
     if ! command -v mvn &> /dev/null; then
