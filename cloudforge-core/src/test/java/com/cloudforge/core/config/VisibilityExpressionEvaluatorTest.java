@@ -17,6 +17,7 @@ public class VisibilityExpressionEvaluatorTest {
         public boolean multiAz = false;
         public String runtimeType = "ec2";
         public String databaseEngine = "postgres";
+        public String applicationId = "jenkins";
         public int minCapacity = 1;
         public int maxCapacity = 10;
     }
@@ -146,6 +147,29 @@ public class VisibilityExpressionEvaluatorTest {
         config.runtimeType = "ec2";
         VisibilityExpressionEvaluator evaluator = new VisibilityExpressionEvaluator(null, config, "runtimeType != \"fargate\"");
         assertTrue(evaluator.evaluate());
+    }
+
+    @Test
+    public void testUnquotedIdentifierComparison_HyphenatedValueMatches() {
+        // Real application IDs like "cloudforge-manager" are hyphenated; an unquoted comparison
+        // value must accept hyphens, not just the plain [a-zA-Z0-9_]* identifier grammar used for
+        // field names on the left-hand side.
+        TestConfig config = new TestConfig();
+        config.applicationId = "cloudforge-manager";
+        VisibilityExpressionEvaluator evaluator = new VisibilityExpressionEvaluator(
+            null, config, "applicationId == cloudforge-manager"
+        );
+        assertTrue(evaluator.evaluate());
+    }
+
+    @Test
+    public void testUnquotedIdentifierComparison_HyphenatedValueDoesNotMatch() {
+        TestConfig config = new TestConfig();
+        config.applicationId = "jenkins";
+        VisibilityExpressionEvaluator evaluator = new VisibilityExpressionEvaluator(
+            null, config, "applicationId == cloudforge-manager"
+        );
+        assertFalse(evaluator.evaluate());
     }
 
     @Test
