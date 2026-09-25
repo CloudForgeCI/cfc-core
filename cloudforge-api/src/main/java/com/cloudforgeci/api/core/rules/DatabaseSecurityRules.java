@@ -389,7 +389,9 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
      *   <li>Enhanced monitoring enabled</li>
      * </ul>
      */
-    private List<ComplianceRule> validateDatabaseMonitoring(SystemContext ctx) {
+    // Package-private, not private: DatabaseSecurityRulesTest calls this directly to inspect
+    // individual rule results (install() only exposes pass/fail as a whole).
+    List<ComplianceRule> validateDatabaseMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Gate on either signal, not the self-attested "rdsEnabled" flag alone -- a real
@@ -455,8 +457,13 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             }
         }
 
-        // Enhanced Monitoring
-        boolean enhancedMonitoringEnabled = getBooleanSetting(ctx, "rdsEnhancedMonitoringEnabled", false);
+        // Enhanced Monitoring. Mirrors RdsFactory's own default resolution (unset -> true for
+        // PRODUCTION) rather than getBooleanSetting's hardcoded false -- otherwise a default
+        // PRODUCTION+database deploy synthesizes with Enhanced Monitoring actually enabled but
+        // still fails this check, since getBooleanSetting only sees the raw context value.
+        boolean enhancedMonitoringEnabled = ctx.cfc.rdsEnhancedMonitoringEnabled() != null
+            ? ctx.cfc.rdsEnhancedMonitoringEnabled()
+            : ctx.security == SecurityProfile.PRODUCTION;
 
         if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !enhancedMonitoringEnabled) {
             rules.add(ComplianceRule.fail(

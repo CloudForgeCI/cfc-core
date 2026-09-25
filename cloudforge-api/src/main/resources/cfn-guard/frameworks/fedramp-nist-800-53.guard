@@ -22,26 +22,37 @@
 # validateSystemCommunications); they have no template-visible signal cfn-guard could assert on
 # independently, so Layer 3 doesn't restate them.
 
+let flow_logs = Resources.*[ Type == 'AWS::EC2::FlowLog' ]
+let security_groups = Resources.*[ Type == 'AWS::EC2::SecurityGroup' ]
+let cloudtrail_trails = Resources.*[ Type == 'AWS::CloudTrail::Trail' ]
+let s3_buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let log_groups = Resources.*[ Type == 'AWS::Logs::LogGroup' ]
+let alb_loadbalancers = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::LoadBalancer' ]
+let rds_instances = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
+let cognito_pools = Resources.*[ Type == 'AWS::Cognito::UserPool' ]
+let alb_https_listeners = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' Properties.Port == 443 ]
+let alb_listeners = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' ]
+let ebs_volumes = Resources.*[ Type == 'AWS::EC2::Volume' ]
+let efs_filesystems = Resources.*[ Type == 'AWS::EFS::FileSystem' ]
+
 # ============================================================================
 # AC - Access Control
 # ============================================================================
 
 # AC-4 - Information Flow Enforcement / SI-4(4) - Inbound/Outbound Communications Traffic
 # CloudForge Mapping: NETWORK_MONITORING control
-rule fedramp_flow_logs_enabled when
-    resourceType == 'AWS::EC2::FlowLog' {
+rule fedramp_flow_logs_enabled when %flow_logs !empty {
 
-    Properties.ResourceType == 'VPC' <<[FedRAMP AC-4] VPC Flow Logs must target VPC>>
-    Properties.TrafficType == 'ALL' <<[FedRAMP AC-4] VPC Flow Logs must capture ALL traffic>>
+    %flow_logs.Properties.ResourceType == 'VPC' <<[FedRAMP AC-4] VPC Flow Logs must target VPC>>
+    %flow_logs.Properties.TrafficType == 'ALL' <<[FedRAMP AC-4] VPC Flow Logs must capture ALL traffic>>
 }
 
 # AC-17 - Remote Access
 # CloudForge Mapping: NETWORK_SEGMENTATION control
-rule fedramp_security_groups_restricted when
-    resourceType == 'AWS::EC2::SecurityGroup' {
+rule fedramp_security_groups_restricted when %security_groups !empty {
 
-    when Properties.SecurityGroupIngress exists {
-        Properties.SecurityGroupIngress[*] {
+    when %security_groups.Properties.SecurityGroupIngress exists {
+        %security_groups.Properties.SecurityGroupIngress[*] {
             when CidrIp exists {
                 CidrIp != '0.0.0.0/0' <<[FedRAMP AC-17] Security groups must not allow unrestricted access>>
             }
@@ -58,50 +69,45 @@ rule fedramp_security_groups_restricted when
 
 # AU-2 - Event Logging / AU-3 - Content of Audit Records / SI-7 - Software, Firmware, Information Integrity
 # CloudForge Mapping: AUDIT_LOGGING control
-rule fedramp_cloudtrail_enabled when
-    resourceType == 'AWS::CloudTrail::Trail' {
+rule fedramp_cloudtrail_enabled when %cloudtrail_trails !empty {
 
-    Properties.IsLogging == true <<[FedRAMP AU-2] CloudTrail must be enabled>>
-    Properties.EnableLogFileValidation == true <<[FedRAMP AU-3/SI-7] CloudTrail must enable log file validation>>
+    %cloudtrail_trails.Properties.IsLogging == true <<[FedRAMP AU-2] CloudTrail must be enabled>>
+    %cloudtrail_trails.Properties.EnableLogFileValidation == true <<[FedRAMP AU-3/SI-7] CloudTrail must enable log file validation>>
 }
 
 # AU-9 - Protection of Audit Information
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule fedramp_cloudtrail_kms_encryption when
-    resourceType == 'AWS::CloudTrail::Trail' {
+rule fedramp_cloudtrail_kms_encryption when %cloudtrail_trails !empty {
 
-    Properties.KMSKeyId exists <<[FedRAMP AU-9] CloudTrail logs must be encrypted with KMS>>
+    %cloudtrail_trails.Properties.KMSKeyId exists <<[FedRAMP AU-9] CloudTrail logs must be encrypted with KMS>>
 }
 
 # AU-9 - Protection of Audit Information (immutability, where Object Lock is declared)
 # CloudForge Mapping: S3_OBJECT_LOCK control
-rule fedramp_s3_object_lock when
-    resourceType == 'AWS::S3::Bucket' {
+rule fedramp_s3_object_lock when %s3_buckets !empty {
 
-    when Properties.ObjectLockEnabled exists {
-        Properties.ObjectLockEnabled == true <<[FedRAMP AU-9] Object Lock must be enabled where declared>>
-        Properties.ObjectLockConfiguration exists <<[FedRAMP AU-9] Object Lock configuration must be set>>
+    when %s3_buckets.Properties.ObjectLockEnabled exists {
+        %s3_buckets.Properties.ObjectLockEnabled == true <<[FedRAMP AU-9] Object Lock must be enabled where declared>>
+        %s3_buckets.Properties.ObjectLockConfiguration exists <<[FedRAMP AU-9] Object Lock configuration must be set>>
     }
 }
 
 # AU-11 - Audit Record Retention (3 years -- stricter than the 90-day baseline other frameworks use)
 # CloudForge Mapping: LOG_RETENTION control
-rule fedramp_log_retention_3yr when
-    resourceType == 'AWS::Logs::LogGroup' {
+rule fedramp_log_retention_3yr when %log_groups !empty {
 
     # Absent RetentionInDays means the log group never expires (RetentionDays.INFINITE), which
     # satisfies AU-11 -- FedRampRules.isRetentionSufficient already accepts it as compliant.
-    when Properties.RetentionInDays exists {
-        Properties.RetentionInDays >= 1095 <<[FedRAMP AU-11] CloudWatch logs must retain for at least 3 years (1095 days)>>
+    when %log_groups.Properties.RetentionInDays exists {
+        %log_groups.Properties.RetentionInDays >= 1095 <<[FedRAMP AU-11] CloudWatch logs must retain for at least 3 years (1095 days)>>
     }
 }
 
 # AU-12 - Audit Record Generation (ALB access logs)
 # CloudForge Mapping: AUDIT_LOGGING control
-rule fedramp_alb_access_logging when
-    resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
+rule fedramp_alb_access_logging when %alb_loadbalancers !empty {
 
-    Properties.LoadBalancerAttributes[*] {
+    %alb_loadbalancers.Properties.LoadBalancerAttributes[*] {
         when Key == 'access_logs.s3.enabled' {
             Value == 'true' <<[FedRAMP AU-12] ALB access logging must be enabled>>
         }
@@ -114,19 +120,17 @@ rule fedramp_alb_access_logging when
 
 # CP-9 - System Backup
 # CloudForge Mapping: BACKUP_RECOVERY control
-rule fedramp_rds_backup when
-    resourceType == 'AWS::RDS::DBInstance' {
+rule fedramp_rds_backup when %rds_instances !empty {
 
-    Properties.BackupRetentionPeriod exists <<[FedRAMP CP-9] RDS must have backup retention configured>>
-    Properties.BackupRetentionPeriod >= 7 <<[FedRAMP CP-9] RDS backups must be retained for at least 7 days>>
+    %rds_instances.Properties.BackupRetentionPeriod exists <<[FedRAMP CP-9] RDS must have backup retention configured>>
+    %rds_instances.Properties.BackupRetentionPeriod >= 7 <<[FedRAMP CP-9] RDS backups must be retained for at least 7 days>>
 }
 
 # CP-10 - System Recovery and Reconstitution
 # CloudForge Mapping: DATABASE_MULTI_AZ control
-rule fedramp_rds_multi_az when
-    resourceType == 'AWS::RDS::DBInstance' {
+rule fedramp_rds_multi_az when %rds_instances !empty {
 
-    Properties.MultiAZ == true <<[FedRAMP CP-10] RDS instances must use Multi-AZ for high availability>>
+    %rds_instances.Properties.MultiAZ == true <<[FedRAMP CP-10] RDS instances must use Multi-AZ for high availability>>
 }
 
 # ============================================================================
@@ -135,18 +139,16 @@ rule fedramp_rds_multi_az when
 
 # IA-2(1) - Multi-Factor Authentication
 # CloudForge Mapping: AUTHENTICATION control
-rule fedramp_cognito_mfa when
-    resourceType == 'AWS::Cognito::UserPool' {
+rule fedramp_cognito_mfa when %cognito_pools !empty {
 
-    Properties.MfaConfiguration == 'ON' <<[FedRAMP IA-2(1)] Cognito user pools must require MFA>>
+    %cognito_pools.Properties.MfaConfiguration == 'ON' <<[FedRAMP IA-2(1)] Cognito user pools must require MFA>>
 }
 
 # IA-5(1) - Password-Based Authentication
 # CloudForge Mapping: CREDENTIAL_ROTATION control
-rule fedramp_cognito_password_length when
-    resourceType == 'AWS::Cognito::UserPool' {
+rule fedramp_cognito_password_length when %cognito_pools !empty {
 
-    Properties.Policies.PasswordPolicy.MinimumLength >= 12 <<[FedRAMP IA-5(1)] Cognito password policy must require at least 12 characters>>
+    %cognito_pools.Properties.Policies.PasswordPolicy.MinimumLength >= 12 <<[FedRAMP IA-5(1)] Cognito password policy must require at least 12 characters>>
 }
 
 # ============================================================================
@@ -155,21 +157,18 @@ rule fedramp_cognito_password_length when
 
 # SC-8 - Transmission Confidentiality and Integrity / MP-5 - Media Transport
 # CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-rule fedramp_alb_https when
-    resourceType == 'AWS::ElasticLoadBalancingV2::Listener'
-    Properties.Port == 443 {
+rule fedramp_alb_https when %alb_https_listeners !empty {
 
-    Properties.Protocol in ['HTTPS', 'TLS'] <<[FedRAMP SC-8] ALB listeners must use HTTPS/TLS>>
-    Properties.Certificates exists <<[FedRAMP SC-8] ALB listeners must have certificates configured>>
+    %alb_https_listeners.Properties.Protocol in ['HTTPS', 'TLS'] <<[FedRAMP SC-8] ALB listeners must use HTTPS/TLS>>
+    %alb_https_listeners.Properties.Certificates exists <<[FedRAMP SC-8] ALB listeners must have certificates configured>>
 }
 
 # SC-8(1) - Cryptographic Protection (HTTP listeners, when present, must redirect to HTTPS)
 # CloudForge Mapping: HTTPS_STRICT control
-rule fedramp_http_listener_redirects when
-    resourceType == 'AWS::ElasticLoadBalancingV2::Listener' {
+rule fedramp_http_listener_redirects when %alb_listeners !empty {
 
-    when Properties.Protocol == 'HTTP' {
-        some Properties.DefaultActions[*] {
+    when %alb_listeners.Properties.Protocol == 'HTTP' {
+        some %alb_listeners.Properties.DefaultActions[*] {
             Type == 'redirect' <<[FedRAMP SC-8(1)] HTTP listeners must redirect to HTTPS>>
         }
     }
@@ -177,22 +176,19 @@ rule fedramp_http_listener_redirects when
 
 # SC-28 - Protection of Information at Rest
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule fedramp_ebs_encryption when
-    resourceType == 'AWS::EC2::Volume' {
+rule fedramp_ebs_encryption when %ebs_volumes !empty {
 
-    Properties.Encrypted == true <<[FedRAMP SC-28] EBS volumes must be encrypted>>
+    %ebs_volumes.Properties.Encrypted == true <<[FedRAMP SC-28] EBS volumes must be encrypted>>
 }
 
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule fedramp_efs_encryption when
-    resourceType == 'AWS::EFS::FileSystem' {
+rule fedramp_efs_encryption when %efs_filesystems !empty {
 
-    Properties.Encrypted == true <<[FedRAMP SC-28] EFS file systems must be encrypted>>
+    %efs_filesystems.Properties.Encrypted == true <<[FedRAMP SC-28] EFS file systems must be encrypted>>
 }
 
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule fedramp_rds_encryption when
-    resourceType == 'AWS::RDS::DBInstance' {
+rule fedramp_rds_encryption when %rds_instances !empty {
 
-    Properties.StorageEncrypted == true <<[FedRAMP SC-28] RDS instances must use encrypted storage>>
+    %rds_instances.Properties.StorageEncrypted == true <<[FedRAMP SC-28] RDS instances must use encrypted storage>>
 }

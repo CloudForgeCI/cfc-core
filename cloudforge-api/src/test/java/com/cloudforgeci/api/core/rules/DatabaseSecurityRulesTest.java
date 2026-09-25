@@ -16,6 +16,7 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.assertions.Template;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -145,6 +146,36 @@ class DatabaseSecurityRulesTest {
         // When: Installing database security rules
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
 
+    }
+
+    /**
+     * DB-ENHANCED-MONITORING must pass a default PRODUCTION deployment without an explicit
+     * rdsEnhancedMonitoringEnabled context value, matching RdsFactory's own default (enabled for
+     * PRODUCTION when unset).
+     */
+    @Test
+    void testEnhancedMonitoringPassesOnDefaultProductionDeployment() {
+        App app = new App();
+        Stack stack = new Stack(app, "TestDbSecEnhancedMonitoringDefault");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestDbSecEnhancedMonitoringDefault");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("rdsEnabled", "true");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        List<ComplianceRule> rules = new DatabaseSecurityRules().validateDatabaseMonitoring(ctx);
+
+        ComplianceRule enhancedMonitoring = rules.stream()
+            .filter(r -> r.ruleId().equals("DB-ENHANCED-MONITORING"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("DB-ENHANCED-MONITORING rule not found"));
+        assertTrue(enhancedMonitoring.passed());
     }
 
     @Test

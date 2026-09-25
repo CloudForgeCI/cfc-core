@@ -6,16 +6,22 @@
 # CloudForge Core - Multi-Layer Compliance Validation
 # Layer 3: Template-Level Policy Enforcement (cfn-guard)
 
+
+let elasticloadbalancingv2_loadbalancer = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::LoadBalancer' ]
+let wafv2_webaclassociation = Resources.*[ Type == 'AWS::WAFv2::WebACLAssociation' ]
+let elasticloadbalancingv2_listener = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::Listener' ]
+let elasticloadbalancingv2_targetgroup = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::TargetGroup' ]
+let elasticloadbalancing_loadbalancer = Resources.*[ Type == 'AWS::ElasticLoadBalancing::LoadBalancer' ]
+let elasticloadbalancingv2_listenerrule = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::ListenerRule' ]
 # ============================================================================
 # Application/Network Load Balancer Security
 # ============================================================================
 
 # ALB/NLB access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule elb_security_alb_access_logging when
-    resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
+rule elb_security_alb_access_logging when %elasticloadbalancingv2_loadbalancer !empty {
 
-    Properties.LoadBalancerAttributes exists <<[ELB Security] Load balancers must configure attributes>>
+    %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes exists <<[ELB Security] Load balancers must configure attributes>>
 
     some Properties.LoadBalancerAttributes[*] {
         Key == 'access_logs.s3.enabled'
@@ -25,10 +31,9 @@ rule elb_security_alb_access_logging when
 
 # ALB deletion protection
 # CloudForge Mapping: DELETION_PROTECTION control
-rule elb_security_alb_deletion_protection when
-    resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
+rule elb_security_alb_deletion_protection when %elasticloadbalancingv2_loadbalancer !empty {
 
-    Properties.LoadBalancerAttributes exists <<[ELB Security] Load balancers must configure attributes>>
+    %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes exists <<[ELB Security] Load balancers must configure attributes>>
 
     some Properties.LoadBalancerAttributes[*] {
         Key == 'deletion_protection.enabled'
@@ -38,8 +43,7 @@ rule elb_security_alb_deletion_protection when
 
 # ALB drop invalid HTTP headers
 # CloudForge Mapping: WEB_APPLICATION_FIREWALL control
-rule elb_security_alb_drop_http_headers when
-    resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
+rule elb_security_alb_drop_http_headers when %elasticloadbalancingv2_loadbalancer !empty {
 
     when Properties.Type == 'application' OR Properties.Type not exists {
         when Properties.LoadBalancerAttributes exists {
@@ -53,8 +57,7 @@ rule elb_security_alb_drop_http_headers when
 
 # ALB/NLB cross-zone load balancing
 # CloudForge Mapping: HIGH_AVAILABILITY control
-rule elb_security_cross_zone_load_balancing when
-    resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
+rule elb_security_cross_zone_load_balancing when %elasticloadbalancingv2_loadbalancer !empty {
 
     when Properties.Type in ['network', 'gateway'] {
         when Properties.LoadBalancerAttributes exists {
@@ -68,18 +71,16 @@ rule elb_security_cross_zone_load_balancing when
 
 # ALB internal for internal services
 # CloudForge Mapping: NETWORK_SECURITY control
-rule elb_security_alb_internal_scheme when
-    resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
+rule elb_security_alb_internal_scheme when %elasticloadbalancingv2_loadbalancer !empty {
 
-    Properties.Scheme exists <<[ELB Security] Load balancer scheme should be explicitly specified>>
+    %elasticloadbalancingv2_loadbalancer.Properties.Scheme exists <<[ELB Security] Load balancer scheme should be explicitly specified>>
 }
 
 # ALB WAF integration
 # CloudForge Mapping: WEB_APPLICATION_FIREWALL control
-rule elb_security_alb_waf when
-    resourceType == 'AWS::WAFv2::WebACLAssociation' {
+rule elb_security_alb_waf when %wafv2_webaclassociation !empty {
 
-    Properties.ResourceArn exists <<[ELB Security] Application Load Balancers should be associated with WAF>>
+    %wafv2_webaclassociation.Properties.ResourceArn exists <<[ELB Security] Application Load Balancers should be associated with WAF>>
 }
 
 # ============================================================================
@@ -88,10 +89,9 @@ rule elb_security_alb_waf when
 
 # ALB/NLB HTTPS/TLS listener
 # CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-rule elb_security_listener_https when
-    resourceType == 'AWS::ElasticLoadBalancingV2::Listener' {
+rule elb_security_listener_https when %elasticloadbalancingv2_listener !empty {
 
-    Properties.Protocol in ['HTTPS', 'TLS', 'HTTP'] <<[ELB Security] Load balancer listener protocol must be specified>>
+    %elasticloadbalancingv2_listener.Properties.Protocol in ['HTTPS', 'TLS', 'HTTP'] <<[ELB Security] Load balancer listener protocol must be specified>>
 
     when Properties.Protocol == 'HTTP' {
         some Properties.DefaultActions[*] {
@@ -102,23 +102,21 @@ rule elb_security_listener_https when
 
 # ALB/NLB listener certificate
 # CloudForge Mapping: CERTIFICATE_MANAGEMENT control
-rule elb_security_listener_certificate when
-    resourceType == 'AWS::ElasticLoadBalancingV2::Listener' {
+rule elb_security_listener_certificate when %elasticloadbalancingv2_listener !empty {
 
     when Properties.Protocol in ['HTTPS', 'TLS'] {
-        Properties.Certificates exists <<[ELB Security] HTTPS/TLS listeners must have certificates configured>>
-        Properties.Certificates not empty <<[ELB Security] HTTPS/TLS listeners must have at least one certificate>>
+        %elasticloadbalancingv2_listener.Properties.Certificates exists <<[ELB Security] HTTPS/TLS listeners must have certificates configured>>
+        %elasticloadbalancingv2_listener.Properties.Certificates not empty <<[ELB Security] HTTPS/TLS listeners must have at least one certificate>>
     }
 }
 
 # ALB listener SSL policy
 # CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-rule elb_security_listener_ssl_policy when
-    resourceType == 'AWS::ElasticLoadBalancingV2::Listener' {
+rule elb_security_listener_ssl_policy when %elasticloadbalancingv2_listener !empty {
 
     when Properties.Protocol in ['HTTPS', 'TLS'] {
-        Properties.SslPolicy exists <<[ELB Security] HTTPS/TLS listeners must specify SSL policy>>
-        Properties.SslPolicy in [
+        %elasticloadbalancingv2_listener.Properties.SslPolicy exists <<[ELB Security] HTTPS/TLS listeners must specify SSL policy>>
+        %elasticloadbalancingv2_listener.Properties.SslPolicy in [
             'ELBSecurityPolicy-TLS13-1-2-2021-06',
             'ELBSecurityPolicy-TLS13-1-2-Res-2021-06',
             'ELBSecurityPolicy-TLS-1-2-2017-01',
@@ -136,17 +134,15 @@ rule elb_security_listener_ssl_policy when
 
 # Target group health check
 # CloudForge Mapping: HIGH_AVAILABILITY control
-rule elb_security_target_group_health_check when
-    resourceType == 'AWS::ElasticLoadBalancingV2::TargetGroup' {
+rule elb_security_target_group_health_check when %elasticloadbalancingv2_targetgroup !empty {
 
-    Properties.HealthCheckEnabled == true OR Properties.HealthCheckEnabled not exists
-    Properties.HealthCheckPath exists OR Properties.HealthCheckPort exists <<[ELB Security] Target groups must have health checks configured>>
+    %elasticloadbalancingv2_targetgroup.Properties.HealthCheckEnabled == true OR Properties.HealthCheckEnabled not exists
+    %elasticloadbalancingv2_targetgroup.Properties.HealthCheckPath exists OR Properties.HealthCheckPort exists <<[ELB Security] Target groups must have health checks configured>>
 }
 
 # Target group deregistration delay
 # CloudForge Mapping: HIGH_AVAILABILITY control
-rule elb_security_target_group_deregistration when
-    resourceType == 'AWS::ElasticLoadBalancingV2::TargetGroup' {
+rule elb_security_target_group_deregistration when %elasticloadbalancingv2_targetgroup !empty {
 
     when Properties.TargetGroupAttributes exists {
         some Properties.TargetGroupAttributes[*] {
@@ -161,29 +157,26 @@ rule elb_security_target_group_deregistration when
 
 # Classic ELB access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule elb_security_classic_access_logging when
-    resourceType == 'AWS::ElasticLoadBalancing::LoadBalancer' {
+rule elb_security_classic_access_logging when %elasticloadbalancing_loadbalancer !empty {
 
-    Properties.AccessLoggingPolicy exists <<[ELB Security] Classic Load Balancers must have access logging policy>>
-    Properties.AccessLoggingPolicy.Enabled == true <<[ELB Security] Classic Load Balancers must enable access logging>>
-    Properties.AccessLoggingPolicy.S3BucketName exists <<[ELB Security] Classic Load Balancer logging must specify S3 bucket>>
+    %elasticloadbalancing_loadbalancer.Properties.AccessLoggingPolicy exists <<[ELB Security] Classic Load Balancers must have access logging policy>>
+    %elasticloadbalancing_loadbalancer.Properties.AccessLoggingPolicy.Enabled == true <<[ELB Security] Classic Load Balancers must enable access logging>>
+    %elasticloadbalancing_loadbalancer.Properties.AccessLoggingPolicy.S3BucketName exists <<[ELB Security] Classic Load Balancer logging must specify S3 bucket>>
 }
 
 # Classic ELB not internet-facing
 # CloudForge Mapping: NETWORK_SECURITY control
-rule elb_security_classic_not_public when
-    resourceType == 'AWS::ElasticLoadBalancing::LoadBalancer' {
+rule elb_security_classic_not_public when %elasticloadbalancing_loadbalancer !empty {
 
-    Properties.Scheme != 'internet-facing' <<[ELB Security] Classic Load Balancers should not be internet-facing>>
+    %elasticloadbalancing_loadbalancer.Properties.Scheme != 'internet-facing' <<[ELB Security] Classic Load Balancers should not be internet-facing>>
 }
 
 # Classic ELB SSL certificate
 # CloudForge Mapping: CERTIFICATE_MANAGEMENT control
-rule elb_security_classic_ssl_certificate when
-    resourceType == 'AWS::ElasticLoadBalancing::LoadBalancer' {
+rule elb_security_classic_ssl_certificate when %elasticloadbalancing_loadbalancer !empty {
 
     when Properties.Listeners exists {
-        Properties.Listeners[*] {
+        %elasticloadbalancing_loadbalancer.Properties.Listeners[*] {
             when Protocol in ['HTTPS', 'SSL'] {
                 SSLCertificateId exists <<[ELB Security] Classic Load Balancer HTTPS/SSL listeners must have certificates>>
             }
@@ -193,19 +186,17 @@ rule elb_security_classic_ssl_certificate when
 
 # Classic ELB connection draining
 # CloudForge Mapping: HIGH_AVAILABILITY control
-rule elb_security_classic_connection_draining when
-    resourceType == 'AWS::ElasticLoadBalancing::LoadBalancer' {
+rule elb_security_classic_connection_draining when %elasticloadbalancing_loadbalancer !empty {
 
-    Properties.ConnectionDrainingPolicy exists <<[ELB Security] Classic Load Balancers should have connection draining policy>>
-    Properties.ConnectionDrainingPolicy.Enabled == true <<[ELB Security] Classic Load Balancers should enable connection draining>>
+    %elasticloadbalancing_loadbalancer.Properties.ConnectionDrainingPolicy exists <<[ELB Security] Classic Load Balancers should have connection draining policy>>
+    %elasticloadbalancing_loadbalancer.Properties.ConnectionDrainingPolicy.Enabled == true <<[ELB Security] Classic Load Balancers should enable connection draining>>
 }
 
 # Classic ELB cross-zone load balancing
 # CloudForge Mapping: HIGH_AVAILABILITY control
-rule elb_security_classic_cross_zone when
-    resourceType == 'AWS::ElasticLoadBalancing::LoadBalancer' {
+rule elb_security_classic_cross_zone when %elasticloadbalancing_loadbalancer !empty {
 
-    Properties.CrossZone == true <<[ELB Security] Classic Load Balancers should enable cross-zone load balancing>>
+    %elasticloadbalancing_loadbalancer.Properties.CrossZone == true <<[ELB Security] Classic Load Balancers should enable cross-zone load balancing>>
 }
 
 # ============================================================================
@@ -214,9 +205,8 @@ rule elb_security_classic_cross_zone when
 
 # Listener rule with conditions
 # CloudForge Mapping: NETWORK_SECURITY control
-rule elb_security_listener_rule_conditions when
-    resourceType == 'AWS::ElasticLoadBalancingV2::ListenerRule' {
+rule elb_security_listener_rule_conditions when %elasticloadbalancingv2_listenerrule !empty {
 
-    Properties.Conditions exists <<[ELB Security] Listener rules must have conditions specified>>
-    Properties.Conditions not empty <<[ELB Security] Listener rules must have at least one condition>>
+    %elasticloadbalancingv2_listenerrule.Properties.Conditions exists <<[ELB Security] Listener rules must have conditions specified>>
+    %elasticloadbalancingv2_listenerrule.Properties.Conditions not empty <<[ELB Security] Listener rules must have at least one condition>>
 }

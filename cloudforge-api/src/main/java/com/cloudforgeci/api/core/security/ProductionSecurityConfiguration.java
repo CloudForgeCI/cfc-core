@@ -209,9 +209,10 @@ public final class ProductionSecurityConfiguration implements SecurityConfigurat
         ComplianceFactory complianceFactory = new ComplianceFactory(c, c.stackName + "-Compliance");
         complianceFactory.create();
 
-        // Create GuardDuty threat detection (enabled by PRODUCTION profile by default)
-        // GuardDutyFactory will check security profile configuration
-        c.createGuardDutyFactory(c, "Production");
+        // GuardDuty is already created for every stack in SystemContext.createInfrastructureFactories
+        // (self-gating on the PRODUCTION-aware security profile default), so it isn't repeated
+        // here -- GuardDuty's detector is an account/Region singleton and a second CfnDetector
+        // construct here would fail at deploy time.
 
         // Verify Security Hub, Macie, and Inspector are already enabled centrally (each
         // self-gates on its own flag) rather than enabling them from this stack -- account/Region

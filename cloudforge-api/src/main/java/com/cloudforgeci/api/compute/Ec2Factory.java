@@ -493,6 +493,7 @@ public class Ec2Factory extends BaseFactory {
         : (security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING);
 
     LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, appId + "Lt")
+            .launchTemplateName(launchTemplateName(appId))
             .machineImage(MachineImage.latestAmazonLinux2023())
             .instanceType(parsedInstanceType)
             .securityGroup(instanceSg)
@@ -555,6 +556,19 @@ public class Ec2Factory extends BaseFactory {
     }
 
     return ltBuilder.build();
+  }
+
+  /**
+   * Builds a launch template name from the stack name and application ID, sanitized and
+   * truncated to AWS's launch-template-name limit (128 characters; letters, digits, and
+   * {@code -().{@literal /}_}) -- left to CDK's default node-path-derived name, a long
+   * {@code stackName} (as this factory's own compliance-matrix fixtures use) can exceed that
+   * limit and fail with {@code InvalidLaunchTemplateName.MalformedException} at deploy time.
+   */
+  private String launchTemplateName(String appId) {
+    String base = (stackName != null && !stackName.isBlank() ? stackName : "cfc") + "-" + appId + "-lt";
+    String sanitized = base.replaceAll("[^A-Za-z0-9().$/_-]", "-");
+    return sanitized.length() <= 128 ? sanitized : sanitized.substring(0, 128);
   }
 
   /**

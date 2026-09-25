@@ -18,5 +18,6 @@
   "memory": 1024,
   "minInstanceCapacity": 1,
   "maxInstanceCapacity": 1,
-  "awsConfigEnabled": true
+  "awsConfigEnabled": true,
+  "auditManagerEnabled": true
 }
