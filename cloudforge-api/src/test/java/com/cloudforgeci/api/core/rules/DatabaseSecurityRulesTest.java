@@ -776,9 +776,11 @@ class DatabaseSecurityRulesTest {
         if (piEncrypted) {
             customContext.put("performanceInsightsEncrypted", "true");
         }
-        if (enhancedMonitoring) {
-            customContext.put("rdsEnhancedMonitoringEnabled", "true");
-        }
+        // Set explicitly (both true and false) rather than only when true -- PRODUCTION now
+        // defaults this to enabled when unset (matching RdsFactory's own default), so an
+        // "enhancedMonitoring=false" scenario must set it explicitly to actually exercise the
+        // disabled case instead of silently falling back to the enabled default.
+        customContext.put("rdsEnhancedMonitoringEnabled", String.valueOf(enhancedMonitoring));
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -910,9 +912,11 @@ class DatabaseSecurityRulesTest {
         if (piEncrypted) {
             customContext.put("performanceInsightsEncrypted", "true");
         }
-        if (enhancedMonitoring) {
-            customContext.put("rdsEnhancedMonitoringEnabled", "true");
-        }
+        // Set explicitly (both true and false) rather than only when true -- PRODUCTION now
+        // defaults this to enabled when unset (matching RdsFactory's own default), so an
+        // "enhancedMonitoring=false" scenario must set it explicitly to actually exercise the
+        // disabled case instead of silently falling back to the enabled default.
+        customContext.put("rdsEnhancedMonitoringEnabled", String.valueOf(enhancedMonitoring));
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
