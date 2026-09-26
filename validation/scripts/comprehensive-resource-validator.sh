@@ -107,9 +107,17 @@ initialize_truth_table() {
                                 # Validation will mark them as LOOKUP if not created in template
                                 expected+=",Route53HostedZone,Route53Records"
 
-                                # Add SSL-specific resources
+                                # Add SSL-specific resources. PRODUCTION forces HTTPS strict mode
+                                # (see ProductionSecurityProfileConfiguration#isHttpsStrictEnabled,
+                                # active here because this fixture always sets complianceFrameworks
+                                # for PRODUCTION below), which drops the port-80 listener entirely
+                                # rather than redirecting it -- so PRODUCTION never gets HTTPRedirect.
                                 if [[ "$ssl_config" == "ssl-enabled" ]]; then
-                                    expected+=",ACMCertificate,HTTPSListener,HTTPRedirect"
+                                    if [[ "$security_profile" == "PRODUCTION" ]]; then
+                                        expected+=",ACMCertificate,HTTPSListener"
+                                    else
+                                        expected+=",ACMCertificate,HTTPSListener,HTTPRedirect"
+                                    fi
                                 else
                                     expected+=",HTTPListener"
                                 fi
@@ -154,11 +162,12 @@ initialize_truth_table() {
                                     if [[ "$domain_config" == "with-domain" && "$ssl_config" == "ssl-enabled" ]]; then
                                         expected+=",CognitoUserPool,CognitoUserPoolClient,CognitoUserPoolDomain"
                                     fi
-                                    # AutoScaling only for EC2 topologies
-                                    # Fargate uses ECS Service auto-scaling, not EC2 AutoScaling policies
-                                    if [[ "$runtime" == "EC2" && ("$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE") ]]; then
-                                        expected+=",AutoScaling"
-                                    fi
+                                    # Jenkins has no clustering/HA support (see
+                                    # ScalingFactory#rejectUnsupportedAutoScaling), so this
+                                    # fixture pins minInstanceCapacity=maxInstanceCapacity=1 and
+                                    # never requests AutoScaling -- Ec2RuntimeConfiguration only
+                                    # wires ScalingFactory.scale() when maxInstanceCapacity > 1,
+                                    # so no AWS::AutoScaling::ScalingPolicy is ever created here.
                                     ;;
                             esac
 
@@ -281,9 +290,9 @@ create_deployment_context() {
   "runtime": "$runtime",
   "cpu": "1024",
   "cpuTargetUtilization": "60",
-  "enableAutoScaling": "true",
+  "enableAutoScaling": "false",
   "env": "dev",
-  "maxInstanceCapacity": "3",
+  "maxInstanceCapacity": "1",
   "authMode": "$auth_mode",
   "domain": "$domain_value",
   "subdomain": "$subdomain_value",
@@ -691,6 +700,7 @@ main() {
         echo -e "${RED}⚠️  Failures detected. Check drift report for details.${NC}"
         echo "Failed configurations:"
         grep "MISSING_RESOURCES\|SYNTHESIS_FAILED" "$DRIFT_REPORT_FILE" | head -10
+        exit 1
     else
         echo -e "${GREEN}All validations passed.${NC}"
     fi

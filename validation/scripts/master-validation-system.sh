@@ -191,12 +191,32 @@ run_smoke_tests() {
     echo -e "${PURPLE}💨 Running smoke tests...${NC}"
     echo ""
 
-    # Define minimal test configurations
-    # CloudForge 3.0.0: JENKINS_SINGLE_NODE removed, using APPLICATION_SERVICE
+    # Define minimal test configurations. Each covers a runtime/topology/security combination
+    # against a distinct ApplicationSpec code path, since what's valid differs by app (see
+    # ScalingFactory#rejectUnsupportedAutoScaling) -- minInstanceCapacity/maxInstanceCapacity/
+    # dbEngine below are set per-app rather than copy-pasted across configs.
+    #   runtime,topology,security,domain,ssl,subdomain,appId,appName,dbEngine,dbVersion,minCap,maxCap,resourceTier
+    # dbEngine "none" omits provisionDatabase entirely (app either has no DatabaseSpec, or an
+    # optional one left on its embedded default). resourceTier picks the cpu/memory/instanceType
+    # values below -- "default" is this file's original 1024/2048/(app or t3.micro fallback).
     local smoke_configs=(
-        "FARGATE,APPLICATION_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain"
-        "EC2,APPLICATION_SERVICE,DEV,no-domain,ssl-disabled,no-subdomain"
-        "FARGATE,APPLICATION_SERVICE,PRODUCTION,with-domain,ssl-enabled,with-subdomain"
+        "FARGATE,APPLICATION_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain,jenkins,Jenkins,none,none,1,1,default"
+        "EC2,APPLICATION_SERVICE,DEV,no-domain,ssl-disabled,no-subdomain,jenkins,Jenkins,none,none,1,1,default"
+        "FARGATE,APPLICATION_SERVICE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,jenkins,Jenkins,none,none,1,1,default"
+        # WordPress: DatabaseSpec.required (MySQL) + PHP/CMS runtime config -- also exercises
+        # the real multi-instance path (WordPress has no supportsAutoScaling override, and a
+        # provisioned database satisfies requiresSequentialDeploymentWithoutDatabase()).
+        "FARGATE,APPLICATION_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain,wordpress,WordPress,mysql,8.0,1,2,default"
+        # Grafana: DatabaseSpec.optional (defaults to embedded SQLite when unset) + a
+        # monitoring-category app instead of a CMS -- kept single-instance since no managed
+        # database is provisioned here (see requiresSequentialDeploymentWithoutDatabase()).
+        "EC2,APPLICATION_SERVICE,DEV,no-domain,ssl-disabled,no-subdomain,grafana,Grafana,none,none,1,1,default"
+        # Same Jenkins/EC2/DEV shape as the first EC2 config above, but a non-default instance
+        # class (m5 instead of t3) -- exercises Ec2Factory#parseInstanceClass's other branches.
+        "EC2,APPLICATION_SERVICE,DEV,no-domain,ssl-disabled,no-subdomain,jenkins,Jenkins,none,none,1,1,ec2-m5-large"
+        # Same Jenkins/FARGATE/DEV shape as the first FARGATE config above, but a larger valid
+        # Fargate cpu/memory tier -- exercises a different validFargateMemoryValues() bracket.
+        "FARGATE,APPLICATION_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain,jenkins,Jenkins,none,none,1,1,fargate-2048-4096"
     )
 
     local passed=0
@@ -211,10 +231,30 @@ run_smoke_tests() {
         local domain="${CONFIG_PARTS[3]}"
         local ssl="${CONFIG_PARTS[4]}"
         local subdomain="${CONFIG_PARTS[5]}"
+        local app_id="${CONFIG_PARTS[6]}"
+        local app_name="${CONFIG_PARTS[7]}"
+        local db_engine="${CONFIG_PARTS[8]}"
+        local db_version="${CONFIG_PARTS[9]}"
+        local min_capacity="${CONFIG_PARTS[10]}"
+        local max_capacity="${CONFIG_PARTS[11]}"
+        local resource_tier="${CONFIG_PARTS[12]}"
 
-        local stack_name="smoke-$(echo "$config" | tr '[:upper:],' '[:lower:]-' | tr -d ',' | tr '_' '-')"
+        local cpu_value="1024"
+        local memory_value="2048"
+        local instance_type_value=""
+        case "$resource_tier" in
+            ec2-m5-large)
+                instance_type_value="m5.large"
+                ;;
+            fargate-2048-4096)
+                cpu_value="2048"
+                memory_value="4096"
+                ;;
+        esac
 
-        echo -e "${CYAN}🧪 Testing: $runtime + $topology + $security${NC}"
+        local stack_name="smoke-$(echo "${app_id},${runtime},${topology},${security},${resource_tier}" | tr '[:upper:],' '[:lower:]-' | tr -d ',' | tr '_' '-')"
+
+        echo -e "${CYAN}🧪 Testing: $app_name + $runtime + $topology + $security + $resource_tier${NC}"
 
         # Create deployment context
         local domain_value=""
@@ -231,11 +271,23 @@ run_smoke_tests() {
             fi
         fi
 
+        local db_fields=""
+        if [[ "$db_engine" != "none" ]]; then
+            db_fields="  \"provisionDatabase\": true,
+  \"databaseEngine\": \"$db_engine\",
+  \"databaseVersion\": \"$db_version\","
+        fi
+
+        local instance_type_field=""
+        if [[ -n "$instance_type_value" ]]; then
+            instance_type_field="  \"instanceType\": \"$instance_type_value\","
+        fi
+
         cat > "$BASE_DIR/deployment-context.json" << EOF
 {
   "stackName": "$stack_name",
-  "applicationId": "jenkins",
-  "applicationName": "Jenkins",
+  "applicationId": "$app_id",
+  "applicationName": "$app_name",
   "runtime": "$runtime",
   "topology": "$topology",
   "securityProfile": "$security",
@@ -245,10 +297,12 @@ run_smoke_tests() {
   "createZone": "true",
   "networkMode": "public-no-nat",
   "tier": "public",
-  "memory": "2048",
-  "cpu": "1024",
-  "minInstanceCapacity": "1",
-  "maxInstanceCapacity": "3",
+  "memory": "$memory_value",
+  "cpu": "$cpu_value",
+$instance_type_field
+$db_fields
+  "minInstanceCapacity": "$min_capacity",
+  "maxInstanceCapacity": "$max_capacity",
   "env": "dev",
   "region": "us-east-1",
   "enableEncryption": "true"
@@ -526,7 +580,11 @@ show_usage() {
 case "${1:-help}" in
     "full")
         check_prerequisites
-        run_full_validation
+        # Captured rather than left to `set -e`, so a validation failure still runs drift
+        # detection and generates the final report (needed for CI artifact upload / debugging)
+        # instead of aborting the script immediately at this line.
+        validation_status=0
+        run_full_validation || validation_status=$?
 
         # Run drift detection but don't fail the entire validation if drift is detected
         # Drift is informational - it shows changes but shouldn't fail validation
@@ -534,7 +592,12 @@ case "${1:-help}" in
 
         generate_comprehensive_report
         echo ""
-        echo -e "${GREEN}🎉 Complete validation suite finished${NC}"
+        if [[ $validation_status -eq 0 ]]; then
+            echo -e "${GREEN}🎉 Complete validation suite finished${NC}"
+        else
+            echo -e "${RED}💥 Complete validation suite finished with failures${NC}"
+        fi
+        exit $validation_status
         ;;
     "validate")
         check_prerequisites

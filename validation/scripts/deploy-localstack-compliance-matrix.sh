@@ -85,7 +85,10 @@ deploy() {
   local resources
   resources=$(curl -s "http://localhost:4566/?Action=DescribeStackResources&StackName=${stack}&Version=2010-05-15")
   local config_rules guardduty cloudtrail waf
-  config_rules=$(echo "$resources" | grep -c "AWS::Config::ConfigRule" || true)
+  # DescribeStackResources comes back as a single unformatted line, so `grep -c` (which counts
+  # matching *lines*, not occurrences) always reports 0 or 1 regardless of the real count --
+  # count actual occurrences instead.
+  config_rules=$(echo "$resources" | grep -o "AWS::Config::ConfigRule" | wc -l | tr -d ' ')
   guardduty=$(echo "$resources" | grep -qc "AWS::GuardDuty::Detector" && echo yes || echo no)
   cloudtrail=$(echo "$resources" | grep -qc "AWS::CloudTrail::Trail" && echo yes || echo no)
   waf=$(echo "$resources" | grep -qc "AWS::WAFv2::WebACL" && echo yes || echo no)

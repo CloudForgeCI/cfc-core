@@ -340,7 +340,10 @@ jobs:
             });
 
       - name: Check validation status
-        if: steps.validation.outputs.exit_code != '0' && github.event_name != 'pull_request'
+        # Must run for every trigger, including pull_request: "Run CFC validation" above sets
+        # continue-on-error so the PR comment/summary steps still run on failure, so this step
+        # is the only thing that can fail the job.
+        if: steps.validation.outputs.exit_code != '0'
         run: |
           echo "Validation failed with exit code: ${{ steps.validation.outputs.exit_code }}"
           echo "Please review the validation artifacts for details."
