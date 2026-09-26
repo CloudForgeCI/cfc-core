@@ -1,0 +1,710 @@
+#!/usr/bin/env bash
+
+# Resource Validation Matrix
+# Creates a truth table of expected resources for every configuration combination
+# and validates actual synthesized resources against expectations.
+# Requires cloudforge-cli on PATH.
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Configuration - dynamically determine script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# BASE_DIR should be the validation directory (parent of scripts), not the scripts directory itself
+BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
+DOMAIN="cloudforgeci.com"
+VALIDATION_DIR="$SCRIPT_DIR/validation-results"
+TRUTH_TABLE_FILE="$VALIDATION_DIR/truth-table.json"
+DRIFT_REPORT_FILE="$VALIDATION_DIR/drift-report.txt"
+CDK_OUT_DIR="$BASE_DIR/cdk.out"
+
+# Create directories
+mkdir -p "$VALIDATION_DIR"
+
+echo -e "${BLUE}Resource Validation Matrix${NC}"
+echo -e "${BLUE}===========================================${NC}"
+echo "Domain: $DOMAIN"
+echo "Validation Directory: $VALIDATION_DIR"
+echo ""
+
+# Configuration matrix
+RUNTIMES=("EC2" "FARGATE")
+# CloudForge 3.0.0: JENKINS_SINGLE_NODE removed, APPLICATION_SERVICE added
+TOPOLOGIES=("JENKINS_SERVICE" "APPLICATION_SERVICE")
+SECURITY_PROFILES=("DEV" "STAGING" "PRODUCTION")
+DOMAIN_CONFIGS=("with-domain" "no-domain")
+SSL_CONFIGS=("ssl-enabled" "ssl-disabled")
+SUBDOMAIN_CONFIGS=("with-subdomain" "no-subdomain")
+
+
+# Expected resources truth table
+declare -A EXPECTED_RESOURCES
+
+# Function to initialize expected resources truth table
+#
+# This function generates expected resources for all valid configuration combinations.
+#
+# Key behaviors to note:
+# 1. Route53HostedZone and ACMCertificate are often looked up (not created)
+#    - Validation marks them as LOOKUP if not found in template but referenced
+# 2. Cognito resources require BOTH domain AND SSL enabled
+#    - CognitoUserPool, CognitoUserPoolClient, CognitoUserPoolDomain
+#    - Only created for STAGING/PRODUCTION with domain + SSL
+#    - This is correct: Cognito OIDC requires HTTPS
+# 3. Compliance resources (CloudTrail, ConfigRules) created for STAGING/PRODUCTION
+#    - Requires awsConfigEnabled=true in deployment context
+# 4. WAFWebACL only for PRODUCTION profile
+# 5. S3Bucket created for ALB access logging in STAGING/PRODUCTION with JENKINS_SERVICE
+initialize_truth_table() {
+    echo -e "${CYAN}Initializing truth table...${NC}"
+
+    # Base resources that should ALWAYS exist
+    local base_resources="VPC,Subnets,SecurityGroups,IAMRoles,CloudWatchLogs"
+    
+    for runtime in "${RUNTIMES[@]}"; do
+        for topology in "${TOPOLOGIES[@]}"; do
+            for security_profile in "${SECURITY_PROFILES[@]}"; do
+                for domain_config in "${DOMAIN_CONFIGS[@]}"; do
+                    for ssl_config in "${SSL_CONFIGS[@]}"; do
+                        for subdomain_config in "${SUBDOMAIN_CONFIGS[@]}"; do
+                            local key="${runtime}_${topology}_${security_profile}_${domain_config}_${ssl_config}_${subdomain_config}"
+                            
+                            # Start with base resources
+                            local expected="$base_resources"
+                            
+                            # Add runtime-specific resources
+                            if [[ "$runtime" == "FARGATE" ]]; then
+                                expected+=",ECSCluster,ECSService,FargateTaskDefinition"
+                            else
+                                # EC2 runtime - both JENKINS_SERVICE and APPLICATION_SERVICE use AutoScalingGroup
+                                expected+=",AutoScalingGroup"
+                            fi
+
+                            # Add topology-specific resources - both topologies use ALB
+                            if [[ "$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE" ]]; then
+                                expected+=",ApplicationLoadBalancer,TargetGroups"
+                            fi
+
+                            # Add EFS for persistent storage
+                            # EFS is available for all configurations
+                            expected+=",EFSFileSystem"
+                            # EFSAccessPoint is only for FARGATE
+                            if [[ "$runtime" == "FARGATE" ]]; then
+                                expected+=",EFSAccessPoint"
+                            fi
+                            
+                            # Add domain-specific resources
+                            if [[ "$domain_config" == "with-domain" ]]; then
+                                # Route53HostedZone and ACMCertificate are typically looked up, not created
+                                # Validation will mark them as LOOKUP if not created in template
+                                expected+=",Route53HostedZone,Route53Records"
+
+                                # Add SSL-specific resources. PRODUCTION forces HTTPS strict mode
+                                # (see ProductionSecurityProfileConfiguration#isHttpsStrictEnabled,
+                                # active here because this fixture always sets complianceFrameworks
+                                # for PRODUCTION below), which drops the port-80 listener entirely
+                                # rather than redirecting it -- so PRODUCTION never gets HTTPRedirect.
+                                if [[ "$ssl_config" == "ssl-enabled" ]]; then
+                                    if [[ "$security_profile" == "PRODUCTION" ]]; then
+                                        expected+=",ACMCertificate,HTTPSListener"
+                                    else
+                                        expected+=",ACMCertificate,HTTPSListener,HTTPRedirect"
+                                    fi
+                                else
+                                    expected+=",HTTPListener"
+                                fi
+                            else
+                                # No domain means only HTTP listener (if ALB exists)
+                                if [[ "$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE" ]]; then
+                                    expected+=",HTTPListener"
+                                fi
+                            fi
+                            
+                            # Add security profile-specific resources
+                            case "$security_profile" in
+                                "DEV")
+                                    # Basic security, minimal monitoring
+                                    ;;
+                                "STAGING")
+                                    expected+=",CloudTrail,ConfigRules"
+                                    # ALB access logging (creates S3 bucket)
+                                    if [[ "$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE" ]]; then
+                                        expected+=",S3Bucket"
+                                    fi
+                                    # OIDC authentication with Cognito (requires HTTPS/SSL + domain)
+                                    # Cognito is ONLY created when BOTH conditions are met:
+                                    # 1. Domain is configured (with-domain)
+                                    # 2. SSL is enabled (ssl-enabled)
+                                    # This is correct behavior - Cognito OIDC requires HTTPS
+                                    if [[ "$domain_config" == "with-domain" && "$ssl_config" == "ssl-enabled" ]]; then
+                                        expected+=",CognitoUserPool,CognitoUserPoolClient,CognitoUserPoolDomain"
+                                    fi
+                                    ;;
+                                "PRODUCTION")
+                                    expected+=",WAFWebACL,CloudTrail,ConfigRules"
+                                    # ALB access logging (creates S3 bucket)
+                                    if [[ "$topology" == "JENKINS_SERVICE" || "$topology" == "APPLICATION_SERVICE" ]]; then
+                                        expected+=",S3Bucket"
+                                    fi
+                                    # OIDC authentication with Cognito (requires HTTPS/SSL + domain)
+                                    # Cognito is ONLY created when BOTH conditions are met:
+                                    # 1. Domain is configured (with-domain)
+                                    # 2. SSL is enabled (ssl-enabled)
+                                    # This is correct behavior - Cognito OIDC requires HTTPS
+                                    if [[ "$domain_config" == "with-domain" && "$ssl_config" == "ssl-enabled" ]]; then
+                                        expected+=",CognitoUserPool,CognitoUserPoolClient,CognitoUserPoolDomain"
+                                    fi
+                                    # Jenkins has no clustering/HA support (see
+                                    # ScalingFactory#rejectUnsupportedAutoScaling), so this
+                                    # fixture pins minInstanceCapacity=maxInstanceCapacity=1 and
+                                    # never requests AutoScaling -- Ec2RuntimeConfiguration only
+                                    # wires ScalingFactory.scale() when maxInstanceCapacity > 1,
+                                    # so no AWS::AutoScaling::ScalingPolicy is ever created here.
+                                    ;;
+                            esac
+
+                            # Skip invalid combinations
+                            if [[ "$ssl_config" == "ssl-enabled" && "$domain_config" == "no-domain" ]]; then
+                                expected="INVALID_COMBINATION"
+                            fi
+
+                            if [[ "$subdomain_config" == "with-subdomain" && "$domain_config" == "no-domain" ]]; then
+                                expected="INVALID_COMBINATION"
+                            fi
+                            
+                            EXPECTED_RESOURCES[$key]="$expected"
+                        done
+                    done
+                done
+            done
+        done
+    done
+}
+
+# Function to create deployment context for testing
+create_deployment_context() {
+    local runtime=$1
+    local topology=$2
+    local security_profile=$3
+    local domain_config=$4
+    local ssl_config=$5
+    local subdomain_config=$6
+    local stack_name=$7
+    
+    local domain_value=""
+    local subdomain_value=""
+    local ssl_value="false"
+    local create_zone_value="false"
+
+    # Compliance features - enable based on security profile and configuration
+    local waf_enabled="false"
+    local aws_config_enabled="false"
+    local create_config_infra="false"
+    local auth_mode="none"
+    local cognito_domain_prefix=""
+
+    # Pre-compute hash for various uses (subdomain, cognito domain prefix)
+    local stack_hash=$(echo -n "$stack_name" | md5sum | cut -c1-8)
+
+    if [[ "$domain_config" == "with-domain" ]]; then
+        domain_value="$DOMAIN"
+        create_zone_value="true"  # Enable hosted zone creation when domain is configured
+        if [[ "$subdomain_config" == "with-subdomain" ]]; then
+# Generate subdomain that stays under 64-char Cognito domain limit
+            # Use first 40 chars of stack name + 8-char hash for uniqueness
+            local stack_lower=$(echo $stack_name | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+            local stack_prefix="${stack_lower:0:33}"
+            subdomain_value="test-${stack_prefix}-${stack_hash}"
+
+            # Verify FQDN length
+            local fqdn="${subdomain_value}.${domain_value}"
+            if [[ ${#fqdn} -gt 64 ]]; then
+                stack_prefix="${stack_lower:0:20}"
+                subdomain_value="test-${stack_prefix}-${stack_hash}"
+            fi
+        fi
+        if [[ "$ssl_config" == "ssl-enabled" ]]; then
+            ssl_value="true"
+
+            # Enable Cognito auth for SSL-enabled configurations in STAGING/PRODUCTION
+            # Cognito uses "alb-oidc" authMode with cognitoAutoProvision=true
+            if [[ "$security_profile" == "STAGING" || "$security_profile" == "PRODUCTION" ]]; then
+                auth_mode="alb-oidc"
+                # Use hash to generate short, unique Cognito domain prefix (13 chars total)
+                cognito_domain_prefix="auth-${stack_hash}"
+            fi
+        fi
+    fi
+
+    # Set compliance frameworks for all profiles to validate the compliance matrix works correctly
+    # DEV should run cfn-guard and fail (proving controls are absent by design)
+    # STAGING/PRODUCTION should run cfn-guard and pass (proving controls are present)
+    local compliance_frameworks=""
+    if [[ "$security_profile" == "DEV" ]]; then
+        # DEV tests against all frameworks to prove it correctly lacks compliance controls
+        compliance_frameworks="SOC2,HIPAA,PCI-DSS,GDPR"
+    elif [[ "$security_profile" == "STAGING" ]]; then
+        aws_config_enabled="true"
+        create_config_infra="true"
+        compliance_frameworks="SOC2"
+    elif [[ "$security_profile" == "PRODUCTION" ]]; then
+        aws_config_enabled="true"
+        create_config_infra="true"
+        compliance_frameworks="SOC2,HIPAA,PCI-DSS,GDPR"
+    fi
+
+    # Enable WAF for PRODUCTION (compliance requirement)
+    if [[ "$security_profile" == "PRODUCTION" ]]; then
+        waf_enabled="true"
+    fi
+    
+    cat > "$BASE_DIR/deployment-context.json" << EOF
+{
+  "stackName": "$stack_name",
+  "applicationId": "jenkins",
+  "applicationName": "Jenkins",
+  "healthCheckTimeout": "5",
+  "memory": "2048",
+  "enableMonitoring": "true",
+  "healthCheckInterval": "30",
+  "enableSsl": "$ssl_value",
+  "tier": "public",
+  "wafEnabled": "$waf_enabled",
+  "securityProfile": "$security_profile",
+  "cloudfrontEnabled": "false",
+  "healthCheckGracePeriod": "300",
+  "unhealthyThreshold": "3",
+  "healthyThreshold": "2",
+  "networkMode": "public-no-nat",
+  "topology": "$topology",
+  "instanceType": "t3.micro",
+  "minInstanceCapacity": "1",
+  "runtime": "$runtime",
+  "cpu": "1024",
+  "cpuTargetUtilization": "60",
+  "enableAutoScaling": "false",
+  "env": "dev",
+  "maxInstanceCapacity": "1",
+  "authMode": "$auth_mode",
+  "domain": "$domain_value",
+  "subdomain": "$subdomain_value",
+  "createZone": "$create_zone_value",
+  "logRetentionDays": "7",
+  "region": "us-east-1",
+  "enableEncryption": "true",
+  "awsConfigEnabled": "$aws_config_enabled",
+  "createConfigInfrastructure": "$create_config_infra",
+  "guardDutyEnabled": "false",
+  "auditManagerEnabled": "false",
+  "complianceFrameworks": "$compliance_frameworks",
+  "cognitoDomainPrefix": "$cognito_domain_prefix",
+  "cognitoAutoProvision": "$([[ -n "$cognito_domain_prefix" ]] && echo "true" || echo "false")"
+}
+EOF
+}
+
+# Function to synthesize and validate a configuration
+synthesize_and_validate() {
+    local runtime=$1
+    local topology=$2
+    local security_profile=$3
+    local domain_config=$4
+    local ssl_config=$5
+    local subdomain_config=$6
+    
+    local key="${runtime}_${topology}_${security_profile}_${domain_config}_${ssl_config}_${subdomain_config}"
+    local expected="${EXPECTED_RESOURCES[$key]}"
+    
+    # Skip invalid combinations
+    if [[ "$expected" == "INVALID_COMBINATION" ]]; then
+        echo -e "${YELLOW}⚠️  Skipping invalid combination: $key${NC}"
+        return 0
+    fi
+    
+    local stack_name="val-$(echo $key | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+    
+    echo -e "${PURPLE}Testing: $key${NC}"
+    echo "  Stack: $stack_name"
+    echo "  Expected: $expected"
+    
+    # Create deployment context
+    create_deployment_context "$runtime" "$topology" "$security_profile" "$domain_config" "$ssl_config" "$subdomain_config" "$stack_name"
+    
+    # Clean previous CDK output
+    rm -rf "$CDK_OUT_DIR"
+    
+    # Run synthesis
+    local synth_output="$VALIDATION_DIR/${key}-synth.log"
+    local synth_error="$VALIDATION_DIR/${key}-error.log"
+    local template_file="$CDK_OUT_DIR/$stack_name.template.json"
+
+    cd "$BASE_DIR"
+
+    if cloudforge-cli deploy --context "$BASE_DIR/deployment-context.json" --synth-only \
+            --outdir "$CDK_OUT_DIR" > "$synth_output" 2> "$synth_error"; then
+        echo -e "  ${GREEN}Synthesis successful${NC}"
+
+        # Validate resources
+        if [ -f "$template_file" ]; then
+            validate_resources "$template_file" "$expected" "$key"
+        else
+            echo -e "  ${RED}ERROR: Template file not found${NC}"
+            echo "$key: SYNTHESIS_FAILED - Template not generated" >> "$DRIFT_REPORT_FILE"
+        fi
+
+    else
+        echo -e "  ${RED}ERROR: Synthesis failed${NC}"
+        echo "$key: SYNTHESIS_FAILED - $(head -1 $synth_error)" >> "$DRIFT_REPORT_FILE"
+    fi
+    
+    echo ""
+}
+
+# Function to validate resources in a CloudFormation template
+validate_resources() {
+    local template_file=$1
+    local expected_resources=$2
+    local config_key=$3
+
+    local validation_output="$VALIDATION_DIR/${config_key}-validation.json"
+
+    echo "  Validating resources..."
+
+    # Extract all resource types from template
+    local actual_resources=$(jq -r '.Resources | to_entries[] | .value.Type' "$template_file" 2>/dev/null | sort | uniq | tr '\n' ',' | sed 's/,$//')
+
+    # Create validation report
+    cat > "$validation_output" << EOF
+{
+  "config": "$config_key",
+  "expected": "$expected_resources",
+  "actual_resource_types": "$actual_resources",
+  "validation_results": {
+EOF
+
+    local validation_results=""
+    local missing_resources=""
+    local lookup_resources=""
+    local all_good=true
+
+    # Check each expected resource type
+    IFS=',' read -ra EXPECTED_ARRAY <<< "$expected_resources"
+    for expected in "${EXPECTED_ARRAY[@]}"; do
+        local found=false
+        local is_lookup=false
+        case "$expected" in
+            "VPC")
+                if grep -q "AWS::EC2::VPC" "$template_file"; then found=true; fi
+                ;;
+            "Subnets")
+                if grep -q "AWS::EC2::Subnet" "$template_file"; then found=true; fi
+                ;;
+            "SecurityGroups")
+                if grep -q "AWS::EC2::SecurityGroup" "$template_file"; then found=true; fi
+                ;;
+            "ApplicationLoadBalancer")
+                if grep -q "AWS::ElasticLoadBalancingV2::LoadBalancer" "$template_file"; then found=true; fi
+                ;;
+            "TargetGroups")
+                if grep -q "AWS::ElasticLoadBalancingV2::TargetGroup" "$template_file"; then found=true; fi
+                ;;
+            "HTTPListener")
+                # Check for Listener with Port 80 OR check for any HTTP listener
+                if jq -r '.Resources | to_entries[] | select(.value.Type == "AWS::ElasticLoadBalancingV2::Listener") | select(.value.Properties.Port == 80 or .value.Properties.Protocol == "HTTP") | .key' "$template_file" 2>/dev/null | grep -q .; then
+                    found=true
+                fi
+                ;;
+            "HTTPSListener")
+                # Check for Listener with Port 443 OR Protocol HTTPS
+                if jq -r '.Resources | to_entries[] | select(.value.Type == "AWS::ElasticLoadBalancingV2::Listener") | select(.value.Properties.Port == 443 or .value.Properties.Protocol == "HTTPS") | .key' "$template_file" 2>/dev/null | grep -q .; then
+                    found=true
+                fi
+                ;;
+            "HTTPRedirect")
+                # Check for Listener with redirect action to HTTPS
+                if jq -r '.Resources | to_entries[] | select(.value.Type == "AWS::ElasticLoadBalancingV2::Listener") | select(.value.Properties.DefaultActions[]? | select(.Type == "redirect") | select(.RedirectConfig.Protocol == "HTTPS")) | .key' "$template_file" 2>/dev/null | grep -q .; then
+                    found=true
+                fi
+                ;;
+            "ACMCertificate")
+                # ACM certificates are often looked up from existing resources
+                if grep -q "AWS::CertificateManager::Certificate" "$template_file"; then
+                    found=true
+                else
+                    # Check if certificate ARN is referenced (indicating lookup)
+                    if grep -q "arn:aws:acm:" "$template_file"; then
+                        found=true
+                        is_lookup=true
+                    fi
+                fi
+                ;;
+            "Route53HostedZone")
+                # Hosted zones are typically looked up, not created
+                if grep -q "AWS::Route53::HostedZone" "$template_file"; then
+                    found=true
+                else
+                    # If Route53 records exist, zone must exist (via lookup)
+                    if grep -q "AWS::Route53::RecordSet" "$template_file"; then
+                        found=true
+                        is_lookup=true
+                    fi
+                fi
+                ;;
+            "Route53Records")
+                if grep -q "AWS::Route53::RecordSet" "$template_file"; then found=true; fi
+                ;;
+            "ECSCluster")
+                if grep -q "AWS::ECS::Cluster" "$template_file"; then found=true; fi
+                ;;
+            "ECSService")
+                if grep -q "AWS::ECS::Service" "$template_file"; then found=true; fi
+                ;;
+            "FargateTaskDefinition")
+                if grep -q "AWS::ECS::TaskDefinition" "$template_file"; then found=true; fi
+                ;;
+            "EC2Instances")
+                # Check for EC2 Instance or LaunchTemplate (which creates instances)
+                if grep -q "AWS::EC2::Instance" "$template_file" || grep -q "AWS::EC2::LaunchTemplate" "$template_file"; then
+                    found=true
+                fi
+                ;;
+            "AutoScalingGroup")
+                if grep -q "AWS::AutoScaling::AutoScalingGroup" "$template_file"; then found=true; fi
+                ;;
+            "AutoScaling")
+                if grep -q "AWS::AutoScaling::ScalingPolicy" "$template_file"; then found=true; fi
+                ;;
+            "EFSFileSystem")
+                if grep -q "AWS::EFS::FileSystem" "$template_file"; then found=true; fi
+                ;;
+            "EFSAccessPoint")
+                if grep -q "AWS::EFS::AccessPoint" "$template_file"; then found=true; fi
+                ;;
+            "IAMRoles")
+                if grep -q "AWS::IAM::Role" "$template_file"; then found=true; fi
+                ;;
+            "CloudWatchLogs")
+                if grep -q "AWS::Logs::LogGroup" "$template_file"; then found=true; fi
+                ;;
+            "WAFWebACL")
+                if grep -q "AWS::WAFv2::WebACL" "$template_file"; then found=true; fi
+                ;;
+            "CloudTrail")
+                if grep -q "AWS::CloudTrail::Trail" "$template_file"; then found=true; fi
+                ;;
+            "ConfigRules")
+                # Check for Config Rule OR ConfigurationRecorder (which enables Config)
+                if grep -q "AWS::Config::ConfigRule" "$template_file" || grep -q "AWS::Config::ConfigurationRecorder" "$template_file"; then
+                    found=true
+                fi
+                ;;
+            "S3Bucket")
+                if grep -q "AWS::S3::Bucket" "$template_file"; then found=true; fi
+                ;;
+            "CognitoUserPool")
+                if grep -q "AWS::Cognito::UserPool" "$template_file"; then found=true; fi
+                ;;
+            "CognitoUserPoolClient")
+                if grep -q "AWS::Cognito::UserPoolClient" "$template_file"; then found=true; fi
+                ;;
+            "CognitoUserPoolDomain")
+                if grep -q "AWS::Cognito::UserPoolDomain" "$template_file"; then found=true; fi
+                ;;
+        esac
+
+        if [[ "$found" == true ]]; then
+            if [[ "$is_lookup" == true ]]; then
+                validation_results+="\n    \"$expected\": \"LOOKUP\","
+                lookup_resources+="$expected,"
+                echo -e "    ${CYAN}🔍 $expected (via lookup)${NC}"
+            else
+                validation_results+="\n    \"$expected\": \"FOUND\","
+                echo -e "    ${GREEN}✅ $expected${NC}"
+            fi
+        else
+            validation_results+="\n    \"$expected\": \"MISSING\","
+            missing_resources+="$expected,"
+            all_good=false
+            echo -e "    ${RED}❌ $expected${NC}"
+        fi
+    done
+
+    # Close validation JSON
+    echo -e "$validation_results" | sed '$ s/,$//' >> "$validation_output"
+    echo "" >> "$validation_output"
+    echo "  }," >> "$validation_output"
+    echo "  \"summary\": {" >> "$validation_output"
+    echo "    \"status\": \"$(if $all_good; then echo 'PASS'; else echo 'FAIL'; fi)\"," >> "$validation_output"
+    echo "    \"missing_resources\": \"${missing_resources%,}\"," >> "$validation_output"
+    echo "    \"lookup_resources\": \"${lookup_resources%,}\"," >> "$validation_output"
+    echo "    \"resource_count\": $(grep -c '"Type"' "$template_file" 2>/dev/null || echo 0)" >> "$validation_output"
+    echo "  }" >> "$validation_output"
+    echo "}" >> "$validation_output"
+
+    # Add to drift report
+    if ! $all_good; then
+        echo "$config_key: MISSING_RESOURCES - ${missing_resources%,}" >> "$DRIFT_REPORT_FILE"
+    else
+        echo "$config_key: VALIDATION_PASSED" >> "$DRIFT_REPORT_FILE"
+    fi
+}
+
+# Function to generate the validation report
+generate_comprehensive_report() {
+    echo -e "${BLUE}Generating validation report...${NC}"
+    
+    local report_file="$VALIDATION_DIR/comprehensive-validation-report.html"
+    
+    cat > "$report_file" << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CloudForge Core Resource Validation Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { background: #f0f0f0; padding: 15px; border-radius: 5px; }
+        .matrix { margin: 20px 0; }
+        .config { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 3px; }
+        .pass { background: #d4edda; border-color: #c3e6cb; }
+        .fail { background: #f8d7da; border-color: #f5c6cb; }
+        .invalid { background: #e2e3e5; border-color: #d6d8db; }
+        .resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+        .resource-item { padding: 5px; border-radius: 3px; font-size: 12px; }
+        .found { background: #d1ecf1; color: #0c5460; }
+        .missing { background: #f8d7da; color: #721c24; }
+        .truth-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .truth-table th, .truth-table td { border: 1px solid #ddd; padding: 4px; text-align: center; }
+        .truth-table th { background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>CloudForge Core Resource Validation Report</h1>
+        <p>Generated: $(date)</p>
+        <p>Validation Directory: $VALIDATION_DIR</p>
+    </div>
+    
+    <h2>Validation Summary</h2>
+    <div id="summary">
+        <!-- Summary will be populated -->
+    </div>
+    
+    <h2>Configuration Matrix Results</h2>
+    <div class="matrix" id="matrix">
+        <!-- Matrix will be populated -->
+    </div>
+    
+    <h2>Truth Table</h2>
+    <table class="truth-table">
+        <thead>
+            <tr>
+                <th>Runtime</th>
+                <th>Topology</th>
+                <th>Security</th>
+                <th>Domain</th>
+                <th>SSL</th>
+                <th>Subdomain</th>
+                <th>Expected Resources</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="truth-table-body">
+            <!-- Truth table will be populated -->
+        </tbody>
+    </table>
+    
+    <h2>Detailed Validation Results</h2>
+    <div id="detailed-results">
+        <!-- Detailed results will be populated -->
+    </div>
+</body>
+</html>
+EOF
+    
+    echo -e "${GREEN}Report generated: $report_file${NC}"
+}
+
+# Main execution
+main() {
+    echo -e "${CYAN}Starting resource validation...${NC}"
+    
+    # Initialize truth table
+    initialize_truth_table
+    
+    # Clear previous drift report
+    > "$DRIFT_REPORT_FILE"
+    
+    local total_configs=0
+    local passed_configs=0
+    local failed_configs=0
+    local invalid_configs=0
+    
+    # Test all combinations
+    for runtime in "${RUNTIMES[@]}"; do
+        for topology in "${TOPOLOGIES[@]}"; do
+            for security_profile in "${SECURITY_PROFILES[@]}"; do
+                for domain_config in "${DOMAIN_CONFIGS[@]}"; do
+                    for ssl_config in "${SSL_CONFIGS[@]}"; do
+                        for subdomain_config in "${SUBDOMAIN_CONFIGS[@]}"; do
+                            local key="${runtime}_${topology}_${security_profile}_${domain_config}_${ssl_config}_${subdomain_config}"
+                            local expected="${EXPECTED_RESOURCES[$key]}"
+                            
+                            total_configs=$((total_configs + 1))
+                            
+                            if [[ "$expected" == "INVALID_COMBINATION" ]]; then
+                                invalid_configs=$((invalid_configs + 1))
+                            else
+                                synthesize_and_validate "$runtime" "$topology" "$security_profile" "$domain_config" "$ssl_config" "$subdomain_config"
+                                
+                                # Check if validation passed (simple check)
+                                if grep -q "${key}: VALIDATION_PASSED" "$DRIFT_REPORT_FILE" 2>/dev/null; then
+                                    passed_configs=$((passed_configs + 1))
+                                else
+                                    failed_configs=$((failed_configs + 1))
+                                fi
+                            fi
+                        done
+                    done
+                done
+            done
+        done
+    done
+    
+    # Generate reports
+    generate_comprehensive_report
+    
+    # Print summary
+    echo -e "${BLUE}Validation Summary${NC}"
+    echo -e "${BLUE}====================${NC}"
+    echo "Total Configurations: $total_configs"
+    echo "Valid Configurations: $((total_configs - invalid_configs))"
+    echo "Invalid Combinations: $invalid_configs"
+    echo "Passed Validations: $passed_configs"
+    echo "Failed Validations: $failed_configs"
+    echo "Success Rate: $(( (passed_configs * 100) / (total_configs - invalid_configs) ))%"
+    echo ""
+    echo -e "${GREEN}Resource validation completed.${NC}"
+    echo "Results saved in: $VALIDATION_DIR"
+    echo "Drift report: $DRIFT_REPORT_FILE"
+    echo ""
+    
+    if [[ $failed_configs -gt 0 ]]; then
+        echo -e "${RED}⚠️  Failures detected. Check drift report for details.${NC}"
+        echo "Failed configurations:"
+        grep "MISSING_RESOURCES\|SYNTHESIS_FAILED" "$DRIFT_REPORT_FILE" | head -10
+        exit 1
+    else
+        echo -e "${GREEN}All validations passed.${NC}"
+    fi
+}
+
+# Run main function
+main "$@"

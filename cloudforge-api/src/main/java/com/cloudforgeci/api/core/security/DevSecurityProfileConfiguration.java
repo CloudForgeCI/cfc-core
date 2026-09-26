@@ -114,9 +114,12 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
 
     @Override
     public boolean isAuditManagerEnabled() {
-        // Allow deployment context to override profile default
-        if (deploymentContext != null && deploymentContext.auditManagerEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.auditManagerEnabled());
+        // Allow deployment context to override profile default. This is the audit-manager-SERVICE
+        // flag, distinct from DeploymentConfig#auditManagerEnabled, which is the separate master
+        // gate SecurityRules.install() uses to decide whether ANY FrameworkRules compliance
+        // validation runs at all.
+        if (deploymentContext != null && deploymentContext.auditManagerServiceEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.auditManagerServiceEnabled());
         }
         return false; // Disabled for dev to reduce costs
     }
@@ -240,12 +243,20 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
 
     @Override
     public boolean isBackupVaultLockEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.backupVaultLockEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.backupVaultLockEnabled());
+        }
         // Vault lock not required in dev environments
         return false;
     }
 
     @Override
     public boolean isBackupVaultRetentionEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.backupVaultRetentionEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.backupVaultRetentionEnabled());
+        }
         // Dev environments don't retain backup vaults
         return false;
     }
@@ -372,6 +383,10 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
 
     @Override
     public boolean isRdsDeletionProtectionEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.rdsDeletionProtectionEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.rdsDeletionProtectionEnabled());
+        }
         // Dev environments don't require deletion protection
         // to allow easy cleanup and rapid iteration
         return false;
@@ -379,6 +394,10 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
 
     @Override
     public boolean isRdsDatabaseMultiAzEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.rdsDatabaseMultiAzEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.rdsDatabaseMultiAzEnabled());
+        }
         // Dev environments use single-AZ for cost savings
         return false;
     }
@@ -589,11 +608,19 @@ public class DevSecurityProfileConfiguration implements SecurityProfileConfigura
 
     @Override
     public boolean isSnsKmsEncryptionEnabled() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.snsKmsEncryptionEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.snsKmsEncryptionEnabled());
+        }
         return false; // Not required for development
     }
 
     @Override
     public boolean isImdsv2Required() {
+        // Allow deployment context to override profile default
+        if (deploymentContext != null && deploymentContext.imdsv2Required() != null) {
+            return Boolean.TRUE.equals(deploymentContext.imdsv2Required());
+        }
         return false; // IMDSv1 allowed for development convenience
     }
 }

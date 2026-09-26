@@ -6,25 +6,43 @@
 # CloudForge Core - Multi-Layer Compliance Validation
 # Layer 3: Template-Level Policy Enforcement (cfn-guard)
 
+
+let logs_loggroup = Resources.*[ Type == 'AWS::Logs::LogGroup' ]
+let cloudwatch_alarm = Resources.*[ Type == 'AWS::CloudWatch::Alarm' ]
+let cloudtrail_trail = Resources.*[ Type == 'AWS::CloudTrail::Trail' ]
+let ec2_flowlog = Resources.*[ Type == 'AWS::EC2::FlowLog' ]
+let rds_dbinstance = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
+let lambda_function = Resources.*[ Type == 'AWS::Lambda::Function' ]
+let s3_bucket = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let elasticloadbalancingv2_loadbalancer = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::LoadBalancer' ]
+let apigateway_stage = Resources.*[ Type == 'AWS::ApiGateway::Stage' ]
+let config_configurationrecorder = Resources.*[ Type == 'AWS::Config::ConfigurationRecorder' ]
+let config_deliverychannel = Resources.*[ Type == 'AWS::Config::DeliveryChannel' ]
+let guardduty_detector = Resources.*[ Type == 'AWS::GuardDuty::Detector' ]
+let cloudfront_distribution = Resources.*[ Type == 'AWS::CloudFront::Distribution' ]
+let redshift_cluster = Resources.*[ Type == 'AWS::Redshift::Cluster' ]
+let ecs_taskdefinition = Resources.*[ Type == 'AWS::ECS::TaskDefinition' ]
+let xray_samplingrule = Resources.*[ Type == 'AWS::XRay::SamplingRule' ]
+let cloudwatch_compositealarm = Resources.*[ Type == 'AWS::CloudWatch::CompositeAlarm' ]
+let logs_metricfilter = Resources.*[ Type == 'AWS::Logs::MetricFilter' ]
+let cloudwatch_dashboard = Resources.*[ Type == 'AWS::CloudWatch::Dashboard' ]
 # ============================================================================
 # CloudWatch Logs
 # ============================================================================
 
 # Log group retention
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_cloudwatch_retention when
-    resourceType == 'AWS::Logs::LogGroup' {
+rule advanced_monitoring_cloudwatch_retention when %logs_loggroup !empty {
 
-    Properties.RetentionInDays exists <<[Advanced Monitoring] CloudWatch log groups must have retention configured>>
-    Properties.RetentionInDays >= 90 <<[Advanced Monitoring] CloudWatch logs must retain for at least 90 days>>
+    %logs_loggroup.Properties.RetentionInDays exists <<[Advanced Monitoring] CloudWatch log groups must have retention configured>>
+    %logs_loggroup.Properties.RetentionInDays >= 90 <<[Advanced Monitoring] CloudWatch logs must retain for at least 90 days>>
 }
 
 # Log group encryption
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule advanced_monitoring_log_encryption when
-    resourceType == 'AWS::Logs::LogGroup' {
+rule advanced_monitoring_log_encryption when %logs_loggroup !empty {
 
-    Properties.KmsKeyId exists <<[Advanced Monitoring] CloudWatch log groups must be encrypted with KMS>>
+    %logs_loggroup.Properties.KmsKeyId exists <<[Advanced Monitoring] CloudWatch log groups must be encrypted with KMS>>
 }
 
 # ============================================================================
@@ -33,11 +51,10 @@ rule advanced_monitoring_log_encryption when
 
 # Alarms with actions enabled
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_alarm_actions when
-    resourceType == 'AWS::CloudWatch::Alarm' {
+rule advanced_monitoring_alarm_actions when %cloudwatch_alarm !empty {
 
-    Properties.ActionsEnabled == true <<[Advanced Monitoring] CloudWatch alarms must have actions enabled>>
-    Properties.AlarmActions exists <<[Advanced Monitoring] CloudWatch alarms must have alarm actions configured>>
+    %cloudwatch_alarm.Properties.ActionsEnabled == true <<[Advanced Monitoring] CloudWatch alarms must have actions enabled>>
+    %cloudwatch_alarm.Properties.AlarmActions exists <<[Advanced Monitoring] CloudWatch alarms must have alarm actions configured>>
 }
 
 # ============================================================================
@@ -46,28 +63,25 @@ rule advanced_monitoring_alarm_actions when
 
 # CloudTrail enabled
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_cloudtrail_enabled when
-    resourceType == 'AWS::CloudTrail::Trail' {
+rule advanced_monitoring_cloudtrail_enabled when %cloudtrail_trail !empty {
 
-    Properties.IsLogging == true <<[Advanced Monitoring] CloudTrail must be enabled>>
-    Properties.EnableLogFileValidation == true <<[Advanced Monitoring] CloudTrail must enable log file validation>>
+    %cloudtrail_trail.Properties.IsLogging == true <<[Advanced Monitoring] CloudTrail must be enabled>>
+    %cloudtrail_trail.Properties.EnableLogFileValidation == true <<[Advanced Monitoring] CloudTrail must enable log file validation>>
 }
 
 # CloudTrail multi-region
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_cloudtrail_multiregion when
-    resourceType == 'AWS::CloudTrail::Trail' {
+rule advanced_monitoring_cloudtrail_multiregion when %cloudtrail_trail !empty {
 
-    Properties.IsMultiRegionTrail == true <<[Advanced Monitoring] CloudTrail should be multi-region>>
-    Properties.IncludeGlobalServiceEvents == true <<[Advanced Monitoring] CloudTrail should include global events>>
+    %cloudtrail_trail.Properties.IsMultiRegionTrail == true <<[Advanced Monitoring] CloudTrail should be multi-region>>
+    %cloudtrail_trail.Properties.IncludeGlobalServiceEvents == true <<[Advanced Monitoring] CloudTrail should include global events>>
 }
 
 # CloudTrail CloudWatch logs integration
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_cloudtrail_cloudwatch when
-    resourceType == 'AWS::CloudTrail::Trail' {
+rule advanced_monitoring_cloudtrail_cloudwatch when %cloudtrail_trail !empty {
 
-    Properties.CloudWatchLogsLogGroupArn exists <<[Advanced Monitoring] CloudTrail should send logs to CloudWatch>>
+    %cloudtrail_trail.Properties.CloudWatchLogsLogGroupArn exists <<[Advanced Monitoring] CloudTrail should send logs to CloudWatch>>
 }
 
 # ============================================================================
@@ -76,11 +90,10 @@ rule advanced_monitoring_cloudtrail_cloudwatch when
 
 # VPC Flow Logs enabled
 # CloudForge Mapping: NETWORK_MONITORING control
-rule advanced_monitoring_vpc_flow_logs when
-    resourceType == 'AWS::EC2::FlowLog' {
+rule advanced_monitoring_vpc_flow_logs when %ec2_flowlog !empty {
 
-    Properties.ResourceType == 'VPC' <<[Advanced Monitoring] VPC Flow Logs must target VPC>>
-    Properties.TrafficType == 'ALL' <<[Advanced Monitoring] VPC Flow Logs must capture ALL traffic>>
+    %ec2_flowlog.Properties.ResourceType == 'VPC' <<[Advanced Monitoring] VPC Flow Logs must target VPC>>
+    %ec2_flowlog.Properties.TrafficType == 'ALL' <<[Advanced Monitoring] VPC Flow Logs must capture ALL traffic>>
 }
 
 # ============================================================================
@@ -89,29 +102,26 @@ rule advanced_monitoring_vpc_flow_logs when
 
 # RDS enhanced monitoring
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_rds_enhanced when
-    resourceType == 'AWS::RDS::DBInstance' {
+rule advanced_monitoring_rds_enhanced when %rds_dbinstance !empty {
 
-    Properties.MonitoringInterval exists <<[Advanced Monitoring] RDS must have monitoring interval configured>>
-    Properties.MonitoringInterval in [1, 5, 10, 15, 30, 60] <<[Advanced Monitoring] RDS monitoring interval must be valid>>
+    %rds_dbinstance.Properties.MonitoringInterval exists <<[Advanced Monitoring] RDS must have monitoring interval configured>>
+    %rds_dbinstance.Properties.MonitoringInterval in [1, 5, 10, 15, 30, 60] <<[Advanced Monitoring] RDS monitoring interval must be valid>>
 }
 
 # RDS CloudWatch log exports
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_rds_logs when
-    resourceType == 'AWS::RDS::DBInstance' {
+rule advanced_monitoring_rds_logs when %rds_dbinstance !empty {
 
-    Properties.EnableCloudwatchLogsExports exists <<[Advanced Monitoring] RDS should export logs to CloudWatch>>
-    Properties.EnableCloudwatchLogsExports not empty <<[Advanced Monitoring] RDS must have at least one log export configured>>
+    %rds_dbinstance.Properties.EnableCloudwatchLogsExports exists <<[Advanced Monitoring] RDS should export logs to CloudWatch>>
+    %rds_dbinstance.Properties.EnableCloudwatchLogsExports not empty <<[Advanced Monitoring] RDS must have at least one log export configured>>
 }
 
 # RDS performance insights
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_rds_performance_insights when
-    resourceType == 'AWS::RDS::DBInstance' {
+rule advanced_monitoring_rds_performance_insights when %rds_dbinstance !empty {
 
     when Properties.EnablePerformanceInsights exists {
-        Properties.EnablePerformanceInsights == true <<[Advanced Monitoring] RDS Performance Insights should be enabled>>
+        %rds_dbinstance.Properties.EnablePerformanceInsights == true <<[Advanced Monitoring] RDS Performance Insights should be enabled>>
     }
 }
 
@@ -121,21 +131,19 @@ rule advanced_monitoring_rds_performance_insights when
 
 # Lambda tracing (X-Ray)
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_lambda_tracing when
-    resourceType == 'AWS::Lambda::Function' {
+rule advanced_monitoring_lambda_tracing when %lambda_function !empty {
 
-    Properties.TracingConfig exists <<[Advanced Monitoring] Lambda functions must enable X-Ray tracing>>
-    Properties.TracingConfig.Mode exists <<[Advanced Monitoring] Must specify tracing mode>>
-    Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Advanced Monitoring] Lambda tracing mode must be Active or PassThrough>>
+    %lambda_function.Properties.TracingConfig exists <<[Advanced Monitoring] Lambda functions must enable X-Ray tracing>>
+    %lambda_function.Properties.TracingConfig.Mode exists <<[Advanced Monitoring] Must specify tracing mode>>
+    %lambda_function.Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Advanced Monitoring] Lambda tracing mode must be Active or PassThrough>>
 }
 
 # Lambda dead letter queue
 # CloudForge Mapping: ERROR_HANDLING control
-rule advanced_monitoring_lambda_dlq when
-    resourceType == 'AWS::Lambda::Function' {
+rule advanced_monitoring_lambda_dlq when %lambda_function !empty {
 
-    Properties.DeadLetterConfig exists <<[Advanced Monitoring] Lambda functions must have dead letter queues configured>>
-    Properties.DeadLetterConfig.TargetArn exists <<[Advanced Monitoring] Lambda DLQ must specify target ARN>>
+    %lambda_function.Properties.DeadLetterConfig exists <<[Advanced Monitoring] Lambda functions must have dead letter queues configured>>
+    %lambda_function.Properties.DeadLetterConfig.TargetArn exists <<[Advanced Monitoring] Lambda DLQ must specify target ARN>>
 }
 
 # ============================================================================
@@ -144,11 +152,10 @@ rule advanced_monitoring_lambda_dlq when
 
 # S3 access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_s3_logging when
-    resourceType == 'AWS::S3::Bucket' {
+rule advanced_monitoring_s3_logging when %s3_bucket !empty {
 
-    Properties.LoggingConfiguration exists <<[Advanced Monitoring] S3 buckets must have logging configured>>
-    Properties.LoggingConfiguration.DestinationBucketName exists <<[Advanced Monitoring] S3 logging must specify destination bucket>>
+    %s3_bucket.Properties.LoggingConfiguration exists <<[Advanced Monitoring] S3 buckets must have logging configured>>
+    %s3_bucket.Properties.LoggingConfiguration.DestinationBucketName exists <<[Advanced Monitoring] S3 logging must specify destination bucket>>
 }
 
 # ============================================================================
@@ -157,10 +164,9 @@ rule advanced_monitoring_s3_logging when
 
 # ALB access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_alb_logging when
-    resourceType == 'AWS::ElasticLoadBalancingV2::LoadBalancer' {
+rule advanced_monitoring_alb_logging when %elasticloadbalancingv2_loadbalancer !empty {
 
-    Properties.LoadBalancerAttributes exists <<[Advanced Monitoring] Load balancers must configure attributes>>
+    %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes exists <<[Advanced Monitoring] Load balancers must configure attributes>>
 
     some Properties.LoadBalancerAttributes[*] {
         Key == 'access_logs.s3.enabled'
@@ -174,20 +180,18 @@ rule advanced_monitoring_alb_logging when
 
 # API Gateway access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_apigateway_logging when
-    resourceType == 'AWS::ApiGateway::Stage' {
+rule advanced_monitoring_apigateway_logging when %apigateway_stage !empty {
 
-    Properties.AccessLogSetting exists <<[Advanced Monitoring] API Gateway must have access logging configured>>
-    Properties.AccessLogSetting.DestinationArn exists <<[Advanced Monitoring] API Gateway access logging must specify destination>>
+    %apigateway_stage.Properties.AccessLogSetting exists <<[Advanced Monitoring] API Gateway must have access logging configured>>
+    %apigateway_stage.Properties.AccessLogSetting.DestinationArn exists <<[Advanced Monitoring] API Gateway access logging must specify destination>>
 }
 
 # API Gateway execution logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_apigateway_execution_logging when
-    resourceType == 'AWS::ApiGateway::Stage' {
+rule advanced_monitoring_apigateway_execution_logging when %apigateway_stage !empty {
 
-    Properties.MethodSettings exists <<[Advanced Monitoring] API Gateway stages must configure method settings>>
-    Properties.MethodSettings[*] {
+    %apigateway_stage.Properties.MethodSettings exists <<[Advanced Monitoring] API Gateway stages must configure method settings>>
+    %apigateway_stage.Properties.MethodSettings[*] {
         LoggingLevel exists <<[Advanced Monitoring] Method settings must specify logging level>>
         LoggingLevel in ['INFO', 'ERROR'] <<[Advanced Monitoring] API Gateway logging level must be INFO or ERROR>>
     }
@@ -199,18 +203,16 @@ rule advanced_monitoring_apigateway_execution_logging when
 
 # Config recorder enabled
 # CloudForge Mapping: CONFIGURATION_MANAGEMENT control
-rule advanced_monitoring_config_recorder when
-    resourceType == 'AWS::Config::ConfigurationRecorder' {
+rule advanced_monitoring_config_recorder when %config_configurationrecorder !empty {
 
-    Properties.RecordingGroup.AllSupported == true <<[Advanced Monitoring] AWS Config must record all supported resources>>
+    %config_configurationrecorder.Properties.RecordingGroup.AllSupported == true <<[Advanced Monitoring] AWS Config must record all supported resources>>
 }
 
 # Config delivery channel
 # CloudForge Mapping: CONFIGURATION_MANAGEMENT control
-rule advanced_monitoring_config_delivery when
-    resourceType == 'AWS::Config::DeliveryChannel' {
+rule advanced_monitoring_config_delivery when %config_deliverychannel !empty {
 
-    Properties.S3BucketName exists <<[Advanced Monitoring] AWS Config must have delivery channel configured>>
+    %config_deliverychannel.Properties.S3BucketName exists <<[Advanced Monitoring] AWS Config must have delivery channel configured>>
 }
 
 # ============================================================================
@@ -219,10 +221,9 @@ rule advanced_monitoring_config_delivery when
 
 # GuardDuty enabled
 # CloudForge Mapping: THREAT_DETECTION control
-rule advanced_monitoring_guardduty_enabled when
-    resourceType == 'AWS::GuardDuty::Detector' {
+rule advanced_monitoring_guardduty_enabled when %guardduty_detector !empty {
 
-    Properties.Enable == true <<[Advanced Monitoring] GuardDuty must be enabled for threat monitoring>>
+    %guardduty_detector.Properties.Enable == true <<[Advanced Monitoring] GuardDuty must be enabled for threat monitoring>>
 }
 
 # ============================================================================
@@ -231,11 +232,10 @@ rule advanced_monitoring_guardduty_enabled when
 
 # CloudFront access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_cloudfront_logging when
-    resourceType == 'AWS::CloudFront::Distribution' {
+rule advanced_monitoring_cloudfront_logging when %cloudfront_distribution !empty {
 
     when Properties.DistributionConfig.Logging exists {
-        Properties.DistributionConfig.Logging.Bucket exists <<[Advanced Monitoring] CloudFront logging must specify bucket>>
+        %cloudfront_distribution.Properties.DistributionConfig.Logging.Bucket exists <<[Advanced Monitoring] CloudFront logging must specify bucket>>
     }
 }
 
@@ -245,11 +245,10 @@ rule advanced_monitoring_cloudfront_logging when
 
 # Redshift audit logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_redshift_logging when
-    resourceType == 'AWS::Redshift::Cluster' {
+rule advanced_monitoring_redshift_logging when %redshift_cluster !empty {
 
-    Properties.LoggingProperties exists <<[Advanced Monitoring] Redshift must have logging configured>>
-    Properties.LoggingProperties.BucketName exists <<[Advanced Monitoring] Redshift logging must specify bucket>>
+    %redshift_cluster.Properties.LoggingProperties exists <<[Advanced Monitoring] Redshift must have logging configured>>
+    %redshift_cluster.Properties.LoggingProperties.BucketName exists <<[Advanced Monitoring] Redshift logging must specify bucket>>
 }
 
 # ============================================================================
@@ -258,11 +257,10 @@ rule advanced_monitoring_redshift_logging when
 
 # ECS task definition logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_ecs_logging when
-    resourceType == 'AWS::ECS::TaskDefinition' {
+rule advanced_monitoring_ecs_logging when %ecs_taskdefinition !empty {
 
-    Properties.ContainerDefinitions exists <<[Advanced Monitoring] ECS task definitions must define containers>>
-    Properties.ContainerDefinitions[*] {
+    %ecs_taskdefinition.Properties.ContainerDefinitions exists <<[Advanced Monitoring] ECS task definitions must define containers>>
+    %ecs_taskdefinition.Properties.ContainerDefinitions[*] {
         LogConfiguration exists <<[Advanced Monitoring] ECS containers must have log configuration>>
         LogConfiguration.LogDriver exists <<[Advanced Monitoring] ECS container must have log driver configured>>
     }
@@ -274,26 +272,23 @@ rule advanced_monitoring_ecs_logging when
 
 # CloudTrail Insights enabled
 # CloudForge Mapping: CLOUDTRAIL_INSIGHTS control
-rule advanced_monitoring_cloudtrail_insights when
-    resourceType == 'AWS::CloudTrail::Trail' {
+rule advanced_monitoring_cloudtrail_insights when %cloudtrail_trail !empty {
 
-    Properties.InsightSelectors exists <<[Advanced Monitoring] CloudTrail should enable Insights for anomaly detection>>
+    %cloudtrail_trail.Properties.InsightSelectors exists <<[Advanced Monitoring] CloudTrail should enable Insights for anomaly detection>>
 }
 
 # CloudTrail Organization trail
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_cloudtrail_organization when
-    resourceType == 'AWS::CloudTrail::Trail' {
+rule advanced_monitoring_cloudtrail_organization when %cloudtrail_trail !empty {
 
-    Properties.IsOrganizationTrail == true <<[Advanced Monitoring] Consider using Organization trails for centralized logging>>
+    %cloudtrail_trail.Properties.IsOrganizationTrail == true <<[Advanced Monitoring] Consider using Organization trails for centralized logging>>
 }
 
 # CloudTrail S3 data events
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_cloudtrail_s3_data_events when
-    resourceType == 'AWS::CloudTrail::Trail' {
+rule advanced_monitoring_cloudtrail_s3_data_events when %cloudtrail_trail !empty {
 
-    Properties.EventSelectors exists <<[Advanced Monitoring] CloudTrail should configure event selectors>>
+    %cloudtrail_trail.Properties.EventSelectors exists <<[Advanced Monitoring] CloudTrail should configure event selectors>>
 
     some Properties.EventSelectors[*] {
         DataResources exists <<[Advanced Monitoring] Event selectors should include data resources>>
@@ -309,11 +304,10 @@ rule advanced_monitoring_cloudtrail_s3_data_events when
 
 # X-Ray sampling rule
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_xray_sampling when
-    resourceType == 'AWS::XRay::SamplingRule' {
+rule advanced_monitoring_xray_sampling when %xray_samplingrule !empty {
 
-    Properties.SamplingRule exists <<[Advanced Monitoring] X-Ray must have sampling rule configured>>
-    Properties.SamplingRule.RuleName exists <<[Advanced Monitoring] X-Ray sampling rule must have name>>
+    %xray_samplingrule.Properties.SamplingRule exists <<[Advanced Monitoring] X-Ray must have sampling rule configured>>
+    %xray_samplingrule.Properties.SamplingRule.RuleName exists <<[Advanced Monitoring] X-Ray sampling rule must have name>>
 }
 
 # ============================================================================
@@ -322,11 +316,10 @@ rule advanced_monitoring_xray_sampling when
 
 # CloudWatch composite alarm configuration
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_composite_alarm when
-    resourceType == 'AWS::CloudWatch::CompositeAlarm' {
+rule advanced_monitoring_composite_alarm when %cloudwatch_compositealarm !empty {
 
-    Properties.AlarmRule exists <<[Advanced Monitoring] Composite alarm must have alarm rule>>
-    Properties.AlarmActions exists <<[Advanced Monitoring] Composite alarm must have actions configured>>
+    %cloudwatch_compositealarm.Properties.AlarmRule exists <<[Advanced Monitoring] Composite alarm must have alarm rule>>
+    %cloudwatch_compositealarm.Properties.AlarmActions exists <<[Advanced Monitoring] Composite alarm must have actions configured>>
 }
 
 # ============================================================================
@@ -335,11 +328,10 @@ rule advanced_monitoring_composite_alarm when
 
 # CloudWatch metric filter for security events
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_metric_filter when
-    resourceType == 'AWS::Logs::MetricFilter' {
+rule advanced_monitoring_metric_filter when %logs_metricfilter !empty {
 
-    Properties.FilterPattern exists <<[Advanced Monitoring] Metric filter must have filter pattern>>
-    Properties.MetricTransformations exists <<[Advanced Monitoring] Metric filter must have transformations>>
+    %logs_metricfilter.Properties.FilterPattern exists <<[Advanced Monitoring] Metric filter must have filter pattern>>
+    %logs_metricfilter.Properties.MetricTransformations exists <<[Advanced Monitoring] Metric filter must have transformations>>
 }
 
 # ============================================================================
@@ -348,8 +340,7 @@ rule advanced_monitoring_metric_filter when
 
 # CloudWatch dashboard with widgets
 # CloudForge Mapping: MONITORING control
-rule advanced_monitoring_dashboard when
-    resourceType == 'AWS::CloudWatch::Dashboard' {
+rule advanced_monitoring_dashboard when %cloudwatch_dashboard !empty {
 
-    Properties.DashboardBody exists <<[Advanced Monitoring] CloudWatch dashboard must have body configured>>
+    %cloudwatch_dashboard.Properties.DashboardBody exists <<[Advanced Monitoring] CloudWatch dashboard must have body configured>>
 }

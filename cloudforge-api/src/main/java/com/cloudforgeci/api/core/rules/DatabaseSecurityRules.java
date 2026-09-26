@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Database security compliance validation rules.
@@ -50,6 +51,12 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(DatabaseSecurityRules.class.getName());
 
+    /** Controls that still block STAGING synthesis: encryption at rest -- PHI/cardholder/federal
+     *  data may exist in a provisioned STAGING database, same rationale as the encryption-at-rest
+     *  entries in HipaaRules/PciDssRules/FedRampRules' own STAGING_BLOCKING_RULES. Everything else
+     *  here (backup, Multi-AZ, PITR, activity-streams monitoring) stays non-blocking. */
+    private static final Set<String> STAGING_BLOCKING_RULES = Set.of("RDS-ENCRYPTION", "DYNAMODB-ENCRYPTION");
+
     /**
      * Install database security validation rules.
      * These rules apply primarily to PRODUCTION environments.
@@ -65,6 +72,10 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
 
             // RDS security validation
             rules.addAll(validateRdsSecurity(ctx));
+
+            // Database access control (public access restriction + IAM auth) -- runs against
+            // ctx.dbConnection, same real-infrastructure gate validateRdsSecurity now uses
+            rules.addAll(validateDatabaseAccessControl(ctx));
 
             // DynamoDB security validation
             rules.addAll(validateDynamoDbSecurity(ctx));
@@ -82,12 +93,19 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
                 failedRules.forEach(rule ->
                     LOG.warning("  - " + rule.description() + ": " + rule.errorMessage().orElse("")));
 
-                // For DEV, these are advisory only
+                // DEV is advisory only. STAGING blocks on the subset in STAGING_BLOCKING_RULES
+                // (encryption at rest); everything else is a visible, non-blocking finding.
                 if (ctx.security == SecurityProfile.DEV) {
                     return List.of();
                 }
+                if (ctx.security == SecurityProfile.STAGING) {
+                    return failedRules.stream()
+                        .filter(rule -> STAGING_BLOCKING_RULES.contains(rule.ruleId()))
+                        .map(rule -> rule.description() + ": " + rule.errorMessage().orElse(""))
+                        .toList();
+                }
 
-                // For PRODUCTION/STAGING, convert to error strings
+                // For PRODUCTION, convert to error strings
                 return failedRules.stream()
                     .map(rule -> rule.description() + ": " + rule.errorMessage().orElse(""))
                     .toList();
@@ -112,9 +130,12 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
     private List<ComplianceRule> validateRdsSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        boolean rdsEnabled = getBooleanSetting(ctx, "rdsEnabled", false);
-
-        if (!rdsEnabled) {
+        // Gate on ctx.dbConnection, the "was a database provisioned" signal every other
+        // matrix-controls check in this class uses (see validateDatabaseAccessControl), not the
+        // self-attested "rdsEnabled" flag -- a stale/mismatched flag would otherwise skip
+        // encryption/backup/multi-AZ checks against a provisioned database, or evaluate them
+        // against config that drives no infrastructure.
+        if (ctx.dbConnection.get().isEmpty()) {
             // No RDS in use, skip validation
             rules.add(ComplianceRule.pass(
                 "RDS-NOT-USED",
@@ -123,8 +144,9 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             return rules;
         }
 
-        // RDS encryption at rest
-        boolean rdsEncryptionEnabled = getBooleanSetting(ctx, "rdsEncryptionEnabled", false);
+        // RDS encryption at rest -- read the field RdsFactory actually consumes
+        // (enableEncryption), not the disconnected "rdsEncryptionEnabled" name.
+        boolean rdsEncryptionEnabled = getBooleanSetting(ctx, "enableEncryption", true);
 
         if (!rdsEncryptionEnabled) {
             rules.add(ComplianceRule.fail(
@@ -133,7 +155,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
                 "RdsEncryptionAtRestEnabled",
                 "Enable RDS encryption at rest for all database instances. " +
                 "PCI-DSS Req 3.4, HIPAA §164.312(a)(2)(iv), GDPR Art.32(1)(a). " +
-                "Set rdsEncryptionEnabled = true in deployment context."
+                "Set enableEncryption = true in deployment context."
             ));
         } else {
             rules.add(ComplianceRule.pass(
@@ -163,8 +185,14 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // Multi-AZ for production - use ComplianceMatrix
-        boolean rdsMultiAz = getBooleanSetting(ctx, "rdsMultiAz", false);
+        // Multi-AZ for production - use ComplianceMatrix. Mirror RdsFactory.createDatabase's own
+        // override-then-profile-default resolution (databaseMultiAz context override, falling back
+        // to SecurityProfileConfiguration.isRdsDatabaseMultiAzEnabled(), which PRODUCTION defaults
+        // to true for even with no override set) -- reading the raw override flag alone with a
+        // hardcoded false default would flag a database RdsFactory actually built with Multi-AZ on.
+        Boolean multiAzOverride = ctx.cfc.databaseMultiAz();
+        boolean rdsMultiAz = multiAzOverride != null ? multiAzOverride
+            : ctx.securityProfileConfig.get().map(c -> c.isRdsDatabaseMultiAzEnabled()).orElse(false);
 
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
@@ -176,21 +204,22 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (multiAzResult == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "RDS-MULTI-AZ",
                     "RDS Multi-AZ deployment required for " + complianceFrameworks,
                     "RdsMultiAzEnabled",
                     "Enable Multi-AZ deployment for high availability. " +
-                    "Set rdsMultiAz = true in deployment context."
+                    "Set databaseMultiAz = true in deployment context."
                 ));
             } else if (multiAzResult == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("RDS Multi-AZ recommended but not required for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "RDS-MULTI-AZ",
                     "RDS Multi-AZ is advisory for " + complianceFrameworks + " (recommended but not required)",
-                    "RdsMultiAzEnabled"
+                    "RdsMultiAzEnabled",
+                    "Enable Multi-AZ on the RDS instance for higher availability."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -204,7 +233,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         // Backup retention period
         int rdsBackupRetentionDays = getIntSetting(ctx, "rdsBackupRetentionDays", 7);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && rdsBackupRetentionDays < 7) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && rdsBackupRetentionDays < 7) {
             rules.add(ComplianceRule.fail(
                 "RDS-BACKUP-RETENTION",
                 "RDS backup retention must be at least 7 days for production",
@@ -221,7 +250,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         // Minor version auto-upgrade (security patches)
         boolean rdsAutoMinorVersionUpgrade = getBooleanSetting(ctx, "rdsAutoMinorVersionUpgrade", true);
 
-        if (!rdsAutoMinorVersionUpgrade && ctx.security == SecurityProfile.PRODUCTION) {
+        if (!rdsAutoMinorVersionUpgrade && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
             rules.add(ComplianceRule.fail(
                 "RDS-AUTO-UPGRADE",
                 "RDS automatic minor version upgrades recommended for production",
@@ -234,6 +263,32 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
                 "RDS automatic minor version upgrades enabled"
             ));
         }
+
+        return rules;
+    }
+
+    /**
+     * Public access restriction and IAM authentication (matrix: DATABASE_ACCESS_CONTROL). Runs
+     * unconditionally against {@code ctx.dbConnection} -- the "was a database provisioned"
+     * signal every other framework's matrix-controls checks use -- rather than the self-attested
+     * {@code rdsEnabled} flag {@link #validateRdsSecurity} reads, since this control's guarantee
+     * comes from {@code RdsFactory} itself: it hardcodes {@code publiclyAccessible(false)}
+     * unconditionally and derives {@code iamAuthentication} purely from the security profile, with
+     * no override path in the factory. Verified against RdsFactory's source.
+     */
+    private List<ComplianceRule> validateDatabaseAccessControl(SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+
+        if (ctx.dbConnection.get().isEmpty()) {
+            return rules;
+        }
+
+        boolean iamAuthRequired = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
+        rules.add(ComplianceRule.pass(
+            "RDS-ACCESS-CONTROL",
+            "RDS is never publicly accessible by construction (RdsFactory hardcodes " +
+            "publiclyAccessible=false)" + (iamAuthRequired ? ", and IAM authentication is enabled for " + ctx.security : "")
+        ));
 
         return rules;
     }
@@ -295,7 +350,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (pitrResult == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "DYNAMODB-PITR",
@@ -306,10 +361,11 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (pitrResult == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("DynamoDB PITR recommended but not required for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "DYNAMODB-PITR",
                     "DynamoDB PITR is advisory for " + complianceFrameworks + " (recommended but not required)",
-                    "DynamoDbPitrEnabled"
+                    "DynamoDbPitrEnabled",
+                    "Enable point-in-time recovery on the DynamoDB table."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -333,30 +389,44 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
      *   <li>Enhanced monitoring enabled</li>
      * </ul>
      */
-    private List<ComplianceRule> validateDatabaseMonitoring(SystemContext ctx) {
+    // Package-private, not private: DatabaseSecurityRulesTest calls this directly to inspect
+    // individual rule results (install() only exposes pass/fail as a whole).
+    List<ComplianceRule> validateDatabaseMonitoring(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
+        // Gate on either signal, not the self-attested "rdsEnabled" flag alone -- a real
+        // ctx.dbConnection with no flag set would otherwise skip validation for a database that
+        // was actually provisioned. Keep the flag as an alternate trigger too: DB-ACTIVITY-STREAMS
+        // below specifically checks ctx.dbConnection itself, so it still needs to run (and fail)
+        // when the flag claims a database but ctx.dbConnection is empty -- that mismatch is
+        // exactly what it exists to catch.
         boolean rdsEnabled = getBooleanSetting(ctx, "rdsEnabled", false);
-
-        if (!rdsEnabled) {
+        if (!rdsEnabled && ctx.dbConnection.get().isEmpty()) {
             return rules; // Skip if RDS not in use
         }
 
-        // Database Activity Streams (audit logging)
-        boolean dbActivityStreamsEnabled = getBooleanSetting(ctx, "dbActivityStreamsEnabled", false);
+        // Database activity logging. Real RDS Activity Streams only supports Aurora
+        // MySQL/PostgreSQL, Oracle, and SQL Server -- RdsFactory only provisions standalone
+        // PostgreSQL/MySQL/MariaDB via DatabaseInstance, so it's out of scope until engine
+        // support catches up. In the meantime, check the signal RdsFactory already provides
+        // unconditionally for every engine it does support: general/slow-query/DDL logging
+        // enabled in the parameter group and exported to CloudWatch Logs (see
+        // RdsFactory.createParameterGroup / getCloudWatchLogsExports). Same
+        // provisioned-resource signal as validateDatabaseAccessControl above, not the
+        // self-attested flag.
+        boolean dbActivityStreamsEnabled = ctx.dbConnection.get().isPresent();
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !dbActivityStreamsEnabled) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !dbActivityStreamsEnabled) {
             rules.add(ComplianceRule.fail(
                 "DB-ACTIVITY-STREAMS",
-                "Database Activity Streams recommended for production audit logging",
-                "Enable Database Activity Streams for real-time audit logging. " +
-                "PCI-DSS Req 10.2, HIPAA §164.312(b). " +
-                "Set dbActivityStreamsEnabled = true in deployment context."
+                "Database activity logging (CloudWatch Logs export of general/slow-query/DDL logs) not present",
+                "No database was provisioned, so RdsFactory's parameter-group logging and " +
+                "CloudWatch Logs export never ran. PCI-DSS Req 10.2, HIPAA §164.312(b)."
             ));
         } else if (dbActivityStreamsEnabled) {
             rules.add(ComplianceRule.pass(
                 "DB-ACTIVITY-STREAMS",
-                "Database Activity Streams enabled"
+                "Database activity logging enabled (general/slow-query/DDL logs exported to CloudWatch Logs)"
             ));
         }
 
@@ -387,10 +457,15 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             }
         }
 
-        // Enhanced Monitoring
-        boolean enhancedMonitoringEnabled = getBooleanSetting(ctx, "rdsEnhancedMonitoringEnabled", false);
+        // Enhanced Monitoring. Mirrors RdsFactory's own default resolution (unset -> true for
+        // PRODUCTION) rather than getBooleanSetting's hardcoded false -- otherwise a default
+        // PRODUCTION+database deploy synthesizes with Enhanced Monitoring actually enabled but
+        // still fails this check, since getBooleanSetting only sees the raw context value.
+        boolean enhancedMonitoringEnabled = ctx.cfc.rdsEnhancedMonitoringEnabled() != null
+            ? ctx.cfc.rdsEnhancedMonitoringEnabled()
+            : ctx.security == SecurityProfile.PRODUCTION;
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !enhancedMonitoringEnabled) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !enhancedMonitoringEnabled) {
             rules.add(ComplianceRule.fail(
                 "DB-ENHANCED-MONITORING",
                 "RDS Enhanced Monitoring recommended for production",
@@ -429,5 +504,25 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. RDS automatic minor-version
+     * upgrade and backup-retention-period length are conditional checks with no corresponding
+     * {@link ComplianceMatrix.SecurityControl} entry, so they aren't claimed here.
+     *
+     * <p>{@code validateRdsSecurity} and {@link #validateDatabaseAccessControl} both gate on
+     * {@code ctx.dbConnection} -- the "was a database provisioned" signal every other framework's
+     * matrix-controls checks use -- rather than a self-attested context flag, so
+     * RDS-ENCRYPTION/RDS-BACKUP/RDS-MULTI-AZ/etc can't validate a database that doesn't exist or
+     * skip one that does.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "ENCRYPTION_AT_REST", "BACKUP_RECOVERY", "DATABASE_MULTI_AZ", "DATABASE_PITR",
+            "DATABASE_LOGGING", "DATABASE_ACCESS_CONTROL"
+        );
     }
 }

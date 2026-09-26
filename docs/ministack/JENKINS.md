@@ -438,4 +438,4 @@ More: [Troubleshooting](TROUBLESHOOTING.md)
 
 - [Verify the full stack](VERIFICATION.md)
 - [Add domain or TLS](ADVANCED.md#incremental-deployments)
-- [Interactive Deployer options](../guides/INTERACTIVE_DEPLOYER.md)
+- [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli)

@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.rules;
 
 import com.cloudforge.core.annotation.ComplianceFramework;
+import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.NetworkMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
@@ -9,6 +10,7 @@ import com.cloudforgeci.api.core.SystemContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * FedRAMP High Impact Level compliance validator.
@@ -60,6 +62,13 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
 
     private static final Logger LOG = Logger.getLogger(FedRampHighRules.class.getName());
 
+    /**
+     * Install FedRAMP High compliance validation rules. Only applies to PRODUCTION -- the High
+     * baseline is for systems with a HIGH confidentiality/integrity/availability impact, which
+     * STAGING/DEV deployments aren't.
+     *
+     * @param ctx System context
+     */
     @Override
     public void install(SystemContext ctx) {
         // FedRAMP High only applies to PRODUCTION (High baseline is for critical systems)
@@ -97,12 +106,11 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
             // SI-4(5): System-generated alerts
             rules.addAll(validateSystemGeneratedAlerts(ctx));
 
-            // Return all failures
-            return rules.stream()
-                .filter(r -> !r.passed())
-                .map(ComplianceRule::toErrorString)
-                .flatMap(java.util.Optional::stream)
-                .toList();
+            // install() already restricts this class to PRODUCTION only, so STAGING never
+            // reaches ComplianceEnforcement -- Set.of() (nothing blocks in STAGING) is unreachable
+            // here but keeps this call the same shape as every other framework's.
+            return ComplianceEnforcement.resolve(
+                "FedRAMP High", rules, ctx.cfc.complianceMode(), ctx.security, java.util.Set.of(), LOG);
         });
 
         LOG.info("FedRAMP High rules installed - additional High baseline controls validated");
@@ -295,5 +303,20 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
         }
 
         return rules;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. The compliance matrix has no
+     * "FEDRAMP-HIGH" column (only "FEDRAMP"), so this declaration isn't enforced against it yet the
+     * way the Moderate baseline is -- it documents current coverage now so it's ready the moment a
+     * High column exists.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "VULNERABILITY_MANAGEMENT", "THREAT_DETECTION", "BACKUP_RECOVERY",
+            "HIGH_AVAILABILITY", "SECURITY_MONITORING", "NETWORK_SEGMENTATION"
+        );
     }
 }

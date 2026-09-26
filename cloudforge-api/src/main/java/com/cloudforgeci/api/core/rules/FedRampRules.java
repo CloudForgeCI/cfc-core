@@ -4,8 +4,10 @@ import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import com.cloudforgeci.api.core.SystemContext;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * FedRAMP Moderate compliance validation.
@@ -64,6 +67,21 @@ import java.util.logging.Logger;
 )
 public class FedRampRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(FedRampRules.class.getName());
+
+    /** Controls that still block STAGING synthesis: authentication (IA-2, IA-2(1) MFA, IA-5/IA-5(1)
+     *  password policy, AC-7 lockout), network isolation (AC-17, AC-17(2) encrypted remote access,
+     *  SC-7(5) default deny), SSL/TLS in transit (SC-8, SC-8(1) HTTPS-strict), encryption at rest
+     *  (SC-28), and audit logging (AU-2/AU-3/AU-6/AU-9/AU-11/AU-12) -- federal data may exist in
+     *  STAGING, so these can't be downgraded to a non-blocking finding there. AC-3/AC-4/SC-7/SC-7-WAF
+     *  are access-enforcement/flow-logging/WAF controls, not auth/network-isolation/SSL themselves,
+     *  so they stay non-blocking like every other STAGING finding. */
+    private static final Set<String> STAGING_BLOCKING_RULES = Set.of(
+        "FEDRAMP-IA-2", "FEDRAMP-IA-2(1)", "FEDRAMP-IA-5", "FEDRAMP-IA-5(1)", "FEDRAMP-AC-7",
+        "FEDRAMP-AC-17", "FEDRAMP-AC-17(2)", "FEDRAMP-SC-7(5)", "FEDRAMP-SC-8", "FEDRAMP-SC-8(1)-HTTPSStrict",
+        "FEDRAMP-SC-28", "FEDRAMP-AU-2", "FEDRAMP-AU-3", "FEDRAMP-AU-6", "FEDRAMP-AU-9",
+        "FEDRAMP-AU-9-LogEncryption", "FEDRAMP-AU-9-AuditLogImmutability", "FEDRAMP-AU-11",
+        "FEDRAMP-AU-12", "FEDRAMP-AU-12-ALB", "FEDRAMP-CP-9", "FEDRAMP-MP-5-EFS"
+    );
 
     // FedRAMP requires 3-year retention for audit records (AU-11)
     private static final int FEDRAMP_MIN_RETENTION_DAYS = 365 * 3; // 1095 days
@@ -126,31 +144,15 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
             // SI Family - System and Information Integrity
             rules.addAll(validateSystemIntegrity(ctx));
 
-            // Get all failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
+            // Matrix-required controls not covered by any control family above
+            rules.addAll(validateMatrixControls(
+                ctx.securityProfileConfig.get().orElseThrow(
+                    () -> new IllegalStateException("SecurityProfileConfiguration not set")),
+                ctx.runtime,
+                ctx.dbConnection.get().isPresent()));
 
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    LOG.warning("FedRAMP validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    return List.of();
-                } else {
-                    LOG.severe("FedRAMP validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");
-                    errors.forEach(err -> LOG.severe("  - " + err));
-                    return errors;
-                }
-            } else {
-                LOG.info("FedRAMP Moderate validation passed (" + rules.size() + " checks) - all technical controls enabled");
-                return List.of();
-            }
+            return ComplianceEnforcement.resolve(
+                "FedRAMP Moderate", rules, complianceMode, ctx.security, STAGING_BLOCKING_RULES, LOG);
         });
     }
 
@@ -222,13 +224,23 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // AC-6: Least Privilege - IAM policies should follow least privilege
-        // Validated by AWS Config rule: iam-policy-no-statements-with-admin-access
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-AC-6",
-            "Least privilege enforced via IAM policies (NIST AC-6)",
-            "iam-policy-no-statements-with-admin-access"
-        ));
+        // AC-6: Least Privilege - continuously validated by AWS Config's
+        // iam-policy-no-statements-with-admin-access managed rule, provisioned by
+        // ComplianceFactory only when AWS Config is enabled.
+        if (!config.isAwsConfigEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-AC-6",
+                "Least privilege requires continuous IAM policy monitoring via AWS Config (NIST AC-6)",
+                "iam-policy-no-statements-with-admin-access",
+                "Set awsConfigEnabled = true to provision the least-privilege Config rule."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-AC-6",
+                "Least privilege enforced via IAM policies (NIST AC-6)",
+                "iam-policy-no-statements-with-admin-access"
+            ));
+        }
 
         // AC-7: Unsuccessful Logon Attempts - Cognito lockout policy
         AuthMode authMode = ctx.cfc.authMode();
@@ -526,6 +538,12 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
                 "FEDRAMP-CM-8",
                 "System component inventory maintained via AWS Config (NIST CM-8)"
             ));
+        } else {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-CM-8",
+                "System component inventory required (NIST CM-8)",
+                "Enable AWS Config to maintain a resource inventory."
+            ));
         }
 
         return rules;
@@ -551,14 +569,15 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // CP-6: Alternate Storage Site - Cross-region backup
-        if (ctx.security == SecurityProfile.PRODUCTION && !config.isCrossRegionBackupEnabled()) {
+        boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
+        if (isProdOrStaging && !config.isCrossRegionBackupEnabled()) {
             rules.add(ComplianceRule.fail(
                 "FEDRAMP-CP-6",
                 "Alternate storage site required for production (NIST CP-6)",
                 "s3-bucket-replication-enabled",
                 "Enable cross-region backup for disaster recovery."
             ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION) {
+        } else if (isProdOrStaging) {
             rules.add(ComplianceRule.pass(
                 "FEDRAMP-CP-6",
                 "Alternate storage site configured via cross-region backup (NIST CP-6)",
@@ -583,14 +602,14 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         }
 
         // CP-10: System Recovery - Multi-AZ for high availability
-        if (ctx.security == SecurityProfile.PRODUCTION && !config.isMultiAzEnforced()) {
+        if (isProdOrStaging && !config.isMultiAzEnforced()) {
             rules.add(ComplianceRule.fail(
                 "FEDRAMP-CP-10",
                 "System recovery capability required via Multi-AZ (NIST CP-10)",
                 "rds-multi-az-support",
                 "Enable Multi-AZ deployment for system recovery."
             ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION) {
+        } else if (isProdOrStaging) {
             rules.add(ComplianceRule.pass(
                 "FEDRAMP-CP-10",
                 "System recovery capability enabled via Multi-AZ (NIST CP-10)",
@@ -653,20 +672,38 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
             }
         }
 
-        // IA-5: Authenticator Management - Password policy validation
-        // FedRAMP requires minimum 12-character passwords
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-IA-5",
-            "Authenticator management enforced via IAM password policy (NIST IA-5)",
-            "iam-password-policy"
-        ));
-
-        // IA-5(1): Password-based Authentication requirements
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-IA-5(1)",
-            "Password complexity requirements enforced (NIST IA-5(1)) - minimum 12 characters",
-            "iam-password-policy"
-        ));
+        // IA-5 / IA-5(1): Authenticator Management - FedRAMP requires minimum 12-character passwords
+        var config = ctx.securityProfileConfig.get().orElseThrow(
+            () -> new IllegalStateException("SecurityProfileConfiguration not set")
+        );
+        int passwordLength = config.getMinimumPasswordLength();
+        if (passwordLength < FEDRAMP_MIN_PASSWORD_LENGTH) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-IA-5",
+                "Authenticator management requires a minimum " + FEDRAMP_MIN_PASSWORD_LENGTH
+                    + "-character password policy (NIST IA-5)",
+                "iam-password-policy",
+                "Current: " + passwordLength + " characters. Update SecurityProfileConfiguration.getMinimumPasswordLength()."
+            ));
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-IA-5(1)",
+                "Password complexity requirements not met (NIST IA-5(1)) - minimum "
+                    + FEDRAMP_MIN_PASSWORD_LENGTH + " characters required",
+                "iam-password-policy",
+                "Current: " + passwordLength + " characters."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-IA-5",
+                "Authenticator management enforced via IAM password policy (NIST IA-5)",
+                "iam-password-policy"
+            ));
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-IA-5(1)",
+                "Password complexity requirements enforced (NIST IA-5(1)) - " + passwordLength + " characters",
+                "iam-password-policy"
+            ));
+        }
 
         return rules;
     }
@@ -726,6 +763,13 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
                 "FEDRAMP-IR-6",
                 "Incident reporting capability enabled via Security Hub (NIST IR-6)",
                 "securityhub-enabled"
+            ));
+        } else {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-IR-6",
+                "Incident reporting capability required (NIST IR-6)",
+                "securityhub-enabled",
+                "Enable both security monitoring and GuardDuty to aggregate findings for incident reporting."
             ));
         }
 
@@ -851,6 +895,12 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
                 "FEDRAMP-RA-5(2)",
                 "Continuous vulnerability monitoring enabled (NIST RA-5(2))"
             ));
+        } else {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-RA-5(2)",
+                "Continuous vulnerability monitoring required (NIST RA-5(2))",
+                "Enable both AWS Config and GuardDuty for continuous scanning."
+            ));
         }
 
         return rules;
@@ -941,18 +991,37 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
             ));
         }
 
-        // SC-12: Cryptographic Key Management - KMS with rotation
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-SC-12",
-            "Cryptographic key management via AWS KMS (NIST SC-12)",
-            "kms-cmk-not-scheduled-for-deletion"
-        ));
+        // SC-12: Cryptographic Key Management - customer-managed KMS key with rotation
+        if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-SC-12",
+                "Cryptographic key establishment and management requires a customer-managed KMS key (NIST SC-12)",
+                "kms-cmk-not-scheduled-for-deletion",
+                "Set cloudWatchLogsKmsEncryptionEnabled = true to provision a rotating customer-managed key."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-SC-12",
+                "Cryptographic key management via AWS KMS (NIST SC-12)",
+                "kms-cmk-not-scheduled-for-deletion"
+            ));
+        }
 
-        // SC-13: Cryptographic Protection - AES-256
-        rules.add(ComplianceRule.pass(
-            "FEDRAMP-SC-13",
-            "FIPS 140-2 validated cryptographic protection (NIST SC-13)"
-        ));
+        // SC-13: Cryptographic Protection - AES-256 encryption applied to data at rest
+        if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-SC-13",
+                "Cryptographic protection requires AES-256 encryption of data at rest (NIST SC-13)",
+                "encrypted-volumes",
+                "Enable encryption at rest for all storage."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-SC-13",
+                "FIPS 140-2 validated cryptographic protection (NIST SC-13)",
+                "encrypted-volumes"
+            ));
+        }
 
         // SC-28: Protection of Information at Rest
         if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()) {
@@ -1058,6 +1127,132 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         return rules;
     }
 
+    /**
+     * Controls that {@link ComplianceMatrix} marks REQUIRED for FedRAMP and that the checks above
+     * do not already cover -- this class predated the matrix and was never reconciled against it
+     * until now, unlike {@link Soc2Rules} and {@link HipaaRules}. Mirrors the {@code
+     * validateMatrixControls} pattern already used there.
+     */
+    private List<ComplianceRule> validateMatrixControls(
+            SecurityProfileConfiguration config, RuntimeType runtime, boolean databaseProvisioned) {
+        List<ComplianceRule> rules = new ArrayList<>();
+
+        // AU-9: CloudWatch Logs may contain sensitive federal data in application log output --
+        // distinct from the general S3-encryption check already covering the other half of AU-9.
+        if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-AU-9-LogEncryption",
+                "CloudWatch log groups must be encrypted with a customer-managed KMS key (NIST AU-9)",
+                "Enable cloudWatchLogsKmsEncryptionEnabled."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-AU-9-LogEncryption",
+                "CloudWatch log groups encrypted with a customer-managed KMS key (NIST AU-9)"
+            ));
+        }
+
+        // AU-9: audit trail immutability.
+        if (!config.isS3ObjectLockEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-AU-9-AuditLogImmutability",
+                "S3 Object Lock required so audit logs cannot be altered or deleted (NIST AU-9)",
+                "Enable S3 Object Lock on the audit-log buckets."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-AU-9-AuditLogImmutability",
+                "S3 Object Lock enabled on audit-log buckets (NIST AU-9)"
+            ));
+        }
+
+        // SC-8(1): HTTPS-only mode -- distinct from the SC-8 cert-presence check above, which
+        // confirms TLS is available but not that the HTTP listener is actually disabled.
+        if (!config.isHttpsStrictEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "FEDRAMP-SC-8(1)-HTTPSStrict",
+                "HTTP listener must be disabled when SSL is enabled (NIST SC-8(1))",
+                "Set httpsStrictEnabled = true to disable the port-80 listener."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "FEDRAMP-SC-8(1)-HTTPSStrict",
+                "HTTP listener disabled, HTTPS-only mode enforced (NIST SC-8(1))"
+            ));
+        }
+
+        // AC-3: EC2 instance metadata is a documented credential-theft vector; Fargate has no
+        // instance metadata service to protect.
+        if (runtime == RuntimeType.EC2) {
+            if (!config.isImdsv2Required()) {
+                rules.add(ComplianceRule.fail(
+                    "FEDRAMP-AC-3-IMDSv2",
+                    "EC2 instances must require IMDSv2 (NIST AC-3)",
+                    "Set imdsv2Required=true."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "FEDRAMP-AC-3-IMDSv2",
+                    "EC2 instances require IMDSv2 tokens (NIST AC-3)"
+                ));
+            }
+        }
+
+        // CP-10: database-specific availability and protection -- the existing CP-10 check only
+        // covers compute Multi-AZ, not RDS specifically.
+        if (databaseProvisioned) {
+            if (!config.isRdsDatabaseMultiAzEnabled()) {
+                rules.add(ComplianceRule.fail(
+                    "FEDRAMP-CP-10-DatabaseMultiAZ",
+                    "RDS Multi-AZ required for database availability (NIST CP-10)",
+                    "Enable Multi-AZ on the RDS instance."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "FEDRAMP-CP-10-DatabaseMultiAZ",
+                    "RDS Multi-AZ enabled for database availability (NIST CP-10)"
+                ));
+            }
+            if (!config.isRdsDeletionProtectionEnabled()) {
+                rules.add(ComplianceRule.fail(
+                    "FEDRAMP-CP-9-DatabaseDeletionProtection",
+                    "RDS deletion protection required to prevent accidental data loss (NIST CP-9)",
+                    "Enable RDS deletion protection."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass(
+                    "FEDRAMP-CP-9-DatabaseDeletionProtection",
+                    "RDS deletion protection enabled (NIST CP-9)"
+                ));
+            }
+        }
+
+        return rules;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * FrameworkRules#claimedControls}. Controls the matrix marks REQUIRED for FedRAMP but left off
+     * this list belong to always-load cross-framework classes instead (KMS_KEY_ROTATION,
+     * SECRETS_MANAGER, SECRETS_ROTATION, DATABASE_PITR, DATABASE_LOGGING, CONTAINER_SECURITY,
+     * API_SECURITY, CDN_SECURITY, INSTANCE_METADATA_SECURITY, ROOT_ACCOUNT_PROTECTION,
+     * CREDENTIAL_ROTATION, SNS_KMS_ENCRYPTION, SECURITY_HUB, VULNERABILITY_SCANNING -- see
+     * KeyManagementRules, DatabaseSecurityRules, IamSecurityRules, ComputeSecurityRules,
+     * MessagingSecurityRules and similar), except LAMBDA_SECURITY and DATABASE_ACCESS_CONTROL,
+     * which are genuine gaps: no class anywhere checks them.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "ACCESS_CONTROL", "NETWORK_FLOW_LOGS", "AUTHENTICATION", "NETWORK_SEGMENTATION",
+            "ENCRYPTION_IN_TRANSIT", "AUDIT_LOGGING", "THREAT_DETECTION", "ENCRYPTION_AT_REST",
+            "LOG_RETENTION", "VULNERABILITY_MANAGEMENT", "SECURITY_MONITORING", "CHANGE_MANAGEMENT",
+            "BACKUP_RECOVERY", "HIGH_AVAILABILITY", "WAF_PROTECTION",
+            "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "S3_OBJECT_LOCK", "HTTPS_STRICT", "EC2_IMDSV2",
+            "DATABASE_MULTI_AZ", "DELETION_PROTECTION"
+        );
+    }
+
     // ========================================================================
     // Helper Methods
     // ========================================================================
@@ -1137,7 +1332,7 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         report.append("IA - Identification & Authentication:\n");
         report.append("  ✓ IA-2 (Authentication): ").append(ctx.cfc.authMode() != AuthMode.NONE ? "ENABLED" : "DISABLED").append("\n");
         report.append("  ✓ IA-2(1) (MFA): ").append(Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled()) ? "ENABLED" : "CHECK MANUALLY").append("\n");
-        report.append("  ✓ IA-5 (Password Policy): ENFORCED VIA IAM\n");
+        report.append("  ✓ IA-5 (Password Policy): ").append(config.getMinimumPasswordLength() >= FEDRAMP_MIN_PASSWORD_LENGTH ? "ENFORCED VIA IAM (" + config.getMinimumPasswordLength() + " chars)" : "BELOW MINIMUM (" + config.getMinimumPasswordLength() + " chars)").append("\n");
         report.append("\n");
 
         // IR - Incident Response
@@ -1177,6 +1372,40 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         report.append("This report covers automated infrastructure controls only.\n");
         report.append("═".repeat(50)).append("\n\n");
 
+        appendAdvisorySection(report, ctx, config);
+
         return report.toString();
+    }
+
+    /**
+     * Recommendations for controls that are ADVISORY-tier (not blocking) and currently off.
+     * Runs the same checks {@link #install} does, so this reflects live findings, not a
+     * separate hand-maintained list.
+     */
+    private void appendAdvisorySection(StringBuilder report, SystemContext ctx, SecurityProfileConfiguration config) {
+        List<ComplianceRule> rules = new ArrayList<>();
+        rules.addAll(validateAccessControl(ctx));
+        rules.addAll(validateAuditAccountability(ctx));
+        rules.addAll(validateContinuousMonitoring(ctx));
+        rules.addAll(validateConfigurationManagement(ctx));
+        rules.addAll(validateContingencyPlanning(ctx));
+        rules.addAll(validateIdentificationAuthentication(ctx));
+        rules.addAll(validateIncidentResponse(ctx));
+        rules.addAll(validateMediaProtection(ctx));
+        rules.addAll(validateRiskAssessment(ctx));
+        rules.addAll(validateSystemCommunications(ctx));
+        rules.addAll(validateSystemIntegrity(ctx));
+        rules.addAll(validateMatrixControls(config, ctx.runtime, ctx.dbConnection.get().isPresent()));
+
+        List<ComplianceRule> advisories = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+        if (advisories.isEmpty()) {
+            return;
+        }
+        report.append("Recommendations (advisory, non-blocking):\n");
+        for (ComplianceRule rule : advisories) {
+            report.append("  - ").append(rule.ruleId()).append(": ").append(rule.description()).append("\n");
+            rule.recommendation().ifPresent(r -> report.append("      ").append(r).append("\n"));
+        }
+        report.append("\n");
     }
 }

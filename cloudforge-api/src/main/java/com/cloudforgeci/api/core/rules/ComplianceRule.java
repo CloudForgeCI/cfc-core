@@ -11,15 +11,19 @@ import java.util.Optional;
  * @param ruleId Unique identifier for this compliance rule (e.g., "SOC2-CC6.1", "PCI-DSS-Req3.4")
  * @param description Human-readable description of the requirement
  * @param configRuleId Optional AWS Config rule ID that monitors this requirement
- * @param passed Whether the validation check passed
+ * @param passed Whether the validation check passed -- true for both a clean pass and an advisory
  * @param errorMessage Optional error message if validation failed
+ * @param recommendation Optional recommendation for an ADVISORY-tier control that's off; present only
+ *        on a passed=true result, distinguishing "clean pass" from "passed, but here's a recommendation"
+ *        without a separate boolean. See {@link #advisory}.
  */
 public record ComplianceRule(
     String ruleId,
     String description,
     Optional<String> configRuleId,
     boolean passed,
-    Optional<String> errorMessage
+    Optional<String> errorMessage,
+    Optional<String> recommendation
 ) {
     /**
      * Create a passing compliance rule.
@@ -30,6 +34,7 @@ public record ComplianceRule(
             description,
             Optional.ofNullable(configRuleId),
             true,
+            Optional.empty(),
             Optional.empty()
         );
     }
@@ -43,6 +48,7 @@ public record ComplianceRule(
             description,
             Optional.empty(),
             true,
+            Optional.empty(),
             Optional.empty()
         );
     }
@@ -56,7 +62,8 @@ public record ComplianceRule(
             description,
             Optional.empty(),
             false,
-            Optional.of(errorMessage)
+            Optional.of(errorMessage),
+            Optional.empty()
         );
     }
 
@@ -69,8 +76,48 @@ public record ComplianceRule(
             description,
             Optional.ofNullable(configRuleId),
             false,
-            Optional.of(errorMessage)
+            Optional.of(errorMessage),
+            Optional.empty()
         );
+    }
+
+    /**
+     * Create an ADVISORY-tier finding: the control is off, but the framework doesn't require it, so
+     * this must never block synthesis. {@code passed} stays true; {@code recommendation} carries the
+     * specific, actionable text for the compliance report.
+     */
+    public static ComplianceRule advisory(String ruleId, String description, String recommendation) {
+        return new ComplianceRule(
+            ruleId,
+            description,
+            Optional.empty(),
+            true,
+            Optional.empty(),
+            Optional.of(recommendation)
+        );
+    }
+
+    /**
+     * Create an ADVISORY-tier finding with Config rule mapping.
+     */
+    public static ComplianceRule advisory(String ruleId, String description, String configRuleId,
+                                          String recommendation) {
+        return new ComplianceRule(
+            ruleId,
+            description,
+            Optional.ofNullable(configRuleId),
+            true,
+            Optional.empty(),
+            Optional.of(recommendation)
+        );
+    }
+
+    /**
+     * True for a passed result that carries a recommendation -- distinguishes an advisory finding
+     * from a clean pass without a separate constructor flag.
+     */
+    public boolean isAdvisory() {
+        return passed && recommendation.isPresent();
     }
 
     /**

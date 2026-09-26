@@ -40,7 +40,7 @@ import java.util.Map;
  *
  * <p><b>Architecture:</b> This class lives in cloudforge-core (the contract layer) as
  * it defines the data model interface between libraries and consumers. This ensures
- * cfc-testing and other consumers always use the latest configuration schema without
+ * cloudforge-cli and other consumers always use the latest configuration schema without
  * duplication.</p>
  *
  * @since CloudForge 3.0.0
@@ -968,6 +968,10 @@ public class DeploymentConfig {
     /**
      * Enable Multi-AZ deployment for high availability.
      * BILLING_IMPACT: Multi-AZ doubles database costs.
+     *
+     * <p>Deliberately no static default: any non-null value is treated as an explicit override of
+     * the security profile, so a {@code false} initializer would keep PRODUCTION and
+     * compliance-driven Multi-AZ from ever applying. When unset, the profile decides.</p>
      */
     @ConfigField(
         displayName = "Multi-AZ Deployment",
@@ -978,7 +982,56 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 60
     )
-    public Boolean databaseMultiAz = false;
+    public Boolean databaseMultiAz;
+
+    /**
+     * Automatic minor-version upgrades for the RDS instance.
+     *
+     * <p>Deliberately no static default: unset lets RdsFactory fall back to its
+     * security-profile default (PRODUCTION only). A {@code false} initializer would
+     * make an explicit override indistinguishable from "not set".</p>
+     */
+    @ConfigField(
+        displayName = "RDS Auto Minor Version Upgrade",
+        description = "Apply RDS engine minor-version security patches automatically",
+        category = "database",
+        visibleWhen = "provisionDatabase",
+        dependsOn = "provisionDatabase",
+        order = 61
+    )
+    public Boolean rdsAutoMinorVersionUpgrade;
+
+    /**
+     * RDS Performance Insights (query-level performance monitoring).
+     *
+     * <p>Deliberately no static default -- see {@link #databaseMultiAz}. RdsFactory
+     * also skips this regardless of override on instance classes too small to support it
+     * (e.g. db.t3.micro).</p>
+     */
+    @ConfigField(
+        displayName = "RDS Performance Insights",
+        description = "Enable Performance Insights for query-level RDS monitoring",
+        category = "database",
+        visibleWhen = "provisionDatabase",
+        dependsOn = "provisionDatabase",
+        order = 62
+    )
+    public Boolean performanceInsightsEnabled;
+
+    /**
+     * RDS Enhanced Monitoring (OS-level metrics at a configurable interval).
+     *
+     * <p>Deliberately no static default -- see {@link #databaseMultiAz}.</p>
+     */
+    @ConfigField(
+        displayName = "RDS Enhanced Monitoring",
+        description = "Enable RDS Enhanced Monitoring for real-time OS metrics",
+        category = "database",
+        visibleWhen = "provisionDatabase",
+        dependsOn = "provisionDatabase",
+        order = 63
+    )
+    public Boolean rdsEnhancedMonitoringEnabled;
 
     /**
      * Optional number of RDS read replicas. When unset, an application may provide
@@ -1041,7 +1094,7 @@ public class DeploymentConfig {
      * as a shared session store (CFC_MANAGER_SESSION_MODE=redis), so every Manager instance
      * behind the same ALB recognizes sessions any of the others created — the missing piece for
      * running Manager itself horizontally scaled. Only {@code ApplicationFactory} acts on this,
-     * and only when {@code applicationId == cloudforge-manager}; {@code visibleWhen} below keeps
+     * and only when {@code applicationId == "cloudforge-manager"}; {@code visibleWhen} below keeps
      * it out of every other application's deploy form for the same reason. Requires RDS
      * (embedded H2 isn't safe to share across instances) — see {@code
      * ManagerDeploymentPreset.rdsWithRedisSessions(...)} in cloudforge-manager-deployment, the
@@ -1053,7 +1106,7 @@ public class DeploymentConfig {
         description = "Provision ElastiCache Redis and share sessions across every CloudForge "
             + "Manager instance — required for running Manager itself horizontally scaled behind an ALB",
         category = "database",
-        visibleWhen = "applicationId == cloudforge-manager && provisionDatabase",
+        visibleWhen = "applicationId == \"cloudforge-manager\" && provisionDatabase",
         dependsOn = "provisionDatabase",
         tags = {FieldTag.BILLING_IMPACT},
         order = 90
@@ -1081,7 +1134,7 @@ public class DeploymentConfig {
             + "to encrypt cross-account connection secrets — leave enabled unless you are "
             + "supplying CFC_MANAGER_ACCOUNT_SECRET_KEY through another mechanism",
         category = "database",
-        visibleWhen = "applicationId == cloudforge-manager",
+        visibleWhen = "applicationId == \"cloudforge-manager\"",
         tags = {FieldTag.BILLING_IMPACT},
         order = 91
     )
@@ -1111,7 +1164,7 @@ public class DeploymentConfig {
         description = "LicenseSeat customer license key (LS-XXXX-XXXX-XXXX-XXXX) to activate this "
             + "install with on first boot, delivered via a dedicated Secrets Manager entry",
         category = "database",
-        visibleWhen = "applicationId == cloudforge-manager",
+        visibleWhen = "applicationId == \"cloudforge-manager\"",
         sensitive = true,
         order = 92
     )
@@ -1254,16 +1307,22 @@ public class DeploymentConfig {
     )
     public Boolean createConfigInfrastructure = false;
 
-    /** Enable GuardDuty threat detection */
+    /** Enable GuardDuty threat detection.
+     *  Deliberately no static default -- see {@link #macieEnabled}. isGuardDutyEnabled() falls
+     *  back to "always enabled for production" when unset; a {@code false} initializer here
+     *  would make every deployment look like an explicit opt-out, permanently skipping both that
+     *  fallback and the compliance-matrix requirement check ahead of it. */
     @ConfigField(
         displayName = "Enable GuardDuty",
         description = "Enable Amazon GuardDuty for threat detection",
         category = "compliance",
         order = 50
     )
-    public Boolean guardDutyEnabled = false;
+    public Boolean guardDutyEnabled;
 
-    /** Create GuardDuty detector (account-region singleton) */
+    /** Create GuardDuty detector (account-region singleton).
+     *  Deliberately no static default -- see {@link #guardDutyEnabled} above; GuardDutyFactory
+     *  only auto-sets this to true when it's unset. */
     @ConfigField(
         displayName = "Create GuardDuty Detector",
         description = "Create GuardDuty detector (only one per account/region)",
@@ -1271,7 +1330,7 @@ public class DeploymentConfig {
         visibleWhen = "guardDutyEnabled == true",
         order = 60
     )
-    public Boolean createGuardDutyDetector = false;
+    public Boolean createGuardDutyDetector;
 
     /** GuardDuty alerts configured (EventBridge to SNS/SIEM) */
     @ConfigField(
@@ -1348,9 +1407,23 @@ public class DeploymentConfig {
     )
     public Boolean crossRegionBackupEnabled = null;
 
+    /** ARN of the AWS Backup vault, in another region, that backups are copied to. */
+    @ConfigField(
+        displayName = "Cross-Region Backup Vault ARN",
+        description = "Destination backup vault for cross-region copies; no copy is made when unset",
+        category = "storage",
+        visibleWhen = "crossRegionBackupEnabled",
+        order = 65
+    )
+    public String backupCrossRegionVaultArn;
+
     // ========== Advanced Monitoring & Threat Protection ==========
 
-    /** Enable Amazon Macie for PII/PHI discovery (HIPAA/GDPR) */
+    /** Enable Amazon Macie for PII/PHI discovery (HIPAA/GDPR).
+     *  Deliberately no static default -- see {@link #crossRegionBackupEnabled}. Left unset,
+     *  isMacieEnabled() falls through to the compliance-matrix requirement and then the
+     *  profile default; a {@code false} initializer here would make every deployment look like
+     *  an explicit opt-out, permanently skipping both. */
     @ConfigField(
         displayName = "Enable Macie",
         description = "Enable Amazon Macie for PII/PHI discovery (required for HIPAA/GDPR)",
@@ -1358,7 +1431,7 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 80
     )
-    public Boolean macieEnabled = false;
+    public Boolean macieEnabled;
 
     /** Enable Macie automated discovery jobs */
     @ConfigField(
@@ -1370,25 +1443,131 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 90
     )
-    public Boolean macieAutomatedDiscovery = false;
+    // Deliberately no static default -- see macieEnabled above; isMacieAutomatedDiscoveryEnabled()
+    // falls back to isMacieEnabled() when unset.
+    public Boolean macieAutomatedDiscovery;
 
-    /** Enable AWS Security Hub for centralized security findings */
+    /** Enable AWS Security Hub for centralized security findings.
+     *  Deliberately no static default -- see {@link #macieEnabled} above. */
     @ConfigField(
         displayName = "Enable Security Hub",
         description = "Enable AWS Security Hub for centralized security findings",
         category = "compliance",
         order = 100
     )
-    public Boolean securityHubEnabled = false;
+    public Boolean securityHubEnabled;
 
-    /** Enable Amazon Inspector for vulnerability scanning */
+    /** Enable the CIS AWS Foundations Benchmark standard in Security Hub */
+    @ConfigField(
+        displayName = "Security Hub: CIS Benchmark",
+        description = "Enable the CIS AWS Foundations Benchmark standard",
+        category = "compliance",
+        visibleWhen = "securityHubEnabled == true",
+        dependsOn = "securityHubEnabled",
+        order = 101
+    )
+    public Boolean securityHubCisEnabled = false;
+
+    /**
+     * CIS AWS Foundations Benchmark version to enable. AWS has shipped 1.2.0, 1.4.0, 3.0.0,
+     * and 5.0.0 as coexisting standard versions over time -- configurable so a future version
+     * bump is a config change, not a code change.
+     */
+    @ConfigField(
+        displayName = "Security Hub: CIS Benchmark Version",
+        description = "CIS AWS Foundations Benchmark version to enable",
+        category = "compliance",
+        visibleWhen = "securityHubCisEnabled == true",
+        dependsOn = "securityHubCisEnabled",
+        example = "5.0.0",
+        order = 101
+    )
+    public String securityHubCisVersion = "5.0.0";
+
+    /** Enable the AWS Foundational Security Best Practices standard in Security Hub */
+    @ConfigField(
+        displayName = "Security Hub: AWS Foundational Security Best Practices",
+        description = "Enable the AWS Foundational Security Best Practices standard",
+        category = "compliance",
+        visibleWhen = "securityHubEnabled == true",
+        dependsOn = "securityHubEnabled",
+        order = 102
+    )
+    public Boolean securityHubAwsFoundationalEnabled = false;
+
+    /**
+     * AWS Foundational Security Best Practices version to enable. Has stayed at 1.0.0 since
+     * the standard launched in 2020 (controls are added within the version, not by version
+     * bump), but configurable for consistency with the other two standards.
+     */
+    @ConfigField(
+        displayName = "Security Hub: FSBP Version",
+        description = "AWS Foundational Security Best Practices version to enable",
+        category = "compliance",
+        visibleWhen = "securityHubAwsFoundationalEnabled == true",
+        dependsOn = "securityHubAwsFoundationalEnabled",
+        example = "1.0.0",
+        order = 103
+    )
+    public String securityHubFsbpVersion = "1.0.0";
+
+    /** Enable the PCI DSS standard in Security Hub */
+    @ConfigField(
+        displayName = "Security Hub: PCI DSS",
+        description = "Enable the PCI DSS standard",
+        category = "compliance",
+        visibleWhen = "securityHubEnabled == true",
+        dependsOn = "securityHubEnabled",
+        order = 104
+    )
+    public Boolean securityHubPciDssEnabled = false;
+
+    /**
+     * PCI DSS version to enable. 4.0.1 is current -- the PCI Council retired the prior
+     * version, and AWS Security Hub follows suit. Configurable for the next version bump.
+     */
+    @ConfigField(
+        displayName = "Security Hub: PCI DSS Version",
+        description = "PCI DSS version to enable",
+        category = "compliance",
+        visibleWhen = "securityHubPciDssEnabled == true",
+        dependsOn = "securityHubPciDssEnabled",
+        example = "4.0.1",
+        order = 105
+    )
+    public String securityHubPciDssVersion = "4.0.1";
+
+    /** Enable Amazon Inspector for vulnerability scanning.
+     *  Deliberately no static default -- see {@link #macieEnabled} above. */
     @ConfigField(
         displayName = "Enable Inspector",
         description = "Enable Amazon Inspector for vulnerability scanning",
         category = "compliance",
         order = 110
     )
-    public Boolean inspectorEnabled = false;
+    public Boolean inspectorEnabled;
+
+    /** Enable Inspector EC2 instance scanning */
+    @ConfigField(
+        displayName = "Inspector: EC2 Scanning",
+        description = "Enable Inspector vulnerability scanning for EC2 instances",
+        category = "compliance",
+        visibleWhen = "inspectorEnabled == true",
+        dependsOn = "inspectorEnabled",
+        order = 111
+    )
+    public Boolean inspectorEc2Scanning = true;
+
+    /** Enable Inspector ECR image scanning */
+    @ConfigField(
+        displayName = "Inspector: ECR Scanning",
+        description = "Enable Inspector vulnerability scanning for ECR container images",
+        category = "compliance",
+        visibleWhen = "inspectorEnabled == true",
+        dependsOn = "inspectorEnabled",
+        order = 112
+    )
+    public Boolean inspectorEcrScanning = true;
 
     /** Enable anti-malware scanning */
     @ConfigField(
@@ -1436,6 +1615,25 @@ public class DeploymentConfig {
     )
     public Boolean auditManagerEnabled = false;
 
+    /**
+     * Enable the AWS Audit Manager service itself (null = use security profile default).
+     *
+     * <p>This is distinct from {@link #auditManagerEnabled}, which is the master gate
+     * {@code SecurityRules.install()} uses to decide whether any CloudForge FrameworkRules
+     * compliance validation runs at all. This field is the independent, configurable fact of
+     * whether the Audit Manager service should actually be provisioned/enabled for a given
+     * deployment -- it is what {@code SecurityProfileConfiguration#isAuditManagerEnabled()}
+     * reads.</p>
+     */
+    @ConfigField(
+        displayName = "Enable Audit Manager Service",
+        description = "Provision the AWS Audit Manager service for this deployment (null = profile default: PRODUCTION=true, others=false)",
+        category = "compliance",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 165
+    )
+    public Boolean auditManagerServiceEnabled = null;
+
     /** Enable CloudWatch Logs KMS encryption */
     @ConfigField(
         displayName = "CloudWatch Logs KMS Encryption",
@@ -1475,6 +1673,100 @@ public class DeploymentConfig {
         order = 195
     )
     public Boolean s3ObjectLockEnabled = false;
+
+    /** Enable EBS volume encryption (null = profile default: PRODUCTION/STAGING=true unless the
+     *  compliance matrix already requires it, DEV=true). Independent of {@link #efsEncryptionAtRestEnabled}
+     *  and {@link #s3EncryptionEnabled} -- every framework's Rules.java reads these as 3 separate controls. */
+    @ConfigField(
+        displayName = "EBS Encryption",
+        description = "Encrypt EBS volumes at rest (required for PCI-DSS, HIPAA, SOC2, GDPR)",
+        category = "compliance",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 196
+    )
+    public Boolean ebsEncryptionEnabled = null;
+
+    /** Enable EFS at-rest encryption (null = profile default). See {@link #ebsEncryptionEnabled}. */
+    @ConfigField(
+        displayName = "EFS Encryption at Rest",
+        description = "Encrypt EFS file systems at rest (required for PCI-DSS, HIPAA, SOC2, GDPR)",
+        category = "compliance",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 197
+    )
+    public Boolean efsEncryptionAtRestEnabled = null;
+
+    /** Enable S3 bucket encryption (null = profile default). See {@link #ebsEncryptionEnabled}. */
+    @ConfigField(
+        displayName = "S3 Encryption",
+        description = "Encrypt S3 buckets at rest (required for PCI-DSS, HIPAA, SOC2, GDPR)",
+        category = "compliance",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 198
+    )
+    public Boolean s3EncryptionEnabled = null;
+
+    /** Enable AWS Backup Vault Lock (null = profile default: false except when the compliance
+     *  matrix requires BACKUP_RECOVERY). Vault Lock makes the vault's retention policy immutable. */
+    @ConfigField(
+        displayName = "Backup Vault Lock",
+        description = "Lock the AWS Backup vault's retention policy (required for PCI-DSS, HIPAA when enforced)",
+        category = "compliance",
+        order = 199
+    )
+    public Boolean backupVaultLockEnabled = null;
+
+    /** Retain the AWS Backup vault on stack deletion (null = profile default). */
+    @ConfigField(
+        displayName = "Backup Vault Retention",
+        description = "Retain the AWS Backup vault when the stack is deleted",
+        category = "compliance",
+        order = 200
+    )
+    public Boolean backupVaultRetentionEnabled = null;
+
+    /** Enable RDS deletion protection (null = profile default: PRODUCTION=false unless the
+     *  compliance matrix requires DELETION_PROTECTION, STAGING/DEV=false). */
+    @ConfigField(
+        displayName = "RDS Deletion Protection",
+        description = "Block accidental deletion of the RDS instance",
+        category = "compliance",
+        order = 201
+    )
+    public Boolean rdsDeletionProtectionEnabled = null;
+
+    /** Enable RDS Multi-AZ (null = profile default: PRODUCTION=true, STAGING/DEV=false unless the
+     *  compliance matrix requires DATABASE_MULTI_AZ). */
+    @ConfigField(
+        displayName = "RDS Multi-AZ",
+        description = "Deploy the RDS instance across multiple availability zones",
+        category = "compliance",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 202
+    )
+    public Boolean rdsDatabaseMultiAzEnabled = null;
+
+    /** Enable SNS topic KMS encryption (null = profile default: false unless the compliance
+     *  matrix requires SNS_KMS_ENCRYPTION). */
+    @ConfigField(
+        displayName = "SNS KMS Encryption",
+        description = "Encrypt SNS topics with a customer-managed KMS key",
+        category = "compliance",
+        tags = {FieldTag.BILLING_IMPACT},
+        order = 203
+    )
+    public Boolean snsKmsEncryptionEnabled = null;
+
+    /** Require IMDSv2 on EC2 instances (null = profile default: PRODUCTION/STAGING=true unless the
+     *  compliance matrix requires EC2_IMDSV2, DEV=false). ADVISORY for PCI-DSS and GDPR -- this
+     *  field is what lets a deployer opt out where the framework doesn't mandate it. */
+    @ConfigField(
+        displayName = "IMDSv2 Required",
+        description = "Require EC2 Instance Metadata Service Version 2 (blocks the legacy v1 endpoint)",
+        category = "compliance",
+        order = 204
+    )
+    public Boolean imdsv2Required = null;
 
     /** Enable S3 versioning remediation */
     @ConfigField(
@@ -1815,7 +2107,7 @@ public class DeploymentConfig {
             + "ProvisionProduct), scoped to CloudForge-tagged resources. Only applies when "
             + "applicationId is cloudforge-manager.",
         category = "operations",
-        visibleWhen = "applicationId == cloudforge-manager",
+        visibleWhen = "applicationId == \"cloudforge-manager\"",
         required = false,
         tags = {FieldTag.REQUIRES_APPROVAL, FieldTag.EXPERIMENTAL},
         propertyKey = "cfc.manager.direct-deploy-enabled",
@@ -1848,7 +2140,7 @@ public class DeploymentConfig {
             + "the check on, it never selects which product is checked. Only applies when "
             + "applicationId is cloudforge-manager.",
         category = "operations",
-        visibleWhen = "applicationId == cloudforge-manager",
+        visibleWhen = "applicationId == \"cloudforge-manager\"",
         required = false,
         tags = {FieldTag.EXPERIMENTAL},
         propertyKey = "cfc.manager.marketplace-deployment",

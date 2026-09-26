@@ -264,9 +264,12 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             }
         }
 
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.auditManagerEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.auditManagerEnabled());
+        // Check deployment context override (Boolean accessor - need null check). This is the
+        // audit-manager-SERVICE flag, distinct from DeploymentConfig#auditManagerEnabled, which is
+        // the separate master gate SecurityRules.install() uses to decide whether ANY FrameworkRules
+        // compliance validation runs at all.
+        if (deploymentContext != null && deploymentContext.auditManagerServiceEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.auditManagerServiceEnabled());
         }
 
         return false;
@@ -288,6 +291,13 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
                 LOG.severe("STAGING profile: EBS Encryption enforced by compliance frameworks: " + frameworks);
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.ebsEncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.ebsEncryptionEnabled());
+            LOG.info("STAGING profile: Overriding EBS Encryption from deployment context: " + enabled);
+            return enabled;
         }
 
         // Default: encryption enabled
@@ -332,6 +342,13 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             }
         }
 
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.efsEncryptionAtRestEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.efsEncryptionAtRestEnabled());
+            LOG.info("STAGING profile: Overriding EFS Encryption at Rest from deployment context: " + enabled);
+            return enabled;
+        }
+
         // Default: encryption enabled
         return true;
     }
@@ -351,6 +368,13 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
                 LOG.severe("STAGING profile: S3 Encryption enforced by compliance frameworks: " + frameworks);
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.s3EncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.s3EncryptionEnabled());
+            LOG.info("STAGING profile: Overriding S3 Encryption from deployment context: " + enabled);
+            return enabled;
         }
 
         // Default: encryption enabled
@@ -522,6 +546,13 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             }
         }
 
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.backupVaultLockEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.backupVaultLockEnabled());
+            LOG.info("STAGING profile: Overriding Backup Vault Lock from deployment context: " + enabled);
+            return enabled;
+        }
+
         // Default: Vault lock typically not enabled in staging to allow easy cleanup
         return false;
     }
@@ -541,6 +572,13 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
                 LOG.severe("STAGING profile: Backup Vault Retention enforced by compliance frameworks: " + frameworks);
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.backupVaultRetentionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.backupVaultRetentionEnabled());
+            LOG.info("STAGING profile: Overriding Backup Vault Retention from deployment context: " + enabled);
+            return enabled;
         }
 
         // Default: Staging environments typically don't retain backup vaults
@@ -714,6 +752,13 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             }
         }
 
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.rdsDeletionProtectionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.rdsDeletionProtectionEnabled());
+            LOG.info("STAGING profile: Overriding RDS Deletion Protection from deployment context: " + enabled);
+            return enabled;
+        }
+
         // Default: Staging environments typically don't require deletion protection
         // to allow easy cleanup and recreation
         return false;
@@ -734,6 +779,13 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
                 LOG.severe("STAGING profile: RDS Multi-AZ enforced by compliance frameworks: " + frameworks);
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.rdsDatabaseMultiAzEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.rdsDatabaseMultiAzEnabled());
+            LOG.info("STAGING profile: Overriding RDS Multi-AZ from deployment context: " + enabled);
+            return enabled;
         }
 
         // Default: Staging environments typically use single-AZ for cost savings
@@ -1032,12 +1084,24 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isSnsKmsEncryptionEnabled() {
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.snsKmsEncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.snsKmsEncryptionEnabled());
+            LOG.info("STAGING profile: Overriding SNS KMS Encryption from deployment context: " + enabled);
+            return enabled;
+        }
         // STAGING: false - Optional for testing
         return false;
     }
 
     @Override
     public boolean isImdsv2Required() {
+        // Check deployment context override
+        if (deploymentContext != null && deploymentContext.imdsv2Required() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.imdsv2Required());
+            LOG.info("STAGING profile: Overriding IMDSv2 from deployment context: " + enabled);
+            return enabled;
+        }
         // STAGING: true - Test production security behavior
         return true;
     }

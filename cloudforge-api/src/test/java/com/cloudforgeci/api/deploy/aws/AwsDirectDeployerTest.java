@@ -237,4 +237,20 @@ class AwsDirectDeployerTest {
             assertThrows(RuntimeException.class, () -> deployer.delete("some-stack"));
         }
     }
+
+    @Test
+    void previewChangeSetPropagatesConnectionFailuresRatherThanSilentlySucceeding() throws Exception {
+        // previewChangeSet's own first call is stackExists() (same as deploy()'s), so it fails
+        // the same way against an unreachable endpoint -- exercises the shared early-exit path
+        // without needing a real change set to create.
+        try (AwsDirectDeployer deployer = unreachableDeployer("jenkins", RuntimeType.FARGATE)) {
+            java.nio.file.Path template = java.nio.file.Files.createTempFile("template-", ".json");
+            try {
+                java.nio.file.Files.writeString(template, "{}");
+                assertThrows(RuntimeException.class, () -> deployer.previewChangeSet("some-stack", template));
+            } finally {
+                java.nio.file.Files.deleteIfExists(template);
+            }
+        }
+    }
 }

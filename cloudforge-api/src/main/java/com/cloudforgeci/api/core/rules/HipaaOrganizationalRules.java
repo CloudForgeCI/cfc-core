@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * HIPAA organizational and administrative safeguard validation rules.
@@ -397,5 +398,19 @@ public class HipaaOrganizationalRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. "HIPAA-Organizational" is
+     * not a {@link ComplianceMatrix} column, so this declaration is for documentation only, not
+     * enforced by the sync test. Every check in this class reads a manually-attested
+     * deployment-context flag (BAA signed, workforce authorization, emergency access, breach
+     * notification, etc.) rather than any infrastructure state a
+     * {@code ComplianceMatrix.SecurityControl} describes, so no control names are claimed.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of();
     }
 }

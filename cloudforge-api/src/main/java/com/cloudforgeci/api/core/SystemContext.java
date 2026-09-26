@@ -239,6 +239,10 @@ public final class SystemContext extends Construct {
 
   // Logging
   public final Slot<FlowLogOptions> flowlogs = new Slot<>();
+  // Populated by ComplianceFactory when it builds the real CloudTrail trail -- lets a
+  // compliance check confirm CloudTrail was actually built instead of relying on the
+  // cloudTrailEnabled flag, which only gates which Config rules attach, not the trail itself.
+  public final Slot<software.amazon.awscdk.services.cloudtrail.Trail> cloudTrail = new Slot<>();
 
   // Security
   public final Slot<software.amazon.awscdk.services.wafv2.CfnWebACL> wafWebAcl = new Slot<>();
@@ -485,6 +489,79 @@ public final class SystemContext extends Construct {
   public void createGuardDutyFactory(Construct scope, String idPrefix) {
     GuardDutyFactory guardDutyFactory = new GuardDutyFactory(scope, idPrefix + "GuardDuty");
     guardDutyFactory.create();
+  }
+
+  /**
+   * Creates Security Hub (hub + standards subscriptions) factory.
+   * Conditionally enabled based on security profile or explicit configuration.
+   */
+  public void createSecurityHubFactory(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.SecurityHubFactory securityHubFactory =
+        new com.cloudforgeci.api.observability.SecurityHubFactory(scope, idPrefix + "SecurityHub");
+    securityHubFactory.create();
+  }
+
+  /**
+   * Creates Macie (sensitive-data discovery) factory.
+   * Conditionally enabled based on security profile or explicit configuration.
+   */
+  public void createMacieFactory(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.MacieFactory macieFactory =
+        new com.cloudforgeci.api.observability.MacieFactory(scope, idPrefix + "Macie");
+    macieFactory.create();
+  }
+
+  /**
+   * Creates Inspector (vulnerability scanning) factory.
+   * Conditionally enabled based on security profile or explicit configuration.
+   */
+  public void createInspectorFactory(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.InspectorFactory inspectorFactory =
+        new com.cloudforgeci.api.observability.InspectorFactory(scope, idPrefix + "Inspector");
+    inspectorFactory.create();
+  }
+
+  /**
+   * Verifies Security Hub is already enabled centrally, instead of enabling it from this stack --
+   * see {@link com.cloudforgeci.api.observability.SecurityHubVerificationFactory}. This is what
+   * {@link com.cloudforgeci.api.core.security.ProductionSecurityConfiguration}/
+   * {@link com.cloudforgeci.api.core.security.StagingSecurityConfiguration} actually call;
+   * {@link #createSecurityHubFactory} is kept for a future deployment model that wants CFC to own
+   * provisioning again.
+   */
+  public void createSecurityHubVerification(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.SecurityHubVerificationFactory verification =
+        new com.cloudforgeci.api.observability.SecurityHubVerificationFactory(scope, idPrefix + "SecurityHub");
+    verification.create();
+  }
+
+  /**
+   * Verifies Macie is already enabled centrally, instead of enabling it from this stack -- see
+   * {@link com.cloudforgeci.api.observability.MacieVerificationFactory}. This is what
+   * {@link com.cloudforgeci.api.core.security.ProductionSecurityConfiguration}/
+   * {@link com.cloudforgeci.api.core.security.StagingSecurityConfiguration} actually call;
+   * {@link #createMacieFactory} is kept for a future deployment model that wants CFC to own
+   * provisioning again.
+   */
+  public void createMacieVerification(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.MacieVerificationFactory verification =
+        new com.cloudforgeci.api.observability.MacieVerificationFactory(scope, idPrefix + "Macie");
+    verification.create();
+  }
+
+  /**
+   * Verifies Inspector is reachable for this account, instead of enabling it from this stack --
+   * see {@link com.cloudforgeci.api.observability.InspectorVerificationFactory} for why this is a
+   * narrower guarantee than the Security Hub/Macie checks. This is what
+   * {@link com.cloudforgeci.api.core.security.ProductionSecurityConfiguration}/
+   * {@link com.cloudforgeci.api.core.security.StagingSecurityConfiguration} actually call;
+   * {@link #createInspectorFactory} is kept for a future deployment model that wants CFC to own
+   * provisioning again.
+   */
+  public void createInspectorVerification(Construct scope, String idPrefix) {
+    com.cloudforgeci.api.observability.InspectorVerificationFactory verification =
+        new com.cloudforgeci.api.observability.InspectorVerificationFactory(scope, idPrefix + "Inspector");
+    verification.create();
   }
 
   /**

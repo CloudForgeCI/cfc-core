@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Elastic Load Balancer security compliance validation rules.
@@ -107,7 +108,7 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // ALB access logging
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean albLoggingEnabled = config.isAlbAccessLoggingEnabled();
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -128,9 +129,10 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("ALB access logging recommended for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "ALB-ACCESS-LOGGING",
-                    "ALB access logging recommended but not required"
+                    "ALB access logging recommended but not required for " + complianceFrameworks,
+                    "Enable albAccessLogging = true to record incoming requests."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -153,7 +155,7 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // HTTPS/TLS enforcement
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean httpsEnforced = ctx.cert.get().isPresent();
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -208,7 +210,7 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Deletion protection for production
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean deletionProtection = getBooleanSetting(ctx, "albDeletionProtection", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -227,9 +229,10 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("ALB deletion protection recommended for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "ALB-DELETION-PROTECTION",
-                    "ALB deletion protection recommended"
+                    "ALB deletion protection recommended but not required for " + complianceFrameworks,
+                    "Enable deletion protection on the load balancer to prevent accidental removal."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -257,7 +260,7 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Cross-zone load balancing and multi-AZ
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean multiAz = config.isMultiAzEnforced();
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -319,5 +322,19 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. The ALB TLS 1.2+ SSL policy
+     * check is a conditional check but calls no {@code ComplianceMatrix} control directly; it
+     * reinforces {@code ENCRYPTION_IN_TRANSIT}, already claimed via the HTTPS enforcement check,
+     * rather than adding a new claim.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "AUDIT_LOGGING", "ENCRYPTION_IN_TRANSIT", "DELETION_PROTECTION", "HIGH_AVAILABILITY"
+        );
     }
 }

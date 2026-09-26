@@ -1,5 +1,7 @@
 package com.cloudforgeci.api.storage;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
@@ -34,6 +36,48 @@ import static org.junit.jupiter.api.Assertions.*;
  * </ul>
  */
 class BackupFactoryTest {
+
+    // ========== Cross-Region Copy Tests ==========
+
+    private static final String DR_VAULT_ARN = "arn:aws:backup:us-west-2:123456789012:backup-vault:dr-vault";
+
+    /** Synthesizes a stack and returns its {@code AWS::Backup::BackupPlan} resource as JSON. */
+    private String backupPlanJson(SecurityProfile profile, Map<String, Object> context) {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "BackupCrossRegion" + profile, profile, RuntimeType.FARGATE, context);
+        builder.createCompleteInfrastructure();
+        new BackupFactory(builder.getStack(), "Backup").create();
+        return Template.fromStack(builder.getStack()).findResources("AWS::Backup::BackupPlan").toString();
+    }
+
+    @Test
+    void productionCopiesBackupsToTheConfiguredDestinationVault() {
+        Map<String, Object> context = new HashMap<>();
+        context.put("backupCrossRegionVaultArn", DR_VAULT_ARN);
+
+        String plan = backupPlanJson(SecurityProfile.PRODUCTION, context);
+
+        assertTrue(plan.contains("CopyActions"), "the daily rule should copy to the destination vault");
+        assertTrue(plan.contains(DR_VAULT_ARN));
+    }
+
+    @Test
+    void productionMakesNoCopyWhenNoDestinationVaultIsConfigured() {
+        String plan = backupPlanJson(SecurityProfile.PRODUCTION, new HashMap<>());
+
+        assertFalse(plan.contains("CopyActions"));
+    }
+
+    @Test
+    void crossRegionCopyIsOnlyAddedForProduction() {
+        Map<String, Object> context = new HashMap<>();
+        context.put("crossRegionBackupEnabled", "true");
+        context.put("backupCrossRegionVaultArn", DR_VAULT_ARN);
+
+        String plan = backupPlanJson(SecurityProfile.STAGING, context);
+
+        assertFalse(plan.contains("CopyActions"));
+    }
 
     // ========== Security Profile Behavior Tests ==========
 

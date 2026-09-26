@@ -6,47 +6,51 @@
 # CloudForge Core - Multi-Layer Compliance Validation
 # Layer 3: Template-Level Policy Enforcement (cfn-guard)
 
+
+let cloudfront_distribution = Resources.*[ Type == 'AWS::CloudFront::Distribution' ]
+let apigateway_stage = Resources.*[ Type == 'AWS::ApiGateway::Stage' ]
+let apigateway_restapi = Resources.*[ Type == 'AWS::ApiGateway::RestApi' ]
+let apigatewayv2_stage = Resources.*[ Type == 'AWS::ApiGatewayV2::Stage' ]
+let waf_webacl = Resources.*[ Type == 'AWS::WAF::WebACL' ]
+let wafv2_webacl = Resources.*[ Type == 'AWS::WAFv2::WebACL' ]
+let wafv2_loggingconfiguration = Resources.*[ Type == 'AWS::WAFv2::LoggingConfiguration' ]
 # ============================================================================
 # CloudFront Distribution Security
 # ============================================================================
 
 # CloudFront logging enabled
 # CloudForge Mapping: CDN_SECURITY control
-rule cdn_security_cloudfront_logging when
-    resourceType == 'AWS::CloudFront::Distribution' {
+rule cdn_security_cloudfront_logging when %cloudfront_distribution !empty {
 
-    Properties.DistributionConfig.Logging exists <<[CDN Security] CloudFront distributions must have access logging enabled>>
-    Properties.DistributionConfig.Logging.Bucket exists <<[CDN Security] CloudFront logging must specify a bucket>>
+    %cloudfront_distribution.Properties.DistributionConfig.Logging exists <<[CDN Security] CloudFront distributions must have access logging enabled>>
+    %cloudfront_distribution.Properties.DistributionConfig.Logging.Bucket exists <<[CDN Security] CloudFront logging must specify a bucket>>
 }
 
 # CloudFront WAF integration
 # CloudForge Mapping: WEB_APPLICATION_FIREWALL control
-rule cdn_security_cloudfront_waf when
-    resourceType == 'AWS::CloudFront::Distribution' {
+rule cdn_security_cloudfront_waf when %cloudfront_distribution !empty {
 
-    Properties.DistributionConfig.WebACLId exists <<[CDN Security] CloudFront distributions should have WAF protection enabled>>
+    %cloudfront_distribution.Properties.DistributionConfig.WebACLId exists <<[CDN Security] CloudFront distributions should have WAF protection enabled>>
 }
 
 # CloudFront geographic restrictions
 # CloudForge Mapping: CDN_SECURITY control
-rule cdn_security_cloudfront_geo_restriction when
-    resourceType == 'AWS::CloudFront::Distribution' {
+rule cdn_security_cloudfront_geo_restriction when %cloudfront_distribution !empty {
 
-    Properties.DistributionConfig.Restrictions exists <<[CDN Security] CloudFront must configure restrictions>>
-    Properties.DistributionConfig.Restrictions.GeoRestriction exists <<[CDN Security] Must define geographic restrictions>>
-    Properties.DistributionConfig.Restrictions.GeoRestriction.RestrictionType exists <<[CDN Security] Must specify restriction type>>
-    Properties.DistributionConfig.Restrictions.GeoRestriction.RestrictionType != 'none' <<[CDN Security] CloudFront distributions should configure geographic restrictions>>
+    %cloudfront_distribution.Properties.DistributionConfig.Restrictions exists <<[CDN Security] CloudFront must configure restrictions>>
+    %cloudfront_distribution.Properties.DistributionConfig.Restrictions.GeoRestriction exists <<[CDN Security] Must define geographic restrictions>>
+    %cloudfront_distribution.Properties.DistributionConfig.Restrictions.GeoRestriction.RestrictionType exists <<[CDN Security] Must specify restriction type>>
+    %cloudfront_distribution.Properties.DistributionConfig.Restrictions.GeoRestriction.RestrictionType != 'none' <<[CDN Security] CloudFront distributions should configure geographic restrictions>>
 }
 
 # CloudFront deprecated SSL protocols
 # CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-rule cdn_security_cloudfront_no_deprecated_ssl when
-    resourceType == 'AWS::CloudFront::Distribution' {
+rule cdn_security_cloudfront_no_deprecated_ssl when %cloudfront_distribution !empty {
 
-    Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
-    Properties.DistributionConfig.Origins exists <<[CDN Security] CloudFront must define origins>>
+    %cloudfront_distribution.Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
+    %cloudfront_distribution.Properties.DistributionConfig.Origins exists <<[CDN Security] CloudFront must define origins>>
 
-    Properties.DistributionConfig.Origins[*] {
+    %cloudfront_distribution.Properties.DistributionConfig.Origins[*] {
         when CustomOriginConfig exists {
             CustomOriginConfig.OriginSSLProtocols exists <<[CDN Security] Custom origins must explicitly define SSL protocols>>
             CustomOriginConfig.OriginSSLProtocols[*] {
@@ -60,24 +64,22 @@ rule cdn_security_cloudfront_no_deprecated_ssl when
 
 # CloudFront ACM certificate
 # CloudForge Mapping: CERTIFICATE_MANAGEMENT control
-rule cdn_security_cloudfront_acm_certificate when
-    resourceType == 'AWS::CloudFront::Distribution' {
+rule cdn_security_cloudfront_acm_certificate when %cloudfront_distribution !empty {
 
     when Properties.DistributionConfig.ViewerCertificate exists {
-        Properties.DistributionConfig.ViewerCertificate.AcmCertificateArn exists OR
-        Properties.DistributionConfig.ViewerCertificate.CloudFrontDefaultCertificate == true <<[CDN Security] CloudFront should use ACM certificates for custom domains>>
+        %cloudfront_distribution.Properties.DistributionConfig.ViewerCertificate.AcmCertificateArn exists OR
+        %cloudfront_distribution.Properties.DistributionConfig.ViewerCertificate.CloudFrontDefaultCertificate == true <<[CDN Security] CloudFront should use ACM certificates for custom domains>>
     }
 }
 
 # CloudFront minimum TLS version
 # CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-rule cdn_security_cloudfront_minimum_tls when
-    resourceType == 'AWS::CloudFront::Distribution' {
+rule cdn_security_cloudfront_minimum_tls when %cloudfront_distribution !empty {
 
-    Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
-    Properties.DistributionConfig.ViewerCertificate exists <<[CDN Security] CloudFront must configure viewer certificate>>
-    Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion exists <<[CDN Security] Must explicitly define minimum TLS version>>
-    Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion in [
+    %cloudfront_distribution.Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
+    %cloudfront_distribution.Properties.DistributionConfig.ViewerCertificate exists <<[CDN Security] CloudFront must configure viewer certificate>>
+    %cloudfront_distribution.Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion exists <<[CDN Security] Must explicitly define minimum TLS version>>
+    %cloudfront_distribution.Properties.DistributionConfig.ViewerCertificate.MinimumProtocolVersion in [
         'TLSv1.2_2021',
         'TLSv1.2_2019',
         'TLSv1.2_2018'
@@ -86,13 +88,12 @@ rule cdn_security_cloudfront_minimum_tls when
 
 # CloudFront HTTPS-only viewer protocol
 # CloudForge Mapping: ENCRYPTION_IN_TRANSIT control
-rule cdn_security_cloudfront_https_only when
-    resourceType == 'AWS::CloudFront::Distribution' {
+rule cdn_security_cloudfront_https_only when %cloudfront_distribution !empty {
 
-    Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
-    Properties.DistributionConfig.DefaultCacheBehavior exists <<[CDN Security] CloudFront must define default cache behavior>>
-    Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy exists <<[CDN Security] Must specify viewer protocol policy>>
-    Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy in [
+    %cloudfront_distribution.Properties.DistributionConfig exists <<[CDN Security] CloudFront must have distribution config>>
+    %cloudfront_distribution.Properties.DistributionConfig.DefaultCacheBehavior exists <<[CDN Security] CloudFront must define default cache behavior>>
+    %cloudfront_distribution.Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy exists <<[CDN Security] Must specify viewer protocol policy>>
+    %cloudfront_distribution.Properties.DistributionConfig.DefaultCacheBehavior.ViewerProtocolPolicy in [
         'redirect-to-https',
         'https-only'
     ] <<[CDN Security] CloudFront must redirect HTTP to HTTPS or require HTTPS only>>
@@ -108,47 +109,42 @@ rule cdn_security_cloudfront_https_only when
 
 # API Gateway client certificate
 # CloudForge Mapping: API_SECURITY control
-rule api_security_restapi_client_certificate when
-    resourceType == 'AWS::ApiGateway::Stage' {
+rule api_security_restapi_client_certificate when %apigateway_stage !empty {
 
-    Properties.ClientCertificateId exists <<[API Security] API Gateway stages should use client certificates for backend authentication>>
+    %apigateway_stage.Properties.ClientCertificateId exists <<[API Security] API Gateway stages should use client certificates for backend authentication>>
 }
 
 # API Gateway private endpoint
 # CloudForge Mapping: API_SECURITY control
-rule api_security_restapi_private when
-    resourceType == 'AWS::ApiGateway::RestApi' {
+rule api_security_restapi_private when %apigateway_restapi !empty {
 
     when Properties.EndpointConfiguration exists {
-        Properties.EndpointConfiguration.Types[*] == 'PRIVATE' <<[API Security] API Gateway REST APIs should be PRIVATE for internal services>>
+        %apigateway_restapi.Properties.EndpointConfiguration.Types[*] == 'PRIVATE' <<[API Security] API Gateway REST APIs should be PRIVATE for internal services>>
     }
 }
 
 # API Gateway access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule api_security_stage_access_logging when
-    resourceType == 'AWS::ApiGateway::Stage' {
+rule api_security_stage_access_logging when %apigateway_stage !empty {
 
-    Properties.AccessLogSetting exists <<[API Security] API Gateway stages must have access logging enabled>>
-    Properties.AccessLogSetting.DestinationArn exists <<[API Security] API Gateway access logging must specify destination>>
+    %apigateway_stage.Properties.AccessLogSetting exists <<[API Security] API Gateway stages must have access logging enabled>>
+    %apigateway_stage.Properties.AccessLogSetting.DestinationArn exists <<[API Security] API Gateway access logging must specify destination>>
 }
 
 # API Gateway X-Ray tracing
 # CloudForge Mapping: MONITORING control
-rule api_security_stage_xray_tracing when
-    resourceType == 'AWS::ApiGateway::Stage' {
+rule api_security_stage_xray_tracing when %apigateway_stage !empty {
 
-    Properties.TracingEnabled exists
-    Properties.TracingEnabled == true <<[API Security] API Gateway stages should enable X-Ray tracing>>
+    %apigateway_stage.Properties.TracingEnabled exists
+    %apigateway_stage.Properties.TracingEnabled == true <<[API Security] API Gateway stages should enable X-Ray tracing>>
 }
 
 # API Gateway method-level logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule api_security_stage_method_logging when
-    resourceType == 'AWS::ApiGateway::Stage' {
+rule api_security_stage_method_logging when %apigateway_stage !empty {
 
     when Properties.MethodSettings exists {
-        Properties.MethodSettings[*] {
+        %apigateway_stage.Properties.MethodSettings[*] {
             LoggingLevel in ['INFO', 'ERROR'] <<[API Security] API Gateway stages should enable method-level logging>>
         }
     }
@@ -156,12 +152,11 @@ rule api_security_stage_method_logging when
 
 # API Gateway cache encryption
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule api_security_stage_cache_encryption when
-    resourceType == 'AWS::ApiGateway::Stage' {
+rule api_security_stage_cache_encryption when %apigateway_stage !empty {
 
     when Properties.CacheClusterEnabled == true {
         when Properties.MethodSettings exists {
-            Properties.MethodSettings[*] {
+            %apigateway_stage.Properties.MethodSettings[*] {
                 when CachingEnabled == true {
                     CacheDataEncrypted == true <<[API Security] API Gateway cache data must be encrypted>>
                 }
@@ -172,10 +167,9 @@ rule api_security_stage_cache_encryption when
 
 # API Gateway WAF association
 # CloudForge Mapping: WEB_APPLICATION_FIREWALL control
-rule api_security_restapi_waf when
-    resourceType == 'AWS::ApiGateway::Stage' {
+rule api_security_restapi_waf when %apigateway_stage !empty {
 
-    Properties.WebAclArn exists <<[API Security] API Gateway stages should be associated with WAF>>
+    %apigateway_stage.Properties.WebAclArn exists <<[API Security] API Gateway stages should be associated with WAF>>
 }
 
 # ============================================================================
@@ -184,21 +178,19 @@ rule api_security_restapi_waf when
 
 # HTTP API access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule api_security_httpapi_logging when
-    resourceType == 'AWS::ApiGatewayV2::Stage' {
+rule api_security_httpapi_logging when %apigatewayv2_stage !empty {
 
-    Properties.AccessLogSettings exists <<[API Security] HTTP API stages must have access logging enabled>>
-    Properties.AccessLogSettings.DestinationArn exists <<[API Security] HTTP API access logging must specify destination>>
+    %apigatewayv2_stage.Properties.AccessLogSettings exists <<[API Security] HTTP API stages must have access logging enabled>>
+    %apigatewayv2_stage.Properties.AccessLogSettings.DestinationArn exists <<[API Security] HTTP API access logging must specify destination>>
 }
 
 # HTTP API throttling
 # CloudForge Mapping: API_SECURITY control
-rule api_security_httpapi_throttling when
-    resourceType == 'AWS::ApiGatewayV2::Stage' {
+rule api_security_httpapi_throttling when %apigatewayv2_stage !empty {
 
-    Properties.DefaultRouteSettings exists <<[API Security] HTTP API stages must configure default route settings>>
-    Properties.DefaultRouteSettings.ThrottlingBurstLimit exists <<[API Security] Must configure throttling burst limit>>
-    Properties.DefaultRouteSettings.ThrottlingRateLimit exists <<[API Security] Must configure throttling rate limit>>
+    %apigatewayv2_stage.Properties.DefaultRouteSettings exists <<[API Security] HTTP API stages must configure default route settings>>
+    %apigatewayv2_stage.Properties.DefaultRouteSettings.ThrottlingBurstLimit exists <<[API Security] Must configure throttling burst limit>>
+    %apigatewayv2_stage.Properties.DefaultRouteSettings.ThrottlingRateLimit exists <<[API Security] Must configure throttling rate limit>>
 }
 
 # ============================================================================
@@ -207,33 +199,29 @@ rule api_security_httpapi_throttling when
 
 # Prevent use of WAF Classic
 # CloudForge Mapping: WEB_APPLICATION_FIREWALL control
-rule waf_security_no_classic when
-    resourceType == 'AWS::WAF::WebACL' {
+rule waf_security_no_classic when %waf_webacl !empty {
 
     FAIL <<[WAF Security] WAF Classic resources should be migrated to AWS WAFv2>>
 }
 
 # WAF v2 with rules
 # CloudForge Mapping: WEB_APPLICATION_FIREWALL control
-rule waf_security_wafv2_rules when
-    resourceType == 'AWS::WAFv2::WebACL' {
+rule waf_security_wafv2_rules when %wafv2_webacl !empty {
 
-    Properties.Rules exists <<[WAF Security] WAFv2 Web ACLs must have rules configured>>
-    Properties.Rules not empty <<[WAF Security] WAFv2 Web ACLs must not have empty rules>>
+    %wafv2_webacl.Properties.Rules exists <<[WAF Security] WAFv2 Web ACLs must have rules configured>>
+    %wafv2_webacl.Properties.Rules not empty <<[WAF Security] WAFv2 Web ACLs must not have empty rules>>
 }
 
 # WAF v2 default action
 # CloudForge Mapping: WEB_APPLICATION_FIREWALL control
-rule waf_security_wafv2_default_action when
-    resourceType == 'AWS::WAFv2::WebACL' {
+rule waf_security_wafv2_default_action when %wafv2_webacl !empty {
 
-    Properties.DefaultAction exists <<[WAF Security] WAFv2 Web ACLs must specify a default action>>
+    %wafv2_webacl.Properties.DefaultAction exists <<[WAF Security] WAFv2 Web ACLs must specify a default action>>
 }
 
 # WAF v2 logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule waf_security_wafv2_logging when
-    resourceType == 'AWS::WAFv2::LoggingConfiguration' {
+rule waf_security_wafv2_logging when %wafv2_loggingconfiguration !empty {
 
-    Properties.LogDestinationConfigs exists <<[WAF Security] WAFv2 should have logging configured>>
+    %wafv2_loggingconfiguration.Properties.LogDestinationConfigs exists <<[WAF Security] WAFv2 should have logging configured>>
 }

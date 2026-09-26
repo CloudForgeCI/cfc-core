@@ -11,3 +11,4 @@ FARGATE_PRODUCTION_PCI-DSS_exact-min-retention-365,FARGATE,PRODUCTION,with-domai
 FARGATE_PRODUCTION_PCI-DSS_one-above-min-366,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,366,true,PASS,jenkins,,,,,
 FARGATE_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_mattermost,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,PASS,mattermost,true,,,,
 FARGATE_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_gitlab_db,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,PASS,gitlab,true,,,,
+FARGATE_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_appoidc,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,application-oidc,private-with-nat,PCI-DSS,,true,PASS,jenkins,,,,,

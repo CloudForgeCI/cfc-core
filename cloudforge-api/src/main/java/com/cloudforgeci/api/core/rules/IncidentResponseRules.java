@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Incident response and disaster recovery compliance validation rules.
@@ -132,7 +133,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         // Incident response plan documented
         boolean incidentResponsePlanDocumented = getBooleanSetting(ctx, "incidentResponsePlanDocumented", securityMonitoringEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !incidentResponsePlanDocumented) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponsePlanDocumented) {
             rules.add(ComplianceRule.fail(
                 "INCIDENT-RESPONSE-PLAN",
                 "Incident response plan required for production",
@@ -153,7 +154,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         // Incident response team defined
         boolean incidentResponseTeamDefined = getBooleanSetting(ctx, "incidentResponseTeamDefined", securityMonitoringEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !incidentResponseTeamDefined) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponseTeamDefined) {
             rules.add(ComplianceRule.fail(
                 "INCIDENT-RESPONSE-TEAM",
                 "Incident response team roles and responsibilities required",
@@ -174,7 +175,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         // Incident response testing
         boolean incidentResponseTested = getBooleanSetting(ctx, "incidentResponseTested", securityMonitoringEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !incidentResponseTested) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponseTested) {
             rules.add(ComplianceRule.fail(
                 "INCIDENT-RESPONSE-TESTING",
                 "Incident response plan must be tested annually",
@@ -240,7 +241,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         // Disaster recovery plan
         boolean disasterRecoveryPlanDocumented = getBooleanSetting(ctx, "disasterRecoveryPlanDocumented", backupEnabled && crossRegionBackup);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !disasterRecoveryPlanDocumented) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !disasterRecoveryPlanDocumented) {
             rules.add(ComplianceRule.fail(
                 "DISASTER-RECOVERY-PLAN",
                 "Disaster recovery plan required for production",
@@ -261,7 +262,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         // Recovery Time Objective (RTO) defined
         boolean rtoRpoDefined = getBooleanSetting(ctx, "rtoRpoDefined", backupEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !rtoRpoDefined) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !rtoRpoDefined) {
             rules.add(ComplianceRule.fail(
                 "RTO-RPO-DEFINED",
                 "Recovery Time Objective (RTO) and Recovery Point Objective (RPO) required",
@@ -281,7 +282,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         // Disaster recovery testing
         boolean disasterRecoveryTested = getBooleanSetting(ctx, "disasterRecoveryTested", backupEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !disasterRecoveryTested) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !disasterRecoveryTested) {
             rules.add(ComplianceRule.fail(
                 "DISASTER-RECOVERY-TESTING",
                 "Disaster recovery plan must be tested annually",
@@ -301,7 +302,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         // Business continuity plan
         boolean businessContinuityPlan = getBooleanSetting(ctx, "businessContinuityPlan", backupEnabled && crossRegionBackup);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !businessContinuityPlan) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !businessContinuityPlan) {
             rules.add(ComplianceRule.fail(
                 "BUSINESS-CONTINUITY-PLAN",
                 "Business continuity plan required for critical systems",
@@ -342,7 +343,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         // Backup restore testing
         boolean backupRestoreTested = getBooleanSetting(ctx, "backupRestoreTested", false);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && config.isAutomatedBackupEnabled() && !backupRestoreTested) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && config.isAutomatedBackupEnabled() && !backupRestoreTested) {
             rules.add(ComplianceRule.fail(
                 "BACKUP-RESTORE-TESTING",
                 "Backup restore procedures must be tested regularly",
@@ -359,7 +360,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         }
 
         // Off-site backup storage
-        if (ctx.security == SecurityProfile.PRODUCTION && config.isAutomatedBackupEnabled()) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && config.isAutomatedBackupEnabled()) {
             boolean offsiteBackupStorage = config.isCrossRegionBackupEnabled();
 
             if (!offsiteBackupStorage) {
@@ -424,7 +425,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         boolean securityMonitoringEnabled = config.isSecurityMonitoringEnabled();
         boolean centralizedLogAggregation = getBooleanSetting(ctx, "centralizedLogAggregation", securityMonitoringEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !centralizedLogAggregation) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !centralizedLogAggregation) {
             rules.add(ComplianceRule.fail(
                 "CENTRALIZED-LOG-AGGREGATION",
                 "Centralized log aggregation recommended for forensic analysis",
@@ -445,7 +446,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         boolean guardDutyEnabled = config.isGuardDutyEnabled();
         boolean automatedLogReview = getBooleanSetting(ctx, "automatedLogReview", guardDutyEnabled || securityMonitoringEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !automatedLogReview) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !automatedLogReview) {
             rules.add(ComplianceRule.fail(
                 "AUTOMATED-LOG-REVIEW",
                 "Automated log review and alerting required",
@@ -508,5 +509,20 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
 
         // Default: advisory for incident response (most are organizational)
         return false;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. Most of this class's checks
+     * (incident response plan/team/testing, RTO/RPO, business continuity, backup-restore testing,
+     * centralized log aggregation, automated log review) read a self-declared context flag rather
+     * than a {@code SecurityProfileConfiguration} accessor, so they are organizational/process
+     * checks rather than enforceable infrastructure controls and are not claimed here.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "BACKUP_RECOVERY"
+        );
     }
 }

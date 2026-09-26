@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Advanced security monitoring and compliance dashboard validation rules.
@@ -84,6 +85,12 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                 failedRules.forEach(rule ->
                     LOG.warning("  - " + rule.description() + ": " + rule.errorMessage().orElse("")));
 
+                // For DEV and STAGING, these are advisory only -- same checks as PRODUCTION, but
+                // never blocking.
+                if (ctx.security == SecurityProfile.DEV || ctx.security == SecurityProfile.STAGING) {
+                    return List.of();
+                }
+
                 // Return blocking errors for missing advanced monitoring features
                 return failedRules.stream()
                     .map(rule -> rule.description() + ": " + rule.errorMessage().orElse(""))
@@ -128,7 +135,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "SECURITYHUB-ENABLED",
@@ -141,9 +148,10 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Security Hub recommended but not required for " +
                     (complianceFrameworks != null ? complianceFrameworks : "this deployment"));
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "SECURITYHUB-ENABLED",
-                    "Security Hub is advisory for " + complianceFrameworks + " (recommended but not required)"
+                    "Security Hub is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "Enable Security Hub for centralized compliance monitoring (securityHubEnabled = true)."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -245,7 +253,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "INSPECTOR-ENABLED",
@@ -258,9 +266,10 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Inspector recommended but not required for " +
                     (complianceFrameworks != null ? complianceFrameworks : "this deployment"));
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "INSPECTOR-ENABLED",
-                    "Inspector is advisory for " + complianceFrameworks + " (recommended but not required)"
+                    "Inspector is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "Enable Inspector for continuous vulnerability scanning (inspectorEnabled = true)."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -343,7 +352,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
             (complianceFrameworks.toUpperCase().contains("GDPR") ||
              complianceFrameworks.toUpperCase().contains("HIPAA"));
 
-        if (ctx.security == SecurityProfile.PRODUCTION && requiresMacie) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && requiresMacie) {
             if (!macieEnabled) {
                 rules.add(ComplianceRule.fail(
                     "MACIE-ENABLED",
@@ -419,7 +428,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
         // CloudWatch dashboard for compliance
         boolean complianceDashboardEnabled = getBooleanSetting(ctx, "complianceDashboardEnabled", securityMonitoringEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (!complianceDashboardEnabled) {
                 LOG.warning("Best practice: CloudWatch compliance dashboard recommended for production monitoring");
                 rules.add(ComplianceRule.pass(
@@ -438,7 +447,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
         // Security alerting (SNS topics)
         boolean securityAlertingEnabled = getBooleanSetting(ctx, "securityAlertingEnabled", securityMonitoringEnabled);
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (!securityAlertingEnabled) {
                 LOG.warning("Best practice: Security alerting (SNS) recommended for production incidents");
                 rules.add(ComplianceRule.pass(
@@ -467,5 +476,19 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. Security Hub standards
+     * selection, Security Hub auto-remediation, Inspector scan types/continuous scanning, the
+     * compliance dashboard, and security alerting are always-pass advisory recommendations with
+     * no fail branch, so they aren't claimed.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "SECURITY_HUB", "VULNERABILITY_SCANNING", "SENSITIVE_DATA_DISCOVERY"
+        );
     }
 }

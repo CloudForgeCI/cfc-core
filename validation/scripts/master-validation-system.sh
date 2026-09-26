@@ -1,0 +1,634 @@
+#!/usr/bin/env bash
+
+# Master Validation System for CloudForge Core
+# Orchestrates resource validation, truth table generation, and drift detection.
+# Requires cloudforge-cli on PATH.
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Configuration - dynamically determine script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# BASE_DIR defaults to validation/ (parent of scripts/). GitHub workflow calls:
+# cd validation && bash scripts/master-validation-system.sh
+if [[ -z "$BASE_DIR" ]]; then
+    BASE_DIR="$(dirname "$SCRIPT_DIR")"
+fi
+
+# Normalize BASE_DIR to absolute path
+BASE_DIR="$(cd "$BASE_DIR" && pwd)"
+VALIDATION_DIR="$SCRIPT_DIR/validation-results"
+
+# Ensure validation directory exists
+mkdir -p "$VALIDATION_DIR"
+
+echo -e "${BLUE}🚀 CloudForge Core - Master Validation System${NC}"
+echo -e "${BLUE}=============================================${NC}"
+echo ""
+echo -e "${CYAN}📁 Working Directory: $(pwd)${NC}"
+echo -e "${CYAN}📁 Script Directory:  $SCRIPT_DIR${NC}"
+echo -e "${CYAN}📁 Base Directory:    $BASE_DIR${NC}"
+echo -e "${CYAN}📁 Validation Dir:    $VALIDATION_DIR${NC}"
+echo ""
+
+# Function to check prerequisites
+check_prerequisites() {
+    echo -e "${CYAN}🔍 Checking prerequisites...${NC}"
+    
+    local missing_deps=()
+    
+    # Check required tools
+    if ! command -v jq &> /dev/null; then
+        missing_deps+=("jq")
+    fi
+    
+    if ! command -v python3 &> /dev/null; then
+        missing_deps+=("python3")
+    fi
+    
+    if ! command -v cloudforge-cli &> /dev/null; then
+        missing_deps+=("cloudforge-cli")
+    fi
+    
+    if ! command -v mvn &> /dev/null; then
+        missing_deps+=("maven")
+    fi
+    
+    # Check required scripts (all in scripts/ directory for consistency)
+    local required_scripts=(
+        "comprehensive-resource-validator.sh"
+        "drift-detector.sh"
+        "truth-table-generator.py"
+    )
+
+    for script in "${required_scripts[@]}"; do
+        if [[ ! -f "$SCRIPT_DIR/$script" ]]; then
+            missing_deps+=("$script")
+        fi
+    done
+    
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        echo -e "${RED}❌ Missing dependencies:${NC}"
+        printf '%s\n' "${missing_deps[@]}"
+        echo ""
+        echo "Please install missing dependencies and ensure all scripts are present."
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✅ All prerequisites met${NC}"
+}
+
+# Function to run full validation suite
+run_full_validation() {
+    echo -e "${PURPLE}🧪 Running comprehensive validation suite...${NC}"
+    echo ""
+    
+    # Step 1: Generate truth table
+    echo -e "${CYAN}📋 Step 1: Generating truth table and test matrix...${NC}"
+    cd "$BASE_DIR"
+    python3 "$SCRIPT_DIR/truth-table-generator.py" "$VALIDATION_DIR"
+    echo ""
+
+    # Step 2: Run comprehensive resource validation
+    echo -e "${CYAN}🔍 Step 2: Running comprehensive resource validation...${NC}"
+    bash "$SCRIPT_DIR/comprehensive-resource-validator.sh"
+    echo ""
+    
+    # Step 3: Move results to current directory for drift detection
+    echo -e "${CYAN}📁 Step 3: Organizing validation results...${NC}"
+    mkdir -p "$VALIDATION_DIR/current"
+    
+    # Move validation JSON files to current directory
+    if ls "$VALIDATION_DIR"/*-validation.json 1> /dev/null 2>&1; then
+        mv "$VALIDATION_DIR"/*-validation.json "$VALIDATION_DIR/current/"
+        echo "Moved validation results to current directory"
+    fi
+    
+    echo -e "${GREEN}✅ Comprehensive validation completed${NC}"
+}
+
+# Function to detect and report drift
+detect_and_report_drift() {
+    echo -e "${PURPLE}🔍 Detecting configuration drift...${NC}"
+    echo ""
+    
+    # Run drift detection
+    bash "$SCRIPT_DIR/drift-detector.sh" detect
+    
+    local drift_status=$?
+    echo ""
+    
+    if [[ $drift_status -eq 0 ]]; then
+        echo -e "${GREEN}🎉 No configuration drift detected${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}⚠️  Configuration drift detected ($drift_status changes)${NC}"
+        
+        # Generate drift history
+        bash "$SCRIPT_DIR/drift-detector.sh" history
+        
+        return $drift_status
+    fi
+}
+
+# Function to create testing strategy
+create_testing_strategy() {
+    local target_files="$1"
+    
+    echo -e "${PURPLE}🎯 Creating targeted testing strategy...${NC}"
+    echo ""
+    
+    if [[ -f "$VALIDATION_DIR/truth-table.json" ]]; then
+        echo "Analyzing which configurations are affected by file changes..."
+        
+        # Parse truth table to find affected configurations
+        local affected_configs=$(python3 -c "
+import json
+import sys
+
+try:
+    with open('$VALIDATION_DIR/truth-table.json', 'r') as f:
+        data = json.load(f)
+    
+    test_matrix = data.get('test_matrix', {})
+    target_files = '$target_files'.split(',') if '$target_files' else []
+    
+    affected = set()
+    for file_name in target_files:
+        file_name = file_name.strip()
+        if file_name in test_matrix:
+            affected.update(test_matrix[file_name])
+    
+    print(f'Configurations affected by changes: {len(affected)}')
+    if affected:
+        print('Recommended test configurations:')
+        for config in sorted(list(affected))[:10]:  # Show first 10
+            print(f'  - {config}')
+        if len(affected) > 10:
+            print(f'  ... and {len(affected) - 10} more')
+    
+except Exception as e:
+    print(f'Error analyzing truth table: {e}')
+")
+        
+        echo "$affected_configs"
+    else
+        echo -e "${YELLOW}⚠️  Truth table not found. Run full validation first.${NC}"
+    fi
+}
+
+# Function to run smoke tests
+run_smoke_tests() {
+    echo -e "${PURPLE}💨 Running smoke tests...${NC}"
+    echo ""
+
+    # Define minimal test configurations. Each covers a runtime/topology/security combination
+    # against a distinct ApplicationSpec code path, since what's valid differs by app (see
+    # ScalingFactory#rejectUnsupportedAutoScaling) -- minInstanceCapacity/maxInstanceCapacity/
+    # dbEngine below are set per-app rather than copy-pasted across configs.
+    #   runtime,topology,security,domain,ssl,subdomain,appId,appName,dbEngine,dbVersion,minCap,maxCap,resourceTier
+    # dbEngine "none" omits provisionDatabase entirely (app either has no DatabaseSpec, or an
+    # optional one left on its embedded default). resourceTier picks the cpu/memory/instanceType
+    # values below -- "default" is this file's original 1024/2048/(app or t3.micro fallback).
+    local smoke_configs=(
+        "FARGATE,APPLICATION_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain,jenkins,Jenkins,none,none,1,1,default"
+        "EC2,APPLICATION_SERVICE,DEV,no-domain,ssl-disabled,no-subdomain,jenkins,Jenkins,none,none,1,1,default"
+        "FARGATE,APPLICATION_SERVICE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,jenkins,Jenkins,none,none,1,1,default"
+        # WordPress: DatabaseSpec.required (MySQL) + PHP/CMS runtime config -- also exercises
+        # the real multi-instance path (WordPress has no supportsAutoScaling override, and a
+        # provisioned database satisfies requiresSequentialDeploymentWithoutDatabase()).
+        "FARGATE,APPLICATION_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain,wordpress,WordPress,mysql,8.0,1,2,default"
+        # Grafana: DatabaseSpec.optional (defaults to embedded SQLite when unset) + a
+        # monitoring-category app instead of a CMS -- kept single-instance since no managed
+        # database is provisioned here (see requiresSequentialDeploymentWithoutDatabase()).
+        "EC2,APPLICATION_SERVICE,DEV,no-domain,ssl-disabled,no-subdomain,grafana,Grafana,none,none,1,1,default"
+        # Same Jenkins/EC2/DEV shape as the first EC2 config above, but a non-default instance
+        # class (m5 instead of t3) -- exercises Ec2Factory#parseInstanceClass's other branches.
+        "EC2,APPLICATION_SERVICE,DEV,no-domain,ssl-disabled,no-subdomain,jenkins,Jenkins,none,none,1,1,ec2-m5-large"
+        # Same Jenkins/FARGATE/DEV shape as the first FARGATE config above, but a larger valid
+        # Fargate cpu/memory tier -- exercises a different validFargateMemoryValues() bracket.
+        "FARGATE,APPLICATION_SERVICE,DEV,with-domain,ssl-enabled,with-subdomain,jenkins,Jenkins,none,none,1,1,fargate-2048-4096"
+    )
+
+    local passed=0
+    local failed=0
+    local failed_configs=()
+
+    for config in "${smoke_configs[@]}"; do
+        IFS=',' read -ra CONFIG_PARTS <<< "$config"
+        local runtime="${CONFIG_PARTS[0]}"
+        local topology="${CONFIG_PARTS[1]}"
+        local security="${CONFIG_PARTS[2]}"
+        local domain="${CONFIG_PARTS[3]}"
+        local ssl="${CONFIG_PARTS[4]}"
+        local subdomain="${CONFIG_PARTS[5]}"
+        local app_id="${CONFIG_PARTS[6]}"
+        local app_name="${CONFIG_PARTS[7]}"
+        local db_engine="${CONFIG_PARTS[8]}"
+        local db_version="${CONFIG_PARTS[9]}"
+        local min_capacity="${CONFIG_PARTS[10]}"
+        local max_capacity="${CONFIG_PARTS[11]}"
+        local resource_tier="${CONFIG_PARTS[12]}"
+
+        local cpu_value="1024"
+        local memory_value="2048"
+        local instance_type_value=""
+        case "$resource_tier" in
+            ec2-m5-large)
+                instance_type_value="m5.large"
+                ;;
+            fargate-2048-4096)
+                cpu_value="2048"
+                memory_value="4096"
+                ;;
+        esac
+
+        local stack_name="smoke-$(echo "${app_id},${runtime},${topology},${security},${resource_tier}" | tr '[:upper:],' '[:lower:]-' | tr -d ',' | tr '_' '-')"
+
+        echo -e "${CYAN}🧪 Testing: $app_name + $runtime + $topology + $security + $resource_tier${NC}"
+
+        # Create deployment context
+        local domain_value=""
+        local subdomain_value=""
+        local ssl_value="false"
+
+        if [[ "$domain" == "with-domain" ]]; then
+            domain_value="cloudforgeci.com"
+            if [[ "$subdomain" == "with-subdomain" ]]; then
+                subdomain_value="smoke-test"
+            fi
+            if [[ "$ssl" == "ssl-enabled" ]]; then
+                ssl_value="true"
+            fi
+        fi
+
+        local db_fields=""
+        if [[ "$db_engine" != "none" ]]; then
+            db_fields="  \"provisionDatabase\": true,
+  \"databaseEngine\": \"$db_engine\",
+  \"databaseVersion\": \"$db_version\","
+        fi
+
+        local instance_type_field=""
+        if [[ -n "$instance_type_value" ]]; then
+            instance_type_field="  \"instanceType\": \"$instance_type_value\","
+        fi
+
+        cat > "$BASE_DIR/deployment-context.json" << EOF
+{
+  "stackName": "$stack_name",
+  "applicationId": "$app_id",
+  "applicationName": "$app_name",
+  "runtime": "$runtime",
+  "topology": "$topology",
+  "securityProfile": "$security",
+  "domain": "$domain_value",
+  "subdomain": "$subdomain_value",
+  "enableSsl": "$ssl_value",
+  "createZone": "true",
+  "networkMode": "public-no-nat",
+  "tier": "public",
+  "memory": "$memory_value",
+  "cpu": "$cpu_value",
+$instance_type_field
+$db_fields
+  "minInstanceCapacity": "$min_capacity",
+  "maxInstanceCapacity": "$max_capacity",
+  "env": "dev",
+  "region": "us-east-1",
+  "enableEncryption": "true"
+}
+EOF
+
+        # Run synthesis with error capture
+        cd "$BASE_DIR"
+        local error_log="$VALIDATION_DIR/smoke-test-${stack_name}-error.log"
+
+        if cloudforge-cli deploy --context "$BASE_DIR/deployment-context.json" --synth-only \
+                --outdir "$BASE_DIR/cdk.out" > /dev/null 2>"$error_log"; then
+
+            echo -e "  ${GREEN}✅ PASS${NC}"
+            passed=$((passed + 1))
+            rm -f "$error_log"
+        else
+            echo -e "  ${RED}❌ FAIL${NC}"
+            failed=$((failed + 1))
+            failed_configs+=("$config")
+
+            # Show last 10 lines of error for immediate feedback
+            if [[ -f "$error_log" ]] && [[ -s "$error_log" ]]; then
+                echo -e "  ${YELLOW}Error preview (last 10 lines):${NC}"
+                tail -10 "$error_log" | sed 's/^/    /'
+            fi
+        fi
+    done
+    
+    echo ""
+    echo -e "${BLUE}📊 Smoke Test Results:${NC}"
+    echo "Passed: $passed"
+    echo "Failed: $failed"
+    echo "Total:  $((passed + failed))"
+    echo ""
+
+    # Create summary file for CI/CD artifact collection
+    local summary_file="$VALIDATION_DIR/smoke-test-summary.txt"
+    cat > "$summary_file" << EOF
+Smoke Test Summary
+==================
+Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+Passed: $passed
+Failed: $failed
+Total:  $((passed + failed))
+
+Test Configurations:
+EOF
+
+    for config in "${smoke_configs[@]}"; do
+        echo "  - $config" >> "$summary_file"
+    done
+
+    if [[ $failed -gt 0 ]]; then
+        echo "" >> "$summary_file"
+        echo "Failed Configurations:" >> "$summary_file"
+        for failed_config in "${failed_configs[@]}"; do
+            echo "  - $failed_config" >> "$summary_file"
+        done
+    fi
+
+    echo "" >> "$summary_file"
+    echo "Smoke test summary written to: $summary_file"
+
+    if [[ $failed -eq 0 ]]; then
+        echo -e "${GREEN}🎉 All smoke tests passed${NC}"
+        return 0
+    else
+        echo -e "${RED}💥 Some smoke tests failed${NC}"
+        echo ""
+        echo -e "${YELLOW}Failed configurations:${NC}"
+        for failed_config in "${failed_configs[@]}"; do
+            echo "  - $failed_config"
+        done
+        echo ""
+        echo -e "${CYAN}💡 Tip: Check error logs in $VALIDATION_DIR for details${NC}"
+        return 1
+    fi
+}
+
+# Generate the HTML validation report
+generate_comprehensive_report() {
+    echo -e "${PURPLE}📊 Generating comprehensive validation report...${NC}"
+    echo ""
+    
+    local report_file="$VALIDATION_DIR/comprehensive-report.html"
+    local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+    
+    cat > "$report_file" << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CloudForge Core - Comprehensive Validation Report</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f8f9fa; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 40px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; }
+        .section { margin: 30px 0; padding: 20px; border: 1px solid #e9ecef; border-radius: 8px; }
+        .section h2 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .stat-card { background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-number { font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }
+        .stat-label { font-size: 1em; opacity: 0.9; }
+        .success { background: linear-gradient(135deg, #00b894 0%, #00a085 100%); }
+        .warning { background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%); }
+        .error { background: linear-gradient(135deg, #d63031 0%, #74b9ff 100%); }
+        .file-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
+        .file-card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; }
+        .file-name { font-weight: bold; color: #e74c3c; font-family: 'Courier New', monospace; }
+        iframe { width: 100%; height: 500px; border: 1px solid #ddd; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 CloudForge Core</h1>
+            <h2>Comprehensive Validation Report</h2>
+            <p>Generated: $timestamp</p>
+        </div>
+        
+        <div class="section">
+            <h2>📊 Validation Overview</h2>
+            <div class="stats-grid">
+EOF
+
+    # Add statistics if available
+    if [[ -f "$VALIDATION_DIR/truth-table.json" ]]; then
+        local total_configs=$(jq -r '.metadata.total_configurations' "$VALIDATION_DIR/truth-table.json" 2>/dev/null || echo "0")
+        local valid_configs=$(jq -r '.metadata.valid_configurations' "$VALIDATION_DIR/truth-table.json" 2>/dev/null || echo "0")
+        local invalid_configs=$(jq -r '.metadata.invalid_configurations' "$VALIDATION_DIR/truth-table.json" 2>/dev/null || echo "0")
+        
+        cat >> "$report_file" << EOF
+                <div class="stat-card">
+                    <div class="stat-number">$total_configs</div>
+                    <div class="stat-label">Total Configurations</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-number">$valid_configs</div>
+                    <div class="stat-label">Valid Configurations</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-number">$invalid_configs</div>
+                    <div class="stat-label">Invalid Combinations</div>
+                </div>
+EOF
+    fi
+    
+    cat >> "$report_file" << EOF
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🎯 Truth Table & Test Matrix</h2>
+            <p>Interactive truth table showing expected resources for every configuration combination:</p>
+EOF
+
+    if [[ -f "$VALIDATION_DIR/truth-table-report.html" ]]; then
+        cat >> "$report_file" << EOF
+            <iframe src="truth-table-report.html"></iframe>
+EOF
+    else
+        cat >> "$report_file" << EOF
+            <p><em>Truth table report not available. Run full validation to generate.</em></p>
+EOF
+    fi
+    
+    cat >> "$report_file" << EOF
+        </div>
+        
+        <div class="section">
+            <h2>🔍 Drift Detection</h2>
+            <p>Configuration drift detection between baseline and current validation results:</p>
+EOF
+
+    # Add drift detection results if available
+    local latest_drift_report=$(ls "$VALIDATION_DIR/drift-reports"/drift-summary-*.txt 2>/dev/null | sort | tail -1)
+    if [[ -f "$latest_drift_report" ]]; then
+        cat >> "$report_file" << EOF
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap;">$(cat "$latest_drift_report")</div>
+EOF
+    else
+        cat >> "$report_file" << EOF
+            <p><em>No drift detection results available. Run drift detection to generate.</em></p>
+EOF
+    fi
+    
+    cat >> "$report_file" << EOF
+        </div>
+        
+        <div class="section">
+            <h2>📋 Validation Results</h2>
+            <p>Detailed validation results for each configuration:</p>
+            <div class="file-grid">
+EOF
+
+    # Add validation results
+    for validation_file in "$VALIDATION_DIR/current"/*-validation.json; do
+        if [[ -f "$validation_file" ]]; then
+            local config_name=$(basename "$validation_file" -validation.json)
+            local status=$(jq -r '.summary.status // "UNKNOWN"' "$validation_file" 2>/dev/null)
+            local resource_count=$(jq -r '.summary.resource_count // 0' "$validation_file" 2>/dev/null)
+            local missing_resources=$(jq -r '.summary.missing_resources // ""' "$validation_file" 2>/dev/null)
+            
+            local status_class="success"
+            if [[ "$status" == "FAIL" ]]; then
+                status_class="error"
+            fi
+            
+            cat >> "$report_file" << EOF
+                <div class="file-card $status_class">
+                    <div class="file-name">$config_name</div>
+                    <div>Status: $status</div>
+                    <div>Resources: $resource_count</div>
+                    $(if [[ -n "$missing_resources" ]]; then echo "<div>Missing: $missing_resources</div>"; fi)
+                </div>
+EOF
+        fi
+    done
+    
+    cat >> "$report_file" << EOF
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>🚀 Next Steps</h2>
+            <ul>
+                <li><strong>Review Failures:</strong> Investigate any failed validations</li>
+                <li><strong>Address Drift:</strong> Review configuration drift and ensure changes are intentional</li>
+                <li><strong>Update Tests:</strong> Add regression tests for any new functionality</li>
+                <li><strong>Documentation:</strong> Update documentation for any new features or changes</li>
+                <li><strong>Create Baseline:</strong> Create new baseline after confirming all changes are correct</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; margin-top: 40px; color: #7f8c8d;">
+            <p>CloudForge Core Validation System v2.0.5</p>
+        </div>
+    </div>
+</body>
+</html>
+EOF
+    
+    echo -e "${GREEN}📊 Comprehensive report generated: $report_file${NC}"
+}
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [COMMAND] [OPTIONS]"
+    echo ""
+    echo "Commands:"
+    echo "  full              Run complete validation suite (truth table + validation + drift)"
+    echo "  validate          Run comprehensive resource validation only"
+    echo "  drift             Detect configuration drift"
+    echo "  smoke             Run smoke tests (quick validation)"
+    echo "  baseline          Create new baseline from current results"
+    echo "  report            Generate comprehensive HTML report"
+    echo "  strategy [files]  Create testing strategy for specific file changes"
+    echo "  help              Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0 full                                    # Run complete validation suite"
+    echo "  $0 smoke                                   # Quick smoke tests"
+    echo "  $0 strategy \"FargateFactory.java,AlbFactory.java\"  # Test strategy for specific files"
+    echo "  $0 drift                                   # Detect configuration drift"
+    echo ""
+    echo "Workflow:"
+    echo "  1. Run '$0 full' for initial complete validation"
+    echo "  2. Run '$0 baseline' to create baseline"
+    echo "  3. After code changes, run '$0 validate'"
+    echo "  4. Run '$0 drift' to detect changes"
+    echo "  5. Run '$0 report' to generate summary"
+}
+
+# Main execution
+case "${1:-help}" in
+    "full")
+        check_prerequisites
+        # Captured rather than left to `set -e`, so a validation failure still runs drift
+        # detection and generates the final report (needed for CI artifact upload / debugging)
+        # instead of aborting the script immediately at this line.
+        validation_status=0
+        run_full_validation || validation_status=$?
+
+        # Run drift detection but don't fail the entire validation if drift is detected
+        # Drift is informational - it shows changes but shouldn't fail validation
+        detect_and_report_drift || true
+
+        generate_comprehensive_report
+        echo ""
+        if [[ $validation_status -eq 0 ]]; then
+            echo -e "${GREEN}🎉 Complete validation suite finished${NC}"
+        else
+            echo -e "${RED}💥 Complete validation suite finished with failures${NC}"
+        fi
+        exit $validation_status
+        ;;
+    "validate")
+        check_prerequisites
+        run_full_validation
+        ;;
+    "drift")
+        check_prerequisites
+        detect_and_report_drift
+        ;;
+    "smoke")
+        check_prerequisites
+        run_smoke_tests
+        ;;
+    "baseline")
+        check_prerequisites
+        bash "$SCRIPT_DIR/drift-detector.sh" baseline
+        ;;
+    "report")
+        generate_comprehensive_report
+        ;;
+    "strategy")
+        check_prerequisites
+        create_testing_strategy "$2"
+        ;;
+    "help"|"-h"|"--help")
+        show_usage
+        ;;
+    *)
+        echo -e "${RED}❌ Unknown command: $1${NC}"
+        echo ""
+        show_usage
+        exit 1
+        ;;
+esac

@@ -6,7 +6,7 @@ on:
     paths:
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
-      - 'cfc-testing/**'
+      - 'validation/**'
       - 'pom.xml'
       - '**/pom.xml'
   pull_request:
@@ -14,7 +14,7 @@ on:
     paths:
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
-      - 'cfc-testing/**'
+      - 'validation/**'
       - 'pom.xml'
       - '**/pom.xml'
   workflow_dispatch:
@@ -61,34 +61,6 @@ jobs:
           pip3 install --upgrade pip
           echo "Dependencies installed"
 
-      - name: Install AWS CDK
-        run: |
-          echo "Installing AWS CDK..."
-          npm install -g aws-cdk
-          cdk --version
-          echo "AWS CDK installed"
-
-      - name: Configure AWS credentials (for CDK synth only)
-        env:
-          # Mock credentials for CDK synthesis only - not used for actual AWS operations
-          MOCK_AWS_ACCESS_KEY_ID: ${{ secrets.MOCK_AWS_ACCESS_KEY_ID }}
-          MOCK_AWS_SECRET_ACCESS_KEY: ${{ secrets.MOCK_AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-        run: |
-          echo "Configuring mock credentials for CDK synthesis..."
-          mkdir -p ~/.aws
-          cat > ~/.aws/credentials << EOF
-          [default]
-          aws_access_key_id = ${MOCK_AWS_ACCESS_KEY_ID}
-          aws_secret_access_key = ${MOCK_AWS_SECRET_ACCESS_KEY}
-          EOF
-          cat > ~/.aws/config << EOF
-          [default]
-          region = ${AWS_DEFAULT_REGION}
-          output = json
-          EOF
-          echo "Mock credentials configured (synth only, no deployment)"
-
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -103,43 +75,33 @@ jobs:
           mvn clean install -Pci -B -V
           echo "Build and tests complete"
 
-      - name: Prepare CDK dependencies
+      # Building from source (not downloading the latest release) so this PR's cloudforge-core/
+      # cloudforge-api changes are what validation actually exercises -- the released binary is
+      # pinned to whatever cfc-core version cloudforge-cli's own pom last synced to, which never
+      # reflects an in-flight PR. `mvn install` above already put this checkout's artifacts in the
+      # local .m2 cache; overriding cfc-core.version to match makes cloudforge-cli's own build
+      # resolve those instead of whatever it has published to Central.
+      - name: Build cloudforge-cli from source against this PR's cfc-core build
         run: |
-          echo "Preparing CDK dependencies for cfc-testing..."
-          cd cfc-testing
-
-          # Verify build artifacts exist
-          if [ ! -d "target/classes" ]; then
-            echo "Building cfc-testing module..."
-            mvn clean install -DskipTests -B
-          fi
-
-          # Copy dependencies to target if not already there
-          if [ ! -d "target/dependency" ]; then
-            echo "Copying Maven dependencies..."
-            mvn dependency:copy-dependencies -DoutputDirectory=target/dependency -B
-          fi
-
-          # Verify the CDK app can be found
-          echo "Verifying CDK app class..."
-          if [ -f "target/classes/com/cloudforgeci/samples/app/CloudForgeCommunitySample.class" ]; then
-            echo "✅ CDK app class found"
-          else
-            echo "❌ ERROR: CDK app class not found"
-            echo "Contents of target/classes:"
-            find target/classes -type f -name "*.class" | head -10
-            exit 1
-          fi
-
-          echo "CDK dependencies ready"
-          echo "Target directory contents:"
-          ls -la target/
-          echo "Dependency count: $(ls target/dependency/*.jar 2>/dev/null | wc -l)"
+          CFC_CORE_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
+          git clone --depth 1 -b develop https://github.com/CloudForgeCI/cloudforge-cli.git /tmp/cloudforge-cli-src
+          cd /tmp/cloudforge-cli-src
+          mvn -q -B versions:set-property -Dproperty=cfc-core.version \
+            -DnewVersion="$CFC_CORE_VERSION" -DgenerateBackupPoms=false
+          # assemble-release.sh builds offline (-o), assuming a developer machine that already
+          # has every dependency cached -- a fresh CI runner doesn'''t, so warm the local repo with
+          # a real (online) build first (dependency:go-offline is too aggressive here and chases
+          # an unrelated, already-broken transitive resolution path).
+          mvn -q -B clean package -DskipTests
+          bash scripts/assemble-release.sh
+          CLI_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
+          tar xzf "release/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz" -C /tmp
+          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
 
       - name: Set up validation environment
         run: |
           echo "Setting up validation environment..."
-          cd cfc-testing
+          cd validation
 
           # Make scripts executable
           chmod +x scripts/*.sh 2>/dev/null || true
@@ -176,7 +138,7 @@ jobs:
         id: validation
         continue-on-error: true
         run: |
-          cd cfc-testing
+          cd validation
           echo "Running validation mode: ${{ steps.mode.outputs.mode }}"
           echo "Current directory: $(pwd)"
           echo "Checking prerequisites..."
@@ -184,17 +146,12 @@ jobs:
           # Verify dependencies
           echo "Checking jq: $(which jq)"
           echo "Checking python3: $(which python3)"
-          echo "Checking cdk: $(which cdk)"
+          echo "Checking cloudforge-cli: $(which cloudforge-cli)"
           echo "Checking mvn: $(which mvn)"
 
           # Verify scripts exist
           echo "Checking scripts..."
           ls -la scripts/*.sh scripts/*.py 2>/dev/null | head -5 || echo "Script listing failed"
-
-          # Verify CDK setup
-          echo "Verifying CDK setup..."
-          ls -la target/classes/ | head -5 || echo "target/classes not found"
-          ls -la target/dependency/ | head -5 || echo "target/dependency not found"
 
           # Run the appropriate validation mode
           echo "Starting validation..."
@@ -235,7 +192,7 @@ jobs:
         if: github.event_name == 'pull_request' && steps.mode.outputs.mode != 'smoke'
         continue-on-error: true
         run: |
-          cd cfc-testing
+          cd validation
 
           # Get list of changed files
           CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(java|ts|js)$' | tr '\n' ',' | sed 's/,$//')
@@ -251,7 +208,7 @@ jobs:
       - name: Generate validation summary
         if: always()
         run: |
-          cd cfc-testing
+          cd validation
 
           echo "## CFC Validation Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -357,7 +314,7 @@ jobs:
 
             // Add testing strategy if available
             try {
-              const strategy = fs.readFileSync('cfc-testing/testing-strategy.txt', 'utf8');
+              const strategy = fs.readFileSync('validation/testing-strategy.txt', 'utf8');
               if (strategy && !strategy.includes('No Java/TypeScript files changed')) {
                 comment += '### 🎯 Testing Strategy\n\n';
                 comment += '```\n' + strategy + '\n```\n\n';
@@ -383,7 +340,10 @@ jobs:
             });
 
       - name: Check validation status
-        if: steps.validation.outputs.exit_code != '0' && github.event_name != 'pull_request'
+        # Must run for every trigger, including pull_request: "Run CFC validation" above sets
+        # continue-on-error so the PR comment/summary steps still run on failure, so this step
+        # is the only thing that can fail the job.
+        if: steps.validation.outputs.exit_code != '0'
         run: |
           echo "Validation failed with exit code: ${{ steps.validation.outputs.exit_code }}"
           echo "Please review the validation artifacts for details."

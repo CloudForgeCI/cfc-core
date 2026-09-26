@@ -1198,8 +1198,13 @@ class Soc2RulesTest {
             customContext.putIfAbsent("enableFlowlogs", "true");
             customContext.putIfAbsent("awsConfigEnabled", "true");
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+            customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+            customContext.putIfAbsent("s3ObjectLockEnabled", "true");
             customContext.putIfAbsent("networkMode", "private-with-nat");
             customContext.putIfAbsent("logRetentionDays", "365");
+            customContext.putIfAbsent("auditManagerEnabled", "true");
             if (secProfile == SecurityProfile.PRODUCTION) {
                 customContext.putIfAbsent("multiAzEnforced", "true");
                 customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -1273,6 +1278,10 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("wafEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+                customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("multiAzEnforced", "true");
                 customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -1360,6 +1369,10 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+                customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("multiAzEnforced", "true");
                 customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -1445,6 +1458,10 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("wafEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+                customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("multiAzEnforced", "true");
                 customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -1521,6 +1538,10 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+                customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("multiAzEnforced", "true");
                 customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -1605,8 +1626,13 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+                customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
             }
         } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
             // STAGING doesn't require availability criteria, so add baseline for other requirements
@@ -1623,8 +1649,13 @@ class Soc2RulesTest {
             customContext.putIfAbsent("enableFlowlogs", "true");
             customContext.putIfAbsent("awsConfigEnabled", "true");
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+            customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+            customContext.putIfAbsent("s3ObjectLockEnabled", "true");
             customContext.putIfAbsent("networkMode", "private-with-nat");
             customContext.putIfAbsent("logRetentionDays", "365");
+            customContext.putIfAbsent("auditManagerEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -1685,6 +1716,10 @@ class Soc2RulesTest {
         customContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
         customContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsEncryption));
         customContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("cloudTrailInsightsEnabled", "true");
+        customContext.put("route53QueryLoggingEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
         customContext.put("networkMode", networkMode);
 
         SecurityProfile secProfile = SecurityProfile.PRODUCTION;
@@ -1767,6 +1802,10 @@ class Soc2RulesTest {
         customContext.put("ebsEncryptionEnabled", ebsEncryption);
         customContext.put("efsEncryptionAtRestEnabled", efsEncryption);
         customContext.put("s3EncryptionEnabled", s3Encryption);
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("cloudTrailInsightsEnabled", "true");
+        customContext.put("route53QueryLoggingEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
         customContext.put("efsEncryptionInTransitEnabled", efsTransit);
         customContext.put("wafEnabled", waf);
         customContext.put("securityMonitoringEnabled", secMonitoring);
@@ -1865,6 +1904,10 @@ class Soc2RulesTest {
         cfcContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
         cfcContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsEncryption));
         cfcContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        cfcContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        cfcContext.put("cloudTrailInsightsEnabled", "true");
+        cfcContext.put("route53QueryLoggingEnabled", "true");
+        cfcContext.put("s3ObjectLockEnabled", "true");
         cfcContext.put("kmsKeyRotationEnabled", String.valueOf(kmsRotation));
 
         if ("alb-oidc".equals(authMode)) {
@@ -2055,6 +2098,10 @@ class Soc2RulesTest {
         cfcContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
         cfcContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsEncryption));
         cfcContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        cfcContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        cfcContext.put("cloudTrailInsightsEnabled", "true");
+        cfcContext.put("route53QueryLoggingEnabled", "true");
+        cfcContext.put("s3ObjectLockEnabled", "true");
         cfcContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
         cfcContext.put("networkMode", networkMode);
         stack.getNode().setContext("cfc", cfcContext);
@@ -2199,6 +2246,10 @@ class Soc2RulesTest {
         cfcContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
         cfcContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsEncryption));
         cfcContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        cfcContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        cfcContext.put("cloudTrailInsightsEnabled", "true");
+        cfcContext.put("route53QueryLoggingEnabled", "true");
+        cfcContext.put("s3ObjectLockEnabled", "true");
         cfcContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
         cfcContext.put("securityMonitoringEnabled", String.valueOf(secMonitoring));
         cfcContext.put("guardDutyEnabled", String.valueOf(guardDuty));
@@ -2268,6 +2319,10 @@ class Soc2RulesTest {
         customContext.put("ebsEncryptionEnabled", String.valueOf(ebsEncryption));
         customContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsEncryption));
         customContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("cloudTrailInsightsEnabled", "true");
+        customContext.put("route53QueryLoggingEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
         customContext.put("kmsKeyRotationEnabled", String.valueOf(kmsRotation));
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -2288,6 +2343,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
                 if (secProfile == SecurityProfile.PRODUCTION) {
                     customContext.putIfAbsent("multiAzEnforced", "true");
                     customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -2379,12 +2435,17 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("ebsEncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+                customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
                 if (secProfile == SecurityProfile.PRODUCTION) {
                     customContext.putIfAbsent("multiAzEnforced", "true");
                     customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -2493,6 +2554,10 @@ class Soc2RulesTest {
             customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
             customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+            customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+            customContext.putIfAbsent("s3ObjectLockEnabled", "true");
             customContext.putIfAbsent("securityMonitoringEnabled", "true");
             customContext.putIfAbsent("guardDutyEnabled", "true");
             if (secProfile == SecurityProfile.PRODUCTION && "ENFORCE".equals(complianceMode)) {
@@ -2580,6 +2645,10 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+                customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
                 customContext.putIfAbsent("wafEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -2588,6 +2657,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
             }
         } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
             // STAGING doesn't require availability criteria
@@ -2598,6 +2668,10 @@ class Soc2RulesTest {
             customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
             customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+            customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+            customContext.putIfAbsent("s3ObjectLockEnabled", "true");
             customContext.putIfAbsent("wafEnabled", "true");
             customContext.putIfAbsent("securityMonitoringEnabled", "true");
             customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -2606,6 +2680,7 @@ class Soc2RulesTest {
             customContext.putIfAbsent("awsConfigEnabled", "true");
             customContext.putIfAbsent("networkMode", "private-with-nat");
             customContext.putIfAbsent("logRetentionDays", "365");
+            customContext.putIfAbsent("auditManagerEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2666,6 +2741,10 @@ class Soc2RulesTest {
         customContext.put("ebsEncryptionEnabled", String.valueOf(encryption));
         customContext.put("efsEncryptionAtRestEnabled", String.valueOf(encryption));
         customContext.put("s3EncryptionEnabled", String.valueOf(encryption));
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("cloudTrailInsightsEnabled", "true");
+        customContext.put("route53QueryLoggingEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
         customContext.put("securityMonitoringEnabled", String.valueOf(monitoring));
         customContext.put("guardDutyEnabled", String.valueOf(monitoring));
         customContext.put("wafEnabled", String.valueOf(waf));
@@ -2689,6 +2768,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("fqdn", "soc2.example.com");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
                 if (secProfile == SecurityProfile.PRODUCTION) {
                     customContext.putIfAbsent("automatedBackupEnabled", "true");
                     customContext.putIfAbsent("crossRegionBackupEnabled", "true");
@@ -2702,6 +2782,7 @@ class Soc2RulesTest {
             customContext.putIfAbsent("fqdn", "soc2.example.com");
             customContext.putIfAbsent("networkMode", "private-with-nat");
             customContext.putIfAbsent("logRetentionDays", "365");
+            customContext.putIfAbsent("auditManagerEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2779,6 +2860,10 @@ class Soc2RulesTest {
         customContext.put("ebsEncryptionEnabled", String.valueOf(encryption));
         customContext.put("efsEncryptionAtRestEnabled", String.valueOf(encryption));
         customContext.put("s3EncryptionEnabled", String.valueOf(encryption));
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("cloudTrailInsightsEnabled", "true");
+        customContext.put("route53QueryLoggingEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
         customContext.put("efsEncryptionInTransitEnabled", String.valueOf(encryption));
         customContext.put("wafEnabled", String.valueOf(waf));
         customContext.put("securityMonitoringEnabled", String.valueOf(monitoring));
@@ -2804,12 +2889,14 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("crossRegionBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
             }
         } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
             boolean baseRequirementsMet = auth && encryption && waf && monitoring && cloudTrail && flowLogs;
             if (baseRequirementsMet) {
                 // STAGING doesn't need availability features
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
             }
         }
 
@@ -2892,6 +2979,10 @@ class Soc2RulesTest {
         customContext.put("ebsEncryptionEnabled", String.valueOf(encryption));
         customContext.put("efsEncryptionAtRestEnabled", String.valueOf(encryption));
         customContext.put("s3EncryptionEnabled", String.valueOf(encryption));
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("cloudTrailInsightsEnabled", "true");
+        customContext.put("route53QueryLoggingEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
         customContext.put("efsEncryptionInTransitEnabled", String.valueOf(transit));
         customContext.put("securityMonitoringEnabled", String.valueOf(monitoring));
         customContext.put("guardDutyEnabled", String.valueOf(monitoring));
@@ -2915,6 +3006,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("wafEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
             }
         } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
             boolean hasRequirement = encryption && transit && monitoring && audit;
@@ -2925,6 +3017,7 @@ class Soc2RulesTest {
                 customContext.putIfAbsent("wafEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("logRetentionDays", "365");
+                customContext.putIfAbsent("auditManagerEnabled", "true");
             }
         }
 
@@ -3007,6 +3100,10 @@ class Soc2RulesTest {
             customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
             customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.putIfAbsent("cloudTrailInsightsEnabled", "true");
+            customContext.putIfAbsent("route53QueryLoggingEnabled", "true");
+            customContext.putIfAbsent("s3ObjectLockEnabled", "true");
             customContext.putIfAbsent("wafEnabled", "true");
             customContext.putIfAbsent("securityMonitoringEnabled", "true");
             customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -3015,6 +3112,7 @@ class Soc2RulesTest {
             customContext.putIfAbsent("awsConfigEnabled", "true");
             customContext.putIfAbsent("networkMode", "private-with-nat");
             customContext.putIfAbsent("logRetentionDays", "365");
+            customContext.putIfAbsent("auditManagerEnabled", "true");
             if (secProfile == SecurityProfile.PRODUCTION) {
                 customContext.putIfAbsent("multiAzEnforced", "true");
                 customContext.putIfAbsent("autoScalingEnabled", "true");
@@ -3029,18 +3127,10 @@ class Soc2RulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new Soc2Rules().install(builder.getSystemContext());
 
-        // SOC2 A1.3 requires automated backups and cross-region backup for PRODUCTION in ENFORCE mode
-        boolean shouldFail = false;
-        if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
-            // Backup must be enabled
-            if (!backupEnabled) {
-                shouldFail = true;
-            }
-            // Cross-region backup is also required for PRODUCTION SOC2 compliance
-            if (!crossRegion) {
-                shouldFail = true;
-            }
-        }
+        // SOC2 A1.3 requires automated backups for PRODUCTION in ENFORCE mode; cross-region copy is advisory
+        boolean shouldFail = "ENFORCE".equals(complianceMode)
+            && secProfile == SecurityProfile.PRODUCTION
+            && !backupEnabled;
 
         if (shouldFail) {
             assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
@@ -3098,6 +3188,10 @@ class Soc2RulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("cloudTrailInsightsEnabled", "true");
+            customContext.put("route53QueryLoggingEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -3145,6 +3239,10 @@ class Soc2RulesTest {
         customContext.put("efsEncryptionAtRestEnabled", String.valueOf(efsAtRest));
         customContext.put("efsEncryptionInTransitEnabled", String.valueOf(efsTransit));
         customContext.put("s3EncryptionEnabled", String.valueOf(s3Encryption));
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("cloudTrailInsightsEnabled", "true");
+        customContext.put("route53QueryLoggingEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
         customContext.put("complianceFrameworks", "SOC2");
         customContext.put("complianceMode", complianceMode);
         customContext.put("networkMode", "private-with-nat");
@@ -3229,6 +3327,10 @@ class Soc2RulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("cloudTrailInsightsEnabled", "true");
+            customContext.put("route53QueryLoggingEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -3277,6 +3379,10 @@ class Soc2RulesTest {
         customContext.put("efsEncryptionAtRestEnabled", String.valueOf(encryptionEnabled));
         customContext.put("efsEncryptionInTransitEnabled", String.valueOf(encryptionEnabled));
         customContext.put("s3EncryptionEnabled", String.valueOf(encryptionEnabled));
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("cloudTrailInsightsEnabled", "true");
+        customContext.put("route53QueryLoggingEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
         customContext.put("logRetentionDays", String.valueOf(retentionDays));
         customContext.put("complianceFrameworks", "SOC2");
         customContext.put("complianceMode", complianceMode);

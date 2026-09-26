@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Threat protection compliance validation rules.
@@ -124,13 +125,15 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         var config = ctx.securityProfileConfig.get().orElse(null);
         boolean hasGuardDuty = config != null && config.isGuardDutyEnabled();
 
-        // PRODUCTION + FARGATE + GuardDuty = immutable infrastructure approach (auto-pass)
-        if (ctx.security == SecurityProfile.PRODUCTION && isFargate && hasGuardDuty) {
+        boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
+
+        // PRODUCTION/STAGING + FARGATE + GuardDuty = immutable infrastructure approach (auto-pass)
+        if (isProdOrStaging && isFargate && hasGuardDuty) {
             rules.add(ComplianceRule.pass(
                 "ANTI-MALWARE-PROTECTION",
                 "Anti-malware via GuardDuty runtime protection + immutable containers"
             ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION && requiresPciDss && !antiMalwareEnabled) {
+        } else if (isProdOrStaging && requiresPciDss && !antiMalwareEnabled) {
             rules.add(ComplianceRule.fail(
                 "ANTI-MALWARE-PROTECTION",
                 "Anti-malware protection required for PCI-DSS Req 5.1",
@@ -181,7 +184,7 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         }
 
         // Container image scanning (alternative for containerized workloads)
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             // Use DeploymentContext fields directly to avoid JSII callback loops during synthesis
             boolean containerImageScanning = ctx.cfc.containerImageScanningEnabled() != null ?
                 ctx.cfc.containerImageScanningEnabled() : false;
@@ -231,6 +234,8 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         boolean requiresPciDss = complianceFrameworks != null &&
             complianceFrameworks.toUpperCase().contains("PCI-DSS");
 
+        boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
+
         // GuardDuty for network intrusion detection - framework-specific validation
         // Read actual configured value for validation (deployment context overrides take precedence)
         boolean guardDutyEnabled = ctx.cfc.guardDutyEnabled() != null ?
@@ -243,7 +248,7 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (result == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "NETWORK-INTRUSION-DETECTION",
@@ -255,10 +260,11 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("GuardDuty recommended but not required for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "NETWORK-INTRUSION-DETECTION",
-                    "GuardDuty recommended but not required",
-                    "GuardDutyEnabled"
+                    "GuardDuty recommended but not required for " + complianceFrameworks,
+                    "GuardDutyEnabled",
+                    "Enable GuardDuty for threat detection (guardDutyEnabled = true)."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -269,11 +275,11 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
             }
         }
 
-        // GuardDuty alert configuration (PRODUCTION only)
+        // GuardDuty alert configuration (PRODUCTION and STAGING)
         if (config.isGuardDutyEnabled()) {
             boolean guardDutyAlertsConfigured = getBooleanSetting(ctx, "guardDutyAlertsConfigured", false);
 
-            if (ctx.security == SecurityProfile.PRODUCTION && !guardDutyAlertsConfigured) {
+            if (isProdOrStaging && !guardDutyAlertsConfigured) {
                 rules.add(ComplianceRule.fail(
                     "GUARDDUTY-ALERTS",
                     "GuardDuty alerts required for PRODUCTION security incidents",
@@ -283,7 +289,7 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
             } else {
                 rules.add(ComplianceRule.pass(
                     "GUARDDUTY-ALERTS",
-                    ctx.security == SecurityProfile.PRODUCTION ?
+                    isProdOrStaging ?
                         "GuardDuty alerts configured" :
                         "GuardDuty alerts not required for " + ctx.security
                 ));
@@ -291,7 +297,7 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         }
 
         // WAF for application-layer protection (required for PCI-DSS only)
-        if (ctx.security == SecurityProfile.PRODUCTION && requiresPciDss) {
+        if (isProdOrStaging && requiresPciDss) {
             if (!config.isWafEnabled()) {
                 rules.add(ComplianceRule.fail(
                     "WAF-INTRUSION-PREVENTION",
@@ -311,7 +317,7 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         }
 
         // Network traffic monitoring (required for PCI-DSS only)
-        if (ctx.security == SecurityProfile.PRODUCTION && requiresPciDss) {
+        if (isProdOrStaging && requiresPciDss) {
             if (!config.isFlowLogsEnabled()) {
                 rules.add(ComplianceRule.fail(
                     "NETWORK-TRAFFIC-MONITORING",
@@ -357,14 +363,15 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         boolean fileIntegrityMonitoring = ctx.cfc.fileIntegrityMonitoringEnabled() != null ?
             ctx.cfc.fileIntegrityMonitoringEnabled() : false;
         boolean isFargate = ctx.runtime != null && ctx.runtime.toString().equals("FARGATE");
+        boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
 
-        // Auto-pass for PRODUCTION profile with FARGATE (immutable infrastructure = file integrity by design)
-        if (ctx.security == SecurityProfile.PRODUCTION && isFargate) {
+        // Auto-pass for PRODUCTION/STAGING with FARGATE (immutable infrastructure = file integrity by design)
+        if (isProdOrStaging && isFargate) {
             rules.add(ComplianceRule.pass(
                 "FILE-INTEGRITY-MONITORING",
                 "File integrity via immutable containers (PRODUCTION profile with FARGATE)"
             ));
-        } else if (ctx.security == SecurityProfile.PRODUCTION && requiresPciDss && !fileIntegrityMonitoring) {
+        } else if (isProdOrStaging && requiresPciDss && !fileIntegrityMonitoring) {
             rules.add(ComplianceRule.fail(
                 "FILE-INTEGRITY-MONITORING",
                 "File integrity monitoring required for PCI-DSS",
@@ -383,7 +390,7 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         // Change detection with AWS Config (required for PCI-DSS with EC2 only)
         // FARGATE has immutable infrastructure, so infrastructure-level change detection via AWS Config is optional
         var config = ctx.securityProfileConfig.get().orElse(null);
-        if (config != null && ctx.security == SecurityProfile.PRODUCTION && requiresPciDss && !isFargate) {
+        if (config != null && isProdOrStaging && requiresPciDss && !isFargate) {
             if (!config.isAwsConfigEnabled()) {
                 rules.add(ComplianceRule.fail(
                     "CONFIG-CHANGE-DETECTION",
@@ -428,7 +435,8 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         boolean containerRuntimeSecurity = ctx.cfc.containerRuntimeSecurityEnabled() != null ?
             ctx.cfc.containerRuntimeSecurityEnabled() : false;
 
-        if (ctx.security == SecurityProfile.PRODUCTION && requiresGdpr && !containerRuntimeSecurity) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)
+                && requiresGdpr && !containerRuntimeSecurity) {
             rules.add(ComplianceRule.fail(
                 "CONTAINER-RUNTIME-SECURITY",
                 "Container runtime security monitoring required for GDPR",
@@ -537,5 +545,21 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
 
         // Default: advisory (non-blocking)
         return false;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. Anti-malware protection,
+     * anti-malware auto-update, malware scan logging, file integrity monitoring, and immutable
+     * infrastructure are all conditional checks (pass/fail both reachable) that have no
+     * corresponding {@link ComplianceMatrix.SecurityControl} entry to claim -- the matrix has no
+     * anti-malware or file-integrity-monitoring control at all.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "THREAT_DETECTION", "WAF_PROTECTION", "NETWORK_FLOW_LOGS", "VULNERABILITY_MANAGEMENT",
+            "CONTAINER_SECURITY", "VULNERABILITY_SCANNING"
+        );
     }
 }

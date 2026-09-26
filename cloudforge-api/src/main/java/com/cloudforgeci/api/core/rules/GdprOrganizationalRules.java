@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * GDPR organizational and data protection validation rules.
@@ -277,7 +278,8 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
         // DPIA conducted
         boolean dpiaCompleted = getBooleanSetting(ctx, "gdprDpiaCompleted", false);
 
-        if (ctx.security == SecurityProfile.PRODUCTION && !dpiaCompleted) {
+        boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
+        if (isProdOrStaging && !dpiaCompleted) {
             rules.add(ComplianceRule.fail(
                 "GDPR-ART35-DPIA",
                 "Data Protection Impact Assessment (DPIA) required for high-risk processing",
@@ -286,7 +288,7 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
                 "Assess risks to rights and freedoms. Document safeguards. " +
                 "Set gdprDpiaCompleted = true when DPIA is documented."
             ));
-        } else if (dpiaCompleted || ctx.security != SecurityProfile.PRODUCTION) {
+        } else if (dpiaCompleted || !isProdOrStaging) {
             rules.add(ComplianceRule.pass(
                 "GDPR-ART35-DPIA",
                 "Data Protection Impact Assessment completed or not required"
@@ -436,5 +438,19 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. "GDPR-Organizational" is
+     * not a {@link ComplianceMatrix} column, so this declaration is for documentation only, not
+     * enforced by the sync test. Every check in this class reads a manually-attested
+     * deployment-context flag (legal basis, consent, DPIA, retention policy, ROPA, etc.) rather
+     * than any infrastructure state a {@code ComplianceMatrix.SecurityControl} describes, so no
+     * control names are claimed.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of();
     }
 }

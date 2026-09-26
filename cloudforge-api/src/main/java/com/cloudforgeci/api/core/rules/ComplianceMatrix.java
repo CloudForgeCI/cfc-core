@@ -90,7 +90,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption and Decryption"),
                 "SOC2", FrameworkRequirement.required("CC6.1 - Logical and Physical Access Controls"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Pseudonymization and Encryption"),
-                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest")
+                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
+                "FEDRAMP", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
+                "ISO-27001", FrameworkRequirement.required("A.8.24 - Use of Cryptography (data at rest)")
             )
         ),
 
@@ -101,7 +103,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(e)(1) - Transmission Security"),
                 "SOC2", FrameworkRequirement.required("CC6.7 - Data Transmission Security"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Encryption of Personal Data"),
-                "NIST", FrameworkRequirement.required("SC-8 - Transmission Confidentiality and Integrity")
+                "NIST", FrameworkRequirement.required("SC-8 - Transmission Confidentiality and Integrity"),
+                "FEDRAMP", FrameworkRequirement.required("SC-8 - Transmission Confidentiality and Integrity"),
+                "ISO-27001", FrameworkRequirement.required("A.8.24 - Use of Cryptography (data in transit)")
             )
         ),
 
@@ -112,7 +116,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.advisory("§164.312(e)(2)(ii) - Encryption mechanism"),
                 "SOC2", FrameworkRequirement.advisory("CC6.7 - Minimize attack surface"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(a) - State of the art encryption"),
-                "NIST", FrameworkRequirement.required("SC-8(1) - Cryptographic Protection")
+                "NIST", FrameworkRequirement.required("SC-8(1) - Cryptographic Protection"),
+                "FEDRAMP", FrameworkRequirement.required("SC-8(1) - Cryptographic Protection"),
+                "ISO-27001", FrameworkRequirement.advisory("A.8.24 - Use of Cryptography (enforce encrypted transport)")
             )
         ),
 
@@ -123,7 +129,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(e)(1) - Network Controls"),
                 "SOC2", FrameworkRequirement.required("CC6.6 - Network Segmentation"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Confidentiality"),
-                "NIST", FrameworkRequirement.required("SC-7 - Boundary Protection")
+                "NIST", FrameworkRequirement.required("SC-7 - Boundary Protection"),
+                "FEDRAMP", FrameworkRequirement.required("SC-7 - Boundary Protection"),
+                "ISO-27001", FrameworkRequirement.required("A.8.22 - Segregation of Networks")
             )
         ),
 
@@ -134,7 +142,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(a)(1) - Access Control"),
                 "SOC2", FrameworkRequirement.required("CC6.1 - Logical Access Controls"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Confidentiality"),
-                "NIST", FrameworkRequirement.required("AC-3 - Access Enforcement")
+                "NIST", FrameworkRequirement.required("AC-3 - Access Enforcement"),
+                "FEDRAMP", FrameworkRequirement.required("AC-3 - Access Enforcement"),
+                "ISO-27001", FrameworkRequirement.required("A.5.15 - Access Control")
             )
         ),
 
@@ -145,7 +155,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(d) - Person or Entity Authentication"),
                 "SOC2", FrameworkRequirement.required("CC6.2 - User Authentication"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Ability to ensure confidentiality"),
-                "NIST", FrameworkRequirement.required("IA-2 - Identification and Authentication")
+                "NIST", FrameworkRequirement.required("IA-2 - Identification and Authentication"),
+                "FEDRAMP", FrameworkRequirement.required("IA-2 - Identification and Authentication"),
+                "ISO-27001", FrameworkRequirement.required("A.8.5 - Secure Authentication")
             )
         ),
 
@@ -156,7 +168,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(b) - Audit Controls"),
                 "SOC2", FrameworkRequirement.required("CC7.2 - System Monitoring"),
                 "GDPR", FrameworkRequirement.required("Art. 30 - Records of Processing Activities"),
-                "NIST", FrameworkRequirement.required("AU-2 - Audit Events")
+                "NIST", FrameworkRequirement.required("AU-2 - Audit Events"),
+                "FEDRAMP", FrameworkRequirement.required("AU-2 - Audit Events"),
+                "ISO-27001", FrameworkRequirement.required("A.8.15 - Logging")
             )
         ),
 
@@ -167,7 +181,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.316(b)(2)(i) - Retain documentation for 6 years"),
                 "SOC2", FrameworkRequirement.required("CC7.2 - Log retention for forensic analysis"),
                 "GDPR", FrameworkRequirement.advisory("Art. 30 - Maintain processing records"),
-                "NIST", FrameworkRequirement.required("AU-11 - Audit Record Retention")
+                "NIST", FrameworkRequirement.required("AU-11 - Audit Record Retention"),
+                "FEDRAMP", FrameworkRequirement.required("AU-11 - Audit Record Retention (3 years)"),
+                "ISO-27001", FrameworkRequirement.required("A.8.15 - Logging (retention of log information)")
             )
         ),
 
@@ -178,7 +194,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(1)(ii)(D) - Information System Activity Review"),
                 "SOC2", FrameworkRequirement.advisory("CC7.2 - System Monitoring for Anomalies"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Regular testing and evaluation"),
-                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring")
+                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring"),
+                "FEDRAMP", FrameworkRequirement.required("CA-7 - Continuous Monitoring"),
+                "ISO-27001", FrameworkRequirement.required("A.8.16 - Monitoring Activities")
             )
         ),
 
@@ -189,7 +207,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(1)(ii)(D) - Security incident procedures"),
                 "SOC2", FrameworkRequirement.advisory("CC7.2 - Threat Detection"),
                 "GDPR", FrameworkRequirement.advisory("Art. 33(1) - Breach Detection"),
-                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring")
+                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring"),
+                "FEDRAMP", FrameworkRequirement.required("SI-4 - Information System Monitoring"),
+                "ISO-27001", FrameworkRequirement.required("A.8.16 - Monitoring Activities (threat detection)")
             )
         ),
 
@@ -200,7 +220,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.advisory("§164.308(a)(1)(ii)(D) - Centralized security monitoring"),
                 "SOC2", FrameworkRequirement.advisory("CC7.3 - Centralized security monitoring"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Centralized security posture"),
-                "NIST", FrameworkRequirement.advisory("SI-4 - Information System Monitoring")
+                "NIST", FrameworkRequirement.advisory("SI-4 - Information System Monitoring"),
+                "FEDRAMP", FrameworkRequirement.required("CA-7(4) - Risk Monitoring"),
+                "ISO-27001", FrameworkRequirement.advisory("A.8.16 - Monitoring Activities (centralized findings)")
             )
         ),
 
@@ -211,7 +233,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.advisory("§164.308(a)(8) - Periodic evaluation"),
                 "SOC2", FrameworkRequirement.advisory("CC7.1 - Vulnerability detection"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(d) - Regular testing"),
-                "NIST", FrameworkRequirement.required("RA-5 - Vulnerability Scanning")
+                "NIST", FrameworkRequirement.required("RA-5 - Vulnerability Scanning"),
+                "FEDRAMP", FrameworkRequirement.required("RA-5 - Vulnerability Scanning"),
+                "ISO-27001", FrameworkRequirement.required("A.8.8 - Management of Technical Vulnerabilities")
             )
         ),
 
@@ -222,7 +246,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(1)(ii)(A) - PHI identification"),
                 "SOC2", FrameworkRequirement.notApplicable(),
                 "GDPR", FrameworkRequirement.required("Art. 30 - Personal data inventory"),
-                "NIST", FrameworkRequirement.advisory("SI-4 - Information System Monitoring")
+                "NIST", FrameworkRequirement.advisory("SI-4 - Information System Monitoring"),
+                "FEDRAMP", FrameworkRequirement.advisory("SI-4 - Information System Monitoring"),
+                "ISO-27001", FrameworkRequirement.advisory("A.5.34 - Privacy and Protection of PII")
             )
         ),
 
@@ -233,7 +259,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.advisory("§164.312(e)(1) - Transmission security mechanisms"),
                 "SOC2", FrameworkRequirement.required("CC6.6 - Web application protection"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1) - Appropriate security measures"),
-                "NIST", FrameworkRequirement.required("SC-7(11) - Boundary Protection")
+                "NIST", FrameworkRequirement.required("SC-7(11) - Boundary Protection"),
+                "FEDRAMP", FrameworkRequirement.required("SC-7 - Boundary Protection (public-facing)"),
+                "ISO-27001", FrameworkRequirement.required("A.8.26 - Application Security Requirements")
             )
         ),
 
@@ -244,7 +272,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.310(d)(2)(iii) - Data Backup and Storage"),
                 "SOC2", FrameworkRequirement.required("A1.3 - Recovery capabilities"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(c) - Restore availability and access"),
-                "NIST", FrameworkRequirement.required("CP-9 - Information System Backup")
+                "NIST", FrameworkRequirement.required("CP-9 - Information System Backup"),
+                "FEDRAMP", FrameworkRequirement.required("CP-9 - Information System Backup"),
+                "ISO-27001", FrameworkRequirement.required("A.8.13 - Information Backup")
             )
         ),
 
@@ -255,7 +285,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(7)(ii)(B) - Disaster recovery plan"),
                 "SOC2", FrameworkRequirement.required("A1.2 - Maintain system availability"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Ensure resilience of systems"),
-                "NIST", FrameworkRequirement.required("CP-2 - Contingency Plan")
+                "NIST", FrameworkRequirement.required("CP-2 - Contingency Plan"),
+                "FEDRAMP", FrameworkRequirement.required("CP-10 - System Recovery"),
+                "ISO-27001", FrameworkRequirement.required("A.5.29 - Information Security During Disruption")
             )
         ),
 
@@ -266,7 +298,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(8) - Evaluation of security measures"),
                 "SOC2", FrameworkRequirement.required("CC8.1 - Change Management Process"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Process for regular testing"),
-                "NIST", FrameworkRequirement.required("CM-3 - Configuration Change Control")
+                "NIST", FrameworkRequirement.required("CM-3 - Configuration Change Control"),
+                "FEDRAMP", FrameworkRequirement.required("CM-3 - Configuration Change Control"),
+                "ISO-27001", FrameworkRequirement.required("A.8.32 - Change Management")
             )
         ),
 
@@ -277,7 +311,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(8) - Periodic evaluation"),
                 "SOC2", FrameworkRequirement.required("CC7.1 - Vulnerability detection and remediation"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Regular testing and evaluating effectiveness"),
-                "NIST", FrameworkRequirement.required("RA-5 - Vulnerability Scanning")
+                "NIST", FrameworkRequirement.required("RA-5 - Vulnerability Scanning"),
+                "FEDRAMP", FrameworkRequirement.required("CM-6 - Configuration Settings"),
+                "ISO-27001", FrameworkRequirement.required("A.8.9 - Configuration Management")
             )
         ),
 
@@ -288,7 +324,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption key management"),
                 "SOC2", FrameworkRequirement.advisory("CC6.1 - Encryption key rotation"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Key management"),
-                "NIST", FrameworkRequirement.required("SC-12 - Cryptographic Key Management")
+                "NIST", FrameworkRequirement.required("SC-12 - Cryptographic Key Management"),
+                "FEDRAMP", FrameworkRequirement.required("SC-12 - Cryptographic Key Management"),
+                "ISO-27001", FrameworkRequirement.required("A.8.24 - Use of Cryptography (key management)")
             )
         ),
 
@@ -299,7 +337,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.advisory("§164.312(e)(1) - Certificate lifecycle"),
                 "SOC2", FrameworkRequirement.advisory("CC6.7 - Certificate management"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Availability assurance"),
-                "NIST", FrameworkRequirement.advisory("IA-5 - Authenticator Management")
+                "NIST", FrameworkRequirement.advisory("IA-5 - Authenticator Management"),
+                "FEDRAMP", FrameworkRequirement.advisory("IA-5(2) - PKI-based Authentication"),
+                "ISO-27001", FrameworkRequirement.advisory("A.8.24 - Use of Cryptography (certificate lifecycle)")
             )
         ),
 
@@ -310,7 +350,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(a)(1) - Access credential management"),
                 "SOC2", FrameworkRequirement.advisory("CC6.1 - Credential storage"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Secure credential storage"),
-                "NIST", FrameworkRequirement.required("IA-5 - Authenticator Management")
+                "NIST", FrameworkRequirement.required("IA-5 - Authenticator Management"),
+                "FEDRAMP", FrameworkRequirement.required("IA-5 - Authenticator Management"),
+                "ISO-27001", FrameworkRequirement.required("A.5.17 - Authentication Information")
             )
         ),
 
@@ -321,7 +363,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(5)(ii)(D) - Password management"),
                 "SOC2", FrameworkRequirement.advisory("CC6.1 - Credential rotation"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Credential lifecycle"),
-                "NIST", FrameworkRequirement.required("IA-5(1) - Password-based Authentication")
+                "NIST", FrameworkRequirement.required("IA-5(1) - Password-based Authentication"),
+                "FEDRAMP", FrameworkRequirement.required("IA-5(1) - Password-based Authentication"),
+                "ISO-27001", FrameworkRequirement.advisory("A.5.17 - Authentication Information (rotation)")
             )
         ),
 
@@ -332,7 +376,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.308(a)(7)(ii)(B) - Disaster recovery"),
                 "SOC2", FrameworkRequirement.required("A1.2 - System availability"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - System resilience"),
-                "NIST", FrameworkRequirement.required("CP-6 - Alternate Storage Site")
+                "NIST", FrameworkRequirement.required("CP-6 - Alternate Storage Site"),
+                "FEDRAMP", FrameworkRequirement.required("CP-10 - System Recovery"),
+                "ISO-27001", FrameworkRequirement.required("A.5.29 - Information Security During Disruption (DB availability)")
             )
         ),
 
@@ -343,7 +389,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.310(d)(2)(iii) - Data backup and recovery"),
                 "SOC2", FrameworkRequirement.required("A1.3 - Recovery capabilities"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(c) - Restore data availability"),
-                "NIST", FrameworkRequirement.required("CP-9 - Information System Backup")
+                "NIST", FrameworkRequirement.required("CP-9 - Information System Backup"),
+                "FEDRAMP", FrameworkRequirement.required("CP-9 - Information System Backup"),
+                "ISO-27001", FrameworkRequirement.required("A.8.13 - Information Backup (point-in-time recovery)")
             )
         ),
 
@@ -354,7 +402,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(b) - Audit network access"),
                 "SOC2", FrameworkRequirement.required("CC7.2 - Network monitoring"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Network monitoring"),
-                "NIST", FrameworkRequirement.required("AU-2 - Audit Events")
+                "NIST", FrameworkRequirement.required("AU-2 - Audit Events"),
+                "FEDRAMP", FrameworkRequirement.required("AC-4 - Information Flow Enforcement"),
+                "ISO-27001", FrameworkRequirement.required("A.8.16 - Monitoring Activities (network traffic)")
             )
         ),
 
@@ -365,7 +415,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.advisory("§164.308(a)(1)(ii)(D) - Audit evidence"),
                 "SOC2", FrameworkRequirement.required("CC7.2 - Continuous monitoring and audit evidence"),
                 "GDPR", FrameworkRequirement.advisory("Art. 30 - Documentation of compliance"),
-                "NIST", FrameworkRequirement.required("AU-6 - Audit Review, Analysis, and Reporting")
+                "NIST", FrameworkRequirement.required("AU-6 - Audit Review, Analysis, and Reporting"),
+                "FEDRAMP", FrameworkRequirement.advisory("AU-6 - Audit Review, Analysis, and Reporting"),
+                "ISO-27001", FrameworkRequirement.advisory("A.5.35 - Independent Review of Information Security")
             )
         ),
 
@@ -376,7 +428,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption of PHI logs"),
                 "SOC2", FrameworkRequirement.required("CC6.1 - Encryption of audit logs"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Encryption of processing records"),
-                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest")
+                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
+                "FEDRAMP", FrameworkRequirement.required("AU-9 - Protection of Audit Information"),
+                "ISO-27001", FrameworkRequirement.required("A.8.24 - Use of Cryptography (log encryption)")
             )
         ),
 
@@ -387,7 +441,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.advisory("§164.308(a)(1)(ii)(D) - Activity review"),
                 "SOC2", FrameworkRequirement.required("CC7.2 - Anomaly detection in system activity"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(d) - Regular testing and evaluation"),
-                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring")
+                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring"),
+                "FEDRAMP", FrameworkRequirement.advisory("SI-4 - Information System Monitoring"),
+                "ISO-27001", FrameworkRequirement.advisory("A.8.16 - Monitoring Activities (anomaly detection)")
             )
         ),
 
@@ -398,7 +454,9 @@ public final class ComplianceMatrix {
                 "HIPAA", FrameworkRequirement.advisory("§164.312(b) - Audit DNS queries"),
                 "SOC2", FrameworkRequirement.required("CC7.2 - Network activity monitoring"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(d) - Network monitoring"),
-                "NIST", FrameworkRequirement.required("AU-2 - Audit Events including DNS")
+                "NIST", FrameworkRequirement.required("AU-2 - Audit Events including DNS"),
+                "FEDRAMP", FrameworkRequirement.advisory("AU-2 - Audit Events including DNS"),
+                "ISO-27001", FrameworkRequirement.advisory("A.8.16 - Monitoring Activities (DNS query visibility)")
             )
         ),
 
@@ -411,7 +469,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.1 - Audit trail protection"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(d) - Data integrity"),
                 "NIST", FrameworkRequirement.required("AU-9 - Protection of Audit Information"),
-                "FedRAMP", FrameworkRequirement.required("AU-9 - Protection of Audit Information")
+                "FEDRAMP", FrameworkRequirement.required("AU-9 - Protection of Audit Information"),
+                "ISO-27001", FrameworkRequirement.required("A.5.33 - Protection of Records")
             )
         ),
 
@@ -424,7 +483,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.1 - Privileged access controls"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Administrative access security"),
                 "NIST", FrameworkRequirement.required("IA-2(1) - Multi-factor Authentication to Privileged Accounts"),
-                "FedRAMP", FrameworkRequirement.required("IA-2(1) - MFA for privileged accounts")
+                "FEDRAMP", FrameworkRequirement.required("IA-2(1) - MFA for privileged accounts"),
+                "ISO-27001", FrameworkRequirement.required("A.8.2 - Privileged Access Rights")
             )
         ),
 
@@ -437,7 +497,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.2 - Credential lifecycle management"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Credential hygiene"),
                 "NIST", FrameworkRequirement.required("IA-5(1) - Password-based Authentication rotation"),
-                "FedRAMP", FrameworkRequirement.required("IA-5(1) - Authenticator management")
+                "FEDRAMP", FrameworkRequirement.required("IA-5(1) - Authenticator management"),
+                "ISO-27001", FrameworkRequirement.required("A.5.17 - Authentication Information (credential lifecycle)")
             )
         ),
 
@@ -450,7 +511,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.1 - Database access restrictions"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Database confidentiality"),
                 "NIST", FrameworkRequirement.required("AC-3 - Access Enforcement for databases"),
-                "FedRAMP", FrameworkRequirement.required("AC-3 - Database access control")
+                "FEDRAMP", FrameworkRequirement.required("AC-3 - Database access control"),
+                "ISO-27001", FrameworkRequirement.required("A.8.3 - Information Access Restriction")
             )
         ),
 
@@ -463,7 +525,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.1/CC6.6 - Container access and network controls"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Container data protection"),
                 "NIST", FrameworkRequirement.required("SC-28/AC-3 - Container security controls"),
-                "FedRAMP", FrameworkRequirement.required("SC-28 - Container secrets protection")
+                "FEDRAMP", FrameworkRequirement.required("SC-28 - Container secrets protection"),
+                "ISO-27001", FrameworkRequirement.required("A.8.20/A.8.24 - Network Security and Use of Cryptography (containers)")
             )
         ),
 
@@ -476,7 +539,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.7 - API security controls"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - API data protection"),
                 "NIST", FrameworkRequirement.required("SC-8/AU-2 - API security and logging"),
-                "FedRAMP", FrameworkRequirement.required("SC-8 - API transmission protection")
+                "FEDRAMP", FrameworkRequirement.required("SC-8 - API transmission protection"),
+                "ISO-27001", FrameworkRequirement.required("A.8.26 - Application Security Requirements (API)")
             )
         ),
 
@@ -489,7 +553,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.6/CC6.7 - CDN access and data protection"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - CDN data protection"),
                 "NIST", FrameworkRequirement.required("SC-7(11)/SC-8 - CDN boundary and transmission protection"),
-                "FedRAMP", FrameworkRequirement.required("SC-8 - CDN transmission protection")
+                "FEDRAMP", FrameworkRequirement.required("SC-8 - CDN transmission protection"),
+                "ISO-27001", FrameworkRequirement.required("A.8.24/A.8.26 - Use of Cryptography and Application Security (CDN)")
             )
         ),
 
@@ -502,7 +567,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.1 - Secure instance configuration"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Instance security"),
                 "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
-                "FedRAMP", FrameworkRequirement.required("CM-6 - Configuration Settings")
+                "FEDRAMP", FrameworkRequirement.required("CM-6 - Configuration Settings"),
+                "ISO-27001", FrameworkRequirement.required("A.8.9 - Configuration Management (instance metadata)")
             )
         ),
 
@@ -515,7 +581,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.7/A1.2 - Certificate availability"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Service availability"),
                 "NIST", FrameworkRequirement.required("IA-5(2) - PKI-based Authentication"),
-                "FedRAMP", FrameworkRequirement.required("IA-5(2) - Certificate management")
+                "FEDRAMP", FrameworkRequirement.required("IA-5(2) - Certificate management"),
+                "ISO-27001", FrameworkRequirement.advisory("A.8.24 - Use of Cryptography (certificate lifecycle management)")
             )
         ),
 
@@ -528,7 +595,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.1/CC6.6 - Lambda access and network controls"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Lambda function protection"),
                 "NIST", FrameworkRequirement.required("AC-3/SC-7 - Lambda access and boundary protection"),
-                "FedRAMP", FrameworkRequirement.required("AC-3 - Lambda access enforcement")
+                "FEDRAMP", FrameworkRequirement.required("AC-3 - Lambda access enforcement"),
+                "ISO-27001", FrameworkRequirement.required("A.8.3/A.8.20 - Information Access Restriction and Network Security (Lambda)")
             )
         ),
 
@@ -541,7 +609,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC7.2 - Database monitoring"),
                 "GDPR", FrameworkRequirement.required("Art. 30 - Database processing records"),
                 "NIST", FrameworkRequirement.required("AU-2 - Database audit events"),
-                "FedRAMP", FrameworkRequirement.required("AU-2 - Database auditing")
+                "FEDRAMP", FrameworkRequirement.required("AU-2 - Database auditing"),
+                "ISO-27001", FrameworkRequirement.required("A.8.15 - Logging (database activity)")
             )
         ),
 
@@ -554,7 +623,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("A1.2 - System availability protection"),
                 "GDPR", FrameworkRequirement.required("Art. 32(1)(c) - Data availability"),
                 "NIST", FrameworkRequirement.required("CP-9/SC-28 - Information protection"),
-                "FedRAMP", FrameworkRequirement.required("CP-9 - Information system backup")
+                "FEDRAMP", FrameworkRequirement.required("CP-9 - Information system backup"),
+                "ISO-27001", FrameworkRequirement.required("A.8.13 - Information Backup (deletion protection)")
             )
         ),
 
@@ -567,7 +637,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.advisory("CC6.1 - Message encryption"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(a) - Encryption of personal data"),
                 "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
-                "FedRAMP", FrameworkRequirement.required("SC-28 - Information at rest")
+                "FEDRAMP", FrameworkRequirement.required("SC-28 - Information at rest"),
+                "ISO-27001", FrameworkRequirement.advisory("A.8.24 - Use of Cryptography (topic encryption)")
             )
         ),
 
@@ -580,7 +651,8 @@ public final class ComplianceMatrix {
                 "SOC2", FrameworkRequirement.required("CC6.1 - Instance metadata protection"),
                 "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Access security"),
                 "NIST", FrameworkRequirement.required("AC-3 - Access Enforcement"),
-                "FedRAMP", FrameworkRequirement.required("AC-3 - Access control enforcement")
+                "FEDRAMP", FrameworkRequirement.required("AC-3 - Access control enforcement"),
+                "ISO-27001", FrameworkRequirement.required("A.8.9 - Configuration Management (IMDSv2 enforcement)")
             )
         );
 
@@ -1027,5 +1099,42 @@ public final class ComplianceMatrix {
         }
 
         return false;
+    }
+
+    /**
+     * All matrix keys with at least one control mapping for them -- i.e. every framework the
+     * matrix actually knows about, independent of which {@code FrameworkRules} plugins exist.
+     * A sync-enforcement test uses this to know which frameworks it should even check: a plugin
+     * whose {@code frameworkId()} isn't in this set (a framework the matrix has no opinion on
+     * yet) is out of scope for matrix-sync checking, not a violation.
+     */
+    public static Set<String> knownFrameworkKeys() {
+        Set<String> keys = new TreeSet<>();
+        for (SecurityControl control : SecurityControl.values()) {
+            keys.addAll(control.getFrameworkMappings().keySet());
+        }
+        return keys;
+    }
+
+    /**
+     * Finds controls the matrix marks REQUIRED for a framework that a plugin doesn't claim to
+     * check (see {@code FrameworkRules#claimedControls}). An empty result means the plugin's
+     * declared coverage is a superset of what the matrix requires -- it's in sync.
+     *
+     * @param frameworkKey the matrix's key for this framework (e.g. "SOC2", "FEDRAMP")
+     * @param claimedControls control names the plugin declares via {@code claimedControls()}
+     * @return REQUIRED controls not present in {@code claimedControls}, in matrix declaration order
+     */
+    public static List<SecurityControl> findUnclaimedRequiredControls(
+        String frameworkKey,
+        Set<String> claimedControls
+    ) {
+        List<SecurityControl> gaps = new ArrayList<>();
+        for (SecurityControl control : SecurityControl.values()) {
+            if (control.isRequired(frameworkKey) && !claimedControls.contains(control.name())) {
+                gaps.add(control);
+            }
+        }
+        return gaps;
     }
 }

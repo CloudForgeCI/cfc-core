@@ -11,3 +11,4 @@ EC2_PRODUCTION_PCI-DSS_exact-min-retention-365,EC2,PRODUCTION,with-domain,ssl-en
 EC2_PRODUCTION_PCI-DSS_one-above-min-366,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,366,true,PASS,jenkins,,,,,
 EC2_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_mattermost,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,PASS,mattermost,true,,,,
 EC2_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_gitlab_db,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,PCI-DSS,,true,PASS,gitlab,true,,,,
+EC2_PRODUCTION_PCI-DSS_alb-oidc_private-with-nat_appoidc,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,application-oidc,private-with-nat,PCI-DSS,,true,PASS,jenkins,,,,,

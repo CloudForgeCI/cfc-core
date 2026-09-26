@@ -3,3 +3,7 @@ GDPR_SOC2_EC2_eu-west-1_compliant,EC2,PRODUCTION,with-domain,ssl-enabled,no-subd
 GDPR_SOC2_FARGATE_eu-west-1_compliant,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,true,PASS,jenkins,,eu-west-1,,,
 GDPR_SOC2_EC2_us-east-1_with-approval,EC2,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,true,PASS,jenkins,,us-east-1,true,,
 GDPR_SOC2_FARGATE_us-east-1_with-approval,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,true,PASS,jenkins,,us-east-1,true,,
+GDPR_SOC2_EC2_eu-west-1_compliant_STAGING,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,true,PASS,jenkins,,eu-west-1,,,
+GDPR_SOC2_FARGATE_eu-west-1_compliant_STAGING,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,true,PASS,jenkins,,eu-west-1,,,
+GDPR_SOC2_EC2_us-east-1_with-approval_STAGING,EC2,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,true,PASS,jenkins,,us-east-1,true,,
+GDPR_SOC2_FARGATE_us-east-1_with-approval_STAGING,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"GDPR,SOC2",,true,PASS,jenkins,,us-east-1,true,,

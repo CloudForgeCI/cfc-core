@@ -258,9 +258,12 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
             }
         }
 
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.auditManagerEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.auditManagerEnabled());
+        // Check deployment context override (Boolean accessor - need null check). This is the
+        // audit-manager-SERVICE flag, distinct from DeploymentConfig#auditManagerEnabled, which is
+        // the separate master gate SecurityRules.install() uses to decide whether ANY FrameworkRules
+        // compliance validation runs at all.
+        if (deploymentContext != null && deploymentContext.auditManagerServiceEnabled() != null) {
+            return Boolean.TRUE.equals(deploymentContext.auditManagerServiceEnabled());
         }
 
         // Default: enabled for production continuous auditing
@@ -285,6 +288,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
                 LOG.info("PRODUCTION profile: EBS Encryption enforced by compliance frameworks: " + frameworks);
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.ebsEncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.ebsEncryptionEnabled());
+            LOG.info("PRODUCTION profile: Overriding EBS Encryption from deployment context: " + enabled);
+            return enabled;
         }
 
         // Default: mandatory encryption for production
@@ -336,6 +346,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
             }
         }
 
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.efsEncryptionAtRestEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.efsEncryptionAtRestEnabled());
+            LOG.info("PRODUCTION profile: Overriding EFS Encryption at Rest from deployment context: " + enabled);
+            return enabled;
+        }
+
         // Default: mandatory encryption for production
         return true;
     }
@@ -355,6 +372,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
                 LOG.info("PRODUCTION profile: S3 Encryption enforced by compliance frameworks: " + frameworks);
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.s3EncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.s3EncryptionEnabled());
+            LOG.info("PRODUCTION profile: Overriding S3 Encryption from deployment context: " + enabled);
+            return enabled;
         }
 
         // Default: mandatory encryption for production
@@ -560,11 +584,20 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            return ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlRequired(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
-            );
+            )) {
+                return true;
+            }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.backupVaultLockEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.backupVaultLockEnabled());
+            LOG.info("PRODUCTION profile: Overriding Backup Vault Lock from deployment context: " + enabled);
+            return enabled;
         }
         return false;
     }
@@ -583,6 +616,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
             )) {
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.backupVaultRetentionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.backupVaultRetentionEnabled());
+            LOG.info("PRODUCTION profile: Overriding Backup Vault Retention from deployment context: " + enabled);
+            return enabled;
         }
         return false;
     }
@@ -769,6 +809,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
                 return true;
             }
         }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.rdsDeletionProtectionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.rdsDeletionProtectionEnabled());
+            LOG.info("PRODUCTION profile: Overriding RDS Deletion Protection from deployment context: " + enabled);
+            return enabled;
+        }
         return false;
     }
 
@@ -787,6 +834,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
                 LOG.severe("PRODUCTION profile: RDS Multi-AZ enforced by compliance frameworks: " + frameworks);
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.rdsDatabaseMultiAzEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.rdsDatabaseMultiAzEnabled());
+            LOG.info("PRODUCTION profile: Overriding RDS Multi-AZ from deployment context: " + enabled);
+            return enabled;
         }
 
         // Default: Enable for PRODUCTION even without compliance frameworks (best practice)
@@ -1176,6 +1230,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
                 return true;
             }
         }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.snsKmsEncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.snsKmsEncryptionEnabled());
+            LOG.info("PRODUCTION profile: Overriding SNS KMS Encryption from deployment context: " + enabled);
+            return enabled;
+        }
         return false;
     }
 
@@ -1194,6 +1255,13 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
                 LOG.info("PRODUCTION profile: IMDSv2 enforced by compliance frameworks: " + frameworks);
                 return true;
             }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.imdsv2Required() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.imdsv2Required());
+            LOG.info("PRODUCTION profile: Overriding IMDSv2 from deployment context: " + enabled);
+            return enabled;
         }
         // PRODUCTION default: true - Required for HIPAA compliance
         return true;

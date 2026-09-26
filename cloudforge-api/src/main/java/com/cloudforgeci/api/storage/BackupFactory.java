@@ -2,7 +2,6 @@ package com.cloudforgeci.api.storage;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.SystemContext;
-import com.cloudforge.core.enums.AwsRegion;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import io.github.cdklabs.cdknag.NagPackSuppression;
@@ -12,6 +11,7 @@ import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.backup.BackupPlan;
+import software.amazon.awscdk.services.backup.BackupPlanCopyActionProps;
 import software.amazon.awscdk.services.backup.BackupPlanRule;
 import software.amazon.awscdk.services.backup.BackupResource;
 import software.amazon.awscdk.services.backup.BackupSelectionOptions;
@@ -156,14 +156,20 @@ public class BackupFactory extends BaseFactory {
                 .completionWindow(Duration.hours(8)) // Must complete within 8 hours
                 .deleteAfter(Duration.days(retentionDays));
 
-        // Add cross-region copy for PRODUCTION if enabled
+        // Copy to a vault in another region. AWS Backup needs that vault to exist already, so the copy
+        // is only added when its ARN is configured.
         if (config.isCrossRegionBackupEnabled() && security == SecurityProfile.PRODUCTION) {
-            AwsRegion.getSecondaryRegion(cfc.region()).ifPresent(destinationRegion -> {
-                LOG.info("Cross-region backup copy enabled to: " + destinationRegion);
-                // Note: Cross-region copy requires a backup vault in the destination region
-                // This is handled at the AWS Backup level, not CDK
-                // The copy is configured via BackupPlanRule.copyActions()
-            });
+            String destinationVaultArn = cfc.backupCrossRegionVaultArn();
+            if (destinationVaultArn == null || destinationVaultArn.isBlank()) {
+                LOG.warning("Cross-region backup is enabled but backupCrossRegionVaultArn is not set; "
+                    + "backups will not be copied to another region");
+            } else {
+                dailyRuleBuilder.copyActions(List.of(BackupPlanCopyActionProps.builder()
+                    .destinationBackupVault(BackupVault.fromBackupVaultArn(this, "CrossRegionVault", destinationVaultArn))
+                    .deleteAfter(Duration.days(retentionDays))
+                    .build()));
+                LOG.info("Cross-region backup copy enabled to: " + destinationVaultArn);
+            }
         }
 
         rules.add(dailyRuleBuilder.build());

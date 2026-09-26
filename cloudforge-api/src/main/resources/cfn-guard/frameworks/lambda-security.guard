@@ -6,17 +6,20 @@
 # CloudForge Core - Multi-Layer Compliance Validation
 # Layer 3: Template-Level Policy Enforcement (cfn-guard)
 
+
+let lambda_function = Resources.*[ Type == 'AWS::Lambda::Function' ]
+let lambda_alias = Resources.*[ Type == 'AWS::Lambda::Alias' ]
+let lambda_permission = Resources.*[ Type == 'AWS::Lambda::Permission' ]
 # ============================================================================
 # Lambda Runtime Security
 # ============================================================================
 
 # Detect obsolete/deprecated runtimes
 # CloudForge Mapping: LAMBDA_SECURITY control
-rule lambda_security_obsolete_runtime when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_obsolete_runtime when %lambda_function !empty {
 
     when Properties.Runtime exists {
-        Properties.Runtime not in [
+        %lambda_function.Properties.Runtime not in [
             'python2.7',
             'python3.6',
             'nodejs6.10',
@@ -35,12 +38,11 @@ rule lambda_security_obsolete_runtime when
 
 # Lambda VPC configuration
 # CloudForge Mapping: LAMBDA_SECURITY control
-rule lambda_security_in_vpc when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_in_vpc when %lambda_function !empty {
 
-    Properties.VpcConfig exists <<[Lambda Security] Lambda functions should be deployed in a VPC>>
-    Properties.VpcConfig.SubnetIds exists <<[Lambda Security] Lambda VPC config must specify SubnetIds>>
-    Properties.VpcConfig.SecurityGroupIds exists <<[Lambda Security] Lambda VPC config must specify SecurityGroupIds>>
+    %lambda_function.Properties.VpcConfig exists <<[Lambda Security] Lambda functions should be deployed in a VPC>>
+    %lambda_function.Properties.VpcConfig.SubnetIds exists <<[Lambda Security] Lambda VPC config must specify SubnetIds>>
+    %lambda_function.Properties.VpcConfig.SecurityGroupIds exists <<[Lambda Security] Lambda VPC config must specify SecurityGroupIds>>
 }
 
 # ============================================================================
@@ -49,11 +51,10 @@ rule lambda_security_in_vpc when
 
 # Lambda dead letter queue
 # CloudForge Mapping: ERROR_HANDLING control
-rule lambda_security_dead_letter_queue when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_dead_letter_queue when %lambda_function !empty {
 
-    Properties.DeadLetterConfig exists <<[Lambda Security] Lambda functions must have dead letter queues configured>>
-    Properties.DeadLetterConfig.TargetArn exists <<[Lambda Security] Lambda DeadLetterConfig must specify TargetArn>>
+    %lambda_function.Properties.DeadLetterConfig exists <<[Lambda Security] Lambda functions must have dead letter queues configured>>
+    %lambda_function.Properties.DeadLetterConfig.TargetArn exists <<[Lambda Security] Lambda DeadLetterConfig must specify TargetArn>>
 }
 
 # ============================================================================
@@ -62,10 +63,9 @@ rule lambda_security_dead_letter_queue when
 
 # Lambda code signing configuration
 # CloudForge Mapping: LAMBDA_SECURITY control
-rule lambda_security_code_signing when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_code_signing when %lambda_function !empty {
 
-    Properties.CodeSigningConfigArn exists <<[Lambda Security] Lambda functions must use code signing>>
+    %lambda_function.Properties.CodeSigningConfigArn exists <<[Lambda Security] Lambda functions must use code signing>>
 }
 
 # ============================================================================
@@ -74,30 +74,27 @@ rule lambda_security_code_signing when
 
 # Lambda concurrent execution limit
 # CloudForge Mapping: LAMBDA_SECURITY control
-rule lambda_security_concurrent_execution_limit when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_concurrent_execution_limit when %lambda_function !empty {
 
-    Properties.ReservedConcurrentExecutions exists <<[Lambda Security] Lambda functions should have reserved concurrent executions configured>>
+    %lambda_function.Properties.ReservedConcurrentExecutions exists <<[Lambda Security] Lambda functions should have reserved concurrent executions configured>>
 }
 
 # Lambda memory configuration (reasonable limits)
 # CloudForge Mapping: LAMBDA_SECURITY control
-rule lambda_security_memory_configured when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_memory_configured when %lambda_function !empty {
 
-    Properties.MemorySize exists <<[Lambda Security] Lambda functions should have MemorySize configured>>
-    Properties.MemorySize >= 128 <<[Lambda Security] Lambda MemorySize must be at least 128 MB>>
-    Properties.MemorySize <= 10240 <<[Lambda Security] Lambda MemorySize must not exceed 10240 MB>>
+    %lambda_function.Properties.MemorySize exists <<[Lambda Security] Lambda functions should have MemorySize configured>>
+    %lambda_function.Properties.MemorySize >= 128 <<[Lambda Security] Lambda MemorySize must be at least 128 MB>>
+    %lambda_function.Properties.MemorySize <= 10240 <<[Lambda Security] Lambda MemorySize must not exceed 10240 MB>>
 }
 
 # Lambda timeout configuration
 # CloudForge Mapping: LAMBDA_SECURITY control
-rule lambda_security_timeout_configured when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_timeout_configured when %lambda_function !empty {
 
-    Properties.Timeout exists <<[Lambda Security] Lambda functions should have Timeout configured>>
-    Properties.Timeout >= 1 <<[Lambda Security] Lambda Timeout must be at least 1 second>>
-    Properties.Timeout <= 900 <<[Lambda Security] Lambda Timeout must not exceed 900 seconds>>
+    %lambda_function.Properties.Timeout exists <<[Lambda Security] Lambda functions should have Timeout configured>>
+    %lambda_function.Properties.Timeout >= 1 <<[Lambda Security] Lambda Timeout must be at least 1 second>>
+    %lambda_function.Properties.Timeout <= 900 <<[Lambda Security] Lambda Timeout must not exceed 900 seconds>>
 }
 
 # ============================================================================
@@ -106,12 +103,11 @@ rule lambda_security_timeout_configured when
 
 # Lambda X-Ray tracing
 # CloudForge Mapping: MONITORING control
-rule lambda_security_xray_tracing when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_xray_tracing when %lambda_function !empty {
 
-    Properties.TracingConfig exists <<[Lambda Security] Lambda functions must enable X-Ray tracing>>
-    Properties.TracingConfig.Mode exists <<[Lambda Security] Must specify tracing mode>>
-    Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Lambda Security] Lambda TracingConfig Mode must be Active or PassThrough>>
+    %lambda_function.Properties.TracingConfig exists <<[Lambda Security] Lambda functions must enable X-Ray tracing>>
+    %lambda_function.Properties.TracingConfig.Mode exists <<[Lambda Security] Must specify tracing mode>>
+    %lambda_function.Properties.TracingConfig.Mode in ['Active', 'PassThrough'] <<[Lambda Security] Lambda TracingConfig Mode must be Active or PassThrough>>
 }
 
 # ============================================================================
@@ -120,12 +116,11 @@ rule lambda_security_xray_tracing when
 
 # Lambda environment variables encryption
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule lambda_security_env_encryption when
-    resourceType == 'AWS::Lambda::Function' {
+rule lambda_security_env_encryption when %lambda_function !empty {
 
     when Properties.Environment exists {
         when Properties.Environment.Variables exists {
-            Properties.KmsKeyArn exists <<[Lambda Security] Lambda functions with environment variables must use KMS encryption>>
+            %lambda_function.Properties.KmsKeyArn exists <<[Lambda Security] Lambda functions with environment variables must use KMS encryption>>
         }
     }
 }
@@ -136,19 +131,17 @@ rule lambda_security_env_encryption when
 
 # Lambda function versioning (via alias or version)
 # CloudForge Mapping: CONFIGURATION_MANAGEMENT control
-rule lambda_security_versioning when
-    resourceType == 'AWS::Lambda::Alias' {
+rule lambda_security_versioning when %lambda_alias !empty {
 
-    Properties.FunctionVersion exists <<[Lambda Security] Lambda aliases should reference specific versions>>
+    %lambda_alias.Properties.FunctionVersion exists <<[Lambda Security] Lambda aliases should reference specific versions>>
 }
 
 # Lambda provisioned concurrency (for production)
 # CloudForge Mapping: PERFORMANCE control
-rule lambda_security_provisioned_concurrency when
-    resourceType == 'AWS::Lambda::Alias' {
+rule lambda_security_provisioned_concurrency when %lambda_alias !empty {
 
     when Properties.ProvisionedConcurrencyConfig exists {
-        Properties.ProvisionedConcurrencyConfig.ProvisionedConcurrentExecutions >= 1 <<[Lambda Security] Lambda provisioned concurrency must be at least 1>>
+        %lambda_alias.Properties.ProvisionedConcurrencyConfig.ProvisionedConcurrentExecutions >= 1 <<[Lambda Security] Lambda provisioned concurrency must be at least 1>>
     }
 }
 
@@ -158,16 +151,14 @@ rule lambda_security_provisioned_concurrency when
 
 # Lambda resource-based policy restrictions
 # CloudForge Mapping: ACCESS_CONTROL control
-rule lambda_security_permission_principal when
-    resourceType == 'AWS::Lambda::Permission' {
+rule lambda_security_permission_principal when %lambda_permission !empty {
 
-    Properties.Principal != '*' <<[Lambda Security] Lambda permissions must not allow public invocation (Principal: "*")>>
+    %lambda_permission.Properties.Principal != '*' <<[Lambda Security] Lambda permissions must not allow public invocation (Principal: "*")>>
 }
 
 # Lambda permission with source restriction
 # CloudForge Mapping: ACCESS_CONTROL control
-rule lambda_security_permission_source when
-    resourceType == 'AWS::Lambda::Permission' {
+rule lambda_security_permission_source when %lambda_permission !empty {
 
-    Properties.SourceArn exists OR Properties.SourceAccount exists <<[Lambda Security] Lambda permissions should specify SourceArn or SourceAccount>>
+    %lambda_permission.Properties.SourceArn exists OR Properties.SourceAccount exists <<[Lambda Security] Lambda permissions should specify SourceArn or SourceAccount>>
 }
