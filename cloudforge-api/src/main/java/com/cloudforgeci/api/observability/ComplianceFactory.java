@@ -225,8 +225,11 @@ public class ComplianceFactory extends BaseFactory {
 
         // STEP 2: Deploy Conformance Packs (AWS managed rule bundles for compliance frameworks)
         // Conformance Packs are the foundation - they deploy standardized Config rules
-        boolean configRulesEnabled = Boolean.TRUE.equals(awsConfigEnabled)
-            || (awsConfigEnabled == null && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING));
+        // awsConfigEnabled has no PRODUCTION/STAGING auto-default (unlike GuardDuty/Macie/
+        // SecurityHub/Inspector): Config's cost scales with rule count -- 89 rules for a
+        // four-framework stack -- rather than being a flat per-service toggle, so it always
+        // requires an explicit true.
+        boolean configRulesEnabled = Boolean.TRUE.equals(awsConfigEnabled);
 
         if (configRulesEnabled) {
             LOG.info("Deploying Conformance Packs for compliance frameworks");
@@ -2142,7 +2145,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("PCI-DSS Req 2: Secure system configuration management")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("EC2_INSTANCE_MANAGED_BY_SSM")
+                        .sourceIdentifier("EC2_INSTANCE_MANAGED_BY_SYSTEMS_MANAGER")
                         .build())
                 .build();
         ec2InstanceManagedBySsm.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -2319,7 +2322,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("SOC 2 CC6.6: Network segmentation and access control")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("INCOMING_SSH_DISABLED")
+                        .sourceIdentifier("RESTRICTED_SSH")
                         .build())
                 .build();
         restrictedSshCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -2364,7 +2367,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("SOC 2 CC7.2: Continuous vulnerability scanning")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("INSPECTOR_ENABLED")
+                        .sourceIdentifier("INSPECTOR_EC2_SCAN_ENABLED")
                         .build())
                 .build();
         inspectorEnabled.addOverride("DeletionPolicy", "Delete");
@@ -2383,7 +2386,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("SOC 2 CC7.2: Sensitive data discovery and protection")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("MACIE_ENABLED")
+                        .sourceIdentifier("MACIE_STATUS_CHECK")
                         .build())
                 .build();
         macieEnabled.addOverride("DeletionPolicy", "Delete");
@@ -2734,7 +2737,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("GDPR Art. 25: Data protection by design - optimize storage security")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("EC2_EBS_OPTIMIZATION_CHECK")
+                        .sourceIdentifier("EBS_OPTIMIZED_INSTANCE")
                         .build())
                 .build();
         ec2EbsOptimized.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -2808,7 +2811,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("GDPR Art. 32(1)(b): Ensure ongoing confidentiality of systems")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("RESTRICTED_INCOMING_TRAFFIC")
+                        .sourceIdentifier("RESTRICTED_COMMON_PORTS")
                         .build())
                 .build();
         restrictedRdpCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -2951,7 +2954,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("PCI-DSS Req 2: Secure system configuration management")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("EC2_INSTANCE_MANAGED_BY_SSM")
+                        .sourceIdentifier("EC2_INSTANCE_MANAGED_BY_SYSTEMS_MANAGER")
                         .build())
                 .build();
         ec2InstanceManagedBySsm.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -3113,7 +3116,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("SOC 2 CC6.6: Network segmentation and access control")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("INCOMING_SSH_DISABLED")
+                        .sourceIdentifier("RESTRICTED_SSH")
                         .build())
                 .build();
         restrictedSshCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -3155,7 +3158,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("SOC 2 CC7.2: Continuous vulnerability scanning")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("INSPECTOR_ENABLED")
+                        .sourceIdentifier("INSPECTOR_EC2_SCAN_ENABLED")
                         .build())
                 .build();
         inspectorEnabled.addOverride("DeletionPolicy", "Delete");
@@ -3173,7 +3176,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("SOC 2 CC7.2: Sensitive data discovery and protection")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("MACIE_ENABLED")
+                        .sourceIdentifier("MACIE_STATUS_CHECK")
                         .build())
                 .build();
         macieEnabled.addOverride("DeletionPolicy", "Delete");
@@ -3493,7 +3496,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("GDPR Art. 25: Data protection by design - optimize storage security")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("EC2_EBS_OPTIMIZATION_CHECK")
+                        .sourceIdentifier("EBS_OPTIMIZED_INSTANCE")
                         .build())
                 .build();
         ec2EbsOptimized.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -3561,7 +3564,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("GDPR Art. 32(1)(b): Ensure ongoing confidentiality of systems")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("RESTRICTED_INCOMING_TRAFFIC")
+                        .sourceIdentifier("RESTRICTED_COMMON_PORTS")
                         .build())
                 .build();
         restrictedRdpCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -5074,6 +5077,9 @@ public class ComplianceFactory extends BaseFactory {
         remediation.addPropertyOverride("Parameters", Map.of(
             "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
         ));
+        // The rule this remediation targets is condition-gated (SOC2 only); an unconditional
+        // Ref to a condition-omitted resource fails CloudFormation validation, so mirror it here.
+        remediation.addOverride("Condition", soc2Condition.getLogicalId());
 
         LOG.info("Security Hub automatic remediation enabled");
     }
@@ -5148,6 +5154,9 @@ public class ComplianceFactory extends BaseFactory {
         remediation.addPropertyOverride("Parameters", Map.of(
             "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
         ));
+        // The rule this remediation targets is condition-gated (SOC2 only); an unconditional
+        // Ref to a condition-omitted resource fails CloudFormation validation, so mirror it here.
+        remediation.addOverride("Condition", soc2Condition.getLogicalId());
 
         LOG.info("Inspector automatic remediation enabled");
     }
@@ -5221,6 +5230,9 @@ public class ComplianceFactory extends BaseFactory {
         remediation.addPropertyOverride("Parameters", Map.of(
             "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
         ));
+        // The rule this remediation targets is condition-gated (SOC2 only); an unconditional
+        // Ref to a condition-omitted resource fails CloudFormation validation, so mirror it here.
+        remediation.addOverride("Condition", soc2Condition.getLogicalId());
 
         LOG.info("Macie automatic remediation enabled");
     }
@@ -5335,6 +5347,9 @@ public class ComplianceFactory extends BaseFactory {
         remediation.addPropertyOverride("Parameters", Map.of(
             "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
         ));
+        // The rule this remediation targets is condition-gated (PCI-DSS only); an unconditional
+        // Ref to a condition-omitted resource fails CloudFormation validation, so mirror it here.
+        remediation.addOverride("Condition", pciDssCondition.getLogicalId());
 
         LOG.info("GuardDuty automatic remediation enabled");
     }
