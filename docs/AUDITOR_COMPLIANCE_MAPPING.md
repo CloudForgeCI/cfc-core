@@ -334,11 +334,11 @@ Deploy only when `complianceFrameworks` includes `soc2`:
 | Rule Name | AWS Managed Rule ID | SOC2 TSC Mapping | Purpose |
 |-----------|-------------------|-----------------|---------|
 | IAM User No Policies | IAM_USER_NO_POLICIES_CHECK | CC6.1 | Enforces role-based access control |
-| Restricted SSH | INCOMING_SSH_DISABLED | CC6.6 | Blocks SSH from 0.0.0.0/0 |
+| Restricted SSH | RESTRICTED_SSH | CC6.6 | Blocks SSH from 0.0.0.0/0 |
 | ALB HTTPS Redirection | ALB_HTTP_TO_HTTPS_REDIRECTION_CHECK | CC6.7 | Enforces HTTPS |
 | Security Hub Enabled | SECURITYHUB_ENABLED | CC7.2 | Monitors security posture |
-| Inspector Enabled | INSPECTOR_ENABLED | CC7.2 | Vulnerability scanning |
-| Macie Enabled | MACIE_ENABLED | C1.1 | Sensitive data discovery |
+| Inspector Enabled | INSPECTOR_EC2_SCAN_ENABLED | CC7.2 | Vulnerability scanning |
+| Macie Enabled | MACIE_STATUS_CHECK | C1.1 | Sensitive data discovery |
 | CloudTrail S3 Data Events | CLOUDTRAIL_S3_DATAEVENTS_ENABLED | CC8.1 | Tracks S3 data access |
 | ELB Deletion Protection | ELB_DELETION_PROTECTION_ENABLED | A1.2 | Prevents accidental deletion |
 
@@ -364,7 +364,7 @@ Deploy only when `complianceFrameworks` includes `pci-dss`:
 | Rule Name | AWS Managed Rule ID | PCI-DSS Req Mapping | Purpose |
 |-----------|-------------------|-------------------|---------|
 | VPC Default SG Closed | VPC_DEFAULT_SECURITY_GROUP_CLOSED | Req 1.3 | Prohibit public access |
-| EC2 Managed by SSM | EC2_INSTANCE_MANAGED_BY_SSM | Req 2 | System configuration management |
+| EC2 Managed by SSM | EC2_INSTANCE_MANAGED_BY_SYSTEMS_MANAGER | Req 2 | System configuration management |
 | ELB TLS Only | ELB_TLS_HTTPS_LISTENERS_ONLY | Req 4.1 | Strong cryptography |
 | IAM No Admin Policy | IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS | Req 7.1 | Need-to-know access |
 | IAM MFA Enabled | IAM_USER_MFA_ENABLED | Req 8.3 | Multi-factor auth |
@@ -377,11 +377,11 @@ Deploy only when `complianceFrameworks` includes `gdpr`:
 
 | Rule Name | AWS Managed Rule ID | GDPR Article Mapping | Purpose |
 |-----------|-------------------|---------------------|---------|
-| EC2 EBS Optimized | EC2_EBS_OPTIMIZATION_CHECK | Art 25 | Data protection by design |
+| EC2 EBS Optimized | EBS_OPTIMIZED_INSTANCE | Art 25 | Data protection by design |
 | VPC Flow Logs | VPC_FLOW_LOGS_ENABLED | Art 30(1) | Records of processing |
 | S3 KMS Encryption | S3_DEFAULT_ENCRYPTION_KMS | Art 32(1)(a) | Pseudonymisation/encryption |
 | KMS Key Rotation | CMK_BACKING_KEY_ROTATION_ENABLED | Art 32(1)(d) | Security measures testing |
-| Restricted Incoming Traffic | RESTRICTED_INCOMING_TRAFFIC | Art 32(1)(b) | Access control |
+| Restricted Incoming Traffic | RESTRICTED_COMMON_PORTS | Art 32(1)(b) | Access control |
 | DynamoDB Autoscaling | DYNAMODB_AUTOSCALING_ENABLED | Art 25 | Privacy by design |
 | S3 Replication | S3_BUCKET_REPLICATION_ENABLED | Art 32(1)(c) | Resilience of systems |
 | GuardDuty Findings | GUARDDUTY_NON_ARCHIVED_FINDINGS | Art 32(1)(d) | Testing effectiveness |
