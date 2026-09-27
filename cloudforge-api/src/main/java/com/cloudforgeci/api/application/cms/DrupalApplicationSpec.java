@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.application.cms;
 
 import com.cloudforge.core.annotation.CmsPlugin;
+import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.CmsSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.Ec2Context;

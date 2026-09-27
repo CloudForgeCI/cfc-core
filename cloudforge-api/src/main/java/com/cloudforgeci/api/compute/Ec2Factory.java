@@ -1,5 +1,6 @@
 package com.cloudforgeci.api.compute;
 
+import com.cloudforgeci.api.observability.LogsKmsKey;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
@@ -15,6 +16,8 @@ import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 
 import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.autoscaling.AdditionalHealthCheckType;
 import software.amazon.awscdk.services.autoscaling.AdditionalHealthChecksOptions;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -361,11 +364,21 @@ public class Ec2Factory extends BaseFactory {
     };
   }
 
+  /** Creates the EC2 instance's log group, encrypting it with a customer-managed KMS key when
+   *  the profile requires log encryption. */
   private LogGroup createLogGroup() {
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
-    return LogGroup.Builder.create(this, appId + "Ec2Logs")
+    LogGroup.Builder builder = LogGroup.Builder.create(this, appId + "Ec2Logs")
             .retention(config.getLogRetentionDays())
-            .build();
+            .removalPolicy(config.getLogRemovalPolicy());
+
+    // Encrypt the instance log group with a rotating KMS key when the profile requires log encryption.
+    if (config.isCloudWatchLogsKmsEncryptionEnabled()) {
+      Key logsKey = LogsKmsKey.create(this, appId + "Ec2LogsKmsKey",
+          "KMS key for the " + appId + " EC2 CloudWatch log group", config.getLogRemovalPolicy());
+      builder.encryptionKey(logsKey);
+    }
+    return builder.build();
   }
 
   private UserData createUserData() {
@@ -480,6 +493,7 @@ public class Ec2Factory extends BaseFactory {
         : (security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING);
 
     LaunchTemplate.Builder ltBuilder = LaunchTemplate.Builder.create(this, appId + "Lt")
+            .launchTemplateName(launchTemplateName(appId))
             .machineImage(MachineImage.latestAmazonLinux2023())
             .instanceType(parsedInstanceType)
             .securityGroup(instanceSg)
@@ -542,6 +556,19 @@ public class Ec2Factory extends BaseFactory {
     }
 
     return ltBuilder.build();
+  }
+
+  /**
+   * Builds a launch template name from the stack name and application ID, sanitized and
+   * truncated to AWS's launch-template-name limit (128 characters; letters, digits, and
+   * {@code -().{@literal /}_}) -- left to CDK's default node-path-derived name, a long
+   * {@code stackName} (as this factory's own compliance-matrix fixtures use) can exceed that
+   * limit and fail with {@code InvalidLaunchTemplateName.MalformedException} at deploy time.
+   */
+  private String launchTemplateName(String appId) {
+    String base = (stackName != null && !stackName.isBlank() ? stackName : "cfc") + "-" + appId + "-lt";
+    String sanitized = base.replaceAll("[^A-Za-z0-9().$/_-]", "-");
+    return sanitized.length() <= 128 ? sanitized : sanitized.substring(0, 128);
   }
 
   /**

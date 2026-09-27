@@ -16,6 +16,7 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.assertions.Template;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -145,6 +146,36 @@ class DatabaseSecurityRulesTest {
         // When: Installing database security rules
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
 
+    }
+
+    /**
+     * DB-ENHANCED-MONITORING must pass a default PRODUCTION deployment without an explicit
+     * rdsEnhancedMonitoringEnabled context value, matching RdsFactory's own default (enabled for
+     * PRODUCTION when unset).
+     */
+    @Test
+    void testEnhancedMonitoringPassesOnDefaultProductionDeployment() {
+        App app = new App();
+        Stack stack = new Stack(app, "TestDbSecEnhancedMonitoringDefault");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestDbSecEnhancedMonitoringDefault");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("rdsEnabled", "true");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        List<ComplianceRule> rules = new DatabaseSecurityRules().validateDatabaseMonitoring(ctx);
+
+        ComplianceRule enhancedMonitoring = rules.stream()
+            .filter(r -> r.ruleId().equals("DB-ENHANCED-MONITORING"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("DB-ENHANCED-MONITORING rule not found"));
+        assertTrue(enhancedMonitoring.passed());
     }
 
     @Test
@@ -543,14 +574,16 @@ class DatabaseSecurityRulesTest {
         if (rdsEnabled) {
             customContext.put("rdsEnabled", "true");
         }
-        if (encryption) {
-            customContext.put("rdsEncryptionEnabled", "true");
-        }
+        // DatabaseSecurityRules checks "enableEncryption" (RdsFactory's real field), not the old
+        // decoy "rdsEncryptionEnabled" name -- default is true, so set explicitly either way.
+        customContext.put("enableEncryption", String.valueOf(encryption));
         if (backup) {
             customContext.put("rdsBackupEnabled", "true");
         }
+        // DatabaseSecurityRules checks "databaseMultiAz" (RdsFactory's real field), not the old
+        // decoy "rdsMultiAz" name.
         if (multiAz) {
-            customContext.put("rdsMultiAz", "true");
+            customContext.put("databaseMultiAz", "true");
         }
         customContext.put("rdsBackupRetentionDays", String.valueOf(retentionDays));
         // Explicitly set autoUpgrade (default is true, so we need to override if false)
@@ -558,7 +591,6 @@ class DatabaseSecurityRulesTest {
 
         // For PRODUCTION with RDS, also enable monitoring to avoid additional failures
         if (profile.equals("PRODUCTION") && rdsEnabled) {
-            customContext.put("dbActivityStreamsEnabled", "true");
             customContext.put("rdsEnhancedMonitoringEnabled", "true");
         }
 
@@ -569,6 +601,11 @@ class DatabaseSecurityRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
+        // DB-ACTIVITY-STREAMS now checks ctx.dbConnection.get().isPresent(), not a flag --
+        // set a mock connection whenever this scenario simulates RDS being in use.
+        if (rdsEnabled) {
+            builder.createMockDbConnection();
+        }
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
@@ -580,11 +617,10 @@ class DatabaseSecurityRulesTest {
             if (!encryption || !backup || !multiAz || retentionDays < 7 || !autoUpgrade) {
                 shouldFail = true;
             }
-        } else if (rdsEnabled && secProfile == SecurityProfile.STAGING) {
-            // STAGING with RDS requires: encryption, backup (no Multi-AZ requirement)
-            if (!encryption || !backup) {
-                shouldFail = true;
-            }
+        } else if (rdsEnabled && secProfile == SecurityProfile.STAGING && !encryption) {
+            // STAGING blocks on RDS-ENCRYPTION only (DatabaseSecurityRules.STAGING_BLOCKING_RULES);
+            // backup/multiAz/retention/autoUpgrade stay advisory.
+            shouldFail = true;
         }
         // DEV is advisory only - never fails
 
@@ -665,11 +701,10 @@ class DatabaseSecurityRulesTest {
                 if (!encryption || !pitr) {
                     shouldFail = true;
                 }
-            } else if (secProfile == SecurityProfile.STAGING) {
-                // STAGING with DynamoDB requires: encryption (no PITR requirement)
-                if (!encryption) {
-                    shouldFail = true;
-                }
+            } else if (secProfile == SecurityProfile.STAGING && !encryption) {
+                // STAGING blocks on DYNAMODB-ENCRYPTION only (DatabaseSecurityRules.
+                // STAGING_BLOCKING_RULES); PITR stays advisory.
+                shouldFail = true;
             }
             // DEV is advisory only - never fails
         }
@@ -723,26 +758,29 @@ class DatabaseSecurityRulesTest {
         if (rdsEnabled) {
             customContext.put("rdsEnabled", "true");
             // Enable basic RDS security to avoid failures from validateRdsSecurity
-            customContext.put("rdsEncryptionEnabled", "true");
+            customContext.put("enableEncryption", "true");
             customContext.put("rdsBackupEnabled", "true");
             customContext.put("rdsBackupRetentionDays", "7");
             if (profile.equals("PRODUCTION")) {
-                customContext.put("rdsMultiAz", "true");
+                customContext.put("databaseMultiAz", "true");
                 customContext.put("rdsAutoMinorVersionUpgrade", "true");
             }
         }
-        if (activityStreams) {
-            customContext.put("dbActivityStreamsEnabled", "true");
-        }
+        // activityStreams is no longer a flag DatabaseSecurityRules reads -- DB-ACTIVITY-STREAMS
+        // now checks ctx.dbConnection.get().isPresent() (set below via createMockDbConnection()
+        // whenever rdsEnabled simulates RDS being in use). The parameter name stays for CSV
+        // readability but no longer maps to a context key.
         if (performanceInsights) {
             customContext.put("performanceInsightsEnabled", "true");
         }
         if (piEncrypted) {
             customContext.put("performanceInsightsEncrypted", "true");
         }
-        if (enhancedMonitoring) {
-            customContext.put("rdsEnhancedMonitoringEnabled", "true");
-        }
+        // Set explicitly (both true and false) rather than only when true -- PRODUCTION now
+        // defaults this to enabled when unset (matching RdsFactory's own default), so an
+        // "enhancedMonitoring=false" scenario must set it explicitly to actually exercise the
+        // disabled case instead of silently falling back to the enabled default.
+        customContext.put("rdsEnhancedMonitoringEnabled", String.valueOf(enhancedMonitoring));
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -751,23 +789,27 @@ class DatabaseSecurityRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
+        // DB-ACTIVITY-STREAMS now checks ctx.dbConnection.get().isPresent(), not a flag --
+        // set a mock connection whenever this scenario simulates RDS being in use, which makes
+        // that check pass unconditionally (activityStreams no longer affects the outcome).
+        if (rdsEnabled) {
+            builder.createMockDbConnection();
+        }
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
         boolean shouldFail = false;
 
         if (rdsEnabled && secProfile == SecurityProfile.PRODUCTION) {
-            // PRODUCTION with RDS requires: activity streams and enhanced monitoring
+            // PRODUCTION with RDS requires enhanced monitoring (activity streams is covered
+            // unconditionally by the mock db connection above).
             // Also: if Performance Insights is enabled, it must be encrypted
-            if (!activityStreams || !enhancedMonitoring) {
+            if (!enhancedMonitoring) {
                 shouldFail = true;
             }
             if (performanceInsights && !piEncrypted) {
                 shouldFail = true;
             }
-        } else if (rdsEnabled && performanceInsights && !piEncrypted) {
-            // Any profile: if Performance Insights is enabled, it must be encrypted
-            shouldFail = true;
         }
         // STAGING and DEV are advisory for monitoring (don't fail)
 
@@ -840,11 +882,13 @@ class DatabaseSecurityRulesTest {
         if (rdsEnabled) {
             customContext.put("rdsEnabled", "true");
         }
-        // Explicitly set these to override defaults
-        customContext.put("rdsEncryptionEnabled", String.valueOf(rdsEncryption));
+        // Explicitly set these to override defaults. DatabaseSecurityRules checks
+        // "enableEncryption"/"databaseMultiAz" (RdsFactory's real fields), not the old decoy
+        // "rdsEncryptionEnabled"/"rdsMultiAz" names.
+        customContext.put("enableEncryption", String.valueOf(rdsEncryption));
         customContext.put("rdsBackupEnabled", String.valueOf(rdsBackup));
         if (multiAz) {
-            customContext.put("rdsMultiAz", "true");
+            customContext.put("databaseMultiAz", "true");
         }
         customContext.put("rdsAutoMinorVersionUpgrade", String.valueOf(autoUpgrade));
         customContext.put("rdsBackupRetentionDays", String.valueOf(retentionDays));
@@ -858,18 +902,21 @@ class DatabaseSecurityRulesTest {
             customContext.put("dynamoDbPitrEnabled", "true");
         }
 
-        if (activityStreams) {
-            customContext.put("dbActivityStreamsEnabled", "true");
-        }
+        // activityStreams is no longer a flag DatabaseSecurityRules reads -- DB-ACTIVITY-STREAMS
+        // now checks ctx.dbConnection.get().isPresent() (set below via createMockDbConnection()
+        // whenever rdsEnabled simulates RDS being in use). The parameter stays for CSV
+        // readability but no longer maps to a context key or a shouldFail condition.
         if (performanceInsights) {
             customContext.put("performanceInsightsEnabled", "true");
         }
         if (piEncrypted) {
             customContext.put("performanceInsightsEncrypted", "true");
         }
-        if (enhancedMonitoring) {
-            customContext.put("rdsEnhancedMonitoringEnabled", "true");
-        }
+        // Set explicitly (both true and false) rather than only when true -- PRODUCTION now
+        // defaults this to enabled when unset (matching RdsFactory's own default), so an
+        // "enhancedMonitoring=false" scenario must set it explicitly to actually exercise the
+        // disabled case instead of silently falling back to the enabled default.
+        customContext.put("rdsEnhancedMonitoringEnabled", String.valueOf(enhancedMonitoring));
 
         // Use TestInfrastructureBuilder to create minimal infrastructure
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
@@ -878,6 +925,9 @@ class DatabaseSecurityRulesTest {
 
         // Create minimal infrastructure and install rules
         builder.createMinimalInfrastructure();
+        if (rdsEnabled) {
+            builder.createMockDbConnection();
+        }
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
         // Determine if this scenario should pass or fail
@@ -885,18 +935,15 @@ class DatabaseSecurityRulesTest {
 
         // Check RDS requirements
         if (rdsEnabled && secProfile == SecurityProfile.PRODUCTION) {
-            // PRODUCTION with RDS requires: encryption, backup, Multi-AZ, retention >= 7, auto-upgrade
-            // Also requires: activity streams and enhanced monitoring
+            // PRODUCTION with RDS requires: encryption, backup, Multi-AZ, retention >= 7,
+            // auto-upgrade, and enhanced monitoring (activity streams is covered unconditionally
+            // by the mock db connection above).
             if (!rdsEncryption || !rdsBackup || !multiAz || retentionDays < 7 || !autoUpgrade ||
-                !activityStreams || !enhancedMonitoring) {
-                shouldFail = true;
-            }
-        } else if (rdsEnabled && secProfile == SecurityProfile.STAGING) {
-            // STAGING with RDS requires: encryption, backup (no Multi-AZ requirement)
-            if (!rdsEncryption || !rdsBackup) {
+                !enhancedMonitoring) {
                 shouldFail = true;
             }
         }
+        // STAGING and DEV are advisory only - never fail
 
         // Check DynamoDB requirements
         if (dynamoDbEnabled) {
@@ -905,20 +952,14 @@ class DatabaseSecurityRulesTest {
                 if (!dynamoDbEncryption || !pitr) {
                     shouldFail = true;
                 }
-            } else if (secProfile == SecurityProfile.STAGING) {
-                // STAGING with DynamoDB requires: encryption (no PITR requirement)
-                if (!dynamoDbEncryption) {
-                    shouldFail = true;
-                }
             }
+            // STAGING and DEV are advisory only - never fail
         }
 
-        // Check Performance Insights encryption (any profile)
-        if (rdsEnabled && performanceInsights && !piEncrypted) {
+        // Check Performance Insights encryption (PRODUCTION only - STAGING/DEV are advisory)
+        if (rdsEnabled && performanceInsights && !piEncrypted && secProfile == SecurityProfile.PRODUCTION) {
             shouldFail = true;
         }
-
-        // DEV is advisory only - never fails
 
         // Trigger synthesis to execute validations
         if (shouldFail) {
@@ -967,17 +1008,22 @@ class DatabaseSecurityRulesTest {
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
 
-        // Always add baseline configs so we're only testing backup retention validation
-        customContext.put("rdsEncryptionEnabled", "true");
-        customContext.put("rdsMultiAz", "true");
+        // Always add baseline configs so we're only testing backup retention validation.
+        // DatabaseSecurityRules checks "enableEncryption"/"databaseMultiAz" (RdsFactory's real
+        // fields), not the old decoy "rdsEncryptionEnabled"/"rdsMultiAz" names.
+        customContext.put("enableEncryption", "true");
+        customContext.put("databaseMultiAz", "true");
         customContext.put("rdsDeleteProtection", "true");
-        customContext.put("dbActivityStreamsEnabled", "true");
         customContext.put("rdsEnhancedMonitoringEnabled", "true");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "TestRdsBackupEdge", secProfile, runtimeType, customContext);
 
         builder.createMinimalInfrastructure();
+        // DB-ACTIVITY-STREAMS now checks ctx.dbConnection.get().isPresent(), not a flag.
+        if (rdsEnabled) {
+            builder.createMockDbConnection();
+        }
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
         if (shouldFail) {
@@ -999,9 +1045,10 @@ class DatabaseSecurityRulesTest {
         "PRODUCTION,EC2,true,true,true,ENFORCE,false",         // EC2 PI encrypted - PASS
         "PRODUCTION,EC2,true,true,false,ENFORCE,true",         // EC2 PI not encrypted - FAIL
 
-        // STAGING - PI encryption IS enforced for all profiles
+        // STAGING - DatabaseSecurityRules doesn't check auth/network/ssl, so it keeps the
+        // blanket non-blocking carve-out for STAGING; findings surface but never fail synthesis.
         "STAGING,FARGATE,true,true,true,ENFORCE,false",        // STAGING PI encrypted - PASS
-        "STAGING,FARGATE,true,true,false,ENFORCE,true",        // STAGING PI not encrypted - FAIL (encryption required)
+        "STAGING,FARGATE,true,true,false,ENFORCE,false",       // STAGING PI not encrypted - advisory only, still PASS
 
         // DEV - PI encryption enforced but DEV validations are advisory
         "DEV,FARGATE,false,false,false,ENFORCE,false",         // DEV no RDS - PASS
@@ -1027,13 +1074,14 @@ class DatabaseSecurityRulesTest {
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
 
         // Always add baseline configs so we're only testing PI encryption validation
-        // (except when RDS is disabled)
+        // (except when RDS is disabled). DatabaseSecurityRules checks
+        // "enableEncryption"/"databaseMultiAz" (RdsFactory's real fields), not the old decoy
+        // "rdsEncryptionEnabled"/"rdsMultiAz" names.
         if (rdsEnabled) {
-            customContext.put("rdsEncryptionEnabled", "true");
-            customContext.put("rdsMultiAz", "true");
+            customContext.put("enableEncryption", "true");
+            customContext.put("databaseMultiAz", "true");
             customContext.put("rdsBackupRetentionDays", "7");
             customContext.put("rdsDeleteProtection", "true");
-            customContext.put("dbActivityStreamsEnabled", "true");
             customContext.put("rdsEnhancedMonitoringEnabled", "true");
         }
 
@@ -1041,6 +1089,10 @@ class DatabaseSecurityRulesTest {
             "TestPIEncryptionEdge", secProfile, runtimeType, customContext);
 
         builder.createMinimalInfrastructure();
+        // DB-ACTIVITY-STREAMS now checks ctx.dbConnection.get().isPresent(), not a flag.
+        if (rdsEnabled) {
+            builder.createMockDbConnection();
+        }
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
         if (shouldFail) {
@@ -1079,7 +1131,9 @@ class DatabaseSecurityRulesTest {
         customContext.put("stackName", "TestRdsHAEdge");
         customContext.put("securityProfile", profile);
         customContext.put("rdsEnabled", "true");
-        customContext.put("rdsMultiAz", String.valueOf(multiAz));
+        // DatabaseSecurityRules checks "databaseMultiAz" (RdsFactory's real field), not the old
+        // decoy "rdsMultiAz" name.
+        customContext.put("databaseMultiAz", String.valueOf(multiAz));
         customContext.put("rdsDeleteProtection", String.valueOf(deleteProtection));
         customContext.put("complianceFrameworks", "pci-dss");
         customContext.put("complianceMode", complianceMode);
@@ -1091,15 +1145,16 @@ class DatabaseSecurityRulesTest {
 
         // For passing cases, add baseline configs so we're only testing HA validation
         // For failing cases, also add baseline configs so the test fails specifically for HA, not other reasons
-        customContext.put("rdsEncryptionEnabled", "true");
+        customContext.put("enableEncryption", "true");
         customContext.put("rdsBackupRetentionDays", "7");
-        customContext.put("dbActivityStreamsEnabled", "true");
         customContext.put("rdsEnhancedMonitoringEnabled", "true");
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
             "TestRdsHAEdge", secProfile, runtimeType, customContext);
 
         builder.createMinimalInfrastructure();
+        // DB-ACTIVITY-STREAMS now checks ctx.dbConnection.get().isPresent(), not a flag.
+        builder.createMockDbConnection();
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
         if (shouldFail) {
@@ -1109,5 +1164,116 @@ class DatabaseSecurityRulesTest {
             assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
                 "Expected RDS HA validation to pass");
         }
+    }
+
+    // ==================== DECOY-NAME FIX / REAL-SIGNAL COVERAGE ====================
+
+    /**
+     * The old "rdsEncryptionEnabled" name is a decoy RdsFactory never reads -- setting it has
+     * no effect on RDS-ENCRYPTION now that the check reads "enableEncryption" instead.
+     */
+    @Test
+    void rdsEncryptionCheckIgnoresOldDecoyNameAndReadsEnableEncryption() {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestDecoyEncryption");
+        customContext.put("securityProfile", "PRODUCTION");
+        customContext.put("rdsEnabled", "true");
+        customContext.put("rdsBackupEnabled", "true");
+        customContext.put("databaseMultiAz", "true");
+        customContext.put("rdsAutoMinorVersionUpgrade", "true");
+        customContext.put("rdsEnhancedMonitoringEnabled", "true");
+        // Old decoy set true, real field left at its default (true) -- both pass regardless.
+        customContext.put("rdsEncryptionEnabled", "false");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestDecoyEncryption", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, customContext);
+        builder.createMinimalInfrastructure();
+        builder.createMockDbConnection();
+        new DatabaseSecurityRules().install(builder.getSystemContext());
+
+        assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+            "enableEncryption defaults true -- the old rdsEncryptionEnabled=false decoy must not fail this");
+    }
+
+    /**
+     * Setting the real field ("enableEncryption") to false does fail the check, confirming the
+     * redirect actually reads live infrastructure config, not just always passing.
+     */
+    @Test
+    void rdsEncryptionCheckFailsWhenRealFieldIsFalse() {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestRealEncryptionOff");
+        customContext.put("securityProfile", "PRODUCTION");
+        customContext.put("rdsEnabled", "true");
+        customContext.put("enableEncryption", "false");
+        customContext.put("rdsBackupEnabled", "true");
+        customContext.put("databaseMultiAz", "true");
+        customContext.put("rdsAutoMinorVersionUpgrade", "true");
+        customContext.put("rdsEnhancedMonitoringEnabled", "true");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestRealEncryptionOff", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, customContext);
+        builder.createMinimalInfrastructure();
+        builder.createMockDbConnection();
+        new DatabaseSecurityRules().install(builder.getSystemContext());
+
+        assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+            "enableEncryption=false must fail RDS-ENCRYPTION");
+    }
+
+    /**
+     * DB-ACTIVITY-STREAMS now checks ctx.dbConnection presence, not the
+     * "dbActivityStreamsEnabled" flag -- setting the flag true with no database provisioned
+     * must still fail.
+     */
+    @Test
+    void dbActivityStreamsCheckFailsWithoutRealDbConnectionRegardlessOfFlag() {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestActivityStreamsNoDb");
+        customContext.put("securityProfile", "PRODUCTION");
+        customContext.put("rdsEnabled", "true");
+        customContext.put("enableEncryption", "true");
+        customContext.put("rdsBackupEnabled", "true");
+        customContext.put("databaseMultiAz", "true");
+        customContext.put("rdsAutoMinorVersionUpgrade", "true");
+        customContext.put("rdsEnhancedMonitoringEnabled", "true");
+        // Old flag set true, but no ctx.dbConnection -- must still fail.
+        customContext.put("dbActivityStreamsEnabled", "true");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestActivityStreamsNoDb", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, customContext);
+        builder.createMinimalInfrastructure();
+        // Deliberately not calling createMockDbConnection() -- no database was "provisioned".
+        new DatabaseSecurityRules().install(builder.getSystemContext());
+
+        assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+            "dbActivityStreamsEnabled=true with no real db connection must still fail DB-ACTIVITY-STREAMS");
+    }
+
+    /**
+     * Conversely, a real db connection satisfies DB-ACTIVITY-STREAMS even with the old flag
+     * left unset entirely.
+     */
+    @Test
+    void dbActivityStreamsCheckPassesWithRealDbConnectionEvenWithFlagUnset() {
+        Map<String, Object> customContext = new HashMap<>();
+        customContext.put("stackName", "TestActivityStreamsWithDb");
+        customContext.put("securityProfile", "PRODUCTION");
+        customContext.put("rdsEnabled", "true");
+        customContext.put("enableEncryption", "true");
+        customContext.put("rdsBackupEnabled", "true");
+        customContext.put("databaseMultiAz", "true");
+        customContext.put("rdsAutoMinorVersionUpgrade", "true");
+        customContext.put("rdsEnhancedMonitoringEnabled", "true");
+        // dbActivityStreamsEnabled deliberately left unset.
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestActivityStreamsWithDb", SecurityProfile.PRODUCTION, RuntimeType.FARGATE, customContext);
+        builder.createMinimalInfrastructure();
+        builder.createMockDbConnection();
+        new DatabaseSecurityRules().install(builder.getSystemContext());
+
+        assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
+            "a real db connection must satisfy DB-ACTIVITY-STREAMS regardless of the old flag");
     }
 }

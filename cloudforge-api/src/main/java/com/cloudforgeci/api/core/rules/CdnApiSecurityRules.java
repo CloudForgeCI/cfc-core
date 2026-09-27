@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * CDN and API security compliance validation rules.
@@ -104,7 +105,7 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // CloudFront TLS/HTTPS enforcement
-        if (ctx.security == SecurityProfile.PRODUCTION && config.isCloudFrontEnabled()) {
+        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && config.isCloudFrontEnabled()) {
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.CDN_SECURITY,
                 complianceFrameworks,
@@ -170,7 +171,7 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // API Gateway access logging
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.API_SECURITY,
                 complianceFrameworks,
@@ -227,7 +228,7 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // WAF protection for CloudFront and API Gateway
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.WAF_PROTECTION,
                 complianceFrameworks,
@@ -246,9 +247,10 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("WAF recommended but not required for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "WAF-CDN-API-PROTECTION",
-                    "WAF recommended but not required"
+                    "WAF recommended but not required for " + complianceFrameworks,
+                    "Enable WAF for CloudFront distributions and API Gateway stages (wafEnabled = true)."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -294,5 +296,21 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. The CLOUDFRONT-HTTPS rule
+     * passes a hardcoded {@code true} into {@code validateControlMultiFramework}, so it can never
+     * fail and is not itself a conditional check; {@code CDN_SECURITY} is claimed instead via the TLS
+     * 1.2 minimum-version check, which is a genuine conditional in the same method. CloudFront
+     * access logging and API Gateway X-Ray tracing are conditional checks with no
+     * corresponding matrix control and are not claimed.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "CDN_SECURITY", "API_SECURITY", "WAF_PROTECTION"
+        );
     }
 }

@@ -1,6 +1,5 @@
 package com.cloudforge.core.local;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Locale;
@@ -49,20 +48,12 @@ public final class EmulatorEdgeCli {
 
     /**
      * {@link LocalEmulatorPaths#emulatorEdgeDir} resolves relative to the JVM's working
-     * directory, assuming callers run from {@code cfc-testing/} (as InteractiveDeployer and the
-     * deploy pipelines do). {@code scripts/emulator-edge-*.sh} runs from the repo root instead,
-     * which also contains a {@code pom.xml}, so that heuristic would resolve to a root-level
-     * {@code .emulator-edge} directory rather than {@code cfc-testing/.emulator-edge}, the path
-     * bind-mounted into the nginx container; reconcile would then write a file nginx never reads.
-     * This prefers a {@code cfc-testing} child directory when one exists (with the same
-     * {@code docker/emulator-edge} marker {@link LocalEmulatorPaths} checks for).
+     * directory — {@code scripts/emulator-edge-*.sh} runs from the repo root, which is also where
+     * {@code docker/emulator-edge} (the path bind-mounted into the nginx container) lives, so no
+     * redirection is needed here; {@link LocalEmulatorPaths} itself falls back to the parent
+     * directory if the marker isn't found in the working directory.
      */
     private static Path resolveWorkingDirectory() {
-        Path cwd = Path.of("").toAbsolutePath().normalize();
-        Path cfcTesting = cwd.resolve("cfc-testing");
-        if (Files.exists(cfcTesting.resolve("docker/emulator-edge"))) {
-            return cfcTesting;
-        }
-        return cwd;
+        return Path.of("").toAbsolutePath().normalize();
     }
 }

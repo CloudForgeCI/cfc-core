@@ -24,7 +24,6 @@ import io.github.cdklabs.cdknag.NagSuppressions;
 import io.github.cdklabs.cdknag.NagPackSuppression;
 
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -289,18 +288,14 @@ public class AlbFactory extends BaseFactory {
             return false; // Default to disabled if no security profile
         }
 
-        // Check if this is a production-grade security profile
-        boolean isProduction = securityProfileConfig.getClass().getSimpleName().contains("Production");
-
-        if (isProduction) {
+        if (securityProfileConfig.isAlbDeletionProtectionEnabled()) {
             // Register AWS Config rule for deletion protection compliance
             ctx.requireConfigRule(AwsConfigRule.ELB_DELETION_PROTECTION);
-            LOG.info("ALB deletion protection: ENABLED (Production security profile)");
+            LOG.info("ALB deletion protection: ENABLED (" + securityProfileConfig.getClass().getSimpleName() + ")");
             return true;
-        } else {
-            LOG.info("ALB deletion protection: DISABLED (Dev/Staging security profile)");
-            return false;
         }
+        LOG.info("ALB deletion protection: DISABLED (" + securityProfileConfig.getClass().getSimpleName() + ")");
+        return false;
     }
 
     /**
@@ -308,10 +303,9 @@ public class AlbFactory extends BaseFactory {
      * Enables dropping invalid HTTP headers to prevent header injection attacks.
      */
     private void configureAlbSecurity(ApplicationLoadBalancer alb) {
-        CfnLoadBalancer cfnAlb = (CfnLoadBalancer) alb.getNode().getDefaultChild();
-        cfnAlb.addPropertyOverride("LoadBalancerAttributes", List.of(
-            Map.of("Key", "routing.http.drop_invalid_header_fields.enabled", "Value", "true")
-        ));
+        // setAttribute adds to the attribute list; a raw property override would replace it and
+        // drop deletion protection and access logging.
+        alb.setAttribute("routing.http.drop_invalid_header_fields.enabled", "true");
         LOG.info("Drop invalid HTTP headers: enabled (compliance)");
     }
 

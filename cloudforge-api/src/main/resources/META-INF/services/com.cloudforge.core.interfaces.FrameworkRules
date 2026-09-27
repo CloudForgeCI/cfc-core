@@ -19,3 +19,5 @@ com.cloudforgeci.api.core.rules.Soc2Rules
 com.cloudforgeci.api.core.rules.GdprRules
 com.cloudforgeci.api.core.rules.GdprOrganizationalRules
 com.cloudforgeci.api.core.rules.Iso27001Rules
+com.cloudforgeci.api.core.rules.FedRampRules
+com.cloudforgeci.api.core.rules.FedRampHighRules

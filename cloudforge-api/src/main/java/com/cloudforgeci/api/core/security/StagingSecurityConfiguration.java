@@ -182,6 +182,16 @@ public final class StagingSecurityConfiguration implements SecurityConfiguration
         ComplianceFactory complianceFactory = new ComplianceFactory(c, c.stackName + "-Compliance");
         complianceFactory.create();
 
+        // Verify Security Hub, Macie, and Inspector are already enabled centrally (each self-gates
+        // on its own flag) rather than enabling them from this stack -- see
+        // SecurityHubVerificationFactory/MacieVerificationFactory/InspectorVerificationFactory.
+        // PHI/cardholder/federal data may exist in STAGING, so the compliance-driven requirement
+        // (e.g. SecurityHub for SOC2/PCI-DSS) needs to reach STAGING the same way it reaches
+        // PRODUCTION, not just be dead code here.
+        c.createSecurityHubVerification(c, "Staging");
+        c.createMacieVerification(c, "Staging");
+        c.createInspectorVerification(c, "Staging");
+
         // Configure logging retention (moderate for staging)
         if (profileConfig.getLogRetentionDays() != null) {
             LOG.info("STAGING profile configured with log retention: " + profileConfig.getLogRetentionDays());

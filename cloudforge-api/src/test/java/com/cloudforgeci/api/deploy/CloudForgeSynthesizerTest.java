@@ -58,13 +58,14 @@ class CloudForgeSynthesizerTest {
         config.runtime = RuntimeType.FARGATE;
         config.securityProfile = SecurityProfile.PRODUCTION;
         config.authMode = com.cloudforge.core.enums.AuthMode.NONE;
+        // An explicit single-AZ database is a genuine AwsSolutions-RDS3 finding; PRODUCTION alone is Multi-AZ.
+        config.databaseMultiAz = false;
         return config;
     }
 
     /**
-     * WordPress on Fargate produces an {@code AwsSolutions-RDS3} finding (its RDS instance is not
-     * Multi-AZ), so this exercises {@code ComplianceMode.ENFORCE} against an actual violation
-     * rather than a synthetic one.
+     * WordPress on Fargate with a single-AZ database produces an {@code AwsSolutions-RDS3} finding, so this
+     * exercises {@code ComplianceMode.ENFORCE} against a violation cdk-nag reports on its own, not a synthetic one.
      */
     @Test
     void enforceModeBlocksSynthesisWhenComplianceFrameworkFindsARealViolation() {
@@ -115,6 +116,10 @@ class CloudForgeSynthesizerTest {
         // to this test's own purpose, worked around the same way its own error message says to.
         config.macieEnabled = true;
         config.macieAutomatedDiscovery = true;
+        // DatabaseSecurityRules is the same kind of "always load" validator that doesn't honor
+        // ComplianceMode -- it hard-blocks PRODUCTION on any failed database check, including this
+        // one, regardless of ADVISORY mode. WordPress provisions a real database, so this fires.
+        config.rdsEnhancedMonitoringEnabled = true;
 
         CloudForgeSynthesizer.ComplianceCheckResult result =
             CloudForgeSynthesizer.synthesizeAdvisoryDryRun(config, tempDir.resolve("cdk.out"));
@@ -162,6 +167,8 @@ class CloudForgeSynthesizerTest {
         config.auditManagerEnabled = true;
         config.macieEnabled = true;
         config.macieAutomatedDiscovery = true;
+        // Same DatabaseSecurityRules ADVISORY gap as advisoryDryRunNeverThrowsAndReturnsBoth... above.
+        config.rdsEnhancedMonitoringEnabled = true;
 
         CloudForgeSynthesizer.ComplianceCheckResult result =
             CloudForgeSynthesizer.synthesizeAdvisoryDryRun(config, tempDir.resolve("cdk.out"));

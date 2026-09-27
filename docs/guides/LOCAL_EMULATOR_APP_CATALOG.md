@@ -177,5 +177,5 @@ Batch scripts (they skip stacks that are already `CREATE_COMPLETE`):
 
 - [MiniStack overview](../ministack/README.md): preflight, architecture, StackPort
 - [LocalStack overview](../localstack/README.md): token, StackPort, tier adapter
-- [Interactive Deployer](INTERACTIVE_DEPLOYER.md): deployment options 6, 7, and 8
+- [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli): `deploy --target ministack|localstack`
 - [CMS Guides](cms/README.md)

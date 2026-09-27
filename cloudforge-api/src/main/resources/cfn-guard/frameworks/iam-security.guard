@@ -6,18 +6,24 @@
 # CloudForge Core - Multi-Layer Compliance Validation
 # Layer 3: Template-Level Policy Enforcement (cfn-guard)
 
+
+let iam_policy = Resources.*[ Type in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy', 'AWS::IAM::Role', 'AWS::IAM::User', 'AWS::IAM::Group'] ]
+let iam_policy_2 = Resources.*[ Type in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] ]
+let iam_role = Resources.*[ Type == 'AWS::IAM::Role' ]
+let iam_user = Resources.*[ Type == 'AWS::IAM::User' ]
+let iam_user_2 = Resources.*[ Type in ['AWS::IAM::User', 'AWS::IAM::Group', 'AWS::IAM::Role'] ]
+let kms_key = Resources.*[ Type == 'AWS::KMS::Key' ]
 # ============================================================================
 # IAM Policy - Least Privilege Violations
 # ============================================================================
 
 # Detect full administrator permissions (Action: "*", Resource: "*")
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_policy_full_admin when
-    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy', 'AWS::IAM::Role', 'AWS::IAM::User', 'AWS::IAM::Group'] {
+rule iam_security_policy_full_admin when %iam_policy !empty {
 
     when Properties.PolicyDocument exists {
         when Properties.PolicyDocument.Statement exists {
-            Properties.PolicyDocument.Statement[*] {
+            %iam_policy.Properties.PolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Action exists {
                         Action != '*' <<[IAM Security] Policies must not grant full administrator access (Action: "*")>>
@@ -30,12 +36,11 @@ rule iam_security_policy_full_admin when
 
 # Detect policies with unrestricted resource access
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_policy_unrestricted_resource when
-    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+rule iam_security_policy_unrestricted_resource when %iam_policy_2 !empty {
 
     when Properties.PolicyDocument exists {
         when Properties.PolicyDocument.Statement exists {
-            Properties.PolicyDocument.Statement[*] {
+            %iam_policy_2.Properties.PolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Action == '*' {
                         when Resource exists {
@@ -50,12 +55,11 @@ rule iam_security_policy_unrestricted_resource when
 
 # Detect unrestricted STS AssumeRole permissions
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_policy_sts_assume when
-    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+rule iam_security_policy_sts_assume when %iam_policy_2 !empty {
 
     when Properties.PolicyDocument exists {
         when Properties.PolicyDocument.Statement exists {
-            Properties.PolicyDocument.Statement[*] {
+            %iam_policy_2.Properties.PolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Action exists {
                         when Action == 'sts:AssumeRole' OR Action == 'sts:*' {
@@ -72,12 +76,11 @@ rule iam_security_policy_sts_assume when
 
 # Detect unrestricted iam:PassRole permissions
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_policy_iam_passrole when
-    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+rule iam_security_policy_iam_passrole when %iam_policy_2 !empty {
 
     when Properties.PolicyDocument exists {
         when Properties.PolicyDocument.Statement exists {
-            Properties.PolicyDocument.Statement[*] {
+            %iam_policy_2.Properties.PolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Action exists {
                         when Action == 'iam:PassRole' OR Action == 'iam:*' {
@@ -94,12 +97,11 @@ rule iam_security_policy_iam_passrole when
 
 # Detect overly permissive S3 access (s3:*)
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_policy_s3_allaccess when
-    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+rule iam_security_policy_s3_allaccess when %iam_policy_2 !empty {
 
     when Properties.PolicyDocument exists {
         when Properties.PolicyDocument.Statement exists {
-            Properties.PolicyDocument.Statement[*] {
+            %iam_policy_2.Properties.PolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Action exists {
                         when Action == 's3:*' {
@@ -120,12 +122,11 @@ rule iam_security_policy_s3_allaccess when
 
 # Detect IAM roles with public trust policies
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_role_assume_public when
-    resourceType == 'AWS::IAM::Role' {
+rule iam_security_role_assume_public when %iam_role !empty {
 
     when Properties.AssumeRolePolicyDocument exists {
         when Properties.AssumeRolePolicyDocument.Statement exists {
-            Properties.AssumeRolePolicyDocument.Statement[*] {
+            %iam_role.Properties.AssumeRolePolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Principal exists {
                         Principal != '*' <<[IAM Security] IAM roles must not allow public trust (Principal: "*")>>
@@ -145,21 +146,19 @@ rule iam_security_role_assume_public when
 
 # Detect policies directly attached to users
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_user_attached_policies when
-    resourceType == 'AWS::IAM::User' {
+rule iam_security_user_attached_policies when %iam_user !empty {
 
     when Properties.Policies exists {
-        Properties.Policies empty <<[IAM Security] Policies should not be directly attached to IAM users. Use IAM groups or roles instead.>>
+        %iam_user.Properties.Policies empty <<[IAM Security] Policies should not be directly attached to IAM users. Use IAM groups or roles instead.>>
     }
 }
 
 # Detect inline policies on users, groups, and roles
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_no_inline_policies when
-    resourceType in ['AWS::IAM::User', 'AWS::IAM::Group', 'AWS::IAM::Role'] {
+rule iam_security_no_inline_policies when %iam_user_2 !empty {
 
     when Properties.Policies exists {
-        Properties.Policies empty <<[IAM Security] Avoid inline policies. Use managed policies for consistent, auditable access control.>>
+        %iam_user_2.Properties.Policies empty <<[IAM Security] Avoid inline policies. Use managed policies for consistent, auditable access control.>>
     }
 }
 
@@ -169,12 +168,11 @@ rule iam_security_no_inline_policies when
 
 # Detect sensitive IAM actions granted without restriction
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_sensitive_actions when
-    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+rule iam_security_sensitive_actions when %iam_policy_2 !empty {
 
     when Properties.PolicyDocument exists {
         when Properties.PolicyDocument.Statement exists {
-            Properties.PolicyDocument.Statement[*] {
+            %iam_policy_2.Properties.PolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Action exists {
                         when Action in ['iam:CreateAccessKey', 'iam:AttachUserPolicy', 'iam:AttachRolePolicy',
@@ -193,12 +191,11 @@ rule iam_security_sensitive_actions when
 
 # Detect unrestricted Lambda invoke permissions
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_lambda_invoke_all when
-    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+rule iam_security_lambda_invoke_all when %iam_policy_2 !empty {
 
     when Properties.PolicyDocument exists {
         when Properties.PolicyDocument.Statement exists {
-            Properties.PolicyDocument.Statement[*] {
+            %iam_policy_2.Properties.PolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Action exists {
                         when Action in ['lambda:InvokeFunction', 'lambda:*'] {
@@ -215,12 +212,11 @@ rule iam_security_lambda_invoke_all when
 
 # Detect unrestricted Secrets Manager access
 # CloudForge Mapping: ACCESS_CONTROL control
-rule iam_security_secretsmanager_allaccess when
-    resourceType in ['AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy'] {
+rule iam_security_secretsmanager_allaccess when %iam_policy_2 !empty {
 
     when Properties.PolicyDocument exists {
         when Properties.PolicyDocument.Statement exists {
-            Properties.PolicyDocument.Statement[*] {
+            %iam_policy_2.Properties.PolicyDocument.Statement[*] {
                 when Effect == 'Allow' {
                     when Action exists {
                         when Action in ['secretsmanager:GetSecretValue', 'secretsmanager:*'] {
@@ -241,12 +237,11 @@ rule iam_security_secretsmanager_allaccess when
 
 # Detect KMS key policies with public access
 # CloudForge Mapping: KEY_MANAGEMENT control
-rule iam_security_kms_public when
-    resourceType == 'AWS::KMS::Key' {
+rule iam_security_kms_public when %kms_key !empty {
 
     when Properties.KeyPolicy exists {
         when Properties.KeyPolicy.Statement exists {
-            Properties.KeyPolicy.Statement[*] {
+            %kms_key.Properties.KeyPolicy.Statement[*] {
                 when Effect == 'Allow' {
                     when Principal exists {
                         Principal != '*' <<[IAM Security] KMS key policies must not allow public access (Principal: "*")>>

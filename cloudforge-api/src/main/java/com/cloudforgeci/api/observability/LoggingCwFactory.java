@@ -7,15 +7,11 @@ import com.cloudforgeci.api.core.util.RetentionDaysConverter;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.RemovalPolicy;
-import software.amazon.awscdk.Stack;
-import software.amazon.awscdk.services.iam.PolicyStatement;
-import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -49,6 +45,18 @@ public class LoggingCwFactory extends BaseFactory {
         super(scope, id);
     }
 
+    /** @return true if "fedramp" or "fedramp-high" is among the selected compliance frameworks */
+    private boolean isFedRampSelected() {
+        String frameworks = ctx.cfc.complianceFrameworks();
+        if (frameworks == null) {
+            return false;
+        }
+        String normalized = frameworks.toLowerCase();
+        return normalized.contains("fedramp");
+    }
+
+    /** Creates the profile's CloudWatch log group, floors retention for FedRAMP where needed, and
+     *  encrypts it with a customer-managed KMS key when the profile requires log encryption. */
     @Override
     public void create() {
         try {
@@ -91,7 +99,21 @@ public class LoggingCwFactory extends BaseFactory {
             if (Boolean.TRUE.equals(enableMonitoring) && logRetentionDays != null) {
                 // Use RetentionDaysConverter for consistent retention mapping across all factories
                 // This ensures compliance-aware thresholds (PCI-DSS, HIPAA, etc.) are properly handled
-                retentionDays = RetentionDaysConverter.fromDays(logRetentionDays);
+                int effectiveDays = logRetentionDays;
+                if (security == SecurityProfile.DEV && isFedRampSelected() && logRetentionDays < 1095) {
+                    // Same AU-11 floor as the DEV-default branch below, but for an explicit
+                    // override that's still short of it -- fedramp-nist-800-53's Layer 3 guard
+                    // has no profile signal and requires >=1095 days on every log group.
+                    effectiveDays = 1095;
+                }
+                retentionDays = RetentionDaysConverter.fromDays(effectiveDays);
+            } else if (security == SecurityProfile.DEV && isFedRampSelected()) {
+                // FedRampRules.install() only enforces AU-11 (3-year retention) for PRODUCTION/
+                // STAGING -- DEV is intentionally out of scope there -- but the fedramp-nist-800-53
+                // Layer 3 guard file has no profile signal and requires >=1095 days on every log
+                // group regardless of profile. Without this, a FedRAMP DEV deployment's default
+                // 7-day retention would fail Layer 3 even though Layer 2 considers it compliant.
+                retentionDays = RetentionDaysConverter.fromDays(1095);
             }
 
             // Create log group with explicit name and removal policy
@@ -109,21 +131,8 @@ public class LoggingCwFactory extends BaseFactory {
             // Add KMS encryption when required by compliance frameworks (PCI-DSS, HIPAA, SOC2)
             if (config.isCloudWatchLogsKmsEncryptionEnabled()) {
                 LOG.info("LoggingCwFactory: Enabling KMS encryption for CloudWatch Logs (compliance requirement)");
-                Key logsKmsKey = Key.Builder.create(this, "LogsKmsKey")
-                        .description("KMS key for CloudWatch Logs encryption (compliance requirement)")
-                        .enableKeyRotation(true)
-                        .removalPolicy(config.getLogRemovalPolicy() == RemovalPolicy.RETAIN
-                                ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY)
-                        .build();
-
-                // Grant CloudWatch Logs service permission to use the KMS key
-                logsKmsKey.addToResourcePolicy(PolicyStatement.Builder.create()
-                        .sid("Allow CloudWatch Logs")
-                        .principals(List.of(new ServicePrincipal("logs." + Stack.of(this).getRegion() + ".amazonaws.com")))
-                        .actions(List.of("kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:CreateGrant", "kms:DescribeKey"))
-                        .resources(List.of("*"))
-                        .build());
-
+                Key logsKmsKey = LogsKmsKey.create(this, "LogsKmsKey",
+                        "KMS key for CloudWatch Logs encryption (compliance requirement)", config.getLogRemovalPolicy());
                 logGroupBuilder.encryptionKey(logsKmsKey);
             }
 

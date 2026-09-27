@@ -17,13 +17,17 @@ import java.util.stream.Collectors;
  *   <li>PCI_DSS - Payment Card Industry Data Security Standard v3.2.1+</li>
  *   <li>HIPAA - Health Insurance Portability and Accountability Act Security Rule</li>
  *   <li>GDPR - General Data Protection Regulation (EU)</li>
+ *   <li>FEDRAMP - FedRAMP Moderate baseline (NIST 800-53 Rev 5)</li>
+ *   <li>FEDRAMP_HIGH - FedRAMP High baseline, additive on top of FEDRAMP</li>
  * </ul>
  */
 public enum ComplianceFrameworkType {
     SOC2("soc2", "SOC 2 Trust Services Criteria"),
     PCI_DSS("pci-dss", "PCI-DSS v3.2.1+"),
     HIPAA("hipaa", "HIPAA Security Rule"),
-    GDPR("gdpr", "General Data Protection Regulation");
+    GDPR("gdpr", "General Data Protection Regulation"),
+    FEDRAMP("fedramp", "FedRAMP Moderate Baseline"),
+    FEDRAMP_HIGH("fedramp-high", "FedRAMP High Baseline");
 
     private final String jsonValue;
     private final String displayName;
@@ -58,6 +62,8 @@ public enum ComplianceFrameworkType {
             case PCI_DSS -> "PCI-DSS";
             case HIPAA -> "HIPAA";
             case GDPR -> "GDPR";
+            case FEDRAMP -> "FEDRAMP";
+            case FEDRAMP_HIGH -> "FEDRAMP-HIGH";
         };
     }
 

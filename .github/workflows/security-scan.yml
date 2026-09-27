@@ -58,7 +58,7 @@ jobs:
       - name: Build project and generate SBOM
         run: |
           echo "Building project and generating SBOM..."
-          # Build modules + parent POM (for aggregate SBOM), skip cfc-testing
+          # Build modules + parent POM (for aggregate SBOM)
           mvn clean install -DskipTests -pl .,cloudforge-api,cloudforge-core || mvn clean install -DskipTests
           echo "Build and SBOM generation complete"
 
@@ -291,7 +291,6 @@ jobs:
           echo "Module coverage report locations:"
           ls -la cloudforge-api/target/site/jacoco/ 2>/dev/null || echo "cloudforge-api: No report found"
           ls -la cloudforge-core/target/site/jacoco/ 2>/dev/null || echo "cloudforge-core: No report found"
-          ls -la cfc-testing/target/site/jacoco/ 2>/dev/null || echo "cfc-testing: No report found"
 
       - name: Upload coverage reports
         if: always()

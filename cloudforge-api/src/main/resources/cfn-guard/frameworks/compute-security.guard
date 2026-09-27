@@ -6,52 +6,54 @@
 # CloudForge Core - Multi-Layer Compliance Validation
 # Layer 3: Template-Level Policy Enforcement (cfn-guard)
 
+
+let ec2_instance = Resources.*[ Type == 'AWS::EC2::Instance' ]
+let ec2_launchtemplate = Resources.*[ Type == 'AWS::EC2::LaunchTemplate' ]
+let ec2_subnet = Resources.*[ Type == 'AWS::EC2::Subnet' ]
+let eks_cluster = Resources.*[ Type == 'AWS::EKS::Cluster' ]
+let eks_nodegroup = Resources.*[ Type == 'AWS::EKS::Nodegroup' ]
+let autoscaling_autoscalinggroup = Resources.*[ Type == 'AWS::AutoScaling::AutoScalingGroup' ]
 # ============================================================================
 # EC2 Instance Security
 # ============================================================================
 
 # EC2 termination protection
 # CloudForge Mapping: DELETION_PROTECTION control
-rule compute_security_ec2_termination_protection when
-    resourceType == 'AWS::EC2::Instance' {
+rule compute_security_ec2_termination_protection when %ec2_instance !empty {
 
-    Properties.DisableApiTermination exists
-    Properties.DisableApiTermination == true <<[Compute Security] EC2 instances should have API termination protection enabled>>
+    %ec2_instance.Properties.DisableApiTermination exists
+    %ec2_instance.Properties.DisableApiTermination == true <<[Compute Security] EC2 instances should have API termination protection enabled>>
 }
 
 # EC2 EBS optimization
 # CloudForge Mapping: PERFORMANCE control
-rule compute_security_ec2_ebs_optimized when
-    resourceType == 'AWS::EC2::Instance' {
+rule compute_security_ec2_ebs_optimized when %ec2_instance !empty {
 
-    Properties.EbsOptimized exists
-    Properties.EbsOptimized == true <<[Compute Security] EC2 instances should have EBS optimization enabled>>
+    %ec2_instance.Properties.EbsOptimized exists
+    %ec2_instance.Properties.EbsOptimized == true <<[Compute Security] EC2 instances should have EBS optimization enabled>>
 }
 
 # EC2 detailed monitoring
 # CloudForge Mapping: MONITORING control
-rule compute_security_ec2_detailed_monitoring when
-    resourceType == 'AWS::EC2::Instance' {
+rule compute_security_ec2_detailed_monitoring when %ec2_instance !empty {
 
-    Properties.Monitoring exists
-    Properties.Monitoring == true <<[Compute Security] EC2 instances should have detailed CloudWatch monitoring enabled>>
+    %ec2_instance.Properties.Monitoring exists
+    %ec2_instance.Properties.Monitoring == true <<[Compute Security] EC2 instances should have detailed CloudWatch monitoring enabled>>
 }
 
 # EC2 IAM instance profile
 # CloudForge Mapping: ACCESS_CONTROL control
-rule compute_security_ec2_iam_profile when
-    resourceType == 'AWS::EC2::Instance' {
+rule compute_security_ec2_iam_profile when %ec2_instance !empty {
 
-    Properties.IamInstanceProfile exists <<[Compute Security] EC2 instances must have an IAM instance profile attached>>
+    %ec2_instance.Properties.IamInstanceProfile exists <<[Compute Security] EC2 instances must have an IAM instance profile attached>>
 }
 
 # EC2 block device encryption
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule compute_security_ec2_block_device_encryption when
-    resourceType == 'AWS::EC2::Instance' {
+rule compute_security_ec2_block_device_encryption when %ec2_instance !empty {
 
-    Properties.BlockDeviceMappings exists <<[Compute Security] EC2 instances must explicitly define block device mappings>>
-    Properties.BlockDeviceMappings[*] {
+    %ec2_instance.Properties.BlockDeviceMappings exists <<[Compute Security] EC2 instances must explicitly define block device mappings>>
+    %ec2_instance.Properties.BlockDeviceMappings[*] {
         when Ebs exists {
             Ebs.Encrypted == true <<[Compute Security] EC2 instance block devices must be encrypted>>
         }
@@ -60,12 +62,11 @@ rule compute_security_ec2_block_device_encryption when
 
 # EC2 instance metadata IMDSv2
 # CloudForge Mapping: INSTANCE_METADATA_SECURITY control
-rule compute_security_ec2_imdsv2 when
-    resourceType == 'AWS::EC2::Instance' {
+rule compute_security_ec2_imdsv2 when %ec2_instance !empty {
 
-    Properties.MetadataOptions exists <<[Compute Security] EC2 instances must configure metadata options>>
-    Properties.MetadataOptions.HttpTokens exists <<[Compute Security] EC2 instances must specify HttpTokens setting>>
-    Properties.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 instances must require IMDSv2 (HttpTokens: required)>>
+    %ec2_instance.Properties.MetadataOptions exists <<[Compute Security] EC2 instances must configure metadata options>>
+    %ec2_instance.Properties.MetadataOptions.HttpTokens exists <<[Compute Security] EC2 instances must specify HttpTokens setting>>
+    %ec2_instance.Properties.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 instances must require IMDSv2 (HttpTokens: required)>>
 }
 
 # ============================================================================
@@ -74,23 +75,21 @@ rule compute_security_ec2_imdsv2 when
 
 # Launch template IMDSv2
 # CloudForge Mapping: INSTANCE_METADATA_SECURITY control
-rule compute_security_launch_template_imdsv2 when
-    resourceType == 'AWS::EC2::LaunchTemplate' {
+rule compute_security_launch_template_imdsv2 when %ec2_launchtemplate !empty {
 
-    Properties.LaunchTemplateData exists <<[Compute Security] Launch templates must define LaunchTemplateData>>
-    Properties.LaunchTemplateData.MetadataOptions exists <<[Compute Security] Launch templates must configure metadata options>>
-    Properties.LaunchTemplateData.MetadataOptions.HttpTokens exists <<[Compute Security] Launch templates must specify HttpTokens>>
-    Properties.LaunchTemplateData.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 launch templates must require IMDSv2>>
+    %ec2_launchtemplate.Properties.LaunchTemplateData exists <<[Compute Security] Launch templates must define LaunchTemplateData>>
+    %ec2_launchtemplate.Properties.LaunchTemplateData.MetadataOptions exists <<[Compute Security] Launch templates must configure metadata options>>
+    %ec2_launchtemplate.Properties.LaunchTemplateData.MetadataOptions.HttpTokens exists <<[Compute Security] Launch templates must specify HttpTokens>>
+    %ec2_launchtemplate.Properties.LaunchTemplateData.MetadataOptions.HttpTokens == 'required' <<[Compute Security] EC2 launch templates must require IMDSv2>>
 }
 
 # Launch template encryption
 # CloudForge Mapping: ENCRYPTION_AT_REST control
-rule compute_security_launch_template_encryption when
-    resourceType == 'AWS::EC2::LaunchTemplate' {
+rule compute_security_launch_template_encryption when %ec2_launchtemplate !empty {
 
-    Properties.LaunchTemplateData exists <<[Compute Security] Launch templates must define LaunchTemplateData>>
-    Properties.LaunchTemplateData.BlockDeviceMappings exists <<[Compute Security] Launch templates must explicitly define block device mappings with encryption>>
-    Properties.LaunchTemplateData.BlockDeviceMappings[*] {
+    %ec2_launchtemplate.Properties.LaunchTemplateData exists <<[Compute Security] Launch templates must define LaunchTemplateData>>
+    %ec2_launchtemplate.Properties.LaunchTemplateData.BlockDeviceMappings exists <<[Compute Security] Launch templates must explicitly define block device mappings with encryption>>
+    %ec2_launchtemplate.Properties.LaunchTemplateData.BlockDeviceMappings[*] {
         when Ebs exists {
             Ebs.Encrypted == true <<[Compute Security] EC2 launch template block devices must be encrypted>>
         }
@@ -103,11 +102,10 @@ rule compute_security_launch_template_encryption when
 
 # Subnet auto-assign public IP disabled
 # CloudForge Mapping: NETWORK_SECURITY control
-rule compute_security_subnet_no_auto_public_ip when
-    resourceType == 'AWS::EC2::Subnet' {
+rule compute_security_subnet_no_auto_public_ip when %ec2_subnet !empty {
 
-    Properties.MapPublicIpOnLaunch not exists OR
-    Properties.MapPublicIpOnLaunch == false <<[Compute Security] Subnets should not auto-assign public IP addresses>>
+    %ec2_subnet.Properties.MapPublicIpOnLaunch not exists OR
+    %ec2_subnet.Properties.MapPublicIpOnLaunch == false <<[Compute Security] Subnets should not auto-assign public IP addresses>>
 }
 
 # ============================================================================
@@ -116,27 +114,25 @@ rule compute_security_subnet_no_auto_public_ip when
 
 # EKS private endpoint only
 # CloudForge Mapping: CONTAINER_SECURITY control
-rule compute_security_eks_private_only when
-    resourceType == 'AWS::EKS::Cluster' {
+rule compute_security_eks_private_only when %eks_cluster !empty {
 
     when Properties.ResourcesVpcConfig exists {
-        Properties.ResourcesVpcConfig.EndpointPublicAccess == false <<[EKS Security] EKS cluster endpoint should be private only>>
-        Properties.ResourcesVpcConfig.EndpointPrivateAccess == true <<[EKS Security] EKS cluster must enable private endpoint access>>
+        %eks_cluster.Properties.ResourcesVpcConfig.EndpointPublicAccess == false <<[EKS Security] EKS cluster endpoint should be private only>>
+        %eks_cluster.Properties.ResourcesVpcConfig.EndpointPrivateAccess == true <<[EKS Security] EKS cluster must enable private endpoint access>>
     }
 }
 
 # EKS public access restricted to specific CIDRs
 # CloudForge Mapping: CONTAINER_SECURITY control
-rule compute_security_eks_public_access_restricted when
-    resourceType == 'AWS::EKS::Cluster' {
+rule compute_security_eks_public_access_restricted when %eks_cluster !empty {
 
-    Properties.ResourcesVpcConfig exists <<[EKS Security] EKS clusters must configure VPC settings>>
-    Properties.ResourcesVpcConfig.EndpointPublicAccess exists <<[EKS Security] Must explicitly configure public access>>
+    %eks_cluster.Properties.ResourcesVpcConfig exists <<[EKS Security] EKS clusters must configure VPC settings>>
+    %eks_cluster.Properties.ResourcesVpcConfig.EndpointPublicAccess exists <<[EKS Security] Must explicitly configure public access>>
 
     when Properties.ResourcesVpcConfig.EndpointPublicAccess == true {
-        Properties.ResourcesVpcConfig.PublicAccessCidrs exists <<[EKS Security] EKS public access must specify allowed CIDRs>>
-        Properties.ResourcesVpcConfig.PublicAccessCidrs not empty <<[EKS Security] PublicAccessCidrs must not be empty>>
-        Properties.ResourcesVpcConfig.PublicAccessCidrs[*] {
+        %eks_cluster.Properties.ResourcesVpcConfig.PublicAccessCidrs exists <<[EKS Security] EKS public access must specify allowed CIDRs>>
+        %eks_cluster.Properties.ResourcesVpcConfig.PublicAccessCidrs not empty <<[EKS Security] PublicAccessCidrs must not be empty>>
+        %eks_cluster.Properties.ResourcesVpcConfig.PublicAccessCidrs[*] {
             this != '0.0.0.0/0' <<[EKS Security] EKS public access must not allow unrestricted CIDR (0.0.0.0/0)>>
         }
     }
@@ -144,19 +140,17 @@ rule compute_security_eks_public_access_restricted when
 
 # EKS secrets encryption
 # CloudForge Mapping: CONTAINER_SECURITY control
-rule compute_security_eks_secrets_encrypted when
-    resourceType == 'AWS::EKS::Cluster' {
+rule compute_security_eks_secrets_encrypted when %eks_cluster !empty {
 
-    Properties.EncryptionConfig exists <<[EKS Security] EKS clusters must encrypt Kubernetes secrets with KMS>>
+    %eks_cluster.Properties.EncryptionConfig exists <<[EKS Security] EKS clusters must encrypt Kubernetes secrets with KMS>>
 }
 
 # EKS control plane logging
 # CloudForge Mapping: CONTAINER_SECURITY control
-rule compute_security_eks_control_plane_logging when
-    resourceType == 'AWS::EKS::Cluster' {
+rule compute_security_eks_control_plane_logging when %eks_cluster !empty {
 
-    Properties.Logging exists <<[EKS Security] EKS clusters should enable control plane logging>>
-    Properties.Logging.ClusterLogging exists <<[EKS Security] EKS clusters must configure ClusterLogging>>
+    %eks_cluster.Properties.Logging exists <<[EKS Security] EKS clusters should enable control plane logging>>
+    %eks_cluster.Properties.Logging.ClusterLogging exists <<[EKS Security] EKS clusters must configure ClusterLogging>>
 }
 
 # ============================================================================
@@ -165,21 +159,19 @@ rule compute_security_eks_control_plane_logging when
 
 # EKS node group launch template
 # CloudForge Mapping: CONTAINER_SECURITY control
-rule compute_security_eks_nodegroup_launch_template when
-    resourceType == 'AWS::EKS::Nodegroup' {
+rule compute_security_eks_nodegroup_launch_template when %eks_nodegroup !empty {
 
-    Properties.LaunchTemplate exists <<[EKS Security] EKS node groups should use launch templates for consistent configuration>>
-    Properties.LaunchTemplate.Id exists OR Properties.LaunchTemplate.Name exists <<[EKS Security] Launch template must specify Id or Name>>
+    %eks_nodegroup.Properties.LaunchTemplate exists <<[EKS Security] EKS node groups should use launch templates for consistent configuration>>
+    %eks_nodegroup.Properties.LaunchTemplate.Id exists OR Properties.LaunchTemplate.Name exists <<[EKS Security] Launch template must specify Id or Name>>
 }
 
 # EKS node group remote access restrictions
 # CloudForge Mapping: CONTAINER_SECURITY control
-rule compute_security_eks_nodegroup_remote_access when
-    resourceType == 'AWS::EKS::Nodegroup' {
+rule compute_security_eks_nodegroup_remote_access when %eks_nodegroup !empty {
 
     when Properties.RemoteAccess exists {
-        Properties.RemoteAccess.SourceSecurityGroups exists <<[EKS Security] EKS node group SSH access must be restricted via security groups>>
-        Properties.RemoteAccess.SourceSecurityGroups not empty <<[EKS Security] Must specify at least one source security group>>
+        %eks_nodegroup.Properties.RemoteAccess.SourceSecurityGroups exists <<[EKS Security] EKS node group SSH access must be restricted via security groups>>
+        %eks_nodegroup.Properties.RemoteAccess.SourceSecurityGroups not empty <<[EKS Security] Must specify at least one source security group>>
     }
 }
 
@@ -189,19 +181,17 @@ rule compute_security_eks_nodegroup_remote_access when
 
 # ASG launch template required
 # CloudForge Mapping: CONFIGURATION_MANAGEMENT control
-rule compute_security_asg_launch_template when
-    resourceType == 'AWS::AutoScaling::AutoScalingGroup' {
+rule compute_security_asg_launch_template when %autoscaling_autoscalinggroup !empty {
 
-    Properties.LaunchTemplate exists OR Properties.MixedInstancesPolicy exists <<[Compute Security] Auto Scaling Groups should use launch templates>>
+    %autoscaling_autoscalinggroup.Properties.LaunchTemplate exists OR Properties.MixedInstancesPolicy exists <<[Compute Security] Auto Scaling Groups should use launch templates>>
 }
 
 # ASG health check configuration
 # CloudForge Mapping: HIGH_AVAILABILITY control
-rule compute_security_asg_health_check when
-    resourceType == 'AWS::AutoScaling::AutoScalingGroup' {
+rule compute_security_asg_health_check when %autoscaling_autoscalinggroup !empty {
 
-    Properties.HealthCheckType exists <<[Compute Security] Auto Scaling Groups should have health check type configured>>
-    Properties.HealthCheckGracePeriod exists <<[Compute Security] Auto Scaling Groups should configure health check grace period>>
+    %autoscaling_autoscalinggroup.Properties.HealthCheckType exists <<[Compute Security] Auto Scaling Groups should have health check type configured>>
+    %autoscaling_autoscalinggroup.Properties.HealthCheckGracePeriod exists <<[Compute Security] Auto Scaling Groups should configure health check grace period>>
 }
 
 # ============================================================================
@@ -210,11 +200,10 @@ rule compute_security_asg_health_check when
 
 # EBS volume delete on termination for attached volumes
 # CloudForge Mapping: RESOURCE_MANAGEMENT control
-rule compute_security_ebs_delete_on_termination when
-    resourceType == 'AWS::EC2::Instance' {
+rule compute_security_ebs_delete_on_termination when %ec2_instance !empty {
 
     when Properties.BlockDeviceMappings exists {
-        Properties.BlockDeviceMappings[*] {
+        %ec2_instance.Properties.BlockDeviceMappings[*] {
             when Ebs exists {
                 Ebs.DeleteOnTermination == true <<[Compute Security] EBS volumes should have DeleteOnTermination enabled>>
             }

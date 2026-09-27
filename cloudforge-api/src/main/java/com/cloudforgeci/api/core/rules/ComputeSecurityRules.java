@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * Compute security compliance validation rules.
@@ -111,13 +112,20 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
             complianceMode
         );
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (ebsResult == ComplianceMatrix.ValidationResult.FAIL) {
                 rules.add(ComplianceRule.fail(
                     "EBS-ENCRYPTION",
                     "EBS volumes must be encrypted",
                     "Enable EBS encryption for data-at-rest protection. " +
                     "Required by PCI-DSS, HIPAA, SOC 2, and GDPR."
+                ));
+            } else if (ebsResult == ComplianceMatrix.ValidationResult.WARN) {
+                LOG.warning("EBS encryption recommended but not required for " + complianceFrameworks);
+                rules.add(ComplianceRule.advisory(
+                    "EBS-ENCRYPTION",
+                    "EBS encryption is advisory for " + complianceFrameworks + " (recommended but not required)",
+                    "Enable EBS encryption for data-at-rest protection."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -128,7 +136,7 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
         }
 
         // Termination protection for production
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean terminationProtection = getBooleanSetting(ctx, "terminationProtection", false);
 
             if (!terminationProtection) {
@@ -166,7 +174,7 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
         }
 
         // EKS secrets encryption
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean eksSecretsEncryption = getBooleanSetting(ctx, "eksSecretsEncryption", false);
 
             if (!eksSecretsEncryption) {
@@ -230,7 +238,7 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
         }
 
         // IMDSv2 enforcement
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean imdsv2Required = getBooleanSetting(ctx, "imdsv2Required", true);
 
             if (!imdsv2Required) {
@@ -269,5 +277,19 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. IMDSv2 enforcement is checked
+     * once but satisfies both {@code EC2_IMDSV2} and {@code INSTANCE_METADATA_SECURITY}, which the
+     * matrix defines as near-duplicate controls. EC2 termination protection and EKS control-plane
+     * logging are conditional checks with no corresponding matrix control and are not claimed.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "ENCRYPTION_AT_REST", "CONTAINER_SECURITY", "EC2_IMDSV2", "INSTANCE_METADATA_SECURITY"
+        );
     }
 }

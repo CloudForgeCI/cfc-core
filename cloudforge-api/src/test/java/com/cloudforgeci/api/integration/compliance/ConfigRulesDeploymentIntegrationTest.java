@@ -1025,6 +1025,6 @@ public class ConfigRulesDeploymentIntegrationTest {
         synthesizeTemplate(builder.getStack());
 
         // Then: RESTRICTED_SSH rule should be deployed
-        assertConfigRuleExists("INCOMING_SSH_DISABLED");
+        assertConfigRuleExists("RESTRICTED_SSH");
     }
 }

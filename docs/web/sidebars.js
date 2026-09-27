@@ -26,7 +26,7 @@ const sidebars = {
         'ONBOARDING_QUICK_START',
         'ADVANCED',
         'compliance/QUICK_START_GUIDE',
-        'guides/INTERACTIVE_DEPLOYER',
+        'guides/LOCAL_EMULATOR_QUICK_START',
       ],
     },
     {

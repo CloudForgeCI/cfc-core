@@ -15,8 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * CDK-synthesis coverage for {@link ManagerOperatorIamSupport#marketplaceEntitlementStatement} —
- * the opt-in {@code aws-marketplace:GetEntitlements} grant gated behind {@code
- * DeploymentConfig.marketplaceDeploymentEnabled}.
+ * the {@code aws-marketplace:GetEntitlements} grant, given to every {@code cloudforge-manager}
+ * deployment regardless of {@code DeploymentConfig.marketplaceDeploymentEnabled}.
  */
 class ManagerMarketplaceEntitlementIamTest {
 
@@ -24,11 +24,10 @@ class ManagerMarketplaceEntitlementIamTest {
     private static final String SID = "CloudForgeManagerMarketplaceEntitlement";
 
     @Test
-    void managerStackWithFlagEnabledGetsEntitlementGrant() throws Exception {
+    void managerStackGetsEntitlementGrant() throws Exception {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "ManagerMarketplaceIam", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
-            .withMarketplaceDeploymentEnabled(true)
             .createVpc()
             .createAlb()
             .createEfs()
@@ -46,20 +45,6 @@ class ManagerMarketplaceEntitlementIamTest {
         // either way: the actual product checked is a constant compiled into cloudforge-manager.
         assertTrue(statement.path("Resource").asText().equals("*"));
         assertTrue(statement.path("Condition").isMissingNode());
-    }
-
-    @Test
-    void managerStackWithFlagUnsetOmitsGrant() throws Exception {
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
-                "ManagerMarketplaceIamUnset", SecurityProfile.DEV, RuntimeType.FARGATE)
-            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
-            .createVpc()
-            .createAlb()
-            .createEfs()
-            .createFargate();
-
-        Template template = Template.fromStack(builder.getStack());
-        assertFalse(templateContainsSid(template, SID));
     }
 
     @Test

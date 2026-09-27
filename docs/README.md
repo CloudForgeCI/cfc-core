@@ -19,7 +19,7 @@ CloudForge. For a short introduction and quick start, see the
 |---|---|
 | [Onboarding Quick Start](ONBOARDING_QUICK_START.md) | Deploy an example configuration to AWS, from development to production profiles |
 | [Local Emulator Quick Start](guides/LOCAL_EMULATOR_QUICK_START.md) | Build, start MiniStack or LocalStack, and deploy without an AWS account |
-| [Interactive Deployer](guides/INTERACTIVE_DEPLOYER.md) | The sample command-line tool in `cfc-testing` |
+| [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli) | Command-line tool for deploying and managing local emulators |
 | [Compliance Quick Start](compliance/QUICK_START_GUIDE.md) | Configure compliance validation |
 | [Sample project](https://github.com/CloudForgeCI/cloudforge-sample) | Standalone project that consumes the published artifacts |
 | [Sample project BOM template](architecture/cloudforge-sample-bom.template.md) | POM and layout for your own project |

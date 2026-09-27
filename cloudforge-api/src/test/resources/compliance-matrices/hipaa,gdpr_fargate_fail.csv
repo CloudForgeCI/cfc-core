@@ -2,3 +2,5 @@ configName,runtime,securityProfile,domainConfig,sslConfig,subdomainConfig,authMo
 FAIL_HIPAA_GDPR_FARGATE_no-auth,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"HIPAA,GDPR",true,,FAIL,jenkins,,eu-west-1,,,
 FAIL_HIPAA_GDPR_FARGATE_public-network,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,"HIPAA,GDPR",true,,FAIL,jenkins,,eu-west-1,,,
 FAIL_HIPAA_GDPR_FARGATE_insufficient-retention,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"HIPAA,GDPR",30,,FAIL,jenkins,,eu-west-1,,,
+FAIL_HIPAA_GDPR_FARGATE_no-auth_STAGING,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,none,public-no-nat,"HIPAA,GDPR",true,,FAIL,jenkins,,eu-west-1,,,
+FAIL_HIPAA_GDPR_FARGATE_public-network_STAGING,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,public-no-nat,"HIPAA,GDPR",true,,FAIL,jenkins,,eu-west-1,,,

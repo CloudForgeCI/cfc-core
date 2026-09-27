@@ -5,15 +5,18 @@ import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.interfaces.SecurityProfileConfiguration;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * SOC 2 (Service Organization Control 2) Trust Services Criteria compliance validation.
@@ -46,6 +49,12 @@ import java.util.logging.Logger;
 public class Soc2Rules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(Soc2Rules.class.getName());
 
+    /** Controls that still block STAGING synthesis: authentication, network isolation, and
+     *  SSL/TLS in transit. Everything else in STAGING is a visible, non-blocking finding. */
+    private static final Set<String> STAGING_BLOCKING_RULES = Set.of(
+        "SOC2-CC6.2-Auth", "SOC2-C1.2-Network", "SOC2-CC6.7-SSL", "SOC2-CC6.7-TLS"
+    );
+
 
     /**
      * Install SOC 2 compliance validation rules.
@@ -76,6 +85,13 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             rules.addAll(validateNetworkSecurity(ctx));
             rules.addAll(validateSystemMonitoring(ctx));
             rules.addAll(validateChangeManagement(ctx));
+            rules.addAll(validateMatrixControls(
+                ctx.securityProfileConfig.get().orElseThrow(
+                    () -> new IllegalStateException("SecurityProfileConfiguration not set")),
+                ctx.security,
+                ctx.runtime,
+                ctx.cfc.authMode(),
+                ctx.dbConnection.get().isPresent()));
 
             // Availability Criteria
             rules.addAll(validateAvailability(ctx));
@@ -83,34 +99,16 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             // Confidentiality Criteria
             rules.addAll(validateConfidentiality(ctx));
 
-            // Get all failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
-
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    // Advisory mode: Log warnings but don't fail synthesis
-                    LOG.warning("SOC 2 validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return List.of(); // Return empty list = no CDK synthesis errors
-                } else {
-                    // Enforce mode: Fail synthesis
-                    LOG.severe("SOC 2 validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");
-                    errors.forEach(err -> LOG.severe("  - " + err));
-                    return errors; // Return errors = CDK synthesis fails
-                }
-            } else {
-                LOG.info("SOC 2 Trust Services Criteria validation passed (" + rules.size() + " checks)");
-                return List.of();
+            // Advisory findings never block synthesis, logged regardless of complianceMode so they
+            // show up in the compliance report and the matrix runner's log capture.
+            List<ComplianceRule> advisoryRules = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+            if (!advisoryRules.isEmpty()) {
+                LOG.info("SOC 2 validation found " + advisoryRules.size() + " advisory recommendations (non-blocking):");
+                advisoryRules.forEach(r -> LOG.info("  [ADVISORY] " + r.ruleId() + ": " + r.description()));
             }
+
+            return ComplianceEnforcement.resolve(
+                "SOC 2", rules, complianceMode, ctx.security, STAGING_BLOCKING_RULES, LOG);
         });
     }
 
@@ -263,14 +261,21 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         // CC7.2: Security monitoring advisory (per ComplianceMatrix - recommended but not required)
         if (config.isSecurityMonitoringEnabled()) {
             rules.add(ComplianceRule.pass("SOC2-CC7.2-Monitoring", "Security monitoring enabled"));
+        } else {
+            rules.add(ComplianceRule.advisory("SOC2-CC7.2-Monitoring",
+                "Security monitoring is advisory for SOC2 (recommended but not required)",
+                "Enable securityMonitoringEnabled for CloudWatch alarms on anomalous activity."));
         }
-        // Note: When disabled, we don't fail - it's advisory for SOC2 per ComplianceMatrix
 
         // CC7.2: Threat detection
         // NOTE: GuardDuty validation is now handled by ThreatProtectionRules using ComplianceMatrix
         // which marks it as ADVISORY for SOC2 (recommended but not required)
         if (config.isGuardDutyEnabled()) {
             rules.add(ComplianceRule.pass("SOC2-CC7.2-GuardDuty", "GuardDuty threat detection enabled"));
+        } else {
+            rules.add(ComplianceRule.advisory("SOC2-CC7.2-GuardDuty",
+                "GuardDuty is advisory for SOC2 (recommended but not required)",
+                "Enable guardDutyEnabled for automated threat detection."));
         }
 
         // CC7.2: Log collection for monitoring
@@ -397,6 +402,111 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
     }
 
     /**
+     * Controls that {@link ComplianceMatrix} marks REQUIRED for SOC2 and that the checks above do not
+     * already cover. Each check reads the security profile, so it fails when the profile leaves a
+     * required control off. A control the matrix does not mark REQUIRED for SOC2 produces no rule.
+     */
+    List<ComplianceRule> validateMatrixControls(
+            SecurityProfileConfiguration config,
+            SecurityProfile profile,
+            RuntimeType runtime,
+            AuthMode authMode,
+            boolean databaseProvisioned) {
+        List<ComplianceRule> rules = new ArrayList<>();
+
+        // CC6.1: multi-factor authentication for authenticated access
+        if (authMode != AuthMode.NONE) {
+            addRequired(rules, ComplianceMatrix.SecurityControl.AUTHENTICATION, "SOC2-CC6.1-MFA",
+                "Multi-factor authentication required for user access (CC6.1)",
+                "Require MFA on the identity provider that fronts the application.",
+                config.isMfaRequired());
+        }
+
+        // CC6.6: instance metadata protection applies to EC2 only; Fargate has no instance metadata service
+        if (runtime == RuntimeType.EC2) {
+            addRequired(rules, ComplianceMatrix.SecurityControl.EC2_IMDSV2, "SOC2-CC6.6-IMDSv2",
+                "EC2 instances must require IMDSv2 (CC6.1/CC6.6)",
+                "Set imdsv2Required=true.",
+                config.isImdsv2Required());
+        }
+
+        // Log-data confidentiality, anomaly detection, DNS visibility and audit-trail integrity are
+        // production controls: the STAGING profile leaves them off by design ("optional for testing").
+        if (profile == SecurityProfile.PRODUCTION) {
+            addRequired(rules, ComplianceMatrix.SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION,
+                "SOC2-CC6.1-LogEncryption",
+                "CloudWatch log groups must be encrypted with a customer-managed KMS key (CC6.1)",
+                "Enable cloudWatchLogsKmsEncryptionEnabled.",
+                config.isCloudWatchLogsKmsEncryptionEnabled());
+            addRequired(rules, ComplianceMatrix.SecurityControl.CLOUDTRAIL_INSIGHTS, "SOC2-CC7.2-CloudTrailInsights",
+                "CloudTrail Insights required to detect anomalous API activity (CC7.2)",
+                "Enable CloudTrail Insights.",
+                config.isCloudTrailInsightsEnabled());
+            addRequired(rules, ComplianceMatrix.SecurityControl.ROUTE53_QUERY_LOGGING, "SOC2-CC7.2-Route53QueryLogging",
+                "Route53 DNS query logging required for network monitoring (CC7.2)",
+                "Enable Route53 query logging.",
+                config.isRoute53QueryLoggingEnabled());
+            addRequired(rules, ComplianceMatrix.SecurityControl.S3_OBJECT_LOCK, "SOC2-CC7.2-AuditLogImmutability",
+                "S3 Object Lock required so audit logs cannot be altered or deleted (CC7.2)",
+                "Enable S3 Object Lock on the audit-log buckets.",
+                config.isS3ObjectLockEnabled());
+            // CC7.2: Audit Manager gives continuous, automated evidence collection for the controls
+            // above. isAuditManagerEnabled() now reads DeploymentConfig#auditManagerServiceEnabled,
+            // a field independent of DeploymentConfig#auditManagerEnabled (the master gate
+            // SecurityRules.install() uses to decide whether any FrameworkRules validation runs at
+            // all) -- so this check is no longer circular the way it would be against that flag.
+            addRequired(rules, ComplianceMatrix.SecurityControl.AUDIT_MANAGER, "SOC2-CC7.2-AuditManager",
+                "AWS Audit Manager required for continuous compliance evidence collection (CC7.2)",
+                "Enable auditManagerServiceEnabled.",
+                config.isAuditManagerEnabled());
+            // CC7.2: log retention -- the matrix doesn't cite a specific period for SOC2 the way
+            // HIPAA (6 years) or FedRAMP (3 years) do, so this uses PCI-DSS's 1-year minimum as a
+            // reasonable floor for forensic analysis; SOC2 audits typically examine a trailing
+            // 12-month period.
+            addRequired(rules, ComplianceMatrix.SecurityControl.LOG_RETENTION, "SOC2-CC7.2-MatrixLogRetention",
+                "Log retention must be at least 1 year for forensic analysis (CC7.2)",
+                "Set logRetentionDays to at least 365.",
+                isRetentionSufficient(config.getLogRetentionDays()));
+        }
+
+        // A1.2/A1.3: database availability and protection, only when a database was actually provisioned
+        if (databaseProvisioned && profile == SecurityProfile.PRODUCTION) {
+            addRequired(rules, ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ, "SOC2-A1.2-DatabaseMultiAZ",
+                "RDS Multi-AZ required for database availability (A1.2)",
+                "Enable Multi-AZ on the RDS instance.",
+                config.isRdsDatabaseMultiAzEnabled());
+            addRequired(rules, ComplianceMatrix.SecurityControl.DELETION_PROTECTION,
+                "SOC2-A1.3-DatabaseDeletionProtection",
+                "RDS deletion protection required to prevent accidental data loss (A1.3)",
+                "Enable RDS deletion protection.",
+                config.isRdsDeletionProtectionEnabled());
+        }
+
+        return rules;
+    }
+
+    private static void addRequired(List<ComplianceRule> rules, ComplianceMatrix.SecurityControl control,
+                                    String ruleId, String description, String remediation, boolean enabled) {
+        if (!control.isRequired("SOC2")) {
+            return;
+        }
+        rules.add(enabled
+            ? ComplianceRule.pass(ruleId, description)
+            : ComplianceRule.fail(ruleId, description, remediation));
+    }
+
+    /**
+     * Auto-scaling is only meaningful for an application that supports running several instances and
+     * is not deliberately pinned to one; a single-instance deployment has nothing to scale.
+     *
+     * @param specSupportsScaling whether the application spec supports more than one instance
+     * @param maxInstances the effective maximum instance count, or {@code null} when unspecified
+     */
+    static boolean autoScalingApplies(boolean specSupportsScaling, Integer maxInstances) {
+        return specSupportsScaling && (maxInstances == null || maxInstances > 1);
+    }
+
+    /**
      * A1.1, A1.2, A1.3: System Availability.
      * The entity maintains, monitors, and evaluates system availability.
      * (Only validated if organization claims Availability criteria)
@@ -408,8 +518,8 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             () -> new IllegalStateException("SecurityProfileConfiguration not set")
         );
 
-        // Skip availability checks for non-production
-        if (ctx.security != SecurityProfile.PRODUCTION) {
+        // Skip availability checks outside production and staging
+        if (ctx.security != SecurityProfile.PRODUCTION && ctx.security != SecurityProfile.STAGING) {
             return rules;
         }
 
@@ -424,15 +534,20 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             rules.add(ComplianceRule.pass("SOC2-A1.2-MultiAZ", "Multi-AZ high availability enabled"));
         }
 
-        // A1.2: Auto-scaling for availability
-        if (!config.isAutoScalingEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-A1.2-AutoScaling",
-                "Auto-scaling recommended for handling demand and maintaining availability",
-                "Enable auto-scaling to handle traffic spikes."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-A1.2-AutoScaling", "Auto-scaling enabled"));
+        // A1.2: Auto-scaling for availability, for applications that can run more than one instance
+        Integer maxInstances = ctx.maxInstanceCapacity.get().orElse(ctx.cfc.maxInstanceCapacity());
+        boolean specSupportsScaling = ctx.applicationSpec.get()
+            .map(com.cloudforge.core.interfaces.ApplicationSpec::supportsAutoScaling).orElse(true);
+        if (autoScalingApplies(specSupportsScaling, maxInstances)) {
+            if (!config.isAutoScalingEnabled()) {
+                rules.add(ComplianceRule.fail(
+                    "SOC2-A1.2-AutoScaling",
+                    "Auto-scaling recommended for handling demand and maintaining availability",
+                    "Enable auto-scaling to handle traffic spikes."
+                ));
+            } else {
+                rules.add(ComplianceRule.pass("SOC2-A1.2-AutoScaling", "Auto-scaling enabled"));
+            }
         }
 
         // A1.3: Backup and recovery
@@ -446,14 +561,15 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             rules.add(ComplianceRule.pass("SOC2-A1.3-Backup", "Automated backups enabled"));
         }
 
-        if (!config.isCrossRegionBackupEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-A1.3-CrossRegion",
-                "Cross-region backup recommended for disaster recovery",
-                "Implement geographic redundancy for business continuity."
-            ));
+        // Cross-region copy is a recommendation, so it never fails: it reports a pass only when a
+        // destination vault is configured and backups are actually copied there.
+        String destinationVault = ctx.cfc.backupCrossRegionVaultArn();
+        if (config.isCrossRegionBackupEnabled() && destinationVault != null && !destinationVault.isBlank()) {
+            rules.add(ComplianceRule.pass("SOC2-A1.3-CrossRegion", "Cross-region backup copy configured"));
         } else {
-            rules.add(ComplianceRule.pass("SOC2-A1.3-CrossRegion", "Cross-region backup enabled"));
+            rules.add(ComplianceRule.advisory("SOC2-A1.3-CrossRegion",
+                "Cross-region backup copy is a recommendation, not required",
+                "Set crossRegionBackupEnabled = true and backupCrossRegionVaultArn for geographic redundancy."));
         }
 
         return rules;
@@ -519,6 +635,29 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
     }
 
     /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * FrameworkRules#claimedControls}. Controls the matrix marks REQUIRED for SOC2 but left off
+     * this list belong to always-load cross-framework classes instead (CDN_SECURITY,
+     * CERTIFICATE_MANAGEMENT, CONTAINER_SECURITY, CREDENTIAL_ROTATION, DATABASE_ACCESS_CONTROL,
+     * DATABASE_LOGGING, DATABASE_PITR, INSTANCE_METADATA_SECURITY, LAMBDA_SECURITY,
+     * ROOT_ACCOUNT_PROTECTION, SNS_KMS_ENCRYPTION, API_SECURITY -- see KeyManagementRules,
+     * DatabaseSecurityRules, IamSecurityRules and similar), except LAMBDA_SECURITY and
+     * DATABASE_ACCESS_CONTROL (genuine gaps: no class anywhere checks them).
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "ACCESS_CONTROL", "AUTHENTICATION", "ENCRYPTION_AT_REST", "NETWORK_SEGMENTATION",
+            "ENCRYPTION_IN_TRANSIT", "HTTPS_STRICT", "WAF_PROTECTION", "SECURITY_MONITORING",
+            "THREAT_DETECTION", "AUDIT_LOGGING", "NETWORK_FLOW_LOGS", "VULNERABILITY_MANAGEMENT",
+            "CHANGE_MANAGEMENT", "HIGH_AVAILABILITY", "BACKUP_RECOVERY",
+            "EC2_IMDSV2", "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "CLOUDTRAIL_INSIGHTS",
+            "ROUTE53_QUERY_LOGGING", "S3_OBJECT_LOCK", "DATABASE_MULTI_AZ", "DELETION_PROTECTION",
+            "LOG_RETENTION", "AUDIT_MANAGER"
+        );
+    }
+
+    /**
      * Generate SOC 2 Trust Services Criteria compliance report.
      */
     public String generateComplianceReport(SystemContext ctx) {
@@ -541,7 +680,7 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         report.append("  ✓ CC8.1 - Change Management: ").append(config.isCloudTrailEnabled() ? "ENABLED" : "DISABLED").append("\n");
         report.append("\n");
 
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             report.append("Availability Criteria (A):\n");
             report.append("  ✓ A1.2 - High Availability: ").append(config.isMultiAzEnforced() ? "ENABLED" : "DISABLED").append("\n");
             report.append("  ✓ A1.2 - Auto-Scaling: ").append(config.isAutoScalingEnabled() ? "ENABLED" : "DISABLED").append("\n");
@@ -558,6 +697,34 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         report.append("Type I: Design of controls | Type II: Operating effectiveness over time\n");
         report.append("\n");
 
+        appendAdvisorySection(report, ctx);
+
         return report.toString();
+    }
+
+    /**
+     * Recommendations for controls that are ADVISORY-tier (not blocking) and currently off.
+     * Runs the same checks {@link #install} does, so this reflects live findings, not a
+     * separate hand-maintained list.
+     */
+    private void appendAdvisorySection(StringBuilder report, SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+        rules.addAll(validateAccessControls(ctx));
+        rules.addAll(validateNetworkSecurity(ctx));
+        rules.addAll(validateSystemMonitoring(ctx));
+        rules.addAll(validateChangeManagement(ctx));
+        rules.addAll(validateAvailability(ctx));
+        rules.addAll(validateConfidentiality(ctx));
+
+        List<ComplianceRule> advisories = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+        if (advisories.isEmpty()) {
+            return;
+        }
+        report.append("Recommendations (advisory, non-blocking):\n");
+        for (ComplianceRule rule : advisories) {
+            report.append("  - ").append(rule.ruleId()).append(": ").append(rule.description()).append("\n");
+            rule.recommendation().ifPresent(r -> report.append("      ").append(r).append("\n"));
+        }
+        report.append("\n");
     }
 }

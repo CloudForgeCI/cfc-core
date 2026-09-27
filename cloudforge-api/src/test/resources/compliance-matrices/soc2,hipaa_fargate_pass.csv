@@ -3,3 +3,5 @@ FARGATE_PRODUCTION_SOC2_HIPAA_alb-oidc_private-with-nat,FARGATE,PRODUCTION,with-
 FARGATE_PRODUCTION_SOC2_HIPAA_alb-oidc_private-with-nat_subdomain,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,true,PASS,jenkins,,,,,
 FARGATE_PRODUCTION_SOC2_HIPAA_retention-2190,FARGATE,PRODUCTION,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,true,PASS,jenkins,,,,,
 FARGATE_PRODUCTION_SOC2_HIPAA_subdomain_retention-2190,FARGATE,PRODUCTION,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",2190,true,PASS,jenkins,,,,,
+FARGATE_PRODUCTION_SOC2_HIPAA_alb-oidc_private-with-nat_STAGING,FARGATE,STAGING,with-domain,ssl-enabled,no-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,true,PASS,jenkins,,,,,
+FARGATE_PRODUCTION_SOC2_HIPAA_alb-oidc_private-with-nat_subdomain_STAGING,FARGATE,STAGING,with-domain,ssl-enabled,with-subdomain,alb-oidc,private-with-nat,"SOC2,HIPAA",,true,PASS,jenkins,,,,,

@@ -183,6 +183,22 @@ public class TestInfrastructureBuilder {
         return this;
     }
 
+    /**
+     * Sets a fake {@code ctx.dbConnection} Slot without provisioning a real RDS instance --
+     * lets tests exercise checks that key off "was a database provisioned" (e.g.
+     * DatabaseSecurityRules' DB-ACTIVITY-STREAMS and DATABASE_ACCESS_CONTROL checks) without the
+     * cost of a full RdsFactory synthesis.
+     */
+    public TestInfrastructureBuilder createMockDbConnection() {
+        ensureSystemContextCreated();
+        ctx.dbConnection.set(new com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection(
+            "mock-db.example.com", 5432, "testdb", "testuser",
+            "arn:aws:secretsmanager:us-east-1:123456789012:secret:mock-db-secret",
+            "postgres", "15", java.util.List.of()
+        ));
+        return this;
+    }
+
     public TestInfrastructureBuilder createMockEfsSecurityGroup() {
         // Create a mock EFS security group for EC2 runtime to satisfy validation
         SecurityGroup mockEfsSg = SecurityGroup.Builder.create(stack, "MockEfsSg")

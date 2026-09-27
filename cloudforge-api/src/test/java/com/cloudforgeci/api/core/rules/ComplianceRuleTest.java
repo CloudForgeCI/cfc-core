@@ -156,6 +156,7 @@ class ComplianceRuleTest {
             "Test description",
             Optional.of("test-config-rule"),
             true,
+            Optional.empty(),
             Optional.empty()
         );
 
@@ -214,5 +215,56 @@ class ComplianceRuleTest {
         assertTrue(str.contains("Test"));
         assertTrue(str.contains("config-test"));
         assertTrue(str.contains("true")); // passed=true
+    }
+
+    @Test
+    void testAdvisoryRuleWithoutConfigRuleId() {
+        // When: Creating an advisory rule without Config rule ID
+        ComplianceRule rule = ComplianceRule.advisory("SOC2-CC7.2-Monitoring",
+            "Security monitoring is advisory for SOC2",
+            "Enable securityMonitoringEnabled for CloudWatch alarms on anomalous activity.");
+
+        // Then: Rule should pass (never blocks) and carry the recommendation
+        assertTrue(rule.passed());
+        assertEquals("SOC2-CC7.2-Monitoring", rule.ruleId());
+        assertEquals(Optional.empty(), rule.configRuleId());
+        assertEquals(Optional.empty(), rule.errorMessage());
+        assertEquals(Optional.of("Enable securityMonitoringEnabled for CloudWatch alarms on anomalous activity."),
+            rule.recommendation());
+        assertTrue(rule.isAdvisory());
+    }
+
+    @Test
+    void testAdvisoryRuleWithConfigRuleId() {
+        // When: Creating an advisory rule with Config rule ID
+        ComplianceRule rule = ComplianceRule.advisory("GDPR-GUARDDUTY",
+            "GuardDuty is advisory for GDPR",
+            "GuardDutyEnabled",
+            "Enable guardDutyEnabled for automated breach detection.");
+
+        // Then: Rule should pass and carry the Config rule ID and recommendation
+        assertTrue(rule.passed());
+        assertEquals(Optional.of("GuardDutyEnabled"), rule.configRuleId());
+        assertEquals(Optional.of("Enable guardDutyEnabled for automated breach detection."), rule.recommendation());
+        assertTrue(rule.isAdvisory());
+    }
+
+    @Test
+    void testIsAdvisoryFalseForCleanPassAndFail() {
+        // A clean pass (no recommendation) is not advisory
+        ComplianceRule cleanPass = ComplianceRule.pass("PASS-CLEAN", "Description");
+        assertFalse(cleanPass.isAdvisory());
+        assertEquals(Optional.empty(), cleanPass.recommendation());
+
+        // A failing rule is not advisory either, even though it also has no recommendation
+        ComplianceRule failing = ComplianceRule.fail("FAIL-1", "Description", "error");
+        assertFalse(failing.isAdvisory());
+    }
+
+    @Test
+    void testAdvisoryNeverBlocksSynthesis() {
+        // toErrorString() must stay empty for an advisory finding, same as a clean pass
+        ComplianceRule rule = ComplianceRule.advisory("ADV-1", "Description", "recommendation");
+        assertEquals(Optional.empty(), rule.toErrorString());
     }
 }

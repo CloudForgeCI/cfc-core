@@ -111,12 +111,11 @@ class MessagingSecurityGuardTest {
     // ========== Secrets Manager Security Rules ==========
 
     @Test
-    void testSecretsManagerReplicationRule() throws IOException {
+    void testSecretsManagerReplicationIsNotRequired() throws IOException {
+        // Cross-region replication is a disaster-recovery choice, not a compliance baseline.
         String content = loadGuardFile();
-        assertTrue(content.contains("rule messaging_security_secretsmanager_replication"),
-            "Should have Secrets Manager replication rule");
-        assertTrue(content.contains("ReplicaRegions"),
-            "Should check for ReplicaRegions property");
+        assertFalse(content.contains("rule messaging_security_secretsmanager_replication"),
+            "Secrets Manager replication should not be a blocking rule");
     }
 
     @Test
@@ -207,7 +206,6 @@ class MessagingSecurityGuardTest {
     @ValueSource(strings = {
         "ENCRYPTION_AT_REST",
         "ACCESS_CONTROL",
-        "HIGH_AVAILABILITY",
         "KEY_MANAGEMENT",
         "ERROR_HANDLING",
         "CONFIGURATION_MANAGEMENT"

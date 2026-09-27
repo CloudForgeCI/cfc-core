@@ -236,12 +236,34 @@ public class VisibilityExpressionEvaluator {
             return parseNumber();
         }
 
-        // Unquoted identifier (for enum values like FARGATE, EC2, PRODUCTION)
+        // Unquoted identifier (for enum values like FARGATE, EC2, PRODUCTION, or hyphenated
+        // application IDs like cloudforge-manager)
         if (position < expression.length() && isIdentifierStart(expression.charAt(position))) {
-            return parseIdentifier();
+            return parseValueIdentifier();
         }
 
         throw new IllegalArgumentException("Expected value at position " + position);
+    }
+
+    /**
+     * Parses an unquoted value identifier: [a-zA-Z_][a-zA-Z0-9_-]*. Unlike {@link
+     * #parseIdentifier()} (used for field names and capability checks), this allows hyphens so
+     * hyphenated application IDs (e.g. {@code cloudforge-manager}) can appear on the right-hand
+     * side of a comparison without quotes.
+     */
+    private String parseValueIdentifier() {
+        skipWhitespace();
+        int start = position;
+        if (position >= expression.length() || !isIdentifierStart(expression.charAt(position))) {
+            throw new IllegalArgumentException("Expected identifier at position " + position);
+        }
+
+        while (position < expression.length()
+            && (isIdentifierPart(expression.charAt(position)) || expression.charAt(position) == '-')) {
+            position++;
+        }
+
+        return expression.substring(start, position);
     }
 
     /**

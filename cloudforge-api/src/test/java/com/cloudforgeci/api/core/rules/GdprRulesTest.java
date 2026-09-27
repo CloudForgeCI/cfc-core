@@ -730,6 +730,7 @@ class GdprRulesTest {
             customContext.putIfAbsent("s3EncryptionEnabled", "true");
             customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
             customContext.putIfAbsent("cloudTrailEnabled", "true");
+            customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
             customContext.putIfAbsent("enableFlowlogs", "true");
             customContext.putIfAbsent("albAccessLogging", "true");
             customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -805,6 +806,7 @@ class GdprRulesTest {
             if (hasRequirement) {
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -831,6 +833,9 @@ class GdprRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new GdprRules().install(builder.getSystemContext());
 
+        // Encryption alone isn't in GDPR's STAGING_BLOCKING_RULES, but the baseline block above
+        // only sets authMode/enableSsl/networkMode when encryption is also fully compliant, so a
+        // missing-encryption STAGING row also fails via auth/network/ssl left at their defaults.
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             if (!ebsEncryption || !efsEncryption || !s3Encryption) {
@@ -871,16 +876,17 @@ class GdprRulesTest {
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
 
-        // Add baseline GDPR requirements for tests expecting to pass
-        // Network isolation is only required for PRODUCTION, so STAGING with public network still needs other requirements
+        // Add baseline GDPR requirements for tests expecting to pass. Network isolation blocks
+        // both PRODUCTION and STAGING.
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
-            boolean shouldPass = (secProfile != SecurityProfile.PRODUCTION || networkMode.equals("private-with-nat"));
+            boolean shouldPass = networkMode.equals("private-with-nat");
             if (shouldPass) {
                 customContext.putIfAbsent("ebsEncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -907,7 +913,9 @@ class GdprRulesTest {
         new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
-        if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
+        // Network isolation blocks both PRODUCTION and STAGING -- it's one of the fixed
+        // auth/network/SSL controls that stay blocking in STAGING.
+        if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Check against NetworkMode.PUBLIC's JSON value (legacy "public-no-nat" is converted to "public")
             NetworkMode mode = NetworkMode.fromString(networkMode);
             if (mode == NetworkMode.PUBLIC) {
@@ -917,7 +925,7 @@ class GdprRulesTest {
 
         if (shouldFail) {
             assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for public network in PRODUCTION: " + profile + " network=" + networkMode);
+                "Expected validation to fail for public network: " + profile + " network=" + networkMode);
         } else {
             assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
                 "Expected validation to pass: " + profile + " network=" + networkMode);
@@ -982,6 +990,7 @@ class GdprRulesTest {
                     customContext.putIfAbsent("automatedBackupEnabled", "true");
                     customContext.putIfAbsent("awsConfigEnabled", "true");
                     customContext.putIfAbsent("wafEnabled", "true");
+                    customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
                 }
             }
         }
@@ -994,6 +1003,9 @@ class GdprRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new GdprRules().install(builder.getSystemContext());
 
+        // Logging isn't in GDPR's STAGING_BLOCKING_RULES, but the baseline block above only sets
+        // authMode/enableSsl/networkMode when logging is also fully compliant, so a
+        // missing-logging STAGING row also fails via auth/network/ssl left at their defaults.
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             if (!cloudTrail || !flowLogs || !albLogging) {
@@ -1070,6 +1082,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -1095,8 +1108,14 @@ class GdprRulesTest {
         new GdprRules().install(builder.getSystemContext());
 
         boolean shouldFail = false;
-        if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
+        if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
             if (!hasCert || !efsTransit || authMode.equals("none")) {
+                shouldFail = true;
+            }
+        } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
+            // SSL/TLS (hasCert) and authentication still block STAGING; EFS in-transit encryption
+            // does not.
+            if (!hasCert || authMode.equals("none")) {
                 shouldFail = true;
             }
         }
@@ -1150,6 +1169,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -1174,12 +1194,19 @@ class GdprRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new GdprRules().install(builder.getSystemContext());
 
+        // Monitoring/backup aren't in GDPR's STAGING_BLOCKING_RULES, but the baseline block above
+        // only sets authMode/enableSsl/networkMode when hasRequirement holds, so a
+        // missing-monitoring STAGING row also fails via auth/network/ssl left at their defaults.
         boolean shouldFail = false;
-        if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
+        if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
             if (!securityMonitoring) {
                 shouldFail = true;
             }
-            if (secProfile == SecurityProfile.PRODUCTION && !automatedBackup) {
+            if (!automatedBackup) {
+                shouldFail = true;
+            }
+        } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
+            if (!securityMonitoring) {
                 shouldFail = true;
             }
         }
@@ -1226,6 +1253,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
@@ -1309,6 +1337,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
@@ -1333,6 +1362,9 @@ class GdprRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new GdprRules().install(builder.getSystemContext());
 
+        // GuardDuty/monitoring aren't in GDPR's STAGING_BLOCKING_RULES, but the baseline block
+        // above only sets authMode/enableSsl/networkMode when hasRequirement holds, so a
+        // missing-detection STAGING row also fails via auth/network/ssl left at their defaults.
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             if (!guardDuty || !securityMonitoring) {
@@ -1382,6 +1414,7 @@ class GdprRulesTest {
                 customContext.putIfAbsent("s3EncryptionEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");

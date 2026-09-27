@@ -5,6 +5,7 @@ import com.cloudforge.core.annotation.ComplianceFramework;
 import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.NetworkMode;
+import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.FrameworkRules;
 import com.cloudforgeci.api.core.SystemContext;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * PCI-DSS compliance validation rules.
@@ -39,6 +41,19 @@ import java.util.logging.Logger;
 )
 public class PciDssRules implements FrameworkRules<SystemContext> {
     private static final Logger LOG = Logger.getLogger(PciDssRules.class.getName());
+
+    /** Controls that still block STAGING synthesis: authentication, network isolation,
+     *  SSL/TLS in transit, encryption at rest, and audit logging -- cardholder data may exist
+     *  in STAGING, so these can't be downgraded to a non-blocking finding there.
+     *  Everything else in STAGING is a visible, non-blocking finding. */
+    private static final Set<String> STAGING_BLOCKING_RULES = Set.of(
+        "PCI-DSS-Req-8.2-Auth", "PCI-DSS-Req-1.3-Network", "PCI-DSS-Req-4.1-SSL", "PCI-DSS-Req-4.1-TLS",
+        "PCI-DSS-Req-4.1-HTTPSStrict",
+        "PCI-DSS-Req-3.4-EBS", "PCI-DSS-Req-3.4-EFS", "PCI-DSS-Req-3.4-S3", "PCI-DSS-Req-3.4-LogEncryption",
+        "PCI-DSS-Req-10.2-CloudTrail", "PCI-DSS-Req-10.3-FlowLogs", "PCI-DSS-Req-10.5-ALB",
+        "PCI-DSS-Req-10.7-AuditLogImmutability", "PCI-DSS-Req-8.3-MFA", "PCI-DSS-Req-4.1-EFS-Transit",
+        "PCI-DSS-Req-8.3.6-Password", "PCI-DSS-Req-10.7-Retention"
+    );
 
     // PCI DSS v4.0 Req 8.3.6: Minimum 12 character passwords (increased from 7 in v3.2.1)
     private static final int MIN_PASSWORD_LENGTH = 12;
@@ -73,8 +88,9 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public void install(SystemContext ctx) {
-        if (ctx.security != SecurityProfile.PRODUCTION) {
-            LOG.info("PCI-DSS validation rules only enforced for PRODUCTION security profile");
+        // PCI-DSS enforcement for production and staging (cardholder data environments may exist in both)
+        if (ctx.security != SecurityProfile.PRODUCTION && ctx.security != SecurityProfile.STAGING) {
+            LOG.info("PCI-DSS validation rules enforced for PRODUCTION and STAGING profiles only");
             return;
         }
 
@@ -109,32 +125,19 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
             // Requirement 11: Security Monitoring
             rules.addAll(validateSecurityMonitoring(ctx));
 
-            // Get all failed rules
-            List<ComplianceRule> failedRules = rules.stream()
-                .filter(rule -> !rule.passed())
-                .toList();
+            // Matrix-required controls not covered above
+            rules.addAll(validateMatrixControls(ctx));
 
-            // Convert to error strings
-            List<String> errors = failedRules.stream()
-                .map(ComplianceRule::toErrorString)
-                .flatMap(Optional::stream)
-                .toList();
-
-            if (!errors.isEmpty()) {
-                if (complianceMode == ComplianceMode.ADVISORY) {
-                    LOG.warning("PCI-DSS validation found " + errors.size() + " recommendations (ADVISORY mode - not blocking)");
-                    errors.forEach(err -> LOG.warning("  - " + err));
-                    ComplianceFindingsCollector.record(failedRules);
-                    return List.of();
-                } else {
-                    LOG.severe("PCI-DSS validation failed with " + errors.size() + " violations (ENFORCE mode - blocking deployment)");
-                    errors.forEach(err -> LOG.severe("  - " + err));
-                    return errors;
-                }
-            } else {
-                LOG.info("PCI-DSS validation passed (" + rules.size() + " checks)");
-                return List.of();
+            // Advisory findings never block synthesis, logged regardless of complianceMode so they
+            // show up in the compliance report and the matrix runner's log capture.
+            List<ComplianceRule> advisoryRules = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+            if (!advisoryRules.isEmpty()) {
+                LOG.info("PCI-DSS validation found " + advisoryRules.size() + " advisory recommendations (non-blocking):");
+                advisoryRules.forEach(r -> LOG.info("  [ADVISORY] " + r.ruleId() + ": " + r.description()));
             }
+
+            return ComplianceEnforcement.resolve(
+                "PCI-DSS", rules, complianceMode, ctx.security, STAGING_BLOCKING_RULES, LOG);
         });
     }
 
@@ -588,9 +591,9 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
     private List<ComplianceRule> validateVendorDefaults(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        // For PRODUCTION profile, assume operational controls are in place
+        // For PRODUCTION and STAGING profiles, assume operational controls are in place
         // This matches the infrastructure-centric approach of SOC2 rules
-        boolean isProduction = ctx.security == SecurityProfile.PRODUCTION;
+        boolean isProduction = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
 
         // Requirement 2.1: Default passwords must be changed
         // PRODUCTION profile requires strong IAM policies and authentication
@@ -709,6 +712,124 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
     }
 
     /**
+     * Controls that {@link ComplianceMatrix} marks REQUIRED for PCI-DSS and that the checks above
+     * do not already cover. VULNERABILITY_SCANNING, BACKUP_RECOVERY and HIGH_AVAILABILITY are
+     * REQUIRED too, but are already covered by always-load cross-framework classes (AdvancedMonitoringRules/
+     * ThreatProtectionRules, DatabaseSecurityRules/IncidentResponseRules, ElbSecurityRules), so they're
+     * not duplicated here. LAMBDA_SECURITY and DATABASE_ACCESS_CONTROL still have no check anywhere
+     * in the codebase -- see the compliance backlog for tracking those as their own fix.
+     */
+    private List<ComplianceRule> validateMatrixControls(SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+
+        var config = ctx.securityProfileConfig.get().orElseThrow(
+            () -> new IllegalStateException("SecurityProfileConfiguration not set")
+        );
+
+        // Req 4.1: HTTPS-only mode -- distinct from "SSL/TLS enabled" (validateEncryption already
+        // checks that): this verifies the HTTP listener is actually disabled, not just that HTTPS
+        // is also available alongside it.
+        if (!config.isHttpsStrictEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-4.1-HTTPSStrict",
+                "HTTP listener must be disabled when SSL is enabled (PCI-DSS Req 4.1)",
+                "Set httpsStrictEnabled = true to disable the port-80 listener."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-4.1-HTTPSStrict",
+                "HTTP listener disabled, HTTPS-only mode enforced (PCI-DSS Req 4.1)"
+            ));
+        }
+
+        // Req 3.4: CloudWatch Logs may contain cardholder data in application log output.
+        if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-3.4-LogEncryption",
+                "CloudWatch log groups must be encrypted with a customer-managed KMS key (PCI-DSS Req 3.4)",
+                "Enable cloudWatchLogsKmsEncryptionEnabled."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-3.4-LogEncryption",
+                "CloudWatch log groups encrypted with a customer-managed KMS key (PCI-DSS Req 3.4)"
+            ));
+        }
+
+        // Req 10.7: audit logs must be tamper-evident.
+        if (!config.isS3ObjectLockEnabled()) {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-10.7-AuditLogImmutability",
+                "S3 Object Lock required so audit logs cannot be altered or deleted (PCI-DSS Req 10.7)",
+                "Enable S3 Object Lock on the audit-log buckets."
+            ));
+        } else {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-10.7-AuditLogImmutability",
+                "S3 Object Lock enabled on audit-log buckets (PCI-DSS Req 10.7)"
+            ));
+        }
+
+        // Req 6.4.5: change control -- CloudTrail plus AWS Config together give a record of every
+        // change and detect drift from the deployed baseline.
+        if (config.isCloudTrailEnabled() && config.isAwsConfigEnabled()) {
+            rules.add(ComplianceRule.pass(
+                "PCI-DSS-Req-6.4.5-ChangeManagement",
+                "Change tracking enabled via CloudTrail and AWS Config (PCI-DSS Req 6.4.5)"
+            ));
+        } else {
+            rules.add(ComplianceRule.fail(
+                "PCI-DSS-Req-6.4.5-ChangeManagement",
+                "Change control tracking required (PCI-DSS Req 6.4.5)",
+                "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."
+            ));
+        }
+
+        // EC2_IMDSV2 is ADVISORY for PCI-DSS (defense in depth, not a PCI-DSS requirement itself),
+        // unlike HIPAA/SOC2/FedRAMP where it's REQUIRED; only checked here for EC2 -- Fargate has
+        // no instance metadata service to protect.
+        if (ctx.runtime == RuntimeType.EC2) {
+            if (config.isImdsv2Required()) {
+                rules.add(ComplianceRule.pass(
+                    "PCI-DSS-Req-2.2-IMDSv2",
+                    "EC2 instances require IMDSv2 tokens (PCI-DSS Req 2.2 defense in depth)"
+                ));
+            } else {
+                rules.add(ComplianceRule.advisory(
+                    "PCI-DSS-Req-2.2-IMDSv2",
+                    "IMDSv2 is advisory for PCI-DSS (recommended defense in depth, not required)",
+                    "Set imdsv2Required = true to block the legacy IMDSv1 endpoint."
+                ));
+            }
+        }
+
+        return rules;
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. Controls the matrix marks
+     * REQUIRED for PCI-DSS but left off this list belong to always-load cross-framework classes
+     * instead (KMS_KEY_ROTATION, SECRETS_MANAGER, SECRETS_ROTATION, DATABASE_MULTI_AZ,
+     * DATABASE_PITR, DATABASE_LOGGING, CONTAINER_SECURITY, API_SECURITY, CDN_SECURITY,
+     * INSTANCE_METADATA_SECURITY, ROOT_ACCOUNT_PROTECTION, CREDENTIAL_ROTATION,
+     * SNS_KMS_ENCRYPTION, VULNERABILITY_SCANNING, BACKUP_RECOVERY, HIGH_AVAILABILITY -- see
+     * KeyManagementRules, DatabaseSecurityRules, IamSecurityRules, MessagingSecurityRules and
+     * similar), except LAMBDA_SECURITY and DATABASE_ACCESS_CONTROL, which are genuine gaps: no
+     * class anywhere checks them.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "NETWORK_SEGMENTATION", "ENCRYPTION_AT_REST", "ENCRYPTION_IN_TRANSIT",
+            "WAF_PROTECTION", "AUTHENTICATION", "ACCESS_CONTROL", "AUDIT_LOGGING",
+            "NETWORK_FLOW_LOGS", "LOG_RETENTION", "THREAT_DETECTION", "SECURITY_MONITORING",
+            "VULNERABILITY_MANAGEMENT", "HTTPS_STRICT", "CLOUDWATCH_LOGS_KMS_ENCRYPTION",
+            "S3_OBJECT_LOCK", "CHANGE_MANAGEMENT"
+        );
+    }
+
+    /**
      * Generate PCI-DSS compliance report showing which requirements are met.
      */
     public String generateComplianceReport(SystemContext ctx) {
@@ -742,6 +863,37 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         report.append("  ✓ AWS Config (Req 11.6): ").append(config.isAwsConfigEnabled() ? "ENABLED" : "DISABLED").append("\n");
 
         report.append("\n");
+
+        appendAdvisorySection(report, ctx);
+
         return report.toString();
+    }
+
+    /**
+     * Recommendations for controls that are ADVISORY-tier (not blocking) and currently off.
+     * Runs the same checks {@link #install} does, so this reflects live findings, not a
+     * separate hand-maintained list.
+     */
+    private void appendAdvisorySection(StringBuilder report, SystemContext ctx) {
+        List<ComplianceRule> rules = new ArrayList<>();
+        rules.addAll(validateNetworkSecurity(ctx));
+        rules.addAll(validateEncryption(ctx));
+        rules.addAll(validateWebApplicationSecurity(ctx));
+        rules.addAll(validateAccessControl(ctx));
+        rules.addAll(validateAuditLogging(ctx));
+        rules.addAll(validateSecurityMonitoring(ctx));
+        rules.addAll(validateVendorDefaults(ctx));
+        rules.addAll(validateMatrixControls(ctx));
+
+        List<ComplianceRule> advisories = rules.stream().filter(ComplianceRule::isAdvisory).toList();
+        if (advisories.isEmpty()) {
+            return;
+        }
+        report.append("Recommendations (advisory, non-blocking):\n");
+        for (ComplianceRule rule : advisories) {
+            report.append("  - ").append(rule.ruleId()).append(": ").append(rule.description()).append("\n");
+            rule.recommendation().ifPresent(r -> report.append("      ").append(r).append("\n"));
+        }
+        report.append("\n");
     }
 }

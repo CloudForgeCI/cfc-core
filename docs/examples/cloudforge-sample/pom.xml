@@ -65,7 +65,7 @@
       <artifactId>cloudforge-localstack</artifactId>
     </dependency>
 
-    <!-- CDK Nag (optional — matches cfc-testing) -->
+    <!-- CDK Nag (optional) -->
     <dependency>
       <groupId>io.github.cdklabs</groupId>
       <artifactId>cdknag</artifactId>

@@ -76,6 +76,12 @@ public final class CloudForgeSynthesizer {
      */
     private static final Object SYNTH_LOCK = new Object();
 
+    // The conventional account id callers set to signal "this is a local-emulator (MiniStack/
+    // LocalStack) deploy, not real AWS" -- the same value AwsDirectDeployer.resolveAccountId() and
+    // LocalStackDeployer already use, reused here (see seedHostedZoneContext) so a local deploy
+    // with a domain configured never makes a real network call to actual AWS Route53.
+    private static final String LOCAL_EMULATOR_ACCOUNT = "000000000000";
+
     private CloudForgeSynthesizer() {
     }
 
@@ -321,6 +327,17 @@ public final class CloudForgeSynthesizer {
      */
     private static void seedHostedZoneContext(App app, String account, String region, String domain) {
         String zoneName = domain.endsWith(".") ? domain : domain + ".";
+        if (LOCAL_EMULATOR_ACCOUNT.equals(account)) {
+            // A local-emulator deploy (MiniStack/LocalStack) has no real Route53 zone to look up
+            // -- callers signal that by using this well-known test account id (the same
+            // convention AwsDirectDeployer.resolveAccountId() and LocalStackDeployer already use
+            // for a local target), so seed a dummy value the same way seedAvailabilityZoneContext
+            // does for AZs, rather than making a real, always-403 call to actual AWS Route53.
+            app.getNode().setContext(
+                "hosted-zone:account=" + account + ":domainName=" + domain + ":privateZone=false:region=" + region,
+                Map.of("Id", "/hostedzone/LOCALEMULATORZONE", "Name", zoneName));
+            return;
+        }
         try (Route53Client route53 = Route53Client.builder().region(Region.AWS_GLOBAL).build()) {
             List<HostedZone> zones = route53.listHostedZonesByName(
                 ListHostedZonesByNameRequest.builder().dnsName(zoneName).maxItems("1").build())

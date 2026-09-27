@@ -261,7 +261,7 @@ public final class DockerEmulatorSupport {
      * such file or directory"} {@link IOException} when the {@code docker} binary itself isn't on
      * {@code PATH} — exactly what happens when this runs inside CloudForge Manager's own runtime
      * container (built from a bare {@code eclipse-temurin} JRE image with no Docker CLI installed
-     * and no access to the host's Docker socket), as opposed to the CLI (cfc-testing), which runs
+     * and no access to the host's Docker socket), as opposed to {@code cloudforge-cli}, which runs
      * directly on the developer's host where Docker is present. Re-thrown as-is that error reads
      * like an internal bug; wrapping it here gives every caller (companion Postgres/edge/emulator
      * containers, host-port probing, etc.) the same actionable message instead of duplicating this
@@ -277,8 +277,8 @@ public final class DockerEmulatorSupport {
                     "Docker CLI is not available in this runtime (needed to run: "
                         + String.join(" ", command) + "). This operation manages a local Docker "
                         + "container for the LocalStack/MiniStack emulator and only works where "
-                        + "the Docker CLI is on PATH with access to the Docker daemon — e.g. the "
-                        + "cfc-testing CLI running directly on your host. It cannot run from inside "
+                        + "the Docker CLI is on PATH with access to the Docker daemon — e.g. "
+                        + "cloudforge-cli running directly on your host. It cannot run from inside "
                         + "CloudForge Manager's own container, which has neither.", e);
             }
             throw e;

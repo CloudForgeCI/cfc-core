@@ -19,7 +19,7 @@ body:
         - "module:ministack (cloudforge-ministack)"
         - "module:localstack (cloudforge-localstack)"
         - "module:manager (cloudforge-manager — Application Panel)"
-        - "module:sample (cfc-testing / entrypoint / docs only)"
+        - "module:sample (cloudforge-sample / docs only)"
         - "unknown / not sure"
     validations:
       required: true

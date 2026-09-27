@@ -139,9 +139,9 @@ class DeploymentConfigTest {
 
     @Test
     void deserializesSavedDeploymentContextFile(@TempDir Path tempDir) throws Exception {
-        // Mirrors cfc-testing/deployment-context.json's shape — that file is gitignored (a local
-        // interactive-deployer artifact), so this writes its own fixture rather than depending on
-        // a path outside the module that won't exist on a clean checkout.
+        // Mirrors a saved deployment-context.json's shape — that file is gitignored (a local,
+        // per-deploy artifact), so this writes its own fixture rather than depending on a path
+        // outside the module that won't exist on a clean checkout.
         Path fixture = tempDir.resolve("deployment-context.json");
         Files.writeString(fixture, """
             {
@@ -284,6 +284,17 @@ class DeploymentConfigTest {
         assertEquals(200, config.databaseAllocatedStorageGB);
         assertTrue(config.databaseMultiAz);
         assertEquals(90, config.databaseBackupRetentionDays);
+    }
+
+    @Test
+    void databaseMultiAzIsUnsetByDefaultSoTheSecurityProfileDecides() {
+        // A non-null default would be read downstream as an explicit override of the profile.
+        assertNull(new DeploymentConfig().databaseMultiAz);
+    }
+
+    @Test
+    void crossRegionBackupVaultIsUnsetByDefaultSoNoCopyIsAssumed() {
+        assertNull(new DeploymentConfig().backupCrossRegionVaultArn);
     }
 
     @Test

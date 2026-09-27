@@ -269,6 +269,13 @@ public interface SecurityProfileConfiguration {
     boolean isAlbAccessLoggingEnabled();
 
     /**
+     * Whether the ALB should have deletion protection enabled.
+     */
+    default boolean isAlbDeletionProtectionEnabled() {
+        return false;
+    }
+
+    /**
      * Get the ALB access log retention period in days.
      */
     RetentionDays getAlbAccessLogRetentionDays();

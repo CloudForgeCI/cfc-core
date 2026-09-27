@@ -1,4 +1,0 @@
-# Custom Application Plugins for cfc-testing
-
-# CMS
-com.cloudforgeci.samples.plugins.cms.CraftCmsApplicationSpec

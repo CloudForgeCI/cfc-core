@@ -9,6 +9,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.Set;
 
 /**
  * IAM security compliance validation rules.
@@ -102,7 +103,7 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Access control / least privilege
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             // Check if IAM profile is properly configured
             boolean hasIamProfile = ctx.iamProfile != null;
 
@@ -162,7 +163,7 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // MFA requirement
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean mfaRequired = config.isMfaRequired();
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -218,7 +219,7 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Root account protection
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean rootMfaEnabled = getBooleanSetting(ctx, "rootMfaEnabled", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -238,9 +239,10 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Root account MFA recommended for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "ROOT-MFA",
-                    "Root account MFA recommended"
+                    "Root account MFA recommended but not required for " + complianceFrameworks,
+                    "Enable MFA on the AWS account root user."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -280,7 +282,7 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
 
         // Credential rotation
-        if (ctx.security == SecurityProfile.PRODUCTION) {
+        if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             boolean credentialRotation = getBooleanSetting(ctx, "credentialRotationEnabled", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
@@ -300,9 +302,10 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
                 ));
             } else if (result == ComplianceMatrix.ValidationResult.WARN) {
                 LOG.warning("Credential rotation recommended for " + complianceFrameworks);
-                rules.add(ComplianceRule.pass(
+                rules.add(ComplianceRule.advisory(
                     "CREDENTIAL-ROTATION",
-                    "Credential rotation recommended"
+                    "Credential rotation recommended but not required for " + complianceFrameworks,
+                    "Rotate IAM access keys and passwords on a regular schedule."
                 ));
             } else {
                 rules.add(ComplianceRule.pass(
@@ -380,5 +383,23 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
         } catch (Exception e) {
             return defaultValue;
         }
+    }
+
+    /**
+     * Controls checked across every {@code validate*} method above -- see {@link
+     * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. IAM-LEAST-PRIVILEGE and
+     * ROOT-ACCESS-KEYS and UNUSED-CREDENTIALS are conditional checks with no direct
+     * {@code ComplianceMatrix} call, but their descriptions ("least privilege", "access key
+     * protection", "unused credential management") fall squarely within {@code ACCESS_CONTROL},
+     * {@code ROOT_ACCOUNT_PROTECTION}, and {@code CREDENTIAL_ROTATION} respectively -- all already
+     * claimed via the sibling check in the same method that does call the matrix directly.
+     * PASSWORD-POLICY is a conditional check with no corresponding matrix control (password length
+     * is not modeled separately from {@code AUTHENTICATION}) and is not claimed.
+     */
+    @Override
+    public Set<String> claimedControls() {
+        return Set.of(
+            "ACCESS_CONTROL", "AUTHENTICATION", "ROOT_ACCOUNT_PROTECTION", "CREDENTIAL_ROTATION"
+        );
     }
 }

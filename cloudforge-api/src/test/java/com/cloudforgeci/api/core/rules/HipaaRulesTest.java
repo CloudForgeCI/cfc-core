@@ -1201,11 +1201,22 @@ class HipaaRulesTest {
             boolean hasRequirement = securityMonitoring && guardDuty;
             if (hasRequirement) {
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
+                customContext.putIfAbsent("ebsEncryptionEnabled", "true");
+                customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
+                customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("imdsv2Required", "true");
+                customContext.putIfAbsent("rdsDatabaseMultiAzEnabled", "true");
+                customContext.putIfAbsent("rdsDeletionProtectionEnabled", "true");
+                customContext.putIfAbsent("multiAzEnforced", "true");
+                customContext.putIfAbsent("autoScalingEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("region", "us-east-1");
 
@@ -1233,7 +1244,10 @@ class HipaaRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        // HIPAA validation checks ALL requirements, so any missing requirement causes failure
+        // HIPAA validation checks ALL requirements, so any missing requirement causes failure.
+        // Monitoring/GuardDuty aren't in HIPAA's STAGING_BLOCKING_RULES, but the baseline block
+        // above only sets authMode/enableSsl/networkMode when hasRequirement holds, so a
+        // missing-monitoring STAGING row also fails via auth/network/ssl left at their defaults.
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Test will fail if THIS requirement is missing
@@ -1288,10 +1302,21 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
+                customContext.putIfAbsent("ebsEncryptionEnabled", "true");
+                customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
+                customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("imdsv2Required", "true");
+                customContext.putIfAbsent("rdsDatabaseMultiAzEnabled", "true");
+                customContext.putIfAbsent("rdsDeletionProtectionEnabled", "true");
+                customContext.putIfAbsent("multiAzEnforced", "true");
+                customContext.putIfAbsent("autoScalingEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("region", "us-east-1");
 
@@ -1315,12 +1340,19 @@ class HipaaRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        // HIPAA validation checks ALL requirements, so any missing requirement causes failure
+        // HIPAA validation checks ALL requirements, so any missing requirement causes failure.
+        // Backup/cross-region aren't in HIPAA's STAGING_BLOCKING_RULES, but the baseline block
+        // above only sets authMode/enableSsl/networkMode when hasRequirement holds, so a
+        // missing-backup STAGING row also fails via auth/network/ssl left at their defaults.
         boolean shouldFail = false;
-        if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
+        if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
             // Test will fail if THIS requirement is missing
             // (it may also fail for other missing requirements, but we're specifically testing this one)
-            if (!automatedBackup || (secProfile == SecurityProfile.PRODUCTION && !crossRegion)) {
+            if (!automatedBackup || !crossRegion) {
+                shouldFail = true;
+            }
+        } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
+            if (!automatedBackup) {
                 shouldFail = true;
             }
         }
@@ -1369,11 +1401,22 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
+                customContext.putIfAbsent("ebsEncryptionEnabled", "true");
+                customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
+                customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("imdsv2Required", "true");
+                customContext.putIfAbsent("rdsDatabaseMultiAzEnabled", "true");
+                customContext.putIfAbsent("rdsDeletionProtectionEnabled", "true");
+                customContext.putIfAbsent("multiAzEnforced", "true");
+                customContext.putIfAbsent("autoScalingEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("region", "us-east-1");
 
@@ -1396,11 +1439,10 @@ class HipaaRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        // HIPAA validation checks ALL requirements, so any missing requirement causes failure
+        // HIPAA validation checks ALL requirements, so any missing requirement causes failure.
+        // Authentication still blocks STAGING synthesis, unlike most other HIPAA controls.
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
-            // Test will fail if THIS requirement is missing
-            // (it may also fail for other missing requirements, but we're specifically testing this one)
             if (authMode.equals("none")) {
                 shouldFail = true;
             }
@@ -1450,11 +1492,22 @@ class HipaaRulesTest {
             // Only add baseline if test expects to pass (has the specific requirement being tested)
             boolean hasRequirement = cloudTrail && flowLogs && albLogging;
             if (hasRequirement) {
+                customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
+                customContext.putIfAbsent("ebsEncryptionEnabled", "true");
+                customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
+                customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("imdsv2Required", "true");
+                customContext.putIfAbsent("rdsDatabaseMultiAzEnabled", "true");
+                customContext.putIfAbsent("rdsDeletionProtectionEnabled", "true");
+                customContext.putIfAbsent("multiAzEnforced", "true");
+                customContext.putIfAbsent("autoScalingEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
 
                 // Add auth baseline if not testing no-auth scenarios
@@ -1481,7 +1534,10 @@ class HipaaRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        // HIPAA validation checks ALL requirements, so any missing requirement causes failure
+        // HIPAA validation checks ALL requirements, so any missing requirement causes failure.
+        // Audit logging isn't in HIPAA's STAGING_BLOCKING_RULES, but the baseline block above
+        // only sets authMode/enableSsl/networkMode when hasRequirement holds, so a
+        // missing-audit STAGING row also fails via auth/network/ssl left at their defaults.
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Test will fail if THIS requirement is missing
@@ -1551,11 +1607,22 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
+                customContext.putIfAbsent("ebsEncryptionEnabled", "true");
+                customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
+                customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("imdsv2Required", "true");
+                customContext.putIfAbsent("rdsDatabaseMultiAzEnabled", "true");
+                customContext.putIfAbsent("rdsDeletionProtectionEnabled", "true");
+                customContext.putIfAbsent("multiAzEnforced", "true");
+                customContext.putIfAbsent("autoScalingEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("region", "us-east-1");
 
@@ -1575,7 +1642,10 @@ class HipaaRulesTest {
         new HipaaRules().install(builder.getSystemContext());
 
         // HIPAA validation checks ALL requirements, so any missing requirement causes failure
-        // HIPAA MFA requires BOTH cognitoMfa AND cognitoAuto to be true, OR hasSso
+        // HIPAA MFA requires BOTH cognitoMfa AND cognitoAuto to be true, OR hasSso.
+        // MFA itself isn't in HIPAA's STAGING_BLOCKING_RULES, but the baseline block above only
+        // sets networkMode (a blocking control) when hasRequirement (which includes MFA) holds,
+        // so a no-MFA STAGING row also fails via network isolation left at its default.
         boolean hasMfa = (cognitoMfa && cognitoAuto) || hasSso;
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
@@ -1636,11 +1706,22 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("logRetentionDays", "2190");
                 customContext.putIfAbsent("region", "us-east-1");
+                customContext.putIfAbsent("ebsEncryptionEnabled", "true");
+                customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
+                customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("imdsv2Required", "true");
+                customContext.putIfAbsent("rdsDatabaseMultiAzEnabled", "true");
+                customContext.putIfAbsent("rdsDeletionProtectionEnabled", "true");
+                customContext.putIfAbsent("multiAzEnforced", "true");
+                customContext.putIfAbsent("autoScalingEnabled", "true");
 
                 // Add auth baseline if not testing no-auth scenarios
                 if (!customContext.containsKey("authMode") || !customContext.get("authMode").equals("none")) {
@@ -1664,13 +1745,17 @@ class HipaaRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        // HIPAA validation checks ALL requirements, so any missing requirement causes failure
+        // HIPAA validation checks ALL requirements, so any missing requirement causes failure.
+        // SSL/TLS (hasCert) and network isolation still block STAGING; EFS in-transit encryption
+        // does not.
         boolean shouldFail = false;
-        if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
-            // Test will fail if THIS requirement is missing
-            // (it may also fail for other missing requirements, but we're specifically testing this one)
-            NetworkMode mode = NetworkMode.fromString(networkMode);
+        NetworkMode mode = NetworkMode.fromString(networkMode);
+        if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.PRODUCTION) {
             if (!hasCert || !efsTransit || mode == NetworkMode.PUBLIC) {
+                shouldFail = true;
+            }
+        } else if ("ENFORCE".equals(complianceMode) && secProfile == SecurityProfile.STAGING) {
+            if (!hasCert || mode == NetworkMode.PUBLIC) {
                 shouldFail = true;
             }
         }
@@ -1725,10 +1810,21 @@ class HipaaRulesTest {
                 customContext.putIfAbsent("securityMonitoringEnabled", "true");
                 customContext.putIfAbsent("guardDutyEnabled", "true");
                 customContext.putIfAbsent("cloudTrailEnabled", "true");
+                customContext.putIfAbsent("awsConfigEnabled", "true");
                 customContext.putIfAbsent("enableFlowlogs", "true");
                 customContext.putIfAbsent("albAccessLogging", "true");
                 customContext.putIfAbsent("automatedBackupEnabled", "true");
                 customContext.putIfAbsent("efsEncryptionInTransitEnabled", "true");
+                customContext.putIfAbsent("ebsEncryptionEnabled", "true");
+                customContext.putIfAbsent("efsEncryptionAtRestEnabled", "true");
+                customContext.putIfAbsent("s3EncryptionEnabled", "true");
+                customContext.putIfAbsent("cloudWatchLogsKmsEncryptionEnabled", "true");
+                customContext.putIfAbsent("s3ObjectLockEnabled", "true");
+                customContext.putIfAbsent("imdsv2Required", "true");
+                customContext.putIfAbsent("rdsDatabaseMultiAzEnabled", "true");
+                customContext.putIfAbsent("rdsDeletionProtectionEnabled", "true");
+                customContext.putIfAbsent("multiAzEnforced", "true");
+                customContext.putIfAbsent("autoScalingEnabled", "true");
                 customContext.putIfAbsent("networkMode", "private-with-nat");
                 customContext.putIfAbsent("region", "us-east-1");
 
@@ -1756,7 +1852,10 @@ class HipaaRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        // HIPAA validation checks ALL requirements, so any missing requirement causes failure
+        // HIPAA validation checks ALL requirements, so any missing requirement causes failure.
+        // Retention isn't in HIPAA's STAGING_BLOCKING_RULES, but the baseline block above only
+        // sets authMode/enableSsl/networkMode when hasRequirement holds, so a
+        // short-retention STAGING row also fails via auth/network/ssl left at their defaults.
         boolean shouldFail = false;
         if ("ENFORCE".equals(complianceMode) && (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING)) {
             // Test will fail if THIS requirement is missing
@@ -1806,8 +1905,9 @@ class HipaaRulesTest {
         new HipaaRules().install(builder.getSystemContext());
 
         // This test validates the security profile early-return branches
-        // DEV profile should always pass (early return), ADVISORY mode should always pass
-        // ENFORCE mode with PRODUCTION/STAGING will fail due to missing requirements (expected)
+        // DEV profile should always pass (early return), ADVISORY mode should always pass.
+        // ENFORCE mode with no auth/network/SSL configured fails both PRODUCTION and STAGING --
+        // those three controls still block STAGING even though most others don't.
         boolean shouldFail = "ENFORCE".equals(complianceMode) &&
                            (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING);
 
@@ -1861,6 +1961,20 @@ class HipaaRulesTest {
         customContext.put("logRetentionDays", String.valueOf(retention));
         customContext.put("automatedBackupEnabled", "true");
         customContext.put("albAccessLogging", "true");  // HIPAA requires ALB access logging
+        customContext.put("awsConfigEnabled", "true");
+        // Held constant at compliant: this test's own shouldFail expression below covers auth, MFA,
+        // monitoring, audit logs, transit encryption, network mode, retention and cross-region backup;
+        // these controls are not part of what it's testing, so they must not interfere with those.
+        customContext.put("ebsEncryptionEnabled", "true");
+        customContext.put("efsEncryptionAtRestEnabled", "true");
+        customContext.put("s3EncryptionEnabled", "true");
+        customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        customContext.put("s3ObjectLockEnabled", "true");
+        customContext.put("imdsv2Required", "true");
+        customContext.put("rdsDatabaseMultiAzEnabled", "true");
+        customContext.put("rdsDeletionProtectionEnabled", "true");
+        customContext.put("multiAzEnforced", "true");
+        customContext.put("autoScalingEnabled", "true");
 
         if (!authMode.equals("none")) {
             customContext.put("enableSsl", "true");
@@ -1881,18 +1995,25 @@ class HipaaRulesTest {
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        // Comprehensive checks for all HIPAA requirements when ENFORCE + PRODUCTION/STAGING
+        // Comprehensive checks for all HIPAA requirements when ENFORCE + PRODUCTION. STAGING now
+        // blocks too, but only on the subset in HipaaRules.STAGING_BLOCKING_RULES -- of the factors
+        // this test varies, that's cloudTrail/flowLogs (HIPAA-164.312(b)-CloudTrail/FlowLogs);
+        // MFA/monitoring/EFS-transit/network-mode/retention/cross-region-backup stay non-blocking
+        // at STAGING.
         NetworkMode mode = NetworkMode.fromString(networkMode);
         boolean shouldFail = "ENFORCE".equals(complianceMode) &&
-                           (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING) &&
-                           (authMode.equals("none") ||                           // No auth
-                            !cognitoMfa ||                                       // No MFA
-                            (!secMonitoring || !guardDuty) ||                    // Missing monitoring
-                            (!cloudTrail || !flowLogs) ||                        // Missing audit logs
-                            !efsTransit ||                                       // No EFS transit encryption
-                            mode == NetworkMode.PUBLIC ||                        // Public network (includes legacy "public-no-nat")
-                            retention < 2190 ||                                  // Insufficient retention (6 years minimum)
-                            (secProfile == SecurityProfile.PRODUCTION && !crossRegion)); // PROD needs cross-region backup
+                           ((secProfile == SecurityProfile.PRODUCTION &&
+                             (authMode.equals("none") ||                           // No auth
+                              !cognitoMfa ||                                       // No MFA
+                              (!secMonitoring || !guardDuty) ||                    // Missing monitoring
+                              (!cloudTrail || !flowLogs) ||                        // Missing audit logs
+                              !efsTransit ||                                       // No EFS transit encryption
+                              mode == NetworkMode.PUBLIC ||                        // Public network (includes legacy "public-no-nat")
+                              retention < 2190 ||                                  // Insufficient retention (6 years minimum)
+                              !crossRegion))                                       // PROD needs cross-region backup
+                            ||
+                            (secProfile == SecurityProfile.STAGING &&
+                             (!cloudTrail || !flowLogs)));                         // STAGING blocks on audit logging too
 
         if (shouldFail) {
             assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
@@ -1901,6 +2022,78 @@ class HipaaRulesTest {
             assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
                 "Expected validation to pass for comprehensive check: " + profile + " auth=" + authMode + " mfa=" + cognitoMfa + " retention=" + retention);
         }
+    }
+
+    /** Every HIPAA control set to compliant -- callers override just the one control under test. */
+    private Map<String, Object> fullyCompliantStagingContext() {
+        Map<String, Object> ctx = new HashMap<>();
+        ctx.put("authMode", "jenkins-oidc");
+        ctx.put("enableSsl", "true");
+        ctx.put("fqdn", "jenkins.example.com");
+        ctx.put("cognitoAutoProvision", "true");
+        ctx.put("cognitoMfaEnabled", "true");
+        ctx.put("securityMonitoringEnabled", "true");
+        ctx.put("guardDutyEnabled", "true");
+        ctx.put("cloudTrailEnabled", "true");
+        ctx.put("enableFlowlogs", "true");
+        ctx.put("crossRegionBackupEnabled", "true");
+        ctx.put("efsEncryptionInTransitEnabled", "true");
+        ctx.put("networkMode", "private-with-nat");
+        ctx.put("logRetentionDays", "2190");
+        ctx.put("automatedBackupEnabled", "true");
+        ctx.put("albAccessLogging", "true");
+        ctx.put("awsConfigEnabled", "true");
+        ctx.put("ebsEncryptionEnabled", "true");
+        ctx.put("efsEncryptionAtRestEnabled", "true");
+        ctx.put("s3EncryptionEnabled", "true");
+        ctx.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+        ctx.put("s3ObjectLockEnabled", "true");
+        ctx.put("imdsv2Required", "true");
+        ctx.put("rdsDatabaseMultiAzEnabled", "true");
+        ctx.put("rdsDeletionProtectionEnabled", "true");
+        ctx.put("multiAzEnforced", "true");
+        ctx.put("autoScalingEnabled", "true");
+        ctx.put("complianceMode", "ENFORCE");
+        return ctx;
+    }
+
+    /** STAGING/ENFORCE with every HIPAA control compliant except authentication, isolated from
+     *  every other control -- HIPAA-164.312(a)(2)(i)-Auth/164.312(d)-Auth are both in
+     *  STAGING_BLOCKING_RULES, so this alone must block synthesis. */
+    @Test
+    void stagingEnforceBlocksOnAuthenticationAlone() {
+        Map<String, Object> ctx = fullyCompliantStagingContext();
+        ctx.put("authMode", "none");
+        ctx.remove("enableSsl");
+        ctx.remove("fqdn");
+        ctx.remove("cognitoAutoProvision");
+        ctx.remove("cognitoMfaEnabled");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestHipaaStagingAuthOnly", SecurityProfile.STAGING, RuntimeType.FARGATE, ctx);
+        builder.createMinimalInfrastructure();
+        new HipaaRules().install(builder.getSystemContext());
+
+        assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+            "STAGING/ENFORCE with authMode=none and every other control compliant must fail");
+    }
+
+    /** STAGING/ENFORCE with every HIPAA control compliant except network isolation, isolated from
+     *  every other control -- HIPAA-164.312(a)(1)-NetworkAccess/164.312(e)(1)-Network are both in
+     *  STAGING_BLOCKING_RULES, so this alone must block synthesis. */
+    @Test
+    void stagingEnforceBlocksOnPublicNetworkAlone() {
+        Map<String, Object> ctx = fullyCompliantStagingContext();
+        ctx.put("networkMode", "public-no-nat");
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "TestHipaaStagingNetworkOnly", SecurityProfile.STAGING, RuntimeType.FARGATE, ctx);
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        new HipaaRules().install(builder.getSystemContext());
+
+        assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
+            "STAGING/ENFORCE with networkMode=public-no-nat and every other control compliant must fail");
     }
 
     // ========================================
@@ -2437,6 +2630,8 @@ class HipaaRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2504,6 +2699,8 @@ class HipaaRulesTest {
             customContext.put("fqdn", "hipaa.example.com");
             customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2576,6 +2773,8 @@ class HipaaRulesTest {
             customContext.put("efsEncryptionAtRestEnabled", "true");
             customContext.put("efsEncryptionInTransitEnabled", "true");
             customContext.put("s3EncryptionEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
@@ -2643,6 +2842,8 @@ class HipaaRulesTest {
             customContext.put("fqdn", "hipaa.example.com");
             customContext.put("cognitoAutoProvision", "true");
             customContext.put("cognitoMfaEnabled", "true");
+            customContext.put("cloudWatchLogsKmsEncryptionEnabled", "true");
+            customContext.put("s3ObjectLockEnabled", "true");
         }
 
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(

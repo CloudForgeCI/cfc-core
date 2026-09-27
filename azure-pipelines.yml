@@ -1,6 +1,8 @@
-# Publishes cloudforge-core/cloudforge-api/cloudforge-localstack/cloudforge-ministack to the
-# cfc-core Azure Artifacts feed, so cloudforge-manager's ADO pipeline can resolve them without
-# hitting Maven Central snapshots directly.
+# Publishes cloudforge-core/cloudforge-api to the cfc-core Azure Artifacts feed, so
+# cloudforge-manager's ADO pipeline can resolve them without hitting Maven Central snapshots
+# directly. cloudforge-localstack/cloudforge-ministack are no longer built here -- they live in
+# their own GitHub repos and publish to Central directly; cloudforge-manager's ADO pipeline needs
+# to resolve those two from Central snapshots instead of this feed.
 #
 # cloudforge-synth-service is not published here; cloudforge-manager's ADO build checks out
 # CloudForgeCI/cloudforge-synth-service as a sibling and `mvn install`s it locally.
@@ -27,7 +29,7 @@ pool:
 
 variables:
   FEED_URL: 'https://pkgs.dev.azure.com/CloudForgeCI/cloudforge-manager/_packaging/cfc-core/maven/v1'
-  MODULES: '.,cloudforge-core,cloudforge-api,cloudforge-localstack,cloudforge-ministack'
+  MODULES: '.,cloudforge-core,cloudforge-api'
 
 steps:
   - task: JavaToolInstaller@0

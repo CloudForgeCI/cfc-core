@@ -18,7 +18,7 @@ body:
         - "module:ministack (cloudforge-ministack)"
         - "module:localstack (cloudforge-localstack)"
         - "module:manager (cloudforge-manager)"
-        - "module:sample (cfc-testing / cloudforge-sample)"
+        - "module:sample (cloudforge-sample)"
         - "cross-cutting (needs plan update)"
     validations:
       required: true
