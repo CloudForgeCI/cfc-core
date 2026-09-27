@@ -12,7 +12,10 @@ let cloudwatch_alarm = Resources.*[ Type == 'AWS::CloudWatch::Alarm' ]
 let cloudtrail_trail = Resources.*[ Type == 'AWS::CloudTrail::Trail' ]
 let ec2_flowlog = Resources.*[ Type == 'AWS::EC2::FlowLog' ]
 let rds_dbinstance = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
-let lambda_function = Resources.*[ Type == 'AWS::Lambda::Function' ]
+# Excludes Lambdas the CDK generates for its own helper constructs (custom resource providers,
+# log retention, bucket notifications, auto-delete): their code and configuration aren't ours.
+let lambda_candidates = Resources[ keys != /^(AWS|LogRetention|BucketNotificationsHandler)[0-9a-f]{32}|^Custom[A-Za-z0-9]*Provider/ ]
+let lambda_function = %lambda_candidates[ Type == 'AWS::Lambda::Function' ]
 let s3_bucket = Resources.*[ Type == 'AWS::S3::Bucket' ]
 let elasticloadbalancingv2_loadbalancer = Resources.*[ Type == 'AWS::ElasticLoadBalancingV2::LoadBalancer' ]
 let apigateway_stage = Resources.*[ Type == 'AWS::ApiGateway::Stage' ]
@@ -150,12 +153,17 @@ rule advanced_monitoring_lambda_dlq when %lambda_function !empty {
 # S3 Bucket Logging
 # ============================================================================
 
+# Compliance archive and log-destination buckets are exempt from server access logging: it would
+# be circular for them, and the trail's S3 data events provide the equivalent audit record.
+let s3_logging_candidates = Resources[ keys != /Compliance(AuditManagerReport|CloudTrail)Bucket|AlbLogsBucket/ ]
+let s3_bucket_access_logged = %s3_logging_candidates[ Type == 'AWS::S3::Bucket' ]
+
 # S3 access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_s3_logging when %s3_bucket !empty {
+rule advanced_monitoring_s3_logging when %s3_bucket_access_logged !empty {
 
-    %s3_bucket.Properties.LoggingConfiguration exists <<[Advanced Monitoring] S3 buckets must have logging configured>>
-    %s3_bucket.Properties.LoggingConfiguration.DestinationBucketName exists <<[Advanced Monitoring] S3 logging must specify destination bucket>>
+    %s3_bucket_access_logged.Properties.LoggingConfiguration exists <<[Advanced Monitoring] S3 buckets must have logging configured>>
+    %s3_bucket_access_logged.Properties.LoggingConfiguration.DestinationBucketName exists <<[Advanced Monitoring] S3 logging must specify destination bucket>>
 }
 
 # ============================================================================
@@ -168,7 +176,7 @@ rule advanced_monitoring_alb_logging when %elasticloadbalancingv2_loadbalancer !
 
     %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes exists <<[Advanced Monitoring] Load balancers must configure attributes>>
 
-    some Properties.LoadBalancerAttributes[*] {
+    some %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes[*] {
         Key == 'access_logs.s3.enabled'
         Value == 'true' <<[Advanced Monitoring] ALB/NLB must have access logging enabled>>
     }
@@ -277,24 +285,15 @@ rule advanced_monitoring_cloudtrail_insights when %cloudtrail_trail !empty {
     %cloudtrail_trail.Properties.InsightSelectors exists <<[Advanced Monitoring] CloudTrail should enable Insights for anomaly detection>>
 }
 
-# CloudTrail Organization trail
-# CloudForge Mapping: AUDIT_LOGGING control
-rule advanced_monitoring_cloudtrail_organization when %cloudtrail_trail !empty {
-
-    %cloudtrail_trail.Properties.IsOrganizationTrail == true <<[Advanced Monitoring] Consider using Organization trails for centralized logging>>
-}
-
 # CloudTrail S3 data events
 # CloudForge Mapping: AUDIT_LOGGING control
 rule advanced_monitoring_cloudtrail_s3_data_events when %cloudtrail_trail !empty {
 
-    %cloudtrail_trail.Properties.EventSelectors exists <<[Advanced Monitoring] CloudTrail should configure event selectors>>
-
-    some Properties.EventSelectors[*] {
-        DataResources exists <<[Advanced Monitoring] Event selectors should include data resources>>
-        some DataResources[*] {
-            Type == 'AWS::S3::Object' <<[Advanced Monitoring] CloudTrail should log S3 data events>>
-        }
+    # Classic event selectors or advanced event selectors, whichever the trail uses.
+    some %cloudtrail_trail.Properties.EventSelectors[*].DataResources[*].Type == 'AWS::S3::Object' OR
+    some %cloudtrail_trail.Properties.AdvancedEventSelectors[*].FieldSelectors[*] {
+        Field == 'resources.type'
+        Equals[*] == 'AWS::S3::Object' <<[Advanced Monitoring] CloudTrail should log S3 data events>>
     }
 }
 

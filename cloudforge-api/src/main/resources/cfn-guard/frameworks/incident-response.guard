@@ -15,7 +15,10 @@ let guardduty_detector = Resources.*[ Type == 'AWS::GuardDuty::Detector' ]
 let sns_topic = Resources.*[ Type == 'AWS::SNS::Topic' ]
 let cloudwatch_alarm = Resources.*[ Type == 'AWS::CloudWatch::Alarm' ]
 let rds_dbinstance = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
-let lambda_function = Resources.*[ Type == 'AWS::Lambda::Function' ]
+# Excludes Lambdas the CDK generates for its own helper constructs (custom resource providers,
+# log retention, bucket notifications, auto-delete): their code and configuration aren't ours.
+let lambda_candidates = Resources[ keys != /^(AWS|LogRetention|BucketNotificationsHandler)[0-9a-f]{32}|^Custom[A-Za-z0-9]*Provider/ ]
+let lambda_function = %lambda_candidates[ Type == 'AWS::Lambda::Function' ]
 let config_configurationrecorder = Resources.*[ Type == 'AWS::Config::ConfigurationRecorder' ]
 let ec2_snapshot = Resources.*[ Type == 'AWS::EC2::Snapshot' ]
 # ============================================================================
@@ -73,12 +76,17 @@ rule incident_response_cloudwatch_retention when %logs_loggroup !empty {
 # S3 Access Logging for Data Access Forensics
 # ============================================================================
 
+# Compliance archive and log-destination buckets are exempt from server access logging: it would
+# be circular for them, and the trail's S3 data events provide the equivalent audit record.
+let s3_logging_candidates = Resources[ keys != /Compliance(AuditManagerReport|CloudTrail)Bucket|AlbLogsBucket/ ]
+let s3_bucket_access_logged = %s3_logging_candidates[ Type == 'AWS::S3::Bucket' ]
+
 # S3 bucket access logging
 # CloudForge Mapping: AUDIT_LOGGING control
-rule incident_response_s3_logging when %s3_bucket !empty {
+rule incident_response_s3_logging when %s3_bucket_access_logged !empty {
 
-    %s3_bucket.Properties.LoggingConfiguration exists <<[Incident Response] S3 buckets must have logging configured>>
-    %s3_bucket.Properties.LoggingConfiguration.DestinationBucketName exists <<[Incident Response] S3 logging must specify destination bucket>>
+    %s3_bucket_access_logged.Properties.LoggingConfiguration exists <<[Incident Response] S3 buckets must have logging configured>>
+    %s3_bucket_access_logged.Properties.LoggingConfiguration.DestinationBucketName exists <<[Incident Response] S3 logging must specify destination bucket>>
 }
 
 # ============================================================================

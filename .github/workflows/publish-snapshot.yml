@@ -227,6 +227,41 @@ jobs:
         if: steps.versions.outputs.already_released == 'false'
         run: mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.release_version }} -DprocessAllModules=true -DgenerateBackupPoms=false
 
+      # cloudforge-api has a compile-scope dependency on cloudforge-localstack/cloudforge-ministack
+      # pinned to ${project.version} (root pom.xml), and both declare this repo's root pom as their
+      # own <parent>. Neither can be resolved from Central at a version that was never published
+      # there, so build them from source against the version just set above and install them into
+      # this runner's local repository -- the deploy step below then resolves them locally instead
+      # of requiring them to already exist on Central.
+      - name: Install cfc-core root + cloudforge-core locally (parent/dependency for the split modules)
+        if: steps.versions.outputs.already_released == 'false'
+        run: mvn -q -B -pl .,cloudforge-core -am install -DskipTests -Djacoco.skip=true
+
+      - name: Build cloudforge-localstack and cloudforge-ministack from source at the release version
+        if: steps.versions.outputs.already_released == 'false'
+        run: |
+          RELEASE_VERSION="${{ steps.versions.outputs.release_version }}"
+          for repo in cloudforge-localstack cloudforge-ministack; do
+            git clone --depth 1 -b main "https://github.com/CloudForgeCI/${repo}.git" "/tmp/${repo}-src"
+            (
+              cd "/tmp/${repo}-src"
+              # versions:update-parent silently no-ops here, even with the target parent version
+              # already installed locally -- replace the <parent> version directly instead of
+              # relying on it.
+              python3 -c "
+          import re
+          with open('pom.xml') as f:
+              content = f.read()
+          new_content, n = re.subn(r'(<parent>.*?<version>)[^<]+(</version>)', r'\g<1>${RELEASE_VERSION}\g<2>', content, count=1, flags=re.DOTALL)
+          assert n == 1, f'expected exactly 1 parent version replacement in ${repo}, got {n}'
+          with open('pom.xml', 'w') as f:
+              f.write(new_content)
+          "
+              mvn -q -B versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
+              mvn -q -B install -DskipTests -Djacoco.skip=true
+            )
+          done
+
       - name: Install gnupg
         if: steps.versions.outputs.already_released == 'false'
         run: brew install gnupg
@@ -274,6 +309,25 @@ jobs:
             </servers>
           </settings>
           EOF
+
+      # Central rejects a release artifact whose dependencyManagement pins a SNAPSHOT dependency
+      # ("Dependency management dependencies to SNAPSHOT versions not allowed"), but the BOM's
+      # cloudforge-manager-deployment.version property is always a SNAPSHOT by design -- see that
+      # property's own comment in pom.xml. For this one real-release publish, swap it to whatever
+      # cloudforge-manager-deployment last published as a real release on Central instead (never
+      # committed -- versions:set-property only touches this runner's own checkout).
+      - name: Resolve cloudforge-manager-deployment.version to its latest real Central release
+        if: steps.versions.outputs.already_released == 'false'
+        run: |
+          RELEASE=$(curl -fsSL "https://repo1.maven.org/maven2/com/cloudforgeci/cloudforge-manager-deployment/maven-metadata.xml" \
+            | grep -o '<release>[^<]*</release>' | sed -E 's|</?release>||g')
+          if [ -z "$RELEASE" ]; then
+            echo "::error::Could not resolve cloudforge-manager-deployment's latest release from Central's maven-metadata.xml"
+            exit 1
+          fi
+          echo "Pinning cloudforge-manager-deployment.version to $RELEASE for this release build (never committed)"
+          mvn -q -B versions:set-property -Dproperty=cloudforge-manager-deployment.version \
+            -DnewVersion="$RELEASE" -DgenerateBackupPoms=false
 
       - name: Build, sign, and publish the release (no re-test — already validated as a SNAPSHOT this run)
         if: steps.versions.outputs.already_released == 'false'

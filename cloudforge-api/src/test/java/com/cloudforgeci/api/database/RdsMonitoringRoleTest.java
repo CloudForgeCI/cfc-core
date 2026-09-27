@@ -6,6 +6,7 @@ import com.cloudforgeci.api.compute.ApplicationFactory;
 import com.cloudforgeci.api.core.DeploymentContext;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.assertions.Template;
 
@@ -26,7 +27,10 @@ class RdsMonitoringRoleTest {
 
     private Template synthWordPress(String stackName) {
         App app = new App();
-        Stack stack = new Stack(app, stackName);
+        // PRODUCTION turns ALB access logging on, which CDK only allows on a stack with a region.
+        Stack stack = Stack.Builder.create(app, stackName)
+            .env(Environment.builder().account("123456789012").region("us-east-1").build())
+            .build();
         Map<String, Object> ctx = new HashMap<>();
         ctx.put("stackName", stackName);
         ctx.put("securityProfile", SecurityProfile.PRODUCTION.name());

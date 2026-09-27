@@ -238,9 +238,13 @@ rule database_security_rds_auto_minor_upgrade when %rds_dbinstance !empty {
 
 # RDS Performance Insights
 # CloudForge Mapping: MONITORING control
-rule database_security_rds_performance_insights when %rds_dbinstance !empty {
+# RDS rejects Performance Insights on .micro instance classes, so those are out of scope.
+let rds_pi_capable = Resources.*[ Type == 'AWS::RDS::DBInstance'
+    Properties.DBInstanceClass != /\.micro$/ ]
 
-    %rds_dbinstance.Properties.EnablePerformanceInsights == true <<[Database Security] RDS should enable Performance Insights>>
+rule database_security_rds_performance_insights when %rds_pi_capable !empty {
+
+    %rds_pi_capable.Properties.EnablePerformanceInsights == true <<[Database Security] RDS should enable Performance Insights>>
 }
 
 # ============================================================================

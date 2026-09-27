@@ -211,7 +211,10 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
 
         // Deletion protection for production
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean deletionProtection = getBooleanSetting(ctx, "albDeletionProtection", false);
+            var profileConfig = ctx.securityProfileConfig.get().orElse(null);
+            boolean deletionProtection = profileConfig != null
+                ? profileConfig.isAlbDeletionProtectionEnabled()
+                : getBooleanSetting(ctx, "albDeletionProtection", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.DELETION_PROTECTION,

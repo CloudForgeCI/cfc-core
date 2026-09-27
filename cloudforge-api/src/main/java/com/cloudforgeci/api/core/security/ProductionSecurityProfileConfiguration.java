@@ -662,6 +662,11 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     }
 
     @Override
+    public boolean isAlbDeletionProtectionEnabled() {
+        return true; // Always enabled for production
+    }
+
+    @Override
     public RetentionDays getAlbAccessLogRetentionDays() {
         return RetentionDays.SIX_YEARS; // HIPAA minimum retention for audit logs
     }

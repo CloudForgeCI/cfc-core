@@ -133,6 +133,11 @@ public final class VpcFactory extends BaseFactory {
         // This encapsulates all logic for topology, runtime, security, and network mode
         int natGateways = config.getNatGatewayCount(topology, runtime, networkMode);
 
+        // Only public network mode places workloads in the public subnets and relies on the
+        // subnet handing out public IPs (EC2 launch); every other mode keeps them off, since the
+        // load balancer and NAT gateways get their public addresses without it.
+        boolean publicNetwork = networkMode == NetworkMode.PUBLIC;
+
         return Vpc.Builder.create(this, "Vpc")
                 .maxAzs(2)
                 .vpcName(getNode().getId() + "Vpc")
@@ -142,6 +147,7 @@ public final class VpcFactory extends BaseFactory {
                                 .name("public")
                                 .subnetType(SubnetType.PUBLIC)
                                 .cidrMask(24)
+                                .mapPublicIpOnLaunch(publicNetwork)
                                 .build(),
                         SubnetConfiguration.builder()
                                 .name("private")

@@ -23,7 +23,7 @@ rule elb_security_alb_access_logging when %elasticloadbalancingv2_loadbalancer !
 
     %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes exists <<[ELB Security] Load balancers must configure attributes>>
 
-    some Properties.LoadBalancerAttributes[*] {
+    some %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes[*] {
         Key == 'access_logs.s3.enabled'
         Value == 'true' <<[ELB Security] Application and Network Load Balancers must have access logging enabled>>
     }
@@ -35,7 +35,7 @@ rule elb_security_alb_deletion_protection when %elasticloadbalancingv2_loadbalan
 
     %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes exists <<[ELB Security] Load balancers must configure attributes>>
 
-    some Properties.LoadBalancerAttributes[*] {
+    some %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes[*] {
         Key == 'deletion_protection.enabled'
         Value == 'true' <<[ELB Security] Application and Network Load Balancers must have deletion protection enabled>>
     }
@@ -47,7 +47,7 @@ rule elb_security_alb_drop_http_headers when %elasticloadbalancingv2_loadbalance
 
     when Properties.Type == 'application' OR Properties.Type not exists {
         when Properties.LoadBalancerAttributes exists {
-            some Properties.LoadBalancerAttributes[*] {
+            some %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes[*] {
                 Key == 'routing.http.drop_invalid_header_fields.enabled'
                 Value == 'true' <<[ELB Security] Application Load Balancers should drop invalid HTTP headers>>
             }
@@ -61,7 +61,7 @@ rule elb_security_cross_zone_load_balancing when %elasticloadbalancingv2_loadbal
 
     when Properties.Type in ['network', 'gateway'] {
         when Properties.LoadBalancerAttributes exists {
-            some Properties.LoadBalancerAttributes[*] {
+            some %elasticloadbalancingv2_loadbalancer.Properties.LoadBalancerAttributes[*] {
                 Key == 'load_balancing.cross_zone.enabled'
                 Value == 'true' <<[ELB Security] Network and Gateway Load Balancers should enable cross-zone load balancing>>
             }
@@ -94,7 +94,7 @@ rule elb_security_listener_https when %elasticloadbalancingv2_listener !empty {
     %elasticloadbalancingv2_listener.Properties.Protocol in ['HTTPS', 'TLS', 'HTTP'] <<[ELB Security] Load balancer listener protocol must be specified>>
 
     when Properties.Protocol == 'HTTP' {
-        some Properties.DefaultActions[*] {
+        some %elasticloadbalancingv2_listener.Properties.DefaultActions[*] {
             Type == 'redirect' <<[ELB Security] HTTP listeners must redirect to HTTPS>>
         }
     }
@@ -145,7 +145,7 @@ rule elb_security_target_group_health_check when %elasticloadbalancingv2_targetg
 rule elb_security_target_group_deregistration when %elasticloadbalancingv2_targetgroup !empty {
 
     when Properties.TargetGroupAttributes exists {
-        some Properties.TargetGroupAttributes[*] {
+        some %elasticloadbalancingv2_targetgroup.Properties.TargetGroupAttributes[*] {
             Key == 'deregistration_delay.timeout_seconds' <<[ELB Security] Target groups should configure deregistration delay>>
         }
     }

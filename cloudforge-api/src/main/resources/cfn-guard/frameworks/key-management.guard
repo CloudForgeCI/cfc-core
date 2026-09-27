@@ -102,7 +102,7 @@ rule key_management_alb_https when %elasticloadbalancingv2_listener !empty {
 
     # Require HTTPS/TLS, or HTTP must have redirect actions
     when Properties.Protocol == 'HTTP' {
-        some Properties.DefaultActions[*] {
+        some %elasticloadbalancingv2_listener.Properties.DefaultActions[*] {
             Type == 'redirect' <<[Key Management] HTTP listeners must redirect to HTTPS>>
         }
     }

@@ -1036,6 +1036,21 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isCloudWatchLogsKmsEncryptionEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION
+            )) {
+                LOG.info("STAGING profile: CloudWatch Logs KMS encryption enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
         // Check deployment context override
         if (deploymentContext != null && deploymentContext.cloudWatchLogsKmsEncryptionEnabled() != null) {
             boolean enabled = Boolean.TRUE.equals(deploymentContext.cloudWatchLogsKmsEncryptionEnabled());
@@ -1047,7 +1062,42 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     @Override
+    public boolean isAlbDeletionProtectionEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.DELETION_PROTECTION
+            )) {
+                LOG.info("STAGING profile: ALB deletion protection enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+        // STAGING default: off unless a compliance framework requires it
+        return false;
+    }
+
+    @Override
     public boolean isCloudTrailInsightsEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.CLOUDTRAIL_INSIGHTS
+            )) {
+                LOG.info("STAGING profile: CloudTrail Insights enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
         // Check deployment context override
         if (deploymentContext != null && deploymentContext.cloudTrailInsightsEnabled() != null) {
             boolean enabled = Boolean.TRUE.equals(deploymentContext.cloudTrailInsightsEnabled());
@@ -1060,6 +1110,21 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isRoute53QueryLoggingEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.ROUTE53_QUERY_LOGGING
+            )) {
+                LOG.info("STAGING profile: Route53 Query Logging enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
         // Check deployment context override
         if (deploymentContext != null && deploymentContext.route53QueryLoggingEnabled() != null) {
             boolean enabled = Boolean.TRUE.equals(deploymentContext.route53QueryLoggingEnabled());
@@ -1072,6 +1137,21 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isS3ObjectLockEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.S3_OBJECT_LOCK
+            )) {
+                LOG.info("STAGING profile: S3 Object Lock enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
         // Check deployment context override
         if (deploymentContext != null && deploymentContext.s3ObjectLockEnabled() != null) {
             boolean enabled = Boolean.TRUE.equals(deploymentContext.s3ObjectLockEnabled());
@@ -1084,6 +1164,21 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isSnsKmsEncryptionEnabled() {
+        // Check if compliance matrix requires this control
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlRequired(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION
+            )) {
+                LOG.info("STAGING profile: SNS KMS encryption enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
         // Check deployment context override
         if (deploymentContext != null && deploymentContext.snsKmsEncryptionEnabled() != null) {
             boolean enabled = Boolean.TRUE.equals(deploymentContext.snsKmsEncryptionEnabled());

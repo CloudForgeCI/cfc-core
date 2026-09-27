@@ -76,23 +76,17 @@ public final class ManagerOperatorIamSupport {
      * Lets Manager's own task role call {@code aws-marketplace:GetEntitlements} — the API
      * {@code MarketplaceEntitlementService} (cloudforge-manager) self-checks against on a
      * schedule, using this same task role's own default credentials (no separate seller-side
-     * credentials involved). Opt-in via {@link
-     * com.cloudforge.core.config.DeploymentConfig#marketplaceDeploymentEnabled}, same reasoning
-     * as {@link #attachDeployCapabilities}'s own gate: a customer-facing capability that calls a
-     * billing-adjacent AWS API must be explicitly present, not inherited automatically —
-     * installations not deployed through an AWS Marketplace listing (the overwhelming majority)
-     * get no grant at all. {@code Resource: "*"} because {@code GetEntitlements} supports no
-     * resource-level permissions or condition keys at all (AWS's own service-authorization
-     * reference for this service lists none) — the flag only turns this grant on, it carries no
-     * product code to scope it with: the product code {@code MarketplaceEntitlementService}
-     * actually checks against is a constant compiled into cloudforge-manager, never sourced from
-     * deploy-time config.
+     * credentials involved). Granted to every Manager deployment, not gated on {@link
+     * com.cloudforge.core.config.DeploymentConfig#marketplaceDeploymentEnabled}: Manager checks
+     * on every AWS deployment and lets AWS's subscription record decide the outcome, so a
+     * non-subscriber simply gets an empty entitlement list. {@code Resource: "*"} because {@code
+     * GetEntitlements} supports no resource-level permissions or condition keys at all (AWS's
+     * own service-authorization reference for this service lists none). The product code
+     * {@code MarketplaceEntitlementService} checks against is a constant compiled into
+     * cloudforge-manager, never sourced from deploy-time config.
      */
     public static Optional<PolicyStatement> marketplaceEntitlementStatement(SystemContext ctx) {
         if (!isCloudForgeManager(ctx)) {
-            return Optional.empty();
-        }
-        if (!Boolean.TRUE.equals(ctx.cfc.marketplaceDeploymentEnabled())) {
             return Optional.empty();
         }
         return Optional.of(PolicyStatement.Builder.create()

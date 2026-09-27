@@ -7,7 +7,10 @@
 # Layer 3: Template-Level Policy Enforcement (cfn-guard)
 
 
-let lambda_function = Resources.*[ Type == 'AWS::Lambda::Function' ]
+# Excludes Lambdas the CDK generates for its own helper constructs (custom resource providers,
+# log retention, bucket notifications, auto-delete): their code and configuration aren't ours.
+let lambda_candidates = Resources[ keys != /^(AWS|LogRetention|BucketNotificationsHandler)[0-9a-f]{32}|^Custom[A-Za-z0-9]*Provider/ ]
+let lambda_function = %lambda_candidates[ Type == 'AWS::Lambda::Function' ]
 let lambda_alias = Resources.*[ Type == 'AWS::Lambda::Alias' ]
 let lambda_permission = Resources.*[ Type == 'AWS::Lambda::Permission' ]
 # ============================================================================

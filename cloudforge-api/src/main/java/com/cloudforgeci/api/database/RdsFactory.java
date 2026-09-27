@@ -255,15 +255,16 @@ public class RdsFactory {
         String dbInstanceIdentifier = truncateDbIdentifier(stackName + "-" + instanceId, 63);
 
         // Auto minor-version upgrade, Performance Insights, and Enhanced Monitoring each take a
-        // deployment context override, falling back to the PRODUCTION-only default when unset --
-        // same override-then-profile-default shape as multiAzOverride above.
+        // deployment context override, falling back to a profile default when unset (auto minor
+        // upgrade and Performance Insights: PRODUCTION and STAGING; Enhanced Monitoring:
+        // PRODUCTION only) -- same override-then-profile-default shape as multiAzOverride above.
         boolean autoMinorVersionUpgrade = ctx.cfc.rdsAutoMinorVersionUpgrade() != null
             ? ctx.cfc.rdsAutoMinorVersionUpgrade()
-            : (security == SecurityProfile.PRODUCTION);
+            : (security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING);
 
         boolean performanceInsightsRequested = ctx.cfc.performanceInsightsEnabled() != null
             ? ctx.cfc.performanceInsightsEnabled()
-            : (security == SecurityProfile.PRODUCTION);
+            : (security == SecurityProfile.PRODUCTION || security == SecurityProfile.STAGING);
         // RDS rejects EnablePerformanceInsights outright ("Performance Insights not supported for
         // this configuration") on the smallest burstable sizes (db.t2/t3/t4g.micro) across every
         // engine, regardless of what was requested.
@@ -324,7 +325,9 @@ public class RdsFactory {
         if (performanceInsightsEnabled) {
             instanceBuilder
                 .enablePerformanceInsights(true)
-                .performanceInsightRetention(PerformanceInsightRetention.LONG_TERM)
+                .performanceInsightRetention(security == SecurityProfile.PRODUCTION
+                    ? PerformanceInsightRetention.LONG_TERM
+                    : PerformanceInsightRetention.DEFAULT)
                 .performanceInsightEncryptionKey(encryptionKey);
         } else {
             instanceBuilder.enablePerformanceInsights(false);

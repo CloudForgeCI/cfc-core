@@ -273,7 +273,7 @@ public class DeploymentConfig {
     )
     public Boolean httpsStrictEnabled;
 
-    /** Enable ALB access logs to S3 */
+    /** Enable ALB access logs to S3. Null means the security profile decides. */
     @ConfigField(
         displayName = "ALB Access Logging",
         description = "Log all ALB requests to S3 for auditing",
@@ -281,7 +281,7 @@ public class DeploymentConfig {
         visibleWhen = "lbType == alb",
         order = 50
     )
-    public Boolean albAccessLogging = false;
+    public Boolean albAccessLogging;
 
     /** Enable CloudFront CDN */
     @ConfigField(

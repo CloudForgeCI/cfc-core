@@ -276,22 +276,31 @@ class ComplianceReportGenerator:
             return False
 
     def _discover_split_test_methods(self) -> List[str]:
-        """Discover all split test methods from CSV files."""
+        """Discover the split test methods bound to a compliance-matrix CSV.
+
+        Reads the @CsvFileSource bindings from TruthTableValidationTest so a method name never
+        has to be derived from a file name (e.g. advancedmonitoring_ec2_pass.csv is bound to
+        testAdvancedMonitoringEc2Pass, which no capitalization rule can produce).
+        """
         matrices_dir = self.project_root / "cloudforge-api/src/test/resources/compliance-matrices"
         if not matrices_dir.exists():
             print(f"   ⚠️  Compliance matrices directory not found: {matrices_dir}")
             return []
 
-        csv_files = sorted(matrices_dir.glob("*.csv"))
+        test_source = (self.project_root / "cloudforge-api/src/test/java/com/cloudforgeci/api/"
+                       "integration/deployment/TruthTableValidationTest.java")
+        source = test_source.read_text(encoding="utf-8")
+        bindings = re.findall(
+            r'resources = "/compliance-matrices/([^"]+)\.csv",\s*numLinesToSkip = 1\s*\)\s*void (\w+)\(',
+            source)
+        method_for_csv = {csv_name: method for csv_name, method in bindings}
+
         test_methods = []
-
-        for csv_file in csv_files:
-            # Convert filename to test method name
-            # e.g., "soc2_ec2_pass.csv" -> "testSoc2Ec2Pass"
-            name_parts = csv_file.stem.replace(',', '_').replace('-', '_').split('_')
-            method_name = "test" + "".join(word.capitalize() for word in name_parts)
-            method_name = method_name.replace('__', '_')
-
+        for csv_file in sorted(matrices_dir.glob("*.csv")):
+            method_name = method_for_csv.get(csv_file.stem)
+            if method_name is None:
+                print(f"   ⚠️  No test method bound to {csv_file.name}")
+                continue
             test_methods.append(method_name)
 
         return test_methods

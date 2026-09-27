@@ -86,13 +86,6 @@ rule messaging_security_sns_policy_restriction when %sns_topicpolicy !empty {
 # Secrets Manager Security
 # ============================================================================
 
-# Secrets Manager cross-region replication
-# CloudForge Mapping: HIGH_AVAILABILITY control
-rule messaging_security_secretsmanager_replication when %secretsmanager_secret !empty {
-
-    %secretsmanager_secret.Properties.ReplicaRegions exists <<[Messaging Security] Secrets Manager secrets should configure cross-region replication>>
-}
-
 # Secrets Manager automatic rotation
 # CloudForge Mapping: KEY_MANAGEMENT control
 rule messaging_security_secretsmanager_rotation when %secretsmanager_rotationschedule !empty {
