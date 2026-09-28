@@ -136,6 +136,7 @@ jobs:
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           brew tap CloudForgeCI/tap
+          brew trust CloudForgeCI/tap
           brew install cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
@@ -235,6 +236,7 @@ jobs:
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           brew tap CloudForgeCI/tap
+          brew trust CloudForgeCI/tap
           brew install cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
@@ -323,6 +325,7 @@ jobs:
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           brew tap CloudForgeCI/tap
+          brew trust CloudForgeCI/tap
           brew install cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
@@ -472,6 +475,7 @@ jobs:
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           brew tap CloudForgeCI/tap
+          brew trust CloudForgeCI/tap
           brew install cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
@@ -594,6 +598,7 @@ jobs:
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           brew tap CloudForgeCI/tap
+          brew trust CloudForgeCI/tap
           brew install cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
