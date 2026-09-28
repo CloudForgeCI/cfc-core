@@ -450,15 +450,25 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
                 "S3 Object Lock required so audit logs cannot be altered or deleted (CC7.2)",
                 "Enable S3 Object Lock on the audit-log buckets.",
                 config.isS3ObjectLockEnabled());
-            // CC7.2: Audit Manager gives continuous, automated evidence collection for the controls
-            // above. isAuditManagerEnabled() now reads DeploymentConfig#auditManagerServiceEnabled,
-            // a field independent of DeploymentConfig#auditManagerEnabled (the master gate
-            // SecurityRules.install() uses to decide whether any FrameworkRules validation runs at
-            // all) -- so this check is no longer circular the way it would be against that flag.
+            // CC7.2: continuous, automated evidence collection for the controls above -- either
+            // AWS Audit Manager or AWS Config's per-framework Conformance-Pack-style rules
+            // (ComplianceFactory's createAllFrameworkConfigRules and friends, already deployed
+            // whenever isAwsConfigEnabled() is true) satisfy this. Audit Manager is no longer a
+            // safe sole requirement: AWS closed it to new accounts as of April 30, 2026 (existing
+            // per-account setups still work, but a fresh account can never enable it), and AWS's
+            // own migration guidance for this exact change names Config Conformance Packs as the
+            // replacement. isAuditManagerEnabled() now reads
+            // DeploymentConfig#auditManagerServiceEnabled, a field independent of
+            // DeploymentConfig#auditManagerEnabled (the master gate SecurityRules.install() uses
+            // to decide whether any FrameworkRules validation runs at all) -- so this check is no
+            // longer circular the way it would be against that flag.
             addRequired(rules, ComplianceMatrix.SecurityControl.AUDIT_MANAGER, "SOC2-CC7.2-AuditManager",
-                "AWS Audit Manager required for continuous compliance evidence collection (CC7.2)",
-                "Enable auditManagerServiceEnabled.",
-                config.isAuditManagerEnabled());
+                "Continuous compliance evidence collection required (CC7.2): AWS Audit Manager or "
+                + "AWS Config",
+                "Enable auditManagerServiceEnabled (only if Audit Manager is already set up in "
+                + "this account -- AWS closed it to new accounts as of April 30, 2026) or "
+                + "awsConfigEnabled.",
+                config.isAuditManagerEnabled() || config.isAwsConfigEnabled());
             // CC7.2: log retention -- the matrix doesn't cite a specific period for SOC2 the way
             // HIPAA (6 years) or FedRAMP (3 years) do, so this uses PCI-DSS's 1-year minimum as a
             // reasonable floor for forensic analysis; SOC2 audits typically examine a trailing
