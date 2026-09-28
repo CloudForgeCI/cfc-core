@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.ingress;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
 import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
@@ -14,11 +15,6 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.iam.AnyPrincipal;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyStatement;
-import software.amazon.awscdk.services.iam.ServicePrincipal;
-import software.amazon.awscdk.services.lambda.Code;
-import software.amazon.awscdk.services.lambda.Function;
-import software.amazon.awscdk.services.lambda.Permission;
-import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.s3.*;
 import software.constructs.Construct;
 import io.github.cdklabs.cdknag.NagSuppressions;
@@ -65,85 +61,6 @@ public class AlbFactory extends BaseFactory {
 
     @DeploymentContext("stackName")
     private String stackName;
-
-    /**
-     * Writes one SSM parameter (Name/Value/Type/Description from {@code ResourceProperties},
-     * fixed physical resource ID) and does nothing on delete. Hand-rolled rather than {@code
-     * AwsCustomResource}/{@code Provider}: both of those wrap CDK's own bundled framework Lambda,
-     * whose code CloudFormation stages to the deployer's private {@code cdk-hnb659fds-assets}
-     * bootstrap bucket -- fine for our own deploys, but unusable by an AWS Marketplace buyer
-     * launching this template directly in their own, unbootstrapped account. {@link Code#fromInline}
-     * embeds this source directly in the template (subject to Lambda's 4096-character {@code
-     * ZipFile} limit), so no S3 reference is emitted at all. Implements the raw CloudFormation
-     * custom-resource protocol itself (the presigned-URL PUT callback) rather than relying on
-     * any CDK-provided response helper, for the same reason.
-     */
-    private static final String SSM_PARAMETER_WRITER_SOURCE = """
-        const https = require('https');
-        const { SSMClient, PutParameterCommand } = require('@aws-sdk/client-ssm');
-
-        function respond(event, status, reason) {
-          return new Promise((resolve, reject) => {
-            const body = JSON.stringify({
-              Status: status,
-              Reason: reason || 'See the function\\'s own CloudWatch Logs group for details.',
-              PhysicalResourceId: 'AlbLogsBucket-SSMWriter',
-              StackId: event.StackId,
-              RequestId: event.RequestId,
-              LogicalResourceId: event.LogicalResourceId,
-              Data: {}
-            });
-            const url = new URL(event.ResponseURL);
-            const req = https.request({
-              hostname: url.hostname,
-              path: url.pathname + url.search,
-              method: 'PUT',
-              headers: { 'content-type': '', 'content-length': Buffer.byteLength(body) },
-              timeout: 10000
-            }, (res) => {
-              res.on('data', () => {});
-              res.on('end', () => {
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                  resolve();
-                } else {
-                  reject(new Error('ResponseURL PUT failed with HTTP status ' + res.statusCode));
-                }
-              });
-            });
-            req.on('timeout', () => req.destroy(new Error('ResponseURL PUT timed out')));
-            req.on('error', reject);
-            req.write(body);
-            req.end();
-          });
-        }
-
-        exports.handler = async (event) => {
-          try {
-            if (event.RequestType !== 'Delete') {
-              const p = event.ResourceProperties;
-              const client = new SSMClient({ region: p.Region });
-              await client.send(new PutParameterCommand({
-                Name: p.ParameterName,
-                Value: p.ParameterValue,
-                Type: 'String',
-                Description: p.ParameterDescription,
-                Overwrite: true
-              }));
-            }
-            await respond(event, 'SUCCESS');
-          } catch (err) {
-            console.error('AlbLogsBucketSSMWriter failed: ' + err);
-            try {
-              await respond(event, 'FAILED', String(err));
-            } catch (deliveryErr) {
-              // Nothing further to do: the ResponseURL PUT itself is what just failed, and
-              // it's the only channel this protocol has to reach CloudFormation. Logged so
-              // it's at least visible in CloudWatch instead of a silently-hung stack operation.
-              console.error('Could not deliver FAILED response to CloudFormation: ' + deliveryErr);
-            }
-          }
-        };
-        """;
 
     @SystemContext("securityProfileConfig")
     private com.cloudforgeci.api.interfaces.SecurityProfileConfiguration securityProfileConfig;
@@ -513,52 +430,24 @@ public class AlbFactory extends BaseFactory {
         String ssmParameterArn = "arn:" + Stack.of(this).getPartition() + ":ssm:" + region + ":"
             + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
 
-        Function ssmWriterFn = Function.Builder.create(this, "AlbLogsBucketSSMWriterFn")
-                .runtime(Runtime.NODEJS_20_X)
-                .handler("index.handler")
-                .code(Code.fromInline(SSM_PARAMETER_WRITER_SOURCE))
-                .timeout(Duration.seconds(30))
-                .build();
-
-        ssmWriterFn.addToRolePolicy(PolicyStatement.Builder.create()
-                .effect(Effect.ALLOW)
-                .actions(List.of("ssm:PutParameter"))
-                .resources(List.of(ssmParameterArn))
-                .build());
-
-        // Required because this is a raw CustomResource (a plain serviceToken pointing at the
-        // function's ARN), not AwsCustomResource/Provider -- both of those add this same
-        // resource-policy grant automatically as part of their own setup. CloudFormation invokes
-        // a custom resource's Lambda directly (not through IAM caller credentials), so without an
-        // explicit grant here the invocation is denied before the handler ever runs.
-        //
-        // Scoped with sourceAccount/sourceArn -- cloudformation.amazonaws.com is a shared,
-        // multi-tenant service principal, so an unscoped grant would let ANY AWS account's
-        // CloudFormation invoke this function by pointing their own custom resource's
-        // serviceToken at its ARN, supplying an arbitrary ParameterValue this stack's execution
-        // role would then write to the tracked SSM parameter (a confused-deputy path). sourceArn
-        // resolves to this exact stack's own ARN via the AWS::StackId pseudo-parameter, so only
-        // this stack -- not just this account -- can invoke it.
-        ssmWriterFn.addPermission("InvokeByCloudFormation", Permission.builder()
-                .principal(new ServicePrincipal("cloudformation.amazonaws.com"))
-                .action("lambda:InvokeFunction")
-                .sourceAccount(Stack.of(this).getAccount())
-                .sourceArn(Stack.of(this).getStackId())
-                .build());
-
-        CustomResource ssmWriter = CustomResource.Builder.create(this, "AlbLogsBucketSSMWriter")
-                .serviceToken(ssmWriterFn.getFunctionArn())
-                .properties(Map.of(
+        AssetFreeCustomResource.Result ssmWriter = AssetFreeCustomResource.create(
+                this, "AlbLogsBucketSSMWriter", AssetFreeCustomResource.SSM_PUT_PARAMETER_HANDLER_JS,
+                Duration.seconds(30),
+                List.of(PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(List.of("ssm:PutParameter"))
+                        .resources(List.of(ssmParameterArn))
+                        .build()),
+                Map.of(
                         "ParameterName", ssmParameterName,
                         "ParameterValue", newBucket.getBucketArn(),
                         "ParameterDescription", "CloudForge retained ALB logs bucket ARN for region " + region,
                         "Region", region
-                ))
-                .build();
+                ));
 
         // Add NagSuppressions for this hand-rolled custom resource's own shape
         NagSuppressions.addResourceSuppressions(
-            ssmWriterFn,
+            ssmWriter.function,
             List.of(
                 NagPackSuppression.builder()
                     .id("PCI.DSS.321-IAMNoInlinePolicy")
@@ -575,7 +464,7 @@ public class AlbFactory extends BaseFactory {
             Boolean.TRUE
         );
 
-        ssmWriter.getNode().addDependency(newBucket);
+        ssmWriter.customResource.getNode().addDependency(newBucket);
 
         LOG.info("ALB logs bucket will use CloudFormation-generated unique name");
         LOG.info("ALB logs bucket ARN will be stored in SSM: " + ssmParameterName);

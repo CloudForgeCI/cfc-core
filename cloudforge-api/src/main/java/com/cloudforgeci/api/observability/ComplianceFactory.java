@@ -8,9 +8,13 @@ import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforgeci.api.core.rules.AuditManagerControl;
 import com.cloudforgeci.api.core.rules.AuditManagerControlRegistry;
 import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
 import software.amazon.awscdk.CfnCondition;
+import software.amazon.awscdk.CustomResource;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.auditmanager.CfnAssessment;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.cloudtrail.CfnTrail;
@@ -589,7 +593,7 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         // Store CloudTrail ARN in SSM for future reference (stack-specific)
-        AwsCustomResource cloudTrailSsmWriter = storeResourceArnInSSM("CloudTrailArn",
+        CustomResource cloudTrailSsmWriter = storeResourceArnInSSM("CloudTrailArn",
                 "/cloudforge/" + this.stackName + "/" + this.region + "/cloudtrail/arn",
                 trail.getTrailArn(),
                 "CloudTrail ARN for stack " + this.stackName + " in region " + this.region);
@@ -967,14 +971,14 @@ public class ComplianceFactory extends BaseFactory {
                 .build());
 
         // Store Recorder ARN (always, not just PRODUCTION)
-        AwsCustomResource recorderSsmWriter = storeResourceArnInSSMAlways("ConfigRecorderArn",
+        CustomResource recorderSsmWriter = storeResourceArnInSSMAlways("ConfigRecorderArn",
                 "/cloudforge/shared/" + this.region + "/config/recorder-arn",
                 recorderArn,
                 "AWS Config Recorder ARN for region " + this.region);
         recorderSsmWriter.getNode().addDependency(recorder);
 
         // Store Channel ARN (always, not just PRODUCTION)
-        AwsCustomResource channelSsmWriter = storeResourceArnInSSMAlways("ConfigDeliveryChannelArn",
+        CustomResource channelSsmWriter = storeResourceArnInSSMAlways("ConfigDeliveryChannelArn",
                 "/cloudforge/shared/" + this.region + "/config/channel-arn",
                 channelArn,
                 "AWS Config Delivery Channel ARN for region " + this.region);
@@ -4779,34 +4783,8 @@ public class ComplianceFactory extends BaseFactory {
         // This avoids conflicts with retained buckets from previous deployments
         Bucket bucket = getOrCreateBucket(id);
 
-        // Create Custom Resource to store bucket ARN in SSM at deployment time
-        // ARN is used instead of name for direct code reference capability
-        AwsSdkCall putParameterCall = AwsSdkCall.builder()
-                .service("SSM")
-                .action("putParameter")
-                .parameters(java.util.Map.of(
-                        "Name", ssmParameterName,
-                        "Value", bucket.getBucketArn(),
-                        "Type", "String",
-                        "Description", "CloudForge retained " + id + " ARN for region " + region,
-                        "Overwrite", true
-                ))
-                .physicalResourceId(software.amazon.awscdk.customresources.PhysicalResourceId.of(id + "-SSMWriter"))
-                .region(region)
-                .build();
-
-        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, id + "SSMWriter")
-                .onCreate(putParameterCall)
-                .onUpdate(putParameterCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
-                                .build()
-                ))
-                .build();
-
-        // Apply NagSuppressions for CDK custom resource limitations
-        applyCustomResourceNagSuppressions(ssmWriter);
+        CustomResource ssmWriter = createSsmArnWriter(id, ssmParameterName, bucket.getBucketArn(),
+                "CloudForge retained " + id + " ARN for region " + region);
 
         // Ensure bucket is created before we write to SSM
         ssmWriter.getNode().addDependency(bucket);
@@ -4830,43 +4808,13 @@ public class ComplianceFactory extends BaseFactory {
      * @param description Human-readable description for the parameter
      * @return The AwsCustomResource that stores the parameter
      */
-    private AwsCustomResource storeResourceArnInSSM(String id, String ssmParameterName, String arnValue, String description) {
+    private CustomResource storeResourceArnInSSM(String id, String ssmParameterName, String arnValue, String description) {
         if (security != SecurityProfile.PRODUCTION) {
             LOG.fine("Non-production mode: Skipping SSM tracking for " + id);
             return null;
         }
 
-        LOG.info("Storing " + id + " ARN in SSM Parameter Store: " + ssmParameterName);
-
-        AwsSdkCall putParameterCall = AwsSdkCall.builder()
-                .service("SSM")
-                .action("putParameter")
-                .parameters(java.util.Map.of(
-                        "Name", ssmParameterName,
-                        "Value", arnValue,
-                        "Type", "String",
-                        "Description", description,
-                        "Overwrite", true
-                ))
-                .physicalResourceId(software.amazon.awscdk.customresources.PhysicalResourceId.of(id + "-SSMWriter"))
-                .region(region)
-                .build();
-
-        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, id + "SSMWriter")
-                .onCreate(putParameterCall)
-                .onUpdate(putParameterCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
-                                .build()
-                ))
-                .build();
-
-        // Apply NagSuppressions for CDK custom resource limitations
-        applyCustomResourceNagSuppressions(ssmWriter);
-
-        LOG.fine(id + " ARN will be tracked in SSM: " + ssmParameterName);
-        return ssmWriter;
+        return createSsmArnWriter(id, ssmParameterName, arnValue, description);
     }
 
     /**
@@ -4881,38 +4829,49 @@ public class ComplianceFactory extends BaseFactory {
      * @param description Human-readable description for the parameter
      * @return The AwsCustomResource that stores the parameter
      */
-    private AwsCustomResource storeResourceArnInSSMAlways(String id, String ssmParameterName, String arnValue, String description) {
+    private CustomResource storeResourceArnInSSMAlways(String id, String ssmParameterName, String arnValue, String description) {
         LOG.info("Storing " + id + " ARN in SSM Parameter Store (always): " + ssmParameterName);
+        return createSsmArnWriter(id, ssmParameterName, arnValue, description);
+    }
 
-        AwsSdkCall putParameterCall = AwsSdkCall.builder()
-                .service("SSM")
-                .action("putParameter")
-                .parameters(java.util.Map.of(
-                        "Name", ssmParameterName,
-                        "Value", arnValue,
-                        "Type", "String",
-                        "Description", description,
-                        "Overwrite", true
-                ))
-                .physicalResourceId(software.amazon.awscdk.customresources.PhysicalResourceId.of(id + "-SSMWriter"))
-                .region(region)
-                .build();
+    /**
+     * Writes {@code arnValue} to SSM Parameter Store as {@code ssmParameterName} at deploy time --
+     * shared by getOrCreateBucketWithSSM/storeResourceArnInSSM/storeResourceArnInSSMAlways, which
+     * only differ in when they call this (PRODUCTION-only vs. always) and what they do with the
+     * result. Asset-free ({@link AssetFreeCustomResource}, not {@code AwsCustomResource}/{@code
+     * Provider}): both of those pull in CDK's own bundled framework Lambda, staged to the
+     * deployer's private {@code cdk-hnb659fds-assets} bootstrap bucket -- unusable by an AWS
+     * Marketplace buyer launching a template directly in their own, unbootstrapped account.
+     */
+    private CustomResource createSsmArnWriter(String id, String ssmParameterName, String arnValue, String description) {
+        LOG.info("Storing " + id + " ARN in SSM Parameter Store: " + ssmParameterName);
 
-        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, id + "SSMWriter")
-                .onCreate(putParameterCall)
-                .onUpdate(putParameterCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
-                                .build()
-                ))
-                .build();
+        // Partition-aware (not a hardcoded "arn:aws" literal) -- a literal breaks this custom
+        // resource's policy outside the standard AWS partition (GovCloud's "arn:aws-us-gov",
+        // China's "arn:aws-cn"), which this project's own compliance/FedRAMP-adjacent posture
+        // makes a plausible real target even though this codebase doesn't deploy there today.
+        String ssmParameterArn = "arn:" + Stack.of(this).getPartition() + ":ssm:" + region + ":"
+            + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
 
-        // Apply NagSuppressions for CDK custom resource limitations
-        applyCustomResourceNagSuppressions(ssmWriter);
+        AssetFreeCustomResource.Result result = AssetFreeCustomResource.create(
+                this, id + "SSMWriter", AssetFreeCustomResource.SSM_PUT_PARAMETER_HANDLER_JS,
+                Duration.seconds(30),
+                List.of(PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(List.of("ssm:PutParameter"))
+                        .resources(List.of(ssmParameterArn))
+                        .build()),
+                java.util.Map.of(
+                        "ParameterName", ssmParameterName,
+                        "ParameterValue", arnValue,
+                        "ParameterDescription", description,
+                        "Region", region
+                ));
+
+        applyCustomResourceNagSuppressions(result.function);
 
         LOG.fine(id + " ARN will be tracked in SSM: " + ssmParameterName);
-        return ssmWriter;
+        return result.customResource;
     }
 
     /**
@@ -5366,39 +5325,36 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param customResource The AwsCustomResource to suppress warnings for
      */
-    private void applyCustomResourceNagSuppressions(AwsCustomResource customResource) {
+    /** Suppressions for {@link #createSsmArnWriter}'s Lambda -- see that method's own javadoc for
+     *  why it's an {@link AssetFreeCustomResource} rather than {@code AwsCustomResource}. Only the
+     *  inline-policy/no-VPC findings still apply: the execution policy is scoped to one exact
+     *  parameter ARN (no wildcard-resource finding to suppress), and the runtime is an explicit
+     *  choice made here, not something CDK manages on this construct's behalf. */
+    private void applyCustomResourceNagSuppressions(software.amazon.awscdk.services.lambda.Function customResourceFunction) {
         NagSuppressions.addResourceSuppressions(
-            customResource,
+            customResourceFunction,
             List.of(
                 NagPackSuppression.builder()
                     .id("PCI.DSS.321-IAMNoInlinePolicy")
-                    .reason("CDK AwsCustomResource creates inline policies by design. " +
-                           "These are auto-generated Lambda execution policies for AWS SDK calls.")
+                    .reason("This Lambda's own execution policy is scoped to a single " +
+                           "ssm:PutParameter call on one parameter ARN -- an inline policy is the " +
+                           "right shape for a permission this narrow.")
                     .build(),
                 NagPackSuppression.builder()
                     .id("PCI.DSS.321-LambdaInsideVPC")
-                    .reason("CDK custom resource Lambdas only make AWS API calls (SSM, etc.) " +
-                           "and do not require VPC access. Running in VPC would add unnecessary complexity.")
+                    .reason("This custom resource Lambda only makes an SSM API call and does not " +
+                           "require VPC access.")
                     .build(),
                 NagPackSuppression.builder()
                     .id("HIPAA.Security-IAMNoInlinePolicy")
-                    .reason("CDK AwsCustomResource creates inline policies by design. " +
-                           "These are auto-generated Lambda execution policies for AWS SDK calls.")
+                    .reason("This Lambda's own execution policy is scoped to a single " +
+                           "ssm:PutParameter call on one parameter ARN -- an inline policy is the " +
+                           "right shape for a permission this narrow.")
                     .build(),
                 NagPackSuppression.builder()
                     .id("HIPAA.Security-LambdaInsideVPC")
-                    .reason("CDK custom resource Lambdas only make AWS API calls (SSM, etc.) " +
-                           "and do not require VPC access. Running in VPC would add unnecessary complexity.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM5")
-                    .reason("SSM parameter operations require wildcard resource patterns " +
-                           "for parameter paths. This is a CDK custom resource limitation.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-L1")
-                    .reason("CDK AwsCustomResource manages its own Lambda runtime version. " +
-                           "Runtime is determined by the CDK framework version and updated via CDK upgrades.")
+                    .reason("This custom resource Lambda only makes an SSM API call and does not " +
+                           "require VPC access.")
                     .build()
             ),
             Boolean.TRUE

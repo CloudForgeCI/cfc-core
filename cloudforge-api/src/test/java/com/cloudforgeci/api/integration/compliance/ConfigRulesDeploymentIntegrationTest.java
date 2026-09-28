@@ -128,8 +128,17 @@ public class ConfigRulesDeploymentIntegrationTest {
         synthesizeTemplate(builder.getStack());
 
         // Verify custom resource exists to auto-start recorder
-        // The Create property is a JSON string, so we just verify the custom resource exists
-        template.resourceCountIs("Custom::AWS", 7);
+        // The Create property is a JSON string, so we just verify the custom resource exists.
+        // Only 2 of this scenario's 7 custom resources are still AwsCustomResource (type
+        // Custom::AWS) -- the recorder start/verify pair. The other 5 (ConfigBucket/CloudTrail
+        // bucket/CloudTrail ARN/Config recorder+delivery-channel ARN SSM writers) are now
+        // AssetFreeCustomResource (type AWS::CloudFormation::CustomResource): a raw CustomResource
+        // wired to an inline Lambda instead of AwsCustomResource/Provider, both of which pull in
+        // CDK's own bundled framework Lambda, staged to the deployer's private
+        // cdk-hnb659fds-assets bootstrap bucket -- unusable by an AWS Marketplace buyer launching
+        // this template directly in their own, unbootstrapped account.
+        template.resourceCountIs("Custom::AWS", 2);
+        template.resourceCountIs("AWS::CloudFormation::CustomResource", 5);
     }
 
     @Test
@@ -362,8 +371,13 @@ public class ConfigRulesDeploymentIntegrationTest {
         synthesizeTemplate(builder.getStack());
 
         // Verify IAM roles are created (Config Recorder role, remediation roles, etc.)
-        // The test infrastructure creates multiple IAM roles
-        template.resourceCountIs("AWS::IAM::Role", 10);
+        // The test infrastructure creates multiple IAM roles. 5 of these belong to the
+        // AssetFreeCustomResource SSM-writer Lambdas -- each gets its own dedicated execution
+        // role, rather than the single shared singleton role AwsCustomResource/Provider give
+        // every custom resource in a stack. More roles, but each scoped to exactly one
+        // function's own narrow permissions instead of a shared role pooling every custom
+        // resource's combined permissions.
+        template.resourceCountIs("AWS::IAM::Role", 15);
     }
 
     @Test
