@@ -4415,8 +4415,20 @@ public class ComplianceFactory extends BaseFactory {
 
     /**
      * Resolves framework identifier to framework UUID.
-     * Handles short names (SOC2, HIPAA), full ARNs, and UUIDs.
-     * Queries AWS to find matching framework if short name is provided.
+     * Handles full ARNs and UUIDs directly, both pure string parsing.
+     *
+     * <p>Does NOT resolve short names ("SOC2", "HIPAA") automatically -- that used to mean a
+     * live AWS Audit Manager lookup, which had two real problems: it ran at synth time (a local
+     * subprocess call to a hardcoded AWS CLI path, unreachable in most environments and reaching
+     * a live account when it did work), and even a working lookup would only be reliable per
+     * region, since Audit Manager's standard-framework UUIDs are not stable across regions. Audit
+     * Manager is also opt-in only now (closed to new AWS accounts as of April 30, 2026, see
+     * {@link com.cloudforgeci.api.core.security.ProductionSecurityProfileConfiguration#isAuditManagerEnabled}),
+     * so it only ever matters for the shrinking set of deployers who already have it set up in an
+     * existing account -- not worth a deploy-time custom resource to automate a lookup that
+     * population can just do once themselves. Supply the framework's ARN or UUID directly (find
+     * it with {@code aws auditmanager list-assessment-frameworks --framework-type Standard
+     * --region <your-region>}) instead of a short name.
      */
     private String resolveFrameworkIdentifier(String identifier) {
         // If it's an ARN, extract the UUID from the end
@@ -4430,125 +4442,14 @@ public class ComplianceFactory extends BaseFactory {
             return identifier;
         }
 
-        // For short names, try to query AWS for matching framework
-        String result = queryAwsForFramework(identifier);
-
-        // If query failed (returned placeholder), skip this framework with a warning
-        if ("00000000-0000-0000-0000-000000000000".equals(result)) {
-            LOG.warning("Unable to resolve Audit Manager framework: " + identifier);
-            LOG.warning("  Framework '" + identifier + "' is not available as an AWS Audit Manager standard framework");
-            LOG.warning("  This may be a custom framework that requires CloudForge-specific Config rules");
-            LOG.warning("  Skipping Audit Manager assessment creation for this framework");
-            LOG.warning("  Note: Other compliance layers (cdk-nag, FrameworkRules, cfn-guard, AWS Config) will still validate this framework");
-            return null;  // Return null to signal "skip this framework"
-        }
-
-        return result;
-    }
-
-    /**
-     * Queries AWS Audit Manager for framework by name.
-     * Falls back to placeholder if query fails or framework not found.
-     */
-    private String queryAwsForFramework(String frameworkName) {
-        LOG.info("Querying AWS for framework: " + frameworkName);
-        try {
-            // Try to execute AWS CLI to list frameworks
-            ProcessBuilder pb = new ProcessBuilder(
-                "/usr/local/bin/aws", "auditmanager", "list-assessment-frameworks",
-                "--framework-type", "Standard",
-                "--output", "json"
-            );
-
-            // Inherit environment variables (AWS_PROFILE, AWS_REGION, etc.)
-            Map<String, String> env = pb.environment();
-            // Preserve AWS_PROFILE if set
-            String awsProfile = System.getenv("AWS_PROFILE");
-            if (awsProfile != null && !awsProfile.isEmpty()) {
-                env.put("AWS_PROFILE", awsProfile);
-                LOG.info("Using AWS_PROFILE = " + awsProfile + " for framework query");
-            }
-            // Preserve AWS_REGION if set
-            String awsRegion = System.getenv("AWS_REGION");
-            if (awsRegion != null && !awsRegion.isEmpty()) {
-                env.put("AWS_REGION", awsRegion);
-                LOG.info("Using AWS_REGION = " + awsRegion + " for framework query");
-            }
-
-            Process process = pb.start();
-
-            // Wait for process with timeout (10 seconds - increased from 5)
-            boolean finished = process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
-
-            if (!finished) {
-                process.destroyForcibly();
-                LOG.warning("AWS CLI query timed out after 10 seconds for framework '" + frameworkName + "'");
-                return "00000000-0000-0000-0000-000000000000";
-            }
-
-            if (process.exitValue() == 0) {
-                // Read output - use try-with-resources to ensure streams are closed
-                StringBuilder output = new StringBuilder();
-                try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getInputStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        output.append(line);
-                    }
-                }
-
-                // Parse JSON output to find matching framework
-                String json = output.toString();
-                String searchName = frameworkName.toUpperCase();
-
-                // Also check stderr for any warnings - use try-with-resources
-                StringBuilder errorOutput = new StringBuilder();
-                try (java.io.BufferedReader errorReader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getErrorStream()))) {
-                    String errLine;
-                    while ((errLine = errorReader.readLine()) != null) {
-                        errorOutput.append(errLine);
-                    }
-                }
-                if (errorOutput.length() > 0) {
-                    LOG.warning("AWS CLI stderr: " + errorOutput.toString());
-                }
-
-                LOG.info("Searching for framework matching: " + searchName);
-
-                // Simple JSON parsing to find framework ID
-                // Look for framework names that match (SOC2, HIPAA, PCI-DSS, etc.)
-                if (json.contains("\"name\"")) {
-                    String[] frameworks = json.split("\\{");
-                    for (String framework : frameworks) {
-                        if (framework.toUpperCase().contains(searchName) ||
-                            (searchName.equals("SOC2") && framework.contains("SOC 2")) ||
-                            (searchName.equals("PCI-DSS") && framework.contains("PCI DSS"))) {
-
-                            // Extract the ID field (UUID)
-                            int idIndex = framework.indexOf("\"id\"");
-                            if (idIndex > 0) {
-                                int startQuote = framework.indexOf("\"", idIndex + 5);
-                                int endQuote = framework.indexOf("\"", startQuote + 1);
-                                if (startQuote > 0 && endQuote > startQuote) {
-                                    String frameworkId = framework.substring(startQuote + 1, endQuote);
-                                    LOG.info("Found framework '" + frameworkName + "' with ID: " + frameworkId);
-                                    return frameworkId;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                LOG.warning("AWS CLI command failed with exit code: " + process.exitValue());
-            }
-
-            LOG.warning("Could not find framework '" + frameworkName + "' in AWS account");
-        } catch (Exception e) {
-            LOG.warning("Error querying AWS for framework '" + frameworkName + "': " + e.getMessage());
-        }
-
-        return "00000000-0000-0000-0000-000000000000";
+        LOG.warning("Cannot resolve Audit Manager framework '" + identifier + "': short-name "
+            + "auto-resolution isn't supported (see resolveFrameworkIdentifier's own javadoc for "
+            + "why). Supply this framework's ARN or UUID directly in complianceFrameworks instead "
+            + "-- find it with: aws auditmanager list-assessment-frameworks "
+            + "--framework-type Standard --region <your-region>");
+        LOG.warning("  Skipping Audit Manager assessment creation for this framework");
+        LOG.warning("  Note: Other compliance layers (cdk-nag, FrameworkRules, cfn-guard, AWS Config) will still validate this framework");
+        return null;  // Return null to signal "skip this framework"
     }
 
     /**
