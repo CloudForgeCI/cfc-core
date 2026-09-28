@@ -626,6 +626,25 @@ public interface ApplicationSpec {
     }
 
     /**
+     * Whether this application supports database provisioning at all, required or optional.
+     *
+     * <p>Reads {@link ApplicationPlugin#supportsDatabase()} when present; defaults to false.
+     * Every {@code DatabaseSpec} implementation already sets this correctly on its own
+     * annotation -- this method was simply missing, so {@code
+     * VisibilityExpressionEvaluator}'s reflective {@code supportsDatabase} capability check
+     * (backing the database-category fields' {@code visibleWhen} expressions on {@code
+     * DeploymentConfig}) always failed to find it and those fields could never become visible
+     * for any application.</p>
+     */
+    default boolean supportsDatabase() {
+        ApplicationPlugin annotation = getClass().getAnnotation(ApplicationPlugin.class);
+        if (annotation == null) {
+            return false;
+        }
+        return annotation.supportsDatabase();
+    }
+
+    /**
      * Get the recommended health check grace period for this application.
      *
      * <p>The grace period is how long ECS/ALB waits before starting health checks

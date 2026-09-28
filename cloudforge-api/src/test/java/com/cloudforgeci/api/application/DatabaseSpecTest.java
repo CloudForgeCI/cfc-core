@@ -11,6 +11,7 @@ import com.cloudforgeci.api.application.artifactregistry.HarborApplicationSpec;
 import com.cloudforgeci.api.application.cicd.GitLabApplicationSpec;
 import com.cloudforgeci.api.application.collaboration.MattermostApplicationSpec;
 import com.cloudforgeci.api.application.monitoring.GrafanaApplicationSpec;
+import com.cloudforgeci.api.application.JenkinsApplicationSpec;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -367,6 +368,18 @@ public class DatabaseSpecTest {
             assertEquals(shouldRequireDb, plugin.requiresDatabase(),
                 app.getClass().getSimpleName() + " database requirement mismatch");
         }
+    }
+
+    @Test
+    @DisplayName("ApplicationSpec.supportsDatabase() should reflect the plugin annotation, not just the annotation itself")
+    void testApplicationSpecSupportsDatabaseReadsAnnotation() {
+        ApplicationSpec metabase = new MetabaseApplicationSpec();
+        assertTrue(metabase.supportsDatabase(),
+            "ApplicationSpec.supportsDatabase() should be true for an app whose @ApplicationPlugin sets it");
+
+        ApplicationSpec jenkins = new JenkinsApplicationSpec();
+        assertFalse(jenkins.supportsDatabase(),
+            "ApplicationSpec.supportsDatabase() should default to false for an app that doesn't support a database");
     }
 
     // ========== Database Connection Record Tests ==========
