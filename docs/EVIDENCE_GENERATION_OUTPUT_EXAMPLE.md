@@ -187,6 +187,8 @@ For questions about this evidence package, refer to:
 
 ## Compliance Matrix Sample (compliance/compliance-matrix.md)
 
+> **The `Status: Implemented` lines below are static text, not a computed result.** `generate_compliance_matrix()` in `scripts/generate-audit-evidence.sh` writes the same `**Status**: Implemented` line for every listed control whenever that framework is selected — it does not read the JSON evidence files (`iam/`, `network/`, `encryption/`, `config/`, `logging/`) this same script export step collects, and it can't detect a control that is actually missing or misconfigured in the target account. Treat this file as a checklist of the controls CloudForge *intends* to enforce for the selected framework, not as an attestation that they are enforced in this deployment — confirm actual status from the raw evidence files (e.g. `config/config-rules.json` compliance state, `iam/credential-report.csv`) alongside it.
+
 ```markdown
 # Compliance Matrix - SOC2
 Generated: 2024-11-22 14:30:52

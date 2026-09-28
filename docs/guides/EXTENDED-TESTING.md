@@ -112,10 +112,10 @@ script's header comment for its full set of environment variables.
 
 ## Report Generators
 
-The Python scripts in `cfc-testing/scripts/` turn test output into reports:
+The Python scripts in `validation/scripts/` turn test output into reports:
 
 - `truth-table-generator.py` and `compliance-truth-table-generator.py` — truth tables of expected resources and compliance controls per configuration
-- `compliance-report-generator.py` — compliance report from the compliance test run
+- `compliance-report-generator.py` — interactive HTML dashboard built from a Maven test run; it determines each check's pass/advisory/fail status by matching patterns against the Maven console output and surefire XML, not by reading the structured findings `ComplianceFindingsCollector`/`CloudForgeSynthesizer.synthesizeAdvisoryDryRun` produce (that API currently has no consumer in this repo — see its javadoc)
 - `localstack-compliance-comparison.py` — compares synthesized templates with what LocalStack deployed
 - `deployment-metrics-dashboard.py` — dashboard of deployment timing metrics
 
