@@ -86,14 +86,36 @@ class Soc2MatrixControlsTest {
         "isS3ObjectLockEnabled,SOC2-CC7.2-AuditLogImmutability",
         "getLogRetentionDays,SOC2-CC7.2-MatrixLogRetention",
         "isRdsDatabaseMultiAzEnabled,SOC2-A1.2-DatabaseMultiAZ",
-        "isRdsDeletionProtectionEnabled,SOC2-A1.3-DatabaseDeletionProtection",
-        "isAuditManagerEnabled,SOC2-CC7.2-AuditManager"
+        "isRdsDeletionProtectionEnabled,SOC2-A1.3-DatabaseDeletionProtection"
+        // isAuditManagerEnabled deliberately not here: SOC2-CC7.2-AuditManager passes on EITHER
+        // Audit Manager or AWS Config, so disabling only one of the two isn't enough to fail it --
+        // see auditManagerAloneDisabledStillPasses/bothAuditManagerAndConfigDisabledFails below.
     })
     void disablingAControlFailsExactlyItsRule(String flag, String ruleId) {
         List<ComplianceRule> rules = evaluate(Set.of(flag), SecurityProfile.PRODUCTION,
             RuntimeType.EC2, AuthMode.ALB_OIDC, true);
 
         assertEquals(Set.of(ruleId), failedIds(rules));
+    }
+
+    /** SOC2-CC7.2-AuditManager accepts AWS Config as an equally-valid continuous-evidence-
+     *  collection mechanism -- AWS closed Audit Manager to new accounts as of April 30, 2026,
+     *  and names Config Conformance Packs as the replacement, so this control can no longer
+     *  safely require Audit Manager alone. */
+    @Test
+    void auditManagerAloneDisabledStillPasses() {
+        List<ComplianceRule> rules = evaluate(Set.of("isAuditManagerEnabled"), SecurityProfile.PRODUCTION,
+            RuntimeType.EC2, AuthMode.ALB_OIDC, true);
+
+        assertTrue(failedIds(rules).isEmpty());
+    }
+
+    @Test
+    void bothAuditManagerAndConfigDisabledFails() {
+        List<ComplianceRule> rules = evaluate(Set.of("isAuditManagerEnabled", "isAwsConfigEnabled"),
+            SecurityProfile.PRODUCTION, RuntimeType.EC2, AuthMode.ALB_OIDC, true);
+
+        assertEquals(Set.of("SOC2-CC7.2-AuditManager"), failedIds(rules));
     }
 
     @Test

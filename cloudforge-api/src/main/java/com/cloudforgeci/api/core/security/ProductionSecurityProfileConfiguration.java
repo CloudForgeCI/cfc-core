@@ -243,33 +243,20 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
 
     @Override
     public boolean isAuditManagerEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.AUDIT_MANAGER
-            )) {
-                LOG.info("PRODUCTION profile: Audit Manager enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check). This is the
-        // audit-manager-SERVICE flag, distinct from DeploymentConfig#auditManagerEnabled, which is
-        // the separate master gate SecurityRules.install() uses to decide whether ANY FrameworkRules
-        // compliance validation runs at all.
-        if (deploymentContext != null && deploymentContext.auditManagerServiceEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.auditManagerServiceEnabled());
-        }
-
-        // Default: enabled for production continuous auditing
-        // NOTE: Audit Manager must be enabled in the AWS account first
-        // This provides automated evidence collection for compliance frameworks
-        return true;
+        // Opt-in only, deliberately not driven by the compliance matrix or a PRODUCTION default:
+        // AWS closed Audit Manager to new accounts as of April 30, 2026 (existing per-account
+        // setups still work, including creating new Assessments there, but a fresh account can
+        // never enable it). Forcing this on by default or by framework requirement would fail
+        // deploys for essentially every new account -- including every AWS Marketplace buyer
+        // launching this template into their own account -- for a reason no deployment-context
+        // change can fix. Soc2Rules' CC7.2 check (the one FrameworkRules control that used to
+        // require this) now also accepts AWS Config's per-framework rules as an equally-valid
+        // continuous-evidence-collection mechanism, which is AWS's own named replacement for this
+        // exact change and is already on by default. This is the audit-manager-SERVICE flag,
+        // distinct from DeploymentConfig#auditManagerEnabled, which is the separate master gate
+        // SecurityRules.install() uses to decide whether ANY FrameworkRules compliance validation
+        // runs at all.
+        return deploymentContext != null && Boolean.TRUE.equals(deploymentContext.auditManagerServiceEnabled());
     }
 
     // Encryption Configuration - Full encryption mandatory
