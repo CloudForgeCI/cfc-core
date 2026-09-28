@@ -6,10 +6,6 @@ import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.*;
-import software.amazon.awscdk.customresources.AwsCustomResource;
-import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
-import software.amazon.awscdk.customresources.AwsSdkCall;
-import software.amazon.awscdk.customresources.PhysicalResourceId;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
@@ -18,12 +14,16 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.iam.AnyPrincipal;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.Function;
+import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.s3.*;
 import software.constructs.Construct;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import io.github.cdklabs.cdknag.NagPackSuppression;
 
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -63,6 +63,66 @@ public class AlbFactory extends BaseFactory {
 
     @DeploymentContext("stackName")
     private String stackName;
+
+    /**
+     * Writes one SSM parameter (Name/Value/Type/Description from {@code ResourceProperties},
+     * fixed physical resource ID) and does nothing on delete. Hand-rolled rather than {@code
+     * AwsCustomResource}/{@code Provider}: both of those wrap CDK's own bundled framework Lambda,
+     * whose code CloudFormation stages to the deployer's private {@code cdk-hnb659fds-assets}
+     * bootstrap bucket -- fine for our own deploys, but unusable by an AWS Marketplace buyer
+     * launching this template directly in their own, unbootstrapped account. {@link Code#fromInline}
+     * embeds this source directly in the template (subject to Lambda's 4096-character {@code
+     * ZipFile} limit), so no S3 reference is emitted at all. Implements the raw CloudFormation
+     * custom-resource protocol itself (the presigned-URL PUT callback) rather than relying on
+     * any CDK-provided response helper, for the same reason.
+     */
+    private static final String SSM_PARAMETER_WRITER_SOURCE = """
+        const https = require('https');
+        const { SSMClient, PutParameterCommand } = require('@aws-sdk/client-ssm');
+
+        function respond(event, status, reason) {
+          return new Promise((resolve) => {
+            const body = JSON.stringify({
+              Status: status,
+              Reason: reason || 'See the function\\'s own CloudWatch Logs group for details.',
+              PhysicalResourceId: 'AlbLogsBucket-SSMWriter',
+              StackId: event.StackId,
+              RequestId: event.RequestId,
+              LogicalResourceId: event.LogicalResourceId,
+              Data: {}
+            });
+            const url = new URL(event.ResponseURL);
+            const req = https.request({
+              hostname: url.hostname,
+              path: url.pathname + url.search,
+              method: 'PUT',
+              headers: { 'content-type': '', 'content-length': Buffer.byteLength(body) }
+            }, (res) => { res.on('data', () => {}); res.on('end', resolve); });
+            req.on('error', resolve);
+            req.write(body);
+            req.end();
+          });
+        }
+
+        exports.handler = async (event) => {
+          try {
+            if (event.RequestType !== 'Delete') {
+              const p = event.ResourceProperties;
+              const client = new SSMClient({ region: p.Region });
+              await client.send(new PutParameterCommand({
+                Name: p.ParameterName,
+                Value: p.ParameterValue,
+                Type: 'String',
+                Description: p.ParameterDescription,
+                Overwrite: true
+              }));
+            }
+            await respond(event, 'SUCCESS');
+          } catch (err) {
+            await respond(event, 'FAILED', String(err));
+          }
+        };
+        """;
 
     @SystemContext("securityProfileConfig")
     private com.cloudforgeci.api.interfaces.SecurityProfileConfiguration securityProfileConfig;
@@ -432,43 +492,43 @@ public class AlbFactory extends BaseFactory {
         String ssmParameterArn = "arn:" + Stack.of(this).getPartition() + ":ssm:" + region + ":"
             + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
 
-        AwsSdkCall putParameterCall = AwsSdkCall.builder()
-                .service("SSM")
-                .action("putParameter")
-                .parameters(java.util.Map.of(
-                        "Name", ssmParameterName,
-                        "Value", newBucket.getBucketArn(),
-                        "Type", "String",
-                        "Description", "CloudForge retained ALB logs bucket ARN for region " + region,
-                        "Overwrite", true
-                ))
-                .physicalResourceId(PhysicalResourceId.of("AlbLogsBucket-SSMWriter"))
-                .region(region)
+        Function ssmWriterFn = Function.Builder.create(this, "AlbLogsBucketSSMWriterFn")
+                .runtime(Runtime.NODEJS_20_X)
+                .handler("index.handler")
+                .code(Code.fromInline(SSM_PARAMETER_WRITER_SOURCE))
+                .timeout(Duration.seconds(30))
                 .build();
 
-        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, "AlbLogsBucketSSMWriter")
-                .onCreate(putParameterCall)
-                .onUpdate(putParameterCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of(ssmParameterArn))
-                                .build()
+        ssmWriterFn.addToRolePolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .actions(List.of("ssm:PutParameter"))
+                .resources(List.of(ssmParameterArn))
+                .build());
+
+        CustomResource ssmWriter = CustomResource.Builder.create(this, "AlbLogsBucketSSMWriter")
+                .serviceToken(ssmWriterFn.getFunctionArn())
+                .properties(Map.of(
+                        "ParameterName", ssmParameterName,
+                        "ParameterValue", newBucket.getBucketArn(),
+                        "ParameterDescription", "CloudForge retained ALB logs bucket ARN for region " + region,
+                        "Region", region
                 ))
                 .build();
 
-        // Add NagSuppressions for CDK custom resource limitations
+        // Add NagSuppressions for this hand-rolled custom resource's own shape
         NagSuppressions.addResourceSuppressions(
-            ssmWriter,
+            ssmWriterFn,
             List.of(
                 NagPackSuppression.builder()
                     .id("PCI.DSS.321-IAMNoInlinePolicy")
-                    .reason("CDK AwsCustomResource creates inline policies by design. " +
-                           "These are auto-generated Lambda execution policies for AWS SDK calls.")
+                    .reason("This Lambda's own execution policy is scoped to a single " +
+                           "ssm:PutParameter call on one parameter ARN -- an inline policy is the " +
+                           "right shape for a permission this narrow.")
                     .build(),
                 NagPackSuppression.builder()
                     .id("PCI.DSS.321-LambdaInsideVPC")
-                    .reason("CDK custom resource Lambdas only make AWS API calls (SSM) " +
-                           "and do not require VPC access.")
+                    .reason("This custom resource Lambda only makes an SSM API call and does not " +
+                           "require VPC access.")
                     .build()
             ),
             Boolean.TRUE
