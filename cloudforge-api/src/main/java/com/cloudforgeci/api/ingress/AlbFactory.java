@@ -531,9 +531,19 @@ public class AlbFactory extends BaseFactory {
         // resource-policy grant automatically as part of their own setup. CloudFormation invokes
         // a custom resource's Lambda directly (not through IAM caller credentials), so without an
         // explicit grant here the invocation is denied before the handler ever runs.
+        //
+        // Scoped with sourceAccount/sourceArn -- cloudformation.amazonaws.com is a shared,
+        // multi-tenant service principal, so an unscoped grant would let ANY AWS account's
+        // CloudFormation invoke this function by pointing their own custom resource's
+        // serviceToken at its ARN, supplying an arbitrary ParameterValue this stack's execution
+        // role would then write to the tracked SSM parameter (a confused-deputy path). sourceArn
+        // resolves to this exact stack's own ARN via the AWS::StackId pseudo-parameter, so only
+        // this stack -- not just this account -- can invoke it.
         ssmWriterFn.addPermission("InvokeByCloudFormation", Permission.builder()
                 .principal(new ServicePrincipal("cloudformation.amazonaws.com"))
                 .action("lambda:InvokeFunction")
+                .sourceAccount(Stack.of(this).getAccount())
+                .sourceArn(Stack.of(this).getStackId())
                 .build());
 
         CustomResource ssmWriter = CustomResource.Builder.create(this, "AlbLogsBucketSSMWriter")
