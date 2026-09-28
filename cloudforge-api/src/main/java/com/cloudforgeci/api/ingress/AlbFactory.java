@@ -14,8 +14,10 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.iam.AnyPrincipal;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Function;
+import software.amazon.awscdk.services.lambda.Permission;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.s3.*;
 import software.constructs.Construct;
@@ -522,6 +524,16 @@ public class AlbFactory extends BaseFactory {
                 .effect(Effect.ALLOW)
                 .actions(List.of("ssm:PutParameter"))
                 .resources(List.of(ssmParameterArn))
+                .build());
+
+        // Required because this is a raw CustomResource (a plain serviceToken pointing at the
+        // function's ARN), not AwsCustomResource/Provider -- both of those add this same
+        // resource-policy grant automatically as part of their own setup. CloudFormation invokes
+        // a custom resource's Lambda directly (not through IAM caller credentials), so without an
+        // explicit grant here the invocation is denied before the handler ever runs.
+        ssmWriterFn.addPermission("InvokeByCloudFormation", Permission.builder()
+                .principal(new ServicePrincipal("cloudformation.amazonaws.com"))
+                .action("lambda:InvokeFunction")
                 .build());
 
         CustomResource ssmWriter = CustomResource.Builder.create(this, "AlbLogsBucketSSMWriter")
