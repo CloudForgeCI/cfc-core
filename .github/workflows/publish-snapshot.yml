@@ -70,6 +70,47 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      - name: Read project version
+        id: version
+        run: |
+          VERSION=$(mvn -q -pl . help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # cloudforge-api has a compile-scope dependency on cloudforge-localstack/cloudforge-ministack
+      # pinned to ${project.version}, and both declare this repo's root pom as their own <parent>.
+      # Each is only published to Central once its own repo's sync-cfc-core-version.yml notices
+      # this repo's latest SNAPSHOT and rebuilds -- a cron poll (every 10 minutes by schedule, but
+      # GitHub throttles scheduled workflows on a low-traffic repo to well beyond their configured
+      # interval, sometimes by hours) racing this job's own `push` trigger, which fires
+      # immediately. Build them from source instead of waiting on that race, the same fix already
+      # applied to the release job below.
+      - name: Install cfc-core root + cloudforge-core locally (parent/dependency for the split modules)
+        run: mvn -q -B -pl .,cloudforge-core -am install -DskipTests -Djacoco.skip=true
+
+      - name: Build cloudforge-localstack and cloudforge-ministack from source at this SNAPSHOT version
+        run: |
+          SNAPSHOT_VERSION="${{ steps.version.outputs.version }}"
+          for repo in cloudforge-localstack cloudforge-ministack; do
+            git clone --depth 1 -b main "https://github.com/CloudForgeCI/${repo}.git" "/tmp/${repo}-src"
+            (
+              cd "/tmp/${repo}-src"
+              # versions:update-parent silently no-ops here, even with the target parent version
+              # already installed locally -- replace the <parent> version directly instead of
+              # relying on it.
+              python3 -c "
+          import re
+          with open('pom.xml') as f:
+              content = f.read()
+          new_content, n = re.subn(r'(<parent>.*?<version>)[^<]+(</version>)', r'\g<1>${SNAPSHOT_VERSION}\g<2>', content, count=1, flags=re.DOTALL)
+          assert n == 1, f'expected exactly 1 parent version replacement in ${repo}, got {n}'
+          with open('pom.xml', 'w') as f:
+              f.write(new_content)
+          "
+              mvn -q -B versions:set -DnewVersion="$SNAPSHOT_VERSION" -DgenerateBackupPoms=false
+              mvn -q -B install -DskipTests -Djacoco.skip=true
+            )
+          done
+
       - name: Build and test
         run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api -am clean verify
 
