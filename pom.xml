@@ -12,7 +12,9 @@
     Reactor modules: cloudforge-core, cloudforge-api. cloudforge-ministack and
     cloudforge-localstack are managed BOM coordinates but not reactor modules — each lives in its
     own repo (CloudForgeCI/cloudforge-ministack, CloudForgeCI/cloudforge-localstack), declares
-    this pom as its Maven parent, and publishes independently in lockstep with this pom's version.
+    this pom as its Maven parent, and publishes independently on its own schedule; cloudforge-api's
+    dependency on each pins an explicit real release (see ${cloudforge-localstack.version}/
+    ${cloudforge-ministack.version}), not this pom's own in-progress version.
     cloudforge-manager-deployment and cloudforge-manager are also not part of this
     BOM/reactor — split into their own private repos
     (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager), each with a
@@ -61,6 +63,15 @@
          to cfc-core's. -->
     <cloudforge-manager-deployment.version>3.2.9-SNAPSHOT</cloudforge-manager-deployment.version>
 
+    <!-- Explicit, deliberately-bumped pins for cloudforge-api's compile-scope dependency on these
+         two — NOT ${project.version}. Each publishes real (non-SNAPSHOT) releases to Central on
+         its own schedule; pinning to one of those instead of chasing this pom's own in-progress
+         version means cfc-core decides what it consumes, rather than depending on a version that
+         may not exist yet at every sibling repo. Bump these only after confirming compatibility
+         with the newer release, the same way any other dependency version bump here works. -->
+    <cloudforge-localstack.version>3.2.17</cloudforge-localstack.version>
+    <cloudforge-ministack.version>3.2.17</cloudforge-ministack.version>
+
     <!-- AWS CDK Versions -->
     <!-- Note: v2.197.0+ defaults to nodejs22.x for AwsCustomResource which isn't available in all regions -->
     <cdk.version>2.196.0</cdk.version>
@@ -76,13 +87,16 @@
          patch suffix), so it can't share ${jackson.version} once that has one. -->
     <jackson-annotations.version>2.21</jackson-annotations.version>
     <jakarta.validation.version>3.0.2</jakarta.validation.version>
-    <!-- 4.1.136.Final, not the 4.1.107.Final AWS SDK v2 2.25.0's own BOM pulls in transitively
-         (via netty-nio-client): dependency-check's SBOM scan found 57-58 CVEs against that
-         pinned version, several CRITICAL (DNS cache-poisoning via unvalidated CNAME/NS-record
-         bailiwick, HTTP request smuggling via Transfer-Encoding/chunked-extension parsing, XXE in
+    <!-- Not the 4.1.107.Final AWS SDK v2 2.25.0's own BOM pulls in transitively (via
+         netty-nio-client): dependency-check's SBOM scan found 57-58 CVEs against that pinned
+         version, several CRITICAL (DNS cache-poisoning via unvalidated CNAME/NS-record bailiwick,
+         HTTP request smuggling via Transfer-Encoding/chunked-extension parsing, XXE in
          XmlDecoder). Netty 4.1.x patch releases are binary-compatible within the same minor line,
-         so overriding just the version here (not the AWS SDK's own BOM) is safe. -->
-    <netty.version>4.1.136.Final</netty.version>
+         so overriding just the version here (not the AWS SDK's own BOM) is safe. 4.1.138.Final
+         specifically: fixes CVE-2026-75595/75596/59902/59903/62380 (all closed as of 4.1.137) and
+         CVE-2026-89044 (a second Transfer-Encoding request-smuggling issue, closed only as of
+         4.1.138 — 4.1.137 alone is still vulnerable to it). -->
+    <netty.version>4.1.138.Final</netty.version>
 
     <!-- Test Dependency Versions -->
     <jupiter.version>5.12.2</jupiter.version>
@@ -103,19 +117,6 @@
     <flatten.plugin.version>1.7.3</flatten.plugin.version>
   </properties>
 
-  <!-- Maven doesn't check the Central Portal's snapshots URL by default — needed here now that
-       cloudforge-api (a reactor member) has a compile-scope dependency on cloudforge-localstack
-       and cloudforge-ministack, which publish independently from their own repos rather than as
-       reactor siblings. Release (non-SNAPSHOT) builds never use this repository. -->
-  <repositories>
-    <repository>
-      <id>central-snapshots</id>
-      <url>https://central.sonatype.com/repository/maven-snapshots/</url>
-      <releases><enabled>false</enabled></releases>
-      <snapshots><enabled>true</enabled></snapshots>
-    </repository>
-  </repositories>
-
   <dependencyManagement>
     <dependencies>
       <!--
@@ -124,11 +125,13 @@
         cloudforge-core            Shared contracts, DeploymentConfig, com.cloudforge.core.local
         cloudforge-api             CloudForgeDeployment, ApplicationSpecs, CMS, CDK factories
         cloudforge-ministack       MiniStack adapter/deployer/pipeline (depends: core); released
-                                   from its own repo (CloudForgeCI/cloudforge-ministack) in
-                                   lockstep with this pom's version, not a reactor module
+                                   from its own repo (CloudForgeCI/cloudforge-ministack) on its
+                                   own cadence, not a reactor module; version pinned explicitly
+                                   (see ${cloudforge-ministack.version}), not tied to this pom's
         cloudforge-localstack      LocalStack adapter/deployer/pipeline (depends: core); released
-                                   from its own repo (CloudForgeCI/cloudforge-localstack) in
-                                   lockstep with this pom's version, not a reactor module
+                                   from its own repo (CloudForgeCI/cloudforge-localstack) on its
+                                   own cadence, not a reactor module; version pinned explicitly
+                                   (see ${cloudforge-localstack.version}), not tied to this pom's
         cloudforge-manager-deployment   ApplicationSpec/deploy presets for CloudForge Manager
                                         (CloudForgeCI/cloudforge-manager-deployment); released
                                         from its own repo on its own cadence. Listed here as a
@@ -161,12 +164,12 @@
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-ministack</artifactId>
-        <version>${project.version}</version>
+        <version>${cloudforge-ministack.version}</version>
       </dependency>
       <dependency>
         <groupId>com.cloudforgeci</groupId>
         <artifactId>cloudforge-localstack</artifactId>
-        <version>${project.version}</version>
+        <version>${cloudforge-localstack.version}</version>
       </dependency>
       <dependency>
         <groupId>com.cloudforgeci</groupId>
@@ -330,13 +333,14 @@
          cloudforge-synth-service all declare this pom as their Maven <parent>, resolved from the
          repository via an empty <relativePath/> (never from a local checkout), so they inherit
          its dependencyManagement and release profile without being reactor members.
-         cloudforge-ministack and cloudforge-localstack stay in lockstep with this pom's own
-         version (see their dependencyManagement entries below, both ${project.version}) and each
-         publish to Maven Central on their own schedule, polling for a new cfc-core release; a
-         cloudforge-api build here needs whichever version they most recently published, which is
-         why cloudforge-api still depends on them (compile scope) despite not being a reactor
-         sibling anymore — see the central-snapshots repository below for how that SNAPSHOT
-         resolution works. cloudforge-manager-deployment also publishes to Maven Central (see
+         cloudforge-ministack and cloudforge-localstack each publish real (non-SNAPSHOT) releases
+         to Maven Central on their own schedule, independent of cfc-core's. cloudforge-api still
+         depends on them (compile scope) despite not being a reactor sibling anymore, pinned to an
+         explicit, deliberately-bumped release (see their dependencyManagement entries below,
+         ${cloudforge-ministack.version}/${cloudforge-localstack.version}) rather than this pom's
+         own in-progress version — cfc-core decides what it consumes, instead of expecting either
+         sibling repo to have already republished to match whatever version cfc-core just became.
+         cloudforge-manager-deployment also publishes to Maven Central (see
          .github/workflows/publish-maven-central.yml) but on its own independent version, not
          locked to this pom's; cloudforge-synth-service does not publish to Central at all, since
          its only Maven consumer is cloudforge-manager's test scope, which installs it from a
