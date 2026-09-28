@@ -191,23 +191,18 @@ public class ComplianceFactory extends BaseFactory {
         // STEP 1: Check if Config INFRASTRUCTURE should be created (Recorder + Delivery Channel)
         // These are account-level singleton resources - only ONE per region per account allowed
         // createConfigInfrastructure controls ONLY infrastructure, NOT rules, and applies only
-        // when awsConfigEnabled is true (matching the field's visibleWhen).
+        // when awsConfigEnabled is true (matching the field's visibleWhen). This flag is the sole
+        // source of truth for whether this stack creates that infrastructure -- deliberately not
+        // second-guessed by a synth-time existence check. A local AWS CLI probe here previously
+        // tried to auto-detect an existing Recorder and silently downgrade this flag, but that
+        // made synthesis depend on whatever real AWS account state (and locally-installed AWS
+        // CLI) happened to be present on whoever ran cdk synth -- non-deterministic, and it
+        // reached out to a live account during what should be a pure, offline synthesis step.
+        // If a deployer genuinely sets this true when infrastructure already exists, CloudFormation
+        // itself now surfaces that as a real ResourceAlreadyExistsException at deploy time -- a
+        // louder, more honest failure than a heuristic silently working around it.
         boolean shouldCreateInfra = Boolean.TRUE.equals(awsConfigEnabled)
             && Boolean.TRUE.equals(createConfigInfrastructure);
-        boolean configInfraExists = false;
-
-        // Only check for existing infrastructure if we're planning to create it
-        if (shouldCreateInfra) {
-            configInfraExists = checkConfigInfrastructureExists();
-
-            if (configInfraExists) {
-                LOG.warning("Config infrastructure already exists but createConfigInfrastructure = true");
-                LOG.warning("  Existing Config Recorder detected in region: " + region);
-                LOG.warning("  Setting createConfigInfrastructure = false automatically to avoid conflict");
-                LOG.warning("  To override this behavior, manually set createConfigInfrastructure in deployment-context.json");
-                shouldCreateInfra = false;
-            }
-        }
 
         ConfigInfrastructure configInfra = null;
         if (shouldCreateInfra) {
@@ -215,11 +210,7 @@ public class ComplianceFactory extends BaseFactory {
             LOG.info("  IMPORTANT: Only ONE stack per region should have createConfigInfrastructure = true");
             configInfra = createConfigInfrastructure();
         } else {
-            if (configInfraExists) {
-                LOG.info("Config infrastructure already exists in region (auto-detected)");
-            } else {
-                LOG.info("Skipping Config infrastructure creation (createConfigInfrastructure = false)");
-            }
+            LOG.info("Skipping Config infrastructure creation (createConfigInfrastructure = false)");
             LOG.info("  Config Recorder 'cloudforge-config-recorder' will be referenced by name if needed");
         }
 
@@ -4549,76 +4540,6 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         return "00000000-0000-0000-0000-000000000000";
-    }
-
-    /**
-     * Check if AWS Config infrastructure (Recorder and Delivery Channel) already exists.
-     * Queries AWS Config to detect existing resources before attempting creation.
-     *
-     * @return true if Config Recorder exists, false otherwise
-     */
-    private boolean checkConfigInfrastructureExists() {
-        LOG.info("Checking if AWS Config infrastructure exists in region: " + region);
-        try {
-            ProcessBuilder pb = new ProcessBuilder(
-                "/usr/local/bin/aws", "configservice", "describe-configuration-recorders",
-                "--output", "json"
-            );
-
-            // Inherit environment variables (AWS_PROFILE, AWS_REGION, etc.)
-            Map<String, String> env = pb.environment();
-            String awsProfile = System.getenv("AWS_PROFILE");
-            if (awsProfile != null && !awsProfile.isEmpty()) {
-                env.put("AWS_PROFILE", awsProfile);
-            }
-            String awsRegion = System.getenv("AWS_REGION");
-            if (awsRegion != null && !awsRegion.isEmpty()) {
-                env.put("AWS_REGION", awsRegion);
-            }
-
-            Process process = pb.start();
-            boolean finished = process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
-
-            if (!finished) {
-                process.destroyForcibly();
-                LOG.warning("AWS CLI query timed out after 10 seconds checking Config Recorder");
-                return false;
-            }
-
-            if (process.exitValue() == 0) {
-                StringBuilder output = new StringBuilder();
-                try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getInputStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        output.append(line);
-                    }
-                }
-
-                String json = output.toString();
-                // Check if ConfigurationRecorders array has any entries
-                boolean exists = json.contains("\"ConfigurationRecorders\"") &&
-                                json.contains("\"name\"") &&
-                                !json.contains("\"ConfigurationRecorders\": []");
-
-                if (exists) {
-                    LOG.info("✓ Existing Config Recorder detected in region: " + region);
-                    LOG.info("  Will skip infrastructure creation to avoid 'ResourceAlreadyExistsException'");
-                } else {
-                    LOG.info("✗ No existing Config Recorder found in region: " + region);
-                    LOG.info("  Will create new Config infrastructure");
-                }
-
-                return exists;
-            } else {
-                LOG.warning("AWS CLI command failed with exit code: " + process.exitValue());
-                return false;
-            }
-        } catch (Exception e) {
-            LOG.warning("Error checking for existing Config infrastructure: " + e.getMessage());
-            LOG.warning("  Assuming no Config infrastructure exists (will attempt creation)");
-            return false;
-        }
     }
 
     /**
