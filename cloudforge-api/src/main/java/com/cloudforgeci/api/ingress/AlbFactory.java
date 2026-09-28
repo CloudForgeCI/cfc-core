@@ -81,7 +81,7 @@ public class AlbFactory extends BaseFactory {
         const { SSMClient, PutParameterCommand } = require('@aws-sdk/client-ssm');
 
         function respond(event, status, reason) {
-          return new Promise((resolve) => {
+          return new Promise((resolve, reject) => {
             const body = JSON.stringify({
               Status: status,
               Reason: reason || 'See the function\\'s own CloudWatch Logs group for details.',
@@ -96,9 +96,20 @@ public class AlbFactory extends BaseFactory {
               hostname: url.hostname,
               path: url.pathname + url.search,
               method: 'PUT',
-              headers: { 'content-type': '', 'content-length': Buffer.byteLength(body) }
-            }, (res) => { res.on('data', () => {}); res.on('end', resolve); });
-            req.on('error', resolve);
+              headers: { 'content-type': '', 'content-length': Buffer.byteLength(body) },
+              timeout: 10000
+            }, (res) => {
+              res.on('data', () => {});
+              res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                  resolve();
+                } else {
+                  reject(new Error('ResponseURL PUT failed with HTTP status ' + res.statusCode));
+                }
+              });
+            });
+            req.on('timeout', () => req.destroy(new Error('ResponseURL PUT timed out')));
+            req.on('error', reject);
             req.write(body);
             req.end();
           });
@@ -119,7 +130,15 @@ public class AlbFactory extends BaseFactory {
             }
             await respond(event, 'SUCCESS');
           } catch (err) {
-            await respond(event, 'FAILED', String(err));
+            console.error('AlbLogsBucketSSMWriter failed: ' + err);
+            try {
+              await respond(event, 'FAILED', String(err));
+            } catch (deliveryErr) {
+              // Nothing further to do: the ResponseURL PUT itself is what just failed, and
+              // it's the only channel this protocol has to reach CloudFormation. Logged so
+              // it's at least visible in CloudWatch instead of a silently-hung stack operation.
+              console.error('Could not deliver FAILED response to CloudFormation: ' + deliveryErr);
+            }
           }
         };
         """;
