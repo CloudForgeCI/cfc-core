@@ -181,6 +181,11 @@ public final class AssetFreeCustomResource {
                 .properties(properties)
                 .build();
 
+        // serviceToken references the function itself, not the separate AWS::Lambda::Permission
+        // above -- without this, CloudFormation has no ordering guarantee that the permission
+        // exists before this resource's first invoke, and can fail with an access-denied error.
+        cr.getNode().addDependency(fn.getNode().findChild("InvokeByCloudFormation"));
+
         return new Result(fn, cr);
     }
 }
