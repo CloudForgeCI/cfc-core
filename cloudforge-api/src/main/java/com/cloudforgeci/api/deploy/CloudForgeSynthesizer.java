@@ -295,14 +295,19 @@ public final class CloudForgeSynthesizer {
      * <p>Suffixes come from {@link DeploymentConfig#availabilityZones} when the caller populated
      * it (region-relative — "a" means whichever zone the target region calls "a"); defaults to
      * {@code ["a", "b"]} otherwise, since every commercial AWS region has at least two AZs with
-     * those conventional suffixes.</p>
+     * those conventional suffixes. A caller-supplied entry that's already a full zone name (e.g.
+     * "us-east-1a", the conventional way anyone would write one by hand) is used as-is rather
+     * than getting the region prepended a second time.</p>
      */
     private static void seedAvailabilityZoneContext(App app, String account, String region, String[] suffixes) {
         List<String> resolvedSuffixes = suffixes != null && suffixes.length > 0
             ? Arrays.asList(suffixes)
             : List.of("a", "b");
         List<String> zones = resolvedSuffixes.stream()
-            .map(suffix -> region + suffix.trim().toLowerCase(Locale.ROOT))
+            .map(suffix -> {
+                String trimmed = suffix.trim().toLowerCase(Locale.ROOT);
+                return trimmed.startsWith(region) ? trimmed : region + trimmed;
+            })
             .toList();
         app.getNode().setContext(
             "availability-zones:account=" + account + ":region=" + region, zones);

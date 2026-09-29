@@ -49,11 +49,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import com.cloudforgeci.api.deploy.aws.StackProgressListener.StackProgressEvent;
 
 /**
  * Creates and incrementally updates CloudFormation stacks on AWS via change sets.
@@ -300,6 +309,15 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * (returns {@code noOp = true}) when the stack already matches the candidate template.
      */
     public AwsStackDeployResult deploy(String stackName, Path template) throws IOException {
+        return deploy(stackName, template, null);
+    }
+
+    /**
+     * Same as {@link #deploy(String, Path)}, additionally reporting each CloudFormation stack
+     * event to {@code listener} as it happens (may be {@code null} to skip live reporting).
+     */
+    public AwsStackDeployResult deploy(String stackName, Path template, StackProgressListener listener)
+            throws IOException {
         String physical = physicalStackName(stackName);
         // The logical stackName, not the physical one: the asset manifest is named after the
         // construct id CloudForgeSynthesizer used.
@@ -346,7 +364,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
             .build());
 
         var request = DescribeStacksRequest.builder().stackName(physical).build();
-        try {
+        waitWithProgress(physical, listener, () -> {
             if (localEmulatorTarget) {
                 WaiterOverrideConfiguration override = WaiterOverrideConfiguration.builder()
                     .waitTimeout(LOCAL_EMULATOR_WAITER_TIMEOUT)
@@ -361,13 +379,112 @@ public final class AwsDirectDeployer implements AutoCloseable {
             } else {
                 cloudFormation.waiter().waitUntilStackCreateComplete(request);
             }
-        } catch (Exception e) {
-            throw new IOException(
-                "AWS deployment failed for " + physical + ":\n" + recentEvents(physical), e);
-        }
+        }, "AWS deployment failed for " + physical);
 
         return new AwsStackDeployResult(
             stackName, !exists, false, changeSummaries, outputs(physical));
+    }
+
+    /**
+     * Runs {@code blockingWait} (one of the SDK's own {@code waitUntilStack*} calls) on a
+     * background thread, while this thread polls {@code describe-stack-events} and reports each
+     * event this stack hasn't already been seen having, in the order CloudFormation reported it,
+     * to {@code listener} (skipped entirely when {@code listener} is {@code null}). Reuses the
+     * SDK waiter's own terminal-state detection rather than reimplementing it; this only adds
+     * visibility into what it's waiting on.
+     *
+     * <p>On failure, the exception message includes every event captured during the wait, with
+     * events that carry a real failure reason (not a generic cancellation, from the cascade every
+     * other in-flight resource gets once CloudFormation starts rolling back) surfaced first —
+     * unlike the fixed-size event window a one-shot {@code describe-stack-events} call after the
+     * fact would return, which can push the actual cause out of view entirely on a stack with
+     * many resources.</p>
+     */
+    private void waitWithProgress(String stackName, StackProgressListener listener,
+            Runnable blockingWait, String failureMessagePrefix) throws IOException {
+        Set<String> seenEventIds = new HashSet<>();
+        List<StackEvent> allEvents = new ArrayList<>();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<?> waiterFuture = executor.submit(blockingWait);
+        try {
+            while (!waiterFuture.isDone()) {
+                pollNewEvents(stackName, seenEventIds, allEvents, listener);
+                Thread.sleep(POLL_INTERVAL.toMillis());
+            }
+            waiterFuture.get();
+            pollNewEvents(stackName, seenEventIds, allEvents, listener);
+        } catch (ExecutionException e) {
+            pollNewEvents(stackName, seenEventIds, allEvents, listener);
+            throw new IOException(
+                failureMessagePrefix + ":\n" + formatFailureSummary(allEvents), e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for " + stackName, e);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    /** Fetches this stack's current events and reports any not already in {@code seenEventIds}. */
+    private void pollNewEvents(String stackName, Set<String> seenEventIds,
+            List<StackEvent> allEvents, StackProgressListener listener) {
+        List<StackEvent> events;
+        try {
+            events = cloudFormation.describeStackEvents(
+                    DescribeStackEventsRequest.builder().stackName(stackName).build())
+                .stackEvents();
+        } catch (CloudFormationException e) {
+            // A stack that's finished deleting is a routine race with this poll, not a real
+            // problem -- the caller's own waiter is the authority on whether the operation
+            // itself succeeded.
+            return;
+        }
+        // CloudFormation returns events newest-first; report them oldest-first so the listener
+        // sees them in the order they actually happened.
+        List<StackEvent> newEvents = new ArrayList<>();
+        for (StackEvent event : events) {
+            if (seenEventIds.add(event.eventId())) {
+                newEvents.add(event);
+            }
+        }
+        for (int i = newEvents.size() - 1; i >= 0; i--) {
+            StackEvent event = newEvents.get(i);
+            allEvents.add(event);
+            if (listener != null) {
+                listener.onEvent(new StackProgressEvent(
+                    String.valueOf(event.timestamp()),
+                    event.resourceType(),
+                    event.logicalResourceId(),
+                    event.physicalResourceId(),
+                    event.resourceStatusAsString(),
+                    event.resourceStatusReason()));
+            }
+        }
+    }
+
+    /**
+     * Events with a real failure reason (not a generic cancellation) are the actual cause and are
+     * listed first; the full event list follows for complete context. Unlike {@link
+     * #formatEvent}'s previous caller, this has no arbitrary length cap -- every event captured
+     * during the wait is included.
+     */
+    static String formatFailureSummary(List<StackEvent> events) {
+        StringBuilder summary = new StringBuilder();
+        List<StackEvent> rootCauses = events.stream()
+            .filter(e -> e.resourceStatusAsString() != null
+                && e.resourceStatusAsString().contains("FAILED"))
+            .filter(e -> e.resourceStatusReason() != null
+                && !e.resourceStatusReason().isBlank()
+                && !e.resourceStatusReason().contains("cancelled"))
+            .toList();
+        if (!rootCauses.isEmpty()) {
+            summary.append("Root cause(s):\n");
+            rootCauses.forEach(e -> summary.append(formatEvent(e)).append('\n'));
+            summary.append('\n');
+        }
+        summary.append("All events:\n");
+        events.forEach(e -> summary.append(formatEvent(e)).append('\n'));
+        return summary.toString();
     }
 
     /**
@@ -414,17 +531,27 @@ public final class AwsDirectDeployer implements AutoCloseable {
     }
 
     public void delete(String stackName) throws IOException {
-        stackName = physicalStackName(stackName);
-        if (!stackExists(stackName)) {
+        delete(stackName, null);
+    }
+
+    /**
+     * Same as {@link #delete(String)}, additionally reporting each CloudFormation stack event to
+     * {@code listener} as it happens (may be {@code null} to skip live reporting).
+     */
+    public void delete(String stackName, StackProgressListener listener) throws IOException {
+        String physical = physicalStackName(stackName);
+        if (!stackExists(physical)) {
             return;
         }
+        var request = DescribeStacksRequest.builder().stackName(physical).build();
         try {
-            cloudFormation.deleteStack(DeleteStackRequest.builder().stackName(stackName).build());
-            cloudFormation.waiter().waitUntilStackDeleteComplete(
-                DescribeStacksRequest.builder().stackName(stackName).build());
-        } catch (Exception e) {
-            if (stackExists(stackName)) {
-                throw new IOException("Failed to delete AWS stack " + stackName, e);
+            cloudFormation.deleteStack(DeleteStackRequest.builder().stackName(physical).build());
+            waitWithProgress(physical, listener,
+                () -> cloudFormation.waiter().waitUntilStackDeleteComplete(request),
+                "Failed to delete AWS stack " + physical);
+        } catch (IOException e) {
+            if (stackExists(physical)) {
+                throw e;
             }
         }
     }
@@ -599,34 +726,6 @@ public final class AwsDirectDeployer implements AutoCloseable {
             .stackName(stackName)
             .changeSetName(changeSetName)
             .build());
-    }
-
-    private String recentEvents(String stackName) {
-        try {
-            StringBuilder summary = new StringBuilder();
-            var events = cloudFormation.describeStackEvents(
-                    DescribeStackEventsRequest.builder().stackName(stackName).build())
-                .stackEvents();
-
-            events.stream()
-                .filter(event -> event.resourceStatusAsString() != null
-                    && (event.resourceStatusAsString().contains("FAILED")
-                        || event.resourceStatusAsString().contains("ROLLBACK")))
-                .limit(5)
-                .forEach(event -> summary.append(formatEvent(event)).append('\n'));
-
-            if (summary.isEmpty()) {
-                events.stream().limit(15).forEach(event ->
-                    summary.append(formatEvent(event)).append('\n'));
-            } else {
-                summary.append("\nRecent events:\n");
-                events.stream().limit(10).forEach(event ->
-                    summary.append(formatEvent(event)).append('\n'));
-            }
-            return summary.toString();
-        } catch (Exception e) {
-            return "Unable to read stack events: " + e.getMessage();
-        }
     }
 
     private static String formatEvent(StackEvent event) {

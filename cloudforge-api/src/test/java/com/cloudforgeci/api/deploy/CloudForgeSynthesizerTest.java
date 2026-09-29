@@ -266,6 +266,29 @@ class CloudForgeSynthesizerTest {
     }
 
     /**
+     * A hand-written deployment-context.json bypasses the interactive wizard's field validation
+     * (which restricts this field to bare suffixes via {@code allowedValues}), so a caller
+     * writing full zone names the conventional way ("us-east-1a", not "a") must still work
+     * rather than producing a doubled "us-east-1us-east-1a".
+     */
+    @Test
+    void synthesizingWithFullAvailabilityZoneNamesDoesNotDoubleTheRegionPrefix() throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestFullAzNames");
+        config.account = "111122223333";
+        config.availabilityZones = new String[] {"us-east-1a", "us-east-1b"};
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        String templateJson = Files.readString(result.templateFile());
+        assertTrue(!templateJson.contains("us-east-1us-east-1"),
+            "region prefix must not be doubled when the caller already supplied a full zone name: "
+                + templateJson);
+        assertTrue(templateJson.contains("us-east-1a") || templateJson.contains("us-east-1b"),
+            "expected real seeded AZ names in the template, got: " + templateJson);
+    }
+
+    /**
      * Companion to the dummy-AZ test above: callers that do not set {@code config.account} (the
      * default) keep account-agnostic {@code Fn::GetAZs} resolution.
      */

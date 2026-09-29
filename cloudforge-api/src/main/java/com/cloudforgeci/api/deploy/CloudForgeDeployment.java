@@ -10,6 +10,7 @@ import com.cloudforge.core.local.LocalSameApplicationStackReplacer;
 import com.cloudforge.core.local.TemplateAdaptationResult;
 import com.cloudforgeci.api.deploy.aws.AwsDirectDeployer;
 import com.cloudforgeci.api.deploy.aws.AwsStackDeployResult;
+import com.cloudforgeci.api.deploy.aws.StackProgressListener;
 import com.cloudforgeci.localstack.LocalStackDeployer;
 import com.cloudforgeci.localstack.LocalStackDeploymentPipeline;
 import com.cloudforgeci.ministack.MiniStackDeployer;
@@ -38,6 +39,16 @@ public final class CloudForgeDeployment {
     }
 
     public static DeploymentResult deploy(DeploymentRequest request) throws IOException {
+        return deploy(request, null);
+    }
+
+    /**
+     * Same as {@link #deploy(DeploymentRequest)}, additionally reporting each CloudFormation
+     * stack event to {@code listener} as it happens for an {@link DeploymentTarget#AWS} request
+     * (ignored for MiniStack/LocalStack targets, which never call {@link AwsDirectDeployer}).
+     */
+    public static DeploymentResult deploy(DeploymentRequest request, StackProgressListener listener)
+            throws IOException {
         if (request.config().applicationSpec != null) {
             DeploymentContextPreparer.prepare(
                 request.config(),
@@ -52,7 +63,7 @@ public final class CloudForgeDeployment {
         return switch (request.target()) {
             case MINISTACK -> deployMiniStack(request, preflight);
             case LOCALSTACK -> deployLocalStack(request, preflight);
-            case AWS -> deployAws(request, preflight);
+            case AWS -> deployAws(request, preflight, listener);
         };
     }
 
@@ -162,7 +173,8 @@ public final class CloudForgeDeployment {
 
     private static DeploymentResult deployAws(
             DeploymentRequest request,
-            LocalDeployPreflight.PreflightOutcome preflight) throws IOException {
+            LocalDeployPreflight.PreflightOutcome preflight,
+            StackProgressListener listener) throws IOException {
         String stackName = request.config().stackName;
         List<String> messages = new ArrayList<>();
         if (preflight != null && preflight.ran()) {
@@ -185,7 +197,8 @@ public final class CloudForgeDeployment {
                     messages.addAll(preview.changeSummaries());
                 }
                 case DEPLOY -> {
-                    AwsStackDeployResult result = deployer.deploy(stackName, request.canonicalTemplate());
+                    AwsStackDeployResult result =
+                        deployer.deploy(stackName, request.canonicalTemplate(), listener);
                     outputs = result.outputs();
                     messages.add(result.noOp()
                         ? "No changes for " + stackName
