@@ -135,9 +135,7 @@ jobs:
         run: |
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew tap CloudForgeCI/tap
-          brew trust CloudForgeCI/tap
-          brew install cloudforge-cli
+          brew install CloudForgeCI/tap/cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Download historical metrics
@@ -235,9 +233,7 @@ jobs:
         run: |
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew tap CloudForgeCI/tap
-          brew trust CloudForgeCI/tap
-          brew install cloudforge-cli
+          brew install CloudForgeCI/tap/cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Run enhanced synthesis test
@@ -324,9 +320,7 @@ jobs:
         run: |
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew tap CloudForgeCI/tap
-          brew trust CloudForgeCI/tap
-          brew install cloudforge-cli
+          brew install CloudForgeCI/tap/cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Download historical metrics
@@ -474,9 +468,7 @@ jobs:
         run: |
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew tap CloudForgeCI/tap
-          brew trust CloudForgeCI/tap
-          brew install cloudforge-cli
+          brew install CloudForgeCI/tap/cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Download historical changeset metrics
@@ -597,9 +589,7 @@ jobs:
         run: |
           # Homebrew is preinstalled on this runner but not on PATH by default.
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew tap CloudForgeCI/tap
-          brew trust CloudForgeCI/tap
-          brew install cloudforge-cli
+          brew install CloudForgeCI/tap/cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Run comprehensive resource validation
