@@ -123,28 +123,20 @@ jobs:
       - name: Build project
         run: mvn clean install -DskipTests -f pom.xml
 
-      # Building from source (not downloading the latest release) so this PR's cloudforge-core/
-      # cloudforge-api changes are what this actually exercises -- the released binary is pinned
-      # to whatever cfc-core version cloudforge-cli's own pom last synced to, which never reflects
-      # an in-flight PR. "Build project" above already put this checkout's artifacts in the local
-      # .m2 cache; overriding cfc-core.version to match makes cloudforge-cli's own build resolve
-      # those instead of whatever it has published to Central.
-      - name: Build cloudforge-cli from source against this PR's cfc-core build
+      # Installs the latest published cloudforge-cli release (via the public homebrew-tap,
+      # the same path a real user takes) rather than building from source against this PR's
+      # in-flight cfc-core changes. A release can never contain unmerged changes no matter how
+      # it's built, so building from source here was always testing a stale proxy for actual PR
+      # compatibility, not this PR's own diff -- the real compatibility check is cloudforge-cli's
+      # own release.yml, which builds and tests (mvn clean verify) against each new cfc-core
+      # release right after it publishes. This step confirms the currently-installable
+      # cloudforge-cli still works, using the exact artifact a real end user would get.
+      - name: Install the latest cloudforge-cli release
         run: |
-          CFC_CORE_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          git clone --depth 1 -b develop https://github.com/CloudForgeCI/cloudforge-cli.git /tmp/cloudforge-cli-src
-          cd /tmp/cloudforge-cli-src
-          mvn -q -B versions:set-property -Dproperty=cfc-core.version \
-            -DnewVersion="$CFC_CORE_VERSION" -DgenerateBackupPoms=false
-          # assemble-release.sh builds offline (-o), assuming a developer machine that already has
-          # every dependency cached -- a fresh CI runner doesn't, so warm the local repo with a
-          # real (online) build first (dependency:go-offline is too aggressive here and chases an
-          # unrelated, already-broken transitive resolution path).
-          mvn -q -B clean package -DskipTests
-          bash scripts/assemble-release.sh
-          CLI_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          tar xzf "release/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz" -C /tmp
-          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
+          # Homebrew is preinstalled on this runner but not on PATH by default.
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install CloudForgeCI/tap/cloudforge-cli
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Download historical metrics
         uses: actions/download-artifact@v4
@@ -229,28 +221,20 @@ jobs:
       - name: Build project
         run: mvn clean install -DskipTests -f pom.xml
 
-      # Building from source (not downloading the latest release) so this PR's cloudforge-core/
-      # cloudforge-api changes are what this actually exercises -- the released binary is pinned
-      # to whatever cfc-core version cloudforge-cli's own pom last synced to, which never reflects
-      # an in-flight PR. "Build project" above already put this checkout's artifacts in the local
-      # .m2 cache; overriding cfc-core.version to match makes cloudforge-cli's own build resolve
-      # those instead of whatever it has published to Central.
-      - name: Build cloudforge-cli from source against this PR's cfc-core build
+      # Installs the latest published cloudforge-cli release (via the public homebrew-tap,
+      # the same path a real user takes) rather than building from source against this PR's
+      # in-flight cfc-core changes. A release can never contain unmerged changes no matter how
+      # it's built, so building from source here was always testing a stale proxy for actual PR
+      # compatibility, not this PR's own diff -- the real compatibility check is cloudforge-cli's
+      # own release.yml, which builds and tests (mvn clean verify) against each new cfc-core
+      # release right after it publishes. This step confirms the currently-installable
+      # cloudforge-cli still works, using the exact artifact a real end user would get.
+      - name: Install the latest cloudforge-cli release
         run: |
-          CFC_CORE_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          git clone --depth 1 -b develop https://github.com/CloudForgeCI/cloudforge-cli.git /tmp/cloudforge-cli-src
-          cd /tmp/cloudforge-cli-src
-          mvn -q -B versions:set-property -Dproperty=cfc-core.version \
-            -DnewVersion="$CFC_CORE_VERSION" -DgenerateBackupPoms=false
-          # assemble-release.sh builds offline (-o), assuming a developer machine that already has
-          # every dependency cached -- a fresh CI runner doesn't, so warm the local repo with a
-          # real (online) build first (dependency:go-offline is too aggressive here and chases an
-          # unrelated, already-broken transitive resolution path).
-          mvn -q -B clean package -DskipTests
-          bash scripts/assemble-release.sh
-          CLI_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          tar xzf "release/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz" -C /tmp
-          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
+          # Homebrew is preinstalled on this runner but not on PATH by default.
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install CloudForgeCI/tap/cloudforge-cli
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Run enhanced synthesis test
         run: |
@@ -324,28 +308,20 @@ jobs:
       - name: Build project
         run: mvn clean install -DskipTests -f pom.xml
 
-      # Building from source (not downloading the latest release) so this PR's cloudforge-core/
-      # cloudforge-api changes are what this actually exercises -- the released binary is pinned
-      # to whatever cfc-core version cloudforge-cli's own pom last synced to, which never reflects
-      # an in-flight PR. "Build project" above already put this checkout's artifacts in the local
-      # .m2 cache; overriding cfc-core.version to match makes cloudforge-cli's own build resolve
-      # those instead of whatever it has published to Central.
-      - name: Build cloudforge-cli from source against this PR's cfc-core build
+      # Installs the latest published cloudforge-cli release (via the public homebrew-tap,
+      # the same path a real user takes) rather than building from source against this PR's
+      # in-flight cfc-core changes. A release can never contain unmerged changes no matter how
+      # it's built, so building from source here was always testing a stale proxy for actual PR
+      # compatibility, not this PR's own diff -- the real compatibility check is cloudforge-cli's
+      # own release.yml, which builds and tests (mvn clean verify) against each new cfc-core
+      # release right after it publishes. This step confirms the currently-installable
+      # cloudforge-cli still works, using the exact artifact a real end user would get.
+      - name: Install the latest cloudforge-cli release
         run: |
-          CFC_CORE_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          git clone --depth 1 -b develop https://github.com/CloudForgeCI/cloudforge-cli.git /tmp/cloudforge-cli-src
-          cd /tmp/cloudforge-cli-src
-          mvn -q -B versions:set-property -Dproperty=cfc-core.version \
-            -DnewVersion="$CFC_CORE_VERSION" -DgenerateBackupPoms=false
-          # assemble-release.sh builds offline (-o), assuming a developer machine that already has
-          # every dependency cached -- a fresh CI runner doesn't, so warm the local repo with a
-          # real (online) build first (dependency:go-offline is too aggressive here and chases an
-          # unrelated, already-broken transitive resolution path).
-          mvn -q -B clean package -DskipTests
-          bash scripts/assemble-release.sh
-          CLI_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          tar xzf "release/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz" -C /tmp
-          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
+          # Homebrew is preinstalled on this runner but not on PATH by default.
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install CloudForgeCI/tap/cloudforge-cli
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Download historical metrics
         uses: actions/download-artifact@v4
@@ -480,28 +456,20 @@ jobs:
       - name: Build project
         run: mvn clean install -DskipTests -f pom.xml
 
-      # Building from source (not downloading the latest release) so this PR's cloudforge-core/
-      # cloudforge-api changes are what this actually exercises -- the released binary is pinned
-      # to whatever cfc-core version cloudforge-cli's own pom last synced to, which never reflects
-      # an in-flight PR. "Build project" above already put this checkout's artifacts in the local
-      # .m2 cache; overriding cfc-core.version to match makes cloudforge-cli's own build resolve
-      # those instead of whatever it has published to Central.
-      - name: Build cloudforge-cli from source against this PR's cfc-core build
+      # Installs the latest published cloudforge-cli release (via the public homebrew-tap,
+      # the same path a real user takes) rather than building from source against this PR's
+      # in-flight cfc-core changes. A release can never contain unmerged changes no matter how
+      # it's built, so building from source here was always testing a stale proxy for actual PR
+      # compatibility, not this PR's own diff -- the real compatibility check is cloudforge-cli's
+      # own release.yml, which builds and tests (mvn clean verify) against each new cfc-core
+      # release right after it publishes. This step confirms the currently-installable
+      # cloudforge-cli still works, using the exact artifact a real end user would get.
+      - name: Install the latest cloudforge-cli release
         run: |
-          CFC_CORE_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          git clone --depth 1 -b develop https://github.com/CloudForgeCI/cloudforge-cli.git /tmp/cloudforge-cli-src
-          cd /tmp/cloudforge-cli-src
-          mvn -q -B versions:set-property -Dproperty=cfc-core.version \
-            -DnewVersion="$CFC_CORE_VERSION" -DgenerateBackupPoms=false
-          # assemble-release.sh builds offline (-o), assuming a developer machine that already has
-          # every dependency cached -- a fresh CI runner doesn't, so warm the local repo with a
-          # real (online) build first (dependency:go-offline is too aggressive here and chases an
-          # unrelated, already-broken transitive resolution path).
-          mvn -q -B clean package -DskipTests
-          bash scripts/assemble-release.sh
-          CLI_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          tar xzf "release/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz" -C /tmp
-          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
+          # Homebrew is preinstalled on this runner but not on PATH by default.
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install CloudForgeCI/tap/cloudforge-cli
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Download historical changeset metrics
         uses: actions/download-artifact@v4
@@ -609,28 +577,20 @@ jobs:
       - name: Build project
         run: mvn clean install -DskipTests -f pom.xml
 
-      # Building from source (not downloading the latest release) so this PR's cloudforge-core/
-      # cloudforge-api changes are what this actually exercises -- the released binary is pinned
-      # to whatever cfc-core version cloudforge-cli's own pom last synced to, which never reflects
-      # an in-flight PR. "Build project" above already put this checkout's artifacts in the local
-      # .m2 cache; overriding cfc-core.version to match makes cloudforge-cli's own build resolve
-      # those instead of whatever it has published to Central.
-      - name: Build cloudforge-cli from source against this PR's cfc-core build
+      # Installs the latest published cloudforge-cli release (via the public homebrew-tap,
+      # the same path a real user takes) rather than building from source against this PR's
+      # in-flight cfc-core changes. A release can never contain unmerged changes no matter how
+      # it's built, so building from source here was always testing a stale proxy for actual PR
+      # compatibility, not this PR's own diff -- the real compatibility check is cloudforge-cli's
+      # own release.yml, which builds and tests (mvn clean verify) against each new cfc-core
+      # release right after it publishes. This step confirms the currently-installable
+      # cloudforge-cli still works, using the exact artifact a real end user would get.
+      - name: Install the latest cloudforge-cli release
         run: |
-          CFC_CORE_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          git clone --depth 1 -b develop https://github.com/CloudForgeCI/cloudforge-cli.git /tmp/cloudforge-cli-src
-          cd /tmp/cloudforge-cli-src
-          mvn -q -B versions:set-property -Dproperty=cfc-core.version \
-            -DnewVersion="$CFC_CORE_VERSION" -DgenerateBackupPoms=false
-          # assemble-release.sh builds offline (-o), assuming a developer machine that already has
-          # every dependency cached -- a fresh CI runner doesn't, so warm the local repo with a
-          # real (online) build first (dependency:go-offline is too aggressive here and chases an
-          # unrelated, already-broken transitive resolution path).
-          mvn -q -B clean package -DskipTests
-          bash scripts/assemble-release.sh
-          CLI_VERSION="$(mvn -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
-          tar xzf "release/cloudforge-cli-${CLI_VERSION}-darwin.tar.gz" -C /tmp
-          echo "/tmp/cloudforge-cli-${CLI_VERSION}/libexec/bin" >> "$GITHUB_PATH"
+          # Homebrew is preinstalled on this runner but not on PATH by default.
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install CloudForgeCI/tap/cloudforge-cli
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: Run comprehensive resource validation
         run: |

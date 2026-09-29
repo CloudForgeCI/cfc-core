@@ -129,6 +129,11 @@ class ComplianceFactoryTest {
         cfcContext.put("stackName", "TestComplianceAuditMgr");
         cfcContext.put("securityProfile", "PRODUCTION");
         cfcContext.put("auditManagerEnabled", true);
+        // auditManagerServiceEnabled (distinct from the master gate above) is what actually
+        // decides whether ComplianceFactory provisions the Audit Manager service/assessments --
+        // PRODUCTION no longer defaults this true (Audit Manager closed to new AWS accounts as of
+        // April 30, 2026), so this test has to opt in explicitly to keep exercising that path.
+        cfcContext.put("auditManagerServiceEnabled", true);
         cfcContext.put("auditManagerFrameworkId", "test-framework-id");
         cfcContext.put("domain", "example.com");
         stack.getNode().setContext("cfc", cfcContext);
