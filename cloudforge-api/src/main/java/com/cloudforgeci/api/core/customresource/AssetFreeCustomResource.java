@@ -63,6 +63,7 @@ public final class AssetFreeCustomResource {
             const url = new URL(event.ResponseURL);
             const req = https.request({
               hostname: url.hostname,
+              port: url.port || 443,
               path: url.pathname + url.search,
               method: 'PUT',
               headers: { 'content-type': '', 'content-length': Buffer.byteLength(body) },
@@ -100,7 +101,11 @@ public final class AssetFreeCustomResource {
           try {
             if (event.RequestType !== 'Delete') {
               const p = event.ResourceProperties;
-              const client = new SSMClient({ region: p.Region });
+              const endpoint = process.env.AWS_ENDPOINT_URL;
+              const client = new SSMClient({
+                region: p.Region,
+                ...(endpoint ? { endpoint } : {})
+              });
               await client.send(new PutParameterCommand({
                 Name: p.ParameterName,
                 Value: p.ParameterValue,
