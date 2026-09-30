@@ -70,6 +70,7 @@ public final class AssetFreeCustomResource {
               timeout: 10000
             }, (res) => {
               res.on('data', () => {});
+              res.on('error', reject);
               res.on('end', () => {
                 if (res.statusCode >= 200 && res.statusCode < 300) {
                   resolve();
@@ -161,7 +162,7 @@ public final class AssetFreeCustomResource {
                                  Duration timeout, List<PolicyStatement> policyStatements,
                                  Map<String, Object> properties) {
         Function fn = Function.Builder.create(scope, idPrefix + "Fn")
-                .runtime(Runtime.NODEJS_20_X)
+                .runtime(Runtime.NODEJS_22_X)
                 .handler("index.handler")
                 .code(Code.fromInline(RESPONSE_PROTOCOL_JS + handlerBody))
                 .timeout(timeout)
@@ -190,6 +191,14 @@ public final class AssetFreeCustomResource {
         // above -- without this, CloudFormation has no ordering guarantee that the permission
         // exists before this resource's first invoke, and can fail with an access-denied error.
         cr.getNode().addDependency(fn.getNode().findChild("InvokeByCloudFormation"));
+
+        // fn.addToRolePolicy(...) above attaches each statement to the role's own generated
+        // DefaultPolicy (a separate AWS::IAM::Policy resource), which CDK does not automatically
+        // make the function -- or anything invoking it -- wait on. Without this, CloudFormation
+        // can invoke the function before that policy exists, failing with AccessDenied.
+        if (!policyStatements.isEmpty()) {
+            cr.getNode().addDependency(fn.getRole().getNode().findChild("DefaultPolicy"));
+        }
 
         return new Result(fn, cr);
     }
