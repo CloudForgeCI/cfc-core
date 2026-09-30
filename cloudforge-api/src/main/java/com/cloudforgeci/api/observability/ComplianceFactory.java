@@ -146,6 +146,14 @@ public class ComplianceFactory extends BaseFactory {
 
     public ComplianceFactory(Construct scope, String id) {
         super(scope, id);
+        // By now BaseFactory's own constructor (the super() call above) has already run
+        // ContextInjector.inject, so `region` already holds whatever the deployment context
+        // supplied -- this only fills the gap when that left it unset, so an ARN or SSM
+        // parameter path built from `region` anywhere in this class never embeds the literal
+        // string "null" (or, worse, crashes a Map.of(..., "Region", region) call with an NPE).
+        if (region == null || region.isEmpty()) {
+            region = Stack.of(this).getRegion();
+        }
     }
 
     // CloudFormation conditions for framework-specific Config rules
