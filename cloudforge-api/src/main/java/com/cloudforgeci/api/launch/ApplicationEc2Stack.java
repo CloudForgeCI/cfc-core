@@ -28,12 +28,13 @@ public class ApplicationEc2Stack extends Stack {
         }
 
         DeploymentContext cfc = DeploymentContext.from(scope);
+        Construct appScope = MarketplaceParameterSupport.applyIfApplicable(this, cfc, applicationSpec);
 
         Tags.of(this).add("cloudforge:managed", "true");
         Tags.of(this).add("cloudforge:application", applicationSpec.applicationId());
         Tags.of(this).add("cloudforge:runtime", "ec2");
 
-        ApplicationFactory.createEc2(this, id, cfc, security, iamProfile, applicationSpec);
+        ApplicationFactory.createEc2(appScope, id, cfc, security, iamProfile, applicationSpec);
 
         CfnOutput.Builder.create(this, "CloudForgeApplicationId")
             .value(applicationSpec.applicationId())
