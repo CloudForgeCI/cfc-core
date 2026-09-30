@@ -127,11 +127,14 @@ public class DeploymentConfig {
     /**
      * Fully qualified domain name — always {@code subdomain + "." + domain} once both are set;
      * this field only matters when you need to override that computed result directly (e.g. a
-     * domain structure the subdomain+domain pair can't express). {@code @JsonIgnore}d
-     * deliberately: it's a derived/override value, not sent as its own JSON key — the previous
-     * description ("overrides domain+subdomain") had the relationship backwards, reading as if
-     * *this* field were the primary input and domain/subdomain were the fallback, when it's the
-     * other way around.
+     * domain structure the subdomain+domain pair can't express), or when a caller only has the
+     * full FQDN available and no reliable way to split it (e.g. recovering it from a live
+     * CloudFormation template's ACM certificate, where the domain/subdomain boundary isn't
+     * knowable without a hosted-zone lookup). Previously {@code @JsonIgnore}d on the theory that
+     * it should never round-trip as its own JSON key — that silently dropped any caller-supplied
+     * override during deserialization (an explicit {@code fqdn} in a submitted JSON body was
+     * discarded, reverting to null and falling through to the subdomain+domain computation
+     * instead), which is the opposite of "override."
      */
     @ConfigField(
         displayName = "FQDN (advanced override)",
@@ -139,7 +142,6 @@ public class DeploymentConfig {
         category = "domain",
         order = 30
     )
-    @JsonIgnore  // Computed/override field, not serialized under its own key
     public String fqdn;
 
     /** Enable SSL certificate via ACM */

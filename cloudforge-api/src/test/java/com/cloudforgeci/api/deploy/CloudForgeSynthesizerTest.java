@@ -51,6 +51,33 @@ class CloudForgeSynthesizerTest {
         assertTrue(template.get("Resources").size() > 0);
     }
 
+    /**
+     * {@code ApplicationUrl} (and its per-app alias) used to always be the raw ALB DNS name, even
+     * when a working custom domain was configured — Manager's instance-detail screen and its
+     * "Open" link always pointed at the ALB instead. {@code FargateFactory.createApplicationUrlOutput}
+     * now prefers {@code https://<fqdn>} once {@code enableSsl} + a resolvable domain make that a
+     * real, reachable URL.
+     */
+    @Test
+    void applicationUrlOutputPrefersTheConfiguredDomainOverTheRawAlbDnsName() throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestDomainUrl");
+        config.account = "111122223333";
+        config.domain = "example.com";
+        config.subdomain = "jenkins";
+        config.enableSsl = true;
+        // Avoids a real Route53 HostedZone.fromLookup API call during synth (createZone=false,
+        // the default, requires live AWS credentials this test environment doesn't have).
+        config.createZone = true;
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        JsonNode outputs = MAPPER.readTree(result.templateFile().toFile()).path("Outputs");
+        String applicationUrl = outputs.path("ApplicationUrl").path("Value").asText();
+        assertEquals("https://jenkins.example.com", applicationUrl,
+            "expected the configured domain, not the ALB DNS name, got outputs: " + outputs);
+    }
+
     private DeploymentConfig wordpressFargateConfig(String stackName) {
         DeploymentConfig config = new DeploymentConfig();
         config.stackName = stackName;

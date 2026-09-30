@@ -164,6 +164,10 @@ class DeploymentConfigTest {
         assertEquals("jtest", loaded.stackName);
         assertEquals("cloudforge.localhost", loaded.domain);
         assertEquals("jenkins", loaded.subdomain);
+        // fqdn must round-trip: it's an explicit override, not a derived value Jackson should
+        // discard on deserialize (@JsonIgnore previously dropped a caller-supplied override back
+        // to null, defeating the whole point of "override").
+        assertEquals("jenkins.cloudforge.localhost", loaded.fqdn);
         assertEquals("jenkins", loaded.applicationId);
         assertEquals(List.of(ComplianceFrameworkType.SOC2), loaded.complianceFrameworks);
     }
