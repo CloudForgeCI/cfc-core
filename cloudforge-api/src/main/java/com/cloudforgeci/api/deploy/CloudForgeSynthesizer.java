@@ -11,6 +11,7 @@ import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.rules.ComplianceFindingsCollector;
 import com.cloudforgeci.api.core.rules.NagReportReader;
 import com.cloudforgeci.api.core.rules.NagReportReader.ComplianceFinding;
+import com.cloudforgeci.api.deploy.aws.AwsDirectDeployer;
 import com.cloudforgeci.api.launch.ApplicationEc2Stack;
 import com.cloudforgeci.api.launch.ApplicationFargateStack;
 import software.amazon.awscdk.App;
@@ -248,6 +249,17 @@ public final class CloudForgeSynthesizer {
 
             CloudFormationStackArtifact artifact = assembly.getStackByName(config.stackName);
             Path templateFile = Path.of(assembly.getDirectory()).resolve(artifact.getTemplateFile());
+
+            // A Marketplace-uploaded template file has no later deploy-time rewrite step to rely
+            // on (unlike AwsDirectDeployer's own in-memory copy, rewritten right before every
+            // CreateStack/CreateChangeSet call) -- the file itself must already be self-contained,
+            // so the buyer's own (never-bootstrapped) account doesn't reject BootstrapVersion's
+            // unresolvable SSM reference before creating a single resource.
+            if (marketplaceMode) {
+                String rewritten = AwsDirectDeployer.resolveCdkBootstrapParameters(Files.readString(templateFile));
+                Files.writeString(templateFile, rewritten);
+            }
+
             return new Result(config.stackName, templateFile, Path.of(assembly.getDirectory()));
         }
     }

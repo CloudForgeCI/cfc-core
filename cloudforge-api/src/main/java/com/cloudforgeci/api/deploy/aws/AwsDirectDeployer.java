@@ -679,10 +679,13 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * value"}) before creating a single resource. Applies the same rewrite as {@code
      * LocalStackTemplateAdapter.resolveCdkBootstrapParameters}, duplicated because {@code
      * cloudforge-api} cannot depend on {@code cloudforge-localstack}. Called for every deploy
-     * target -- a self-contained template must never depend on the deploying account's bootstrap
-     * state, not just a local emulator's.
+     * target, not just a local emulator's -- a self-contained template must never depend on the
+     * deploying account's bootstrap state. Public so {@code CloudForgeSynthesizer
+     * #synthesizeForMarketplace} can also apply it directly to the template file it writes to
+     * disk, not just to the in-memory body this class sends to CloudFormation -- a file meant to
+     * be uploaded to AWS Marketplace has no later deploy-time rewrite step to rely on.
      */
-    static String resolveCdkBootstrapParameters(String templateBody) throws IOException {
+    public static String resolveCdkBootstrapParameters(String templateBody) throws IOException {
         JsonNode root = MAPPER.readTree(templateBody);
         if (!(root instanceof ObjectNode template)) {
             return templateBody;
