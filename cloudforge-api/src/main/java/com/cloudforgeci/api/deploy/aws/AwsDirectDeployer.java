@@ -11,6 +11,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.waiters.WaiterOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
@@ -61,6 +62,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.logging.Logger;
 
 import com.cloudforgeci.api.deploy.aws.StackProgressListener.StackProgressEvent;
 
@@ -95,6 +97,7 @@ import com.cloudforgeci.api.deploy.aws.StackProgressListener.StackProgressEvent;
 public final class AwsDirectDeployer implements AutoCloseable {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Logger LOG = Logger.getLogger(AwsDirectDeployer.class.getName());
     private static final Duration OPERATION_TIMEOUT = Duration.ofMinutes(30);
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
     /**
@@ -358,13 +361,18 @@ public final class AwsDirectDeployer implements AutoCloseable {
             .map(change -> summarize(change.resourceChange()))
             .toList();
 
+        // Captured before the operation starts, not before this deploy() call began, so a stack
+        // event from an earlier deploy/update on this same stack (returned on the very first
+        // describeStackEvents page, since CloudFormation keeps full history) is never mistaken
+        // for this operation's own progress.
+        Instant operationStart = Instant.now();
         cloudFormation.executeChangeSet(ExecuteChangeSetRequest.builder()
             .stackName(physical)
             .changeSetName(changeSetName)
             .build());
 
         var request = DescribeStacksRequest.builder().stackName(physical).build();
-        waitWithProgress(physical, listener, () -> {
+        waitWithProgress(physical, listener, operationStart, () -> {
             if (localEmulatorTarget) {
                 WaiterOverrideConfiguration override = WaiterOverrideConfiguration.builder()
                     .waitTimeout(LOCAL_EMULATOR_WAITER_TIMEOUT)
@@ -401,20 +409,20 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * many resources.</p>
      */
     private void waitWithProgress(String stackName, StackProgressListener listener,
-            Runnable blockingWait, String failureMessagePrefix) throws IOException {
+            Instant operationStart, Runnable blockingWait, String failureMessagePrefix) throws IOException {
         Set<String> seenEventIds = new HashSet<>();
         List<StackEvent> allEvents = new ArrayList<>();
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Future<?> waiterFuture = executor.submit(blockingWait);
         try {
             while (!waiterFuture.isDone()) {
-                pollNewEvents(stackName, seenEventIds, allEvents, listener);
+                pollNewEvents(stackName, operationStart, seenEventIds, allEvents, listener);
                 Thread.sleep(POLL_INTERVAL.toMillis());
             }
             waiterFuture.get();
-            pollNewEvents(stackName, seenEventIds, allEvents, listener);
+            pollNewEvents(stackName, operationStart, seenEventIds, allEvents, listener);
         } catch (ExecutionException e) {
-            pollNewEvents(stackName, seenEventIds, allEvents, listener);
+            pollNewEvents(stackName, operationStart, seenEventIds, allEvents, listener);
             throw new IOException(
                 failureMessagePrefix + ":\n" + formatFailureSummary(allEvents), e.getCause());
         } catch (InterruptedException e) {
@@ -425,41 +433,86 @@ public final class AwsDirectDeployer implements AutoCloseable {
         }
     }
 
-    /** Fetches this stack's current events and reports any not already in {@code seenEventIds}. */
-    private void pollNewEvents(String stackName, Set<String> seenEventIds,
+    /**
+     * Fetches this stack's events newer than {@code operationStart}, paginating as needed, and
+     * reports any not already in {@code seenEventIds}. Events older than {@code operationStart}
+     * are excluded so a stack event from an earlier deploy/update on the same stack (returned on
+     * the first page, since {@code describeStackEvents} returns full history) is never reported
+     * as this operation's own progress or folded into its failure summary.
+     *
+     * <p>Progress reporting only adds visibility -- it must never decide {@link #deploy}/
+     * {@link #delete}'s outcome, which is the background waiter's job alone. A polling failure
+     * (other than the stack having just finished deleting, an expected race with this poll) is
+     * logged, not thrown; a listener that throws is isolated per-event so one bad callback can't
+     * stop the rest of the batch from being reported.</p>
+     */
+    private void pollNewEvents(String stackName, Instant operationStart, Set<String> seenEventIds,
             List<StackEvent> allEvents, StackProgressListener listener) {
-        List<StackEvent> events;
-        try {
-            events = cloudFormation.describeStackEvents(
-                    DescribeStackEventsRequest.builder().stackName(stackName).build())
-                .stackEvents();
-        } catch (CloudFormationException e) {
-            // A stack that's finished deleting is a routine race with this poll, not a real
-            // problem -- the caller's own waiter is the authority on whether the operation
-            // itself succeeded.
-            return;
-        }
-        // CloudFormation returns events newest-first; report them oldest-first so the listener
-        // sees them in the order they actually happened.
+        // Newest-first within a page and across pages; walking oldest-to-newest within the
+        // collected list happens below, once collection is done.
         List<StackEvent> newEvents = new ArrayList<>();
-        for (StackEvent event : events) {
-            if (seenEventIds.add(event.eventId())) {
-                newEvents.add(event);
+        String nextToken = null;
+        try {
+            do {
+                var response = cloudFormation.describeStackEvents(DescribeStackEventsRequest.builder()
+                    .stackName(stackName)
+                    .nextToken(nextToken)
+                    .build());
+                PageScanResult scan = scanPageForNewEvents(response.stackEvents(), operationStart, seenEventIds);
+                newEvents.addAll(scan.newEvents());
+                nextToken = scan.stopPaginating() ? null : response.nextToken();
+            } while (nextToken != null);
+        } catch (CloudFormationException e) {
+            if (e.statusCode() != 400 && e.statusCode() != 404) {
+                LOG.warning("describeStackEvents failed for " + stackName + ": " + e.getMessage());
             }
+            return;
+        } catch (SdkException e) {
+            LOG.warning("describeStackEvents failed for " + stackName + ": " + e.getMessage());
+            return;
         }
         for (int i = newEvents.size() - 1; i >= 0; i--) {
             StackEvent event = newEvents.get(i);
             allEvents.add(event);
             if (listener != null) {
-                listener.onEvent(new StackProgressEvent(
-                    String.valueOf(event.timestamp()),
-                    event.resourceType(),
-                    event.logicalResourceId(),
-                    event.physicalResourceId(),
-                    event.resourceStatusAsString(),
-                    event.resourceStatusReason()));
+                try {
+                    listener.onEvent(new StackProgressEvent(
+                        String.valueOf(event.timestamp()),
+                        event.resourceType(),
+                        event.logicalResourceId(),
+                        event.physicalResourceId(),
+                        event.resourceStatusAsString(),
+                        event.resourceStatusReason()));
+                } catch (RuntimeException e) {
+                    LOG.warning("StackProgressListener threw for " + stackName + ": " + e.getMessage());
+                }
             }
         }
+    }
+
+    /**
+     * One {@code describeStackEvents} page's worth of new events (newest-first, matching the
+     * page's own order) and whether pagination should stop -- {@code true} once a pre-cutoff or
+     * already-seen event is reached, since {@code describeStackEvents} guarantees strict
+     * newest-first ordering: everything after that point, on this page or any later one, is at
+     * least as old and was necessarily already covered by an earlier poll.
+     */
+    record PageScanResult(List<StackEvent> newEvents, boolean stopPaginating) {}
+
+    /** Package-visible for {@code AwsDirectDeployerTest} -- see {@link #pollNewEvents}. */
+    static PageScanResult scanPageForNewEvents(
+            List<StackEvent> pageEvents, Instant operationStart, Set<String> seenEventIds) {
+        List<StackEvent> newEvents = new ArrayList<>();
+        for (StackEvent event : pageEvents) {
+            if (event.timestamp() != null && event.timestamp().isBefore(operationStart)) {
+                return new PageScanResult(newEvents, true);
+            }
+            if (!seenEventIds.add(event.eventId())) {
+                return new PageScanResult(newEvents, true);
+            }
+            newEvents.add(event);
+        }
+        return new PageScanResult(newEvents, false);
     }
 
     /**
@@ -545,8 +598,9 @@ public final class AwsDirectDeployer implements AutoCloseable {
         }
         var request = DescribeStacksRequest.builder().stackName(physical).build();
         try {
+            Instant operationStart = Instant.now();
             cloudFormation.deleteStack(DeleteStackRequest.builder().stackName(physical).build());
-            waitWithProgress(physical, listener,
+            waitWithProgress(physical, listener, operationStart,
                 () -> cloudFormation.waiter().waitUntilStackDeleteComplete(request),
                 "Failed to delete AWS stack " + physical);
         } catch (IOException e) {

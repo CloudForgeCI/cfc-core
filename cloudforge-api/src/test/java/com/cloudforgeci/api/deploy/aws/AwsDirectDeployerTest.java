@@ -306,4 +306,70 @@ class AwsDirectDeployerTest {
             .resourceStatusReason(reason)
             .build();
     }
+
+    /**
+     * {@code scanPageForNewEvents} backs {@code pollNewEvents}' cutoff filtering and pagination
+     * decisions (a stack event from an earlier deploy/update on the same stack must never be
+     * reported as this operation's own progress, and pagination must stop once nothing new is
+     * left to find) -- see its javadoc for the reasoning. Tested directly since there's no
+     * AWS-client mock available in this module to drive {@code pollNewEvents} itself end to end.
+     */
+    @Test
+    void scanPageForNewEventsExcludesEventsFromBeforeTheOperationStarted() {
+        java.time.Instant operationStart = java.time.Instant.parse("2026-01-01T00:00:10.00Z");
+        List<software.amazon.awssdk.services.cloudformation.model.StackEvent> page = List.of(
+            eventAt("New1", operationStart.plusSeconds(2)),
+            eventAt("OldFromPriorDeploy", operationStart.minusSeconds(5))
+        );
+
+        AwsDirectDeployer.PageScanResult scan =
+            AwsDirectDeployer.scanPageForNewEvents(page, operationStart, new java.util.HashSet<>());
+
+        assertEquals(List.of("New1"), scan.newEvents().stream().map(e -> e.logicalResourceId()).toList());
+        assertTrue(scan.stopPaginating(), "must stop once a pre-cutoff event is reached");
+    }
+
+    @Test
+    void scanPageForNewEventsStopsAtAnAlreadySeenEventWithoutPaginatingFurther() {
+        java.time.Instant operationStart = java.time.Instant.parse("2026-01-01T00:00:10.00Z");
+        java.util.Set<String> seenEventIds = new java.util.HashSet<>();
+        seenEventIds.add("AlreadySeen-CREATE_FAILED");
+        List<software.amazon.awssdk.services.cloudformation.model.StackEvent> page = List.of(
+            eventAt("Brand New", operationStart.plusSeconds(5)),
+            cancelledEvent("AlreadySeen", "AWS::EC2::SecurityGroup"),
+            eventAt("NeverReached", operationStart.plusSeconds(1))
+        );
+
+        AwsDirectDeployer.PageScanResult scan =
+            AwsDirectDeployer.scanPageForNewEvents(page, operationStart, seenEventIds);
+
+        assertEquals(List.of("Brand New"), scan.newEvents().stream().map(e -> e.logicalResourceId()).toList());
+        assertTrue(scan.stopPaginating());
+    }
+
+    @Test
+    void scanPageForNewEventsContinuesPaginatingWhenAWholePageIsNew() {
+        java.time.Instant operationStart = java.time.Instant.parse("2026-01-01T00:00:10.00Z");
+        List<software.amazon.awssdk.services.cloudformation.model.StackEvent> page = List.of(
+            eventAt("New1", operationStart.plusSeconds(3)),
+            eventAt("New2", operationStart.plusSeconds(2))
+        );
+
+        AwsDirectDeployer.PageScanResult scan =
+            AwsDirectDeployer.scanPageForNewEvents(page, operationStart, new java.util.HashSet<>());
+
+        assertEquals(2, scan.newEvents().size());
+        assertTrue(!scan.stopPaginating(), "a page with nothing old or already-seen must keep paginating");
+    }
+
+    private static software.amazon.awssdk.services.cloudformation.model.StackEvent eventAt(
+            String logicalId, java.time.Instant timestamp) {
+        return software.amazon.awssdk.services.cloudformation.model.StackEvent.builder()
+            .eventId(logicalId + "-CREATE_FAILED")
+            .logicalResourceId(logicalId)
+            .resourceType("AWS::EC2::Subnet")
+            .resourceStatus("CREATE_COMPLETE")
+            .timestamp(timestamp)
+            .build();
+    }
 }
