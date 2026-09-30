@@ -76,8 +76,7 @@ public final class ManagerOperatorIamSupport {
      * Lets Manager's own task role call {@code aws-marketplace:GetEntitlements} — the API
      * {@code MarketplaceEntitlementService} (cloudforge-manager) self-checks against on a
      * schedule, using this same task role's own default credentials (no separate seller-side
-     * credentials involved). Granted to every Manager deployment, not gated on {@link
-     * com.cloudforge.core.config.DeploymentConfig#marketplaceDeploymentEnabled}: Manager checks
+     * credentials involved). Granted to every Manager deployment unconditionally: Manager checks
      * on every AWS deployment and lets AWS's subscription record decide the outcome, so a
      * non-subscriber simply gets an empty entitlement list. {@code Resource: "*"} because {@code
      * GetEntitlements} supports no resource-level permissions or condition keys at all (AWS's

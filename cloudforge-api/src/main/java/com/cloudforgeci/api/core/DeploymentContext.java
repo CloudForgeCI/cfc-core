@@ -357,7 +357,6 @@ public final class DeploymentContext {
     public Boolean auditManagerEnabled() { return config.auditManagerEnabled; }
     public Boolean auditManagerServiceEnabled() { return config.auditManagerServiceEnabled; }
     public Boolean managerDirectDeployEnabled() { return config.managerDirectDeployEnabled; }
-    public Boolean marketplaceDeploymentEnabled() { return config.marketplaceDeploymentEnabled; }
     public String complianceFrameworks() { return complianceFrameworks; }
     public ComplianceMode complianceMode() { return complianceMode; }
     public Integer logRetentionDays() {

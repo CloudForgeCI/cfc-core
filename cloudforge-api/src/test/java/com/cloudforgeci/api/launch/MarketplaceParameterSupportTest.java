@@ -21,8 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A Marketplace buyer launches this template directly from the AWS Console and never runs the
  * CDK CLI, so cognitoInitialAdminEmail/managerLicenseKey must become real CloudFormation
  * Parameters (see {@link MarketplaceParameterSupport}'s own javadoc for why this is value-only,
- * not structural). {@link ApplicationLoader} (cloudforge-manager-deployment) isn't on this
- * module's test classpath -- it depends on cloudforge-api, not the reverse -- so a minimal
+ * not structural, and why Marketplace mode is a plain method parameter rather than a {@code
+ * DeploymentConfig} field). {@link ApplicationLoader} (cloudforge-manager-deployment) isn't on
+ * this module's test classpath -- it depends on cloudforge-api, not the reverse -- so a minimal
  * {@link ApplicationSpec} stub stands in for the real one; the only method that actually matters
  * to {@link MarketplaceParameterSupport} is {@code applicationId()}.
  */
@@ -53,16 +54,16 @@ class MarketplaceParameterSupportTest {
     }
 
     @Test
-    void managerWithFlagEnabledGetsRealCfnParameters() {
+    void managerInMarketplaceModeGetsRealCfnParameters() {
         Map<String, Object> cfcContext = new HashMap<>();
         cfcContext.put("stackName", "ManagerMarketplaceParams");
-        cfcContext.put("marketplaceDeploymentEnabled", true);
         Stack stack = stackWithContext("ManagerMarketplaceParams", cfcContext);
 
         MarketplaceParameterSupport.applyIfApplicable(
             stack,
             com.cloudforgeci.api.core.DeploymentContext.from(stack),
-            specWithId(ManagerOperatorIamSupport.APPLICATION_ID));
+            specWithId(ManagerOperatorIamSupport.APPLICATION_ID),
+            true);
 
         Template template = Template.fromStack(stack);
         Map<String, Object> json = template.toJSON();
@@ -80,7 +81,7 @@ class MarketplaceParameterSupportTest {
     }
 
     @Test
-    void managerWithFlagDisabledGetsNoCfnParameters() {
+    void managerNotInMarketplaceModeGetsNoCfnParameters() {
         Map<String, Object> cfcContext = new HashMap<>();
         cfcContext.put("stackName", "ManagerNoMarketplaceParams");
         Stack stack = stackWithContext("ManagerNoMarketplaceParams", cfcContext);
@@ -88,7 +89,8 @@ class MarketplaceParameterSupportTest {
         MarketplaceParameterSupport.applyIfApplicable(
             stack,
             com.cloudforgeci.api.core.DeploymentContext.from(stack),
-            specWithId(ManagerOperatorIamSupport.APPLICATION_ID));
+            specWithId(ManagerOperatorIamSupport.APPLICATION_ID),
+            false);
 
         Template template = Template.fromStack(stack);
         Map<String, Object> json = template.toJSON();
@@ -101,22 +103,22 @@ class MarketplaceParameterSupportTest {
     }
 
     @Test
-    void nonManagerAppWithFlagEnabledGetsNoCfnParameters() {
+    void nonManagerAppInMarketplaceModeGetsNoCfnParameters() {
         Map<String, Object> cfcContext = new HashMap<>();
         cfcContext.put("stackName", "JenkinsMarketplaceParams");
-        cfcContext.put("marketplaceDeploymentEnabled", true);
         Stack stack = stackWithContext("JenkinsMarketplaceParams", cfcContext);
 
         MarketplaceParameterSupport.applyIfApplicable(
             stack,
             com.cloudforgeci.api.core.DeploymentContext.from(stack),
-            specWithId("jenkins"));
+            specWithId("jenkins"),
+            true);
 
         Template template = Template.fromStack(stack);
         Map<String, Object> json = template.toJSON();
         @SuppressWarnings("unchecked")
         Map<String, Object> parameters = (Map<String, Object>) json.getOrDefault("Parameters", Map.of());
         assertFalse(parameters.containsKey("AdminEmail") || parameters.containsKey("LicenseKey"),
-            "a non-Manager app must not gain these parameters even with the flag set, got: " + parameters);
+            "a non-Manager app must not gain these parameters even in Marketplace mode, got: " + parameters);
     }
 }

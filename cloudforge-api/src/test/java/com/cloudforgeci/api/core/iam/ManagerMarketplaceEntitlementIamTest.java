@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * CDK-synthesis coverage for {@link ManagerOperatorIamSupport#marketplaceEntitlementStatement} —
  * the {@code aws-marketplace:GetEntitlements} grant, given to every {@code cloudforge-manager}
- * deployment regardless of {@code DeploymentConfig.marketplaceDeploymentEnabled}.
+ * deployment unconditionally.
  */
 class ManagerMarketplaceEntitlementIamTest {
 
@@ -48,11 +48,10 @@ class ManagerMarketplaceEntitlementIamTest {
     }
 
     @Test
-    void nonManagerStackOmitsGrantEvenWithFlagEnabled() throws Exception {
+    void nonManagerStackOmitsGrant() throws Exception {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "JenkinsMarketplaceIam", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId("jenkins")
-            .withMarketplaceDeploymentEnabled(true)
             .createVpc()
             .createAlb()
             .createEfs()

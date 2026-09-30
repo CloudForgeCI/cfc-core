@@ -18,6 +18,13 @@ import java.util.Map;
  * requiring them via CDK {@code --context}/cdk.json (meaningless to a buyer who never runs the CDK
  * CLI at all).
  *
+ * <p>Whether Marketplace mode applies is never sourced from {@code DeploymentConfig}/{@code
+ * --context} -- a field there would be just another value in a user-editable JSON file, settable
+ * on a normal deploy by anyone, not something only an actual Marketplace listing build controls.
+ * The caller (see {@link com.cloudforgeci.api.deploy.CloudForgeSynthesizer#synthesizeForMarketplace})
+ * passes it as a plain method parameter instead, hardcoded {@code true} at that one dedicated call
+ * site and never exposed as a setting anywhere else.</p>
+ *
  * <p>LicenseSeat is the single licensing model across every deployment channel, including
  * Marketplace (BYOL -- Bring Your Own License -- is an AWS Marketplace-supported pricing model
  * under which the seller's own licensing system, not Marketplace's native entitlement mechanism,
@@ -58,14 +65,14 @@ final class MarketplaceParameterSupport {
     }
 
     /**
-     * Returns {@code stack} unchanged unless {@code applicationSpec} is CloudForge Manager and
-     * {@code marketplaceDeploymentEnabled} is set -- every other application, and every
-     * non-Marketplace CloudForge Manager deployment, keeps sourcing these two values from CDK
-     * context exactly as before, with the caller building the application directly under the
-     * stack as usual.
+     * Returns {@code stack} unchanged unless {@code marketplaceMode} is {@code true} and {@code
+     * applicationSpec} is CloudForge Manager -- every other application, and every non-Marketplace
+     * CloudForge Manager deployment, keeps sourcing these two values from CDK context exactly as
+     * before, with the caller building the application directly under the stack as usual.
      */
-    static Construct applyIfApplicable(Stack stack, DeploymentContext cfc, ApplicationSpec applicationSpec) {
-        if (!Boolean.TRUE.equals(cfc.marketplaceDeploymentEnabled())) {
+    static Construct applyIfApplicable(
+            Stack stack, DeploymentContext cfc, ApplicationSpec applicationSpec, boolean marketplaceMode) {
+        if (!marketplaceMode) {
             return stack;
         }
         if (!ManagerOperatorIamSupport.APPLICATION_ID.equals(applicationSpec.applicationId())) {

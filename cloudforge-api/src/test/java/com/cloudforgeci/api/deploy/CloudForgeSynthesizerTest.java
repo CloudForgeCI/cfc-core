@@ -321,4 +321,18 @@ class CloudForgeSynthesizerTest {
             result.assemblyDirectory());
         assertEquals(result.templateFile(), request.canonicalTemplate());
     }
+
+    /** {@code cloudforge-manager}'s own {@code ApplicationSpec} isn't registered on this module's
+     *  test classpath (cloudforge-manager-deployment depends on cloudforge-api, not the reverse),
+     *  so only the guard clause -- not a real Marketplace synth -- is testable here; see {@code
+     *  MarketplaceParameterSupportTest} for coverage of the actual parameter wiring. */
+    @Test
+    void synthesizeForMarketplaceRejectsEveryApplicationExceptManager() {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestMarketplaceGuard");
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+            () -> CloudForgeSynthesizer.synthesizeForMarketplace(config, tempDir.resolve("cdk.out")));
+        assertTrue(thrown.getMessage().contains("cloudforge-manager"),
+            "expected the error to name cloudforge-manager as the only supported app: " + thrown.getMessage());
+    }
 }

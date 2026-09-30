@@ -121,6 +121,36 @@ public final class CloudForgeSynthesizer {
      * @throws IOException when {@code app.synth()} fails, or the output directory can't be created
      */
     public static Result synthesize(DeploymentConfig config, Path outputDirectory) throws IOException {
+        return synthesize(config, outputDirectory, false);
+    }
+
+    /**
+     * Same as {@link #synthesize}, but produces the AWS Marketplace CloudFormation listing variant
+     * of CloudForge Manager -- see {@code MarketplaceParameterSupport}'s own javadoc for what that
+     * changes (real {@code AdminEmail}/{@code LicenseKey} CloudFormation parameters instead of
+     * requiring them via {@code --context}/cdk.json, meaningless to a buyer who never runs the CDK
+     * CLI). This is the one and only place Marketplace mode is ever turned on -- deliberately not a
+     * {@code DeploymentConfig} field or a CLI flag on the regular {@code deploy} command, so it
+     * can't be set by hand-editing a context file; only whatever builds the actual Marketplace
+     * listing artifact calls this method.
+     *
+     * @throws IllegalArgumentException when {@code config.applicationId} isn't {@code
+     *     cloudforge-manager} -- every other application ignores Marketplace mode entirely (see
+     *     {@code MarketplaceParameterSupport}), so synthesizing one through this entry point would
+     *     silently produce a template indistinguishable from {@link #synthesize}'s own output.
+     */
+    public static Result synthesizeForMarketplace(DeploymentConfig config, Path outputDirectory) throws IOException {
+        Objects.requireNonNull(config, "config");
+        if (!"cloudforge-manager".equals(config.applicationId)) {
+            throw new IllegalArgumentException(
+                "synthesizeForMarketplace only applies to cloudforge-manager, got applicationId="
+                    + config.applicationId);
+        }
+        return synthesize(config, outputDirectory, true);
+    }
+
+    private static Result synthesize(DeploymentConfig config, Path outputDirectory, boolean marketplaceMode)
+            throws IOException {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(outputDirectory, "outputDirectory");
         if (config.stackName == null || config.stackName.isBlank()) {
@@ -186,9 +216,11 @@ public final class CloudForgeSynthesizer {
 
             switch (config.runtime) {
                 case FARGATE -> new ApplicationFargateStack(
-                    app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec);
+                    app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec,
+                    marketplaceMode);
                 case EC2 -> new ApplicationEc2Stack(
-                    app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec);
+                    app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec,
+                    marketplaceMode);
             }
 
             CloudAssembly assembly;
