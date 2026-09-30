@@ -19,12 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A Marketplace buyer launches this template directly from the AWS Console and never runs the
- * CDK CLI, so cognitoInitialAdminEmail/managerLicenseKey must become real CloudFormation
- * Parameters (see {@link MarketplaceParameterSupport}'s own javadoc for why this is value-only,
- * not structural). {@link ApplicationLoader} (cloudforge-manager-deployment) isn't on this
- * module's test classpath -- it depends on cloudforge-api, not the reverse -- so a minimal
- * {@link ApplicationSpec} stub stands in for the real one; the only method that actually matters
- * to {@link MarketplaceParameterSupport} is {@code applicationId()}.
+ * CDK CLI, so cognitoInitialAdminEmail must become a real CloudFormation Parameter (see {@link
+ * MarketplaceParameterSupport}'s own javadoc for why this is value-only, not structural, and why
+ * managerLicenseKey is deliberately not included). {@link ApplicationLoader}
+ * (cloudforge-manager-deployment) isn't on this module's test classpath -- it depends on
+ * cloudforge-api, not the reverse -- so a minimal {@link ApplicationSpec} stub stands in for the
+ * real one; the only method that actually matters to {@link MarketplaceParameterSupport} is
+ * {@code applicationId()}.
  */
 class MarketplaceParameterSupportTest {
 
@@ -70,13 +71,11 @@ class MarketplaceParameterSupportTest {
         Map<String, Object> parameters = (Map<String, Object>) json.get("Parameters");
         assertTrue(parameters != null && parameters.containsKey("AdminEmail"),
             "expected an AdminEmail parameter, got: " + parameters);
-        assertTrue(parameters.containsKey("LicenseKey"),
-            "expected a LicenseKey parameter, got: " + parameters);
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> licenseKeyProps = (Map<String, Object>) parameters.get("LicenseKey");
-        assertTrue(Boolean.TRUE.equals(licenseKeyProps.get("NoEcho")),
-            "LicenseKey must be NoEcho -- it's a sensitive value typed into the AWS Console");
+        // managerLicenseKey is deliberately NOT exposed -- see MarketplaceParameterSupport's own
+        // javadoc: whether prompting for a LicenseSeat key in a Marketplace listing's launch form
+        // is compliant with AWS Marketplace's seller terms is still an open question.
+        assertFalse(parameters.containsKey("LicenseKey"),
+            "LicenseKey must not be exposed until the seller-terms question is resolved, got: " + parameters);
     }
 
     @Test
