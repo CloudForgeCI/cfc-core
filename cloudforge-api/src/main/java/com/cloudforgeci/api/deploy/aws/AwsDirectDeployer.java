@@ -337,10 +337,13 @@ public final class AwsDirectDeployer implements AutoCloseable {
             template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
 
         boolean exists = stackExists(physical) && stackIsDeployable(physical);
-        String templateBody = Files.readString(template);
-        if (localEmulatorTarget) {
-            templateBody = resolveCdkBootstrapParameters(templateBody);
-        }
+        // Every target, not just local emulators: a self-contained template (this class's whole
+        // purpose -- see AssetFreeCustomResource) must never depend on the deploying account
+        // being CDK-bootstrapped. An AWS Marketplace buyer launching this template directly never
+        // runs `cdk bootstrap` first, so an unrewritten BootstrapVersion SSM-parameter reference
+        // fails CloudFormation's own parameter resolution before a single resource is created --
+        // the exact same failure mode this rewrite already fixed for LocalStack.
+        String templateBody = resolveCdkBootstrapParameters(Files.readString(template));
 
         if (exists && templateMatches(physical, templateBody)) {
             return new AwsStackDeployResult(stackName, false, true, List.of(), outputs(physical));
@@ -555,10 +558,9 @@ public final class AwsDirectDeployer implements AutoCloseable {
             template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
 
         boolean exists = stackExists(physical) && stackIsDeployable(physical);
-        String templateBody = Files.readString(template);
-        if (localEmulatorTarget) {
-            templateBody = resolveCdkBootstrapParameters(templateBody);
-        }
+        // See the identical comment in deploy() -- applies to every target now, not just local
+        // emulators.
+        String templateBody = resolveCdkBootstrapParameters(Files.readString(template));
 
         if (exists && templateMatches(physical, templateBody)) {
             return new AwsStackDeployResult(stackName, false, true, List.of(), Map.of());
@@ -671,12 +673,14 @@ public final class AwsDirectDeployer implements AutoCloseable {
     /**
      * CDK injects {@code BootstrapVersion} as {@code AWS::SSM::Parameter::Value<String>}, whose
      * default resolves from {@code /cdk-bootstrap/hnb659fds/version} in SSM Parameter Store. That
-     * parameter exists in a bootstrapped AWS account but never in a local emulator, where
-     * CloudFormation rejects the reference ({@code "Parameter BootstrapVersion should either have
-     * input value or default value"}). Applies the same rewrite as
-     * {@code LocalStackTemplateAdapter.resolveCdkBootstrapParameters}, duplicated because
-     * {@code cloudforge-api} cannot depend on {@code cloudforge-localstack}. Called only when
-     * {@link #localEmulatorTarget} is true; AWS templates are left unchanged.
+     * parameter exists in a bootstrapped AWS account but never in a local emulator or an AWS
+     * Marketplace buyer's own (never-bootstrapped) account, where CloudFormation rejects the
+     * reference ({@code "Parameter BootstrapVersion should either have input value or default
+     * value"}) before creating a single resource. Applies the same rewrite as {@code
+     * LocalStackTemplateAdapter.resolveCdkBootstrapParameters}, duplicated because {@code
+     * cloudforge-api} cannot depend on {@code cloudforge-localstack}. Called for every deploy
+     * target -- a self-contained template must never depend on the deploying account's bootstrap
+     * state, not just a local emulator's.
      */
     static String resolveCdkBootstrapParameters(String templateBody) throws IOException {
         JsonNode root = MAPPER.readTree(templateBody);
