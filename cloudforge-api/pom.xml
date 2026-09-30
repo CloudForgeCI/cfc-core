@@ -190,6 +190,9 @@
               </includes>
               <reuseForks>false</reuseForks>
               <forkCount>1</forkCount>
+              <!-- A hang here is a known, accepted risk (see the comment above) — bound it so CI
+                   fails with a clear signal instead of stalling the whole test phase indefinitely. -->
+              <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
             </configuration>
           </execution>
         </executions>

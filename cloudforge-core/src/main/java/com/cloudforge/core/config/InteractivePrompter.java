@@ -93,6 +93,8 @@ public class InteractivePrompter {
             promptYesNo(field, config);
         } else if (isNumericType(type)) {
             promptNumeric(field, config);
+        } else if (List.class.isAssignableFrom(type)) {
+            promptStringList(field, config);
         } else {
             promptString(field, config);
         }
@@ -286,6 +288,41 @@ public class InteractivePrompter {
         field.setValue(config, value.isEmpty() ? null : value);
         String displayValue = field.sensitive() ? "********" : value;
         output.println("✅ " + field.displayName() + ": " + (displayValue.isEmpty() ? "(not set)" : displayValue));
+    }
+
+    /**
+     * Prompts for a comma-separated list of strings (e.g. {@code protectedPaths}). {@code
+     * field.example()}'s format (a comma-separated list) is the expected input shape.
+     */
+    @SuppressWarnings("unchecked")
+    private void promptStringList(ConfigFieldInfo field, Object config) {
+        Object currentValue = field.getValue(config);
+        List<String> currentList = currentValue instanceof List<?> l ? (List<String>) l : List.of();
+        String defaultValue = String.join(",", currentList);
+
+        output.println();
+        output.println("📋 " + field.displayName());
+        if (!field.description().isEmpty()) {
+            output.println("   " + field.description());
+        }
+        if (!field.example().isEmpty()) {
+            output.println("   Example: " + field.example());
+        }
+
+        String defaultDisplay = defaultValue.isEmpty() ? "(none)" : defaultValue;
+        String prompt = String.format("%s, comma-separated (default: %s): ", field.displayName(), defaultDisplay);
+        String response = readLine(prompt);
+        String raw = response.isEmpty() ? defaultValue : response;
+
+        List<String> value = raw.isEmpty()
+            ? List.of()
+            : java.util.Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+
+        field.setValue(config, value.isEmpty() ? null : value);
+        output.println("✅ " + field.displayName() + ": " + (value.isEmpty() ? "(not set)" : String.join(",", value)));
     }
 
     /**
