@@ -289,6 +289,29 @@ class CloudForgeSynthesizerTest {
     }
 
     /**
+     * {@code VpcFactory} hardcodes {@code .maxAzs(2)} for every deployment; CDK silently caps
+     * subnet creation to however many AZ names got seeded, with no synth-time error. A caller
+     * that supplies only one AZ (e.g. the interactive wizard's "Multi-AZ" prompt answered "no")
+     * must not be able to produce a VPC with a single public/private subnet pair — that only
+     * fails once real CloudFormation tries to create the load balancer, which needs at least two.
+     */
+    @Test
+    void synthesizingWithASingleAvailabilityZonePadsUpToTwo() throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestSingleAzPadded");
+        config.account = "111122223333";
+        config.availabilityZones = new String[] {"us-east-1a"};
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        String templateJson = Files.readString(result.templateFile());
+        assertTrue(templateJson.contains("us-east-1a") && templateJson.contains("us-east-1b"),
+            "a single caller-supplied AZ must be padded to at least two, got: " + templateJson);
+        assertTrue(!templateJson.contains("us-east-1us-east-1"),
+            "padding must not double the region prefix: " + templateJson);
+    }
+
+    /**
      * Companion to the dummy-AZ test above: callers that do not set {@code config.account} (the
      * default) keep account-agnostic {@code Fn::GetAZs} resolution.
      */

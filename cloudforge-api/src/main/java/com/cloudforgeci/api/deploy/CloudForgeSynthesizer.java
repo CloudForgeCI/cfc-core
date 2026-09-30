@@ -27,6 +27,7 @@ import software.amazon.awssdk.services.route53.model.ListHostedZonesByNameReques
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -342,17 +343,31 @@ public final class CloudForgeSynthesizer {
      * those conventional suffixes. A caller-supplied entry that's already a full zone name (e.g.
      * "us-east-1a", the conventional way anyone would write one by hand) is used as-is rather
      * than getting the region prepended a second time.</p>
+     *
+     * <p>Always seeds at least two zones, padding with conventional suffixes when the caller
+     * supplies fewer. {@link com.cloudforgeci.api.network.VpcFactory} hardcodes {@code .maxAzs(2)}
+     * for every deployment, but CDK silently caps subnet creation to however many AZ names are
+     * seeded here rather than erroring at synth time — a single-AZ caller (e.g. a wizard answer
+     * that opts out of "Multi-AZ") would otherwise produce a VPC CloudFormation only discovers is
+     * broken when it tries to create the load balancer.</p>
      */
     private static void seedAvailabilityZoneContext(App app, String account, String region, String[] suffixes) {
         List<String> resolvedSuffixes = suffixes != null && suffixes.length > 0
             ? Arrays.asList(suffixes)
             : List.of("a", "b");
-        List<String> zones = resolvedSuffixes.stream()
+        List<String> zones = new ArrayList<>(resolvedSuffixes.stream()
             .map(suffix -> {
                 String trimmed = suffix.trim().toLowerCase(Locale.ROOT);
                 return trimmed.startsWith(region) ? trimmed : region + trimmed;
             })
-            .toList();
+            .toList());
+        for (String fallbackSuffix : List.of("a", "b", "c", "d")) {
+            if (zones.size() >= 2) break;
+            String candidate = region + fallbackSuffix;
+            if (!zones.contains(candidate)) {
+                zones.add(candidate);
+            }
+        }
         app.getNode().setContext(
             "availability-zones:account=" + account + ":region=" + region, zones);
     }
