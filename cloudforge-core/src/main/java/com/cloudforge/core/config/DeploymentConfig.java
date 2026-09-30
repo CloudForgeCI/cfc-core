@@ -461,6 +461,46 @@ public class DeploymentConfig {
     )
     public String oidcProvider = "none";
 
+    /** URL path patterns that require authentication, replacing the application's own default
+     *  list ({@code ApplicationSpec#protectedPaths()}) when set. Consumed by both
+     *  {@code CognitoAuthenticationFactory} and {@code OidcAuthenticationFactory} -- see their
+     *  {@code calculateEffectiveProtectedPaths()}: unset/empty means "use the application's
+     *  default protected paths", not "protect nothing". */
+    @ConfigField(
+        displayName = "Protected Paths",
+        description = "URL path patterns requiring authentication (replaces the application's defaults)",
+        category = "security",
+        visibleWhen = "authMode != none",
+        example = "/admin/*,/api/*",
+        order = 31
+    )
+    public List<String> protectedPaths = null;
+
+    /** Additional URL path patterns requiring authentication, added on top of whichever base list
+     *  ({@link #protectedPaths} or the application default) is in effect. */
+    @ConfigField(
+        displayName = "Additional Protected Paths",
+        description = "Extra URL path patterns requiring authentication, added to the base list",
+        category = "security",
+        visibleWhen = "authMode != none",
+        example = "/reports/*",
+        order = 32
+    )
+    public List<String> additionalProtectedPaths = null;
+
+    /** URL path patterns explicitly excluded from authentication, removed from the effective
+     *  protected-paths list after {@link #protectedPaths}/{@link #additionalProtectedPaths} and
+     *  the application's own defaults are combined. */
+    @ConfigField(
+        displayName = "Public Paths",
+        description = "URL path patterns excluded from authentication",
+        category = "security",
+        visibleWhen = "authMode != none",
+        example = "/health,/public/*",
+        order = 33
+    )
+    public List<String> publicPaths = null;
+
     /** Auto-provision new Cognito User Pool */
     @ConfigField(
         displayName = "Auto-Provision Cognito",
@@ -605,6 +645,18 @@ public class DeploymentConfig {
         order = 140
     )
     public String cognitoAppClientId = null;
+
+    /** Manually configured Cognito app client ID, for a client that wasn't auto-provisioned.
+     *  Distinct from {@link #cognitoAppClientId} above (used to reference an *existing user
+     *  pool's* client when {@code cognitoAutoProvision == false}) -- this is read directly by
+     *  {@code ApplicationOidcFactory} as a manual-configuration fallback. */
+    @ConfigField(
+        displayName = "Cognito User Pool Client ID (manual)",
+        description = "Manually configured Cognito app client ID",
+        category = "security",
+        order = 141
+    )
+    public String cognitoUserPoolClientId = null;
 
     // ========== External OIDC Configuration ==========
 
@@ -1241,6 +1293,16 @@ public class DeploymentConfig {
     @JsonIgnore
     public transient String complianceFrameworksRawOverride;
 
+    /** Legacy single-framework override, superseded by {@link #complianceFrameworks} (which
+     *  supports multiple). Kept for backward compatibility with older deployment contexts. */
+    @ConfigField(
+        displayName = "Audit Manager Framework ID (legacy)",
+        description = "Single compliance framework to enable (legacy -- prefer complianceFrameworks)",
+        category = "compliance",
+        order = 301
+    )
+    public String auditManagerFrameworkId = null;
+
     /**
      * Compliance validation mode controlling how validation failures are handled.
      */
@@ -1306,6 +1368,17 @@ public class DeploymentConfig {
         order = 40
     )
     public Boolean createConfigInfrastructure = false;
+
+    /** Scope AWS Config rules to only monitor this deployment's own resources (by stack name)
+     *  instead of every resource in the account/region. */
+    @ConfigField(
+        displayName = "Scope Config Rules To Deployment",
+        description = "Limit AWS Config rule monitoring to this deployment's own resources",
+        category = "compliance",
+        visibleWhen = "awsConfigEnabled == true",
+        order = 45
+    )
+    public Boolean scopeConfigRulesToDeployment = false;
 
     /** Enable GuardDuty threat detection.
      *  Deliberately no static default -- see {@link #macieEnabled}. isGuardDutyEnabled() falls
@@ -1787,6 +1860,52 @@ public class DeploymentConfig {
         order = 430
     )
     public Boolean enableCloudTrailBucketAccessRemediation = false;
+
+    /** Enable GuardDuty finding remediation (null = profile default: auto-enabled in PRODUCTION,
+     *  same pattern as {@link #imdsv2Required} -- ComplianceFactory's consumers treat {@code null}
+     *  as "PRODUCTION enables it, otherwise off" and an explicit value as an override either way,
+     *  so this must NOT get a static default or that fallback can never trigger. */
+    @ConfigField(
+        displayName = "GuardDuty Remediation",
+        description = "Enable automatic remediation of GuardDuty findings",
+        category = "compliance",
+        visibleWhen = "awsConfigEnabled == true",
+        order = 440
+    )
+    public Boolean enableGuardDutyRemediation;
+
+    /** Enable Security Hub finding remediation. Deliberately no static default -- see {@link
+     *  #enableGuardDutyRemediation}. */
+    @ConfigField(
+        displayName = "Security Hub Remediation",
+        description = "Enable automatic remediation of Security Hub findings",
+        category = "compliance",
+        visibleWhen = "awsConfigEnabled == true",
+        order = 441
+    )
+    public Boolean enableSecurityHubRemediation;
+
+    /** Enable Inspector finding remediation. Deliberately no static default -- see {@link
+     *  #enableGuardDutyRemediation}. */
+    @ConfigField(
+        displayName = "Inspector Remediation",
+        description = "Enable automatic remediation of Amazon Inspector findings",
+        category = "compliance",
+        visibleWhen = "awsConfigEnabled == true",
+        order = 442
+    )
+    public Boolean enableInspectorRemediation;
+
+    /** Enable Macie finding remediation. Deliberately no static default -- see {@link
+     *  #enableGuardDutyRemediation}. */
+    @ConfigField(
+        displayName = "Macie Remediation",
+        description = "Enable automatic remediation of Amazon Macie findings",
+        category = "compliance",
+        visibleWhen = "awsConfigEnabled == true",
+        order = 443
+    )
+    public Boolean enableMacieRemediation;
 
     // ========== Health Check Configuration ==========
 

@@ -391,6 +391,17 @@ public final class DeploymentContext {
     public Integer databaseBackupRetentionDays() { return raw.containsKey("databaseBackupRetentionDays") ? config.databaseBackupRetentionDays : null; }
     public Boolean enableAutoScaling() { return raw.containsKey("enableAutoScaling") ? config.enableAutoScaling : null; }
 
+    // enableGuardDutyRemediation/enableSecurityHubRemediation/enableInspectorRemediation/
+    // enableMacieRemediation carry no class-level default (deliberately, see DeploymentConfig's
+    // javadoc on each) so a plain forwarding getter already distinguishes "unset" (null, PRODUCTION
+    // fallback applies in ComplianceFactory) from an explicit override -- no raw.containsKey needed.
+    public Boolean enableGuardDutyRemediation() { return config.enableGuardDutyRemediation; }
+    public Boolean enableSecurityHubRemediation() { return config.enableSecurityHubRemediation; }
+    public Boolean enableInspectorRemediation() { return config.enableInspectorRemediation; }
+    public Boolean enableMacieRemediation() { return config.enableMacieRemediation; }
+    public Boolean scopeConfigRulesToDeployment() { return config.scopeConfigRulesToDeployment; }
+    public String auditManagerFrameworkId() { return config.auditManagerFrameworkId; }
+
     // No class-level default on any of these four -- a plain forwarding getter already
     // distinguishes "unset" (null, profile/RdsFactory default applies) from an explicit override.
     public Boolean rdsAutoMinorVersionUpgrade() { return config.rdsAutoMinorVersionUpgrade; }
@@ -415,6 +426,10 @@ public final class DeploymentContext {
     public AuthMode authMode() { return config.authMode; }
 
     // Cognito Configuration
+    public List<String> protectedPaths() { return config.protectedPaths; }
+    public List<String> additionalProtectedPaths() { return config.additionalProtectedPaths; }
+    public List<String> publicPaths() { return config.publicPaths; }
+
     public Boolean cognitoAutoProvision() { return config.cognitoAutoProvision; }
     public String cognitoDomainPrefix() { return config.cognitoDomainPrefix; }
     public String cognitoUserPoolName() { return config.cognitoUserPoolName; }
@@ -426,6 +441,7 @@ public final class DeploymentContext {
     public String cognitoUserGroupName() { return config.cognitoUserGroupName; }
     public String cognitoUserPoolId() { return config.cognitoUserPoolId; }
     public String cognitoAppClientId() { return config.cognitoAppClientId; }
+    public String cognitoUserPoolClientId() { return config.cognitoUserPoolClientId; }
     public String cognitoInitialAdminEmail() { return config.cognitoInitialAdminEmail; }
     public String cognitoInitialAdminPhone() { return config.cognitoInitialAdminPhone; }
 
@@ -456,6 +472,22 @@ public final class DeploymentContext {
     public int cpu() { return config.cpu; }
     public int memory() { return config.memory; }
     public String containerImage() { return config.containerImage; }
+
+    // Optional per-application ports (AdvancedSettingsWizard's configureOptionalPorts). All
+    // primitive `boolean` on DeploymentConfig with a `false` default, and every consumer
+    // (Ec2Factory/FargateFactory/ContainerFactory) reads them via Boolean.TRUE.equals(x), so
+    // null and false are indistinguishable downstream -- no profile-fallback semantics to lose.
+    public Boolean enableAgents() { return config.enableAgents; }
+    public Boolean enableSsh() { return config.enableSsh; }
+    public Boolean enableSmtp() { return config.enableSmtp; }
+    public Boolean enableSmtps() { return config.enableSmtps; }
+    public Boolean enableClustering() { return config.enableClustering; }
+    public Boolean enableDockerRegistry() { return config.enableDockerRegistry; }
+    public Boolean enableMetrics() { return config.enableMetrics; }
+    public Boolean enableNotary() { return config.enableNotary; }
+    public Boolean enableTrivy() { return config.enableTrivy; }
+    public Boolean enableSentinel() { return config.enableSentinel; }
+    public Boolean enableCluster() { return config.enableCluster; }
 
     public boolean enableSsl() { return config.enableSsl != null && config.enableSsl; }
     public boolean createZone() { return config.createZone != null && config.createZone; }
