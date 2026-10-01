@@ -103,6 +103,12 @@ final class MarketplaceParameterSupport {
         Map<String, Object> overridden = new HashMap<>(cfc.raw());
         overridden.put("cognitoInitialAdminEmail", adminEmail.getValueAsString());
         overridden.put("managerLicenseKey", licenseKey.getValueAsString());
+        // Defaults to true for this Marketplace listing only -- DeploymentConfig#managerDirectDeployEnabled
+        // is REQUIRES_APPROVAL/EXPERIMENTAL and false elsewhere, since it grants Manager's task role
+        // real CFN CreateStack/UpdateStack + Service Catalog ProvisionProduct permissions. A
+        // Marketplace buyer is specifically subscribing to use Manager's deploy capability, so the
+        // approval this flag normally requires is implicit in the purchase itself.
+        overridden.put("managerDirectDeployEnabled", true);
 
         Construct appScope = new Construct(stack, "App");
         appScope.getNode().setContext("cfc", overridden);
