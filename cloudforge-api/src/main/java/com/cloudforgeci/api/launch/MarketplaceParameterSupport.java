@@ -90,6 +90,7 @@ final class MarketplaceParameterSupport {
             .type("String")
             .description("LicenseSeat license key (LS-XXXX-XXXX-XXXX-XXXX) from your AWS Marketplace purchase")
             .noEcho(true)
+            .minLength(1)
             .build();
 
         Map<String, Object> overridden = new HashMap<>(cfc.raw());

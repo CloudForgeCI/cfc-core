@@ -30,6 +30,7 @@ import software.amazon.awssdk.services.cloudformation.model.ExecuteChangeSetRequ
 import software.amazon.awssdk.services.cloudformation.model.GetTemplateRequest;
 import software.amazon.awssdk.services.cloudformation.model.Output;
 import software.amazon.awssdk.services.cloudformation.model.ResourceChange;
+import software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetResponse;
 import software.amazon.awssdk.services.cloudformation.model.StackEvent;
 import software.amazon.awssdk.services.cloudformation.model.Tag;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -694,27 +695,25 @@ public final class AwsDirectDeployer implements AutoCloseable {
         if (!(parametersNode instanceof ObjectNode parameters)) {
             return templateBody;
         }
-        boolean changed = false;
-        var fields = parameters.properties().iterator();
-        while (fields.hasNext()) {
-            var entry = fields.next();
-            JsonNode parameterNode = entry.getValue();
-            if (!(parameterNode instanceof ObjectNode parameter)) {
-                continue;
-            }
-            String type = parameter.path("Type").asText();
-            if (type == null || !type.startsWith("AWS::SSM::Parameter::Value")) {
-                continue;
-            }
-            String defaultValue = parameter.path("Default").asText(null);
-            String resolved = (defaultValue != null && defaultValue.startsWith("/"))
-                ? "21"
-                : (defaultValue == null || defaultValue.isBlank() ? "21" : defaultValue);
-            parameter.put("Type", "String");
-            parameter.put("Default", resolved);
-            changed = true;
+        // Scoped to the literal "BootstrapVersion" name CDK always gives this specific parameter
+        // -- matching by Type alone would also catch any other AWS::SSM::Parameter::Value the
+        // template happens to declare (an AMI ID lookup, for instance) and overwrite its real
+        // default with "21", corrupting an unrelated resource.
+        JsonNode bootstrapVersionNode = parameters.get("BootstrapVersion");
+        if (!(bootstrapVersionNode instanceof ObjectNode parameter)) {
+            return templateBody;
         }
-        return changed ? MAPPER.writeValueAsString(template) : templateBody;
+        String type = parameter.path("Type").asText();
+        if (type == null || !type.startsWith("AWS::SSM::Parameter::Value")) {
+            return templateBody;
+        }
+        String defaultValue = parameter.path("Default").asText(null);
+        String resolved = (defaultValue == null || defaultValue.isBlank() || defaultValue.startsWith("/"))
+            ? "21"
+            : defaultValue;
+        parameter.put("Type", "String");
+        parameter.put("Default", resolved);
+        return MAPPER.writeValueAsString(template);
     }
 
     private boolean templateMatches(String stackName, String candidate) throws IOException {
@@ -739,7 +738,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * (which deletes it unexecuted) — both need the identical creation and template-size-based
      * inline-vs-S3 branching.
      */
-    private software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetResponse
+    private DescribeChangeSetResponse
             createAndWaitForChangeSet(String physical, String templateBody, boolean exists, String changeSetName)
             throws IOException {
         CreateChangeSetRequest.Builder changeSetBuilder = CreateChangeSetRequest.builder()
@@ -759,7 +758,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
         return waitForChangeSet(physical, changeSetName);
     }
 
-    private software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetResponse
+    private DescribeChangeSetResponse
             waitForChangeSet(String stackName, String changeSetName) throws IOException {
         Instant deadline = Instant.now().plus(OPERATION_TIMEOUT);
         DescribeChangeSetRequest request = DescribeChangeSetRequest.builder()
