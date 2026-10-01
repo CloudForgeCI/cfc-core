@@ -140,7 +140,7 @@ cloudforge-cli deploy --context deployment-context.json --target localstack
 `cloudforge-ministack` and `cloudforge-localstack` expose lifecycle actions through
 `PlatformRuntimeProvider`. `cloudforge-cli emulator` lists the available targets and offers
 `start`, `stop`, `restart`, and `status`. Emulator companion containers are managed by the
-target module, not by the root `docker-compose.yml`.
+target module.
 
 The same operations are available programmatically when `cloudforge-core` and the target
 module are on the classpath:

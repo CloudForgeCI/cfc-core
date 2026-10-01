@@ -87,8 +87,8 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         }
         DockerEmulatorSupport.waitForReachable(browserUrl());
         System.out.println("Emulator edge started: " + browserUrl());
-        System.out.println("  Hostnames: docs/guides/LOCAL_EMULATOR_HOSTS.md "
-            + "(./scripts/setup-cloudforge-local-hosts.sh)");
+        System.out.println("  Hostnames: docs/guides/LOCAL_EMULATOR_HOSTS.md and "
+            + "scripts/setup-cloudforge-local-hosts.sh in cloudforge-localstack / cloudforge-ministack");
         System.out.println("  StackPort (simulated console): http://127.0.0.1:"
             + LocalEmulatorDefaults.STACKPORT_HOST_PORT);
     }
@@ -717,8 +717,10 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         body.append("  http://").append(LocalEmulatorDefaults.HOST_STACKPORT).append("/\\n");
         body.append("  http://").append(LocalEmulatorDefaults.HOST_MANAGER).append("/\\n");
         body.append("  http://").append(LocalEmulatorDefaults.HOST_NGINX).append("/\\n\\n");
-        body.append("Set up hosts: ./scripts/setup-cloudforge-local-hosts.sh\\n");
-        body.append("Reconcile: ./scripts/emulator-edge-reconcile.sh\\n\\n");
+        body.append("Set up hosts: scripts/setup-cloudforge-local-hosts.sh "
+            + "(cloudforge-localstack / cloudforge-ministack)\\n");
+        body.append("Reconcile: scripts/emulator-edge-reconcile.sh "
+            + "(cloudforge-localstack / cloudforge-ministack)\\n\\n");
         if (routes.isEmpty()) {
             body.append("No app vhosts yet - deploy an app, then reconcile.\\n");
         } else {

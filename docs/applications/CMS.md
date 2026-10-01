@@ -231,29 +231,6 @@ System.out.println(CmsLoader.printCatalog());
 }
 ```
 
-## Local development
-
-`docker-compose.yml` defines containers for seven platforms, backed by shared MySQL, PostgreSQL, and Redis
-containers:
-
-| Service | URL |
-|---------|-----|
-| `wordpress` | http://localhost:8087 |
-| `woocommerce` | http://localhost:8089 |
-| `drupal` | http://localhost:8090 |
-| `joomla` | http://localhost:8091 |
-| `dolphin-una` | http://localhost:8092 |
-| `magento` (with `opensearch`) | http://localhost:8093 |
-| `opencart` | http://localhost:8094 |
-
-```bash
-# WordPress, WooCommerce, Drupal, and Joomla plus databases
-./scripts/docker-start.sh infrastructure cms
-
-# The others are not in a start-script group
-docker compose up -d mysql opensearch dolphin-una magento opencart
-```
-
 ## Related documentation
 
 - [Application catalog](README.md)

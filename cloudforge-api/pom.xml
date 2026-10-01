@@ -139,6 +139,63 @@
                instrumentation whenever jacoco.skip isn't set. -->
           <argLine>@{argLine} -Xss8m</argLine>
         </configuration>
+        <executions>
+          <!-- Reconfigures (not duplicates) the plugin's implicit default execution, so this and
+               the isolated-fork execution below are the only two that run — excludes
+               TruthTableValidationTest, which the second execution handles separately. -->
+          <execution>
+            <id>default-test</id>
+            <phase>test</phase>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <configuration>
+              <excludes>
+                <exclude>**/TruthTableValidationTest.java</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+          <!-- TruthTableValidationTest is, by a wide margin, the largest single test class in this
+               module (100+ parameterized methods, many CSV-driven with 10+ rows each — hundreds of
+               full CDK synths in one class), and every synth in this module shares one long-lived
+               jsii Node kernel process with no per-test release of live object references. Enough
+               accumulated synths degrade that shared kernel until individual jsii round-trips slow
+               to a crawl — confirmed via a live `sample` of the stuck Node process mid-run: genuine,
+               actively-executing, very deep recursive V8 frames, not a blocked wait. `-Xss8m` above
+               didn't help (see TruthTableValidationTest's own
+               testSoc2PciDssHipaaGdprFargateAllFrameworks javadoc) because it's not a JVM
+               stack-size problem — it's degraded state in the Node-side kernel.
+
+               Isolating this class into its own fork keeps its degradation from ever spreading to
+               (or being made worse by) the other ~1000 tests in this module — a real, worthwhile
+               improvement on its own. It does NOT fully fix the hang for this class specifically:
+               confirmed by reproducing the same genuine-recursion stall inside this isolated fork
+               too, with zero other processes competing for CPU, meaning this one class alone has
+               enough internal synth volume to degrade a completely fresh kernel on its own. A full
+               fix needs either splitting this class into several smaller ones (so no single fork's
+               volume reaches the degradation threshold) or a way to reset the jsii kernel mid-run
+               (blocked today: `JsiiEngine.reset()` exists but is package-private to
+               `software.amazon.jsii`, not callable from this module without reflection). Until then,
+               a hang inside this specific execution is a known, pre-existing, accepted risk — not a
+               sign anything else broke. -->
+          <execution>
+            <id>truth-table-isolated-fork</id>
+            <phase>test</phase>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>**/TruthTableValidationTest.java</include>
+              </includes>
+              <reuseForks>false</reuseForks>
+              <forkCount>1</forkCount>
+              <!-- A hang here is a known, accepted risk (see the comment above) — bound it so CI
+                   fails with a clear signal instead of stalling the whole test phase indefinitely. -->
+              <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <!-- Diagnostic-only, not wired into any lifecycle phase — run explicitly via
            `mvn org.pitest:pitest-maven:mutationCoverage`. Scoped to core.rules (compliance

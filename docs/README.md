@@ -18,8 +18,8 @@ CloudForge. For a short introduction and quick start, see the
 | Document | Description |
 |---|---|
 | [Onboarding Quick Start](ONBOARDING_QUICK_START.md) | Deploy an example configuration to AWS, from development to production profiles |
-| [Local Emulator Quick Start](guides/LOCAL_EMULATOR_QUICK_START.md) | Build, start MiniStack or LocalStack, and deploy without an AWS account |
 | [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli) | Command-line tool for deploying and managing local emulators |
+| [cloudforge-localstack](https://github.com/CloudForgeCI/cloudforge-localstack) and [cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack) | Local emulator setup — build, start, and deploy without an AWS account |
 | [Compliance Quick Start](compliance/QUICK_START_GUIDE.md) | Configure compliance validation |
 | [Sample project](https://github.com/CloudForgeCI/cloudforge-sample) | Standalone project that consumes the published artifacts |
 | [Sample project BOM template](architecture/cloudforge-sample-bom.template.md) | POM and layout for your own project |
@@ -62,13 +62,10 @@ CloudForge. For a short introduction and quick start, see the
 
 | Document | Description |
 |---|---|
-| [Local Emulator Quick Start](guides/LOCAL_EMULATOR_QUICK_START.md) | Build, start, deploy |
 | [Application compatibility](guides/LOCAL_EMULATOR_APP_CATALOG.md) | Which applications run on MiniStack and LocalStack |
-| [Local host names](guides/LOCAL_EMULATOR_HOSTS.md) | `*.cloudforge.localhost` host entries |
-| [Emulator edge](guides/LOCAL_EMULATOR_EDGE.md) | nginx routing by `Host` header |
 | [MiniStack](ministack/README.md) | Setup, deployment, verification, troubleshooting |
 | [LocalStack](localstack/README.md) | Token, adapter behavior, deployable applications |
-| [Docker Quick Start](guides/DOCKER_QUICK_START.md) and [Docker local development](guides/DOCKER_LOCAL_DEV_README.md) | Run applications with Docker Compose |
+| [cloudforge-localstack](https://github.com/CloudForgeCI/cloudforge-localstack) and [cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack) | Local emulator quick start, hostnames, and emulator edge (nginx) setup |
 
 ## Compliance and security
 
@@ -107,7 +104,7 @@ CloudForge. For a short introduction and quick start, see the
 | [Maven Release Process](MAVEN_RELEASE_PROCESS.md) | How artifacts are published |
 | [Documentation Maintenance](DOCUMENTATION_SETUP.md) | Maintaining this documentation site |
 | [Changelog](https://github.com/CloudForgeCI/cfc-core/blob/develop/CHANGELOG.md) | Release history |
-| [License](https://github.com/CloudForgeCI/cfc-core/blob/develop/LICENSE) | Apache License 2.0 |
+| [License](https://github.com/CloudForgeCI/cfc-core/blob/develop/LICENSE) | Business Source License 1.1 |
 
 ## Getting help
 

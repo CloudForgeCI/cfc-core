@@ -11,6 +11,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.waiters.WaiterOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
@@ -29,6 +30,7 @@ import software.amazon.awssdk.services.cloudformation.model.ExecuteChangeSetRequ
 import software.amazon.awssdk.services.cloudformation.model.GetTemplateRequest;
 import software.amazon.awssdk.services.cloudformation.model.Output;
 import software.amazon.awssdk.services.cloudformation.model.ResourceChange;
+import software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetResponse;
 import software.amazon.awssdk.services.cloudformation.model.StackEvent;
 import software.amazon.awssdk.services.cloudformation.model.Tag;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -49,11 +51,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.logging.Logger;
+
+import com.cloudforgeci.api.deploy.aws.StackProgressListener.StackProgressEvent;
 
 /**
  * Creates and incrementally updates CloudFormation stacks on AWS via change sets.
@@ -86,6 +98,7 @@ import java.util.UUID;
 public final class AwsDirectDeployer implements AutoCloseable {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Logger LOG = Logger.getLogger(AwsDirectDeployer.class.getName());
     private static final Duration OPERATION_TIMEOUT = Duration.ofMinutes(30);
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
     /**
@@ -300,6 +313,15 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * (returns {@code noOp = true}) when the stack already matches the candidate template.
      */
     public AwsStackDeployResult deploy(String stackName, Path template) throws IOException {
+        return deploy(stackName, template, null);
+    }
+
+    /**
+     * Same as {@link #deploy(String, Path)}, additionally reporting each CloudFormation stack
+     * event to {@code listener} as it happens (may be {@code null} to skip live reporting).
+     */
+    public AwsStackDeployResult deploy(String stackName, Path template, StackProgressListener listener)
+            throws IOException {
         String physical = physicalStackName(stackName);
         // The logical stackName, not the physical one: the asset manifest is named after the
         // construct id CloudForgeSynthesizer used.
@@ -316,10 +338,13 @@ public final class AwsDirectDeployer implements AutoCloseable {
             template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
 
         boolean exists = stackExists(physical) && stackIsDeployable(physical);
-        String templateBody = Files.readString(template);
-        if (localEmulatorTarget) {
-            templateBody = resolveCdkBootstrapParameters(templateBody);
-        }
+        // Every target, not just local emulators: a self-contained template (this class's whole
+        // purpose -- see AssetFreeCustomResource) must never depend on the deploying account
+        // being CDK-bootstrapped. An AWS Marketplace buyer launching this template directly never
+        // runs `cdk bootstrap` first, so an unrewritten BootstrapVersion SSM-parameter reference
+        // fails CloudFormation's own parameter resolution before a single resource is created --
+        // the exact same failure mode this rewrite already fixed for LocalStack.
+        String templateBody = resolveCdkBootstrapParameters(Files.readString(template));
 
         if (exists && templateMatches(physical, templateBody)) {
             return new AwsStackDeployResult(stackName, false, true, List.of(), outputs(physical));
@@ -340,13 +365,18 @@ public final class AwsDirectDeployer implements AutoCloseable {
             .map(change -> summarize(change.resourceChange()))
             .toList();
 
+        // Captured before the operation starts, not before this deploy() call began, so a stack
+        // event from an earlier deploy/update on this same stack (returned on the very first
+        // describeStackEvents page, since CloudFormation keeps full history) is never mistaken
+        // for this operation's own progress.
+        Instant operationStart = Instant.now();
         cloudFormation.executeChangeSet(ExecuteChangeSetRequest.builder()
             .stackName(physical)
             .changeSetName(changeSetName)
             .build());
 
         var request = DescribeStacksRequest.builder().stackName(physical).build();
-        try {
+        waitWithProgress(physical, listener, operationStart, () -> {
             if (localEmulatorTarget) {
                 WaiterOverrideConfiguration override = WaiterOverrideConfiguration.builder()
                     .waitTimeout(LOCAL_EMULATOR_WAITER_TIMEOUT)
@@ -361,13 +391,157 @@ public final class AwsDirectDeployer implements AutoCloseable {
             } else {
                 cloudFormation.waiter().waitUntilStackCreateComplete(request);
             }
-        } catch (Exception e) {
-            throw new IOException(
-                "AWS deployment failed for " + physical + ":\n" + recentEvents(physical), e);
-        }
+        }, "AWS deployment failed for " + physical);
 
         return new AwsStackDeployResult(
             stackName, !exists, false, changeSummaries, outputs(physical));
+    }
+
+    /**
+     * Runs {@code blockingWait} (one of the SDK's own {@code waitUntilStack*} calls) on a
+     * background thread, while this thread polls {@code describe-stack-events} and reports each
+     * event this stack hasn't already been seen having, in the order CloudFormation reported it,
+     * to {@code listener} (skipped entirely when {@code listener} is {@code null}). Reuses the
+     * SDK waiter's own terminal-state detection rather than reimplementing it; this only adds
+     * visibility into what it's waiting on.
+     *
+     * <p>On failure, the exception message includes every event captured during the wait, with
+     * events that carry a real failure reason (not a generic cancellation, from the cascade every
+     * other in-flight resource gets once CloudFormation starts rolling back) surfaced first —
+     * unlike the fixed-size event window a one-shot {@code describe-stack-events} call after the
+     * fact would return, which can push the actual cause out of view entirely on a stack with
+     * many resources.</p>
+     */
+    private void waitWithProgress(String stackName, StackProgressListener listener,
+            Instant operationStart, Runnable blockingWait, String failureMessagePrefix) throws IOException {
+        Set<String> seenEventIds = new HashSet<>();
+        List<StackEvent> allEvents = new ArrayList<>();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<?> waiterFuture = executor.submit(blockingWait);
+        try {
+            while (!waiterFuture.isDone()) {
+                pollNewEvents(stackName, operationStart, seenEventIds, allEvents, listener);
+                Thread.sleep(POLL_INTERVAL.toMillis());
+            }
+            waiterFuture.get();
+            pollNewEvents(stackName, operationStart, seenEventIds, allEvents, listener);
+        } catch (ExecutionException e) {
+            pollNewEvents(stackName, operationStart, seenEventIds, allEvents, listener);
+            throw new IOException(
+                failureMessagePrefix + ":\n" + formatFailureSummary(allEvents), e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for " + stackName, e);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    /**
+     * Fetches this stack's events newer than {@code operationStart}, paginating as needed, and
+     * reports any not already in {@code seenEventIds}. Events older than {@code operationStart}
+     * are excluded so a stack event from an earlier deploy/update on the same stack (returned on
+     * the first page, since {@code describeStackEvents} returns full history) is never reported
+     * as this operation's own progress or folded into its failure summary.
+     *
+     * <p>Progress reporting only adds visibility -- it must never decide {@link #deploy}/
+     * {@link #delete}'s outcome, which is the background waiter's job alone. A polling failure
+     * (other than the stack having just finished deleting, an expected race with this poll) is
+     * logged, not thrown; a listener that throws is isolated per-event so one bad callback can't
+     * stop the rest of the batch from being reported.</p>
+     */
+    private void pollNewEvents(String stackName, Instant operationStart, Set<String> seenEventIds,
+            List<StackEvent> allEvents, StackProgressListener listener) {
+        // Newest-first within a page and across pages; walking oldest-to-newest within the
+        // collected list happens below, once collection is done.
+        List<StackEvent> newEvents = new ArrayList<>();
+        String nextToken = null;
+        try {
+            do {
+                var response = cloudFormation.describeStackEvents(DescribeStackEventsRequest.builder()
+                    .stackName(stackName)
+                    .nextToken(nextToken)
+                    .build());
+                PageScanResult scan = scanPageForNewEvents(response.stackEvents(), operationStart, seenEventIds);
+                newEvents.addAll(scan.newEvents());
+                nextToken = scan.stopPaginating() ? null : response.nextToken();
+            } while (nextToken != null);
+        } catch (CloudFormationException e) {
+            if (e.statusCode() != 400 && e.statusCode() != 404) {
+                LOG.warning("describeStackEvents failed for " + stackName + ": " + e.getMessage());
+            }
+            return;
+        } catch (SdkException e) {
+            LOG.warning("describeStackEvents failed for " + stackName + ": " + e.getMessage());
+            return;
+        }
+        for (int i = newEvents.size() - 1; i >= 0; i--) {
+            StackEvent event = newEvents.get(i);
+            allEvents.add(event);
+            if (listener != null) {
+                try {
+                    listener.onEvent(new StackProgressEvent(
+                        String.valueOf(event.timestamp()),
+                        event.resourceType(),
+                        event.logicalResourceId(),
+                        event.physicalResourceId(),
+                        event.resourceStatusAsString(),
+                        event.resourceStatusReason()));
+                } catch (RuntimeException e) {
+                    LOG.warning("StackProgressListener threw for " + stackName + ": " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * One {@code describeStackEvents} page's worth of new events (newest-first, matching the
+     * page's own order) and whether pagination should stop -- {@code true} once a pre-cutoff or
+     * already-seen event is reached, since {@code describeStackEvents} guarantees strict
+     * newest-first ordering: everything after that point, on this page or any later one, is at
+     * least as old and was necessarily already covered by an earlier poll.
+     */
+    record PageScanResult(List<StackEvent> newEvents, boolean stopPaginating) {}
+
+    /** Package-visible for {@code AwsDirectDeployerTest} -- see {@link #pollNewEvents}. */
+    static PageScanResult scanPageForNewEvents(
+            List<StackEvent> pageEvents, Instant operationStart, Set<String> seenEventIds) {
+        List<StackEvent> newEvents = new ArrayList<>();
+        for (StackEvent event : pageEvents) {
+            if (event.timestamp() != null && event.timestamp().isBefore(operationStart)) {
+                return new PageScanResult(newEvents, true);
+            }
+            if (!seenEventIds.add(event.eventId())) {
+                return new PageScanResult(newEvents, true);
+            }
+            newEvents.add(event);
+        }
+        return new PageScanResult(newEvents, false);
+    }
+
+    /**
+     * Events with a real failure reason (not a generic cancellation) are the actual cause and are
+     * listed first; the full event list follows for complete context. Unlike {@link
+     * #formatEvent}'s previous caller, this has no arbitrary length cap -- every event captured
+     * during the wait is included.
+     */
+    static String formatFailureSummary(List<StackEvent> events) {
+        StringBuilder summary = new StringBuilder();
+        List<StackEvent> rootCauses = events.stream()
+            .filter(e -> e.resourceStatusAsString() != null
+                && e.resourceStatusAsString().contains("FAILED"))
+            .filter(e -> e.resourceStatusReason() != null
+                && !e.resourceStatusReason().isBlank()
+                && !e.resourceStatusReason().contains("cancelled"))
+            .toList();
+        if (!rootCauses.isEmpty()) {
+            summary.append("Root cause(s):\n");
+            rootCauses.forEach(e -> summary.append(formatEvent(e)).append('\n'));
+            summary.append('\n');
+        }
+        summary.append("All events:\n");
+        events.forEach(e -> summary.append(formatEvent(e)).append('\n'));
+        return summary.toString();
     }
 
     /**
@@ -385,10 +559,9 @@ public final class AwsDirectDeployer implements AutoCloseable {
             template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
 
         boolean exists = stackExists(physical) && stackIsDeployable(physical);
-        String templateBody = Files.readString(template);
-        if (localEmulatorTarget) {
-            templateBody = resolveCdkBootstrapParameters(templateBody);
-        }
+        // See the identical comment in deploy() -- applies to every target now, not just local
+        // emulators.
+        String templateBody = resolveCdkBootstrapParameters(Files.readString(template));
 
         if (exists && templateMatches(physical, templateBody)) {
             return new AwsStackDeployResult(stackName, false, true, List.of(), Map.of());
@@ -414,17 +587,28 @@ public final class AwsDirectDeployer implements AutoCloseable {
     }
 
     public void delete(String stackName) throws IOException {
-        stackName = physicalStackName(stackName);
-        if (!stackExists(stackName)) {
+        delete(stackName, null);
+    }
+
+    /**
+     * Same as {@link #delete(String)}, additionally reporting each CloudFormation stack event to
+     * {@code listener} as it happens (may be {@code null} to skip live reporting).
+     */
+    public void delete(String stackName, StackProgressListener listener) throws IOException {
+        String physical = physicalStackName(stackName);
+        if (!stackExists(physical)) {
             return;
         }
+        var request = DescribeStacksRequest.builder().stackName(physical).build();
         try {
-            cloudFormation.deleteStack(DeleteStackRequest.builder().stackName(stackName).build());
-            cloudFormation.waiter().waitUntilStackDeleteComplete(
-                DescribeStacksRequest.builder().stackName(stackName).build());
-        } catch (Exception e) {
-            if (stackExists(stackName)) {
-                throw new IOException("Failed to delete AWS stack " + stackName, e);
+            Instant operationStart = Instant.now();
+            cloudFormation.deleteStack(DeleteStackRequest.builder().stackName(physical).build());
+            waitWithProgress(physical, listener, operationStart,
+                () -> cloudFormation.waiter().waitUntilStackDeleteComplete(request),
+                "Failed to delete AWS stack " + physical);
+        } catch (IOException e) {
+            if (stackExists(physical)) {
+                throw e;
             }
         }
     }
@@ -490,14 +674,19 @@ public final class AwsDirectDeployer implements AutoCloseable {
     /**
      * CDK injects {@code BootstrapVersion} as {@code AWS::SSM::Parameter::Value<String>}, whose
      * default resolves from {@code /cdk-bootstrap/hnb659fds/version} in SSM Parameter Store. That
-     * parameter exists in a bootstrapped AWS account but never in a local emulator, where
-     * CloudFormation rejects the reference ({@code "Parameter BootstrapVersion should either have
-     * input value or default value"}). Applies the same rewrite as
-     * {@code LocalStackTemplateAdapter.resolveCdkBootstrapParameters}, duplicated because
-     * {@code cloudforge-api} cannot depend on {@code cloudforge-localstack}. Called only when
-     * {@link #localEmulatorTarget} is true; AWS templates are left unchanged.
+     * parameter exists in a bootstrapped AWS account but never in a local emulator or an AWS
+     * Marketplace buyer's own (never-bootstrapped) account, where CloudFormation rejects the
+     * reference ({@code "Parameter BootstrapVersion should either have input value or default
+     * value"}) before creating a single resource. Applies the same rewrite as {@code
+     * LocalStackTemplateAdapter.resolveCdkBootstrapParameters}, duplicated because {@code
+     * cloudforge-api} cannot depend on {@code cloudforge-localstack}. Called for every deploy
+     * target, not just a local emulator's -- a self-contained template must never depend on the
+     * deploying account's bootstrap state. Public so {@code CloudForgeSynthesizer
+     * #synthesizeForMarketplace} can also apply it directly to the template file it writes to
+     * disk, not just to the in-memory body this class sends to CloudFormation -- a file meant to
+     * be uploaded to AWS Marketplace has no later deploy-time rewrite step to rely on.
      */
-    static String resolveCdkBootstrapParameters(String templateBody) throws IOException {
+    public static String resolveCdkBootstrapParameters(String templateBody) throws IOException {
         JsonNode root = MAPPER.readTree(templateBody);
         if (!(root instanceof ObjectNode template)) {
             return templateBody;
@@ -506,27 +695,25 @@ public final class AwsDirectDeployer implements AutoCloseable {
         if (!(parametersNode instanceof ObjectNode parameters)) {
             return templateBody;
         }
-        boolean changed = false;
-        var fields = parameters.properties().iterator();
-        while (fields.hasNext()) {
-            var entry = fields.next();
-            JsonNode parameterNode = entry.getValue();
-            if (!(parameterNode instanceof ObjectNode parameter)) {
-                continue;
-            }
-            String type = parameter.path("Type").asText();
-            if (type == null || !type.startsWith("AWS::SSM::Parameter::Value")) {
-                continue;
-            }
-            String defaultValue = parameter.path("Default").asText(null);
-            String resolved = (defaultValue != null && defaultValue.startsWith("/"))
-                ? "21"
-                : (defaultValue == null || defaultValue.isBlank() ? "21" : defaultValue);
-            parameter.put("Type", "String");
-            parameter.put("Default", resolved);
-            changed = true;
+        // Scoped to the literal "BootstrapVersion" name CDK always gives this specific parameter
+        // -- matching by Type alone would also catch any other AWS::SSM::Parameter::Value the
+        // template happens to declare (an AMI ID lookup, for instance) and overwrite its real
+        // default with "21", corrupting an unrelated resource.
+        JsonNode bootstrapVersionNode = parameters.get("BootstrapVersion");
+        if (!(bootstrapVersionNode instanceof ObjectNode parameter)) {
+            return templateBody;
         }
-        return changed ? MAPPER.writeValueAsString(template) : templateBody;
+        String type = parameter.path("Type").asText();
+        if (type == null || !type.startsWith("AWS::SSM::Parameter::Value")) {
+            return templateBody;
+        }
+        String defaultValue = parameter.path("Default").asText(null);
+        String resolved = (defaultValue == null || defaultValue.isBlank() || defaultValue.startsWith("/"))
+            ? "21"
+            : defaultValue;
+        parameter.put("Type", "String");
+        parameter.put("Default", resolved);
+        return MAPPER.writeValueAsString(template);
     }
 
     private boolean templateMatches(String stackName, String candidate) throws IOException {
@@ -551,7 +738,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * (which deletes it unexecuted) — both need the identical creation and template-size-based
      * inline-vs-S3 branching.
      */
-    private software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetResponse
+    private DescribeChangeSetResponse
             createAndWaitForChangeSet(String physical, String templateBody, boolean exists, String changeSetName)
             throws IOException {
         CreateChangeSetRequest.Builder changeSetBuilder = CreateChangeSetRequest.builder()
@@ -571,7 +758,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
         return waitForChangeSet(physical, changeSetName);
     }
 
-    private software.amazon.awssdk.services.cloudformation.model.DescribeChangeSetResponse
+    private DescribeChangeSetResponse
             waitForChangeSet(String stackName, String changeSetName) throws IOException {
         Instant deadline = Instant.now().plus(OPERATION_TIMEOUT);
         DescribeChangeSetRequest request = DescribeChangeSetRequest.builder()
@@ -599,34 +786,6 @@ public final class AwsDirectDeployer implements AutoCloseable {
             .stackName(stackName)
             .changeSetName(changeSetName)
             .build());
-    }
-
-    private String recentEvents(String stackName) {
-        try {
-            StringBuilder summary = new StringBuilder();
-            var events = cloudFormation.describeStackEvents(
-                    DescribeStackEventsRequest.builder().stackName(stackName).build())
-                .stackEvents();
-
-            events.stream()
-                .filter(event -> event.resourceStatusAsString() != null
-                    && (event.resourceStatusAsString().contains("FAILED")
-                        || event.resourceStatusAsString().contains("ROLLBACK")))
-                .limit(5)
-                .forEach(event -> summary.append(formatEvent(event)).append('\n'));
-
-            if (summary.isEmpty()) {
-                events.stream().limit(15).forEach(event ->
-                    summary.append(formatEvent(event)).append('\n'));
-            } else {
-                summary.append("\nRecent events:\n");
-                events.stream().limit(10).forEach(event ->
-                    summary.append(formatEvent(event)).append('\n'));
-            }
-            return summary.toString();
-        } catch (Exception e) {
-            return "Unable to read stack events: " + e.getMessage();
-        }
     }
 
     private static String formatEvent(StackEvent event) {

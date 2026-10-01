@@ -2,8 +2,9 @@
 
 This guide deploys one of the example configurations in [`docs/examples/`](examples/README.md)
 to AWS, starting with a minimal development stack and moving to production profiles with
-compliance controls. To try CloudForge without an AWS account, use the
-[Local Emulator Quick Start](guides/LOCAL_EMULATOR_QUICK_START.md) instead.
+compliance controls. To try CloudForge without an AWS account, see the local emulator setup
+docs in [cloudforge-localstack](https://github.com/CloudForgeCI/cloudforge-localstack) or
+[cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack) instead.
 
 Deployment time and AWS cost depend on the resources you enable, the region, and your
 account. The compliance configurations enable and validate technical controls; they do not

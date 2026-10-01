@@ -253,4 +253,123 @@ class AwsDirectDeployerTest {
             }
         }
     }
+
+    /**
+     * Reproduces the exact shape of a real rollback: several resources fail with a generic
+     * "Resource creation cancelled" once CloudFormation starts rolling back, while the actual
+     * cause (an invalid availability zone) is one CREATE_FAILED event among them. The summary
+     * must surface that real reason rather than letting the cancellation cascade bury it.
+     */
+    @Test
+    void formatFailureSummarySurfacesTheRealCauseAheadOfTheCancellationCascade() {
+        List<software.amazon.awssdk.services.cloudformation.model.StackEvent> events = List.of(
+            cancelledEvent("SecurityGroupA", "AWS::EC2::SecurityGroup"),
+            cancelledEvent("SecurityGroupB", "AWS::EC2::SecurityGroup"),
+            cancelledEvent("TargetGroupA", "AWS::ElasticLoadBalancingV2::TargetGroup"),
+            realFailureEvent("PrivateSubnet1", "AWS::EC2::Subnet",
+                "Value (us-east-1us-east-1a) for parameter availabilityZone is invalid."),
+            cancelledEvent("RouteTableA", "AWS::EC2::RouteTable"),
+            cancelledEvent("RouteTableB", "AWS::EC2::RouteTable")
+        );
+
+        String summary = AwsDirectDeployer.formatFailureSummary(events);
+
+        int rootCauseIndex = summary.indexOf("Root cause(s):");
+        int realReasonIndex = summary.indexOf("availabilityZone is invalid");
+        assertTrue(rootCauseIndex >= 0 && realReasonIndex >= 0 && realReasonIndex > rootCauseIndex,
+            "expected the real failure reason under a leading Root cause(s) section, got: " + summary);
+        assertTrue(summary.indexOf("availabilityZone is invalid") < summary.indexOf("All events:"),
+            "the real cause must appear before the full event dump, not only buried within it: " + summary);
+        // Every event captured, not just the real cause -- no arbitrary truncation.
+        assertTrue(summary.contains("SecurityGroupA") && summary.contains("RouteTableB"),
+            "expected every captured event in the summary, got: " + summary);
+    }
+
+    private static software.amazon.awssdk.services.cloudformation.model.StackEvent cancelledEvent(
+            String logicalId, String resourceType) {
+        return software.amazon.awssdk.services.cloudformation.model.StackEvent.builder()
+            .eventId(logicalId + "-CREATE_FAILED")
+            .logicalResourceId(logicalId)
+            .resourceType(resourceType)
+            .resourceStatus("CREATE_FAILED")
+            .resourceStatusReason("Resource creation cancelled")
+            .build();
+    }
+
+    private static software.amazon.awssdk.services.cloudformation.model.StackEvent realFailureEvent(
+            String logicalId, String resourceType, String reason) {
+        return software.amazon.awssdk.services.cloudformation.model.StackEvent.builder()
+            .eventId(logicalId + "-CREATE_FAILED")
+            .logicalResourceId(logicalId)
+            .resourceType(resourceType)
+            .resourceStatus("CREATE_FAILED")
+            .resourceStatusReason(reason)
+            .build();
+    }
+
+    /**
+     * {@code scanPageForNewEvents} backs {@code pollNewEvents}' cutoff filtering and pagination
+     * decisions (a stack event from an earlier deploy/update on the same stack must never be
+     * reported as this operation's own progress, and pagination must stop once nothing new is
+     * left to find) -- see its javadoc for the reasoning. Tested directly since there's no
+     * AWS-client mock available in this module to drive {@code pollNewEvents} itself end to end.
+     */
+    @Test
+    void scanPageForNewEventsExcludesEventsFromBeforeTheOperationStarted() {
+        java.time.Instant operationStart = java.time.Instant.parse("2026-01-01T00:00:10.00Z");
+        List<software.amazon.awssdk.services.cloudformation.model.StackEvent> page = List.of(
+            eventAt("New1", operationStart.plusSeconds(2)),
+            eventAt("OldFromPriorDeploy", operationStart.minusSeconds(5))
+        );
+
+        AwsDirectDeployer.PageScanResult scan =
+            AwsDirectDeployer.scanPageForNewEvents(page, operationStart, new java.util.HashSet<>());
+
+        assertEquals(List.of("New1"), scan.newEvents().stream().map(e -> e.logicalResourceId()).toList());
+        assertTrue(scan.stopPaginating(), "must stop once a pre-cutoff event is reached");
+    }
+
+    @Test
+    void scanPageForNewEventsStopsAtAnAlreadySeenEventWithoutPaginatingFurther() {
+        java.time.Instant operationStart = java.time.Instant.parse("2026-01-01T00:00:10.00Z");
+        java.util.Set<String> seenEventIds = new java.util.HashSet<>();
+        seenEventIds.add("AlreadySeen-CREATE_FAILED");
+        List<software.amazon.awssdk.services.cloudformation.model.StackEvent> page = List.of(
+            eventAt("Brand New", operationStart.plusSeconds(5)),
+            cancelledEvent("AlreadySeen", "AWS::EC2::SecurityGroup"),
+            eventAt("NeverReached", operationStart.plusSeconds(1))
+        );
+
+        AwsDirectDeployer.PageScanResult scan =
+            AwsDirectDeployer.scanPageForNewEvents(page, operationStart, seenEventIds);
+
+        assertEquals(List.of("Brand New"), scan.newEvents().stream().map(e -> e.logicalResourceId()).toList());
+        assertTrue(scan.stopPaginating());
+    }
+
+    @Test
+    void scanPageForNewEventsContinuesPaginatingWhenAWholePageIsNew() {
+        java.time.Instant operationStart = java.time.Instant.parse("2026-01-01T00:00:10.00Z");
+        List<software.amazon.awssdk.services.cloudformation.model.StackEvent> page = List.of(
+            eventAt("New1", operationStart.plusSeconds(3)),
+            eventAt("New2", operationStart.plusSeconds(2))
+        );
+
+        AwsDirectDeployer.PageScanResult scan =
+            AwsDirectDeployer.scanPageForNewEvents(page, operationStart, new java.util.HashSet<>());
+
+        assertEquals(2, scan.newEvents().size());
+        assertTrue(!scan.stopPaginating(), "a page with nothing old or already-seen must keep paginating");
+    }
+
+    private static software.amazon.awssdk.services.cloudformation.model.StackEvent eventAt(
+            String logicalId, java.time.Instant timestamp) {
+        return software.amazon.awssdk.services.cloudformation.model.StackEvent.builder()
+            .eventId(logicalId + "-CREATE_FAILED")
+            .logicalResourceId(logicalId)
+            .resourceType("AWS::EC2::Subnet")
+            .resourceStatus("CREATE_COMPLETE")
+            .timestamp(timestamp)
+            .build();
+    }
 }

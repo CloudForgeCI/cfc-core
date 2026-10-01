@@ -1,38 +1,27 @@
-name: Publish Snapshot & Auto-Release
+name: Publish Snapshot
 
 # Continuous delivery for cfc-core's OSS deployment library (cfc-core's own root/BOM pom,
-# cloudforge-core, cloudforge-api). The pom.xml always carries a -SNAPSHOT version.
+# cloudforge-core, cloudforge-api). The pom.xml always carries a -SNAPSHOT version on develop --
+# real releases no longer happen here. A real release comes from a dedicated, frozen
+# release/vX.Y.Z branch instead: cut-release.yml cuts one from develop on demand, and
+# publish-release-branch.yml publishes it. See those two workflows for that flow; the only thing
+# that still changes develop's <version> is cut-release.yml bumping past the minor it just cut.
 #
 # cloudforge-ministack and cloudforge-localstack are not published here: each lives in its own
 # repo (CloudForgeCI/cloudforge-ministack, CloudForgeCI/cloudforge-localstack), declares this
 # pom as its Maven parent, and publishes independently in lockstep with this pom's version --
 # see their own repos' sync-versions.yml/publish-maven-central.yml.
 #
-# cloudforge-synth-service is not published here either; see publish-maven-central.yml's header.
+# cloudforge-synth-service is not published here either; see publish-release-branch.yml's header.
 #
 #   1. build-test       — full build + test. Nothing downstream runs unless this passes.
 #   2. publish-snapshot — deploys the current -SNAPSHOT version to Central Portal's snapshots
 #      repository (https://central.sonatype.com/repository/maven-snapshots/), so
 #      cloudforge-manager-deployment/cloudforge-manager can resolve it in their own CI. Runs when a
 #      pull request against develop is opened or updated, so a snapshot is available downstream
-#      during review rather than only after merge.
-#   3. release          — develop pushes only (i.e. after a PR merges). Strips "-SNAPSHOT" from
-#      the commit's version, builds/signs/publishes that as a numbered release to Maven Central
-#      (no re-test; build-test already validated this commit), and tags vX.Y.Z. Never edits a
-#      pom.xml, commits, or bumps a version: it releases whatever bump-develop last landed.
-#   4. bump-develop     — develop pushes only, in parallel with release (release publishes this
-#      commit's version; bump-develop advances develop to the next one). Bumps the pom to the next
-#      patch -SNAPSHOT and pushes that commit with "[skip ci]" so it doesn't re-trigger this
-#      workflow. It needs no GPG, Central access, or macOS runner, so a lost push race (see its
-#      "Bump develop" step comment) is a cheap, side-effect-free re-run.
+#      during review rather than only after merge, and again on every push to develop.
 #
-# Feature branches never edit <version>, so concurrent PRs never conflict over it. bump-develop is
-# the only thing that advances it, one merge at a time, serialized by git like any other push to
-# develop. Every merge to develop therefore produces both a snapshot and a Central release, by
-# design. publish-maven-central.yml publishes only a non-SNAPSHOT, untagged pom version, so under
-# this flow (develop always carries -SNAPSHOT) it is a no-op unless run against a release version.
-#
-# Required repo secrets (same four already configured for publish-maven-central.yml):
+# Required repo secrets (same four already configured for publish-release-branch.yml):
 #   GPG_PRIVATE_KEY, GPG_PASSPHRASE, CENTRAL_PORTAL_USERNAME, CENTRAL_PORTAL_PASSWORD
 
 on:
@@ -50,9 +39,6 @@ on:
                            # already tagged) decides whether a run does anything, and a path filter
                            # would only risk skipping a release.
   workflow_dispatch: {}
-
-permissions:
-  contents: write # to push the release tag and the next-snapshot bump commit
 
 jobs:
   build-test:
@@ -178,192 +164,3 @@ jobs:
         run: |
           rm -f ~/.m2/settings.xml
           rm -rf "${GNUPGHOME:-$RUNNER_TEMP/gnupg}"
-
-  release:
-    name: Release to Maven Central
-    # macOS -- see the publish-snapshot job above for why.
-    runs-on: macos-latest
-    needs: publish-snapshot
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    timeout-minutes: 30
-    concurrency:
-      group: publish-snapshot-cfc-core-release
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # need full tag history
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Compute release version
-        id: versions
-        run: |
-          SNAPSHOT_VERSION="${{ needs.publish-snapshot.outputs.version }}"
-          RELEASE_VERSION="${SNAPSHOT_VERSION%-SNAPSHOT}"
-
-          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
-
-          if git rev-parse "v$RELEASE_VERSION" >/dev/null 2>&1; then
-            # RELEASE_VERSION was derived from the SNAPSHOT this exact run just built and
-            # validated, so an existing tag for it isn't a conflicting release -- it's the same
-            # one, already published, most likely by a prior run of this same job (e.g. a manual
-            # re-run) that already completed successfully. Central won't accept a second publish
-            # of a version it's already holding, so there's nothing left for this run to do.
-            echo "::warning::v$RELEASE_VERSION is already tagged -- treating this as an already-completed release. Nothing to do."
-            echo "already_released=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "already_released=false" >> "$GITHUB_OUTPUT"
-            echo "Releasing v$RELEASE_VERSION"
-          fi
-
-      - name: Set release version
-        if: steps.versions.outputs.already_released == 'false'
-        run: mvn -q -B versions:set -DnewVersion=${{ steps.versions.outputs.release_version }} -DprocessAllModules=true -DgenerateBackupPoms=false
-
-      - name: Install gnupg
-        if: steps.versions.outputs.already_released == 'false'
-        run: brew install gnupg
-
-      - name: Import GPG signing key
-        if: steps.versions.outputs.already_released == 'false'
-        env:
-          GPG_PRIVATE_KEY_B64: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: |
-          export GNUPGHOME="$RUNNER_TEMP/gnupg"
-          mkdir -p "$GNUPGHOME"
-          chmod 700 "$GNUPGHOME"
-          # --pinentry-mode loopback (in the release profile's gpg-plugin config) is ignored by
-          # gpg-agent unless allow-loopback-pinentry is set here; without it, the agent tries to
-          # launch a pinentry program and fails headless ("gpg: signing failed: No pinentry").
-          echo "allow-loopback-pinentry" > "$GNUPGHOME/gpg-agent.conf"
-          DECODED=$(echo "$GPG_PRIVATE_KEY_B64" | base64 -d)
-          # ::add-mask:: only masks a single line -- mask every line of the multi-line
-          # armor block individually, or everything after the first line prints in plain
-          # text the moment it appears in any later log output.
-          while IFS= read -r line; do
-            [ -n "$line" ] && echo "::add-mask::$line"
-          done <<< "$DECODED"
-          echo "$DECODED" | gpg --batch --import
-          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
-          # The release profile's maven-gpg-plugin config reads <homedir>${env.GPG_HOMEDIR}</homedir>,
-          # not GNUPGHOME (the gpg CLI's own var) -- both must point at the same imported keyring.
-          echo "GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
-
-      - name: Configure Maven settings.xml (Central Portal credentials)
-        if: steps.versions.outputs.already_released == 'false'
-        env:
-          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
-          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
-        run: |
-          mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml << EOF
-          <settings>
-            <servers>
-              <server>
-                <id>central</id>
-                <username>${CENTRAL_PORTAL_USERNAME}</username>
-                <password>${CENTRAL_PORTAL_PASSWORD}</password>
-              </server>
-            </servers>
-          </settings>
-          EOF
-
-      # Central rejects a release artifact whose dependencyManagement pins a SNAPSHOT dependency
-      # ("Dependency management dependencies to SNAPSHOT versions not allowed"), but the BOM's
-      # cloudforge-manager-deployment.version property is always a SNAPSHOT by design -- see that
-      # property's own comment in pom.xml. For this one real-release publish, swap it to whatever
-      # cloudforge-manager-deployment last published as a real release on Central instead (never
-      # committed -- versions:set-property only touches this runner's own checkout).
-      - name: Resolve cloudforge-manager-deployment.version to its latest real Central release
-        if: steps.versions.outputs.already_released == 'false'
-        run: |
-          RELEASE=$(curl -fsSL "https://repo1.maven.org/maven2/com/cloudforgeci/cloudforge-manager-deployment/maven-metadata.xml" \
-            | grep -o '<release>[^<]*</release>' | sed -E 's|</?release>||g')
-          if [ -z "$RELEASE" ]; then
-            echo "::error::Could not resolve cloudforge-manager-deployment's latest release from Central's maven-metadata.xml"
-            exit 1
-          fi
-          echo "Pinning cloudforge-manager-deployment.version to $RELEASE for this release build (never committed)"
-          mvn -q -B versions:set-property -Dproperty=cloudforge-manager-deployment.version \
-            -DnewVersion="$RELEASE" -DgenerateBackupPoms=false
-
-      - name: Build, sign, and publish the release (no re-test — already validated as a SNAPSHOT this run)
-        if: steps.versions.outputs.already_released == 'false'
-        env:
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests -Djacoco.skip=true "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
-
-      - name: Clean up credentials
-        if: always()
-        run: |
-          rm -f ~/.m2/settings.xml
-          rm -rf "${GNUPGHOME:-$RUNNER_TEMP/gnupg}"
-
-      - name: Tag the published release
-        if: steps.versions.outputs.already_released == 'false'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.versions.outputs.release_version }}" -m "Publish v${{ steps.versions.outputs.release_version }} to Maven Central (cfc-core, cloudforge-core, cloudforge-api)"
-          git push origin "v${{ steps.versions.outputs.release_version }}"
-
-      - name: Publish summary
-        if: always()
-        run: |
-          echo "## Release to Maven Central" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Snapshot published:** ${{ needs.publish-snapshot.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.versions.outputs.already_released }}" = "true" ]; then
-            echo "**Release:** v${{ steps.versions.outputs.release_version }} was already published by a prior run -- nothing to do this time." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Release published:** ${{ steps.versions.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api" >> $GITHUB_STEP_SUMMARY
-
-  bump-develop:
-    name: Bump develop to next SNAPSHOT
-    # ubuntu-latest, not macOS: this job never touches GPG or Central (mvn versions:set plus a git
-    # commit/push). Runs in parallel with release (needs: publish-snapshot only): release publishes
-    # this commit's version, this job advances develop to the next one.
-    runs-on: ubuntu-latest
-    needs: publish-snapshot
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    timeout-minutes: 10
-    concurrency:
-      group: publish-snapshot-cfc-core-bump-develop
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Bump develop to the next SNAPSHOT
-        run: |
-          SNAPSHOT_VERSION="${{ needs.publish-snapshot.outputs.version }}"
-          RELEASE_VERSION="${SNAPSHOT_VERSION%-SNAPSHOT}"
-          # Patch-level bump for the next in-progress version: 3.2.0 -> 3.2.1-SNAPSHOT
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
-          NEXT_SNAPSHOT="${MAJOR}.${MINOR}.$((PATCH + 1))-SNAPSHOT"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          mvn -q -B versions:set -DnewVersion="$NEXT_SNAPSHOT" -DprocessAllModules=true -DgenerateBackupPoms=false
-          git add -A
-          git commit -m "chore: bump to $NEXT_SNAPSHOT [skip ci]"
-          # Guards against a race (another push landing on develop between this job's checkout
-          # and its push below), where a plain push would be rejected as non-fast-forward.
-          git pull --rebase origin develop
-          git push origin HEAD:develop

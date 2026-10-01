@@ -11,6 +11,7 @@ import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.rules.ComplianceFindingsCollector;
 import com.cloudforgeci.api.core.rules.NagReportReader;
 import com.cloudforgeci.api.core.rules.NagReportReader.ComplianceFinding;
+import com.cloudforgeci.api.deploy.aws.AwsDirectDeployer;
 import com.cloudforgeci.api.launch.ApplicationEc2Stack;
 import com.cloudforgeci.api.launch.ApplicationFargateStack;
 import software.amazon.awscdk.App;
@@ -26,6 +27,7 @@ import software.amazon.awssdk.services.route53.model.ListHostedZonesByNameReques
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -121,6 +123,36 @@ public final class CloudForgeSynthesizer {
      * @throws IOException when {@code app.synth()} fails, or the output directory can't be created
      */
     public static Result synthesize(DeploymentConfig config, Path outputDirectory) throws IOException {
+        return synthesize(config, outputDirectory, false);
+    }
+
+    /**
+     * Same as {@link #synthesize}, but produces the AWS Marketplace CloudFormation listing variant
+     * of CloudForge Manager -- see {@code MarketplaceParameterSupport}'s own javadoc for what that
+     * changes (real {@code AdminEmail}/{@code LicenseKey} CloudFormation parameters instead of
+     * requiring them via {@code --context}/cdk.json, meaningless to a buyer who never runs the CDK
+     * CLI). This is the one and only place Marketplace mode is ever turned on -- deliberately not a
+     * {@code DeploymentConfig} field or a CLI flag on the regular {@code deploy} command, so it
+     * can't be set by hand-editing a context file; only whatever builds the actual Marketplace
+     * listing artifact calls this method.
+     *
+     * @throws IllegalArgumentException when {@code config.applicationId} isn't {@code
+     *     cloudforge-manager} -- every other application ignores Marketplace mode entirely (see
+     *     {@code MarketplaceParameterSupport}), so synthesizing one through this entry point would
+     *     silently produce a template indistinguishable from {@link #synthesize}'s own output.
+     */
+    public static Result synthesizeForMarketplace(DeploymentConfig config, Path outputDirectory) throws IOException {
+        Objects.requireNonNull(config, "config");
+        if (!"cloudforge-manager".equals(config.applicationId)) {
+            throw new IllegalArgumentException(
+                "synthesizeForMarketplace only applies to cloudforge-manager, got applicationId="
+                    + config.applicationId);
+        }
+        return synthesize(config, outputDirectory, true);
+    }
+
+    private static Result synthesize(DeploymentConfig config, Path outputDirectory, boolean marketplaceMode)
+            throws IOException {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(outputDirectory, "outputDirectory");
         if (config.stackName == null || config.stackName.isBlank()) {
@@ -186,9 +218,11 @@ public final class CloudForgeSynthesizer {
 
             switch (config.runtime) {
                 case FARGATE -> new ApplicationFargateStack(
-                    app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec);
+                    app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec,
+                    marketplaceMode);
                 case EC2 -> new ApplicationEc2Stack(
-                    app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec);
+                    app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec,
+                    marketplaceMode);
             }
 
             CloudAssembly assembly;
@@ -216,6 +250,17 @@ public final class CloudForgeSynthesizer {
 
             CloudFormationStackArtifact artifact = assembly.getStackByName(config.stackName);
             Path templateFile = Path.of(assembly.getDirectory()).resolve(artifact.getTemplateFile());
+
+            // A Marketplace-uploaded template file has no later deploy-time rewrite step to rely
+            // on (unlike AwsDirectDeployer's own in-memory copy, rewritten right before every
+            // CreateStack/CreateChangeSet call) -- the file itself must already be self-contained,
+            // so the buyer's own (never-bootstrapped) account doesn't reject BootstrapVersion's
+            // unresolvable SSM reference before creating a single resource.
+            if (marketplaceMode) {
+                String rewritten = AwsDirectDeployer.resolveCdkBootstrapParameters(Files.readString(templateFile));
+                Files.writeString(templateFile, rewritten);
+            }
+
             return new Result(config.stackName, templateFile, Path.of(assembly.getDirectory()));
         }
     }
@@ -295,15 +340,34 @@ public final class CloudForgeSynthesizer {
      * <p>Suffixes come from {@link DeploymentConfig#availabilityZones} when the caller populated
      * it (region-relative — "a" means whichever zone the target region calls "a"); defaults to
      * {@code ["a", "b"]} otherwise, since every commercial AWS region has at least two AZs with
-     * those conventional suffixes.</p>
+     * those conventional suffixes. A caller-supplied entry that's already a full zone name (e.g.
+     * "us-east-1a", the conventional way anyone would write one by hand) is used as-is rather
+     * than getting the region prepended a second time.</p>
+     *
+     * <p>Always seeds at least two zones, padding with conventional suffixes when the caller
+     * supplies fewer. {@link com.cloudforgeci.api.network.VpcFactory} hardcodes {@code .maxAzs(2)}
+     * for every deployment, but CDK silently caps subnet creation to however many AZ names are
+     * seeded here rather than erroring at synth time — a single-AZ caller (e.g. a wizard answer
+     * that opts out of "Multi-AZ") would otherwise produce a VPC CloudFormation only discovers is
+     * broken when it tries to create the load balancer.</p>
      */
     private static void seedAvailabilityZoneContext(App app, String account, String region, String[] suffixes) {
         List<String> resolvedSuffixes = suffixes != null && suffixes.length > 0
             ? Arrays.asList(suffixes)
             : List.of("a", "b");
-        List<String> zones = resolvedSuffixes.stream()
-            .map(suffix -> region + suffix.trim().toLowerCase(Locale.ROOT))
-            .toList();
+        List<String> zones = new ArrayList<>(resolvedSuffixes.stream()
+            .map(suffix -> {
+                String trimmed = suffix.trim().toLowerCase(Locale.ROOT);
+                return trimmed.startsWith(region) ? trimmed : region + trimmed;
+            })
+            .toList());
+        for (String fallbackSuffix : List.of("a", "b", "c", "d")) {
+            if (zones.size() >= 2) break;
+            String candidate = region + fallbackSuffix;
+            if (!zones.contains(candidate)) {
+                zones.add(candidate);
+            }
+        }
         app.getNode().setContext(
             "availability-zones:account=" + account + ":region=" + region, zones);
     }

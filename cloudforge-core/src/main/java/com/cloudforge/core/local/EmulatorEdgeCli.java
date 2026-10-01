@@ -6,12 +6,16 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
- * Command-line entry point for {@link EmulatorEdgeLifecycle} — backs {@code scripts/emulator-edge-*.sh}.
+ * Command-line entry point for {@link EmulatorEdgeLifecycle} — backs the
+ * {@code scripts/emulator-edge-*.sh} wrappers in cloudforge-localstack and cloudforge-ministack
+ * (this class itself lives here, in cloudforge-core, which both repos depend on as a resolved
+ * artifact; the wrapper scripts do not live in cfc-core).
  *
- * <p>Invoked via {@code mvn -q -pl cloudforge-core org.codehaus.mojo:exec-maven-plugin:3.5.0:java
- * -Dexec.mainClass=com.cloudforge.core.local.EmulatorEdgeCli -Dexec.args=&lt;goal&gt;}. Fully
- * qualified plugin coordinates are used because no {@code cloudforge:} Maven plugin prefix is
- * registered.
+ * <p>Invoked via {@code mvn -q org.codehaus.mojo:exec-maven-plugin:3.5.0:java
+ * -Dexec.mainClass=com.cloudforge.core.local.EmulatorEdgeCli -Dexec.args=&lt;goal&gt;} from each
+ * repo's own root — {@code cloudforge-core} resolves from the normal parent/dependency classpath
+ * there, no {@code -pl} needed. Fully qualified plugin coordinates are used because no
+ * {@code cloudforge:} Maven plugin prefix is registered.
  */
 public final class EmulatorEdgeCli {
 

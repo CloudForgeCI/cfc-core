@@ -51,6 +51,33 @@ class CloudForgeSynthesizerTest {
         assertTrue(template.get("Resources").size() > 0);
     }
 
+    /**
+     * {@code ApplicationUrl} (and its per-app alias) used to always be the raw ALB DNS name, even
+     * when a working custom domain was configured — Manager's instance-detail screen and its
+     * "Open" link always pointed at the ALB instead. {@code FargateFactory.createApplicationUrlOutput}
+     * now prefers {@code https://<fqdn>} once {@code enableSsl} + a resolvable domain make that a
+     * real, reachable URL.
+     */
+    @Test
+    void applicationUrlOutputPrefersTheConfiguredDomainOverTheRawAlbDnsName() throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestDomainUrl");
+        config.account = "111122223333";
+        config.domain = "example.com";
+        config.subdomain = "jenkins";
+        config.enableSsl = true;
+        // Avoids a real Route53 HostedZone.fromLookup API call during synth (createZone=false,
+        // the default, requires live AWS credentials this test environment doesn't have).
+        config.createZone = true;
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        JsonNode outputs = MAPPER.readTree(result.templateFile().toFile()).path("Outputs");
+        String applicationUrl = outputs.path("ApplicationUrl").path("Value").asText();
+        assertEquals("https://jenkins.example.com", applicationUrl,
+            "expected the configured domain, not the ALB DNS name, got outputs: " + outputs);
+    }
+
     private DeploymentConfig wordpressFargateConfig(String stackName) {
         DeploymentConfig config = new DeploymentConfig();
         config.stackName = stackName;
@@ -266,6 +293,52 @@ class CloudForgeSynthesizerTest {
     }
 
     /**
+     * A hand-written deployment-context.json bypasses the interactive wizard's field validation
+     * (which restricts this field to bare suffixes via {@code allowedValues}), so a caller
+     * writing full zone names the conventional way ("us-east-1a", not "a") must still work
+     * rather than producing a doubled "us-east-1us-east-1a".
+     */
+    @Test
+    void synthesizingWithFullAvailabilityZoneNamesDoesNotDoubleTheRegionPrefix() throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestFullAzNames");
+        config.account = "111122223333";
+        config.availabilityZones = new String[] {"us-east-1a", "us-east-1b"};
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        String templateJson = Files.readString(result.templateFile());
+        assertTrue(!templateJson.contains("us-east-1us-east-1"),
+            "region prefix must not be doubled when the caller already supplied a full zone name: "
+                + templateJson);
+        assertTrue(templateJson.contains("us-east-1a") || templateJson.contains("us-east-1b"),
+            "expected real seeded AZ names in the template, got: " + templateJson);
+    }
+
+    /**
+     * {@code VpcFactory} hardcodes {@code .maxAzs(2)} for every deployment; CDK silently caps
+     * subnet creation to however many AZ names got seeded, with no synth-time error. A caller
+     * that supplies only one AZ (e.g. the interactive wizard's "Multi-AZ" prompt answered "no")
+     * must not be able to produce a VPC with a single public/private subnet pair — that only
+     * fails once real CloudFormation tries to create the load balancer, which needs at least two.
+     */
+    @Test
+    void synthesizingWithASingleAvailabilityZonePadsUpToTwo() throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestSingleAzPadded");
+        config.account = "111122223333";
+        config.availabilityZones = new String[] {"us-east-1a"};
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        String templateJson = Files.readString(result.templateFile());
+        assertTrue(templateJson.contains("us-east-1a") && templateJson.contains("us-east-1b"),
+            "a single caller-supplied AZ must be padded to at least two, got: " + templateJson);
+        assertTrue(!templateJson.contains("us-east-1us-east-1"),
+            "padding must not double the region prefix: " + templateJson);
+    }
+
+    /**
      * Companion to the dummy-AZ test above: callers that do not set {@code config.account} (the
      * default) keep account-agnostic {@code Fn::GetAZs} resolution.
      */
@@ -297,5 +370,19 @@ class CloudForgeSynthesizerTest {
             result.templateFile(),
             result.assemblyDirectory());
         assertEquals(result.templateFile(), request.canonicalTemplate());
+    }
+
+    /** {@code cloudforge-manager}'s own {@code ApplicationSpec} isn't registered on this module's
+     *  test classpath (cloudforge-manager-deployment depends on cloudforge-api, not the reverse),
+     *  so only the guard clause -- not a real Marketplace synth -- is testable here; see {@code
+     *  MarketplaceParameterSupportTest} for coverage of the actual parameter wiring. */
+    @Test
+    void synthesizeForMarketplaceRejectsEveryApplicationExceptManager() {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestMarketplaceGuard");
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+            () -> CloudForgeSynthesizer.synthesizeForMarketplace(config, tempDir.resolve("cdk.out")));
+        assertTrue(thrown.getMessage().contains("cloudforge-manager"),
+            "expected the error to name cloudforge-manager as the only supported app: " + thrown.getMessage());
     }
 }

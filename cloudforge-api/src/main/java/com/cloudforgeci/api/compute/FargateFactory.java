@@ -526,8 +526,18 @@ public class FargateFactory extends BaseFactory {
 
     String appId = applicationSpec != null ? applicationSpec.applicationId() : "application";
     String outputId = appId.substring(0, 1).toUpperCase() + appId.substring(1) + "Url";
-    String description = appId.substring(0, 1).toUpperCase() + appId.substring(1) + " URL (ALB DNS)";
-    String url = "http://" + ctx.alb.get().get().getLoadBalancerDnsName();
+    // Prefer the configured domain over the raw ALB DNS name once one is actually reachable
+    // (enableSsl=true wires the cert/HTTPS listener onto that host — see
+    // FargateRuntimeConfiguration) — otherwise Manager's instance-detail screen and its "Open"
+    // link always point at the ALB even when a custom domain is live and working.
+    String effectiveFqdn = ctx.cfc.fqdn();
+    boolean useDomain = Boolean.TRUE.equals(ctx.cfc.enableSsl())
+        && effectiveFqdn != null && !effectiveFqdn.isBlank();
+    String url = useDomain
+        ? "https://" + effectiveFqdn
+        : "http://" + ctx.alb.get().get().getLoadBalancerDnsName();
+    String description = appId.substring(0, 1).toUpperCase() + appId.substring(1)
+        + (useDomain ? " URL" : " URL (ALB DNS)");
 
     CfnOutput.Builder.create(this, outputId)
             .description(description)
@@ -543,7 +553,7 @@ public class FargateFactory extends BaseFactory {
     // 8-char disambiguation hash — a construct one level deep needs it to stay globally
     // unique, but that hash would defeat the whole point of a stable, predictable key.
     CfnOutput.Builder.create(software.amazon.awscdk.Stack.of(this), "ApplicationUrl")
-            .description("Application URL (ALB DNS)")
+            .description(useDomain ? "Application URL" : "Application URL (ALB DNS)")
             .value(url)
             .build();
 

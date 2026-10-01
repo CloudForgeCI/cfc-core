@@ -25,6 +25,17 @@ public class ApplicationFargateStack extends Stack {
     public ApplicationFargateStack(final Construct scope, final String id, final StackProps props,
                                    final SecurityProfile security, final IAMProfile iamProfile,
                                    final ApplicationSpec applicationSpec) {
+        this(scope, id, props, security, iamProfile, applicationSpec, false);
+    }
+
+    /**
+     * Same as the six-arg constructor, with an explicit Marketplace-mode switch -- see {@link
+     * com.cloudforgeci.api.deploy.CloudForgeSynthesizer#synthesizeForMarketplace}, the only
+     * intended caller with {@code marketplaceMode} true.
+     */
+    public ApplicationFargateStack(final Construct scope, final String id, final StackProps props,
+                                   final SecurityProfile security, final IAMProfile iamProfile,
+                                   final ApplicationSpec applicationSpec, final boolean marketplaceMode) {
         super(scope, id, props);
 
         if (applicationSpec == null) {
@@ -33,12 +44,13 @@ public class ApplicationFargateStack extends Stack {
         }
 
         DeploymentContext cfc = DeploymentContext.from(scope);
+        Construct appScope = MarketplaceParameterSupport.applyIfApplicable(this, cfc, applicationSpec, marketplaceMode);
 
         Tags.of(this).add("cloudforge:managed", "true");
         Tags.of(this).add("cloudforge:application", applicationSpec.applicationId());
         Tags.of(this).add("cloudforge:runtime", "fargate");
 
-        ApplicationFactory.createFargate(this, id, cfc, security, iamProfile, applicationSpec);
+        ApplicationFactory.createFargate(appScope, id, cfc, security, iamProfile, applicationSpec);
 
         // Explicit outputs so Manager can enrich the App column even when stack tags
         // are omitted by local emulators (MiniStack describeStacks tags are often empty).

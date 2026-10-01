@@ -1,15 +1,12 @@
 package com.cloudforgeci.api.ingress;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
 import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.RuntimeType;
 import software.amazon.awscdk.*;
-import software.amazon.awscdk.customresources.AwsCustomResource;
-import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
-import software.amazon.awscdk.customresources.AwsSdkCall;
-import software.amazon.awscdk.customresources.PhysicalResourceId;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
@@ -24,6 +21,7 @@ import io.github.cdklabs.cdknag.NagSuppressions;
 import io.github.cdklabs.cdknag.NagPackSuppression;
 
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -432,49 +430,41 @@ public class AlbFactory extends BaseFactory {
         String ssmParameterArn = "arn:" + Stack.of(this).getPartition() + ":ssm:" + region + ":"
             + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
 
-        AwsSdkCall putParameterCall = AwsSdkCall.builder()
-                .service("SSM")
-                .action("putParameter")
-                .parameters(java.util.Map.of(
-                        "Name", ssmParameterName,
-                        "Value", newBucket.getBucketArn(),
-                        "Type", "String",
-                        "Description", "CloudForge retained ALB logs bucket ARN for region " + region,
-                        "Overwrite", true
-                ))
-                .physicalResourceId(PhysicalResourceId.of("AlbLogsBucket-SSMWriter"))
-                .region(region)
-                .build();
+        AssetFreeCustomResource.Result ssmWriter = AssetFreeCustomResource.create(
+                this, "AlbLogsBucketSSMWriter", AssetFreeCustomResource.SSM_PUT_PARAMETER_HANDLER_JS,
+                Duration.seconds(30),
+                List.of(PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(List.of("ssm:PutParameter"))
+                        .resources(List.of(ssmParameterArn))
+                        .build()),
+                Map.of(
+                        "ParameterName", ssmParameterName,
+                        "ParameterValue", newBucket.getBucketArn(),
+                        "ParameterDescription", "CloudForge retained ALB logs bucket ARN for region " + region,
+                        "Region", region
+                ));
 
-        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, "AlbLogsBucketSSMWriter")
-                .onCreate(putParameterCall)
-                .onUpdate(putParameterCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of(ssmParameterArn))
-                                .build()
-                ))
-                .build();
-
-        // Add NagSuppressions for CDK custom resource limitations
+        // Add NagSuppressions for this hand-rolled custom resource's own shape
         NagSuppressions.addResourceSuppressions(
-            ssmWriter,
+            ssmWriter.function,
             List.of(
                 NagPackSuppression.builder()
                     .id("PCI.DSS.321-IAMNoInlinePolicy")
-                    .reason("CDK AwsCustomResource creates inline policies by design. " +
-                           "These are auto-generated Lambda execution policies for AWS SDK calls.")
+                    .reason("This Lambda's own execution policy is scoped to a single " +
+                           "ssm:PutParameter call on one parameter ARN -- an inline policy is the " +
+                           "right shape for a permission this narrow.")
                     .build(),
                 NagPackSuppression.builder()
                     .id("PCI.DSS.321-LambdaInsideVPC")
-                    .reason("CDK custom resource Lambdas only make AWS API calls (SSM) " +
-                           "and do not require VPC access.")
+                    .reason("This custom resource Lambda only makes an SSM API call and does not " +
+                           "require VPC access.")
                     .build()
             ),
             Boolean.TRUE
         );
 
-        ssmWriter.getNode().addDependency(newBucket);
+        ssmWriter.customResource.getNode().addDependency(newBucket);
 
         LOG.info("ALB logs bucket will use CloudFormation-generated unique name");
         LOG.info("ALB logs bucket ARN will be stored in SSM: " + ssmParameterName);

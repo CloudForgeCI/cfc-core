@@ -430,4 +430,59 @@ class ComplianceFactoryTest {
         // Then: Should create with KMS encryption for PCI-DSS compliance
         assertDoesNotThrow(factory::create);
     }
+
+    /**
+     * {@code region} (a {@code @DeploymentContext("region")} field) stays {@code null} when the
+     * deployment context never supplies one -- every test above already exercises this path
+     * ({@code createTestStack} sets no "region" key -- and each already asserts {@code
+     * factory::create} doesn't throw, which it would if this were still broken: {@code
+     * createSsmArnWriter}'s {@code Map.of(..., "Region", region)} rejects a null value). This
+     * test asserts the actual fallback value directly, and that an explicit region overrides it.
+     */
+    @Test
+    void regionFallsBackToTheStacksOwnRegionWhenDeploymentContextLeavesItUnset() throws Exception {
+        App app = new App();
+        Stack stack = createTestStack(app, "TestComplianceNoRegion", SecurityProfile.PRODUCTION);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
+
+        java.lang.reflect.Field regionField = ComplianceFactory.class.getDeclaredField("region");
+        regionField.setAccessible(true);
+        // Not asserted against stack.getRegion() directly: CDK returns a fresh, distinctly-ID'd
+        // token object on every call, so two separate calls never compare equal even though both
+        // resolve to the same underlying value at synth time. The invariant that matters here is
+        // that this is never null/empty -- which it was, unpatched, before this fix.
+        Object region = regionField.get(factory);
+        assertNotNull(region);
+        assertFalse(String.valueOf(region).isEmpty());
+    }
+
+    @Test
+    void regionPrefersAnExplicitlyConfiguredValueOverTheStacksOwnRegion() throws Exception {
+        App app = new App();
+        Stack stack = new Stack(app, "TestComplianceExplicitRegion");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestComplianceExplicitRegion");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("region", "eu-west-1");
+        cfcContext.put("domain", "example.com");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
+
+        java.lang.reflect.Field regionField = ComplianceFactory.class.getDeclaredField("region");
+        regionField.setAccessible(true);
+        assertEquals("eu-west-1", regionField.get(factory));
+    }
 }

@@ -108,14 +108,22 @@ public final class Ec2RuntimeConfiguration implements RuntimeConfiguration {
       }
       String appId = c.applicationSpec.get().map(spec -> spec.applicationId()).orElse("application");
       String capitalized = appId.substring(0, 1).toUpperCase(Locale.ROOT) + appId.substring(1);
-      String url = "http://" + alb.getLoadBalancerDnsName();
+      // Prefer the configured domain over the raw ALB DNS name once one is actually reachable
+      // (enableSsl=true wires the cert/HTTPS listener onto that host below) -- otherwise
+      // Manager's instance-detail screen and its "Open" link always point at the ALB even when a
+      // custom domain is live and working. Mirrors FargateFactory's own fix for the same gap.
+      String effectiveFqdn = c.cfc != null ? c.cfc.fqdn() : null;
+      boolean useDomain = c.cfc != null && Boolean.TRUE.equals(c.cfc.enableSsl())
+          && effectiveFqdn != null && !effectiveFqdn.isBlank();
+      String url = useDomain ? "https://" + effectiveFqdn : "http://" + alb.getLoadBalancerDnsName();
+      String urlDescriptionSuffix = useDomain ? " URL" : " URL (ALB DNS)";
 
       software.amazon.awscdk.CfnOutput.Builder.create(c, capitalized + "Url")
-          .description(capitalized + " URL (ALB DNS)")
+          .description(capitalized + urlDescriptionSuffix)
           .value(url)
           .build();
       software.amazon.awscdk.CfnOutput.Builder.create(stack, "ApplicationUrl")
-          .description("Application URL (ALB DNS)")
+          .description(useDomain ? "Application URL" : "Application URL (ALB DNS)")
           .value(url)
           .build();
     });

@@ -113,7 +113,9 @@ public final class ContextInjector {
                         field.getAnnotation(DeploymentContext.class);
                     if (deploymentContextAnnotation != null && !deploymentContextAnnotation.value().isEmpty()) {
                         Object value = extractValueFromContext(deploymentContext, deploymentContextAnnotation.value());
-                        setFieldValue(target, field, value);
+                        if (value != null) {
+                            setFieldValue(target, field, value);
+                        }
                         continue;
                     }
 
@@ -122,7 +124,9 @@ public final class ContextInjector {
                         field.getAnnotation(SystemContext.class);
                     if (systemContextAnnotation != null && !systemContextAnnotation.value().isEmpty()) {
                         Object value = extractValueFromContext(systemContext, systemContextAnnotation.value());
-                        setFieldValue(target, field, value);
+                        if (value != null) {
+                            setFieldValue(target, field, value);
+                        }
                         continue;
                     }
 
@@ -131,7 +135,9 @@ public final class ContextInjector {
                         field.getAnnotation(SecurityProfileConfiguration.class);
                     if (securityConfigAnnotation != null && !securityConfigAnnotation.value().isEmpty()) {
                         Object value = extractValueFromContext(securityConfig, securityConfigAnnotation.value());
-                        setFieldValue(target, field, value);
+                        if (value != null) {
+                            setFieldValue(target, field, value);
+                        }
                     }
                 } catch (Exception e) {
                     // Log and continue - don't fail the injection
@@ -155,42 +161,52 @@ public final class ContextInjector {
         }
 
         Object value = null;
+        boolean found = false;
 
         // Try to access as a public field first (e.g., SystemContext.stackName)
         try {
             Field contextField = contextObject.getClass().getField(propertyName);
             value = contextField.get(contextObject);
+            found = true;
         } catch (NoSuchFieldException e) {
             // Not a field, try methods instead
         }
 
-        // If field access didn't work, try methods
-        if (value == null) {
+        // If no field matched, try methods -- a method that legitimately returns null (the
+        // property is unset, not missing) still counts as found, so it isn't logged as a gap.
+        if (!found) {
             // Try standard getter method (e.g., "region" -> "region()")
             Method method = findMethod(contextObject.getClass(), propertyName);
             if (method != null) {
                 value = method.invoke(contextObject);
+                found = true;
             }
 
             // Try "get" prefix (e.g., "wafEnabled" -> "getWafEnabled()")
-            if (value == null) {
+            if (!found) {
                 method = findMethod(contextObject.getClass(), "get" + capitalize(propertyName));
                 if (method != null) {
                     value = method.invoke(contextObject);
+                    found = true;
                 }
             }
 
             // Try "is" prefix for boolean (e.g., "wafEnabled" -> "isWafEnabled()")
-            if (value == null) {
+            if (!found) {
                 method = findMethod(contextObject.getClass(), "is" + capitalize(propertyName));
                 if (method != null) {
                     value = method.invoke(contextObject);
+                    found = true;
                 }
             }
         }
 
-        if (value == null) {
+        if (!found) {
             throw new NoSuchMethodException("No field or getter found for property: " + propertyName);
+        }
+
+        if (value == null) {
+            return null;
         }
 
         // Auto-extract from Slot if the value is a Slot object

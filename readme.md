@@ -15,7 +15,7 @@ AWS account, to a local MiniStack or LocalStack emulator.
 > CloudForge implements and validates infrastructure controls mapped to compliance
 > frameworks. It is not compliance-certified and does not make a deployment compliant on its
 > own. You remain responsible for your own assessments, audits, and organizational controls.
-> The software is provided "AS IS" under the [Apache License 2.0](LICENSE).
+> The software is provided "AS IS" under the [Business Source License 1.1](LICENSE).
 
 ## Features
 
@@ -90,8 +90,9 @@ Then deploy an application against it:
 cloudforge-cli deploy --context cfc-testing/deployment-contexts/Jenkins-Stack.json --target localstack
 ```
 
-MiniStack and LocalStack share port 4566, so run one at a time. See the
-[Local Emulator Quick Start](docs/guides/LOCAL_EMULATOR_QUICK_START.md) for details.
+MiniStack and LocalStack share port 4566, so run one at a time. See the local emulator setup
+docs in [cloudforge-localstack](https://github.com/CloudForgeCI/cloudforge-localstack) and
+[cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack) for details.
 
 ### 4. Deploy to AWS
 
@@ -194,4 +195,6 @@ build and test commands, and pull request process. Release history is in
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Business Source License 1.1. Free for production use, including managing your own infrastructure;
+offering CloudForge (or a derivative) to third parties as a hosted service or marketplace listing
+requires a commercial license. Converts to Apache License 2.0 on 2030-10-01. See [LICENSE](LICENSE).

@@ -55,7 +55,7 @@ With `MINISTACK_AUTH_AUTOSTART=true`, the deploy pipeline reconciles local auth 
 
 | Auth in template | Runtime action |
 |------------------|----------------|
-| Enabled | Start `mock-oidc` (from the repository `docker-compose.yml`) and a detached `MiniStackAuthProxy` JVM |
+| Enabled | Start a `mock-oidc` container and a detached `MiniStackAuthProxy` JVM |
 | Disabled | Stop the managed proxy and `mock-oidc` |
 
 Auth proxy defaults:

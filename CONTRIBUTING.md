@@ -161,4 +161,4 @@ Applications can also live in your own project as plugins; see the
 ## License
 
 By contributing, you agree that your contributions are licensed under the
-[Apache License 2.0](LICENSE).
+[Business Source License 1.1](LICENSE).

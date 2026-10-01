@@ -242,4 +242,77 @@ class UtilTest {
         assertTrue(context.complianceFrameworks().toUpperCase().contains("SOC2"));
         assertTrue(context.complianceFrameworks().toUpperCase().contains("HIPAA"));
     }
+
+    /** These previously had no {@link DeploymentContext} getter at all -- ContextInjector logged
+     *  "Failed to inject field ...: No field or getter found" for every one of them on every real
+     *  deploy, and the value was always silently dropped regardless of what was configured. */
+    @Test
+    void optionalPortTogglesRoundTripThroughTheContextMap() {
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("enableSsh", true);
+        raw.put("enableAgents", true);
+        DeploymentContext context = Util.createDeploymentContext(raw);
+
+        assertTrue(context.enableSsh());
+        assertTrue(context.enableAgents());
+        // Unset port toggles default to false (DeploymentConfig's own field default), not null --
+        // consumers read them via Boolean.TRUE.equals(), so this matches prior (getter-less)
+        // behavior exactly.
+        assertFalse(context.enableSmtp());
+    }
+
+    /** Unlike the port toggles above, these four carry no class-level default on purpose -- their
+     *  consumers in ComplianceFactory check {@code == null} to apply a PRODUCTION-profile
+     *  fallback, so a plain forwarding getter must keep returning {@code null} when unset. */
+    @Test
+    void remediationTogglesStayNullWhenUnsetSoTheProductionFallbackCanApply() {
+        DeploymentContext unset = Util.createDeploymentContext(new HashMap<>());
+        assertNull(unset.enableGuardDutyRemediation());
+        assertNull(unset.enableSecurityHubRemediation());
+        assertNull(unset.enableInspectorRemediation());
+        assertNull(unset.enableMacieRemediation());
+
+        Map<String, Object> explicit = new HashMap<>();
+        explicit.put("enableGuardDutyRemediation", false);
+        DeploymentContext context = Util.createDeploymentContext(explicit);
+        assertEquals(Boolean.FALSE, context.enableGuardDutyRemediation());
+    }
+
+    @Test
+    void scopeConfigRulesAndLegacyFrameworkIdAndManualCognitoClientIdInject() {
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("scopeConfigRulesToDeployment", true);
+        raw.put("auditManagerFrameworkId", "pci-dss");
+        raw.put("cognitoUserPoolClientId", "manual-client-id");
+        DeploymentContext context = Util.createDeploymentContext(raw);
+
+        assertTrue(context.scopeConfigRulesToDeployment());
+        assertEquals("pci-dss", context.auditManagerFrameworkId());
+        assertEquals("manual-client-id", context.cognitoUserPoolClientId());
+    }
+
+    /** protectedPaths/additionalProtectedPaths/publicPaths were declared as {@code @DeploymentContext}
+     *  injection points in both CognitoAuthenticationFactory and OidcAuthenticationFactory with a
+     *  real override-vs-application-default fallback already written, but DeploymentConfig had no
+     *  backing field for any of them -- the override could never actually be supplied. */
+    @Test
+    void pathProtectionListsRoundTripThroughTheContextMap() {
+        Map<String, Object> raw = new HashMap<>();
+        raw.put("protectedPaths", List.of("/admin/*", "/api/*"));
+        raw.put("additionalProtectedPaths", List.of("/reports/*"));
+        raw.put("publicPaths", List.of("/health"));
+
+        DeploymentContext context = Util.createDeploymentContext(raw);
+
+        assertEquals(List.of("/admin/*", "/api/*"), context.protectedPaths());
+        assertEquals(List.of("/reports/*"), context.additionalProtectedPaths());
+        assertEquals(List.of("/health"), context.publicPaths());
+
+        // Unset entirely: null, not empty -- the consumer's `!= null` check treats this as "fall
+        // back to the application's own default protected paths", not "protect nothing".
+        DeploymentContext unset = Util.createDeploymentContext(new HashMap<>());
+        assertNull(unset.protectedPaths());
+        assertNull(unset.additionalProtectedPaths());
+        assertNull(unset.publicPaths());
+    }
 }

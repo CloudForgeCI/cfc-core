@@ -27,8 +27,9 @@ For example:
 mvn -pl cloudforge-ministack verify -Pci,ministack
 ```
 
-Start an emulator from the Interactive Deployer's platform menu (`--platform`); see the
-[Local Emulator Quick Start](LOCAL_EMULATOR_QUICK_START.md). The integration and compliance
+Start an emulator from the Interactive Deployer's platform menu (`--platform`); see the local
+emulator setup docs in [cloudforge-localstack](https://github.com/CloudForgeCI/cloudforge-localstack)
+or [cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack). The integration and compliance
 test suites in `cloudforge-api` are described in
 [Integration Tests](../testing/INTEGRATION_TESTS.md) and
 [Compliance Truth Tables](../testing/COMPLIANCE_TRUTH_TABLES.md).
