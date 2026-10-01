@@ -545,10 +545,11 @@ Relevant environment variables:
 | `CFC_EDGE_HTTP_PORT` | Host port for the emulator edge (default 80). |
 | `CFC_CONTEXT_FILE` | Deployment context file to load. |
 
-Guides: [Local Emulator Quick Start](guides/LOCAL_EMULATOR_QUICK_START.md),
-[application compatibility](guides/LOCAL_EMULATOR_APP_CATALOG.md),
-[host names](guides/LOCAL_EMULATOR_HOSTS.md), [emulator edge](guides/LOCAL_EMULATOR_EDGE.md),
-[MiniStack](ministack/README.md), [LocalStack](localstack/README.md).
+Guides: [application compatibility](guides/LOCAL_EMULATOR_APP_CATALOG.md),
+[MiniStack](ministack/README.md), [LocalStack](localstack/README.md). Local emulator quick
+start, hostnames, and emulator edge (nginx) setup are documented in
+[cloudforge-localstack](https://github.com/CloudForgeCI/cloudforge-localstack) and
+[cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack).
 
 ## Testing and validation
 
@@ -617,8 +618,7 @@ cfc-core/
 ├── cloudforge-localstack/   # LocalStack template adapter, deployer, and platform runtime
 ├── cfc-testing/             # Sample application: Interactive Deployer, CDK launchers, example plugins, scripts
 ├── docs/                    # Documentation (Docusaurus site configuration in docs/web/)
-├── scripts/                 # Local emulator, Docker, and compliance helper scripts
-├── docker/, docker-compose.yml  # Local Docker development environment
+├── scripts/                 # Compliance helper scripts
 └── .github/workflows/       # CI, security scanning, report publishing, releases
 ```
 
@@ -705,11 +705,17 @@ Repository root (`scripts/`):
 
 | Script | Purpose |
 |---|---|
-| `setup-cloudforge-local-hosts.sh [--remove\|--dry-run]` | Add or remove `*.cloudforge.localhost` host entries on systems that do not resolve `.localhost` automatically. |
-| `emulator-edge-via-maven.sh <start\|stop\|restart\|rebuild\|status\|reconcile\|reload>` | Manage the emulator edge outside the platform menu. |
 | `generate-compliance-report.sh [stackName]` | Summarize AWS Config, CloudTrail, GuardDuty, and encryption status for a deployed stack. |
 | `generate-audit-evidence.sh --stack-name <name> --framework <SOC2\|HIPAA\|PCI-DSS\|GDPR>` | Collect an audit evidence package (`--help` for all options). |
-| `docker-*.sh` | Local Docker Compose environment; see the [Docker quick start](guides/DOCKER_QUICK_START.md). |
+
+`setup-cloudforge-local-hosts.sh` and `emulator-edge-via-maven.sh` (and the `emulator-edge-*.sh`
+wrappers around it) now live in the
+[`cloudforge-localstack`](https://github.com/CloudForgeCI/cloudforge-localstack) and
+[`cloudforge-ministack`](https://github.com/CloudForgeCI/cloudforge-ministack) repositories. The
+underlying `EmulatorEdgeLifecycle` / `EmulatorEdgeCli` implementation that those scripts call
+into still lives here, in `cloudforge-core`. The generic Docker Compose application-testing
+harness (`docker-*.sh`, `docker-compose.yml`) has been removed from this repository with no
+replacement.
 
 #### cfc-testing scripts
 

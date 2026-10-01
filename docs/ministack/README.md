@@ -2,7 +2,7 @@
 
 Deploy CloudForge-generated CloudFormation to [MiniStack](https://github.com/ministackorg/ministack), an MIT-licensed, open-source AWS emulator, without an AWS account.
 
-**Quick start from repository root:** [Local Emulator Quick Start](../guides/LOCAL_EMULATOR_QUICK_START.md)
+**Quick start:** see [cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack) for local emulator setup
 
 MiniStack support lives in the **`cloudforge-ministack`** module; the `cfc-testing` Interactive Deployer drives it. Canonical AWS templates stay unchanged in the libraries; local adaptations are applied downstream and recorded in an adaptation report.
 
@@ -179,6 +179,5 @@ DeploymentConfig
 ## Related Documentation
 
 - [cloudforge-cli](https://github.com/CloudForgeCI/cloudforge-cli): deploy and manage the emulator from the command line
-- [Docker Local Dev](../guides/DOCKER_LOCAL_DEV_README.md): broader docker-compose environment
 - [cfc-testing README](https://github.com/CloudForgeCI/cfc-core/blob/develop/cfc-testing/README.md): testing platform overview
 - [LocalStack](../localstack/README.md): the other supported local emulator

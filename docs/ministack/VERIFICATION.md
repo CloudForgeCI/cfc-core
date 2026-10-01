@@ -213,7 +213,10 @@ Expected alias target shape:
 
 **Optional: browser hostname (not required for verification)**
 
-For a friendly name in the address bar, use the shared [`*.cloudforge.localhost`](../guides/LOCAL_EMULATOR_HOSTS.md) names (they work for MiniStack and LocalStack) and **include the port**. Most macOS and modern Linux resolvers handle `*.localhost` already; on other hosts, run the setup script from the repository root:
+For a friendly name in the address bar, use the shared `*.cloudforge.localhost` names (they work
+for MiniStack and LocalStack) and **include the port**. Most macOS and modern Linux resolvers
+handle `*.localhost` already; on other hosts, run the setup script from the
+[cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack) repository root:
 
 ```bash
 ./scripts/setup-cloudforge-local-hosts.sh

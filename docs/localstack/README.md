@@ -10,7 +10,7 @@ CloudForge runs `localstack/localstack:latest` as the `cfc-localstack` container
 
 ## Quick Start
 
-**Full path from repository root:** [Local Emulator Quick Start](../guides/LOCAL_EMULATOR_QUICK_START.md) · [Local hostnames (`*.cloudforge.localhost`)](../guides/LOCAL_EMULATOR_HOSTS.md)
+**Local emulator setup and hostnames:** see [cloudforge-localstack](https://github.com/CloudForgeCI/cloudforge-localstack)
 
 ```bash
 mvn clean install -DskipTests

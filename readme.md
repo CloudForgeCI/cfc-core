@@ -90,8 +90,9 @@ Then deploy an application against it:
 cloudforge-cli deploy --context cfc-testing/deployment-contexts/Jenkins-Stack.json --target localstack
 ```
 
-MiniStack and LocalStack share port 4566, so run one at a time. See the
-[Local Emulator Quick Start](docs/guides/LOCAL_EMULATOR_QUICK_START.md) for details.
+MiniStack and LocalStack share port 4566, so run one at a time. See the local emulator setup
+docs in [cloudforge-localstack](https://github.com/CloudForgeCI/cloudforge-localstack) and
+[cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack) for details.
 
 ### 4. Deploy to AWS
 

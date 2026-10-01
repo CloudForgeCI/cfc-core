@@ -8,9 +8,9 @@ import java.util.Map;
 /**
  * Applies {@link EmulatorEdgeLifecycleAction} to the shared nginx emulator edge.
  *
- * <p>Entry point for programmatic callers and {@link EmulatorEdgeCli} (which backs
- * {@code scripts/emulator-edge-*.sh}). Emulator start/stop also drives this via
- * {@link EmulatorLifecycle} companion orchestration.</p>
+ * <p>Entry point for programmatic callers and {@link EmulatorEdgeCli} (which backs the
+ * {@code scripts/emulator-edge-*.sh} wrappers in cloudforge-localstack and cloudforge-ministack).
+ * Emulator start/stop also drives this via {@link EmulatorLifecycle} companion orchestration.</p>
  */
 public final class EmulatorEdgeLifecycle {
 

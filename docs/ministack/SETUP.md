@@ -110,7 +110,7 @@ Full list including preflight and auth runtime settings: [Advanced Configuration
 
 ## Next Steps
 
-- [Local hostnames (`*.cloudforge.localhost`)](../guides/LOCAL_EMULATOR_HOSTS.md): optional `/etc/hosts` entries for browser-friendly names
+- Local hostnames (`*.cloudforge.localhost`): optional `/etc/hosts` entries for browser-friendly names — see the setup docs in [cloudforge-ministack](https://github.com/CloudForgeCI/cloudforge-ministack)
 - [Deploy an application](DEPLOYMENT.md)
 - [Jenkins on MiniStack: AWS CLI, logs, admin password](JENKINS.md)
 - [Verify what deployed](VERIFICATION.md)
