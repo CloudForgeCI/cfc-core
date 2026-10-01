@@ -1,0 +1,81 @@
+name: Backport Hotfix
+
+# The only sanctioned way anything lands on a release/v* branch after it's cut (see
+# cut-release.yml). Cherry-picks a single commit onto a release branch, patch-bumps the version,
+# and pushes -- the push itself triggers publish-release-branch.yml, so this workflow never
+# duplicates the sign/publish logic.
+#
+# Fails loudly on a cherry-pick conflict rather than attempting any auto-resolution: resolve it
+# locally and push directly to the release branch instead.
+#
+# Does not touch LICENSE -- a release line's BSL Change Date is set once at cut time
+# (cut-release.yml) and a patch release doesn't restart that clock.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'Release branch to patch, e.g. release/v3.3.0'
+        required: true
+        type: string
+      commit_sha:
+        description: 'Commit SHA to cherry-pick onto it'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  backport:
+    name: Cherry-pick and patch-bump
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_branch }}
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Cherry-pick the commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git cherry-pick "${{ inputs.commit_sha }}"; then
+            echo "::error::Cherry-pick of ${{ inputs.commit_sha }} onto ${{ inputs.release_branch }} conflicted -- no auto-resolution attempted. Resolve it locally and push directly to the branch instead."
+            git cherry-pick --abort
+            exit 1
+          fi
+
+      - name: Patch-bump the version
+        id: version
+        run: |
+          CURRENT=$(mvn -q -pl . help:evaluate -Dexpression=project.version -DforceStdout)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          mvn -q -B versions:set -DnewVersion="$NEXT" -DprocessAllModules=true -DgenerateBackupPoms=false
+
+      - name: Commit and push
+        run: |
+          git add -A
+          git commit -m "Backport ${{ inputs.commit_sha }} to ${{ inputs.release_branch }}, bump to ${{ steps.version.outputs.next }}"
+          git push origin "HEAD:${{ inputs.release_branch }}"
+
+      - name: Summary
+        run: |
+          echo "## Hotfix Backported" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ inputs.release_branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Cherry-picked:** ${{ inputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**New version:** ${{ steps.version.outputs.next }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pushing this branch triggers publish-release-branch.yml." >> $GITHUB_STEP_SUMMARY

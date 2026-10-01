@@ -1,0 +1,131 @@
+name: Cut Release Branch
+
+# The only sanctioned way to start a new release line. Defaults to a minor bump -- the next
+# release is normally just develop's current minor-bump target, so there is nothing for a human
+# to get wrong by typing it in. The one real decision -- whether this is a breaking-change major
+# release instead -- is the single boolean input below, defaulted to false.
+#
+# What it does, in order:
+#   1. Reads develop's current X.Y.Z-SNAPSHOT version.
+#   2. Branches release/vX.(Y+1).0 from develop (or release/v(X+1).0.0 if major_bump is true) and
+#      sets that branch's version to the real release version -- pushing this branch is what
+#      triggers publish-release-branch.yml.
+#   3. Stamps that release branch's LICENSE (Business Source License 1.1) Change Date to exactly
+#      four years from today. Each release line gets its own BSL clock, set once at cut time and
+#      never touched again -- see backport-hotfix.yml for the only sanctioned way anything else
+#      lands on this branch.
+#   4. Bumps develop past the version just cut, so it keeps accumulating toward the release
+#      *after* this one: X.(Y+2).0-SNAPSHOT for a minor cut, or X.(Y+1).1.0-SNAPSHOT for a major
+#      cut (continuing minor cadence under the new major -- a major bump doesn't imply the next
+#      release after it is itself another major bump).
+#
+# Worked examples: develop 3.2.25-SNAPSHOT, minor cut -> release/v3.3.0 -> develop 3.4.0-SNAPSHOT.
+# Same starting point, major_bump=true -> release/v4.0.0 -> develop 4.1.0-SNAPSHOT.
+
+on:
+  workflow_dispatch:
+    inputs:
+      major_bump:
+        description: 'Cut a major release (X+1.0.0) instead of the default minor bump'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  cut-release:
+    name: Cut release branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Compute release and next-develop versions
+        id: versions
+        env:
+          MAJOR_BUMP: ${{ inputs.major_bump }}
+        run: |
+          CURRENT=$(mvn -q -pl . help:evaluate -Dexpression=project.version -DforceStdout)
+          BASE="${CURRENT%-SNAPSHOT}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+
+          if [ "$MAJOR_BUMP" = "true" ]; then
+            RELEASE_VERSION="$((MAJOR + 1)).0.0"
+            NEXT_DEVELOP="$((MAJOR + 1)).1.0-SNAPSHOT"
+          else
+            RELEASE_VERSION="${MAJOR}.$((MINOR + 1)).0"
+            NEXT_DEVELOP="${MAJOR}.$((MINOR + 2)).0-SNAPSHOT"
+          fi
+          RELEASE_BRANCH="release/v${RELEASE_VERSION}"
+
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "next_develop=$NEXT_DEVELOP" >> "$GITHUB_OUTPUT"
+          echo "release_branch=$RELEASE_BRANCH" >> "$GITHUB_OUTPUT"
+
+          echo "develop is at $CURRENT -- cutting $RELEASE_BRANCH (real $RELEASE_VERSION, major_bump=$MAJOR_BUMP), develop moves to $NEXT_DEVELOP"
+
+      - name: Fail fast if the release branch already exists
+        run: |
+          if git ls-remote --exit-code --heads origin "${{ steps.versions.outputs.release_branch }}" >/dev/null 2>&1; then
+            echo "::error::${{ steps.versions.outputs.release_branch }} already exists -- nothing to cut. If this is a re-run after a partial failure, delete or finish that branch first."
+            exit 1
+          fi
+
+      - name: Create the release branch and set its version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${{ steps.versions.outputs.release_branch }}"
+          mvn -q -B versions:set -DnewVersion="${{ steps.versions.outputs.release_version }}" -DprocessAllModules=true -DgenerateBackupPoms=false
+
+      - name: Stamp this release line's BSL Change Date (today + 4 years)
+        run: |
+          CHANGE_DATE=$(date -u -d "+4 years" +%F)
+          if ! grep -q "^Change Date:" LICENSE; then
+            echo "::error::LICENSE has no 'Change Date:' line to stamp -- has the license model changed? Update this step to match."
+            exit 1
+          fi
+          sed -i -E "s/^Change Date:([[:space:]]*)[0-9]{4}-[0-9]{2}-[0-9]{2}/Change Date:\1${CHANGE_DATE}/" LICENSE
+          echo "Change Date for ${{ steps.versions.outputs.release_branch }}: $CHANGE_DATE"
+          grep "^Change Date:" LICENSE
+
+      - name: Commit and push the release branch
+        run: |
+          git add -A
+          git commit -m "Cut ${{ steps.versions.outputs.release_branch }} (v${{ steps.versions.outputs.release_version }})"
+          git push origin "${{ steps.versions.outputs.release_branch }}"
+
+      - name: Bump develop past the version just cut
+        run: |
+          git checkout develop
+          mvn -q -B versions:set -DnewVersion="${{ steps.versions.outputs.next_develop }}" -DprocessAllModules=true -DgenerateBackupPoms=false
+          git add -A
+          git commit -m "chore: bump develop to ${{ steps.versions.outputs.next_develop }} after cutting v${{ steps.versions.outputs.release_version }} [skip ci]"
+          # Guards against a race (another push landing on develop between this job's checkout and
+          # this push), where a plain push would be rejected as non-fast-forward.
+          git pull --rebase origin develop
+          git push origin HEAD:develop
+
+      - name: Summary
+        run: |
+          echo "## Release Cut" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release branch:** ${{ steps.versions.outputs.release_branch }} (v${{ steps.versions.outputs.release_version }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Develop bumped to:** ${{ steps.versions.outputs.next_develop }}" >> $GITHUB_STEP_SUMMARY
+          echo "**BSL Change Date (this release line only):** $(grep '^Change Date:' LICENSE | awk '{print $NF}')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pushing ${{ steps.versions.outputs.release_branch }} triggers publish-release-branch.yml." >> $GITHUB_STEP_SUMMARY

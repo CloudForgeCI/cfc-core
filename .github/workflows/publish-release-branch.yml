@@ -1,7 +1,15 @@
-name: Publish to Maven Central
+name: Publish Release Branch
 
-# Publishes the OSS deployment library: cfc-core's own root/BOM pom, cloudforge-core, and
-# cloudforge-api.
+# Publishes a real Maven Central release from a frozen release/vX.Y.Z branch. These branches are
+# created only by cut-release.yml (cutting the next minor from develop on demand) and patched
+# only by backport-hotfix.yml (the only sanctioned way anything lands on one after the cut) -- see
+# those two workflows. develop itself only ever publishes snapshots; see publish-snapshot.yml.
+#
+# Every push to a release/v* branch runs build-test first (fail fast on Linux before burning
+# macOS minutes), then builds, signs, and publishes the branch's current <version> -- which is
+# always a real, non-SNAPSHOT version the moment the branch exists -- to Maven Central, guarded by
+# the same already-tagged check publish-maven-central.yml used to have (so a re-run after a
+# partial failure, or a push that didn't change <version>, is a safe no-op).
 #
 # Not published here (each is released from its own repository and cadence):
 #   - cloudforge-ministack, cloudforge-localstack: declare cfc-core as their Maven <parent>
@@ -23,38 +31,42 @@ name: Publish to Maven Central
 #   CENTRAL_PORTAL_USERNAME   Central Portal "Generate User Token" username half — NOT your
 #                             account login. https://central.sonatype.com/account
 #   CENTRAL_PORTAL_PASSWORD   Same token's password half.
-#
-# Safety gate: builds/signs/publishes only when the root pom's <version> isn't already tagged
-# (v<version>) in this repo; every other push to develop is a fast no-op. This complements
-# central-publishing-maven-plugin's <ignorePublishedComponents>true</...>, which turns a
-# duplicate-version publish into a no-op: the tag check skips the slow signing build for an
-# unchanged version, and the plugin setting covers a run where the artifacts reached Central but
-# the tag push failed.
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ 'release/v*' ]
     paths:
       - 'pom.xml'
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
-      - '.github/workflows/publish-maven-central.yml'
-  workflow_dispatch:
-    inputs:
-      force:
-        description: 'Publish even if this version is already tagged (re-run after a partial failure)'
-        required: false
-        default: 'false'
-        type: choice
-        options: [ 'false', 'true' ]
+      - '.github/workflows/publish-release-branch.yml'
 
 permissions:
   contents: write # to push the release tag on success
 
 jobs:
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build and test
+        run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api -am clean verify
+
   check-version:
     name: Check if this version needs publishing
     runs-on: ubuntu-latest
+    needs: build-test
     outputs:
       version: ${{ steps.version.outputs.version }}
       should_publish: ${{ steps.decide.outputs.should_publish }}
@@ -82,23 +94,16 @@ jobs:
         id: decide
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          FORCE="${{ github.event.inputs.force }}"
 
           if [[ "$VERSION" == *-SNAPSHOT ]]; then
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Version $VERSION is a SNAPSHOT — this workflow only publishes real releases. Bump <version> in the poms to a release version to publish."
-            exit 0
-          fi
-
-          if [ "$FORCE" = "true" ]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::force=true — publishing v$VERSION regardless of existing tag."
-            exit 0
+            echo "::error::Version $VERSION is a SNAPSHOT -- a release/v* branch's pom.xml should always carry a real version from the moment cut-release.yml creates it. Something overwrote it."
+            exit 1
           fi
 
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::v$VERSION is already tagged — nothing changed to publish. Bump <version> in the poms first."
+            echo "::notice::v$VERSION is already tagged — nothing changed to publish."
           else
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
             echo "v$VERSION is not yet tagged — will publish."
@@ -190,8 +195,7 @@ jobs:
       # version.yml, which only ever tracks the latest *SNAPSHOT*. For this one real-release
       # publish, swap it to whatever cloudforge-manager-deployment last published as a real
       # release on Central instead (never committed -- versions:set-property only touches this
-      # runner's own checkout, the same way the SNAPSHOT-bump steps below never push pom changes
-      # either, only the git tag at the very end).
+      # runner's own checkout, nothing on the release branch itself is edited).
       - name: Resolve cloudforge-manager-deployment.version to its latest real Central release
         run: |
           RELEASE=$(curl -fsSL "https://repo1.maven.org/maven2/com/cloudforgeci/cloudforge-manager-deployment/maven-metadata.xml" \
@@ -204,12 +208,13 @@ jobs:
           mvn -q -B versions:set-property -Dproperty=cloudforge-manager-deployment.version \
             -DnewVersion="$RELEASE" -DgenerateBackupPoms=false
 
-      - name: Build, test, sign, and publish cfc-core + cloudforge-core + cloudforge-api
+      - name: Build, sign, and publish cfc-core + cloudforge-core + cloudforge-api
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        # No re-test: build-test already validated this commit on Linux.
         run: |
           echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api..."
-          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
@@ -230,6 +235,7 @@ jobs:
         run: |
           echo "## Maven Central Publish" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ needs.check-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
