@@ -86,17 +86,19 @@ final class MarketplaceParameterSupport {
             .constraintDescription("Must be a valid email address")
             .build();
 
-        // No minLength(1): a buyer may launch the stack before they have a key in hand and
-        // activate licensing later from the Settings -> License page. ApplicationFactory already
-        // treats a null/blank managerLicenseKey as "nothing to provision" (see its own
-        // LicenseKeySecret block), so an empty value here is a supported, intentional state, not
-        // an oversight -- requiring a non-empty key at stack-creation time would block exactly
-        // the deploy-now-license-later flow the product's own usage instructions describe.
+        // No minLength(1), and defaultValue("") so CloudFormation doesn't treat this as a required
+        // parameter either: a buyer may launch the stack before they have a key in hand and
+        // activate licensing later from the Settings -> License page. ApplicationFactory's
+        // LicenseKeySecret now guards the deploy-time-resolved value too (an Fn::If against a
+        // CfnCondition, not just the Java-side isBlank() check, which can't see an empty
+        // CfnParameter token at synth time) -- see that block's own comment for why both guards
+        // are needed.
         CfnParameter licenseKey = CfnParameter.Builder.create(stack, "LicenseKey")
             .type("String")
             .description("LicenseSeat license key (LS-XXXX-XXXX-XXXX-XXXX) from your AWS Marketplace "
                 + "purchase. Optional at launch -- activate it later from Settings -> License if you "
                 + "don't have one yet.")
+            .defaultValue("")
             .noEcho(true)
             .build();
 
