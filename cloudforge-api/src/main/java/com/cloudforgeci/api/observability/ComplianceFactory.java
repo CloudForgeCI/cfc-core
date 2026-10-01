@@ -699,7 +699,7 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The Configuration Recorder that rules depend on
      */
-    private void createConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createConfigRules(CfnConfigurationRecorder recorder, CustomResource starterResource) {
         LOG.info("Setting up AWS Config rules for compliance monitoring");
 
         // Create managed rules based on security profile
@@ -722,9 +722,9 @@ public class ComplianceFactory extends BaseFactory {
      */
     private static class ConfigInfrastructure {
         final CfnConfigurationRecorder recorder;
-        final AwsCustomResource starterResource;
+        final CustomResource starterResource;
 
-        ConfigInfrastructure(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+        ConfigInfrastructure(CfnConfigurationRecorder recorder, CustomResource starterResource) {
             this.recorder = recorder;
             this.starterResource = starterResource;
         }
@@ -738,7 +738,7 @@ public class ComplianceFactory extends BaseFactory {
      * @param recorder The Configuration Recorder
      * @param starterResource The Custom Resource that starts the recorder
      */
-    private void addConfigRuleDependencies(CfnConfigRule rule, CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void addConfigRuleDependencies(CfnConfigRule rule, CfnConfigurationRecorder recorder, CustomResource starterResource) {
         rule.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
         rule.getNode().addDependency(recorder);
         if (starterResource != null) {
@@ -985,7 +985,7 @@ public class ComplianceFactory extends BaseFactory {
 
         // Automatically start the Config Recorder for SOC2 and other compliance frameworks
         // This ensures compliance recording begins immediately upon deployment
-        AwsCustomResource starterResource = startConfigRecorder(recorder, recorderName);
+        CustomResource starterResource = startConfigRecorder(recorder, recorderName);
 
         return new ConfigInfrastructure(recorder, starterResource);
     }
@@ -1007,9 +1007,18 @@ public class ComplianceFactory extends BaseFactory {
      *
      * @param recorder The CfnConfigurationRecorder to start
      * @param recorderName The name of the recorder (e.g., "cloudforge-config-recorder")
-     * @return The AwsCustomResource that starts the recorder (for Config Rule dependencies)
+     * @return The CustomResource that starts and verifies the recorder (for Config Rule
+     *         dependencies) -- an {@link AssetFreeCustomResource}, not {@code AwsCustomResource}:
+     *         AWS Config Recorder has no CloudFormation-native "start" operation (it's always
+     *         created in STOPPED state by AWS's own design), so starting it genuinely requires
+     *         an SDK call at deploy time either way; the choice is only which Lambda packaging
+     *         makes that call. {@code AwsCustomResource}/Provider pulls in a CDK-bundled, asset-
+     *         staged Lambda needing the deployer's CDK bootstrap bucket -- unavailable to an AWS
+     *         Marketplace buyer launching this template directly in their own, unbootstrapped
+     *         account (see {@code CloudForgeSynthesizer#synthesizeForMarketplace|}). This combines
+     *         the old two-resource start-then-verify chain into one Lambda invocation.
      */
-    private AwsCustomResource startConfigRecorder(CfnConfigurationRecorder recorder, String recorderName) {
+    private CustomResource startConfigRecorder(CfnConfigurationRecorder recorder, String recorderName) {
         LOG.info("Auto-starting Config Recorder for compliance frameworks");
         LOG.info("  Recorder: " + recorderName);
         LOG.info("  Reason: SOC2/HIPAA/PCI-DSS/GDPR require continuous compliance monitoring");
@@ -1021,68 +1030,67 @@ public class ComplianceFactory extends BaseFactory {
             return null;
         }
 
-        // Create AWS SDK call to start the recorder
-        AwsSdkCall startRecorderCall = AwsSdkCall.builder()
-                .service("ConfigService")
-                .action("startConfigurationRecorder")
-                .parameters(Map.of(
-                        "ConfigurationRecorderName", recorderName
-                ))
-                .physicalResourceId(PhysicalResourceId.of("config-recorder-starter-" + recorderName))
-                .region(region)
-                .build();
-
-        // Create AWS SDK call to verify the recorder is running
-        // This ensures Config Rules are not created until recorder is operational
-        AwsSdkCall verifyRecorderCall = AwsSdkCall.builder()
-                .service("ConfigService")
-                .action("describeConfigurationRecorderStatus")
-                .parameters(Map.of(
-                        "ConfigurationRecorderNames", List.of(recorderName)
-                ))
-                .physicalResourceId(PhysicalResourceId.of("config-recorder-verifier-" + recorderName))
-                .region(region)
-                .outputPaths(List.of("ConfigurationRecordersStatus.0.recording"))  // Extract recording status
-                .build();
-
-        // Create custom resource that starts the recorder on create and update
-        AwsCustomResource startRecorderResource = AwsCustomResource.Builder.create(this, "StartConfigRecorder")
-                .onCreate(startRecorderCall)
-                .onUpdate(startRecorderCall)  // Idempotent - safe to call on update
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))  // Config Service requires wildcard for start operation
-                                .build()
-                ))
-                .build();
-
-        // Create a second custom resource that WAITS for the recorder to be operational
-        // This verifier depends on the starter and MUST complete before Config Rules are created
-        AwsCustomResource verifyRecorderResource = AwsCustomResource.Builder.create(this, "VerifyConfigRecorderStarted")
-                .onCreate(verifyRecorderCall)
-                .onUpdate(verifyRecorderCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        software.amazon.awscdk.customresources.SdkCallsPolicyOptions.builder()
-                                .resources(List.of("*"))
-                                .build()
-                ))
-                .build();
-
-        // Chain: Recorder → Starter → Verifier → Config Rules
-        verifyRecorderResource.getNode().addDependency(startRecorderResource);
+        AssetFreeCustomResource.Result starter = AssetFreeCustomResource.create(
+                this, "StartConfigRecorder", START_AND_VERIFY_CONFIG_RECORDER_HANDLER_JS,
+                Duration.seconds(30),
+                List.of(PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        // Config Service requires a wildcard resource for start/describe operations.
+                        .actions(List.of("config:StartConfigurationRecorder", "config:DescribeConfigurationRecorderStatus"))
+                        .resources(List.of("*"))
+                        .build()),
+                java.util.Map.of(
+                        "ConfigurationRecorderName", recorderName,
+                        "Region", region
+                ));
 
         // Ensure recorder is created before we try to start it
-        startRecorderResource.getNode().addDependency(recorder);
+        starter.customResource.getNode().addDependency(recorder);
 
         LOG.info("Config Recorder auto-start configured successfully");
         LOG.info("  Recorder will start automatically during deployment");
-        LOG.info("  Verifier will confirm recorder is operational before Config Rules are created");
         LOG.info("  Compliance recording will begin immediately");
 
-        // Return the VERIFIER resource (not the starter) for Config Rule dependencies
-        // Config Rules must wait for the verifier to confirm the recorder is operational
-        return verifyRecorderResource;
+        return starter.customResource;
     }
+
+    /** Node.js handler for {@link AssetFreeCustomResource}: starts the given AWS Config recorder
+     *  and confirms it reports {@code recording: true} before succeeding -- combining what used
+     *  to be two separate custom resources (start, then verify) into one Lambda invocation. Does
+     *  nothing on delete; the recorder itself is a RETAINed, account-level singleton. */
+    private static final String START_AND_VERIFY_CONFIG_RECORDER_HANDLER_JS = """
+        const { ConfigServiceClient, StartConfigurationRecorderCommand, DescribeConfigurationRecorderStatusCommand } = require('@aws-sdk/client-config-service');
+
+        exports.handler = async (event) => {
+          try {
+            if (event.RequestType !== 'Delete') {
+              const p = event.ResourceProperties;
+              const endpoint = process.env.AWS_ENDPOINT_URL;
+              const client = new ConfigServiceClient({ region: p.Region, ...(endpoint ? { endpoint } : {}) });
+              await client.send(new StartConfigurationRecorderCommand({
+                ConfigurationRecorderName: p.ConfigurationRecorderName
+              }));
+              const status = await client.send(new DescribeConfigurationRecorderStatusCommand({
+                ConfigurationRecorderNames: [p.ConfigurationRecorderName]
+              }));
+              const recording = status.ConfigurationRecordersStatus
+                && status.ConfigurationRecordersStatus[0]
+                && status.ConfigurationRecordersStatus[0].recording;
+              if (!recording) {
+                throw new Error('Config Recorder did not report recording=true after start');
+              }
+            }
+            await respond(event, 'SUCCESS');
+          } catch (err) {
+            console.error('Config Recorder start/verify failed: ' + err);
+            try {
+              await respond(event, 'FAILED', String(err));
+            } catch (deliveryErr) {
+              console.error('Could not deliver FAILED response to CloudFormation: ' + deliveryErr);
+            }
+          }
+        };
+        """;
 
     /**
      * Creates Config rules for encryption compliance.
@@ -1091,7 +1099,7 @@ public class ComplianceFactory extends BaseFactory {
      * @param recorder The Configuration Recorder that rules depend on
      * @param starterResource The Custom Resource that starts the recorder
      */
-    private void createEncryptionConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createEncryptionConfigRules(CfnConfigurationRecorder recorder, CustomResource starterResource) {
         CfnConfigRule ebsRule = CfnConfigRule.Builder.create(this, "EbsEncryptionRule")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
@@ -1122,7 +1130,7 @@ public class ComplianceFactory extends BaseFactory {
      * @param recorder The Configuration Recorder that rules depend on
      * @param starterResource The Custom Resource that starts the recorder
      */
-    private void createS3ConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createS3ConfigRules(CfnConfigurationRecorder recorder, CustomResource starterResource) {
         CfnConfigRule publicAccessRule = CfnConfigRule.Builder.create(this, "S3PublicAccessBlockRule")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
@@ -1171,7 +1179,7 @@ public class ComplianceFactory extends BaseFactory {
      * @param recorder The Configuration Recorder that rules depend on
      * @param starterResource The Custom Resource that starts the recorder
      */
-    private void createIAMConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createIAMConfigRules(CfnConfigurationRecorder recorder, CustomResource starterResource) {
         // Get password policy parameters based on enabled compliance frameworks
         Map<String, Object> passwordPolicyParams = getPasswordPolicyParameters();
 
@@ -1840,7 +1848,7 @@ public class ComplianceFactory extends BaseFactory {
      * @param recorder The Configuration Recorder that rules depend on
      * @param starterResource The Custom Resource that starts the recorder
      */
-    private void createProductionConfigRules(CfnConfigurationRecorder recorder, AwsCustomResource starterResource) {
+    private void createProductionConfigRules(CfnConfigurationRecorder recorder, CustomResource starterResource) {
         // Build CloudTrail Config rule with parameters if CloudTrail was created
         CfnConfigRule.Builder cloudTrailRuleBuilder = CfnConfigRule.Builder.create(this, "CloudTrailEnabledRule")
                 .source(CfnConfigRule.SourceProperty.builder()
