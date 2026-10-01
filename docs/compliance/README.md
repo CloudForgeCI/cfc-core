@@ -495,6 +495,6 @@ For more troubleshooting, see **[Deployment Guide - Troubleshooting](DEPLOYMENT_
 See [CONTRIBUTING.md](https://github.com/CloudForgeCI/cfc-core/blob/develop/CONTRIBUTING.md) for guidelines.
 
 ### License
-Apache 2.0 - See [LICENSE](https://github.com/CloudForgeCI/cfc-core/blob/develop/LICENSE) for details.
+Business Source License 1.1 - See [LICENSE](https://github.com/CloudForgeCI/cfc-core/blob/develop/LICENSE) for details.
 
 Release history is maintained in [CHANGELOG.md](https://github.com/CloudForgeCI/cfc-core/blob/develop/CHANGELOG.md).

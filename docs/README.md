@@ -107,7 +107,7 @@ CloudForge. For a short introduction and quick start, see the
 | [Maven Release Process](MAVEN_RELEASE_PROCESS.md) | How artifacts are published |
 | [Documentation Maintenance](DOCUMENTATION_SETUP.md) | Maintaining this documentation site |
 | [Changelog](https://github.com/CloudForgeCI/cfc-core/blob/develop/CHANGELOG.md) | Release history |
-| [License](https://github.com/CloudForgeCI/cfc-core/blob/develop/LICENSE) | Apache License 2.0 |
+| [License](https://github.com/CloudForgeCI/cfc-core/blob/develop/LICENSE) | Business Source License 1.1 |
 
 ## Getting help
 
