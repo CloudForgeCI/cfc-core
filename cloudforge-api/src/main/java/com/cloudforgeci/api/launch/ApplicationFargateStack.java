@@ -45,6 +45,15 @@ public class ApplicationFargateStack extends Stack {
 
         DeploymentContext cfc = DeploymentContext.from(scope);
         Construct appScope = MarketplaceParameterSupport.applyIfApplicable(this, cfc, applicationSpec, marketplaceMode);
+        // Re-derive from appScope, not the pre-override `cfc` above: MarketplaceParameterSupport
+        // sets its overridden "cfc" context on appScope, which @DeploymentContext-annotated
+        // factory fields already pick up correctly by re-resolving from their own scope -- but
+        // SystemContext.cfc (read directly via ctx.cfc.xxx(), e.g. ManagerOperatorIamSupport's
+        // managerDirectDeployEnabled() check) is a single shared DeploymentContext instance, so it
+        // must be built from the post-override scope too or it silently keeps seeing pre-override
+        // values. A no-op when marketplaceMode is false: applyIfApplicable then returns `this`
+        // unchanged, so appScope == this == scope's effective context.
+        cfc = DeploymentContext.from(appScope);
 
         Tags.of(this).add("cloudforge:managed", "true");
         Tags.of(this).add("cloudforge:application", applicationSpec.applicationId());

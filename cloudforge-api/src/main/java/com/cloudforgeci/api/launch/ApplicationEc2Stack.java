@@ -40,6 +40,11 @@ public class ApplicationEc2Stack extends Stack {
 
         DeploymentContext cfc = DeploymentContext.from(scope);
         Construct appScope = MarketplaceParameterSupport.applyIfApplicable(this, cfc, applicationSpec, marketplaceMode);
+        // See ApplicationFargateStack's identical re-derivation for why this is required: ctx.cfc
+        // (SystemContext's shared DeploymentContext, read directly by e.g. ManagerOperatorIamSupport's
+        // managerDirectDeployEnabled() check) must be built from appScope's post-override context,
+        // not the pre-override `cfc` above. No-op when marketplaceMode is false.
+        cfc = DeploymentContext.from(appScope);
 
         Tags.of(this).add("cloudforge:managed", "true");
         Tags.of(this).add("cloudforge:application", applicationSpec.applicationId());
