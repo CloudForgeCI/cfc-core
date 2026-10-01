@@ -40,6 +40,11 @@ on:
       - 'cloudforge-core/**'
       - 'cloudforge-api/**'
       - '.github/workflows/publish-release-branch.yml'
+  # cut-release.yml and backport-hotfix.yml both push to release/v* with their own GITHUB_TOKEN,
+  # which does not fire the `push` trigger above (GitHub doesn't start workflows from
+  # GITHUB_TOKEN-authenticated pushes) -- so both explicitly dispatch this workflow right after
+  # pushing instead of relying on it.
+  workflow_dispatch: {}
 
 permissions:
   contents: write # to push the release tag on success

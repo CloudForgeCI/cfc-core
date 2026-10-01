@@ -8,8 +8,9 @@ name: Cut Release Branch
 # What it does, in order:
 #   1. Reads develop's current X.Y.Z-SNAPSHOT version.
 #   2. Branches release/vX.(Y+1).0 from develop (or release/v(X+1).0.0 if major_bump is true) and
-#      sets that branch's version to the real release version -- pushing this branch is what
-#      triggers publish-release-branch.yml.
+#      sets that branch's version to the real release version, then explicitly dispatches
+#      publish-release-branch.yml -- pushing the branch alone does not trigger it, since this job's
+#      GITHUB_TOKEN-authenticated push doesn't fire other workflows' `push` triggers.
 #   3. Stamps that release branch's LICENSE (Business Source License 1.1) Change Date to exactly
 #      four years from today. Each release line gets its own BSL clock, set once at cut time and
 #      never touched again -- see backport-hotfix.yml for the only sanctioned way anything else
@@ -33,6 +34,7 @@ on:
 
 permissions:
   contents: write
+  actions: write # to dispatch publish-release-branch.yml / publish-snapshot.yml below
 
 jobs:
   cut-release:
@@ -109,16 +111,34 @@ jobs:
           git commit -m "Cut ${{ steps.versions.outputs.release_branch }} (v${{ steps.versions.outputs.release_version }})"
           git push origin "${{ steps.versions.outputs.release_branch }}"
 
+      # GitHub does not start other workflows' `push` triggers from a push authenticated with this
+      # job's own GITHUB_TOKEN (it only prevents the obvious infinite-recursion case, not cross-
+      # workflow triggers in general) -- so publish-release-branch.yml's `on: push` never fires for
+      # the branch just pushed above. Dispatch it explicitly instead.
+      - name: Trigger publish-release-branch.yml for the new release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish-release-branch.yml --ref "${{ steps.versions.outputs.release_branch }}"
+
       - name: Bump develop past the version just cut
         run: |
           git checkout develop
           mvn -q -B versions:set -DnewVersion="${{ steps.versions.outputs.next_develop }}" -DprocessAllModules=true -DgenerateBackupPoms=false
           git add -A
-          git commit -m "chore: bump develop to ${{ steps.versions.outputs.next_develop }} after cutting v${{ steps.versions.outputs.release_version }} [skip ci]"
+          git commit -m "chore: bump develop to ${{ steps.versions.outputs.next_develop }} after cutting v${{ steps.versions.outputs.release_version }}"
           # Guards against a race (another push landing on develop between this job's checkout and
           # this push), where a plain push would be rejected as non-fast-forward.
           git pull --rebase origin develop
           git push origin HEAD:develop
+
+      # Same GITHUB_TOKEN limitation as above, plus this commit carries no [skip ci] on purpose
+      # now: develop's newly-bumped -SNAPSHOT version needs an actual Central publish so
+      # downstream builds can resolve it, which only publish-snapshot.yml's publish-snapshot job
+      # does.
+      - name: Trigger publish-snapshot.yml for the bumped develop version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish-snapshot.yml --ref develop
 
       - name: Summary
         run: |
@@ -128,4 +148,4 @@ jobs:
           echo "**Develop bumped to:** ${{ steps.versions.outputs.next_develop }}" >> $GITHUB_STEP_SUMMARY
           echo "**BSL Change Date (this release line only):** $(grep '^Change Date:' LICENSE | awk '{print $NF}')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Pushing ${{ steps.versions.outputs.release_branch }} triggers publish-release-branch.yml." >> $GITHUB_STEP_SUMMARY
+          echo "publish-release-branch.yml and publish-snapshot.yml were both dispatched explicitly (see above) since a GITHUB_TOKEN push doesn't trigger them on its own." >> $GITHUB_STEP_SUMMARY

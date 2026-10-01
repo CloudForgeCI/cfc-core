@@ -2,8 +2,9 @@ name: Backport Hotfix
 
 # The only sanctioned way anything lands on a release/v* branch after it's cut (see
 # cut-release.yml). Cherry-picks a single commit onto a release branch, patch-bumps the version,
-# and pushes -- the push itself triggers publish-release-branch.yml, so this workflow never
-# duplicates the sign/publish logic.
+# and pushes, then explicitly dispatches publish-release-branch.yml -- a GITHUB_TOKEN-authenticated
+# push doesn't fire that workflow's own `push` trigger, so this step is what actually makes the
+# backport get built, signed, and published (see that workflow's `on:` block for the same note).
 #
 # Fails loudly on a cherry-pick conflict rather than attempting any auto-resolution: resolve it
 # locally and push directly to the release branch instead.
@@ -25,13 +26,32 @@ on:
 
 permissions:
   contents: write
+  actions: write # to dispatch publish-release-branch.yml below
 
 jobs:
   backport:
     name: Cherry-pick and patch-bump
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Serializes concurrent dispatches targeting the same release branch -- two runs racing to
+    # cherry-pick and patch-bump the same branch would both compute the same next patch version,
+    # and the second push would be rejected as non-fast-forward (or worse, silently reordered).
+    concurrency:
+      group: backport-hotfix-${{ inputs.release_branch }}
+      cancel-in-progress: false
     steps:
+      # Runs before checkout on purpose: inputs.release_branch is operator-supplied free text, and
+      # a typo'd or malicious value here would otherwise reach actions/checkout's `ref:` and this
+      # job's own `contents: write` token against whatever branch that happens to name.
+      - name: Validate release branch name
+        env:
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: |
+          if [[ ! "$RELEASE_BRANCH" =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$RELEASE_BRANCH' doesn't look like a branch cut-release.yml would have cut (expected release/vX.Y.Z). Refusing to touch it."
+            exit 1
+          fi
+
       - name: Checkout release branch
         uses: actions/checkout@v4
         with:
@@ -45,12 +65,20 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      # inputs.commit_sha/inputs.release_branch are passed through env and referenced as shell
+      # variables in every step below, never interpolated directly into a run: block -- a ${{ }}
+      # expression is substituted into the script's literal text before Bash parses it, so a
+      # crafted commit_sha (e.g. containing "; curl ... | sh #") would otherwise execute as
+      # arbitrary shell with this job's contents: write token.
       - name: Cherry-pick the commit
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git cherry-pick "${{ inputs.commit_sha }}"; then
-            echo "::error::Cherry-pick of ${{ inputs.commit_sha }} onto ${{ inputs.release_branch }} conflicted -- no auto-resolution attempted. Resolve it locally and push directly to the branch instead."
+          if ! git cherry-pick "$COMMIT_SHA"; then
+            echo "::error::Cherry-pick of $COMMIT_SHA onto $RELEASE_BRANCH conflicted -- no auto-resolution attempted. Resolve it locally and push directly to the branch instead."
             git cherry-pick --abort
             exit 1
           fi
@@ -65,17 +93,29 @@ jobs:
           mvn -q -B versions:set -DnewVersion="$NEXT" -DprocessAllModules=true -DgenerateBackupPoms=false
 
       - name: Commit and push
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
         run: |
           git add -A
-          git commit -m "Backport ${{ inputs.commit_sha }} to ${{ inputs.release_branch }}, bump to ${{ steps.version.outputs.next }}"
-          git push origin "HEAD:${{ inputs.release_branch }}"
+          git commit -m "Backport $COMMIT_SHA to $RELEASE_BRANCH, bump to ${{ steps.version.outputs.next }}"
+          git push origin "HEAD:$RELEASE_BRANCH"
+
+      - name: Trigger publish-release-branch.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: gh workflow run publish-release-branch.yml --ref "$RELEASE_BRANCH"
 
       - name: Summary
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
         run: |
           echo "## Hotfix Backported" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** ${{ inputs.release_branch }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Cherry-picked:** ${{ inputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** $RELEASE_BRANCH" >> $GITHUB_STEP_SUMMARY
+          echo "**Cherry-picked:** $COMMIT_SHA" >> $GITHUB_STEP_SUMMARY
           echo "**New version:** ${{ steps.version.outputs.next }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Pushing this branch triggers publish-release-branch.yml." >> $GITHUB_STEP_SUMMARY
+          echo "publish-release-branch.yml was dispatched explicitly above." >> $GITHUB_STEP_SUMMARY
