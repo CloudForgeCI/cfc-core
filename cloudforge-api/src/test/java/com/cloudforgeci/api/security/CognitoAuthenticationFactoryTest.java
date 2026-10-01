@@ -485,14 +485,16 @@ class CognitoAuthenticationFactoryTest {
      *  profile) and {@code storeCognitoClientSecret} (APPLICATION_OIDC mode) used to provision
      *  Lambda-backed {@code AwsCustomResource}/Provider-framework constructs, each needing the CDK
      *  bootstrap staging bucket -- unavailable in a genuinely unbootstrapped AWS Marketplace buyer
-     *  account (see {@code CloudForgeSynthesizer#synthesizeForMarketplace}). The SSM write is now
-     *  a plain {@code AWS::SSM::Parameter} (no Lambda at all); the client-secret fetch still needs
-     *  a Lambda (CDK's own {@code UserPoolClient.getUserPoolClientSecret()} wraps one internally
-     *  regardless, for reasons not available to inspect from the Java bindings), but as an
-     *  asset-free one ({@link AssetFreeCustomResource}, {@code Code.fromInline}) instead of CDK's
-     *  asset-staged Provider framework. This exercises both paths together (PRODUCTION +
-     *  application-oidc) and asserts no {@link software.amazon.awscdk.customresources.AwsCustomResource}
-     *  is created under this factory. */
+     *  account (see {@code CloudForgeSynthesizer#synthesizeForMarketplace}). Both are now
+     *  asset-free custom resources ({@link AssetFreeCustomResource}, {@code Code.fromInline})
+     *  instead of CDK's asset-staged Provider framework: a plain {@code AWS::SSM::Parameter} was
+     *  tried first for the ARN write, but it has no overwrite-on-create semantics, so redeploying
+     *  a stack under the same name after a delete collided with the old RETAIN-policy parameter
+     *  ("already exists") -- an AssetFreeCustomResource calling {@code ssm:PutParameter} with
+     *  {@code Overwrite=true} keeps the asset-free property while staying idempotent across
+     *  retries, matching {@code ComplianceFactory}'s own SSM writers. This exercises both paths
+     *  together (PRODUCTION + application-oidc) and asserts no {@link
+     *  software.amazon.awscdk.customresources.AwsCustomResource} is created under this factory. */
     @Test
     void testProductionApplicationOidcNeverCreatesAwsCustomResources() {
         App app = new App();
@@ -530,9 +532,9 @@ class CognitoAuthenticationFactoryTest {
             "No AwsCustomResource should exist under CognitoAuthenticationFactory -- it needs "
                 + "CDK bootstrap assets a buyer's unbootstrapped Marketplace account doesn't have");
 
-        assertInstanceOf(software.amazon.awscdk.services.ssm.StringParameter.class,
+        assertInstanceOf(software.amazon.awscdk.CustomResource.class,
             factory.getNode().findChild("UserPoolArnSSMWriter"),
-            "User Pool ARN tracking should be a native SSM parameter, not a custom resource");
+            "User Pool ARN tracking should be an asset-free custom resource (overwrite-safe across redeploys)");
 
         assertInstanceOf(software.amazon.awscdk.services.secretsmanager.Secret.class,
             factory.getNode().findChild("CognitoClientSecret"),

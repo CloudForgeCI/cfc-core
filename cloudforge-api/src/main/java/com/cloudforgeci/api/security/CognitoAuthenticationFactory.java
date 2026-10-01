@@ -8,17 +8,19 @@ import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
 import com.cloudforgeci.api.util.CfnStringUtils;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.cognito.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.actions.*;
+import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
-import software.amazon.awscdk.services.ssm.StringParameter;
 import software.constructs.Construct;
 
 import io.github.cdklabs.cdknag.NagPackSuppression;
@@ -1285,18 +1287,30 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         String ssmParameterName = "/cloudforge/shared/" + region + "/stack/" + this.stackName + "/cognito/user-pool-arn";
 
-        // A plain AWS::SSM::Parameter resource -- the ARN is already a CloudFormation-resolvable
-        // token off the UserPool construct, so there's nothing here that needs a Lambda-backed
-        // AwsCustomResource (which a genuinely unbootstrapped Marketplace buyer account can't
-        // satisfy; see CloudForgeSynthesizer#synthesizeForMarketplace). RETAIN replicates the old
-        // custom resource's behavior of never cleaning this parameter up on stack delete -- it's
-        // a retained compliance-audit trail, not stack-lifecycle state.
-        StringParameter.Builder.create(this, "UserPoolArnSSMWriter")
-                .parameterName(ssmParameterName)
-                .stringValue(userPool.getUserPoolArn())
-                .description("CloudForge retained Cognito User Pool ARN for region " + region)
-                .build()
-                .applyRemovalPolicy(RemovalPolicy.RETAIN);
+        // A plain AWS::SSM::Parameter (tried first) has no Lambda-asset dependency, but it also
+        // has no overwrite-on-create semantics: redeploying a stack under the same name after a
+        // delete collides on this fixed path ("already exists"), since the old RETAIN-policy
+        // parameter outlives the stack that created it. An AssetFreeCustomResource calling
+        // ssm:PutParameter with Overwrite=true -- the same pattern ComplianceFactory's own SSM
+        // writers already use -- keeps the asset-free property while making the write idempotent
+        // across retries/redeploys under the same stack name, matching the original hand-rolled
+        // custom resource's behavior before it was Lambda-asset-dependent.
+        String ssmParameterArn = "arn:" + Stack.of(this).getPartition() + ":ssm:" + region + ":"
+            + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
+        AssetFreeCustomResource.create(
+                this, "UserPoolArnSSMWriter", AssetFreeCustomResource.SSM_PUT_PARAMETER_HANDLER_JS,
+                Duration.seconds(30),
+                List.of(PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(List.of("ssm:PutParameter"))
+                        .resources(List.of(ssmParameterArn))
+                        .build()),
+                java.util.Map.of(
+                        "ParameterName", ssmParameterName,
+                        "ParameterValue", userPool.getUserPoolArn(),
+                        "ParameterDescription", "CloudForge retained Cognito User Pool ARN for region " + region,
+                        "Region", region
+                ));
 
         LOG.info("User Pool ARN will be tracked in SSM: " + ssmParameterName);
     }
