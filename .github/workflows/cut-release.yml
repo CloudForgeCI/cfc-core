@@ -120,21 +120,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run publish-release-branch.yml --ref "${{ steps.versions.outputs.release_branch }}"
 
+      # develop is a protected branch (required status checks) -- a direct push from this job's
+      # GITHUB_TOKEN is rejected outright ("GH006: Protected branch update failed"), confirmed by
+      # the first real cut attempt. A PR plus auto-merge is the same pattern
+      # cloudforge-manager-deployment's own ADO auto_release stage already uses for this exact
+      # problem on its own protected develop.
       - name: Bump develop past the version just cut
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git checkout develop
+          BRANCH="chore/bump-develop-to-${{ steps.versions.outputs.next_develop }}"
+          git checkout -b "$BRANCH"
           mvn -q -B versions:set -DnewVersion="${{ steps.versions.outputs.next_develop }}" -DprocessAllModules=true -DgenerateBackupPoms=false
           git add -A
           git commit -m "chore: bump develop to ${{ steps.versions.outputs.next_develop }} after cutting v${{ steps.versions.outputs.release_version }}"
-          # Guards against a race (another push landing on develop between this job's checkout and
-          # this push), where a plain push would be rejected as non-fast-forward.
-          git pull --rebase origin develop
-          git push origin HEAD:develop
+          git push origin "$BRANCH"
+          gh pr create --base develop --head "$BRANCH" \
+            --title "chore: bump develop to ${{ steps.versions.outputs.next_develop }}" \
+            --body "Version bump following the v${{ steps.versions.outputs.release_version }} cut. Opened by cut-release.yml."
+          gh pr merge "$BRANCH" --squash --auto --delete-branch
 
       # Same GITHUB_TOKEN limitation as above, plus this commit carries no [skip ci] on purpose
       # now: develop's newly-bumped -SNAPSHOT version needs an actual Central publish so
       # downstream builds can resolve it, which only publish-snapshot.yml's publish-snapshot job
-      # does.
+      # does. Dispatched against develop directly rather than chained after the bump PR's merge,
+      # since publish-snapshot.yml also runs on every ordinary push to develop -- the PR merge
+      # itself will trigger a second, redundant but harmless run.
       - name: Trigger publish-snapshot.yml for the bumped develop version
         env:
           GH_TOKEN: ${{ github.token }}
