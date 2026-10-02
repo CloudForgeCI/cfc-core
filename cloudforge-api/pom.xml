@@ -152,7 +152,6 @@
             <configuration>
               <excludes>
                 <exclude>**/TruthTableValidationTest.java</exclude>
-                <exclude>**/ConfigRulesDeploymentIntegrationTest.java</exclude>
               </excludes>
             </configuration>
           </execution>
@@ -194,27 +193,6 @@
               <!-- A hang here is a known, accepted risk (see the comment above) — bound it so CI
                    fails with a clear signal instead of stalling the whole test phase indefinitely. -->
               <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
-            </configuration>
-          </execution>
-          <!-- Same jsii-kernel degradation as TruthTableValidationTest above, different failure
-               mode: this class doesn't hang, but intermittently returns an incomplete synth result
-               (a resource count of 0 where the code path always produces one) when it runs late in
-               the shared default-test fork, after enough prior synths have degraded that fork's
-               kernel. A separate fork, not folded into truth-table-isolated-fork's, since that
-               class's own synth volume is already enough to degrade a fork on its own — combining
-               the two would reintroduce the same risk inside one fork. -->
-          <execution>
-            <id>config-rules-isolated-fork</id>
-            <phase>test</phase>
-            <goals>
-              <goal>test</goal>
-            </goals>
-            <configuration>
-              <includes>
-                <include>**/ConfigRulesDeploymentIntegrationTest.java</include>
-              </includes>
-              <reuseForks>false</reuseForks>
-              <forkCount>1</forkCount>
             </configuration>
           </execution>
         </executions>
