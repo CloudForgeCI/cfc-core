@@ -379,10 +379,10 @@ public class FargateFactory extends BaseFactory {
     CfnService cfnService = (CfnService) service.getNode().getDefaultChild();
     cfnService.setHealthCheckGracePeriodSeconds(gracePeriodSeconds);
 
-    // Add dependency on Cognito client secret Custom Resource if it exists
-    // This ensures the secret is created in Secrets Manager BEFORE ECS tries to pull it
-    ctx.cognitoClientSecretResourceInternal.get().ifPresent(secretResource -> {
-        service.getNode().addDependency(secretResource);
+    // Add dependency on Cognito client secret sync Custom Resource if it exists
+    // This ensures the real secret value is synced to Secrets Manager BEFORE ECS tries to pull it
+    ctx.cognitoClientSecretResourceInternal.get().ifPresent(secretSyncResource -> {
+        service.getNode().addDependency(secretSyncResource);
     });
 
     // Set task definition in context first (needed by ContainerFactory)

@@ -1439,8 +1439,12 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         LOG.info("Cognito client secret will be synced to Secrets Manager: " + secretName);
 
-        // Store the secret in SystemContext for dependency tracking
-        ctx.cognitoClientSecretResourceInternal.set(cognitoSecret);
+        // Store the sync Custom Resource (not the bare Secret) for dependency tracking -- the
+        // Secret exists the moment it's created, but only holds a random placeholder value until
+        // this sync resource overwrites it with the real Cognito-managed secret. Consumers (see
+        // FargateFactory) must depend on the sync completing, not just the Secret's existence, or
+        // the first-booted task can read the placeholder.
+        ctx.cognitoClientSecretResourceInternal.set(secretSync.customResource);
 
         // Return the COMPLETE ARN with suffix (same as RDS pattern)
         return cognitoSecret.getSecretArn();

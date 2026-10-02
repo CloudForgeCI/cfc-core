@@ -513,7 +513,7 @@ class CognitoAuthenticationFactoryTest {
 
         DeploymentContext cfc = DeploymentContext.from(stack);
         IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
                 SecurityProfile.PRODUCTION, iamProfile, cfc);
 
         CognitoAuthenticationFactory factory = new CognitoAuthenticationFactory(stack, "Cognito");
@@ -539,5 +539,16 @@ class CognitoAuthenticationFactoryTest {
         assertInstanceOf(software.amazon.awscdk.services.secretsmanager.Secret.class,
             factory.getNode().findChild("CognitoClientSecret"),
             "The Cognito client secret copy should still be created, just without a custom resource");
+
+        // Regression guard for a live deploy bug: the Secret resource exists the moment it's
+        // created, but only holds a random placeholder value until CognitoClientSecretSync
+        // overwrites it with the real Cognito-managed secret. FargateFactory depends on whatever
+        // this slot holds to decide when the ECS Service may start -- if it held the bare Secret
+        // (as it once did), the first-booted task could read the placeholder instead of the real
+        // value, exactly matching a reported "Cognito is active but not linked" symptom.
+        assertInstanceOf(software.amazon.awscdk.CustomResource.class,
+            ctx.cognitoClientSecretResourceInternal.get().orElse(null),
+            "FargateFactory must depend on the client secret SYNC completing, not just the "
+                + "Secret's existence, or the first ECS task can start before the real value lands");
     }
 }
