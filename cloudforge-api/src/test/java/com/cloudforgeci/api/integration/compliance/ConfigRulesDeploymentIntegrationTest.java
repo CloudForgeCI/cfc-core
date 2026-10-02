@@ -129,16 +129,17 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         // Verify custom resource exists to auto-start recorder
         // The Create property is a JSON string, so we just verify the custom resource exists.
-        // Only 2 of this scenario's 7 custom resources are still AwsCustomResource (type
-        // Custom::AWS) -- the recorder start/verify pair. The other 5 (ConfigBucket/CloudTrail
-        // bucket/CloudTrail ARN/Config recorder+delivery-channel ARN SSM writers) are now
-        // AssetFreeCustomResource (type AWS::CloudFormation::CustomResource): a raw CustomResource
-        // wired to an inline Lambda instead of AwsCustomResource/Provider, both of which pull in
-        // CDK's own bundled framework Lambda, staged to the deployer's private
-        // cdk-hnb659fds-assets bootstrap bucket -- unusable by an AWS Marketplace buyer launching
-        // this template directly in their own, unbootstrapped account.
-        template.resourceCountIs("Custom::AWS", 2);
-        template.resourceCountIs("AWS::CloudFormation::CustomResource", 5);
+        // None of this scenario's 6 custom resources are AwsCustomResource (type Custom::AWS)
+        // anymore -- all are AssetFreeCustomResource (type AWS::CloudFormation::CustomResource):
+        // a raw CustomResource wired to an inline Lambda instead of AwsCustomResource/Provider,
+        // both of which pull in CDK's own bundled framework Lambda, staged to the deployer's
+        // private cdk-hnb659fds-assets bootstrap bucket -- unusable by an AWS Marketplace buyer
+        // launching this template directly in their own, unbootstrapped account. The recorder
+        // start/verify pair, formerly 2 separate AwsCustomResources, is now a single
+        // AssetFreeCustomResource (StartConfigRecorder) combining both steps into one Lambda
+        // invocation -- see ComplianceFactory#startConfigRecorder.
+        template.resourceCountIs("Custom::AWS", 0);
+        template.resourceCountIs("AWS::CloudFormation::CustomResource", 6);
     }
 
     @Test
