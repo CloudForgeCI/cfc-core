@@ -43,10 +43,13 @@ import java.util.stream.Collectors;
 public enum AwsConfigRule {
 
     // ==================== Threat Detection ====================
+    // No expectedCfnResourceType: GuardDutyFactory#enableGuardDuty registers this rule
+    // unconditionally but only builds CfnDetector when createGuardDutyDetector is true (false
+    // when the account already has a detector elsewhere) -- the rule can be required with no
+    // AWS::GuardDuty::Detector in this template.
     GUARDDUTY_ENABLED("guardduty-enabled-centralized",
         ComplianceMatrix.SecurityControl.THREAT_DETECTION,
-        "Checks that GuardDuty is enabled in the account",
-        "AWS::GuardDuty::Detector"),
+        "Checks that GuardDuty is enabled in the account"),
 
     // ==================== Audit Logging ====================
     CLOUDTRAIL_ENABLED("cloudtrail-enabled",

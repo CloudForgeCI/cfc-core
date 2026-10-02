@@ -1068,15 +1068,15 @@ public class ConfigRulesDeploymentIntegrationTest {
     }
 
     /**
-     * Regression coverage for the four {@code AwsConfigRule} entries whose real AWS SourceIdentifier
+     * Regression coverage for the four {@code AwsConfigRule} entries whose AWS SourceIdentifier
      * doesn't match the naive uppercase-the-rule-name transform {@link ComplianceFactory#sourceIdentifierFor}
      * falls back to. Each expected value here comes from CDK's own {@code ManagedRuleIdentifiers}
      * constants, not a hand-typed guess. Uses {@code assertCollectedConfigRuleExists} (ConfigRuleName
      * + SourceIdentifier together) rather than {@code assertConfigRuleExists} (SourceIdentifier
-     * alone) because three of these four values are also emitted, independently and already
-     * correctly, by the always-present, condition-gated per-framework rules in
-     * {@code createAllFrameworkConfigRules} -- matching on SourceIdentifier alone would pass even
-     * if {@code sourceIdentifierFor}'s override map were broken.
+     * alone) because two of these four values (INCOMING_SSH_DISABLED, CLOUD_TRAIL_ENABLED) are
+     * also emitted, independently, by the always-present, condition-gated per-framework rules in
+     * {@code createAllFrameworkConfigRules} -- matching on SourceIdentifier alone would pass for
+     * those two even if {@code sourceIdentifierFor}'s override map were broken.
      */
     @Test
     public void testIdentifiersThatDontMatchTheNaiveUppercaseTransform() {
