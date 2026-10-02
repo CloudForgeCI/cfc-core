@@ -277,6 +277,22 @@ public class ComplianceFactory extends BaseFactory {
         }
     }
 
+    // AwsConfigRule.getRuleName() is the AWS Config rule page slug (e.g. "restricted-ssh"), which
+    // usually -- but not always -- becomes the real managed-rule SourceIdentifier by uppercasing
+    // and replacing hyphens with underscores. These four don't follow that pattern; the real
+    // identifiers come from CDK's own ManagedRuleIdentifiers constants, not a guess.
+    private static final Map<AwsConfigRule, String> SOURCE_IDENTIFIER_OVERRIDES = Map.of(
+        AwsConfigRule.CLOUDTRAIL_ENABLED, ManagedRuleIdentifiers.CLOUD_TRAIL_ENABLED,
+        AwsConfigRule.MULTI_REGION_CLOUDTRAIL, ManagedRuleIdentifiers.CLOUDTRAIL_MULTI_REGION_ENABLED,
+        AwsConfigRule.EC2_INSTANCES_IN_VPC, ManagedRuleIdentifiers.EC2_INSTANCES_IN_VPC,
+        AwsConfigRule.RESTRICTED_SSH, ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_INCOMING_SSH_DISABLED
+    );
+
+    private static String sourceIdentifierFor(AwsConfigRule rule) {
+        return SOURCE_IDENTIFIER_OVERRIDES.getOrDefault(
+            rule, rule.getRuleName().toUpperCase().replace("-", "_"));
+    }
+
     /**
      * Deploy AWS Config rules collected from factories.
      *
@@ -308,7 +324,7 @@ public class ComplianceFactory extends BaseFactory {
                     .description(rule.getDescription() + " (collected from factory)")
                     .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier(rule.getRuleName().toUpperCase().replace("-", "_"))
+                        .sourceIdentifier(sourceIdentifierFor(rule))
                         .build())
                     .build();
                 deployedCount++;
@@ -346,7 +362,7 @@ public class ComplianceFactory extends BaseFactory {
                     .description(rule.getDescription())
                     .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier(rule.getRuleName().toUpperCase().replace("-", "_"))
+                        .sourceIdentifier(sourceIdentifierFor(rule))
                         .build())
                     .build();
                 deployedCount++;
@@ -2148,7 +2164,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("PCI-DSS Req 2: Secure system configuration management")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("EC2_INSTANCE_MANAGED_BY_SYSTEMS_MANAGER")
+                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_INSTANCE_MANAGED_BY_SSM)
                         .build())
                 .build();
         ec2InstanceManagedBySsm.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -2325,7 +2341,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("SOC 2 CC6.6: Network segmentation and access control")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("RESTRICTED_SSH")
+                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_INCOMING_SSH_DISABLED)
                         .build())
                 .build();
         restrictedSshCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -2740,7 +2756,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("GDPR Art. 25: Data protection by design - optimize storage security")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("EBS_OPTIMIZED_INSTANCE")
+                        .sourceIdentifier(ManagedRuleIdentifiers.EBS_OPTIMIZED_INSTANCE)
                         .build())
                 .build();
         ec2EbsOptimized.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -2814,7 +2830,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("GDPR Art. 32(1)(b): Ensure ongoing confidentiality of systems")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("RESTRICTED_COMMON_PORTS")
+                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_RESTRICTED_INCOMING_TRAFFIC)
                         .build())
                 .build();
         restrictedRdpCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -2957,7 +2973,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("PCI-DSS Req 2: Secure system configuration management")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("EC2_INSTANCE_MANAGED_BY_SYSTEMS_MANAGER")
+                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_INSTANCE_MANAGED_BY_SSM)
                         .build())
                 .build();
         ec2InstanceManagedBySsm.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -3119,7 +3135,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("SOC 2 CC6.6: Network segmentation and access control")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("RESTRICTED_SSH")
+                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_INCOMING_SSH_DISABLED)
                         .build())
                 .build();
         restrictedSshCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -3499,7 +3515,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("GDPR Art. 25: Data protection by design - optimize storage security")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("EBS_OPTIMIZED_INSTANCE")
+                        .sourceIdentifier(ManagedRuleIdentifiers.EBS_OPTIMIZED_INSTANCE)
                         .build())
                 .build();
         ec2EbsOptimized.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
@@ -3567,7 +3583,7 @@ public class ComplianceFactory extends BaseFactory {
                 .description("GDPR Art. 32(1)(b): Ensure ongoing confidentiality of systems")
                 .source(CfnConfigRule.SourceProperty.builder()
                         .owner("AWS")
-                        .sourceIdentifier("RESTRICTED_COMMON_PORTS")
+                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_RESTRICTED_INCOMING_TRAFFIC)
                         .build())
                 .build();
         restrictedRdpCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack

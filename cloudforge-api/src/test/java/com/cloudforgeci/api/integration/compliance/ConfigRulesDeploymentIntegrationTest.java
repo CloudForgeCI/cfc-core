@@ -1038,7 +1038,35 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         synthesizeTemplate(builder.getStack());
 
-        // Then: RESTRICTED_SSH rule should be deployed
-        assertConfigRuleExists("RESTRICTED_SSH");
+        // Then: the restricted-ssh rule's real AWS managed-rule identifier should be deployed.
+        // "RESTRICTED_SSH" looks plausible (it's the rule name uppercased) but is not a real AWS
+        // Config SourceIdentifier -- AWS calls this one INCOMING_SSH_DISABLED.
+        assertConfigRuleExists("INCOMING_SSH_DISABLED");
+    }
+
+    /**
+     * Regression coverage for a set of Config rule identifiers whose real AWS SourceIdentifier
+     * doesn't match the naive uppercase-the-rule-name transform {@code deployCollectedConfigRules}/
+     * {@code deployAuthenticationConfigRules} apply by default. Each expected value here comes from
+     * CDK's own {@code ManagedRuleIdentifiers} constants, not a hand-typed guess.
+     */
+    @Test
+    public void testIdentifiersThatDontMatchTheNaiveUppercaseTransform() {
+        Map<String, Object> context = new HashMap<>();
+        context.put("awsConfigEnabled", true);
+        context.put("createConfigInfrastructure", true);
+        context.put("complianceFrameworks", "PCI-DSS,HIPAA,SOC2");
+
+        TestInfrastructureBuilder builder = createBuilder(context);
+        builder.createMinimalInfrastructure()
+               .createCompliance();
+
+        synthesizeTemplate(builder.getStack());
+
+        assertConfigRuleExists("INCOMING_SSH_DISABLED");
+        assertConfigRuleExists("RESTRICTED_INCOMING_TRAFFIC");
+        assertConfigRuleExists("EC2_INSTANCE_MANAGED_BY_SSM");
+        assertConfigRuleExists("INSTANCES_IN_VPC");
+        assertConfigRuleExists("MULTI_REGION_CLOUD_TRAIL_ENABLED");
     }
 }
