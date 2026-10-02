@@ -148,7 +148,13 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
             "work_mem", "16MB",
             "maintenance_work_mem", "256MB",
             "random_page_cost", "1.1",
-            "log_statement", "ddl"
+            "log_statement", "ddl",
+            // GitLab's initial schema load (structure.sql) creates thousands of relations,
+            // indexes, and sequences in a single transaction, exceeding PostgreSQL's default
+            // shared lock table (sized from max_locks_per_transaction * max_connections) and
+            // failing with "out of shared memory". GitLab's own installation docs require this
+            // raised; 128 is their documented minimum.
+            "max_locks_per_transaction", "128"
         );
     }
 
