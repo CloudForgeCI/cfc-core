@@ -7,12 +7,20 @@ import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.TopologyType;
+import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.services.config.ManagedRuleIdentifiers;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -484,5 +492,50 @@ class ComplianceFactoryTest {
         java.lang.reflect.Field regionField = ComplianceFactory.class.getDeclaredField("region");
         regionField.setAccessible(true);
         assertEquals("eu-west-1", regionField.get(factory));
+    }
+
+    /**
+     * {@link ComplianceFactory#sourceIdentifierFor} falls back to uppercasing a rule's slug for
+     * any {@link AwsConfigRule} without an explicit override, which doesn't always match AWS's
+     * real SourceIdentifier. Resolves every rule except the four with no matching CDK constant
+     * (tracked explicitly below) and asserts each result is a real value from CDK's own
+     * {@link ManagedRuleIdentifiers}.
+     */
+    @Test
+    void everyConfigRuleResolvesToARealManagedRuleIdentifier() throws IllegalAccessException {
+        Set<String> cdkIdentifiers = new HashSet<>();
+        for (Field field : ManagedRuleIdentifiers.class.getFields()) {
+            if (field.getType() == String.class && Modifier.isStatic(field.getModifiers())) {
+                cdkIdentifiers.add((String) field.get(null));
+            }
+        }
+
+        // CDK 2.196.0 has no ManagedRuleIdentifiers constant for these four -- not necessarily
+        // wrong, just unverifiable against CDK's own source of truth. None is registered by any
+        // factory today (see AwsConfigRule's own enum list), so nothing deploys with an unverified
+        // identifier; revisit when CDK adds a matching constant or these get used.
+        Set<AwsConfigRule> noCdkConstantYet = Set.of(
+            AwsConfigRule.RDS_CLUSTER_PUBLIC_ACCESS_CHECK,
+            AwsConfigRule.EKS_CLUSTER_LOGGING_ENABLED,
+            AwsConfigRule.EC2_LAUNCH_TEMPLATE_PUBLIC_IP_DISABLED,
+            AwsConfigRule.ACM_CERTIFICATE_RSA_CHECK
+        );
+
+        List<String> unverifiable = new ArrayList<>();
+        for (AwsConfigRule rule : AwsConfigRule.values()) {
+            if (noCdkConstantYet.contains(rule)) {
+                continue;
+            }
+            String identifier = ComplianceFactory.sourceIdentifierFor(rule);
+            if (!cdkIdentifiers.contains(identifier)) {
+                unverifiable.add(rule.name() + " -> " + identifier);
+            }
+        }
+
+        assertTrue(unverifiable.isEmpty(),
+            "These rules resolve to an identifier that isn't a real AWS managed rule per CDK's "
+                + "ManagedRuleIdentifiers -- either add an override in ComplianceFactory's "
+                + "SOURCE_IDENTIFIER_OVERRIDES, or add them to noCdkConstantYet above if CDK "
+                + "genuinely has no constant for them: " + unverifiable);
     }
 }
