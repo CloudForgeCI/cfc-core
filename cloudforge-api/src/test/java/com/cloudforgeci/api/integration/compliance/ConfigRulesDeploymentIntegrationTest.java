@@ -591,6 +591,25 @@ public class ConfigRulesDeploymentIntegrationTest {
     }
 
     /**
+     * Pins both {@code ConfigRuleName} and {@code Source.SourceIdentifier} on the same resource.
+     * {@code deployCollectedConfigRules}/{@code deployAuthenticationConfigRules} name their rules
+     * with the bare {@link com.cloudforgeci.api.core.rules.AwsConfigRule#getRuleName()} slug (e.g.
+     * {@code "restricted-ssh"}) -- unlike {@code assertConfigRuleExists}, which matches any
+     * resource with that SourceIdentifier, this proves the collected-rule resolver itself produced
+     * the right value, not a same-valued hardcoded rule elsewhere in the template (the always-present,
+     * condition-gated per-framework rules from {@code createAllFrameworkConfigRules} use a
+     * stack-prefixed name, so they can never satisfy this).
+     */
+    private void assertCollectedConfigRuleExists(String ruleName, String sourceIdentifier) {
+        template.hasResourceProperties("AWS::Config::ConfigRule", Match.objectLike(Map.of(
+            "ConfigRuleName", ruleName,
+            "Source", Match.objectLike(Map.of(
+                "SourceIdentifier", sourceIdentifier
+            ))
+        )));
+    }
+
+    /**
      * Helper method to assert a remediation configuration exists.
      */
     private void assertRemediationConfigurationExists(String ruleName) {
@@ -1038,17 +1057,26 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         synthesizeTemplate(builder.getStack());
 
-        // Then: the restricted-ssh rule's real AWS managed-rule identifier should be deployed.
+        // Then: the collected restricted-ssh rule (ConfigRuleName "restricted-ssh", from
+        // VpcFactory's ctx.requireConfigRule) resolves to AWS's real managed-rule identifier.
         // "RESTRICTED_SSH" looks plausible (it's the rule name uppercased) but is not a real AWS
-        // Config SourceIdentifier -- AWS calls this one INCOMING_SSH_DISABLED.
-        assertConfigRuleExists("INCOMING_SSH_DISABLED");
+        // Config SourceIdentifier -- AWS calls this one INCOMING_SSH_DISABLED. Pinning
+        // ConfigRuleName here proves ComplianceFactory#sourceIdentifierFor resolved it, not the
+        // always-present, condition-gated SOC2 "Soc2RestrictedSsh" rule, which happens to resolve
+        // to the same value independently.
+        assertCollectedConfigRuleExists("restricted-ssh", "INCOMING_SSH_DISABLED");
     }
 
     /**
-     * Regression coverage for a set of Config rule identifiers whose real AWS SourceIdentifier
-     * doesn't match the naive uppercase-the-rule-name transform {@code deployCollectedConfigRules}/
-     * {@code deployAuthenticationConfigRules} apply by default. Each expected value here comes from
-     * CDK's own {@code ManagedRuleIdentifiers} constants, not a hand-typed guess.
+     * Regression coverage for the four {@code AwsConfigRule} entries whose real AWS SourceIdentifier
+     * doesn't match the naive uppercase-the-rule-name transform {@link ComplianceFactory#sourceIdentifierFor}
+     * falls back to. Each expected value here comes from CDK's own {@code ManagedRuleIdentifiers}
+     * constants, not a hand-typed guess. Uses {@code assertCollectedConfigRuleExists} (ConfigRuleName
+     * + SourceIdentifier together) rather than {@code assertConfigRuleExists} (SourceIdentifier
+     * alone) because three of these four values are also emitted, independently and already
+     * correctly, by the always-present, condition-gated per-framework rules in
+     * {@code createAllFrameworkConfigRules} -- matching on SourceIdentifier alone would pass even
+     * if {@code sourceIdentifierFor}'s override map were broken.
      */
     @Test
     public void testIdentifiersThatDontMatchTheNaiveUppercaseTransform() {
@@ -1063,10 +1091,33 @@ public class ConfigRulesDeploymentIntegrationTest {
 
         synthesizeTemplate(builder.getStack());
 
-        assertConfigRuleExists("INCOMING_SSH_DISABLED");
-        assertConfigRuleExists("RESTRICTED_INCOMING_TRAFFIC");
+        assertCollectedConfigRuleExists("restricted-ssh", "INCOMING_SSH_DISABLED");
+        assertCollectedConfigRuleExists("ec2-instances-in-vpc", "INSTANCES_IN_VPC");
+        assertCollectedConfigRuleExists("cloudtrail-enabled", "CLOUD_TRAIL_ENABLED");
+        assertCollectedConfigRuleExists("multi-region-cloudtrail-enabled", "MULTI_REGION_CLOUD_TRAIL_ENABLED");
+    }
+
+    /**
+     * Regression coverage for the two wrong hardcoded {@code sourceIdentifier} literals in the
+     * always-present, condition-gated per-framework rules ({@code createPciDssConfigRules},
+     * {@code createGdprConfigRules}). Unlike the four above, neither of these values has a
+     * same-valued collected-path equivalent anywhere else in the template, so plain
+     * {@code assertConfigRuleExists} (SourceIdentifier alone) is unambiguous here.
+     */
+    @Test
+    public void testHardcodedIdentifiersThatWereWrongGuesses() {
+        Map<String, Object> context = new HashMap<>();
+        context.put("awsConfigEnabled", true);
+        context.put("createConfigInfrastructure", true);
+        context.put("complianceFrameworks", "PCI-DSS,GDPR");
+
+        TestInfrastructureBuilder builder = createBuilder(context);
+        builder.createMinimalInfrastructure()
+               .createCompliance();
+
+        synthesizeTemplate(builder.getStack());
+
         assertConfigRuleExists("EC2_INSTANCE_MANAGED_BY_SSM");
-        assertConfigRuleExists("INSTANCES_IN_VPC");
-        assertConfigRuleExists("MULTI_REGION_CLOUD_TRAIL_ENABLED");
+        assertConfigRuleExists("RESTRICTED_INCOMING_TRAFFIC");
     }
 }

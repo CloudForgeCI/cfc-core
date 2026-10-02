@@ -43,6 +43,7 @@ import io.github.cdklabs.cdknag.NagPackSuppression;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
 
@@ -288,9 +289,9 @@ public class ComplianceFactory extends BaseFactory {
         AwsConfigRule.RESTRICTED_SSH, ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_INCOMING_SSH_DISABLED
     );
 
-    private static String sourceIdentifierFor(AwsConfigRule rule) {
+    static String sourceIdentifierFor(AwsConfigRule rule) {
         return SOURCE_IDENTIFIER_OVERRIDES.getOrDefault(
-            rule, rule.getRuleName().toUpperCase().replace("-", "_"));
+            rule, rule.getRuleName().toUpperCase(Locale.ROOT).replace("-", "_"));
     }
 
     /**
