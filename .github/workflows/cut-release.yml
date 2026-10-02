@@ -1,36 +1,45 @@
 name: Cut Release Branch
 
-# The only sanctioned way to start a new release line. Defaults to a minor bump -- the next
-# release is normally just develop's current minor-bump target, so there is nothing for a human
-# to get wrong by typing it in. The one real decision -- whether this is a breaking-change major
-# release instead -- is the single boolean input below, defaulted to false.
+# The only sanctioned way to publish a release. Patch, minor, and major all go through this same
+# workflow -- the only difference is which version component bump_type increments. Defaults to
+# patch, the routine case: develop's current accumulated state becomes the next patch release
+# as-is. backport-hotfix.yml is a separate, narrower mechanism for patching a line develop has
+# already moved past (minor/major bumped beyond it) -- this workflow always cuts from develop's
+# current tip.
 #
 # What it does, in order:
 #   1. Reads develop's current X.Y.Z-SNAPSHOT version.
-#   2. Branches release/vX.(Y+1).0 from develop (or release/v(X+1).0.0 if major_bump is true) and
-#      sets that branch's version to the real release version, then explicitly dispatches
+#   2. Branches release/vX.Y.Z from develop at the version bump_type computes (see below) and sets
+#      that branch's version to the released version, then explicitly dispatches
 #      publish-release-branch.yml -- pushing the branch alone does not trigger it, since this job's
 #      GITHUB_TOKEN-authenticated push doesn't fire other workflows' `push` triggers.
 #   3. Stamps that release branch's LICENSE (Business Source License 1.1) Change Date to exactly
 #      four years from today. Each release line gets its own BSL clock, set once at cut time and
 #      never touched again -- see backport-hotfix.yml for the only sanctioned way anything else
 #      lands on this branch.
-#   4. Bumps develop past the version just cut, so it keeps accumulating toward the release
-#      *after* this one: X.(Y+2).0-SNAPSHOT for a minor cut, or X.(Y+1).1.0-SNAPSHOT for a major
-#      cut (continuing minor cadence under the new major -- a major bump doesn't imply the next
-#      release after it is itself another major bump).
+#   4. Bumps develop to the next SNAPSHOT. A patch cut just increments develop's own patch number
+#      (Z+1) -- there's no other line for it to collide with. A minor/major cut skips develop past
+#      the line just cut (X.(Y+2).0-SNAPSHOT / X.(Y+1).1.0-SNAPSHOT), since that cut line now owns
+#      its own patch sequence via backport-hotfix.yml, and develop must never also claim a version
+#      in it.
 #
-# Worked examples: develop 3.2.25-SNAPSHOT, minor cut -> release/v3.3.0 -> develop 3.4.0-SNAPSHOT.
-# Same starting point, major_bump=true -> release/v4.0.0 -> develop 4.1.0-SNAPSHOT.
+# Worked examples, all starting from develop at 3.2.25-SNAPSHOT:
+#   patch cut -> release/v3.2.25 (same version, just un-SNAPSHOT'd) -> develop 3.2.26-SNAPSHOT.
+#   minor cut -> release/v3.3.0 -> develop 3.4.0-SNAPSHOT.
+#   major cut -> release/v4.0.0 -> develop 4.1.0-SNAPSHOT.
 
 on:
   workflow_dispatch:
     inputs:
-      major_bump:
-        description: 'Cut a major release (X+1.0.0) instead of the default minor bump'
+      bump_type:
+        description: 'Which version component to bump for this release'
         required: false
-        default: false
-        type: boolean
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: write
@@ -58,19 +67,32 @@ jobs:
       - name: Compute release and next-develop versions
         id: versions
         env:
-          MAJOR_BUMP: ${{ inputs.major_bump }}
+          BUMP_TYPE: ${{ inputs.bump_type }}
         run: |
           CURRENT=$(mvn -q -pl . help:evaluate -Dexpression=project.version -DforceStdout)
           BASE="${CURRENT%-SNAPSHOT}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
 
-          if [ "$MAJOR_BUMP" = "true" ]; then
-            RELEASE_VERSION="$((MAJOR + 1)).0.0"
-            NEXT_DEVELOP="$((MAJOR + 1)).1.0-SNAPSHOT"
-          else
-            RELEASE_VERSION="${MAJOR}.$((MINOR + 1)).0"
-            NEXT_DEVELOP="${MAJOR}.$((MINOR + 2)).0-SNAPSHOT"
-          fi
+          case "$BUMP_TYPE" in
+            major)
+              RELEASE_VERSION="$((MAJOR + 1)).0.0"
+              NEXT_DEVELOP="$((MAJOR + 1)).1.0-SNAPSHOT"
+              ;;
+            minor)
+              RELEASE_VERSION="${MAJOR}.$((MINOR + 1)).0"
+              NEXT_DEVELOP="${MAJOR}.$((MINOR + 2)).0-SNAPSHOT"
+              ;;
+            patch|"")
+              # develop's current state becomes the release as-is; only what develop moves to
+              # afterward increments.
+              RELEASE_VERSION="$BASE"
+              NEXT_DEVELOP="${MAJOR}.${MINOR}.$((PATCH + 1))-SNAPSHOT"
+              ;;
+            *)
+              echo "::error::Unknown bump_type '$BUMP_TYPE' -- must be patch, minor, or major."
+              exit 1
+              ;;
+          esac
           RELEASE_BRANCH="release/v${RELEASE_VERSION}"
 
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
@@ -78,7 +100,7 @@ jobs:
           echo "next_develop=$NEXT_DEVELOP" >> "$GITHUB_OUTPUT"
           echo "release_branch=$RELEASE_BRANCH" >> "$GITHUB_OUTPUT"
 
-          echo "develop is at $CURRENT -- cutting $RELEASE_BRANCH (real $RELEASE_VERSION, major_bump=$MAJOR_BUMP), develop moves to $NEXT_DEVELOP"
+          echo "develop is at $CURRENT -- cutting $RELEASE_BRANCH (v$RELEASE_VERSION, bump_type=$BUMP_TYPE), develop moves to $NEXT_DEVELOP"
 
       - name: Fail fast if the release branch already exists
         run: |
@@ -120,21 +142,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run publish-release-branch.yml --ref "${{ steps.versions.outputs.release_branch }}"
 
-      - name: Bump develop past the version just cut
+      # develop is a protected branch (required status checks) -- a direct push from this job's
+      # GITHUB_TOKEN is rejected outright ("GH006: Protected branch update failed"), confirmed by
+      # the first cut attempt (v3.3.0). A PR plus auto-merge is the same pattern
+      # cloudforge-manager-deployment's own ADO auto_release stage already uses for this exact
+      # problem on its own protected develop.
+      - name: Bump develop to the next SNAPSHOT
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git checkout develop
+          BRANCH="chore/bump-develop-to-${{ steps.versions.outputs.next_develop }}"
+          git checkout -b "$BRANCH"
           mvn -q -B versions:set -DnewVersion="${{ steps.versions.outputs.next_develop }}" -DprocessAllModules=true -DgenerateBackupPoms=false
           git add -A
           git commit -m "chore: bump develop to ${{ steps.versions.outputs.next_develop }} after cutting v${{ steps.versions.outputs.release_version }}"
-          # Guards against a race (another push landing on develop between this job's checkout and
-          # this push), where a plain push would be rejected as non-fast-forward.
-          git pull --rebase origin develop
-          git push origin HEAD:develop
+          git push origin "$BRANCH"
+          gh pr create --base develop --head "$BRANCH" \
+            --title "chore: bump develop to ${{ steps.versions.outputs.next_develop }}" \
+            --body "Version bump following the v${{ steps.versions.outputs.release_version }} cut. Opened by cut-release.yml."
+          gh pr merge "$BRANCH" --squash --auto --delete-branch
 
       # Same GITHUB_TOKEN limitation as above, plus this commit carries no [skip ci] on purpose
       # now: develop's newly-bumped -SNAPSHOT version needs an actual Central publish so
       # downstream builds can resolve it, which only publish-snapshot.yml's publish-snapshot job
-      # does.
+      # does. Dispatched against develop directly rather than chained after the bump PR's merge,
+      # since publish-snapshot.yml also runs on every ordinary push to develop -- the PR merge
+      # itself will trigger a second, redundant but harmless run.
       - name: Trigger publish-snapshot.yml for the bumped develop version
         env:
           GH_TOKEN: ${{ github.token }}
