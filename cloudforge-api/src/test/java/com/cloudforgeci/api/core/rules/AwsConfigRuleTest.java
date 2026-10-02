@@ -51,8 +51,12 @@ class AwsConfigRuleTest {
      * each of the four CloudTrail-mapped rules points at is present, not just the Config rules.
      * {@code complianceFrameworks=HIPAA} enables KMS encryption, which is what gates
      * CLOUDTRAIL_ENCRYPTION_ENABLED's own registration. The same synthesis also exercises {@code
-     * getOrCreateBucket}, which creates the CloudTrail logs bucket and registers the two mapped S3
-     * rules.
+     * getOrCreateBucket}, which creates the CloudTrail logs bucket (logical id {@code
+     * CloudTrailBucket}, from {@code getOrCreateBucketWithSSM("CloudTrailBucket", ...)}) and
+     * registers the two mapped S3 rules. S3_BUCKET_ENCRYPTION/VERSIONING are asserted by logical
+     * id, not bare type -- {@code AWS::S3::Bucket} is a type other factories can also create (e.g.
+     * AlbFactory's access-log bucket), so a type-only match would pass even if this specific
+     * bucket were never built.
      */
     @Test
     void cloudTrailAndS3RulesHaveTheirResourcesInTheSynthesizedTemplate() {
@@ -67,8 +71,10 @@ class AwsConfigRuleTest {
         assertMappedResourceExists(AwsConfigRule.CLOUDTRAIL_LOG_FILE_VALIDATION, builder.getStack());
         assertMappedResourceExists(AwsConfigRule.MULTI_REGION_CLOUDTRAIL, builder.getStack());
         assertMappedResourceExists(AwsConfigRule.CLOUDTRAIL_ENCRYPTION_ENABLED, builder.getStack());
-        assertMappedResourceExists(AwsConfigRule.S3_BUCKET_ENCRYPTION, builder.getStack());
-        assertMappedResourceExists(AwsConfigRule.S3_BUCKET_VERSIONING_ENABLED, builder.getStack());
+        assertMappedResourceWithLogicalIdContains(
+            AwsConfigRule.S3_BUCKET_ENCRYPTION, builder.getStack(), "CloudTrailBucket");
+        assertMappedResourceWithLogicalIdContains(
+            AwsConfigRule.S3_BUCKET_VERSIONING_ENABLED, builder.getStack(), "CloudTrailBucket");
     }
 
     /**
@@ -133,6 +139,12 @@ class AwsConfigRuleTest {
      * checks it during its own {@code create()}, so FlowLogFactory must run first or the option
      * is set too late to be picked up (matching the order in {@code ApplicationFactory}, which
      * creates FlowLogFactory before the infrastructure factories that include VpcFactory).
+     *
+     * <p>CLOUDWATCH_LOG_GROUP_ENCRYPTED is asserted by logical id, not bare type -- {@code
+     * AWS::Logs::LogGroup} is a type other factories also create (e.g. LoggingCwFactory's
+     * SecurityProfileLogs group, built by {@code createMinimalInfrastructure()}'s own Fargate
+     * step), so a type-only match would pass even with FlowLogFactory's own log group
+     * ({@code VpcFlowLogsGroup}) never built.
      */
     @Test
     void flowLogRulesHaveTheirResourcesInTheSynthesizedTemplate() {
@@ -144,11 +156,28 @@ class AwsConfigRuleTest {
         builder.createMinimalInfrastructure();
 
         assertMappedResourceExists(AwsConfigRule.VPC_FLOW_LOGS_ENABLED, builder.getStack());
-        assertMappedResourceExists(AwsConfigRule.CLOUDWATCH_LOG_GROUP_ENCRYPTED, builder.getStack());
+        assertMappedResourceWithLogicalIdContains(
+            AwsConfigRule.CLOUDWATCH_LOG_GROUP_ENCRYPTED, builder.getStack(), "VpcFlowLogsGroup");
     }
 
     private static void assertMappedResourceExists(AwsConfigRule rule, Stack stack) {
         String expectedType = rule.getExpectedCfnResourceType().orElseThrow();
         Template.fromStack(stack).hasResource(expectedType, Match.anyValue());
+    }
+
+    /**
+     * Like {@link #assertMappedResourceExists}, but also requires a resource of the mapped type
+     * whose logical id contains {@code logicalIdSubstring} -- CDK appends a hash suffix to
+     * logical ids, so this checks a substring rather than an exact match. Use this instead of the
+     * type-only assertion whenever the mapped resource type isn't unique to the factory under
+     * test, or the assertion would pass regardless of whether that factory built anything.
+     */
+    private static void assertMappedResourceWithLogicalIdContains(
+            AwsConfigRule rule, Stack stack, String logicalIdSubstring) {
+        String expectedType = rule.getExpectedCfnResourceType().orElseThrow();
+        Map<String, Map<String, Object>> matches = Template.fromStack(stack).findResources(expectedType);
+        boolean found = matches.keySet().stream().anyMatch(id -> id.contains(logicalIdSubstring));
+        assertTrue(found, "Expected a " + expectedType + " resource with logical id containing \""
+            + logicalIdSubstring + "\", found: " + matches.keySet());
     }
 }
