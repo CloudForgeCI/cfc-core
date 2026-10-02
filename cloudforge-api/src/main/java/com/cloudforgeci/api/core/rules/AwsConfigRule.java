@@ -3,7 +3,6 @@ package com.cloudforgeci.api.core.rules;
 import com.cloudforge.core.enums.ComplianceMode;
 
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -15,16 +14,7 @@ import java.util.stream.Collectors;
  *   <li>Which AWS Config rules exist</li>
  *   <li>Which SecurityControl each rule validates</li>
  *   <li>Whether a rule is required based on compliance frameworks</li>
- *   <li>Which CloudFormation resource type, if mapped, the rule's requirement should produce --
- *       see {@link #getExpectedCfnResourceType()}</li>
  * </ul>
- *
- * <p>{@code expectedCfnResourceType} is set only where a {@code ctx.requireConfigRule(...)} call
- * site traces the rule to one owning factory and one resource type. It's unset for: rules only
- * referenced from {@code ComplianceFactory}'s hardcoded per-framework methods, which don't use
- * this enum; account-level rules with no stack-created resource (e.g. IAM password policy); and
- * rules whose check is a property on a resource rather than the resource's existence (e.g. a
- * security group's ingress rules, not the security group itself).</p>
  *
  * <p>Usage in ConfigRulesFactory:</p>
  * <pre>{@code
@@ -43,10 +33,6 @@ import java.util.stream.Collectors;
 public enum AwsConfigRule {
 
     // ==================== Threat Detection ====================
-    // No expectedCfnResourceType: GuardDutyFactory#enableGuardDuty registers this rule
-    // unconditionally but only builds CfnDetector when createGuardDutyDetector is true (false
-    // when the account already has a detector elsewhere) -- the rule can be required with no
-    // AWS::GuardDuty::Detector in this template.
     GUARDDUTY_ENABLED("guardduty-enabled-centralized",
         ComplianceMatrix.SecurityControl.THREAT_DETECTION,
         "Checks that GuardDuty is enabled in the account"),
@@ -54,34 +40,28 @@ public enum AwsConfigRule {
     // ==================== Audit Logging ====================
     CLOUDTRAIL_ENABLED("cloudtrail-enabled",
         ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
-        "Checks that CloudTrail is enabled",
-        "AWS::CloudTrail::Trail"),
+        "Checks that CloudTrail is enabled"),
 
     CLOUDTRAIL_LOG_FILE_VALIDATION("cloud-trail-log-file-validation-enabled",
         ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
-        "Checks that CloudTrail log file validation is enabled",
-        "AWS::CloudTrail::Trail"),
+        "Checks that CloudTrail log file validation is enabled"),
 
     MULTI_REGION_CLOUDTRAIL("multi-region-cloudtrail-enabled",
         ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
-        "Checks that multi-region CloudTrail is enabled",
-        "AWS::CloudTrail::Trail"),
+        "Checks that multi-region CloudTrail is enabled"),
 
     VPC_FLOW_LOGS_ENABLED("vpc-flow-logs-enabled",
         ComplianceMatrix.SecurityControl.NETWORK_FLOW_LOGS,
-        "Checks that VPC flow logs are enabled",
-        "AWS::EC2::FlowLog"),
+        "Checks that VPC flow logs are enabled"),
 
     ELB_LOGGING_ENABLED("elb-logging-enabled",
         ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
-        "Checks that ELB access logging is enabled",
-        "AWS::ElasticLoadBalancingV2::LoadBalancer"),
+        "Checks that ELB access logging is enabled"),
 
     // ==================== Encryption at Rest ====================
     S3_BUCKET_ENCRYPTION("s3-bucket-server-side-encryption-enabled",
         ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
-        "Checks that S3 buckets have server-side encryption enabled",
-        "AWS::S3::Bucket"),
+        "Checks that S3 buckets have server-side encryption enabled"),
 
     EBS_ENCRYPTION_BY_DEFAULT("ec2-ebs-encryption-by-default",
         ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
@@ -89,23 +69,19 @@ public enum AwsConfigRule {
 
     RDS_STORAGE_ENCRYPTED("rds-storage-encrypted",
         ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
-        "Checks that RDS storage encryption is enabled",
-        "AWS::RDS::DBInstance"),
+        "Checks that RDS storage encryption is enabled"),
 
     EFS_ENCRYPTED("efs-encrypted-check",
         ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
-        "Checks that EFS file systems are encrypted",
-        "AWS::EFS::FileSystem"),
+        "Checks that EFS file systems are encrypted"),
 
     CLOUDWATCH_LOG_GROUP_ENCRYPTED("cloudwatch-log-group-encrypted",
         ComplianceMatrix.SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION,
-        "Checks that CloudWatch log groups are encrypted with KMS",
-        "AWS::Logs::LogGroup"),
+        "Checks that CloudWatch log groups are encrypted with KMS"),
 
     CLOUDTRAIL_ENCRYPTION_ENABLED("cloud-trail-encryption-enabled",
         ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
-        "Checks that CloudTrail is encrypted with KMS",
-        "AWS::CloudTrail::Trail"),
+        "Checks that CloudTrail is encrypted with KMS"),
 
     // ==================== Encryption in Transit ====================
     ALB_HTTPS_ONLY("alb-http-to-https-redirection-check",
@@ -158,8 +134,7 @@ public enum AwsConfigRule {
 
     S3_BUCKET_VERSIONING_ENABLED("s3-bucket-versioning-enabled",
         ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
-        "Checks that S3 bucket versioning is enabled",
-        "AWS::S3::Bucket"),
+        "Checks that S3 bucket versioning is enabled"),
 
     S3_BUCKET_DEFAULT_LOCK_ENABLED("s3-bucket-default-lock-enabled",
         ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
@@ -168,8 +143,7 @@ public enum AwsConfigRule {
     // ==================== Backup & Recovery ====================
     DB_INSTANCE_BACKUP_ENABLED("db-instance-backup-enabled",
         ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
-        "Checks that RDS automated backups are enabled",
-        "AWS::RDS::DBInstance"),
+        "Checks that RDS automated backups are enabled"),
 
     S3_BUCKET_REPLICATION("s3-bucket-replication-enabled",
         ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
@@ -182,13 +156,11 @@ public enum AwsConfigRule {
     // ==================== High Availability ====================
     RDS_MULTI_AZ("rds-multi-az-support",
         ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ,
-        "Checks that RDS instances are Multi-AZ",
-        "AWS::RDS::DBInstance"),
+        "Checks that RDS instances are Multi-AZ"),
 
     ELB_DELETION_PROTECTION("elb-deletion-protection-enabled",
         ComplianceMatrix.SecurityControl.HIGH_AVAILABILITY,
-        "Checks that ELB deletion protection is enabled",
-        "AWS::ElasticLoadBalancingV2::LoadBalancer"),
+        "Checks that ELB deletion protection is enabled"),
 
     // ==================== Key Management ====================
     KMS_CMK_NOT_SCHEDULED_FOR_DELETION("kms-cmk-not-scheduled-for-deletion",
@@ -212,13 +184,11 @@ public enum AwsConfigRule {
     // ==================== WAF Protection ====================
     WAFV2_LOGGING_ENABLED("wafv2-logging-enabled",
         ComplianceMatrix.SecurityControl.WAF_PROTECTION,
-        "Checks that WAFv2 logging is enabled",
-        "AWS::WAFv2::LoggingConfiguration"),
+        "Checks that WAFv2 logging is enabled"),
 
     ALB_WAF_ENABLED("alb-waf-enabled",
         ComplianceMatrix.SecurityControl.WAF_PROTECTION,
-        "Checks that ALB has WAF associated",
-        "AWS::WAFv2::WebACLAssociation"),
+        "Checks that ALB has WAF associated"),
 
     // ==================== Root Account Protection ====================
     ROOT_ACCOUNT_MFA_ENABLED("root-account-mfa-enabled",
@@ -249,8 +219,7 @@ public enum AwsConfigRule {
     // ==================== Database Access Control ====================
     RDS_INSTANCE_PUBLIC_ACCESS_CHECK("rds-instance-public-access-check",
         ComplianceMatrix.SecurityControl.DATABASE_ACCESS_CONTROL,
-        "Checks that RDS instances are not publicly accessible",
-        "AWS::RDS::DBInstance"),
+        "Checks that RDS instances are not publicly accessible"),
 
     RDS_CLUSTER_PUBLIC_ACCESS_CHECK("rds-cluster-public-access-check",
         ComplianceMatrix.SecurityControl.DATABASE_ACCESS_CONTROL,
@@ -271,8 +240,7 @@ public enum AwsConfigRule {
     // ==================== Database Logging ====================
     RDS_LOGGING_ENABLED("rds-logging-enabled",
         ComplianceMatrix.SecurityControl.DATABASE_LOGGING,
-        "Checks that RDS logging is enabled",
-        "AWS::RDS::DBInstance"),
+        "Checks that RDS logging is enabled"),
 
     REDSHIFT_AUDIT_LOGGING_ENABLED("redshift-audit-logging-enabled",
         ComplianceMatrix.SecurityControl.DATABASE_LOGGING,
@@ -285,8 +253,7 @@ public enum AwsConfigRule {
 
     RDS_INSTANCE_DELETION_PROTECTION_ENABLED("rds-instance-deletion-protection-enabled",
         ComplianceMatrix.SecurityControl.DELETION_PROTECTION,
-        "Checks that RDS instance deletion protection is enabled",
-        "AWS::RDS::DBInstance"),
+        "Checks that RDS instance deletion protection is enabled"),
 
     // ==================== Container Security (EKS) ====================
     EKS_ENDPOINT_NO_PUBLIC_ACCESS("eks-endpoint-no-public-access",
@@ -416,25 +383,11 @@ public enum AwsConfigRule {
     private final String ruleName;
     private final ComplianceMatrix.SecurityControl securityControl;
     private final String description;
-    private final String expectedCfnResourceType;
 
     AwsConfigRule(String ruleName, ComplianceMatrix.SecurityControl securityControl, String description) {
-        this(ruleName, securityControl, description, null);
-    }
-
-    /**
-     * @param expectedCfnResourceType the CloudFormation resource type (e.g. {@code
-     *     "AWS::CloudTrail::Trail"}) that must exist in a synthesized template for this rule to
-     *     check infrastructure this codebase built, rather than asking AWS Config to evaluate
-     *     something that was never created here. Null for rules without one yet -- see this
-     *     enum's class javadoc for why most rules are still unset.
-     */
-    AwsConfigRule(String ruleName, ComplianceMatrix.SecurityControl securityControl, String description,
-                  String expectedCfnResourceType) {
         this.ruleName = ruleName;
         this.securityControl = securityControl;
         this.description = description;
-        this.expectedCfnResourceType = expectedCfnResourceType;
     }
 
     /**
@@ -456,19 +409,6 @@ public enum AwsConfigRule {
      */
     public String getDescription() {
         return description;
-    }
-
-    /**
-     * The CloudFormation resource type this rule's requirement should produce, if mapped. A rule
-     * being REQUIRED only deploys a {@code CfnConfigRule} asking AWS Config to evaluate something
-     * -- it proves nothing about whether the infrastructure it checks actually exists in this
-     * stack. Use this to assert the resource is also present, not just the rule. Empty for
-     * rules not yet mapped (most of them -- see this enum's class javadoc), and for rules that
-     * check a property across existing account state rather than a resource this codebase creates
-     * (e.g. the IAM account-level rules in {@code deployAuthenticationConfigRules}).
-     */
-    public Optional<String> getExpectedCfnResourceType() {
-        return Optional.ofNullable(expectedCfnResourceType);
     }
 
     /**
