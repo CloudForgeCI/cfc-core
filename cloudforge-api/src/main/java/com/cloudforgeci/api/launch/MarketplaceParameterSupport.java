@@ -86,16 +86,31 @@ final class MarketplaceParameterSupport {
             .constraintDescription("Must be a valid email address")
             .build();
 
+        // No minLength(1), and defaultValue("") so CloudFormation doesn't treat this as a required
+        // parameter either: a buyer may launch the stack before they have a key in hand and
+        // activate licensing later from the Settings -> License page. ApplicationFactory's
+        // LicenseKeySecret now guards the deploy-time-resolved value too (an Fn::If against a
+        // CfnCondition, not just the Java-side isBlank() check, which can't see an empty
+        // CfnParameter token at synth time) -- see that block's own comment for why both guards
+        // are needed.
         CfnParameter licenseKey = CfnParameter.Builder.create(stack, "LicenseKey")
             .type("String")
-            .description("LicenseSeat license key (LS-XXXX-XXXX-XXXX-XXXX) from your AWS Marketplace purchase")
+            .description("LicenseSeat license key (LS-XXXX-XXXX-XXXX-XXXX) from your AWS Marketplace "
+                + "purchase. Optional at launch -- activate it later from Settings -> License if you "
+                + "don't have one yet.")
+            .defaultValue("")
             .noEcho(true)
-            .minLength(1)
             .build();
 
         Map<String, Object> overridden = new HashMap<>(cfc.raw());
         overridden.put("cognitoInitialAdminEmail", adminEmail.getValueAsString());
         overridden.put("managerLicenseKey", licenseKey.getValueAsString());
+        // Defaults to true for this Marketplace listing only -- DeploymentConfig#managerDirectDeployEnabled
+        // is REQUIRES_APPROVAL/EXPERIMENTAL and false elsewhere, since it grants Manager's task role
+        // real CFN CreateStack/UpdateStack + Service Catalog ProvisionProduct permissions. A
+        // Marketplace buyer is specifically subscribing to use Manager's deploy capability, so the
+        // approval this flag normally requires is implicit in the purchase itself.
+        overridden.put("managerDirectDeployEnabled", true);
 
         Construct appScope = new Construct(stack, "App");
         appScope.getNode().setContext("cfc", overridden);

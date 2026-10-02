@@ -6,17 +6,16 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
 import com.cloudforgeci.api.util.CfnStringUtils;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.RemovalPolicy;
-import software.amazon.awscdk.customresources.AwsCustomResource;
-import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
-import software.amazon.awscdk.customresources.AwsSdkCall;
-import software.amazon.awscdk.customresources.PhysicalResourceId;
-import software.amazon.awscdk.customresources.SdkCallsPolicyOptions;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.cognito.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.actions.*;
+import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
@@ -740,7 +739,6 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             if (authMode == AuthMode.APPLICATION_OIDC) {
                 LOG.info("Application-level OIDC detected - storing Cognito client secret in Secrets Manager");
                 // For existing user pool with existing client, we need the secret to be provided externally
-                // or we retrieve it using Custom Resource
                 secretName = storeCognitoClientSecret(userPool, appClient);
             }
 
@@ -1289,39 +1287,71 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         String ssmParameterName = "/cloudforge/shared/" + region + "/stack/" + this.stackName + "/cognito/user-pool-arn";
 
-        AwsSdkCall putParameterCall = AwsSdkCall.builder()
-                .service("SSM")
-                .action("putParameter")
-                .parameters(java.util.Map.of(
-                        "Name", ssmParameterName,
-                        "Value", userPool.getUserPoolArn(),
-                        "Type", "String",
-                        "Description", "CloudForge retained Cognito User Pool ARN for region " + region,
-                        "Overwrite", true
-                ))
-                .physicalResourceId(PhysicalResourceId.of("UserPoolArn-SSMWriter"))
-                .region(region)
-                .build();
-
-        // Use scoped ARN pattern for least-privilege SSM access
-        // Pattern: arn:aws:ssm:REGION:*:parameter/cloudforge/shared/REGION/stack/STACKNAME/*
-        String ssmArnPattern = "arn:aws:ssm:" + region + ":*:parameter/cloudforge/shared/" + region + "/stack/" + this.stackName + "/*";
-
-        AwsCustomResource ssmWriter = AwsCustomResource.Builder.create(this, "UserPoolArnSSMWriter")
-                .onCreate(putParameterCall)
-                .onUpdate(putParameterCall)
-                .policy(AwsCustomResourcePolicy.fromStatements(List.of(
-                        software.amazon.awscdk.services.iam.PolicyStatement.Builder.create()
-                                .actions(List.of("ssm:PutParameter"))
-                                .resources(List.of(ssmArnPattern))
-                                .build()
-                )))
-                .build();
-
-        ssmWriter.getNode().addDependency(userPool);
+        // A plain AWS::SSM::Parameter (tried first) has no Lambda-asset dependency, but it also
+        // has no overwrite-on-create semantics: redeploying a stack under the same name after a
+        // delete collides on this fixed path ("already exists"), since the old RETAIN-policy
+        // parameter outlives the stack that created it. An AssetFreeCustomResource calling
+        // ssm:PutParameter with Overwrite=true -- the same pattern ComplianceFactory's own SSM
+        // writers already use -- keeps the asset-free property while making the write idempotent
+        // across retries/redeploys under the same stack name, matching the original hand-rolled
+        // custom resource's behavior before it was Lambda-asset-dependent.
+        String ssmParameterArn = "arn:" + Stack.of(this).getPartition() + ":ssm:" + region + ":"
+            + Stack.of(this).getAccount() + ":parameter" + ssmParameterName;
+        AssetFreeCustomResource.create(
+                this, "UserPoolArnSSMWriter", AssetFreeCustomResource.SSM_PUT_PARAMETER_HANDLER_JS,
+                Duration.seconds(30),
+                List.of(PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(List.of("ssm:PutParameter"))
+                        .resources(List.of(ssmParameterArn))
+                        .build()),
+                java.util.Map.of(
+                        "ParameterName", ssmParameterName,
+                        "ParameterValue", userPool.getUserPoolArn(),
+                        "ParameterDescription", "CloudForge retained Cognito User Pool ARN for region " + region,
+                        "Region", region
+                ));
 
         LOG.info("User Pool ARN will be tracked in SSM: " + ssmParameterName);
     }
+
+    /** Node.js handler for {@link AssetFreeCustomResource}: fetches the Cognito app client's
+     *  secret via {@code DescribeUserPoolClient} and writes it straight into the already-created
+     *  Secrets Manager secret via {@code PutSecretValue}, combining what used to be two separate
+     *  custom resources into one Lambda invocation. Does nothing on delete -- the Secret
+     *  construct's own removal policy governs its lifecycle. */
+    private static final String COGNITO_CLIENT_SECRET_SYNC_HANDLER_JS = """
+        const { CognitoIdentityProviderClient, DescribeUserPoolClientCommand } = require('@aws-sdk/client-cognito-identity-provider');
+        const { SecretsManagerClient, PutSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+
+        exports.handler = async (event) => {
+          try {
+            if (event.RequestType !== 'Delete') {
+              const p = event.ResourceProperties;
+              const endpoint = process.env.AWS_ENDPOINT_URL;
+              const cognito = new CognitoIdentityProviderClient({ region: p.Region, ...(endpoint ? { endpoint } : {}) });
+              const described = await cognito.send(new DescribeUserPoolClientCommand({
+                UserPoolId: p.UserPoolId,
+                ClientId: p.ClientId
+              }));
+
+              const secretsManager = new SecretsManagerClient({ region: p.Region, ...(endpoint ? { endpoint } : {}) });
+              await secretsManager.send(new PutSecretValueCommand({
+                SecretId: p.SecretArn,
+                SecretString: described.UserPoolClient.ClientSecret
+              }));
+            }
+            await respond(event, 'SUCCESS');
+          } catch (err) {
+            console.error('Cognito client secret sync failed: ' + err);
+            try {
+              await respond(event, 'FAILED', String(err));
+            } catch (deliveryErr) {
+              console.error('Could not deliver FAILED response to CloudFormation: ' + deliveryErr);
+            }
+          }
+        };
+        """;
 
     /**
      * Store Cognito User Pool Client Secret in AWS Secrets Manager.
@@ -1330,14 +1360,15 @@ public class CognitoAuthenticationFactory extends BaseFactory {
      * needs to retrieve the client secret at runtime. For ALB-level OIDC, Cognito manages
      * the secret internally and this method is not called.</p>
      *
-     * <p>The client secret is retrieved from the Cognito User Pool Client and stored directly
-     * in Secrets Manager using a Custom Resource Lambda. This ensures the secret value never
-     * appears in the CloudFormation template (avoiding the security issue with unsafePlainText).</p>
-     *
-     * <p>The Custom Resource uses a Lambda function that:
-     * 1. Calls DescribeUserPoolClient to get the client secret
-     * 2. Calls PutSecretValue to store it in Secrets Manager
-     * This keeps the secret value within AWS and out of CloudFormation.</p>
+     * <p>{@code UserPoolClient}'s own L2 {@code getUserPoolClientSecret()} looks like the native
+     * way to do this -- {@code AWS::Cognito::UserPoolClient} has long exposed {@code ClientSecret}
+     * via {@code Fn::GetAtt} -- but CDK's implementation wraps that call in its own {@code
+     * AwsCustomResource}/Provider framework regardless, which pulls in a bundled Lambda asset
+     * needing the deployer's CDK bootstrap staging bucket. An AWS Marketplace buyer launching this
+     * template directly has no such bucket (see {@code CloudForgeSynthesizer
+     * #synthesizeForMarketplace}), so this fetches the secret with its own asset-free custom
+     * resource ({@link AssetFreeCustomResource}, {@code Code.fromInline}) instead, combining the
+     * old two-step fetch-then-store into one Lambda invocation.</p>
      *
      * @param userPool The Cognito User Pool
      * @param appClient The Cognito User Pool Client
@@ -1354,12 +1385,11 @@ public class CognitoAuthenticationFactory extends BaseFactory {
 
         LOG.info("Storing Cognito client secret in Secrets Manager for application: " + appId);
 
-        // First, create an empty secret in Secrets Manager
-        // The Custom Resource will populate it with the actual client secret value
         Secret cognitoSecret = Secret.Builder.create(this, "CognitoClientSecret")
                 .secretName(secretName)
                 .description("Cognito User Pool Client Secret for application-level OIDC authentication")
-                // Generate a placeholder - will be replaced by Custom Resource
+                // Placeholder -- the asset-free custom resource below overwrites it with the real
+                // Cognito-managed client secret.
                 .generateSecretString(SecretStringGenerator.builder()
                     .generateStringKey("placeholder")
                     .secretStringTemplate("{}")
@@ -1369,7 +1399,7 @@ public class CognitoAuthenticationFactory extends BaseFactory {
                 .build();
 
         // Suppress SMG4 - Cognito client secrets cannot be rotated by Secrets Manager
-        // The secret is managed by Cognito and synchronized via Custom Resource.
+        // The secret is managed by Cognito and synchronized at deploy time via a custom resource.
         // To rotate, you must regenerate the Cognito User Pool Client which requires
         // updating all dependent applications (ALB OIDC actions, application configs).
         NagSuppressions.addResourceSuppressions(
@@ -1385,69 +1415,36 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             Boolean.TRUE
         );
 
-        // Use Custom Resource to retrieve the client secret from Cognito and store it in Secrets Manager
-        // This keeps the secret value within AWS - it never appears in the CloudFormation template
-        //
-        // SECURITY: We use a two-step Custom Resource approach:
-        // 1. First CR fetches the secret from Cognito (DescribeUserPoolClient)
-        // 2. Second CR stores it in Secrets Manager (PutSecretValue)
-        // This ensures the secret value is passed between CRs at runtime, never in CloudFormation.
-        AwsSdkCall getSecretCall = AwsSdkCall.builder()
-                .service("CognitoIdentityServiceProvider")
-                .action("describeUserPoolClient")
-                .parameters(java.util.Map.of(
-                        "UserPoolId", userPool.getUserPoolId(),
-                        "ClientId", appClient.getUserPoolClientId()
-                ))
-                .outputPaths(List.of("UserPoolClient.ClientSecret"))
-                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecretFetch-" + stackName))
-                .region(region)
-                .build();
-
-        // Step 1: Fetch the client secret from Cognito
-        AwsCustomResource secretFetcher = AwsCustomResource.Builder.create(this, "CognitoClientSecretFetcher")
-                .onCreate(getSecretCall)
-                .onUpdate(getSecretCall)
-                .policy(AwsCustomResourcePolicy.fromSdkCalls(
-                        SdkCallsPolicyOptions.builder()
+        AssetFreeCustomResource.Result secretSync = AssetFreeCustomResource.create(
+                this, "CognitoClientSecretSync", COGNITO_CLIENT_SECRET_SYNC_HANDLER_JS,
+                software.amazon.awscdk.Duration.seconds(30),
+                List.of(
+                        PolicyStatement.Builder.create()
+                                .actions(List.of("cognito-idp:DescribeUserPoolClient"))
                                 .resources(List.of(userPool.getUserPoolArn()))
+                                .build(),
+                        PolicyStatement.Builder.create()
+                                .actions(List.of("secretsmanager:PutSecretValue"))
+                                .resources(List.of(cognitoSecret.getSecretArn()))
                                 .build()
-                ))
-                .build();
+                ),
+                java.util.Map.of(
+                        "UserPoolId", userPool.getUserPoolId(),
+                        "ClientId", appClient.getUserPoolClientId(),
+                        "SecretArn", cognitoSecret.getSecretArn(),
+                        "Region", region
+                ));
+        secretSync.customResource.getNode().addDependency(appClient);
+        secretSync.customResource.getNode().addDependency(cognitoSecret);
 
-        secretFetcher.getNode().addDependency(appClient);
+        LOG.info("Cognito client secret will be synced to Secrets Manager: " + secretName);
 
-        // Step 2: Store the secret value in Secrets Manager using PutSecretValue
-        // This Custom Resource takes the output from the fetcher and stores it
-        AwsSdkCall storeSecretCall = AwsSdkCall.builder()
-                .service("SecretsManager")
-                .action("putSecretValue")
-                .parameters(java.util.Map.of(
-                        "SecretId", cognitoSecret.getSecretArn(),
-                        "SecretString", secretFetcher.getResponseField("UserPoolClient.ClientSecret")
-                ))
-                .physicalResourceId(PhysicalResourceId.of("CognitoClientSecretStore-" + stackName))
-                .region(region)
-                .build();
-
-        AwsCustomResource secretStorer = AwsCustomResource.Builder.create(this, "CognitoClientSecretStorer")
-                .onCreate(storeSecretCall)
-                .onUpdate(storeSecretCall)
-                .policy(AwsCustomResourcePolicy.fromStatements(List.of(
-                    PolicyStatement.Builder.create()
-                        .actions(List.of("secretsmanager:PutSecretValue"))
-                        .resources(List.of(cognitoSecret.getSecretArn()))
-                        .build()
-                )))
-                .build();
-
-        secretStorer.getNode().addDependency(secretFetcher);
-        secretStorer.getNode().addDependency(cognitoSecret);
-
-        LOG.info("Cognito client secret will be stored in Secrets Manager via Custom Resource");
-
-        // Store the secret in SystemContext for dependency tracking
-        ctx.cognitoClientSecretResourceInternal.set(cognitoSecret);
+        // Store the sync Custom Resource (not the bare Secret) for dependency tracking -- the
+        // Secret exists the moment it's created, but only holds a random placeholder value until
+        // this sync resource overwrites it with the real Cognito-managed secret. Consumers (see
+        // FargateFactory) must depend on the sync completing, not just the Secret's existence, or
+        // the first-booted task can read the placeholder.
+        ctx.cognitoClientSecretResourceInternal.set(secretSync.customResource);
 
         // Return the COMPLETE ARN with suffix (same as RDS pattern)
         return cognitoSecret.getSecretArn();

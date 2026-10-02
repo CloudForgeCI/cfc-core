@@ -354,6 +354,24 @@ public class ApplicationFactory extends BaseFactory {
             if (licenseKeySecretEnvVar != null && !licenseKeySecretEnvVar.isBlank()
                     && managerLicenseKey != null && !managerLicenseKey.isBlank()) {
                 LOG.info("Provisioning license key secret for " + applicationSpec.applicationId());
+                // managerLicenseKey is never Java-blank when it's a CfnParameter token (e.g. the
+                // Marketplace LicenseKey parameter, which has no minLength -- see
+                // MarketplaceParameterSupport): getValueAsString() returns an opaque, non-empty
+                // token string at synth time regardless of what the buyer actually types at
+                // deploy time. The isBlank() check above only catches a genuinely empty *literal*
+                // value, so a buyer who leaves LicenseKey blank would otherwise still get a Secret
+                // whose SecretString resolves to "" -- which Secrets Manager rejects (SecretString
+                // must be non-empty). Guard the deploy-time-resolved value too, with a sentinel
+                // CloudForge's own LicenseSeat validation already treats as "not entitled" the same
+                // as any other invalid key, same as it would for a wrong one.
+                software.amazon.awscdk.CfnCondition hasLicenseKey =
+                    software.amazon.awscdk.CfnCondition.Builder.create(this, "HasLicenseKeyCondition")
+                        .expression(software.amazon.awscdk.Fn.conditionNot(
+                            software.amazon.awscdk.Fn.conditionEquals(managerLicenseKey, "")))
+                        .build();
+                String resolvedLicenseKey = software.amazon.awscdk.Token.asString(
+                    software.amazon.awscdk.Fn.conditionIf(
+                        hasLicenseKey.getLogicalId(), managerLicenseKey, "not-configured"));
                 software.amazon.awscdk.services.secretsmanager.Secret licenseKeySecret =
                     software.amazon.awscdk.services.secretsmanager.Secret.Builder.create(
                             this, "LicenseKeySecret")
@@ -361,7 +379,7 @@ public class ApplicationFactory extends BaseFactory {
                             + software.amazon.awscdk.Stack.of(this).getStackName()
                             + " (" + licenseKeySecretEnvVar + ")")
                         .secretStringValue(
-                            software.amazon.awscdk.SecretValue.unsafePlainText(managerLicenseKey))
+                            software.amazon.awscdk.SecretValue.unsafePlainText(resolvedLicenseKey))
                         .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
                         .build();
                 ctx.licenseKeySecretArn.set(licenseKeySecret.getSecretArn());

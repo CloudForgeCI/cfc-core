@@ -480,4 +480,75 @@ class CognitoAuthenticationFactoryTest {
         // Then: Should handle all features
         assertDoesNotThrow(factory::create);
     }
+
+    /** Regression test for a Marketplace-blocking gap: {@code storeUserPoolArnInSSM} (PRODUCTION
+     *  profile) and {@code storeCognitoClientSecret} (APPLICATION_OIDC mode) used to provision
+     *  Lambda-backed {@code AwsCustomResource}/Provider-framework constructs, each needing the CDK
+     *  bootstrap staging bucket -- unavailable in a genuinely unbootstrapped AWS Marketplace buyer
+     *  account (see {@code CloudForgeSynthesizer#synthesizeForMarketplace}). Both are now
+     *  asset-free custom resources ({@link AssetFreeCustomResource}, {@code Code.fromInline})
+     *  instead of CDK's asset-staged Provider framework: a plain {@code AWS::SSM::Parameter} was
+     *  tried first for the ARN write, but it has no overwrite-on-create semantics, so redeploying
+     *  a stack under the same name after a delete collided with the old RETAIN-policy parameter
+     *  ("already exists") -- an AssetFreeCustomResource calling {@code ssm:PutParameter} with
+     *  {@code Overwrite=true} keeps the asset-free property while staying idempotent across
+     *  retries, matching {@code ComplianceFactory}'s own SSM writers. This exercises both paths
+     *  together (PRODUCTION + application-oidc) and asserts no {@link
+     *  software.amazon.awscdk.customresources.AwsCustomResource} is created under this factory. */
+    @Test
+    void testProductionApplicationOidcNeverCreatesAwsCustomResources() {
+        App app = new App();
+        Stack stack = new Stack(app, "TestCognitoNoCustomResource");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestCognitoNoCustomResource");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("domain", "example.com");
+        cfcContext.put("enableSsl", true);
+        cfcContext.put("fqdn", "app.example.com");
+        cfcContext.put("authMode", "application-oidc");
+        cfcContext.put("cognitoAutoProvision", true);
+        cfcContext.put("cognitoDomainPrefix", "test-no-cr-auth");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        CognitoAuthenticationFactory factory = new CognitoAuthenticationFactory(stack, "Cognito");
+        factory.create();
+
+        // Scoped to this factory's own subtree, not the whole stack: SystemContext.start above
+        // already wires up every security factory (including ApplicationOidcFactory), which has
+        // its own, unrelated AwsCustomResource for non-Cognito OIDC providers -- correctly a
+        // no-op for genuine Cognito configs (see its own "Don't create secret for Cognito"
+        // guard), but this test's harness-only duplicate CognitoAuthenticationFactory instance
+        // runs outside that orchestration order and isn't representative either way. What this
+        // test actually guards is CognitoAuthenticationFactory's own two methods.
+        boolean anyCustomResource = factory.getNode().findAll().stream()
+            .anyMatch(c -> c instanceof software.amazon.awscdk.customresources.AwsCustomResource);
+        assertFalse(anyCustomResource,
+            "No AwsCustomResource should exist under CognitoAuthenticationFactory -- it needs "
+                + "CDK bootstrap assets a buyer's unbootstrapped Marketplace account doesn't have");
+
+        assertInstanceOf(software.amazon.awscdk.CustomResource.class,
+            factory.getNode().findChild("UserPoolArnSSMWriter"),
+            "User Pool ARN tracking should be an asset-free custom resource (overwrite-safe across redeploys)");
+
+        assertInstanceOf(software.amazon.awscdk.services.secretsmanager.Secret.class,
+            factory.getNode().findChild("CognitoClientSecret"),
+            "The Cognito client secret copy should still be created, just without a custom resource");
+
+        // Regression guard for a live deploy bug: the Secret resource exists the moment it's
+        // created, but only holds a random placeholder value until CognitoClientSecretSync
+        // overwrites it with the real Cognito-managed secret. FargateFactory depends on whatever
+        // this slot holds to decide when the ECS Service may start -- if it held the bare Secret
+        // (as it once did), the first-booted task could read the placeholder instead of the real
+        // value, exactly matching a reported "Cognito is active but not linked" symptom.
+        assertInstanceOf(software.amazon.awscdk.CustomResource.class,
+            ctx.cognitoClientSecretResourceInternal.get().orElse(null),
+            "FargateFactory must depend on the client secret SYNC completing, not just the "
+                + "Secret's existence, or the first ECS task can start before the real value lands");
+    }
 }
