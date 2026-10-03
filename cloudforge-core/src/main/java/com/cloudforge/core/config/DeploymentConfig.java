@@ -1195,7 +1195,7 @@ public class DeploymentConfig {
     public Boolean provisionManagerAccountCipherKey = true;
 
     /**
-     * A customer's LicenseSeat license key ({@code LS-XXXX-XXXX-XXXX-XXXX}), injected at deploy
+     * A customer's LicenseSeat license key ({@code CFC-XXXX-XXXX-XXXX-XXXX}), injected at deploy
      * time so an install activates immediately instead of requiring a follow-up visit to the
      * owner-only License settings screen after the stack comes up. When set, {@code
      * ApplicationFactory} provisions a dedicated Secrets Manager entry for it and {@code
@@ -1215,7 +1215,7 @@ public class DeploymentConfig {
      */
     @ConfigField(
         displayName = "License Key",
-        description = "LicenseSeat customer license key (LS-XXXX-XXXX-XXXX-XXXX) to activate this "
+        description = "LicenseSeat customer license key (CFC-XXXX-XXXX-XXXX-XXXX) to activate this "
             + "install with on first boot, delivered via a dedicated Secrets Manager entry",
         category = "database",
         visibleWhen = "applicationId == \"cloudforge-manager\"",
