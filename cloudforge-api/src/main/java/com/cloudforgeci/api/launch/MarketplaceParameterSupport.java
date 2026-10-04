@@ -95,7 +95,7 @@ final class MarketplaceParameterSupport {
         // are needed.
         CfnParameter licenseKey = CfnParameter.Builder.create(stack, "LicenseKey")
             .type("String")
-            .description("LicenseSeat license key (LS-XXXX-XXXX-XXXX-XXXX) from your AWS Marketplace "
+            .description("LicenseSeat license key (CFC-XXXX-XXXX-XXXX-XXXX) from your AWS Marketplace "
                 + "purchase. Optional at launch -- activate it later from Settings -> License if you "
                 + "don't have one yet.")
             .defaultValue("")
