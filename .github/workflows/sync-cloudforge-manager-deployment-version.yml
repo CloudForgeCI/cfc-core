@@ -42,9 +42,34 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      # This repo's root pom declares no repositories, so Maven only looks at Central for releases
+      # and the versions plugin never sees a newer deployment SNAPSHOT: without this the step
+      # reports "nothing to do" forever. Scoped to the one command that needs it, not a pom change,
+      # because the root pom is the parent every consumer inherits.
+      - name: Make Central's snapshots repository visible to the versions plugin
+        run: |
+          cat > "$RUNNER_TEMP/snapshot-settings.xml" <<'EOF'
+          <settings>
+            <profiles>
+              <profile>
+                <id>central-snapshots</id>
+                <repositories>
+                  <repository>
+                    <id>central-snapshots</id>
+                    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+                    <releases><enabled>false</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                  </repository>
+                </repositories>
+              </profile>
+            </profiles>
+            <activeProfiles><activeProfile>central-snapshots</activeProfile></activeProfiles>
+          </settings>
+          EOF
+
       - name: Update cloudforge-manager-deployment.version to its own latest SNAPSHOT
         run: >
-          mvn -B -q versions:update-property
+          mvn -B -q -s "$RUNNER_TEMP/snapshot-settings.xml" versions:update-property
           -Dproperty=cloudforge-manager-deployment.version
           -DallowSnapshots=true
           -DgenerateBackupPoms=false

@@ -213,6 +213,30 @@ jobs:
           mvn -q -B versions:set-property -Dproperty=cloudforge-manager-deployment.version \
             -DnewVersion="$RELEASE" -DgenerateBackupPoms=false
 
+      # Warning only, never a failure: the pin above is always a real release, but the deployment
+      # repo releases on every push to its develop, so its newest SNAPSHOT can be published while
+      # that release is still in flight (a pipeline run queued or not yet synced to Central). When
+      # that is the case this BOM pins the previous release, so say so in the run instead of
+      # leaving it to be noticed after publishing.
+      - name: Warn if a newer cloudforge-manager-deployment snapshot is ahead of the pinned release
+        run: |
+          PINNED=$(mvn -q -B help:evaluate -Dexpression=cloudforge-manager-deployment.version -DforceStdout)
+          LATEST_SNAPSHOT=$(curl -fsSL "https://central.sonatype.com/repository/maven-snapshots/com/cloudforgeci/cloudforge-manager-deployment/maven-metadata.xml" \
+            | grep -o '<version>[^<]*-SNAPSHOT</version>' | sed -E 's|</?version>||g' | sort -V | tail -1 || true)
+          if [ -z "$LATEST_SNAPSHOT" ]; then
+            echo "Could not read cloudforge-manager-deployment's snapshot metadata; skipping the freshness check."
+            exit 0
+          fi
+          STRIPPED="${LATEST_SNAPSHOT%-SNAPSHOT}"
+          if [ "$(printf '%s\n%s\n' "$PINNED" "$STRIPPED" | sort -V | tail -1)" != "$PINNED" ]; then
+            MSG="This release pins cloudforge-manager-deployment $PINNED, but $LATEST_SNAPSHOT is already published. Its release may still be in flight; check its last pipeline run and Central's metadata before relying on this BOM."
+            echo "::warning::$MSG"
+            echo "### Warning: deployment pin may be stale" >> "$GITHUB_STEP_SUMMARY"
+            echo "$MSG" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "cloudforge-manager-deployment pin $PINNED is current (latest snapshot $LATEST_SNAPSHOT)."
+          fi
+
       - name: Build, sign, and publish cfc-core + cloudforge-core + cloudforge-api
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
