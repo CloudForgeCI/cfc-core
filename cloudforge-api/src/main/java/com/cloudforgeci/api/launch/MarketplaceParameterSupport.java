@@ -3,7 +3,10 @@ package com.cloudforgeci.api.launch;
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.iam.ManagerOperatorIamSupport;
 import com.cloudforge.core.interfaces.ApplicationSpec;
+
+import software.amazon.awscdk.CfnCondition;
 import software.amazon.awscdk.CfnParameter;
+import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
 
@@ -84,20 +87,20 @@ final class MarketplaceParameterSupport {
 
         CfnParameter adminEmail = CfnParameter.Builder.create(stack, "AdminEmail")
             .type("String")
-            .description("Email address for the initial CloudForge Manager admin user, " + 
-            "Leaving empty requires X-CFC-TOKEN setup")
-            .allowedPattern(".+@.+")
-            .constraintDescription("Must be a valid email address")
+            .description("Email address for the initial CloudForge Manager admin user. Leaving empty requires X-CFC-TOKEN setup")
+            .defaultValue("")
+            .allowedPattern("^(.+@.+)?$") 
+            .constraintDescription("Must be a valid email address or left blank")
             .build();
 
         CfnParameter cognitoDomainPrefix = CfnParameter.Builder.create(stack, "CognitoDomainPrefix")
             .type("String")
             .description("Cognito Domain Prefix")
             .defaultValue("cloudforge-" + generateCognitoPrefixHash())
-            .constraintDescription("Must be a valid email address")
+            // .constraintDescription("Must be a valid email address") // Removed: This was copy-pasted and wrong for a domain prefix
             .build();
 
-        // No minLength(1), and defaultValue("") so CloudFormation doesn't treat this as a required
+            // No minLength(1), and defaultValue("") so CloudFormation doesn't treat this as a required
         // parameter either: a buyer may launch the stack before they have a key in hand and
         // activate licensing later from the Settings -> License page. ApplicationFactory's
         // LicenseKeySecret now guards the deploy-time-resolved value too (an Fn::If against a
@@ -113,16 +116,29 @@ final class MarketplaceParameterSupport {
             .noEcho(true)
             .build();
 
-        String authConfigured = adminEmail.getValueAsString() != null ? "application-oidc" : null;    
-        Boolean cognitoAutoProvision = authConfigured != null ? true : false;
+        CfnCondition isParamEmpty = CfnCondition.Builder.create(stack, "IsParamEmpty")
+            .expression(Fn.conditionEquals(adminEmail.getValueAsString(), ""))
+            .build();
 
+        // Dynamically resolve authMode at deploy-time
+        String authConfigured = Fn.conditionIf(
+            isParamEmpty.getLogicalId(),
+            "application-oidc",
+            ""               
+        ).toString();
+
+        Object cognitoAutoProvision = Fn.conditionIf(
+            isParamEmpty.getLogicalId(),
+            true,  
+            false  
+        );
 
         Map<String, Object> overridden = new HashMap<>(cfc.raw());
         overridden.put("cognitoInitialAdminEmail", adminEmail.getValueAsString());
         overridden.put("managerLicenseKey", licenseKey.getValueAsString());
         overridden.put("authMode", authConfigured);
         overridden.put("cognitoAutoProvision", cognitoAutoProvision);
-        overridden.put("cognitoDomainPrefeix", cognitoDomainPrefix.getValueAsString());
+        overridden.put("cognitoDomainPrefix", cognitoDomainPrefix.getValueAsString());
         // Defaults to true for this Marketplace listing only -- DeploymentConfig#managerDirectDeployEnabled
         // is REQUIRES_APPROVAL/EXPERIMENTAL and false elsewhere, since it grants Manager's task role
         // real CFN CreateStack/UpdateStack + Service Catalog ProvisionProduct permissions. A
