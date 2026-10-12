@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,31 +54,73 @@ class MarketplaceParameterSupportTest {
         return stack;
     }
 
-    @Test
-    void managerInMarketplaceModeGetsRealCfnParameters() {
-        Map<String, Object> cfcContext = new HashMap<>();
-        cfcContext.put("stackName", "ManagerMarketplaceParams");
-        Stack stack = stackWithContext("ManagerMarketplaceParams", cfcContext);
+    private static Map<String, Object> synth(Stack stack) {
+        return Template.fromStack(stack).toJSON();
+    }
 
-        MarketplaceParameterSupport.applyIfApplicable(
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parameters(Stack stack) {
+        Map<String, Object> params = (Map<String, Object>) synth(stack).get("Parameters");
+        return params == null ? Map.of() : params;
+    }
+
+    private static com.cloudforge.core.config.DeploymentConfig appliedConfig(
+            Stack stack, MarketplaceVariant variant) {
+        software.constructs.Construct scope = MarketplaceParameterSupport.applyIfApplicable(
             stack,
             com.cloudforgeci.api.core.DeploymentContext.from(stack),
             specWithId(ManagerOperatorIamSupport.APPLICATION_ID),
-            true);
-
-        Template template = Template.fromStack(stack);
-        Map<String, Object> json = template.toJSON();
+            variant);
         @SuppressWarnings("unchecked")
-        Map<String, Object> parameters = (Map<String, Object>) json.get("Parameters");
-        assertTrue(parameters != null && parameters.containsKey("AdminEmail"),
-            "expected an AdminEmail parameter, got: " + parameters);
-        assertTrue(parameters.containsKey("LicenseKey"),
-            "expected a LicenseKey parameter, got: " + parameters);
+        Map<String, Object> raw = (Map<String, Object>) scope.getNode().tryGetContext("cfc");
+        return com.cloudforge.core.config.DeploymentConfig.fromMap(raw);
+    }
 
+    @Test
+    void ssoVariantRequiresAdminEmailAndDomainPrefixAndProvisionsCognito() {
+        Stack stack = stackWithContext("ManagerMarketplaceSso", new HashMap<>(Map.of("stackName", "ManagerMarketplaceSso")));
+
+        var config = appliedConfig(stack, MarketplaceVariant.SSO);
+
+        assertEquals(com.cloudforge.core.enums.AuthMode.APPLICATION_OIDC, config.authMode);
+        assertTrue(Boolean.TRUE.equals(config.cognitoAutoProvision));
+
+        Map<String, Object> parameters = parameters(stack);
+        assertTrue(parameters.containsKey("AdminEmail"), "got: " + parameters.keySet());
+        assertTrue(parameters.containsKey("CognitoDomainPrefix"), "got: " + parameters.keySet());
+        assertTrue(parameters.containsKey("LicenseKey"), "got: " + parameters.keySet());
         @SuppressWarnings("unchecked")
-        Map<String, Object> licenseKeyProps = (Map<String, Object>) parameters.get("LicenseKey");
-        assertTrue(Boolean.TRUE.equals(licenseKeyProps.get("NoEcho")),
+        Map<String, Object> adminEmail = (Map<String, Object>) parameters.get("AdminEmail");
+        assertFalse(adminEmail.containsKey("Default"), "AdminEmail must be required (no default)");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> prefix = (Map<String, Object>) parameters.get("CognitoDomainPrefix");
+        assertFalse(prefix.containsKey("Default"), "CognitoDomainPrefix must be required (no default)");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> licenseKey = (Map<String, Object>) parameters.get("LicenseKey");
+        assertTrue(Boolean.TRUE.equals(licenseKey.get("NoEcho")),
             "LicenseKey must be NoEcho -- it's a sensitive value typed into the AWS Console");
+
+        String description = (String) synth(stack).get("Description");
+        assertTrue(description != null && description.contains("Cognito"), "description: " + description);
+        assertFalse(description.contains("X-CFC-TOKEN"), "SSO description must not carry token setup: " + description);
+    }
+
+    @Test
+    void tokenVariantHasNoCognitoParametersAndDescribesTokenSetup() {
+        Stack stack = stackWithContext("ManagerMarketplaceToken", new HashMap<>(Map.of("stackName", "ManagerMarketplaceToken")));
+
+        var config = appliedConfig(stack, MarketplaceVariant.TOKEN);
+
+        assertEquals(com.cloudforge.core.enums.AuthMode.NONE, config.authMode);
+        assertFalse(Boolean.TRUE.equals(config.cognitoAutoProvision));
+
+        Map<String, Object> parameters = parameters(stack);
+        assertFalse(parameters.containsKey("AdminEmail"), "got: " + parameters.keySet());
+        assertFalse(parameters.containsKey("CognitoDomainPrefix"), "got: " + parameters.keySet());
+        assertTrue(parameters.containsKey("LicenseKey"), "got: " + parameters.keySet());
+
+        String description = (String) synth(stack).get("Description");
+        assertTrue(description != null && description.contains("X-CFC-TOKEN"), "description: " + description);
     }
 
     @Test
@@ -90,7 +133,7 @@ class MarketplaceParameterSupportTest {
             stack,
             com.cloudforgeci.api.core.DeploymentContext.from(stack),
             specWithId(ManagerOperatorIamSupport.APPLICATION_ID),
-            false);
+            null);
 
         Template template = Template.fromStack(stack);
         Map<String, Object> json = template.toJSON();
@@ -112,7 +155,7 @@ class MarketplaceParameterSupportTest {
             stack,
             com.cloudforgeci.api.core.DeploymentContext.from(stack),
             specWithId("jenkins"),
-            true);
+            MarketplaceVariant.SSO);
 
         Template template = Template.fromStack(stack);
         Map<String, Object> json = template.toJSON();

@@ -3,6 +3,7 @@ package com.cloudforgeci.api.launch;
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.iam.ManagerOperatorIamSupport;
 import com.cloudforge.core.interfaces.ApplicationSpec;
+
 import software.amazon.awscdk.CfnParameter;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
@@ -61,35 +62,42 @@ import java.util.Map;
  */
 final class MarketplaceParameterSupport {
 
+    private static final String SSO_DESCRIPTION =
+        "CloudForge Manager with Cognito sign-in. Enter the administrator's email address and a "
+            + "unique Cognito domain prefix; Cognito emails that address a temporary password for "
+            + "the first login.";
+
+    private static final String TOKEN_DESCRIPTION =
+        "CloudForge Manager with setup-token sign-in (no Cognito). After launch, Manager writes a "
+            + "one-time setup token to its CloudWatch log at startup. Open the Manager URL from the "
+            + "stack Outputs and enter that token (X-CFC-TOKEN) in the setup wizard to create the "
+            + "first administrator.";
+
     private MarketplaceParameterSupport() {
     }
 
     /**
-     * Returns {@code stack} unchanged unless {@code marketplaceMode} is {@code true} and {@code
+     * Returns {@code stack} unchanged unless {@code variant} is non-null and {@code
      * applicationSpec} is CloudForge Manager -- every other application, and every non-Marketplace
-     * CloudForge Manager deployment, keeps sourcing these two values from CDK context exactly as
+     * CloudForge Manager deployment, keeps sourcing these values from CDK context exactly as
      * before, with the caller building the application directly under the stack as usual.
+     * {@link MarketplaceVariant#SSO} adds required {@code AdminEmail}/{@code CognitoDomainPrefix}
+     * parameters and provisions Cognito; {@link MarketplaceVariant#TOKEN} adds neither and
+     * disables auth, so the first administrator is created with Manager's one-time setup token.
      */
     static Construct applyIfApplicable(
-            Stack stack, DeploymentContext cfc, ApplicationSpec applicationSpec, boolean marketplaceMode) {
-        if (!marketplaceMode) {
+            Stack stack, DeploymentContext cfc, ApplicationSpec applicationSpec, MarketplaceVariant variant) {
+        if (variant == null) {
             return stack;
         }
         if (!ManagerOperatorIamSupport.APPLICATION_ID.equals(applicationSpec.applicationId())) {
             return stack;
         }
 
-        CfnParameter adminEmail = CfnParameter.Builder.create(stack, "AdminEmail")
-            .type("String")
-            .description("Email address for the initial CloudForge Manager admin user")
-            .allowedPattern(".+@.+")
-            .constraintDescription("Must be a valid email address")
-            .build();
-
         // No minLength(1), and defaultValue("") so CloudFormation doesn't treat this as a required
-        // parameter either: a buyer may launch the stack before they have a key in hand and
-        // activate licensing later from the Settings -> License page. ApplicationFactory's
-        // LicenseKeySecret now guards the deploy-time-resolved value too (an Fn::If against a
+        // parameter: a buyer may launch the stack before they have a key in hand and activate
+        // licensing later from the Settings -> License page. ApplicationFactory's
+        // LicenseKeySecret guards the deploy-time-resolved value too (an Fn::If against a
         // CfnCondition, not just the Java-side isBlank() check, which can't see an empty
         // CfnParameter token at synth time) -- see that block's own comment for why both guards
         // are needed.
@@ -103,8 +111,42 @@ final class MarketplaceParameterSupport {
             .build();
 
         Map<String, Object> overridden = new HashMap<>(cfc.raw());
-        overridden.put("cognitoInitialAdminEmail", adminEmail.getValueAsString());
         overridden.put("managerLicenseKey", licenseKey.getValueAsString());
+
+        if (variant == MarketplaceVariant.SSO) {
+            stack.getTemplateOptions().setDescription(SSO_DESCRIPTION);
+
+            CfnParameter adminEmail = CfnParameter.Builder.create(stack, "AdminEmail")
+                .type("String")
+                .description("Email address for the initial CloudForge Manager administrator. "
+                    + "Cognito emails a temporary password to this address.")
+                .minLength(3)
+                .allowedPattern("^.+@.+$")
+                .constraintDescription("Must be a valid email address")
+                .build();
+
+            CfnParameter cognitoDomainPrefix = CfnParameter.Builder.create(stack, "CognitoDomainPrefix")
+                .type("String")
+                .description("Globally unique prefix for the Cognito sign-in domain "
+                    + "(lowercase letters, numbers and hyphens).")
+                .minLength(1)
+                .maxLength(63)
+                .allowedPattern("^[a-z0-9][a-z0-9-]*$")
+                .constraintDescription("Must be lowercase letters, numbers and hyphens, "
+                    + "starting with a letter or number")
+                .build();
+
+            overridden.put("authMode", "application-oidc");
+            overridden.put("cognitoAutoProvision", true);
+            overridden.put("cognitoInitialAdminEmail", adminEmail.getValueAsString());
+            overridden.put("cognitoDomainPrefix", cognitoDomainPrefix.getValueAsString());
+        } else {
+            stack.getTemplateOptions().setDescription(TOKEN_DESCRIPTION);
+
+            overridden.put("authMode", "none");
+            overridden.put("cognitoAutoProvision", false);
+        }
+
         // Defaults to true for this Marketplace listing only -- DeploymentConfig#managerDirectDeployEnabled
         // is REQUIRES_APPROVAL/EXPERIMENTAL and false elsewhere, since it grants Manager's task role
         // real CFN CreateStack/UpdateStack + Service Catalog ProvisionProduct permissions. A

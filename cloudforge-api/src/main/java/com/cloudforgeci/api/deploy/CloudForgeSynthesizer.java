@@ -14,6 +14,7 @@ import com.cloudforgeci.api.core.rules.NagReportReader.ComplianceFinding;
 import com.cloudforgeci.api.deploy.aws.AwsDirectDeployer;
 import com.cloudforgeci.api.launch.ApplicationEc2Stack;
 import com.cloudforgeci.api.launch.ApplicationFargateStack;
+import com.cloudforgeci.api.launch.MarketplaceVariant;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
@@ -123,7 +124,7 @@ public final class CloudForgeSynthesizer {
      * @throws IOException when {@code app.synth()} fails, or the output directory can't be created
      */
     public static Result synthesize(DeploymentConfig config, Path outputDirectory) throws IOException {
-        return synthesize(config, outputDirectory, false);
+        return synthesize(config, outputDirectory, null);
     }
 
     /**
@@ -142,16 +143,27 @@ public final class CloudForgeSynthesizer {
      *     silently produce a template indistinguishable from {@link #synthesize}'s own output.
      */
     public static Result synthesizeForMarketplace(DeploymentConfig config, Path outputDirectory) throws IOException {
+        return synthesizeForMarketplace(config, outputDirectory, MarketplaceVariant.SSO);
+    }
+
+    /**
+     * Same as {@link #synthesizeForMarketplace(DeploymentConfig, Path)}, for an explicit {@link
+     * MarketplaceVariant}: {@code SSO} (Cognito, admin email and domain prefix required) or {@code
+     * TOKEN} (no Cognito, first administrator created with the one-time setup token).
+     */
+    public static Result synthesizeForMarketplace(
+            DeploymentConfig config, Path outputDirectory, MarketplaceVariant variant) throws IOException {
         Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(variant, "variant");
         if (!"cloudforge-manager".equals(config.applicationId)) {
             throw new IllegalArgumentException(
                 "synthesizeForMarketplace only applies to cloudforge-manager, got applicationId="
                     + config.applicationId);
         }
-        return synthesize(config, outputDirectory, true);
+        return synthesize(config, outputDirectory, variant);
     }
 
-    private static Result synthesize(DeploymentConfig config, Path outputDirectory, boolean marketplaceMode)
+    private static Result synthesize(DeploymentConfig config, Path outputDirectory, MarketplaceVariant marketplaceVariant)
             throws IOException {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(outputDirectory, "outputDirectory");
@@ -219,10 +231,10 @@ public final class CloudForgeSynthesizer {
             switch (config.runtime) {
                 case FARGATE -> new ApplicationFargateStack(
                     app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec,
-                    marketplaceMode);
+                    marketplaceVariant);
                 case EC2 -> new ApplicationEc2Stack(
                     app, config.stackName, props, config.securityProfile, iamProfile, applicationSpec,
-                    marketplaceMode);
+                    marketplaceVariant);
             }
 
             CloudAssembly assembly;
@@ -256,7 +268,7 @@ public final class CloudForgeSynthesizer {
             // CreateStack/CreateChangeSet call) -- the file itself must already be self-contained,
             // so the buyer's own (never-bootstrapped) account doesn't reject BootstrapVersion's
             // unresolvable SSM reference before creating a single resource.
-            if (marketplaceMode) {
+            if (marketplaceVariant != null) {
                 String rewritten = AwsDirectDeployer.resolveCdkBootstrapParameters(Files.readString(templateFile));
                 Files.writeString(templateFile, rewritten);
             }

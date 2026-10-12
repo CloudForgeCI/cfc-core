@@ -25,17 +25,17 @@ public class ApplicationFargateStack extends Stack {
     public ApplicationFargateStack(final Construct scope, final String id, final StackProps props,
                                    final SecurityProfile security, final IAMProfile iamProfile,
                                    final ApplicationSpec applicationSpec) {
-        this(scope, id, props, security, iamProfile, applicationSpec, false);
+        this(scope, id, props, security, iamProfile, applicationSpec, (MarketplaceVariant) null);
     }
 
     /**
      * Same as the six-arg constructor, with an explicit Marketplace-mode switch -- see {@link
      * com.cloudforgeci.api.deploy.CloudForgeSynthesizer#synthesizeForMarketplace}, the only
-     * intended caller with {@code marketplaceMode} true.
+     * intended caller with a non-null {@code marketplaceVariant}.
      */
     public ApplicationFargateStack(final Construct scope, final String id, final StackProps props,
                                    final SecurityProfile security, final IAMProfile iamProfile,
-                                   final ApplicationSpec applicationSpec, final boolean marketplaceMode) {
+                                   final ApplicationSpec applicationSpec, final MarketplaceVariant marketplaceVariant) {
         super(scope, id, props);
 
         if (applicationSpec == null) {
@@ -44,14 +44,14 @@ public class ApplicationFargateStack extends Stack {
         }
 
         DeploymentContext cfc = DeploymentContext.from(scope);
-        Construct appScope = MarketplaceParameterSupport.applyIfApplicable(this, cfc, applicationSpec, marketplaceMode);
+        Construct appScope = MarketplaceParameterSupport.applyIfApplicable(this, cfc, applicationSpec, marketplaceVariant);
         // Re-derive from appScope, not the pre-override `cfc` above: MarketplaceParameterSupport
         // sets its overridden "cfc" context on appScope, which @DeploymentContext-annotated
         // factory fields already pick up correctly by re-resolving from their own scope -- but
         // SystemContext.cfc (read directly via ctx.cfc.xxx(), e.g. ManagerOperatorIamSupport's
         // managerDirectDeployEnabled() check) is a single shared DeploymentContext instance, so it
         // must be built from the post-override scope too or it silently keeps seeing pre-override
-        // values. A no-op when marketplaceMode is false: applyIfApplicable then returns `this`
+        // values. A no-op when marketplaceVariant is null: applyIfApplicable then returns `this`
         // unchanged, so appScope == this == scope's effective context.
         cfc = DeploymentContext.from(appScope);
 

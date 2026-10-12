@@ -20,17 +20,17 @@ public class ApplicationEc2Stack extends Stack {
     public ApplicationEc2Stack(final Construct scope, final String id, final StackProps props,
                               final SecurityProfile security, final IAMProfile iamProfile,
                               final ApplicationSpec applicationSpec) {
-        this(scope, id, props, security, iamProfile, applicationSpec, false);
+        this(scope, id, props, security, iamProfile, applicationSpec, (MarketplaceVariant) null);
     }
 
     /**
      * Same as the six-arg constructor, with an explicit Marketplace-mode switch -- see {@link
      * com.cloudforgeci.api.deploy.CloudForgeSynthesizer#synthesizeForMarketplace}, the only
-     * intended caller with {@code marketplaceMode} true.
+     * intended caller with a non-null {@code marketplaceVariant}.
      */
     public ApplicationEc2Stack(final Construct scope, final String id, final StackProps props,
                               final SecurityProfile security, final IAMProfile iamProfile,
-                              final ApplicationSpec applicationSpec, final boolean marketplaceMode) {
+                              final ApplicationSpec applicationSpec, final MarketplaceVariant marketplaceVariant) {
         super(scope, id, props);
 
         if (applicationSpec == null) {
@@ -39,11 +39,11 @@ public class ApplicationEc2Stack extends Stack {
         }
 
         DeploymentContext cfc = DeploymentContext.from(scope);
-        Construct appScope = MarketplaceParameterSupport.applyIfApplicable(this, cfc, applicationSpec, marketplaceMode);
+        Construct appScope = MarketplaceParameterSupport.applyIfApplicable(this, cfc, applicationSpec, marketplaceVariant);
         // See ApplicationFargateStack's identical re-derivation for why this is required: ctx.cfc
         // (SystemContext's shared DeploymentContext, read directly by e.g. ManagerOperatorIamSupport's
         // managerDirectDeployEnabled() check) must be built from appScope's post-override context,
-        // not the pre-override `cfc` above. No-op when marketplaceMode is false.
+        // not the pre-override `cfc` above. No-op when marketplaceVariant is null.
         cfc = DeploymentContext.from(appScope);
 
         Tags.of(this).add("cloudforge:managed", "true");
