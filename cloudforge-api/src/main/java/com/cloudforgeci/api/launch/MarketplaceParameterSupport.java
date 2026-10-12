@@ -130,6 +130,7 @@ final class MarketplaceParameterSupport {
                 .description("Globally unique prefix for the Cognito sign-in domain "
                     + "(lowercase letters, numbers and hyphens).")
                 .minLength(1)
+                .maxLength(63)
                 .allowedPattern("^[a-z0-9][a-z0-9-]*$")
                 .constraintDescription("Must be lowercase letters, numbers and hyphens, "
                     + "starting with a letter or number")
