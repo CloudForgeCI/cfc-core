@@ -91,16 +91,22 @@ check_prerequisites() {
 run_full_validation() {
     echo -e "${PURPLE}🧪 Running comprehensive validation suite...${NC}"
     echo ""
-    
+
+    # Each step's status is captured explicitly and returned at the end. This function is called
+    # both bare (validate) and as `run_full_validation || validation_status=$?` (full); bash turns
+    # `set -e` off inside a function called on the left of `||`, so relying on errexit here meant a
+    # failing step passed in full mode while aborting in validate mode.
+    local status=0
+
     # Step 1: Generate truth table
     echo -e "${CYAN}📋 Step 1: Generating truth table and test matrix...${NC}"
     cd "$BASE_DIR"
-    python3 "$SCRIPT_DIR/truth-table-generator.py" "$VALIDATION_DIR"
+    python3 "$SCRIPT_DIR/truth-table-generator.py" "$VALIDATION_DIR" || status=$?
     echo ""
 
     # Step 2: Run comprehensive resource validation
     echo -e "${CYAN}🔍 Step 2: Running comprehensive resource validation...${NC}"
-    bash "$SCRIPT_DIR/comprehensive-resource-validator.sh"
+    bash "$SCRIPT_DIR/comprehensive-resource-validator.sh" || status=$?
     echo ""
     
     # Step 3: Move results to current directory for drift detection
@@ -113,7 +119,12 @@ run_full_validation() {
         echo "Moved validation results to current directory"
     fi
     
-    echo -e "${GREEN}✅ Comprehensive validation completed${NC}"
+    if [[ $status -eq 0 ]]; then
+        echo -e "${GREEN}✅ Comprehensive validation completed${NC}"
+    else
+        echo -e "${RED}❌ Comprehensive validation failed (exit $status)${NC}"
+    fi
+    return $status
 }
 
 # Function to detect and report drift
