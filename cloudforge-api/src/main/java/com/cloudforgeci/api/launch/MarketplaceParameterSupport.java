@@ -123,14 +123,14 @@ final class MarketplaceParameterSupport {
         // Dynamically resolve authMode at deploy-time
         String authConfigured = Fn.conditionIf(
             isParamEmpty.getLogicalId(),
-            "application-oidc",
-            ""               
+            "none",
+            "application-oidc"               
         ).toString();
 
         Object cognitoAutoProvision = Fn.conditionIf(
             isParamEmpty.getLogicalId(),
-            true,  
-            false  
+            false,  
+            true  
         );
 
         Map<String, Object> overridden = new HashMap<>(cfc.raw());
