@@ -7,8 +7,11 @@ import software.amazon.awscdk.CfnParameter;
 import software.amazon.awscdk.Stack;
 import software.constructs.Construct;
 
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * For an AWS Marketplace CloudFormation listing of CloudForge Manager (the only application this
@@ -81,8 +84,16 @@ final class MarketplaceParameterSupport {
 
         CfnParameter adminEmail = CfnParameter.Builder.create(stack, "AdminEmail")
             .type("String")
-            .description("Email address for the initial CloudForge Manager admin user")
+            .description("Email address for the initial CloudForge Manager admin user, " + 
+            "Leaving empty requires X-CFC-TOKEN setup")
             .allowedPattern(".+@.+")
+            .constraintDescription("Must be a valid email address")
+            .build();
+
+        CfnParameter cognitoDomainPrefix = CfnParameter.Builder.create(stack, "CognitoDomainPrefix")
+            .type("String")
+            .description("Cognito Domain Prefix")
+            .defaultValue("cloudforge-" + generateCognitoPrefixHash())
             .constraintDescription("Must be a valid email address")
             .build();
 
@@ -102,9 +113,16 @@ final class MarketplaceParameterSupport {
             .noEcho(true)
             .build();
 
+        String authConfigured = adminEmail.getValueAsString() != null ? "application-oidc" : null;    
+        Boolean cognitoAutoProvision = authConfigured != null ? true : false;
+
+
         Map<String, Object> overridden = new HashMap<>(cfc.raw());
         overridden.put("cognitoInitialAdminEmail", adminEmail.getValueAsString());
         overridden.put("managerLicenseKey", licenseKey.getValueAsString());
+        overridden.put("authMode", authConfigured);
+        overridden.put("cognitoAutoProvision", cognitoAutoProvision);
+        overridden.put("cognitoDomainPrefeix", cognitoDomainPrefix.getValueAsString());
         // Defaults to true for this Marketplace listing only -- DeploymentConfig#managerDirectDeployEnabled
         // is REQUIRES_APPROVAL/EXPERIMENTAL and false elsewhere, since it grants Manager's task role
         // real CFN CreateStack/UpdateStack + Service Catalog ProvisionProduct permissions. A
@@ -115,5 +133,15 @@ final class MarketplaceParameterSupport {
         Construct appScope = new Construct(stack, "App");
         appScope.getNode().setContext("cfc", overridden);
         return appScope;
+    }
+
+    private static String generateCognitoPrefixHash() {
+        SecureRandom random = new SecureRandom();
+        String pool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        
+        return IntStream.range(0, 5)
+                .map(i -> pool.charAt(random.nextInt(pool.length())))
+                .mapToObj(c -> String.valueOf((char) c))
+                .collect(Collectors.joining());
     }
 }
