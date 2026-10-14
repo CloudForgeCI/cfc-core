@@ -1,14 +1,19 @@
 package com.cloudforgeci.api.launch;
 
+import com.cloudforge.core.config.DeploymentConfig;
+import com.cloudforge.core.enums.AuthMode;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.UserDataBuilder;
+import com.cloudforge.core.manager.ManagerEnvKeys;
+import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.iam.ManagerOperatorIamSupport;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
+import software.constructs.Construct;
 
 import java.util.HashMap;
 import java.util.List;
@@ -64,16 +69,16 @@ class MarketplaceParameterSupportTest {
         return params == null ? Map.of() : params;
     }
 
-    private static com.cloudforge.core.config.DeploymentConfig appliedConfig(
+    private static DeploymentConfig appliedConfig(
             Stack stack, MarketplaceVariant variant) {
-        software.constructs.Construct scope = MarketplaceParameterSupport.applyIfApplicable(
+        Construct scope = MarketplaceParameterSupport.applyIfApplicable(
             stack,
-            com.cloudforgeci.api.core.DeploymentContext.from(stack),
+            DeploymentContext.from(stack),
             specWithId(ManagerOperatorIamSupport.APPLICATION_ID),
             variant);
         @SuppressWarnings("unchecked")
         Map<String, Object> raw = (Map<String, Object>) scope.getNode().tryGetContext("cfc");
-        return com.cloudforge.core.config.DeploymentConfig.fromMap(raw);
+        return DeploymentConfig.fromMap(raw);
     }
 
     @Test
@@ -82,8 +87,12 @@ class MarketplaceParameterSupportTest {
 
         var config = appliedConfig(stack, MarketplaceVariant.SSO);
 
-        assertEquals(com.cloudforge.core.enums.AuthMode.APPLICATION_OIDC, config.authMode);
+        assertEquals(AuthMode.APPLICATION_OIDC, config.authMode);
         assertTrue(Boolean.TRUE.equals(config.cognitoAutoProvision));
+        assertEquals(ManagerEnvKeys.DEFAULT_OIDC_ADMIN_GROUP, config.cognitoAdminGroupName,
+            "Cognito admin group must be the name Manager maps to its admin role");
+        assertEquals(ManagerEnvKeys.DEFAULT_OIDC_MANAGER_GROUP, config.cognitoUserGroupName,
+            "Cognito user group must be the name Manager maps to its manager role");
 
         Map<String, Object> parameters = parameters(stack);
         assertTrue(parameters.containsKey("AdminEmail"), "got: " + parameters.keySet());
@@ -111,8 +120,10 @@ class MarketplaceParameterSupportTest {
 
         var config = appliedConfig(stack, MarketplaceVariant.TOKEN);
 
-        assertEquals(com.cloudforge.core.enums.AuthMode.NONE, config.authMode);
+        assertEquals(AuthMode.NONE, config.authMode);
         assertFalse(Boolean.TRUE.equals(config.cognitoAutoProvision));
+        assertTrue(config.cognitoAdminGroupName == null && config.cognitoUserGroupName == null,
+            "token variant creates no Cognito groups, so it must not set group names");
 
         Map<String, Object> parameters = parameters(stack);
         assertFalse(parameters.containsKey("AdminEmail"), "got: " + parameters.keySet());
@@ -131,7 +142,7 @@ class MarketplaceParameterSupportTest {
 
         MarketplaceParameterSupport.applyIfApplicable(
             stack,
-            com.cloudforgeci.api.core.DeploymentContext.from(stack),
+            DeploymentContext.from(stack),
             specWithId(ManagerOperatorIamSupport.APPLICATION_ID),
             null);
 
@@ -153,7 +164,7 @@ class MarketplaceParameterSupportTest {
 
         MarketplaceParameterSupport.applyIfApplicable(
             stack,
-            com.cloudforgeci.api.core.DeploymentContext.from(stack),
+            DeploymentContext.from(stack),
             specWithId("jenkins"),
             MarketplaceVariant.SSO);
 

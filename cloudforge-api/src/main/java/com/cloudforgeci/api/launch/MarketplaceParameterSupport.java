@@ -3,6 +3,7 @@ package com.cloudforgeci.api.launch;
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.iam.ManagerOperatorIamSupport;
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.manager.ManagerEnvKeys;
 
 import software.amazon.awscdk.CfnParameter;
 import software.amazon.awscdk.Stack;
@@ -139,6 +140,8 @@ final class MarketplaceParameterSupport {
             overridden.put("authMode", "application-oidc");
             overridden.put("cognitoAutoProvision", true);
             overridden.put("cognitoInitialAdminEmail", adminEmail.getValueAsString());
+            overridden.put("cognitoAdminGroupName", ManagerEnvKeys.DEFAULT_OIDC_ADMIN_GROUP);
+            overridden.put("cognitoUserGroupName", ManagerEnvKeys.DEFAULT_OIDC_MANAGER_GROUP);
             overridden.put("cognitoDomainPrefix", cognitoDomainPrefix.getValueAsString());
         } else {
             stack.getTemplateOptions().setDescription(TOKEN_DESCRIPTION);
