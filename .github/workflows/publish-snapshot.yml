@@ -28,11 +28,8 @@ on:
   pull_request:
     branches: [ develop ] # snapshot as soon as a PR targeting develop is opened/updated
     types: [ opened, synchronize, reopened ]
-    paths:
-      - 'pom.xml'
-      - 'cloudforge-core/**'
-      - 'cloudforge-api/**'
-      - '.github/workflows/publish-snapshot.yml'
+    # No paths filter: "Build & test" is a required check on develop, and a required check from a
+    # path-filtered workflow never reports on a PR that doesn't match, leaving that PR unmergeable.
   push:
     branches: [ develop ] # release on every push to develop (normally a PR merge). No path
                            # filter on purpose: the safety gate below (root pom's <version> not
