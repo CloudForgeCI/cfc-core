@@ -92,6 +92,19 @@ jobs:
           brew install CloudForgeCI/tap/cloudforge-cli
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
+      # Fails here, with a clear message, when the installed launcher can't start. Without this a
+      # broken cloudforge-cli shows up as SYNTHESIS_FAILED on every configuration further down.
+      - name: Verify cloudforge-cli launches
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          OUT="$(cloudforge-cli 2>&1 || true)"
+          if ! grep -q "Usage:" <<< "$OUT"; then
+            echo "::error::The installed cloudforge-cli did not print its usage message. Output:"
+            echo "$OUT" | head -20
+            exit 1
+          fi
+          echo "cloudforge-cli launches"
+
       - name: Set up validation environment
         run: |
           echo "Setting up validation environment..."

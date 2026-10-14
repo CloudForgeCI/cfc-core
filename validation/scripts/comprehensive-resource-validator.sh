@@ -179,6 +179,15 @@ initialize_truth_table() {
                             if [[ "$subdomain_config" == "with-subdomain" && "$domain_config" == "no-domain" ]]; then
                                 expected="INVALID_COMBINATION"
                             fi
+
+                            # PRODUCTION enforces HIPAA and PCI-DSS (see create_deployment_context),
+                            # and both require the ALB's HTTP listener to redirect to HTTPS. With SSL
+                            # disabled there is nothing to redirect to, so the engine correctly refuses
+                            # to synthesize; the check is that it does refuse.
+                            if [[ "$security_profile" == "PRODUCTION" && "$ssl_config" == "ssl-disabled" \
+                                  && "$expected" != "INVALID_COMBINATION" ]]; then
+                                expected="COMPLIANCE_REJECTED"
+                            fi
                             
                             EXPECTED_RESOURCES[$key]="$expected"
                         done
@@ -311,6 +320,20 @@ create_deployment_context() {
 EOF
 }
 
+# Prints the first meaningful error line for a failed synthesis. cloudforge-cli reports its error as
+# JSON on stdout; stderr usually opens with an unrelated runtime banner (for example the jsii
+# warning about an untested Node version), so reading only its first line hides the real cause.
+first_error_line() {
+    local stdout_file=$1
+    local stderr_file=$2
+    local line
+    line=$(jq -r 'select(.status == "error") | .message' "$stdout_file" 2>/dev/null | head -1)
+    if [[ -z "$line" ]]; then
+        line=$(grep -v -E '^[[:space:]]*$|^!!|^INFO|^WARNING' "$stderr_file" 2>/dev/null | head -1)
+    fi
+    echo "${line:-no error output}"
+}
+
 # Function to synthesize and validate a configuration
 synthesize_and_validate() {
     local runtime=$1
@@ -352,17 +375,23 @@ synthesize_and_validate() {
             --outdir "$CDK_OUT_DIR" > "$synth_output" 2> "$synth_error"; then
         echo -e "  ${GREEN}Synthesis successful${NC}"
 
+        if [[ "$expected" == "COMPLIANCE_REJECTED" ]]; then
+            echo -e "  ${RED}ERROR: expected a compliance rejection but synthesis succeeded${NC}"
+            echo "$key: SYNTHESIS_FAILED - expected a compliance rejection (HTTPS redirection) but synthesis succeeded" >> "$DRIFT_REPORT_FILE"
         # Validate resources
-        if [ -f "$template_file" ]; then
+        elif [ -f "$template_file" ]; then
             validate_resources "$template_file" "$expected" "$key"
         else
             echo -e "  ${RED}ERROR: Template file not found${NC}"
             echo "$key: SYNTHESIS_FAILED - Template not generated" >> "$DRIFT_REPORT_FILE"
         fi
 
+    elif [[ "$expected" == "COMPLIANCE_REJECTED" ]] && grep -q "Compliance check failed" "$synth_output" "$synth_error" 2>/dev/null; then
+        echo -e "  ${GREEN}Rejected by compliance enforcement, as expected${NC}"
+        echo "$key: VALIDATION_PASSED - rejected by compliance enforcement as expected" >> "$DRIFT_REPORT_FILE"
     else
         echo -e "  ${RED}ERROR: Synthesis failed${NC}"
-        echo "$key: SYNTHESIS_FAILED - $(head -1 $synth_error)" >> "$DRIFT_REPORT_FILE"
+        echo "$key: SYNTHESIS_FAILED - $(first_error_line "$synth_output" "$synth_error")" >> "$DRIFT_REPORT_FILE"
     fi
     
     echo ""
