@@ -161,7 +161,15 @@ jobs:
           gh pr create --base develop --head "$BRANCH" \
             --title "chore: bump develop to ${{ steps.versions.outputs.next_develop }}" \
             --body "Version bump following the v${{ steps.versions.outputs.release_version }} cut. Opened by cut-release.yml."
-          gh pr merge "$BRANCH" --squash --auto --delete-branch
+          # Merged immediately, not with --auto. A PR opened with the workflow token does not trigger
+          # other workflows, so develop's required checks never report on it and auto-merge would wait
+          # forever. The GitHub Actions app is a bypass actor on develop's ruleset, which is what lets
+          # this merge go through. Fails loudly: the cut itself is already done, but a bump PR left open
+          # would leave develop on the released version.
+          if ! gh pr merge "$BRANCH" --squash --delete-branch; then
+            echo "::error::Opened the bump PR from $BRANCH but could not merge it. Merge it by hand so develop moves to ${{ steps.versions.outputs.next_develop }}."
+            exit 1
+          fi
 
       # Same GITHUB_TOKEN limitation as above, plus this commit carries no [skip ci] on purpose
       # now: develop's newly-bumped -SNAPSHOT version needs an actual Central publish so
