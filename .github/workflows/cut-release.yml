@@ -44,6 +44,7 @@ on:
 permissions:
   contents: write
   actions: write # to dispatch publish-release-branch.yml / publish-snapshot.yml below
+  pull-requests: write # to open the develop version-bump PR below
 
 jobs:
   cut-release:
