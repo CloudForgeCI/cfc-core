@@ -12,13 +12,9 @@ on:
       - '.github/workflows/cfc-validation.yml'
   pull_request:
     branches: [ develop ]
-    paths:
-      - 'cloudforge-core/**'
-      - 'cloudforge-api/**'
-      - 'validation/**'
-      - 'pom.xml'
-      - '**/pom.xml'
-      - '.github/workflows/cfc-validation.yml'
+    # No paths filter: "CFC Configuration Validation" is a required check on develop, and a required
+    # check from a path-filtered workflow never reports on a PR that does not match, which would leave
+    # that PR unmergeable.
   workflow_dispatch:
     inputs:
       validation_mode:
