@@ -2,6 +2,7 @@ package com.cloudforgeci.api.database;
 
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.DatabaseEngineCatalog;
+import com.cloudforge.core.interfaces.InstanceCatalog;
 import com.cloudforgeci.api.application.cms.WordPressApplicationSpec;
 import com.cloudforgeci.api.compute.ApplicationFactory;
 import com.cloudforgeci.api.core.DeploymentContext;
@@ -12,6 +13,7 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.assertions.Template;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -116,5 +118,30 @@ class RdsFactoryOverrideTest {
         for (String version : DatabaseEngineCatalog.versions("mariadb")) {
             assertEquals(version, RdsFactory.mapMariaDbVersion(version).getMariaDbMajorVersion(), "mariadb " + version);
         }
+    }
+
+    /** A full version a deployment context may carry keeps its own value and takes its major from the leading segments. */
+    @Test
+    void fullVersionsKeepTheirValueAndTheCatalogMajor() {
+        assertEquals("15.4", RdsFactory.mapPostgresVersion("15.4").getPostgresFullVersion());
+        assertEquals("15", RdsFactory.mapPostgresVersion("15.4").getPostgresMajorVersion());
+        assertEquals("8.0.40", RdsFactory.mapMySqlVersion("8.0.40").getMysqlFullVersion());
+        assertEquals("8.0", RdsFactory.mapMySqlVersion("8.0.40").getMysqlMajorVersion());
+        assertEquals("10.11.6", RdsFactory.mapMariaDbVersion("10.11.6").getMariaDbFullVersion());
+        assertEquals("10.11", RdsFactory.mapMariaDbVersion("10.11.6").getMariaDbMajorVersion());
+    }
+
+    /** Every instance class the catalog offers must become that same class, never a different family. */
+    @Test
+    void everyCatalogInstanceClassParsesToItself() {
+        for (String instanceClass : InstanceCatalog.databaseInstanceClasses()) {
+            assertEquals(instanceClass.substring("db.".length()),
+                RdsFactory.parseInstanceType(instanceClass).toString(), instanceClass);
+        }
+    }
+
+    @Test
+    void anUnknownInstanceFamilyIsRejectedInsteadOfBecomingT3() {
+        assertThrows(IllegalArgumentException.class, () -> RdsFactory.parseInstanceType("db.x9.large"));
     }
 }
