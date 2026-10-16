@@ -552,6 +552,39 @@ public final class OperatorProvisioningPermissionMatrix {
         )
     );
 
+    /**
+     * The EC2 permissions for {@link com.cloudforgeci.api.compute.Ec2Factory}'s {@code AutoScalingGroup}
+     * and the launch template CDK synthesizes behind it; {@link #SCALING_PERMISSIONS} covers the Auto
+     * Scaling API. CloudFormation evaluates these with the deploying principal's credentials:
+     * <ul>
+     *   <li>{@code ec2:DescribeImages}: the AMI is an {@code AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>}
+     *       template parameter, which CloudFormation validates with {@code DescribeImages} before the
+     *       stack starts. Reading the parameter itself is the {@code CloudForgeManagerDeployAmiParameter}
+     *       statement.</li>
+     *   <li>{@code ec2:RunInstances} and the launch template actions: {@code CreateAutoScalingGroup}
+     *       validates the launch template against the caller's EC2 permissions.</li>
+     * </ul>
+     * Kept in the network half of the split (see {@link #getNetworkPermissions}) because the
+     * compute-and-data half is near its 6,144-byte managed policy limit.
+     */
+    public static final Map<IAMProfile, List<String>> EC2_COMPUTE_PERMISSIONS = Map.of(
+        IAMProfile.MINIMAL, List.of(
+            "ec2:DescribeImages",
+            "ec2:DescribeInstances",
+            "ec2:DescribeInstanceTypes",
+            "ec2:DescribeLaunchTemplates",
+            "ec2:DescribeLaunchTemplateVersions"
+        ),
+        IAMProfile.STANDARD, List.of(
+            "ec2:CreateLaunchTemplate",
+            "ec2:CreateLaunchTemplateVersion",
+            "ec2:ModifyLaunchTemplate",
+            "ec2:DeleteLaunchTemplate",
+            "ec2:DeleteLaunchTemplateVersions",
+            "ec2:RunInstances"
+        )
+    );
+
     /** {@link com.cloudforgeci.api.security.CognitoAuthenticationFactory}/{@link
      *  com.cloudforgeci.api.security.CognitoSamlFactory}'s {@code UserPool}/{@code
      *  UserPoolClient}/{@code UserPoolDomain} L2 constructs (application-oidc's own identity
@@ -635,6 +668,11 @@ public final class OperatorProvisioningPermissionMatrix {
         IAMProfile.STANDARD, List.of(
             "backup:CreateBackupVault",
             "backup:DeleteBackupVault",
+            // Creating a vault mounts its storage capsule. The KMS grants a vault also needs to
+            // use its encryption key are in ManagerOperatorIamSupport#deployStatements, conditioned
+            // to AWS Backup, rather than here, where they would apply to every key.
+            "backup-storage:MountCapsule",
+            "backup:PutBackupVaultLockConfiguration",
             "backup:PutBackupVaultAccessPolicy",
             "backup:CreateBackupPlan",
             "backup:DeleteBackupPlan",
@@ -663,6 +701,7 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(ROUTE53_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(CLOUDFRONT_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(S3_APP_BUCKET_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(EC2_COMPUTE_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(ECS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(LOGS_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(DATABASE_PERMISSIONS.get(IAMProfile.MINIMAL));
@@ -684,6 +723,7 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(ROUTE53_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(CLOUDFRONT_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(S3_APP_BUCKET_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(EC2_COMPUTE_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(ECS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(LOGS_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(DATABASE_PERMISSIONS.get(IAMProfile.STANDARD));
@@ -719,6 +759,7 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(ROUTE53_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(CLOUDFRONT_PERMISSIONS.get(IAMProfile.MINIMAL));
         actions.addAll(S3_APP_BUCKET_PERMISSIONS.get(IAMProfile.MINIMAL));
+        actions.addAll(EC2_COMPUTE_PERMISSIONS.get(IAMProfile.MINIMAL));
         if (tier == IAMProfile.MINIMAL) {
             return List.copyOf(actions);
         }
@@ -730,6 +771,7 @@ public final class OperatorProvisioningPermissionMatrix {
         actions.addAll(ROUTE53_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(CLOUDFRONT_PERMISSIONS.get(IAMProfile.STANDARD));
         actions.addAll(S3_APP_BUCKET_PERMISSIONS.get(IAMProfile.STANDARD));
+        actions.addAll(EC2_COMPUTE_PERMISSIONS.get(IAMProfile.STANDARD));
         if (tier == IAMProfile.STANDARD) {
             return List.copyOf(actions);
         }

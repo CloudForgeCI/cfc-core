@@ -19,6 +19,7 @@ import software.amazon.awscdk.services.auditmanager.CfnAssessment;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.cloudtrail.CfnTrail;
 import software.amazon.awscdk.services.config.*;
+import software.amazon.awscdk.services.iam.CfnRole;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
@@ -578,6 +579,7 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         Trail trail = trailBuilder.build();
+        nameTrailLogsRole(trail);
 
         // Store trail for later configuration
         this.trail = trail;
@@ -5216,4 +5218,26 @@ public class ComplianceFactory extends BaseFactory {
         );
     }
 
+
+    /** Suffix of the explicit name given to the trail's CloudWatch Logs delivery role, so the
+     *  CloudForge Manager deploy role can match it by name. See {@link #nameTrailLogsRole}. */
+    private static final String TRAIL_LOGS_ROLE_SUFFIX = "-CfcCloudTrailLogs";
+
+    /**
+     * {@code Trail} creates its CloudWatch Logs delivery role itself and has no property to name
+     * it, so the role is left with a CloudFormation-generated name that truncates to a generic
+     * tail. Manager's deploy role can only create and delete roles it can match by name, so the
+     * role is given an explicit one, the same way {@code FlowLogFactory}, {@code RdsFactory} and
+     * {@code BackupFactory} name theirs. IAM role names are limited to 64 characters.
+     */
+    private void nameTrailLogsRole(Trail trail) {
+        if (trail.getNode().tryFindChild("LogsRole") instanceof Role logsRole
+                && logsRole.getNode().getDefaultChild() instanceof CfnRole cfnRole) {
+            int maxPrefixLength = 64 - TRAIL_LOGS_ROLE_SUFFIX.length();
+            String prefix = stackName.length() > maxPrefixLength
+                ? stackName.substring(0, maxPrefixLength)
+                : stackName;
+            cfnRole.setRoleName(prefix + TRAIL_LOGS_ROLE_SUFFIX);
+        }
+    }
 }

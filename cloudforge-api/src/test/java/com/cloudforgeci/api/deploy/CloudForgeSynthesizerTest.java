@@ -83,6 +83,34 @@ class CloudForgeSynthesizerTest {
     }
 
     /**
+     * The trail's CloudWatch Logs delivery role is created by the {@code Trail} construct itself,
+     * with a CloudFormation-generated name that truncates to a generic tail. Manager's deploy role
+     * matches the roles it may create by name, so this one needs the explicit, suffixed name, or
+     * a stack with CloudTrail fails to create it ({@code iam:CreateRole} denied) and cannot delete
+     * it on rollback.
+     */
+    @Test
+    void cloudTrailLogsRoleHasAnExplicitNameTheDeployRoleCanMatch() throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestTrailRole");
+        config.securityProfile = SecurityProfile.STAGING;
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        JsonNode resources = MAPPER.readTree(result.templateFile().toFile()).path("Resources");
+        String roleName = null;
+        for (var entry : resources.properties()) {
+            if ("AWS::IAM::Role".equals(entry.getValue().path("Type").asText())
+                    && entry.getKey().contains("CloudTrailLogsRole")) {
+                roleName = entry.getValue().path("Properties").path("RoleName").asText(null);
+            }
+        }
+        assertNotNull(roleName, "expected the CloudTrail logs role to carry an explicit RoleName");
+        assertTrue(roleName.endsWith("-CfcCloudTrailLogs"), roleName);
+        assertTrue(roleName.length() <= 64, "IAM role names are limited to 64 characters: " + roleName);
+    }
+
+    /**
      * With HTTPS and no domain, the ALB's certificate comes from a stack-owned Private CA. ACM can
      * only issue from a CA that grants it permission; without {@code AWS::ACMPCA::Permission} the
      * certificate sits in PENDING_VALIDATION and the stack never finishes creating.
