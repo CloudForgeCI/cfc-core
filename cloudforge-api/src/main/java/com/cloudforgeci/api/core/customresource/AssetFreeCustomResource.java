@@ -6,6 +6,7 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.CfnFunction;
 import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Permission;
 import software.amazon.awscdk.services.lambda.Runtime;
@@ -38,6 +39,9 @@ public final class AssetFreeCustomResource {
 
     private AssetFreeCustomResource() {
     }
+
+    /** Metadata key on each function this class creates; the compliance guards use it to skip them. */
+    public static final String METADATA_KEY = "CloudForgeAssetFreeCustomResource";
 
     /**
      * The shared CloudFormation custom-resource response protocol, implementing the raw PUT-to-
@@ -167,6 +171,9 @@ public final class AssetFreeCustomResource {
                 .code(Code.fromInline(RESPONSE_PROTOCOL_JS + handlerBody))
                 .timeout(timeout)
                 .build();
+
+        // Lets the compliance guards tell this deploy-time helper from an application's own Lambda.
+        ((CfnFunction) fn.getNode().getDefaultChild()).addMetadata(METADATA_KEY, true);
 
         for (PolicyStatement statement : policyStatements) {
             fn.addToRolePolicy(statement);

@@ -184,4 +184,44 @@ public class AssetFreeCustomResourceDependencyTest {
         List<Object> getAtt = (List<Object>) intrinsic.get("Fn::GetAtt");
         return (String) getAtt.get(0);
     }
+
+    /**
+     * The cfn-guard Lambda rules skip functions carrying {@link AssetFreeCustomResource#METADATA_KEY}.
+     * Every function an {@code AssetFreeCustomResource} backs must carry it, or the SOC2, HIPAA and
+     * PCI-DSS templates fail the Lambda rules for a function that only runs during stack operations.
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void everyAssetFreeCustomResourceFunctionCarriesTheGuardExclusionMetadata() throws Exception {
+        Map<String, Object> context = new HashMap<>();
+        context.put("awsConfigEnabled", true);
+        context.put("createConfigInfrastructure", true);
+
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+            "AssetFreeCustomResourceMetadataTestStack", SecurityProfile.PRODUCTION,
+            RuntimeType.FARGATE, context);
+        builder.createMinimalInfrastructure().createCompliance();
+
+        Map<String, Object> json = (Map<String, Object>) Template.fromStack(builder.getStack()).toJSON();
+        Map<String, Object> resources = (Map<String, Object>) json.get("Resources");
+
+        int checked = 0;
+        for (Object value : resources.values()) {
+            Map<String, Object> resource = (Map<String, Object>) value;
+            if (!"AWS::CloudFormation::CustomResource".equals(resource.get("Type"))) {
+                continue;
+            }
+            Map<String, Object> properties = (Map<String, Object>) resource.get("Properties");
+            String functionId = functionLogicalId(properties.get("ServiceToken"));
+            Map<String, Object> function = (Map<String, Object>) resources.get(functionId);
+            if (function == null || !"AWS::Lambda::Function".equals(function.get("Type"))) {
+                continue;
+            }
+            checked++;
+            Map<String, Object> metadata = (Map<String, Object>) function.getOrDefault("Metadata", Map.of());
+            assertTrue(Boolean.TRUE.equals(metadata.get(AssetFreeCustomResource.METADATA_KEY)),
+                functionId + " backs a custom resource and must carry " + AssetFreeCustomResource.METADATA_KEY);
+        }
+        assertTrue(checked >= 4, "Expected several custom resource functions in a Config-enabled stack, found " + checked);
+    }
 }
