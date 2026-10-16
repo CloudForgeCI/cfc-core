@@ -7,6 +7,9 @@ import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -15,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,6 +80,50 @@ class CloudForgeSynthesizerTest {
         String applicationUrl = outputs.path("ApplicationUrl").path("Value").asText();
         assertEquals("https://jenkins.example.com", applicationUrl,
             "expected the configured domain, not the ALB DNS name, got outputs: " + outputs);
+    }
+
+    /**
+     * With HTTPS and no domain, the ALB's certificate comes from a stack-owned Private CA. ACM can
+     * only issue from a CA that grants it permission; without {@code AWS::ACMPCA::Permission} the
+     * certificate sits in PENDING_VALIDATION and the stack never finishes creating.
+     */
+    @Test
+    void privateCaCertificateWaitsForAnAcmPermissionOnTheCa() throws IOException {
+        for (RuntimeType runtime : new RuntimeType[] {RuntimeType.FARGATE, RuntimeType.EC2}) {
+            DeploymentConfig config = jenkinsFargateConfig("SynthTestPrivateCa" + runtime);
+            config.runtime = runtime;
+            config.enableSsl = true;
+
+            CloudForgeSynthesizer.Result result = CloudForgeSynthesizer.synthesize(
+                config, tempDir.resolve("cdk-" + runtime));
+
+            JsonNode resources = MAPPER.readTree(result.templateFile().toFile()).path("Resources");
+            String permissionId = null;
+            JsonNode certificate = null;
+            for (var entry : resources.properties()) {
+                String type = entry.getValue().path("Type").asText();
+                if ("AWS::ACMPCA::Permission".equals(type)) {
+                    permissionId = entry.getKey();
+                    JsonNode props = entry.getValue().path("Properties");
+                    assertEquals("acm.amazonaws.com", props.path("Principal").asText(), runtime.toString());
+                    Set<String> actions = new HashSet<>();
+                    props.path("Actions").forEach(a -> actions.add(a.asText()));
+                    assertEquals(Set.of("IssueCertificate", "GetCertificate", "ListPermissions"),
+                        actions, runtime.toString());
+                } else if ("AWS::CertificateManager::Certificate".equals(type)
+                        && entry.getValue().path("Properties").has("CertificateAuthorityArn")) {
+                    certificate = entry.getValue();
+                }
+            }
+            assertNotNull(permissionId, runtime + ": expected an AWS::ACMPCA::Permission, got " + resources.properties().stream().map(Map.Entry::getKey).toList());
+            assertNotNull(certificate, runtime + ": expected a Private CA certificate");
+            boolean dependsOnPermission = false;
+            for (JsonNode dep : certificate.path("DependsOn")) {
+                dependsOnPermission |= permissionId.equals(dep.asText());
+            }
+            assertTrue(dependsOnPermission,
+                runtime + ": certificate must depend on " + permissionId + ", got " + certificate.path("DependsOn"));
+        }
     }
 
     private DeploymentConfig wordpressFargateConfig(String stackName) {
