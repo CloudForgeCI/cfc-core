@@ -1,6 +1,13 @@
 package com.cloudforge.core.config;
 
+import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.DatabaseSpec;
+import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseOption;
+import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
+import java.lang.reflect.InvocationHandler;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Proxy;
 
 import java.util.List;
 import java.util.Set;
@@ -232,5 +239,68 @@ class ConfigurationIntrospectorTest {
             assertEquals(field.fieldName(), field.field().getName(),
                 "Field reference name should match fieldName");
         }
+    }
+
+    /** An application that is also a DatabaseSpec; interface defaults run, everything else is zero. */
+    private static ApplicationSpec databaseApplication(DatabaseRequirement requirement, List<DatabaseOption> supported) {
+        return (ApplicationSpec) Proxy.newProxyInstance(
+            ConfigurationIntrospectorTest.class.getClassLoader(),
+            new Class<?>[] {ApplicationSpec.class, DatabaseSpec.class},
+            (proxy, method, args) -> {
+                if (method.getName().equals("databaseRequirement")) {
+                    return requirement;
+                }
+                if (method.getName().equals("supportedDatabases") && supported != null) {
+                    return supported;
+                }
+                if (method.isDefault()) {
+                    return InvocationHandler.invokeDefault(proxy, method, args);
+                }
+                Class<?> type = method.getReturnType();
+                return type == boolean.class ? Boolean.FALSE : type == int.class ? Integer.valueOf(0) : null;
+            });
+    }
+
+    private static ConfigFieldInfo field(String name) {
+        return ConfigurationIntrospector.discoverFields(null).stream()
+            .filter(field -> field.fieldName().equals(name))
+            .findFirst().orElseThrow();
+    }
+
+    @Test
+    void allowedValuesOffersTheApplicationsEngineAndItsVersionsFromTheMinimum() {
+        ApplicationSpec spec = databaseApplication(DatabaseRequirement.required("postgres", "16"), null);
+
+        assertArrayEquals(new String[] {"postgres"},
+            ConfigurationIntrospector.allowedValues(field("databaseEngine"), spec, new DeploymentConfig()));
+        assertArrayEquals(new String[] {"16", "17", "18"},
+            ConfigurationIntrospector.allowedValues(field("databaseVersion"), spec, new DeploymentConfig()));
+    }
+
+    @Test
+    void allowedValuesScopesVersionsToTheEngineChosenSoFar() {
+        ApplicationSpec spec = databaseApplication(DatabaseRequirement.required("postgres", "15"), List.of(
+            new DatabaseOption("postgres", "15", true),
+            new DatabaseOption("mysql", "8.0", true),
+            new DatabaseOption("mysql", "8.4", false)));
+        DeploymentConfig config = new DeploymentConfig();
+        config.databaseEngine = "mysql";
+
+        assertArrayEquals(new String[] {"postgres", "mysql"},
+            ConfigurationIntrospector.allowedValues(field("databaseEngine"), spec, config));
+        assertArrayEquals(new String[] {"8.0", "8.4"},
+            ConfigurationIntrospector.allowedValues(field("databaseVersion"), spec, config));
+    }
+
+    @Test
+    void allowedValuesLeavesOtherFieldsAndNonDatabaseApplicationsAlone() {
+        ConfigFieldInfo instanceType = field("instanceType");
+        assertArrayEquals(instanceType.allowedValues(),
+            ConfigurationIntrospector.allowedValues(instanceType, null, new DeploymentConfig()));
+
+        ConfigFieldInfo engine = field("databaseEngine");
+        ApplicationSpec noDatabase = databaseApplication(DatabaseRequirement.none(), null);
+        assertArrayEquals(engine.allowedValues(),
+            ConfigurationIntrospector.allowedValues(engine, noDatabase, new DeploymentConfig()));
     }
 }

@@ -2,6 +2,7 @@ package com.cloudforge.core.config;
 
 import com.cloudforge.core.annotation.ConfigField;
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.DatabaseSpec;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -42,6 +43,40 @@ public class ConfigurationIntrospector {
      */
     public static List<ConfigFieldInfo> discoverFields(ApplicationSpec appSpec) {
         return discoverFields(appSpec, null);
+    }
+
+    /**
+     * The values a form or prompt should offer for a field. Most fields offer their own
+     * {@code allowedValues}. The database fields offer what the selected application supports:
+     * {@code databaseEngine} lists its engines, and {@code databaseVersion} lists the versions of
+     * the engine chosen in {@code config}, or of the application's own engine when none is chosen.
+     * The Manager and the CLI both read this, so an application's {@link DatabaseSpec#supportedDatabases()}
+     * shows up in each without further changes.
+     *
+     * @param field the field being offered
+     * @param appSpec the selected application, may be null
+     * @param config the configuration chosen so far, may be null
+     * @return the offered values, empty when the field accepts free input
+     */
+    public static String[] allowedValues(ConfigFieldInfo field, ApplicationSpec appSpec, Object config) {
+        boolean engine = "databaseEngine".equals(field.fieldName());
+        boolean version = "databaseVersion".equals(field.fieldName());
+        if ((engine || version) && appSpec instanceof DatabaseSpec databaseSpec
+                && databaseSpec.databaseRequirement() != null
+                && databaseSpec.databaseRequirement().type() != DatabaseSpec.DatabaseRequirement.RequirementType.NONE) {
+            List<DatabaseSpec.DatabaseOption> supported = databaseSpec.supportedDatabases();
+            if (engine) {
+                return supported.stream().map(DatabaseSpec.DatabaseOption::engine).distinct().toArray(String[]::new);
+            }
+            String chosen = config instanceof DeploymentConfig deployment && deployment.databaseEngine != null
+                ? deployment.databaseEngine
+                : databaseSpec.databaseRequirement().engine();
+            return supported.stream()
+                .filter(option -> option.engine().equalsIgnoreCase(chosen))
+                .map(DatabaseSpec.DatabaseOption::version)
+                .toArray(String[]::new);
+        }
+        return field.allowedValues();
     }
 
     /**
