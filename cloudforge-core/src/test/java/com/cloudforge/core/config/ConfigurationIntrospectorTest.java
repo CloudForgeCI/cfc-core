@@ -242,7 +242,7 @@ class ConfigurationIntrospectorTest {
     }
 
     /** An application that is also a DatabaseSpec; interface defaults run, everything else is zero. */
-    private static ApplicationSpec databaseApplication(DatabaseRequirement requirement, List<DatabaseOption> supported) {
+    static ApplicationSpec databaseApplication(DatabaseRequirement requirement, List<DatabaseOption> supported) {
         return (ApplicationSpec) Proxy.newProxyInstance(
             ConfigurationIntrospectorTest.class.getClassLoader(),
             new Class<?>[] {ApplicationSpec.class, DatabaseSpec.class},

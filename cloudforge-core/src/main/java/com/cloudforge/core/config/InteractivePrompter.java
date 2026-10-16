@@ -87,8 +87,9 @@ public class InteractivePrompter {
 
         Class<?> type = field.type();
 
-        if (field.allowedValues().length > 0) {
-            promptChoice(field, config);
+        String[] offered = ConfigurationIntrospector.allowedValues(field, appSpec, config);
+        if (offered.length > 0) {
+            promptChoice(field, config, offered);
         } else if (type == boolean.class || type == Boolean.class) {
             promptYesNo(field, config);
         } else if (isNumericType(type)) {
@@ -103,8 +104,7 @@ public class InteractivePrompter {
     /**
      * Prompts for a choice from allowed values.
      */
-    private void promptChoice(ConfigFieldInfo field, Object config) {
-        String[] choices = field.allowedValues();
+    private void promptChoice(ConfigFieldInfo field, Object config, String[] choices) {
         Object currentValue = field.getValue(config);
         String defaultValue = currentValue != null ? currentValue.toString() : "";
 

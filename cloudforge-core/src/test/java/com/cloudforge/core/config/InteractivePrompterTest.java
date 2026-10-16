@@ -1,6 +1,9 @@
 package com.cloudforge.core.config;
 
 import com.cloudforge.core.enums.AuthMode;
+import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseOption;
+import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -63,5 +66,27 @@ class InteractivePrompterTest {
 
         assertDoesNotThrow(() -> promptStringList.invoke(prompter, protectedPathsField(config), config));
         assertEquals(null, config.protectedPaths);
+    }
+
+    @Test
+    void databaseChoicesComeFromTheSelectedApplication() throws Exception {
+        ApplicationSpec spec = ConfigurationIntrospectorTest.databaseApplication(
+            DatabaseRequirement.optional("mysql", "8.0"),
+            List.of(new DatabaseOption("mysql", "8.0", true), new DatabaseOption("mariadb", "10.11", false)));
+        DeploymentConfig config = new DeploymentConfig();
+        config.provisionDatabase = true;
+        InteractivePrompter prompter = new InteractivePrompter(
+            new ByteArrayInputStream("2\n".getBytes(StandardCharsets.UTF_8)),
+            new PrintStream(new ByteArrayOutputStream()));
+        ConfigFieldInfo engine = ConfigurationIntrospector.discoverFields(spec).stream()
+            .filter(f -> f.fieldName().equals("databaseEngine"))
+            .findFirst().orElseThrow();
+
+        Method promptForField = InteractivePrompter.class
+            .getDeclaredMethod("promptForField", ConfigFieldInfo.class, Object.class, ApplicationSpec.class);
+        promptForField.setAccessible(true);
+        promptForField.invoke(prompter, engine, config, spec);
+
+        assertEquals("mariadb", config.databaseEngine);
     }
 }
