@@ -17,7 +17,7 @@ load balancing, and security from the deployment context.
 | ID | Name | Category | Port | Default image | Default Fargate size | Database |
 |----|------|----------|------|---------------|----------------------|----------|
 | `jenkins` | Jenkins | `cicd` | 8080 | `jenkins/jenkins:lts` | 1024 / 2048 | — |
-| `gitlab` | GitLab | `cicd` | 80 | `gitlab/gitlab-ce:latest` | 2048 / 4096 | PostgreSQL 16 (required) |
+| `gitlab` | GitLab | `cicd` | 80 | `gitlab/gitlab-ce:19.4.2-ce.0` | 2048 / 4096 | PostgreSQL 17+ (required) |
 | `drone` | Drone | `cicd` | 80 | `drone/drone:2` | 1024 / 2048 | — |
 | `sonarqube` | SonarQube | `code-quality` | 9000 | `sonarqube:lts-community` | 2048 / 4096 | — |
 | `gitea` | Gitea | `vcs` | 3000 | `gitea/gitea:latest` | 512 / 1024 | — |

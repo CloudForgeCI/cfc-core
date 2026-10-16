@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.database;
 
 import com.cloudforge.core.enums.SecurityProfile;
+import com.cloudforge.core.interfaces.DatabaseEngineCatalog;
 import com.cloudforgeci.api.application.cms.WordPressApplicationSpec;
 import com.cloudforgeci.api.compute.ApplicationFactory;
 import com.cloudforgeci.api.core.DeploymentContext;
@@ -9,6 +10,8 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.assertions.Template;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -99,5 +102,19 @@ class RdsFactoryOverrideTest {
         Template unset = synthWordPress("RdsOverrideMonitorUnset", Map.of());
         unset.hasResourceProperties("AWS::RDS::DBInstance",
             Map.of("MonitoringInterval", 60));
+    }
+
+    /** A version the catalog offers must reach RDS as that same major version, not fall through to a different one. */
+    @Test
+    void everyCatalogVersionMapsToAnEngineVersionOfItsOwnMajor() {
+        for (String version : DatabaseEngineCatalog.versions("postgres")) {
+            assertEquals(version, RdsFactory.mapPostgresVersion(version).getPostgresMajorVersion(), "postgres " + version);
+        }
+        for (String version : DatabaseEngineCatalog.versions("mysql")) {
+            assertEquals(version, RdsFactory.mapMySqlVersion(version).getMysqlMajorVersion(), "mysql " + version);
+        }
+        for (String version : DatabaseEngineCatalog.versions("mariadb")) {
+            assertEquals(version, RdsFactory.mapMariaDbVersion(version).getMariaDbMajorVersion(), "mariadb " + version);
+        }
     }
 }

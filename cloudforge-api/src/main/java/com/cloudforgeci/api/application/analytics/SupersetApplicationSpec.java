@@ -134,6 +134,7 @@ public class SupersetApplicationSpec implements ApplicationSpec, DatabaseSpec {
         // Superset REQUIRES PostgreSQL/MySQL for metadata storage
         // SQLite is not suitable for production (single-process limitation)
         return DatabaseRequirement.required("postgres", "13")
+            .withDefaultVersion("14")
             .withInstanceClass("db.t3.small")
             .withStorage(20)
             .withDatabaseName("superset");

@@ -141,6 +141,7 @@ public class HarborApplicationSpec implements ApplicationSpec, DatabaseSpec {
     public DatabaseRequirement databaseRequirement() {
         // Harbor REQUIRES PostgreSQL for registry metadata
         return DatabaseRequirement.required("postgres", "13")
+            .withDefaultVersion("14")
             .withInstanceClass("db.t3.medium")
             .withStorage(50)
             .withDatabaseName("registry");

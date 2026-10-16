@@ -282,6 +282,7 @@ public class MyBBApplicationSpec implements CmsSpec, DatabaseSpec {
     public DatabaseRequirement databaseRequirement() {
         // MySQL 5.0 is no longer a valid RDS parameter group family; MyBB 1.8 supports 5.7.
         return DatabaseRequirement.required("mysql", "5.7")
+            .withDefaultVersion("8.0")
             .withInstanceClass("db.t3.micro")
             .withStorage(20)
             .withDatabaseName("mybb");

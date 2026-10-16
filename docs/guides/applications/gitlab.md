@@ -12,7 +12,7 @@ GitLab provides Git repository hosting, CI/CD pipelines, issue tracking, and a c
 |----------|-------|
 | **Application ID** | `gitlab` |
 | **Category** | CI/CD |
-| **Default Image** | `gitlab/gitlab-ce:latest` |
+| **Default Image** | `gitlab/gitlab-ce:19.4.2-ce.0` |
 | **Application Port** | `80` |
 | **SSH Port** | `22` (optional, see below) |
 | **Default CPU** | 2048 (Fargate) |
@@ -64,7 +64,7 @@ GitLab requires a PostgreSQL database. The interactive deployer and `CloudForgeD
 
 | Property | Value |
 |----------|-------|
-| Engine | PostgreSQL 16 or later |
+| Engine | PostgreSQL 17 or later (17 is the default; a higher version may be chosen with `databaseVersion`, a lower one is rejected) |
 | Instance Class | `db.t3.medium` (default) |
 | Storage | 50 GB (default) |
 | Database Name | `gitlabhq_production` |

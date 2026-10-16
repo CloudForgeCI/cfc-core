@@ -30,7 +30,7 @@ import java.util.Map;
  *
  * <p><strong>Requirements:</strong></p>
  * <ul>
- *   <li><b>Production:</b> PostgreSQL 12+ via RDS (REQUIRED for multi-instance)</li>
+ *   <li><b>Production:</b> PostgreSQL 17+ via RDS (REQUIRED for multi-instance)</li>
  *   <li><b>Development:</b> Embedded PostgreSQL (single instance only)</li>
  *   <li>Redis for caching (included in GitLab container)</li>
  *   <li>Minimum 4GB RAM recommended</li>
@@ -62,7 +62,7 @@ import java.util.Map;
 public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     private static final String APPLICATION_ID = "gitlab";
-    private static final String DEFAULT_IMAGE = "gitlab/gitlab-ce:latest";
+    private static final String DEFAULT_IMAGE = "gitlab/gitlab-ce:19.4.2-ce.0";
     private static final int APPLICATION_PORT = 80;
     private static final int SSH_PORT = 22;
     private static final String CONTAINER_DATA_PATH = "/var/opt/gitlab";
@@ -130,9 +130,9 @@ public class GitLabApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
     @Override
     public DatabaseRequirement databaseRequirement() {
-        // GitLab REQUIRES PostgreSQL 16+ for production deployments
+        // GitLab REQUIRES PostgreSQL 17+ (the gitlab-ce:latest image refuses to start on 16)
         // Embedded PostgreSQL only suitable for dev/staging (single instance)
-        return DatabaseRequirement.required("postgres", "16")
+        return DatabaseRequirement.required("postgres", "17")
             .withInstanceClass("db.t3.medium")
             .withStorage(50)
             .withDatabaseName("gitlabhq_production");

@@ -243,12 +243,18 @@ public class ApplicationFactory extends BaseFactory {
                         software.amazon.awscdk.services.ec2.IVpc vpc = ctx.vpc.get()
                             .orElseThrow(() -> new IllegalStateException("VPC not available for database provisioning"));
 
+                        // The engine and version must be one the application lists as supported; an
+                        // unset engine or version falls back to the application's own default.
+                        DatabaseSpec.DatabaseChoice choice = dbSpec
+                            .resolveDatabase(applicationSpec.applicationId(), databaseEngine, databaseVersion);
+                        if (!choice.option().tested()) {
+                            LOG.warning(applicationSpec.applicationId() + " has not been verified with "
+                                + choice.engine() + " " + choice.version() + "; deploying it anyway");
+                        }
+
                         // Merge DeploymentConfig values with ApplicationSpec defaults
                         // Priority: DeploymentConfig > ApplicationSpec
-                        DatabaseRequirement mergedReq = DatabaseRequirement.required(
-                            databaseEngine != null ? databaseEngine : dbReq.engine(),
-                            databaseVersion != null ? databaseVersion : dbReq.version()
-                        )
+                        DatabaseRequirement mergedReq = DatabaseRequirement.required(choice.engine(), choice.version())
                         .withInstanceClass(databaseInstanceClass != null ? databaseInstanceClass : dbReq.instanceClass())
                         .withStorage(databaseAllocatedStorageGB != null ? databaseAllocatedStorageGB : dbReq.allocatedStorageGB())
                         .withDatabaseName(databaseName != null ? databaseName : dbReq.databaseName());

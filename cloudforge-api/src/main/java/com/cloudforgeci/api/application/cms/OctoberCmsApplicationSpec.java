@@ -283,6 +283,7 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public DatabaseRequirement databaseRequirement() {
         return DatabaseRequirement.required("mysql", "5.7")
+            .withDefaultVersion("8.0")
             .withInstanceClass("db.t3.micro")
             .withStorage(20)
             .withDatabaseName("october");

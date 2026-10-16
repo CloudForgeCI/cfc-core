@@ -495,7 +495,7 @@ public class RdsFactory {
     /**
      * Map version string to PostgreSQL engine version.
      */
-    private static PostgresEngineVersion mapPostgresVersion(String version) {
+    static PostgresEngineVersion mapPostgresVersion(String version) {
         return switch (version) {
             case "11" -> PostgresEngineVersion.VER_11;
             case "12" -> PostgresEngineVersion.VER_12;
@@ -510,7 +510,7 @@ public class RdsFactory {
     /**
      * Map version string to MySQL engine version.
      */
-    private static MysqlEngineVersion mapMySqlVersion(String version) {
+    static MysqlEngineVersion mapMySqlVersion(String version) {
         if ("5.7".equals(version)) {
             System.err.println("WARNING: MySQL 5.7 reached end-of-life in October 2023. Consider upgrading to MySQL 8.0 for continued security updates and support.");
         }
@@ -528,7 +528,7 @@ public class RdsFactory {
     /**
      * Map version string to MariaDB engine version.
      */
-    private static MariaDbEngineVersion mapMariaDbVersion(String version) {
+    static MariaDbEngineVersion mapMariaDbVersion(String version) {
         return switch (version) {
             case "10.6" -> MariaDbEngineVersion.VER_10_6;
             case "10.11" -> MariaDbEngineVersion.VER_10_11;

@@ -954,7 +954,7 @@ public class DeploymentConfig {
         category = "database",
         visibleWhen = "provisionDatabase",
         dependsOn = "provisionDatabase",
-        allowedValues = {"postgres", "mysql", "mariadb", "aurora-postgresql", "aurora-mysql"},
+        allowedValues = {"postgres", "mysql", "mariadb"},
         defaultFrom = "databaseRequirement().engine",
         example = "postgres",
         order = 20
@@ -963,7 +963,9 @@ public class DeploymentConfig {
 
     /**
      * Database engine version.
-     * Default comes from ApplicationSpec.databaseRequirement().version()
+     * Default comes from ApplicationSpec.databaseRequirement().effectiveDefaultVersion(). The
+     * application's declared version is a minimum: a higher version may be chosen, a lower one is
+     * rejected, and a version above the application's tested maximum is accepted with a warning.
      */
     @ConfigField(
         displayName = "Database Version",
@@ -972,7 +974,7 @@ public class DeploymentConfig {
         visibleWhen = "provisionDatabase",
         dependsOn = "provisionDatabase",
         example = "15",
-        defaultFrom = "databaseRequirement().version",
+        defaultFrom = "databaseRequirement().effectiveDefaultVersion",
         order = 30
     )
     public String databaseVersion;
