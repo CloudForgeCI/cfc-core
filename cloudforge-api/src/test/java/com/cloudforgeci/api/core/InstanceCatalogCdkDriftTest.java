@@ -73,12 +73,12 @@ class InstanceCatalogCdkDriftTest {
         for (String family : offered) {
             Matcher own = FAMILY.matcher(family);
             assertTrue(own.matches(), "unrecognised family name " + family);
-            int generation = Integer.parseInt(own.group(2));
+            int generation = number(own.group(2));
             for (String known : cdkFamilies()) {
                 Matcher other = FAMILY.matcher(known);
                 if (other.matches() && other.group(1).equals(own.group(1))
                         && lineage(other.group(3)).equals(lineage(own.group(3)))
-                        && Integer.parseInt(other.group(2)) > generation
+                        && number(other.group(2)) > generation
                         && !offered.contains(known) && !NOT_OFFERED_YET.contains(known)) {
                     missing.add(known + " (newer than offered " + family + ")");
                 }
@@ -97,5 +97,14 @@ class InstanceCatalogCdkDriftTest {
     void theNotOfferedListHoldsOnlyRealCdkFamilies() {
         List<String> unknown = NOT_OFFERED_YET.stream().filter(family -> !cdkFamilies().contains(family)).toList();
         assertTrue(unknown.isEmpty(), "NOT_OFFERED_YET names families the CDK does not know: " + unknown);
+    }
+
+    /** Family generations are small digit strings captured by {@link #FAMILY}, so a failure is a test bug. */
+    private static int number(String digits) {
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            throw new AssertionError("not a generation number: " + digits, e);
+        }
     }
 }

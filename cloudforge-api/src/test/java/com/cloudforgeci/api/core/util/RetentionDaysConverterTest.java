@@ -126,12 +126,20 @@ class RetentionDaysConverterTest {
                 DeploymentConfig.class.getField("logRetentionDays")
                         .getAnnotation(ConfigField.class).allowedValues()));
         Set<RetentionDays> reached = offered.stream()
-                .map(v -> RetentionDaysConverter.fromDays(Integer.parseInt(v)))
+                .map(v -> RetentionDaysConverter.fromDays(days(v)))
                 .collect(Collectors.toSet());
         Set<RetentionDays> cdk = Arrays.stream(RetentionDays.values())
                 .filter(r -> r != RetentionDays.INFINITE)
                 .collect(Collectors.toSet());
         assertEquals(cdk, reached, "logRetentionDays allowedValues must cover every CDK RetentionDays");
         assertEquals(cdk.size(), offered.size(), "each offered value must be an exact CloudWatch period");
+    }
+
+    private static int days(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new AssertionError("logRetentionDays offers a non-numeric value: " + value, e);
+        }
     }
 }

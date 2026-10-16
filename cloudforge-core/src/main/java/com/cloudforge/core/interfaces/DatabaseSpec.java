@@ -285,7 +285,14 @@ public interface DatabaseSpec {
             while (end < segment.length() && Character.isDigit(segment.charAt(end))) {
                 end++;
             }
-            return end == 0 ? null : Integer.valueOf(segment.substring(0, end));
+            if (end == 0) {
+                return null;
+            }
+            try {
+                return Integer.valueOf(segment.substring(0, end));
+            } catch (NumberFormatException tooLarge) {
+                return null;
+            }
         }
 
         public static DatabaseRequirement required(String engine, String version) {
