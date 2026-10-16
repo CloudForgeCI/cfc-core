@@ -377,12 +377,7 @@ public class DeploymentConfig {
         displayName = "EC2 Instance Type",
         description = "EC2 instance size for compute capacity",
         category = "resources",
-        allowedValues = {
-            "t3.micro", "t3.small", "t3.medium", "t3.large", "t3.xlarge",
-            "t3a.micro", "t3a.small", "t3a.medium", "t3a.large",
-            "m5.large", "m5.xlarge", "m5.2xlarge",
-            "c5.large", "c5.xlarge", "c5.2xlarge"
-        },
+        // Choices come from InstanceCatalog.ec2InstanceTypes().
         visibleWhen = "runtime == EC2",
         defaultFrom = "defaultInstanceType",
         tags = {FieldTag.BILLING_IMPACT},
@@ -954,7 +949,7 @@ public class DeploymentConfig {
         category = "database",
         visibleWhen = "provisionDatabase",
         dependsOn = "provisionDatabase",
-        allowedValues = {"postgres", "mysql", "mariadb", "aurora-postgresql", "aurora-mysql"},
+        allowedValues = {"postgres", "mysql", "mariadb"},
         defaultFrom = "databaseRequirement().engine",
         example = "postgres",
         order = 20
@@ -963,7 +958,9 @@ public class DeploymentConfig {
 
     /**
      * Database engine version.
-     * Default comes from ApplicationSpec.databaseRequirement().version()
+     * Default comes from ApplicationSpec.databaseRequirement().effectiveDefaultVersion(). The
+     * application's declared version is a minimum: a higher version may be chosen, a lower one is
+     * rejected, and a version above the application's tested maximum is accepted with a warning.
      */
     @ConfigField(
         displayName = "Database Version",
@@ -972,7 +969,7 @@ public class DeploymentConfig {
         visibleWhen = "provisionDatabase",
         dependsOn = "provisionDatabase",
         example = "15",
-        defaultFrom = "databaseRequirement().version",
+        defaultFrom = "databaseRequirement().effectiveDefaultVersion",
         order = 30
     )
     public String databaseVersion;
@@ -988,11 +985,7 @@ public class DeploymentConfig {
         category = "database",
         visibleWhen = "provisionDatabase",
         dependsOn = "provisionDatabase",
-        allowedValues = {
-            "db.t3.micro", "db.t3.small", "db.t3.medium", "db.t3.large",
-            "db.m5.large", "db.m5.xlarge", "db.m5.2xlarge",
-            "db.r5.large", "db.r5.xlarge", "db.r5.2xlarge"
-        },
+        // Choices come from InstanceCatalog.databaseInstanceClasses().
         example = "db.t3.small",
         defaultFrom = "databaseRequirement().instanceClass",
         tags = {FieldTag.DESTRUCTIVE, FieldTag.BILLING_IMPACT},
@@ -1322,7 +1315,7 @@ public class DeploymentConfig {
         displayName = "Log Retention (Days)",
         description = "CloudWatch Logs retention period in days",
         category = "monitoring",
-        allowedValues = {"1", "3", "5", "7", "14", "30", "60", "90", "120", "150", "180", "365", "400", "545", "731", "1827", "3653"},
+        allowedValues = {"1", "3", "5", "7", "14", "30", "60", "90", "120", "150", "180", "365", "400", "545", "731", "1096", "1827", "2192", "2557", "2922", "3288", "3653"},
         order = 10
     )
     public String logRetentionDays = null;
@@ -1971,9 +1964,10 @@ public class DeploymentConfig {
         category = "basic",
         allowedValues = {
             "us-east-1", "us-east-2", "us-west-1", "us-west-2",
+            "ca-central-1", "sa-east-1",
             "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1", "eu-north-1",
-            "ap-northeast-1", "ap-northeast-2", "ap-southeast-1", "ap-southeast-2",
-            "ap-south-1", "sa-east-1", "ca-central-1"
+            "ap-south-1", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3",
+            "ap-southeast-1", "ap-southeast-2"
         },
         required = true,
         order = 50

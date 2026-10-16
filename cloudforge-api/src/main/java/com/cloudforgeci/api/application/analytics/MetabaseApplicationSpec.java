@@ -5,12 +5,14 @@ import com.cloudforge.core.annotation.ApplicationPlugin;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection;
+import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseOption;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 import com.cloudforge.core.interfaces.Ec2Context;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import com.cloudforge.core.interfaces.UserDataBuilder;
 import com.cloudforge.core.oidc.MetabaseSamlIntegration;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -136,6 +138,20 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
             .withDatabaseName("metabase");
     }
 
+    /**
+     * Metabase documents PostgreSQL, MySQL and MariaDB as application databases. PostgreSQL is the
+     * default; MySQL and MariaDB are offered as untested alternates until each has been deployed.
+     */
+    @Override
+    public List<DatabaseOption> supportedDatabases() {
+        List<DatabaseOption> options = new ArrayList<>(DatabaseSpec.super.supportedDatabases());
+        options.add(new DatabaseOption("mysql", "8.0", false));
+        options.add(new DatabaseOption("mysql", "8.4", false));
+        options.add(new DatabaseOption("mariadb", "10.11", false));
+        options.add(new DatabaseOption("mariadb", "11.4", false));
+        return List.copyOf(options);
+    }
+
     @Override
     public java.util.Map<String, String> containerEnvironmentVariables(String fqdn, boolean sslEnabled, String authMode) {
         // Delegate to new method with null database connection for backward compatibility
@@ -170,8 +186,9 @@ public class MetabaseApplicationSpec implements ApplicationSpec, DatabaseSpec {
 
         // Database configuration
         if (dbConn != null) {
-            // Use RDS PostgreSQL for production multi-instance deployments
-            environment.put("MB_DB_TYPE", "postgres");
+            // Use RDS for production multi-instance deployments. Metabase calls MariaDB "mysql".
+            environment.put("MB_DB_TYPE", "postgres".equalsIgnoreCase(dbConn.engine()) || dbConn.engine() == null
+                ? "postgres" : "mysql");
             environment.put("MB_DB_HOST", dbConn.endpoint());
             environment.put("MB_DB_PORT", String.valueOf(dbConn.port()));
             environment.put("MB_DB_DBNAME", dbConn.databaseName());

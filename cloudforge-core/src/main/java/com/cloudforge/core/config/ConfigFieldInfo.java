@@ -3,6 +3,7 @@ package com.cloudforge.core.config;
 import com.cloudforge.core.annotation.ConfigField;
 import com.cloudforge.core.annotation.FieldTag;
 
+import com.cloudforge.core.interfaces.InstanceCatalog;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.List;
@@ -80,7 +81,11 @@ public record ConfigFieldInfo(
             annotation.dependsOn(),
             annotation.required(),
             annotation.example(),
-            annotation.allowedValues(),
+            // The instance size fields read their values from the catalog rather than the annotation.
+            "DeploymentConfig".equals(field.getDeclaringClass().getSimpleName())
+                ? InstanceCatalog.valuesFor(field.getName())
+                    .orElse(annotation.allowedValues())
+                : annotation.allowedValues(),
             annotation.min(),
             annotation.max(),
             annotation.pattern(),

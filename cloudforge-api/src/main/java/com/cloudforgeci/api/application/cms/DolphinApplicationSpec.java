@@ -313,6 +313,7 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public DatabaseRequirement databaseRequirement() {
         return DatabaseRequirement.required("mysql", "5.7")
+            .withDefaultVersion("8.0")
             .withInstanceClass("db.t3.small")
             .withStorage(50)
             .withDatabaseName("una");

@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.application;
 
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.DatabaseEngineCatalog;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseConnection;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
@@ -12,6 +13,8 @@ import com.cloudforgeci.api.application.cicd.GitLabApplicationSpec;
 import com.cloudforgeci.api.application.collaboration.MattermostApplicationSpec;
 import com.cloudforgeci.api.application.monitoring.GrafanaApplicationSpec;
 import com.cloudforgeci.api.application.JenkinsApplicationSpec;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,8 +22,12 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
+import java.util.ServiceLoader;
 import java.util.Map;
 import java.util.stream.Stream;
+import software.amazon.awscdk.services.rds.MariaDbEngineVersion;
+import software.amazon.awscdk.services.rds.MysqlEngineVersion;
+import software.amazon.awscdk.services.rds.PostgresEngineVersion;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -55,7 +62,7 @@ public class DatabaseSpecTest {
             Arguments.of(new GrafanaApplicationSpec(), RequirementType.OPTIONAL, "postgres", "14", "grafana", 7),
 
             // REQUIRED databases (must have external RDS)
-            Arguments.of(new GitLabApplicationSpec(), RequirementType.REQUIRED, "postgres", "16", "gitlabhq_production", 30),
+            Arguments.of(new GitLabApplicationSpec(), RequirementType.REQUIRED, "postgres", "17", "gitlabhq_production", 30),
             Arguments.of(new MattermostApplicationSpec(), RequirementType.REQUIRED, "postgres", "14", "mattermost", 14),
             Arguments.of(new SupersetApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "superset", 14),
             Arguments.of(new HarborApplicationSpec(), RequirementType.REQUIRED, "postgres", "13", "registry", 30)
@@ -460,5 +467,289 @@ public class DatabaseSpecTest {
         assertNotNull(dataSource, "Should have data source");
         assertTrue(dataSource.contains("MISSING_DATABASE_CONNECTION"),
             "Should indicate missing database connection");
+    }
+
+    // ========== Minimum-version semantics ==========
+
+    @ParameterizedTest(name = "minimum {0}: {1} -> {2}")
+    @MethodSource("minimumVersionCases")
+    @DisplayName("A database version meets the minimum when it is equal or higher")
+    void requirementVersionIsAMinimum(String minimum, String candidate, boolean allowed) {
+        DatabaseRequirement requirement = DatabaseRequirement.required("postgres", minimum);
+        assertEquals(allowed, requirement.meetsMinimum(candidate));
+    }
+
+    static Stream<Arguments> minimumVersionCases() {
+        return Stream.of(
+            Arguments.of("17", "17", true),
+            Arguments.of("17", "18", true),
+            Arguments.of("17", "17.4", true),
+            Arguments.of("17", "16", false),
+            Arguments.of("17", "9", false),       // numeric, not lexical: 9 < 17
+            Arguments.of("8.0", "8.0.35", true),
+            Arguments.of("8.0", "8.0", true),
+            Arguments.of("8.0", "5.7", false),
+            Arguments.of("10.11", "10.6", false), // 10.6 < 10.11 numerically
+            Arguments.of("17", "17-beta", true),  // suffix after the digits is ignored
+            Arguments.of("17", "latest", true)    // unreadable versions are not rejected on a guess
+        );
+    }
+
+    // ========== Default and tested-maximum versions ==========
+
+    /** Every registered application that declares a database, found through the same ServiceLoader the engine uses. */
+    static List<DatabaseRequirement> registeredDatabaseRequirements() {
+        return ServiceLoader.load(ApplicationSpec.class).stream()
+            .map(ServiceLoader.Provider::get)
+            .filter(spec -> spec instanceof DatabaseSpec)
+            .map(spec -> ((DatabaseSpec) spec).databaseRequirement())
+            .filter(req -> req.type() != RequirementType.NONE)
+            .toList();
+    }
+
+    @Test
+    @DisplayName("Every registered application's default database version meets its minimum")
+    void everyDefaultVersionMeetsItsMinimum() {
+        List<DatabaseRequirement> requirements = registeredDatabaseRequirements();
+        assertTrue(requirements.size() >= 20, "expected the registered database applications, found " + requirements.size());
+        for (DatabaseRequirement req : requirements) {
+            assertTrue(req.meetsMinimum(req.effectiveDefaultVersion()),
+                req.engine() + " default " + req.effectiveDefaultVersion() + " is below minimum " + req.version());
+            if (req.testedMaxVersion() != null) {
+                assertFalse(req.exceedsTestedMax(req.effectiveDefaultVersion()),
+                    req.engine() + " default " + req.effectiveDefaultVersion() + " is above its tested maximum " + req.testedMaxVersion());
+            }
+        }
+    }
+
+    /**
+     * Majors that Amazon RDS no longer supports under standard support (Extended Support is a paid,
+     * opt-in-at-create program), as of 2026-10: MySQL 5.7 and Postgres 13 and older. A default on one
+     * of these deploys an engine that costs extra or is retired. The minimum may still be this low,
+     * since a user can choose it on purpose; only the default is checked.
+     */
+    @Test
+    @DisplayName("No application defaults to an engine version past RDS standard support")
+    void noDefaultIsPastRdsStandardSupport() {
+        for (DatabaseRequirement req : registeredDatabaseRequirements()) {
+            String def = req.effectiveDefaultVersion();
+            boolean pastSupport = switch (req.engine()) {
+                case "mysql" -> DatabaseRequirement.compareVersions(def, "5.7.999") <= 0;
+                case "postgres" -> DatabaseRequirement.compareVersions(def, "13.999") <= 0;
+                default -> false;
+            };
+            assertFalse(pastSupport, req.engine() + " default " + def + " is past RDS standard support");
+        }
+    }
+
+    @Test
+    @DisplayName("An application that declares only a minimum defaults to that minimum")
+    void defaultVersionFallsBackToMinimum() {
+        DatabaseRequirement req = DatabaseRequirement.required("mysql", "8.0");
+        assertEquals("8.0", req.effectiveDefaultVersion());
+        assertFalse(req.exceedsTestedMax("9.9"), "no tested maximum recorded, so nothing is flagged");
+    }
+
+    @Test
+    @DisplayName("The default is separate from the minimum and survives other with-methods")
+    void defaultVersionIsKeptSeparateFromMinimum() {
+        DatabaseRequirement req = DatabaseRequirement.required("mysql", "5.7")
+            .withDefaultVersion("8.0")
+            .withTestedMaxVersion("8.0.40")
+            .withStorage(50)
+            .withDatabaseName("app");
+        assertEquals("5.7", req.version());
+        assertEquals("8.0", req.effectiveDefaultVersion());
+        assertTrue(req.meetsMinimum("5.7"), "the minimum stays selectable");
+        assertFalse(req.meetsMinimum("5.6"));
+        assertFalse(req.exceedsTestedMax("8.0.35"));
+        assertTrue(req.exceedsTestedMax("8.4"), "above the tested maximum is flagged, not rejected");
+    }
+
+    @Test
+    @DisplayName("A default below the minimum, or a tested maximum below the default, is rejected")
+    void inconsistentVersionsAreRejected() {
+        DatabaseRequirement req = DatabaseRequirement.required("postgres", "14");
+        assertThrows(IllegalArgumentException.class, () -> req.withDefaultVersion("13"));
+        assertThrows(IllegalArgumentException.class, () -> req.withDefaultVersion("15").withTestedMaxVersion("14"));
+    }
+
+    private static DatabaseSpec specFor(DatabaseRequirement requirement) {
+        return () -> requirement;
+    }
+
+    @Test
+    @DisplayName("The supported list defaults to the requirement's engine from its minimum upward")
+    void supportedDatabasesAreDerivedFromTheRequirement() {
+        DatabaseSpec spec = specFor(DatabaseRequirement.required("mysql", "5.7")
+            .withDefaultVersion("8.0")
+            .withTestedMaxVersion("8.0"));
+
+        assertEquals(List.of(
+            new DatabaseSpec.DatabaseOption("mysql", "5.7", true),
+            new DatabaseSpec.DatabaseOption("mysql", "8.0", true),
+            new DatabaseSpec.DatabaseOption("mysql", "8.4", false)), spec.supportedDatabases());
+    }
+
+    @Test
+    @DisplayName("Without a tested maximum, only versions up to the default count as tested")
+    void versionsAboveTheDefaultAreUntestedWhenNoMaximumIsDeclared() {
+        DatabaseSpec spec = specFor(DatabaseRequirement.required("postgres", "14").withDefaultVersion("15"));
+
+        assertTrue(spec.findSupportedDatabase("postgres", "14").orElseThrow().tested());
+        assertTrue(spec.findSupportedDatabase("postgres", "15").orElseThrow().tested());
+        assertFalse(spec.findSupportedDatabase("postgres", "16").orElseThrow().tested());
+    }
+
+    @Test
+    @DisplayName("An application with no database lists no supported databases")
+    void noDatabaseMeansNoSupportedDatabases() {
+        assertTrue(specFor(DatabaseRequirement.none()).supportedDatabases().isEmpty());
+    }
+
+    @Test
+    @DisplayName("A full version matches the option for its major version")
+    void fullVersionMatchesItsMajorOption() {
+        DatabaseSpec spec = specFor(DatabaseRequirement.required("mysql", "8.0"));
+        assertTrue(spec.findSupportedDatabase("mysql", "8.0.35").isPresent());
+        assertTrue(spec.findSupportedDatabase("MySQL", "8.4").isPresent());
+        assertFalse(spec.findSupportedDatabase("mysql", "5.7").isPresent());
+        assertFalse(spec.findSupportedDatabase("mysql", "8.01").isPresent());
+    }
+
+    @Test
+    @DisplayName("Unset engine and version resolve to the application's own default")
+    void resolveUsesTheApplicationDefault() {
+        DatabaseSpec spec = specFor(DatabaseRequirement.required("mysql", "5.7").withDefaultVersion("8.0"));
+        DatabaseSpec.DatabaseChoice choice = spec.resolveDatabase("app", null, null);
+        assertEquals("mysql", choice.engine());
+        assertEquals("8.0", choice.version());
+    }
+
+    @Test
+    @DisplayName("A higher version is accepted, and flagged untested above the tested maximum")
+    void resolveAcceptsHigherVersions() {
+        DatabaseSpec spec = specFor(DatabaseRequirement.required("postgres", "14").withTestedMaxVersion("15"));
+        assertTrue(spec.resolveDatabase("app", "postgres", "15").option().tested());
+        assertFalse(spec.resolveDatabase("app", "postgres", "17").option().tested());
+    }
+
+    @Test
+    @DisplayName("A version below the minimum is rejected naming the minimum")
+    void resolveRejectsBelowMinimum() {
+        DatabaseSpec spec = specFor(DatabaseRequirement.required("postgres", "17"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> spec.resolveDatabase("gitlab", null, "16"));
+        assertEquals("gitlab requires postgres 17 or higher, but databaseVersion=16. "
+            + "Choose 17 or a later version.", e.getMessage());
+    }
+
+    @Test
+    @DisplayName("An engine the application does not list is rejected with the supported choices")
+    void resolveRejectsUnsupportedEngine() {
+        DatabaseSpec spec = specFor(DatabaseRequirement.required("postgres", "16"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> spec.resolveDatabase("mattermost", "mysql", null));
+        assertTrue(e.getMessage().startsWith("mattermost does not support databaseEngine=mysql"));
+        assertTrue(e.getMessage().contains("postgres 16"));
+    }
+
+    @Test
+    @DisplayName("An application that overrides the list can be deployed on each listed engine")
+    void overriddenListSupportsEachEngine() {
+        DatabaseSpec spec = new DatabaseSpec() {
+            @Override
+            public DatabaseRequirement databaseRequirement() {
+                return DatabaseRequirement.required("postgres", "15");
+            }
+
+            @Override
+            public List<DatabaseOption> supportedDatabases() {
+                return List.of(
+                    new DatabaseOption("postgres", "15", true),
+                    new DatabaseOption("mysql", "8.0", true),
+                    new DatabaseOption("mysql", "8.4", false));
+            }
+        };
+
+        DatabaseSpec.DatabaseChoice mysql = spec.resolveDatabase("app", "mysql", null);
+        assertEquals("8.0", mysql.version(), "an alternate engine starts at its first listed version");
+        assertFalse(spec.resolveDatabase("app", "mysql", "8.4").option().tested());
+        assertThrows(IllegalArgumentException.class, () -> spec.resolveDatabase("app", "mariadb", null));
+        assertThrows(IllegalArgumentException.class, () -> spec.resolveDatabase("app", "mysql", "5.7"));
+    }
+
+    @Test
+    @DisplayName("Metabase tells the container which type of database it is connected to")
+    void metabaseDatabaseTypeFollowsTheConnectedEngine() {
+        MetabaseApplicationSpec metabase = new MetabaseApplicationSpec();
+        for (String[] engineAndType : new String[][] {{"postgres", "postgres"}, {"mysql", "mysql"}, {"mariadb", "mysql"}}) {
+            DatabaseConnection dbConn = new DatabaseConnection(
+                "db.rds.amazonaws.com", 3306, "metabase", "user", "arn:secret", engineAndType[0], "8.0", List.of());
+            Map<String, String> env = metabase.containerEnvironmentVariables("m.example.com", true, "none", dbConn);
+            assertEquals(engineAndType[1], env.get("MB_DB_TYPE"), engineAndType[0]);
+        }
+    }
+
+    @Test
+    @DisplayName("Metabase offers MySQL and MariaDB as untested alternates to PostgreSQL")
+    void metabaseListsUntestedAlternateEngines() {
+        MetabaseApplicationSpec metabase = new MetabaseApplicationSpec();
+        assertTrue(metabase.findSupportedDatabase("postgres", "15").orElseThrow().tested());
+        assertFalse(metabase.findSupportedDatabase("mysql", "8.0").orElseThrow().tested());
+        assertFalse(metabase.findSupportedDatabase("mariadb", "10.11").orElseThrow().tested());
+        assertFalse(metabase.findSupportedDatabase("mysql", "5.7").isPresent());
+    }
+
+    /**
+     * The newest major version the CDK library knows for an engine. When a CDK upgrade adds a version
+     * RDS has released, this exceeds the catalog and the test below fails, so the catalog is not
+     * silently left behind.
+     */
+    private static String newestCdkMajor(Class<?> engineVersionClass, String majorGetter) throws Exception {
+        String newest = null;
+        for (Field field : engineVersionClass.getFields()) {
+            if (!Modifier.isStatic(field.getModifiers())
+                    || field.getType() != engineVersionClass) {
+                continue;
+            }
+            Object constant = field.get(null);
+            String major = (String) engineVersionClass.getMethod(majorGetter).invoke(constant);
+            if (newest == null || DatabaseRequirement.compareVersions(major, newest) > 0) {
+                newest = major;
+            }
+        }
+        return newest;
+    }
+
+    @Test
+    @DisplayName("The catalog lists the newest major version the CDK knows for each engine")
+    void catalogIncludesTheNewestMajorVersionTheCdkKnows() throws Exception {
+        assertCatalogHas("postgres", newestCdkMajor(
+            PostgresEngineVersion.class, "getPostgresMajorVersion"));
+        assertCatalogHas("mysql", newestCdkMajor(
+            MysqlEngineVersion.class, "getMysqlMajorVersion"));
+        assertCatalogHas("mariadb", newestCdkMajor(
+            MariaDbEngineVersion.class, "getMariaDbMajorVersion"));
+    }
+
+    private static void assertCatalogHas(String engine, String newestInCdk) {
+        List<String> catalog = DatabaseEngineCatalog.versions(engine);
+        assertTrue(catalog.contains(newestInCdk) || DatabaseRequirement.compareVersions(
+                catalog.get(catalog.size() - 1), newestInCdk) >= 0,
+            "The CDK knows " + engine + " " + newestInCdk + " but DatabaseEngineCatalog stops at "
+                + catalog.get(catalog.size() - 1) + ". Add the new version to the catalog, mark it untested "
+                + "on the applications until each has been deployed with it, and add its case to "
+                + "RdsFactory's version mapping if the CDK has a constant for it.");
+    }
+
+    @Test
+    @DisplayName("Every engine the catalog can offer is one the RDS factory can provision")
+    void catalogEnginesAreProvisionable() {
+        assertEquals(List.of("postgres", "mysql", "mariadb"),
+            DatabaseEngineCatalog.engines());
+        for (String engine : DatabaseEngineCatalog.engines()) {
+            assertFalse(DatabaseEngineCatalog.versions(engine).isEmpty(), engine);
+        }
     }
 }

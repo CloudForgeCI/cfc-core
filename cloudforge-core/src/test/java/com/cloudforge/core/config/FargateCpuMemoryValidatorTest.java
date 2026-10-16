@@ -1,5 +1,6 @@
 package com.cloudforge.core.config;
 
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -346,5 +347,13 @@ class FargateCpuMemoryValidatorTest {
         config.fargateMemory = 8500;  // Invalid (not 1024 increment)
         ValidationResult result2 = validator.validate(createFargateMemoryFieldInfo(), 8500, config);
         assertTrue(result2.isError());
+    }
+
+    @Test
+    void exposesTheValidCpuAndMemoryChoicesForPromptsToOffer() {
+        assertEquals(List.of(256, 512, 1024, 2048, 4096, 8192, 16384), FargateCpuMemoryValidator.validCpuValues());
+        assertEquals(List.of(512, 1024, 2048), FargateCpuMemoryValidator.validMemoryValues(256));
+        assertTrue(FargateCpuMemoryValidator.validMemoryValues(4096).contains(30720));
+        assertTrue(FargateCpuMemoryValidator.validMemoryValues(999).isEmpty());
     }
 }

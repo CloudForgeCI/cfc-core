@@ -68,6 +68,16 @@ public class FargateCpuMemoryValidator implements FieldValidator {
     /**
      * Generates a range of values with a given increment.
      */
+    /** The Fargate CPU units a task can use, lowest first. */
+    public static List<Integer> validCpuValues() {
+        return VALID_COMBINATIONS.keySet().stream().sorted().toList();
+    }
+
+    /** The memory sizes (MB) Fargate accepts with a CPU value, lowest first; empty for an unknown CPU. */
+    public static List<Integer> validMemoryValues(int cpu) {
+        return VALID_COMBINATIONS.getOrDefault(cpu, List.of());
+    }
+
     private static List<Integer> generateRange(int start, int end, int increment) {
         java.util.List<Integer> range = new java.util.ArrayList<>();
         for (int value = start; value <= end; value += increment) {

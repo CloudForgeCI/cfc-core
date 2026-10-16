@@ -1,6 +1,8 @@
 package com.cloudforge.core.config;
 
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.DatabaseSpec;
+import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -87,8 +89,9 @@ public class InteractivePrompter {
 
         Class<?> type = field.type();
 
-        if (field.allowedValues().length > 0) {
-            promptChoice(field, config);
+        String[] offered = ConfigurationIntrospector.allowedValues(field, appSpec, config);
+        if (offered.length > 0) {
+            promptChoice(field, config, offered, preferredChoice(field, appSpec, config, offered));
         } else if (type == boolean.class || type == Boolean.class) {
             promptYesNo(field, config);
         } else if (isNumericType(type)) {
@@ -101,13 +104,40 @@ public class InteractivePrompter {
     }
 
     /**
+     * The choice an empty answer selects: the value already set when it is offered, otherwise the
+     * application's own default for the database engine or version, otherwise the first choice.
+     */
+    private static String preferredChoice(
+            ConfigFieldInfo field, ApplicationSpec appSpec, Object config, String[] offered) {
+        List<String> choices = List.of(offered);
+        Object current = field.getValue(config);
+        if (current != null && choices.contains(current.toString())) {
+            return current.toString();
+        }
+        if (appSpec instanceof DatabaseSpec databaseSpec && databaseSpec.databaseRequirement() != null) {
+            DatabaseRequirement requirement = databaseSpec.databaseRequirement();
+            String candidate = null;
+            if ("databaseEngine".equals(field.fieldName())) {
+                candidate = requirement.engine();
+            } else if ("databaseVersion".equals(field.fieldName())) {
+                String engine = config instanceof DeploymentConfig deployment && deployment.databaseEngine != null
+                    ? deployment.databaseEngine
+                    : requirement.engine();
+                if (engine.equalsIgnoreCase(requirement.engine())) {
+                    candidate = requirement.effectiveDefaultVersion();
+                }
+            }
+            if (candidate != null && choices.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return offered[0];
+    }
+
+    /**
      * Prompts for a choice from allowed values.
      */
-    private void promptChoice(ConfigFieldInfo field, Object config) {
-        String[] choices = field.allowedValues();
-        Object currentValue = field.getValue(config);
-        String defaultValue = currentValue != null ? currentValue.toString() : "";
-
+    private void promptChoice(ConfigFieldInfo field, Object config, String[] choices, String defaultValue) {
         output.println();
         output.println("📋 " + field.displayName());
         if (!field.description().isEmpty()) {

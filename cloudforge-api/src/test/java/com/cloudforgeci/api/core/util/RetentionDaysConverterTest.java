@@ -3,6 +3,13 @@ package com.cloudforgeci.api.core.util;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
+import com.cloudforge.core.annotation.ConfigField;
+import com.cloudforge.core.config.DeploymentConfig;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -111,5 +118,28 @@ class RetentionDaysConverterTest {
     void testZeroDays() {
         // Zero should map to ONE_DAY (minimum retention)
         assertEquals(RetentionDays.ONE_DAY, RetentionDaysConverter.fromDays(0));
+    }
+
+    @Test
+    void logRetentionDaysFieldOffersEveryCloudWatchRetentionPeriod() throws Exception {
+        Set<String> offered = new HashSet<>(Arrays.asList(
+                DeploymentConfig.class.getField("logRetentionDays")
+                        .getAnnotation(ConfigField.class).allowedValues()));
+        Set<RetentionDays> reached = offered.stream()
+                .map(v -> RetentionDaysConverter.fromDays(days(v)))
+                .collect(Collectors.toSet());
+        Set<RetentionDays> cdk = Arrays.stream(RetentionDays.values())
+                .filter(r -> r != RetentionDays.INFINITE)
+                .collect(Collectors.toSet());
+        assertEquals(cdk, reached, "logRetentionDays allowedValues must cover every CDK RetentionDays");
+        assertEquals(cdk.size(), offered.size(), "each offered value must be an exact CloudWatch period");
+    }
+
+    private static int days(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new AssertionError("logRetentionDays offers a non-numeric value: " + value, e);
+        }
     }
 }

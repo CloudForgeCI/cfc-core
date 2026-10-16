@@ -30,6 +30,7 @@ import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -495,7 +496,7 @@ public class RdsFactory {
     /**
      * Map version string to PostgreSQL engine version.
      */
-    private static PostgresEngineVersion mapPostgresVersion(String version) {
+    static PostgresEngineVersion mapPostgresVersion(String version) {
         return switch (version) {
             case "11" -> PostgresEngineVersion.VER_11;
             case "12" -> PostgresEngineVersion.VER_12;
@@ -503,14 +504,14 @@ public class RdsFactory {
             case "14" -> PostgresEngineVersion.VER_14;
             case "15" -> PostgresEngineVersion.VER_15;
             case "16" -> PostgresEngineVersion.VER_16;
-            default -> PostgresEngineVersion.of(version, version);
+            default -> PostgresEngineVersion.of(version, leadingSegments(version, 1));
         };
     }
 
     /**
      * Map version string to MySQL engine version.
      */
-    private static MysqlEngineVersion mapMySqlVersion(String version) {
+    static MysqlEngineVersion mapMySqlVersion(String version) {
         if ("5.7".equals(version)) {
             System.err.println("WARNING: MySQL 5.7 reached end-of-life in October 2023. Consider upgrading to MySQL 8.0 for continued security updates and support.");
         }
@@ -521,19 +522,28 @@ public class RdsFactory {
             case "8.0.33" -> MysqlEngineVersion.VER_8_0_33;
             case "8.0.34" -> MysqlEngineVersion.VER_8_0_34;
             case "8.0.35" -> MysqlEngineVersion.VER_8_0_35;
-            default -> MysqlEngineVersion.of(version, version);
+            default -> MysqlEngineVersion.of(version, leadingSegments(version, 2));
         };
     }
 
     /**
      * Map version string to MariaDB engine version.
      */
-    private static MariaDbEngineVersion mapMariaDbVersion(String version) {
+    static MariaDbEngineVersion mapMariaDbVersion(String version) {
         return switch (version) {
             case "10.6" -> MariaDbEngineVersion.VER_10_6;
             case "10.11" -> MariaDbEngineVersion.VER_10_11;
-            default -> MariaDbEngineVersion.of(version, version);
+            default -> MariaDbEngineVersion.of(version, leadingSegments(version, 2));
         };
+    }
+
+    /**
+     * The first {@code count} dot-separated segments of a version: the major version RDS uses for
+     * parameter group families, so {@code 15.4} is major {@code 15} and {@code 8.0.40} is {@code 8.0}.
+     */
+    private static String leadingSegments(String version, int count) {
+        String[] parts = version.split("\\.");
+        return String.join(".", Arrays.copyOf(parts, Math.min(count, parts.length)));
     }
 
     /**
@@ -553,7 +563,7 @@ public class RdsFactory {
      *
      * <p>Converts strings like "db.t3.medium" to InstanceType.</p>
      */
-    private static InstanceType parseInstanceType(String instanceClass) {
+    static InstanceType parseInstanceType(String instanceClass) {
         // Extract class and size from instance class (e.g., "db.t3.medium")
         String[] parts = instanceClass.split("\\.");
         if (parts.length < 3) {
@@ -571,13 +581,15 @@ public class RdsFactory {
      */
     private static software.amazon.awscdk.services.ec2.InstanceClass parseInstanceClass(String className) {
         return switch (className.toLowerCase()) {
-            case "t3" -> software.amazon.awscdk.services.ec2.InstanceClass.BURSTABLE3;
-            case "t4g" -> software.amazon.awscdk.services.ec2.InstanceClass.BURSTABLE4_GRAVITON;
-            case "m5" -> software.amazon.awscdk.services.ec2.InstanceClass.M5;
-            case "m6g" -> software.amazon.awscdk.services.ec2.InstanceClass.MEMORY6_GRAVITON;
-            case "r5" -> software.amazon.awscdk.services.ec2.InstanceClass.R5;
-            case "r6g" -> software.amazon.awscdk.services.ec2.InstanceClass.MEMORY6_GRAVITON;
-            default -> software.amazon.awscdk.services.ec2.InstanceClass.BURSTABLE3;
+            case "t3" -> InstanceClass.BURSTABLE3;
+            case "t4g" -> InstanceClass.BURSTABLE4_GRAVITON;
+            case "m5" -> InstanceClass.M5;
+            case "m6g" -> InstanceClass.STANDARD6_GRAVITON;
+            case "m7g" -> InstanceClass.STANDARD7_GRAVITON;
+            case "r5" -> InstanceClass.R5;
+            case "r6g" -> InstanceClass.MEMORY6_GRAVITON;
+            case "r7g" -> InstanceClass.MEMORY7_GRAVITON;
+            default -> throw new IllegalArgumentException("Unsupported database instance family: " + className);
         };
     }
 
