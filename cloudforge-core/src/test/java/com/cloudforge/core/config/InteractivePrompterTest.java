@@ -89,4 +89,46 @@ class InteractivePrompterTest {
 
         assertEquals("mariadb", config.databaseEngine);
     }
+
+    private static ApplicationSpec postgresMinimum16Default17() {
+        return ConfigurationIntrospectorTest.databaseApplication(
+            DatabaseRequirement.optional("postgres", "16").withDefaultVersion("17"),
+            List.of(new DatabaseOption("postgres", "16", true), new DatabaseOption("postgres", "17", true),
+                new DatabaseOption("mariadb", "10.11", false), new DatabaseOption("mariadb", "11.4", false)));
+    }
+
+    private static void promptDatabaseVersion(DeploymentConfig config, ApplicationSpec spec) throws Exception {
+        InteractivePrompter prompter = new InteractivePrompter(
+            new ByteArrayInputStream("\n".getBytes(StandardCharsets.UTF_8)),
+            new PrintStream(new ByteArrayOutputStream()));
+        ConfigFieldInfo version = ConfigurationIntrospector.discoverFields(spec).stream()
+            .filter(f -> f.fieldName().equals("databaseVersion"))
+            .findFirst().orElseThrow();
+        Method promptForField = InteractivePrompter.class
+            .getDeclaredMethod("promptForField", ConfigFieldInfo.class, Object.class, ApplicationSpec.class);
+        promptForField.setAccessible(true);
+        promptForField.invoke(prompter, version, config, spec);
+    }
+
+    @Test
+    void anEmptyAnswerSelectsTheApplicationsDefaultVersionNotTheMinimum() throws Exception {
+        DeploymentConfig config = new DeploymentConfig();
+        config.provisionDatabase = true;
+
+        promptDatabaseVersion(config, postgresMinimum16Default17());
+
+        assertEquals("17", config.databaseVersion);
+    }
+
+    @Test
+    void aVersionFromAnotherEngineIsNotKeptAsTheDefault() throws Exception {
+        DeploymentConfig config = new DeploymentConfig();
+        config.provisionDatabase = true;
+        config.databaseEngine = "mariadb";
+        config.databaseVersion = "17";
+
+        promptDatabaseVersion(config, postgresMinimum16Default17());
+
+        assertEquals("10.11", config.databaseVersion);
+    }
 }
