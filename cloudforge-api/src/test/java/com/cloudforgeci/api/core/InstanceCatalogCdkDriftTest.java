@@ -4,6 +4,7 @@ import com.cloudforge.core.interfaces.InstanceCatalog;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.InstanceType;
 
 import java.util.Arrays;
 import java.util.List;
@@ -37,8 +38,10 @@ class InstanceCatalogCdkDriftTest {
     }
 
     private static Set<String> cdkFamilies() {
+        // The AWS family name (t3) comes from the instance type the CDK builds, not from the enum
+        // constant name (BURSTABLE3), which is one of several aliases for the same family.
         return Arrays.stream(InstanceClass.values())
-            .map(family -> family.name().toLowerCase(Locale.ROOT))
+            .map(family -> InstanceType.of(family, InstanceSize.LARGE).toString().split("\\.")[0])
             .collect(Collectors.toSet());
     }
 
