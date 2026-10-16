@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import java.util.LinkedHashMap;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -266,5 +268,60 @@ class DefaultEmulatorEdgeRuntimeTest {
             Map.of("jenkins.cloudforge.localhost", 48843, "grafana.cloudforge.localhost", 3000),
             Map.of(48843, "/_aws/elb/cfc-xnp5kj"));
         assertEquals(Map.of("jenkins.cloudforge.localhost", "/_aws/elb/cfc-xnp5kj"), prefixes);
+    }
+
+    @Test
+    void findsMiniStackTaskContainersThatPublishNoHostPort() {
+        List<DefaultEmulatorEdgeRuntime.UnpublishedTask> tasks = DefaultEmulatorEdgeRuntime.parseUnpublishedMiniStackTasks(List.of(
+            "ministack-ecs-ab12cd34-MS-jenkinsFargateContainer\t8080/tcp",
+            "ministack-ecs-ab12cd34-cloudforge-synth-service\t8090/tcp",
+            "ministack-ecs-9f8e7d6c-MS-giteaFargateContainer\t0.0.0.0:3000->3000/tcp",
+            "ministack-rds-281afe4a44d7-instance-db\t3306/tcp, 33060/tcp",
+            "cfc-ministack\t0.0.0.0:4566->4566/tcp",
+            "ministack-ecs-5a5a5a5a-MS-grafanaFargateContainer\t3000/tcp"));
+
+        assertEquals(List.of(
+            new DefaultEmulatorEdgeRuntime.UnpublishedTask("ministack-ecs-ab12cd34-MS-jenkinsFargateContainer", 8080),
+            new DefaultEmulatorEdgeRuntime.UnpublishedTask("ministack-ecs-5a5a5a5a-MS-grafanaFargateContainer", 3000)), tasks,
+            "the sidecar, published tasks, database and emulator containers are not routes");
+    }
+
+    @Test
+    void anUnpublishedTaskIsProxiedToItsContainerAddressWhileOtherRoutesKeepHostDockerInternal() {
+        Map<String, Integer> routes = new LinkedHashMap<>();
+        routes.put("jenkins.cloudforge.localhost", 8080);
+        routes.put("gitea.cloudforge.localhost", 3000);
+
+        String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(
+            routes, Map.of(), Map.of("jenkins.cloudforge.localhost", "172.18.0.9:8080"));
+
+        assertTrue(conf.contains("proxy_pass http://172.18.0.9:8080;"));
+        assertTrue(conf.contains("proxy_pass http://host.docker.internal:3000;"));
+        assertFalse(conf.contains("host.docker.internal:8080"));
+    }
+
+    /** The text of the nginx {@code server} block for one host name. */
+    private static String serverBlock(String conf, String hostname) {
+        for (String block : conf.split("(?m)^server \\{")) {
+            if (block.contains("server_name " + hostname + ";")) {
+                return block;
+            }
+        }
+        throw new AssertionError("no server block for " + hostname);
+    }
+
+    @Test
+    void aDirectJenkinsRouteSendsTheBareRootToTheLoginPage() {
+        Map<String, Integer> routes = new LinkedHashMap<>();
+        routes.put("jenkins.cloudforge.localhost", 8080);
+        routes.put("grafana.cloudforge.localhost", 3000);
+
+        String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(
+            routes, Map.of(), Map.of("jenkins.cloudforge.localhost", "172.18.0.9:8080"));
+
+        String jenkins = serverBlock(conf, "jenkins.cloudforge.localhost");
+        assertTrue(jenkins.contains("location = / {") && jenkins.contains("return 302 /login;"));
+        String grafana = serverBlock(conf, "grafana.cloudforge.localhost");
+        assertFalse(grafana.contains("return 302 /login;"), "only Jenkins is redirected");
     }
 }
