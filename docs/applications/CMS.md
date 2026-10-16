@@ -50,9 +50,9 @@ EC2 instance type.
 | `october-cms` | October CMS | `cms` | 8.2 | `php:8.2-apache` | 1024 / 2048, `t3.small` |
 | `woocommerce` | WooCommerce | `ecommerce` | 8.2 | `wordpress:php8.2-apache` | 2048 / 4096, `t3.medium` |
 | `magento` | Magento 2 / Adobe Commerce | `ecommerce` | 8.2 | `magento/magento-cloud-docker-php:8.2-fpm` | 4096 / 8192, `t3.xlarge` |
-| `prestashop` | PrestaShop | `ecommerce` | 8.1 | `prestashop/prestashop:8-8.1-apache` | 2048 / 4096, `t3.medium` |
+| `prestashop` | PrestaShop | `ecommerce` | 8.1 | `prestashop/prestashop:8.1-apache` | 2048 / 4096, `t3.medium` |
 | `opencart` | OpenCart | `ecommerce` | 8.1 | `vimagick/opencart:latest` | 1024 / 2048, `t3.small` |
-| `sylius` | Sylius | `ecommerce` | 8.3 | `sylius/standard:latest` | 2048 / 4096, `t3.medium` |
+| `sylius` | Sylius | `ecommerce` | 8.3 | `sylius/standard:1.11-traditional` | 2048 / 4096, `t3.medium` |
 | `bagisto` | Bagisto | `ecommerce` | 8.2 | `php:8.2-apache` | 2048 / 4096, `t3.medium` |
 | `phpbb` | phpBB | `forum` | 8.2 | `php:8.2-apache` | 1024 / 2048, `t3.small` |
 | `flarum` | Flarum | `forum` | 8.2 | `php:8.2-apache` | 1024 / 2048, `t3.small` |

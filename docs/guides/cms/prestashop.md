@@ -10,7 +10,7 @@ PrestaShop is an open-source e-commerce platform with a storefront, back office,
 |----------|-------|
 | **Application ID** | `prestashop` |
 | **Category** | E-Commerce |
-| **Default Image** | `prestashop/prestashop:8-8.1-apache` |
+| **Default Image** | `prestashop/prestashop:8.1-apache` |
 | **PHP Version** | 8.1 |
 | **Application Port** | `80` |
 | **Recommended CPU / Memory (Fargate)** | 2048 / 4096 MB |

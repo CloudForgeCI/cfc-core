@@ -50,14 +50,14 @@ import java.util.Map;
     supportsObjectCache = true,
     supportsMultisite = true,
     websiteUrl = "https://www.prestashop.com",
-    defaultImage = "prestashop/prestashop:8-8.1-apache"
+    defaultImage = "prestashop/prestashop:8.1-apache"
 )
 public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
 
     // ========== Constants ==========
 
     protected static final String APPLICATION_ID = "prestashop";
-    protected static final String DEFAULT_IMAGE = "prestashop/prestashop:8-8.1-apache";
+    protected static final String DEFAULT_IMAGE = "prestashop/prestashop:8.1-apache";
     protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";
     protected static final String EFS_DATA_PATH = "/prestashop";
