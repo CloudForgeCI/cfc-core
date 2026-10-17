@@ -356,4 +356,12 @@ class FargateCpuMemoryValidatorTest {
         assertTrue(FargateCpuMemoryValidator.validMemoryValues(4096).contains(30720));
         assertTrue(FargateCpuMemoryValidator.validMemoryValues(999).isEmpty());
     }
+
+    @Test
+    void theMemoryChoicesCannotBeChangedByACaller() {
+        List<Integer> memory = FargateCpuMemoryValidator.validMemoryValues(4096);
+
+        assertThrows(UnsupportedOperationException.class, () -> memory.add(1));
+        assertEquals(FargateCpuMemoryValidator.validMemoryValues(4096), memory);
+    }
 }
