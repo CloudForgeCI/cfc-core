@@ -333,11 +333,12 @@ public final class ManagerOperatorIamSupport {
             .actions(List.of("ssm:GetParameters", "ssm:GetParameter"))
             .resources(List.of("arn:aws:ssm:*:*:parameter/aws/service/*"))
             .build();
-        // The EC2 runtime also creates an AWS::IAM::InstanceProfile around its instance role.
-        // Instance profile names are CloudFormation-generated from the logical id and truncate
-        // like role names, so there is no stable name pattern to scope them by; an instance
-        // profile grants nothing on its own, and launching with one still needs iam:PassRole,
-        // which stays conditioned on the cloudforge:managed tag (see passRole above).
+        // The EC2 runtime also creates an AWS::IAM::InstanceProfile around its instance role. Like
+        // the roles above, profiles are scoped by name and not by tag: a rollback can delete a
+        // profile before its tags are visible to IAM. The launch template's profile has a logical
+        // id containing LtProfile, which CloudFormation carries into the physical name, so only
+        // profiles created for CloudForge EC2 launch templates match. Launching with a profile
+        // still needs iam:PassRole, which stays conditioned on the cloudforge:managed tag.
         PolicyStatement instanceProfileManage = PolicyStatement.Builder.create()
             .sid("CloudForgeManagerDeployInstanceProfile")
             .actions(List.of(
@@ -348,7 +349,7 @@ public final class ManagerOperatorIamSupport {
                 "iam:RemoveRoleFromInstanceProfile",
                 "iam:TagInstanceProfile",
                 "iam:UntagInstanceProfile"))
-            .resources(List.of("arn:aws:iam::*:instance-profile/*"))
+            .resources(List.of("arn:aws:iam::*:instance-profile/*LtProfile*"))
             .build();
         // A Backup vault is created with the account's AWS-managed Backup key, and creating it
         // makes AWS Backup grant itself use of that key on the caller's behalf. Conditioned to

@@ -200,7 +200,8 @@ class ManagerDeployIamSupportTest {
         assertTrue(profile.getActions().contains("iam:CreateInstanceProfile"));
         assertTrue(profile.getActions().contains("iam:AddRoleToInstanceProfile"));
         assertTrue(profile.getActions().contains("iam:DeleteInstanceProfile"));
-        assertTrue(profile.getResources().contains("arn:aws:iam::*:instance-profile/*"));
+        assertEquals(List.of("arn:aws:iam::*:instance-profile/*LtProfile*"), profile.getResources(),
+            "only the profiles CloudForge's EC2 launch templates create, not every instance profile");
 
         for (String sid : List.of("CloudForgeManagerDeployIamRoleCreate", "CloudForgeManagerDeployIamRoleManage")) {
             PolicyStatement roles = statements.stream().filter(s -> sid.equals(s.getSid())).findFirst().orElseThrow();
