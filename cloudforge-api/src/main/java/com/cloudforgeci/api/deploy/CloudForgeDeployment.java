@@ -4,6 +4,7 @@ import com.cloudforge.core.config.DeploymentContextPreparer;
 import com.cloudforge.core.local.DeploymentTarget;
 import com.cloudforge.core.local.EmulatorEdgeLifecycle;
 import com.cloudforge.core.local.LocalDeployResult;
+import com.cloudforge.core.local.LocalDeploymentPipeline;
 import com.cloudforge.core.local.LocalDeploymentPipelineResult;
 import com.cloudforge.core.local.LocalDeploymentRequest;
 import com.cloudforge.core.local.LocalSameApplicationStackReplacer;
@@ -15,6 +16,8 @@ import com.cloudforgeci.localstack.LocalStackDeployer;
 import com.cloudforgeci.localstack.LocalStackDeploymentPipeline;
 import com.cloudforgeci.ministack.MiniStackDeployer;
 import com.cloudforgeci.ministack.MiniStackDeploymentPipeline;
+import com.cloudforgeci.ministack.MiniStackLocalRuntime;
+import com.cloudforgeci.ministack.MiniStackTemplateAdapter;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -79,6 +82,20 @@ public final class CloudForgeDeployment {
             && (subdomain == null || subdomain.isBlank());
     }
 
+    /** Deploys to the region a deployment context names, like the AWS target; MiniStack has one stack list per region. */
+    private static final LocalDeploymentPipeline MINISTACK_PIPELINE = LocalDeploymentPipeline.forRegion(
+        MiniStackTemplateAdapter.INSTANCE,
+        CloudForgeDeployment::miniStackDeployer,
+        MiniStackLocalRuntime.INSTANCE::reconcile);
+
+    /** A MiniStack deployer for {@code region}; a blank region uses {@code AWS_DEFAULT_REGION}, then us-east-1. */
+    static MiniStackDeployer miniStackDeployer(String region) {
+        if (region == null || region.isBlank()) {
+            return new MiniStackDeployer();
+        }
+        return new MiniStackDeployer(MiniStackDeployer.resolveEndpoint(), region.trim());
+    }
+
     private static DeploymentResult deployMiniStack(
             DeploymentRequest request,
             LocalDeployPreflight.PreflightOutcome preflight) throws IOException {
@@ -91,7 +108,7 @@ public final class CloudForgeDeployment {
         String endpoint = MiniStackDeployer.resolveEndpoint();
         LocalSameApplicationStackReplacer.Result replaceResult = null;
         if (replacesSameApplication(request)) {
-            try (MiniStackDeployer deployer = new MiniStackDeployer()) {
+            try (MiniStackDeployer deployer = miniStackDeployer(request.config().region)) {
                 replaceResult = deployer.replaceSameApplicationStacks(
                     request.config().applicationId,
                     localRequest.localStackName(),
@@ -107,13 +124,13 @@ public final class CloudForgeDeployment {
             case DRY_RUN -> adaptation = MiniStackDeploymentPipeline.adapt(localRequest);
             case DEPLOY -> {
                 LocalDeploymentPipelineResult pipelineResult =
-                    MiniStackDeploymentPipeline.deploy(localRequest);
+                    MINISTACK_PIPELINE.deploy(localRequest, request.config().region);
                 adaptation = pipelineResult.adaptation();
                 deployment = pipelineResult.deployment();
                 outputs = deployment.outputs();
             }
             case VERIFY -> {
-                try (MiniStackDeployer deployer = new MiniStackDeployer()) {
+                try (MiniStackDeployer deployer = miniStackDeployer(request.config().region)) {
                     outputs = deployer.verifyDeployment(localRequest.localStackName());
                 }
             }
