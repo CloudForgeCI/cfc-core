@@ -1,6 +1,8 @@
 package com.cloudforgeci.api.application;
 
 import com.cloudforge.core.interfaces.ApplicationSpec;
+import com.cloudforge.core.interfaces.DatabaseSpec;
+import com.cloudforge.core.interfaces.InstanceCatalog;
 import com.cloudforgeci.api.application.analytics.MetabaseApplicationSpec;
 import com.cloudforgeci.api.application.analytics.SupersetApplicationSpec;
 import com.cloudforgeci.api.application.artifactregistry.HarborApplicationSpec;
@@ -19,6 +21,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.List;
+import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -347,5 +352,87 @@ class AllApplicationSpecsTest {
         GrafanaApplicationSpec grafana = new GrafanaApplicationSpec();
         assertTrue(grafana.supportsOidcIntegration());
         assertNotNull(grafana.getOidcIntegration());
+    }
+
+    // ========== Default image tags ==========
+
+    /**
+     * Specs whose default image still uses a floating tag. A floating tag changes what a new
+     * deployment runs without any change here, which is how GitLab's image began requiring a newer
+     * database than the one the spec provisioned. Pin each of these to a version and delete its
+     * entry; this test fails when an entry is no longer floating, so the list only shrinks.
+     */
+    private static final Set<String> FLOATING_TAG_EXCEPTIONS = Set.of(
+        "MattermostApplicationSpec", "MattermostTeamApplicationSpec", "NexusApplicationSpec",
+        "VaultApplicationSpec", "OpenCartApplicationSpec",
+        "GiteaApplicationSpec", "GrafanaApplicationSpec", "PrometheusApplicationSpec",
+        "MetabaseApplicationSpec", "SupersetApplicationSpec");
+
+    private static boolean isFloatingTag(String image) {
+        // The tag is whatever follows the last ':' that comes after the last '/', so a registry
+        // port ("host:5000/app") is not mistaken for one.
+        int slash = image.lastIndexOf('/');
+        int colon = image.lastIndexOf(':');
+        if (image.contains("@sha256:")) {
+            return false;
+        }
+        if (colon <= slash) {
+            return true; // no tag at all means latest
+        }
+        String tag = image.substring(colon + 1);
+        // Only "latest" (and no tag at all). Upstream-managed release channels such as Jenkins "lts"
+        // are a deliberate choice and are not treated as floating here.
+        return tag.equals("latest");
+    }
+
+    @Test
+    void newApplicationsMustPinTheirDefaultImageVersion() {
+        List<ApplicationSpec> registered = ServiceLoader.load(ApplicationSpec.class).stream()
+            .map(ServiceLoader.Provider::get)
+            .toList();
+        assertTrue(registered.size() >= 25, "expected the registered applications, found " + registered.size());
+
+        for (ApplicationSpec spec : registered) {
+            String name = spec.getClass().getSimpleName();
+            boolean floating = isFloatingTag(spec.defaultContainerImage());
+            if (FLOATING_TAG_EXCEPTIONS.contains(name)) {
+                assertTrue(floating, name + " now pins " + spec.defaultContainerImage()
+                    + "; remove it from FLOATING_TAG_EXCEPTIONS");
+            } else {
+                assertFalse(floating, name + " uses a floating default image tag: " + spec.defaultContainerImage()
+                    + ". Pin a version.");
+            }
+        }
+    }
+
+    @Test
+    void floatingTagDetection() {
+        assertTrue(isFloatingTag("gitlab/gitlab-ce:latest"));
+        assertTrue(isFloatingTag("redis"));
+        assertFalse(isFloatingTag("jenkins/jenkins:lts"));
+        assertFalse(isFloatingTag("gitlab/gitlab-ce:19.4.2-ce.0"));
+        assertFalse(isFloatingTag("registry.example.com:5000/app:1.2"));
+        assertTrue(isFloatingTag("registry.example.com:5000/app"));
+        assertFalse(isFloatingTag("app@sha256:abc"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void defaultInstanceTypeIsOneTheCatalogOffers(ApplicationSpec spec) {
+        assertTrue(InstanceCatalog.ec2InstanceTypes().contains(spec.defaultInstanceType()),
+            spec.applicationId() + " defaults to EC2 type " + spec.defaultInstanceType()
+                + ", which InstanceCatalog does not offer");
+    }
+
+    @ParameterizedTest
+    @MethodSource("allApplicationSpecs")
+    void declaredDatabaseInstanceClassIsOneTheCatalogOffers(ApplicationSpec spec) {
+        if (!(spec instanceof DatabaseSpec databaseSpec) || databaseSpec.databaseRequirement() == null
+                || databaseSpec.databaseRequirement().type() == DatabaseSpec.DatabaseRequirement.RequirementType.NONE) {
+            return;
+        }
+        assertTrue(InstanceCatalog.databaseInstanceClasses().contains(databaseSpec.databaseRequirement().instanceClass()),
+            spec.applicationId() + " declares RDS class " + databaseSpec.databaseRequirement().instanceClass()
+                + ", which InstanceCatalog does not offer");
     }
 }

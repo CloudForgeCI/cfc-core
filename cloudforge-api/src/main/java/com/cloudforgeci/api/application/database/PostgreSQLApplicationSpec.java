@@ -116,6 +116,12 @@ public class PostgreSQLApplicationSpec implements ApplicationSpec {
         return EC2_LOG_PATHS;
     }
 
+    /** The official image refuses to initialise an empty data directory without a superuser password. */
+    @Override
+    public String autoAdminPasswordEnvVar() {
+        return "POSTGRES_PASSWORD";
+    }
+
     @Override
     public void configureUserData(UserDataBuilder builder, Ec2Context context) {
         builder.addSystemUpdate();

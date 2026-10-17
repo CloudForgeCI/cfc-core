@@ -49,14 +49,14 @@ import java.util.Map;
     supportsObjectCache = true,
     supportsMultisite = true,
     websiteUrl = "https://sylius.com",
-    defaultImage = "sylius/standard:latest"
+    defaultImage = "sylius/standard:1.11-traditional"
 )
 public class SyliusApplicationSpec implements CmsSpec, DatabaseSpec {
 
     // ========== Constants ==========
 
     protected static final String APPLICATION_ID = "sylius";
-    protected static final String DEFAULT_IMAGE = "sylius/standard:latest";
+    protected static final String DEFAULT_IMAGE = "sylius/standard:1.11-traditional";
     protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";
     protected static final String EFS_DATA_PATH = "/sylius";
