@@ -18,6 +18,7 @@ import com.cloudforgeci.ministack.MiniStackDeployer;
 import com.cloudforgeci.ministack.MiniStackDeploymentPipeline;
 import com.cloudforgeci.ministack.MiniStackLocalRuntime;
 import com.cloudforgeci.ministack.MiniStackTemplateAdapter;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -82,18 +83,25 @@ public final class CloudForgeDeployment {
             && (subdomain == null || subdomain.isBlank());
     }
 
-    /** Deploys to the region a deployment context names, like the AWS target; MiniStack has one stack list per region. */
-    private static final LocalDeploymentPipeline MINISTACK_PIPELINE = LocalDeploymentPipeline.forRegion(
-        MiniStackTemplateAdapter.INSTANCE,
-        CloudForgeDeployment::miniStackDeployer,
-        MiniStackLocalRuntime.INSTANCE::reconcile);
+    /**
+     * Deploys to the region a deployment context names, like the AWS target; MiniStack has one stack list per
+     * region. {@code credentials}, when given, choose the account the way they do on AWS.
+     */
+    private static LocalDeploymentPipeline miniStackPipeline(AwsCredentialsProvider credentials) {
+        return LocalDeploymentPipeline.forRegion(
+            MiniStackTemplateAdapter.INSTANCE,
+            region -> miniStackDeployer(region, credentials),
+            MiniStackLocalRuntime.INSTANCE::reconcile);
+    }
 
-    /** A MiniStack deployer for {@code region}; a blank region uses {@code AWS_DEFAULT_REGION}, then us-east-1. */
-    static MiniStackDeployer miniStackDeployer(String region) {
-        if (region == null || region.isBlank()) {
-            return new MiniStackDeployer();
-        }
-        return new MiniStackDeployer(MiniStackDeployer.resolveEndpoint(), region.trim());
+    /**
+     * A MiniStack deployer for {@code region}; a blank region uses {@code AWS_DEFAULT_REGION}, then us-east-1.
+     * Without {@code credentials} the account comes from {@code AWS_ACCESS_KEY_ID}.
+     */
+    static MiniStackDeployer miniStackDeployer(String region, AwsCredentialsProvider credentials) {
+        String effectiveRegion = region == null || region.isBlank()
+            ? System.getenv().getOrDefault("AWS_DEFAULT_REGION", "us-east-1") : region.trim();
+        return new MiniStackDeployer(MiniStackDeployer.resolveEndpoint(), effectiveRegion, credentials);
     }
 
     private static DeploymentResult deployMiniStack(
@@ -108,7 +116,7 @@ public final class CloudForgeDeployment {
         String endpoint = MiniStackDeployer.resolveEndpoint();
         LocalSameApplicationStackReplacer.Result replaceResult = null;
         if (replacesSameApplication(request)) {
-            try (MiniStackDeployer deployer = miniStackDeployer(request.config().region)) {
+            try (MiniStackDeployer deployer = miniStackDeployer(request.config().region, request.options().credentialsOverride())) {
                 replaceResult = deployer.replaceSameApplicationStacks(
                     request.config().applicationId,
                     localRequest.localStackName(),
@@ -124,13 +132,14 @@ public final class CloudForgeDeployment {
             case DRY_RUN -> adaptation = MiniStackDeploymentPipeline.adapt(localRequest);
             case DEPLOY -> {
                 LocalDeploymentPipelineResult pipelineResult =
-                    MINISTACK_PIPELINE.deploy(localRequest, request.config().region);
+                    miniStackPipeline(request.options().credentialsOverride())
+                    .deploy(localRequest, request.config().region);
                 adaptation = pipelineResult.adaptation();
                 deployment = pipelineResult.deployment();
                 outputs = deployment.outputs();
             }
             case VERIFY -> {
-                try (MiniStackDeployer deployer = miniStackDeployer(request.config().region)) {
+                try (MiniStackDeployer deployer = miniStackDeployer(request.config().region, request.options().credentialsOverride())) {
                     outputs = deployer.verifyDeployment(localRequest.localStackName());
                 }
             }
