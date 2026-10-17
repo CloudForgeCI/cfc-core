@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import java.util.LinkedHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -266,5 +269,113 @@ class DefaultEmulatorEdgeRuntimeTest {
             Map.of("jenkins.cloudforge.localhost", 48843, "grafana.cloudforge.localhost", 3000),
             Map.of(48843, "/_aws/elb/cfc-xnp5kj"));
         assertEquals(Map.of("jenkins.cloudforge.localhost", "/_aws/elb/cfc-xnp5kj"), prefixes);
+    }
+
+    @Test
+    void findsMiniStackTaskContainersThatPublishNoHostPort() {
+        List<DefaultEmulatorEdgeRuntime.UnpublishedTask> tasks = DefaultEmulatorEdgeRuntime.parseUnpublishedMiniStackTasks(List.of(
+            "ministack-ecs-ab12cd34-MS-jenkinsFargateContainer\t8080/tcp",
+            "ministack-ecs-ab12cd34-cloudforge-synth-service\t8090/tcp",
+            "ministack-ecs-9f8e7d6c-MS-giteaFargateContainer\t0.0.0.0:3000->3000/tcp",
+            "ministack-rds-281afe4a44d7-instance-db\t3306/tcp, 33060/tcp",
+            "cfc-ministack\t0.0.0.0:4566->4566/tcp",
+            "ministack-ecs-5a5a5a5a-MS-grafanaFargateContainer\t3000/tcp"));
+
+        assertEquals(List.of(
+            new DefaultEmulatorEdgeRuntime.UnpublishedTask("ministack-ecs-ab12cd34-MS-jenkinsFargateContainer", 8080),
+            new DefaultEmulatorEdgeRuntime.UnpublishedTask("ministack-ecs-5a5a5a5a-MS-grafanaFargateContainer", 3000)), tasks,
+            "the sidecar, published tasks, database and emulator containers are not routes");
+    }
+
+    @Test
+    void anUnpublishedTaskIsProxiedToItsContainerAddressWhileOtherRoutesKeepHostDockerInternal() {
+        Map<String, Integer> routes = new LinkedHashMap<>();
+        routes.put("jenkins.cloudforge.localhost", 8080);
+        routes.put("gitea.cloudforge.localhost", 3000);
+
+        String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(
+            routes, Map.of(), Map.of("jenkins.cloudforge.localhost", "172.18.0.9:8080"));
+
+        assertTrue(conf.contains("proxy_pass http://172.18.0.9:8080;"));
+        assertTrue(conf.contains("proxy_pass http://host.docker.internal:3000;"));
+        assertFalse(conf.contains("host.docker.internal:8080"));
+    }
+
+    /** The text of the nginx {@code server} block for one host name. */
+    private static String serverBlock(String conf, String hostname) {
+        for (String block : conf.split("(?m)^server \\{")) {
+            if (block.contains("server_name " + hostname + ";")) {
+                return block;
+            }
+        }
+        throw new AssertionError("no server block for " + hostname);
+    }
+
+    @Test
+    void aDirectJenkinsRouteSendsTheBareRootToTheLoginPage() {
+        Map<String, Integer> routes = new LinkedHashMap<>();
+        routes.put("jenkins.cloudforge.localhost", 8080);
+        routes.put("grafana.cloudforge.localhost", 3000);
+
+        String conf = DefaultEmulatorEdgeRuntime.renderNginxConf(
+            routes, Map.of(), Map.of("jenkins.cloudforge.localhost", "172.18.0.9:8080"));
+
+        String jenkins = serverBlock(conf, "jenkins.cloudforge.localhost");
+        assertTrue(jenkins.contains("location = / {") && jenkins.contains("return 302 /login;"));
+        String grafana = serverBlock(conf, "grafana.cloudforge.localhost");
+        assertFalse(grafana.contains("return 302 /login;"), "only Jenkins is redirected");
+    }
+
+    @Test
+    void anImageThatExposesSeveralPortsIsRoutedOnTheOneItHasAHostnameFor() {
+        List<DefaultEmulatorEdgeRuntime.UnpublishedTask> tasks = DefaultEmulatorEdgeRuntime.parseUnpublishedMiniStackTasks(List.of(
+            "ministack-ecs-ab12cd34-MS-gitlabFargateContainer\t22/tcp, 80/tcp, 443/tcp"));
+
+        assertEquals(List.of(
+            new DefaultEmulatorEdgeRuntime.UnpublishedTask("ministack-ecs-ab12cd34-MS-gitlabFargateContainer", 80)), tasks);
+    }
+
+    @Test
+    void aRoutedOverTheNetworkTaskDoesNotTakeThePrefixOfAnAppPublishedOnTheSameNumber() {
+        Map<String, Integer> routes = new LinkedHashMap<>();
+        routes.put("grafana.cloudforge.localhost", 8080);
+        routes.put("jenkins.cloudforge.localhost", 8080);
+
+        Map<String, String> prefixes = DefaultEmulatorEdgeRuntime.pathPrefixesForPublishedPorts(
+            routes, Set.of("jenkins.cloudforge.localhost"), Map.of(8080, "/_aws/elb/grafana"));
+
+        assertEquals(Map.of("grafana.cloudforge.localhost", "/_aws/elb/grafana"), prefixes,
+            "jenkins' 8080 is a container port, not the published host port the prefix belongs to");
+    }
+
+    @Test
+    void aTaskDeployedWithASubdomainKeepsItsOwnHostnameAndPathPrefix() {
+        DefaultEmulatorEdgeRuntime.UnpublishedTask task = new DefaultEmulatorEdgeRuntime.UnpublishedTask(
+            "ministack-ecs-ab12cd34-MS-jenkins2FargateContainer", 8080);
+
+        DefaultEmulatorEdgeRuntime.DirectRoute route = DefaultEmulatorEdgeRuntime.directRoute(task, List.of(
+            "CFC_LOCALSTACK_EDGE_HOSTNAME=jenkins2.cloudforge.localhost",
+            "JENKINS_OPTS=--httpPort=8080 --prefix=/_aws/elb/cfc-jenkins2"));
+
+        assertEquals("jenkins2.cloudforge.localhost", route.hostname());
+        assertEquals("/_aws/elb/cfc-jenkins2", route.pathPrefix());
+    }
+
+    @Test
+    void aTaskWithoutOverridesUsesTheSharedHostnameAndNoPrefix() {
+        DefaultEmulatorEdgeRuntime.DirectRoute route = DefaultEmulatorEdgeRuntime.directRoute(
+            new DefaultEmulatorEdgeRuntime.UnpublishedTask("ministack-ecs-ab12cd34-MS-jenkinsFargateContainer", 8080),
+            List.of("JAVA_OPTS=-Xmx512m"));
+
+        assertEquals("jenkins.cloudforge.localhost", route.hostname());
+        assertEquals(null, route.pathPrefix());
+    }
+
+    @Test
+    void theTaskAddressIsReadFromTheEmulatorNetworkOnly() {
+        String format = DefaultEmulatorEdgeRuntime.addressFormat("cfc-network");
+
+        assertTrue(format.contains("index .NetworkSettings.Networks \"cfc-network\""), format);
+        assertFalse(format.contains("range"), "an address on another attached network is not reachable from the edge");
     }
 }

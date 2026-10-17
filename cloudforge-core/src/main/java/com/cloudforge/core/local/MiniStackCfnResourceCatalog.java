@@ -20,8 +20,25 @@ public final class MiniStackCfnResourceCatalog {
         if (resourceType == null || resourceType.isBlank()) {
             return MiniStackResourcePolicy.UNSUPPORTED;
         }
+        // A database instance is created as a real container through MiniStack's RDS API and the
+        // template is rewritten to use it; its subnet and parameter groups are plain CloudFormation.
+        if ("AWS::RDS::DBInstance".equals(resourceType)) {
+            return MiniStackResourcePolicy.ADAPTED;
+        }
+        if ("AWS::RDS::DBSubnetGroup".equals(resourceType) || "AWS::RDS::DBParameterGroup".equals(resourceType)) {
+            return MiniStackResourcePolicy.SUPPORTED;
+        }
         if (resourceType.startsWith("AWS::RDS::")) {
             return MiniStackResourcePolicy.UNSUPPORTED;
+        }
+        // The Private CA chain is replaced by plain HTTP, Cognito users and branding are created or
+        // dropped by the deployer, and the CDK log-retention custom resource is removed.
+        if (resourceType.startsWith("AWS::ACMPCA::")
+                || "AWS::Cognito::UserPoolUser".equals(resourceType)
+                || "AWS::Cognito::UserPoolUserToGroupAttachment".equals(resourceType)
+                || "AWS::Cognito::ManagedLoginBranding".equals(resourceType)
+                || "Custom::LogRetention".equals(resourceType)) {
+            return MiniStackResourcePolicy.ADAPTED;
         }
         if (resourceType.startsWith("AWS::WAFv2::")
                 || resourceType.startsWith("AWS::WAF::")) {

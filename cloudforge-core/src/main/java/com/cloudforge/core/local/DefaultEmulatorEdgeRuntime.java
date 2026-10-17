@@ -11,7 +11,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.logging.Logger;
@@ -126,7 +128,10 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
     @Override
     public Map<String, Integer> reconcile() throws IOException {
         Path runtimeDir = prepareRuntimeDir();
-        Path confDir = runtimeDir.resolve("conf.d");
+        // A running edge reads the directory it was started with. The one derived from the current
+        // working directory differs when the CLI runs from elsewhere, and config written there is
+        // never seen, so every vhost answers 404.
+        Path confDir = mountedConfDir().orElse(runtimeDir.resolve("conf.d"));
         Files.createDirectories(confDir);
         Map<String, Integer> routes = reconcileRoutes(confDir);
         if (isRunning()) {
@@ -140,8 +145,23 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         }
         System.out.println("Emulator edge reconciled " + routes.size() + " vhost(s)");
         routes.forEach((host, port) ->
-            System.out.println("  http://" + host + "/ → host.docker.internal:" + port));
+            System.out.println("  http://" + host + "/ → "
+                + lastUpstreams.getOrDefault(host, "host.docker.internal:" + port)));
         return routes;
+    }
+
+    /** The host directory the running edge container mounts as its {@code conf.d}, if it is running. */
+    private Optional<Path> mountedConfDir() {
+        try {
+            if (!isRunning()) {
+                return Optional.empty();
+            }
+            return DockerEmulatorSupport.capture(List.of("docker", "inspect", containerName(), "--format",
+                    "{{range .Mounts}}{{if eq .Destination \"/etc/nginx/conf.d\"}}{{.Source}}{{end}}{{end}}"))
+                .stream().map(String::trim).filter(line -> !line.isEmpty()).findFirst().map(Path::of);
+        } catch (IOException e) {
+            return Optional.empty();
+        }
     }
 
     @Override
@@ -250,6 +270,46 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             }
         }
         return routes;
+    }
+
+    /** A MiniStack task container that exposes a port on the emulator network but publishes none on the host. */
+    record UnpublishedTask(String containerName, int containerPort) {
+    }
+
+    private static final Pattern EXPOSED_PORT = Pattern.compile("(?<![>:\\d])(\\d{2,5})/tcp");
+
+    /**
+     * MiniStack 1.5 and later do not publish a task's port on the host; the application is reached
+     * through the emulator's load balancer or straight over the Docker network. These are the task
+     * containers (never the synth sidecar) whose {@code docker ps} port column holds only exposed
+     * ports such as {@code 8080/tcp}.
+     *
+     * @param nameAndPortLines {@code name<TAB>ports} lines from {@code docker ps}
+     */
+    static List<UnpublishedTask> parseUnpublishedMiniStackTasks(List<String> nameAndPortLines) {
+        List<UnpublishedTask> tasks = new ArrayList<>();
+        for (String line : nameAndPortLines) {
+            int tab = line == null ? -1 : line.indexOf('\t');
+            if (tab < 0) {
+                continue;
+            }
+            String name = line.substring(0, tab).trim();
+            String ports = line.substring(tab + 1);
+            if (!name.startsWith("ministack-ecs-") || name.contains("synth-service") || ports.contains("->")) {
+                continue;
+            }
+            // An image can expose several ports (GitLab exposes 22, 80 and 443); route the first
+            // one the application has a hostname for.
+            Matcher matcher = EXPOSED_PORT.matcher(ports);
+            while (matcher.find()) {
+                int port = parsePort(matcher.group(1));
+                if (port > 0 && hostnameForContainer(name, port) != null) {
+                    tasks.add(new UnpublishedTask(name, port));
+                    break;
+                }
+            }
+        }
+        return List.copyOf(tasks);
     }
 
     /**
@@ -371,6 +431,15 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
      *                     (e.g. {@code /_aws/elb/cfc-xyz}) for applications that serve beneath one
      */
     static String renderNginxConf(Map<String, Integer> routes, Map<String, String> pathPrefixes) {
+        return renderNginxConf(routes, pathPrefixes, Map.of());
+    }
+
+    /**
+     * @param upstreams hostname → {@code address:port} for applications reached directly over the
+     *                  Docker network; every other hostname goes through {@code host.docker.internal}
+     */
+    static String renderNginxConf(
+            Map<String, Integer> routes, Map<String, String> pathPrefixes, Map<String, String> upstreams) {
         StringBuilder sb = new StringBuilder();
         sb.append("# Generated by DefaultEmulatorEdgeRuntime.reconcile\n\n");
         sb.append(renderNginxStatusServer(routes));
@@ -385,6 +454,8 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                 continue;
             }
             int hostPort = routes.get(hostname);
+            String upstream = upstreams != null && upstreams.containsKey(hostname)
+                ? upstreams.get(hostname) : "host.docker.internal:" + hostPort;
             boolean gateway = isGatewayHostname(hostname);
             String pathPrefix = normalizePathPrefix(
                 pathPrefixes == null ? null : pathPrefixes.get(hostname));
@@ -412,7 +483,7 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                 // Pass-through when the client already uses the LocalStack ELB path.
                 sb.append("    location ^~ ").append(pathPrefix).append("/ {\n");
                 appendProxyHeaders(sb, gateway);
-                appendProxyPass(sb, hostPort);
+                appendProxyPass(sb, upstream);
                 appendPrefixResponseRewrites(sb, pathPrefix);
                 sb.append("    }\n\n");
                 // Jenkins-specific: an anonymous request to bare "/" under the ELB prefix gets a
@@ -426,13 +497,20 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                         .append("    }\n\n");
                 }
             }
+            // Without a path prefix Jenkins also answers an anonymous "/" with a 403 page that only
+            // meta-refreshes to the login, so send the browser there directly.
+            if (pathPrefix == null && hostname.contains("jenkins")) {
+                sb.append("    location = / {\n")
+                    .append("        return 302 /login;\n")
+                    .append("    }\n\n");
+            }
             sb.append("    location / {\n");
             appendProxyHeaders(sb, gateway);
             if (pathPrefix != null && hostname.contains("jenkins")) {
                 // Jenkins's own --prefix flag makes it expect every request already carrying
                 // the ALB path prefix, so a bare "/" needs it injected before proxying.
                 sb.append("        rewrite ^/(.*)$ ").append(pathPrefix).append("/$1 break;\n");
-                appendProxyPass(sb, hostPort);
+                appendProxyPass(sb, upstream);
                 appendPrefixResponseRewrites(sb, pathPrefix);
             } else if (pathPrefix != null) {
                 // Everything else (WordPress etc.) expects to be hit at its own root — it fakes
@@ -444,10 +522,10 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
                 // backend's own redirects/asset links legitimately carry that prefix regardless
                 // of whether it's injected into the request, and still need translating back to
                 // the friendly hostname's root.
-                appendProxyPass(sb, hostPort);
+                appendProxyPass(sb, upstream);
                 appendPrefixResponseRewrites(sb, pathPrefix);
             } else {
-                appendProxyPass(sb, hostPort);
+                appendProxyPass(sb, upstream);
             }
             sb.append("    }\n")
                 .append("}\n\n");
@@ -456,8 +534,11 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
     }
 
     private static void appendProxyPass(StringBuilder sb, int hostPort) {
-        sb.append("        proxy_pass http://host.docker.internal:")
-            .append(hostPort).append(";\n");
+        appendProxyPass(sb, "host.docker.internal:" + hostPort);
+    }
+
+    private static void appendProxyPass(StringBuilder sb, String upstream) {
+        sb.append("        proxy_pass http://").append(upstream).append(";\n");
     }
 
     /** Apply CloudForge styling to LocalStack's otherwise unbranded Cognito hosted-login page. */
@@ -551,6 +632,20 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             p = p.substring(0, p.length() - 1);
         }
         return p;
+    }
+
+    /**
+     * Same as {@link #pathPrefixesForPublishedPorts(Map, Map)}, leaving out the hostnames routed over
+     * the Docker network. Their route value is a container port, not a host port, so it could
+     * otherwise pick up the prefix of an unrelated application published on the same number.
+     */
+    static Map<String, String> pathPrefixesForPublishedPorts(
+            Map<String, Integer> routes,
+            Set<String> unpublishedHostnames,
+            Map<Integer, String> hostPortToPrefix) {
+        Map<String, Integer> published = new LinkedHashMap<>(routes);
+        published.keySet().removeAll(unpublishedHostnames);
+        return pathPrefixesForPublishedPorts(published, hostPortToPrefix);
     }
 
     /**
@@ -754,6 +849,9 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             + "}\n\n";
     }
 
+    /** Upstreams reached directly over the Docker network in the last reconcile, by hostname. */
+    private Map<String, String> lastUpstreams = Map.of();
+
     private Map<String, Integer> reconcileRoutes(Path confDir) throws IOException {
         List<String> portLines = DockerEmulatorSupport.capture(List.of(
             "docker", "ps", "--format", "{{.Names}}\t{{.Ports}}"));
@@ -761,6 +859,22 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         Map<String, Integer> routes =
             parseDockerPortPublishes(portLines, overrides.edgeHostnameByContainerName());
         expandPlatformRoutes(routes);
+        Map<String, String> upstreams = new LinkedHashMap<>();
+        Map<String, String> directPrefixes = new LinkedHashMap<>();
+        for (UnpublishedTask task : parseUnpublishedMiniStackTasks(portLines)) {
+            DirectRoute direct = directRoute(task, inspectContainerEnv(task.containerName()));
+            if (direct.hostname() == null || routes.containsKey(direct.hostname())) {
+                continue;
+            }
+            String address = containerAddress(task.containerName());
+            if (address != null) {
+                routes.put(direct.hostname(), task.containerPort());
+                upstreams.put(direct.hostname(), address + ":" + task.containerPort());
+                if (direct.pathPrefix() != null) {
+                    directPrefixes.put(direct.hostname(), direct.pathPrefix());
+                }
+            }
+        }
         for (Map.Entry<Integer, String> entry : CONTAINER_PORT_TO_HOST.entrySet()) {
             int port = entry.getKey();
             String hostname = entry.getValue();
@@ -769,12 +883,56 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             }
         }
         Map<String, String> pathPrefixes = pathPrefixesForPublishedPorts(
-            routes, overrides.pathPrefixByHostPort());
+            routes, upstreams.keySet(), overrides.pathPrefixByHostPort());
+        pathPrefixes.putAll(directPrefixes);
         Files.writeString(
             confDir.resolve("cloudforge-apps.conf"),
-            renderNginxConf(routes, pathPrefixes),
+            renderNginxConf(routes, pathPrefixes, upstreams),
             StandardCharsets.UTF_8);
+        lastUpstreams = upstreams;
         return routes;
+    }
+
+    /** The container's address on the emulator network, or null when it has none. */
+    private static String containerAddress(String containerName) {
+        try {
+            for (String line : DockerEmulatorSupport.capture(List.of("docker", "inspect", containerName,
+                    "--format", addressFormat(LocalEmulatorDefaults.DOCKER_NETWORK)))) {
+                String address = line.trim();
+                if (!address.isEmpty()) {
+                    return address;
+                }
+            }
+        } catch (IOException e) {
+            // the container went away between listing and inspecting; it gets no route
+        }
+        return null;
+    }
+
+    /**
+     * The {@code docker inspect} format for a container's address on one network. The edge runs on
+     * the emulator network, so an address on any other network the container is also attached to
+     * would not be reachable from it.
+     */
+    static String addressFormat(String network) {
+        return "{{with index .NetworkSettings.Networks \"" + network + "\"}}{{.IPAddress}}{{end}}";
+    }
+
+    /** The hostname and ALB path prefix a task reached directly over the Docker network is served under. */
+    record DirectRoute(String hostname, String pathPrefix) {
+    }
+
+    /**
+     * A task's own {@code CFC_LOCALSTACK_EDGE_HOSTNAME} (set when it was deployed with a subdomain)
+     * wins over the shared hostname for its application, so two stacks of one application get
+     * separate vhosts, and its own ALB path prefix is kept because there is no published host port
+     * to look the prefix up by.
+     */
+    static DirectRoute directRoute(UnpublishedTask task, List<String> env) {
+        String override = extractEdgeHostname(env);
+        String hostname = override != null && !override.isBlank()
+            ? override : hostnameForContainer(task.containerName(), task.containerPort());
+        return new DirectRoute(hostname, extractAlbPathPrefix(env));
     }
 
     /**
