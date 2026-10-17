@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -297,11 +298,14 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             if (!name.startsWith("ministack-ecs-") || name.contains("synth-service") || ports.contains("->")) {
                 continue;
             }
+            // An image can expose several ports (GitLab exposes 22, 80 and 443); route the first
+            // one the application has a hostname for.
             Matcher matcher = EXPOSED_PORT.matcher(ports);
-            if (matcher.find()) {
+            while (matcher.find()) {
                 int port = parsePort(matcher.group(1));
-                if (port > 0) {
+                if (port > 0 && hostnameForContainer(name, port) != null) {
                     tasks.add(new UnpublishedTask(name, port));
+                    break;
                 }
             }
         }
@@ -631,6 +635,20 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
     }
 
     /**
+     * Same as {@link #pathPrefixesForPublishedPorts(Map, Map)}, leaving out the hostnames routed over
+     * the Docker network. Their route value is a container port, not a host port, so it could
+     * otherwise pick up the prefix of an unrelated application published on the same number.
+     */
+    static Map<String, String> pathPrefixesForPublishedPorts(
+            Map<String, Integer> routes,
+            Set<String> unpublishedHostnames,
+            Map<Integer, String> hostPortToPrefix) {
+        Map<String, Integer> published = new LinkedHashMap<>(routes);
+        published.keySet().removeAll(unpublishedHostnames);
+        return pathPrefixesForPublishedPorts(published, hostPortToPrefix);
+    }
+
+    /**
      * Maps hostname → LocalStack ALB path prefix using container env for published host ports.
      */
     static Map<String, String> pathPrefixesForPublishedPorts(
@@ -861,7 +879,7 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             }
         }
         Map<String, String> pathPrefixes = pathPrefixesForPublishedPorts(
-            routes, overrides.pathPrefixByHostPort());
+            routes, upstreams.keySet(), overrides.pathPrefixByHostPort());
         Files.writeString(
             confDir.resolve("cloudforge-apps.conf"),
             renderNginxConf(routes, pathPrefixes, upstreams),

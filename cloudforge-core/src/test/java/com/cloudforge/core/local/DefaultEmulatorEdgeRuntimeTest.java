@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import java.util.LinkedHashMap;
 
@@ -323,5 +324,27 @@ class DefaultEmulatorEdgeRuntimeTest {
         assertTrue(jenkins.contains("location = / {") && jenkins.contains("return 302 /login;"));
         String grafana = serverBlock(conf, "grafana.cloudforge.localhost");
         assertFalse(grafana.contains("return 302 /login;"), "only Jenkins is redirected");
+    }
+
+    @Test
+    void anImageThatExposesSeveralPortsIsRoutedOnTheOneItHasAHostnameFor() {
+        List<DefaultEmulatorEdgeRuntime.UnpublishedTask> tasks = DefaultEmulatorEdgeRuntime.parseUnpublishedMiniStackTasks(List.of(
+            "ministack-ecs-ab12cd34-MS-gitlabFargateContainer\t22/tcp, 80/tcp, 443/tcp"));
+
+        assertEquals(List.of(
+            new DefaultEmulatorEdgeRuntime.UnpublishedTask("ministack-ecs-ab12cd34-MS-gitlabFargateContainer", 80)), tasks);
+    }
+
+    @Test
+    void aRoutedOverTheNetworkTaskDoesNotTakeThePrefixOfAnAppPublishedOnTheSameNumber() {
+        Map<String, Integer> routes = new LinkedHashMap<>();
+        routes.put("grafana.cloudforge.localhost", 8080);
+        routes.put("jenkins.cloudforge.localhost", 8080);
+
+        Map<String, String> prefixes = DefaultEmulatorEdgeRuntime.pathPrefixesForPublishedPorts(
+            routes, Set.of("jenkins.cloudforge.localhost"), Map.of(8080, "/_aws/elb/grafana"));
+
+        assertEquals(Map.of("grafana.cloudforge.localhost", "/_aws/elb/grafana"), prefixes,
+            "jenkins' 8080 is a container port, not the published host port the prefix belongs to");
     }
 }
