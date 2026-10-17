@@ -9,6 +9,7 @@ import com.cloudforgeci.api.core.rules.AuditManagerControl;
 import com.cloudforgeci.api.core.rules.AuditManagerControlRegistry;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
+import software.amazon.awscdk.Aws;
 import software.amazon.awscdk.CfnCondition;
 import software.amazon.awscdk.CustomResource;
 import software.amazon.awscdk.Duration;
@@ -41,8 +42,12 @@ import software.constructs.Construct;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import io.github.cdklabs.cdknag.NagPackSuppression;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -5223,21 +5228,35 @@ public class ComplianceFactory extends BaseFactory {
      *  CloudForge Manager deploy role can match it by name. See {@link #nameTrailLogsRole}. */
     private static final String TRAIL_LOGS_ROLE_SUFFIX = "-CfcCloudTrailLogs";
 
+    /** 64, less the suffix, a hyphen, an eight character hash, a hyphen and the longest region name (14). */
+    private static final int TRAIL_LOGS_ROLE_PREFIX_LENGTH = 22;
+
     /**
      * {@code Trail} creates its CloudWatch Logs delivery role itself and has no property to name
      * it, so the role is left with a CloudFormation-generated name that truncates to a generic
      * tail. Manager's deploy role can only create and delete roles it can match by name, so the
      * role is given an explicit one, the same way {@code FlowLogFactory}, {@code RdsFactory} and
-     * {@code BackupFactory} name theirs. IAM role names are limited to 64 characters.
+     * {@code BackupFactory} name theirs. IAM role names are limited to 64 characters and are unique
+     * per account across regions, so the name is the start of the stack name, a hash of the whole
+     * stack name (stack names sharing a long prefix stay distinct), the region and the suffix.
      */
     private void nameTrailLogsRole(Trail trail) {
         if (trail.getNode().tryFindChild("LogsRole") instanceof Role logsRole
                 && logsRole.getNode().getDefaultChild() instanceof CfnRole cfnRole) {
-            int maxPrefixLength = 64 - TRAIL_LOGS_ROLE_SUFFIX.length();
-            String prefix = stackName.length() > maxPrefixLength
-                ? stackName.substring(0, maxPrefixLength)
+            String prefix = stackName.length() > TRAIL_LOGS_ROLE_PREFIX_LENGTH
+                ? stackName.substring(0, TRAIL_LOGS_ROLE_PREFIX_LENGTH)
                 : stackName;
-            cfnRole.setRoleName(prefix + TRAIL_LOGS_ROLE_SUFFIX);
+            cfnRole.setRoleName(prefix + "-" + stackNameHash() + "-" + Aws.REGION + TRAIL_LOGS_ROLE_SUFFIX);
+        }
+    }
+
+    /** Eight hex characters derived from the stack name. */
+    private String stackNameHash() {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(stackName.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest, 0, 4);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is always available", e);
         }
     }
 }

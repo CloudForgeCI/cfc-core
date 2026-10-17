@@ -18,6 +18,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -98,16 +100,59 @@ class CloudForgeSynthesizerTest {
             CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
 
         JsonNode resources = MAPPER.readTree(result.templateFile().toFile()).path("Resources");
-        String roleName = null;
+        JsonNode roleName = null;
         for (var entry : resources.properties()) {
             if ("AWS::IAM::Role".equals(entry.getValue().path("Type").asText())
                     && entry.getKey().contains("CloudTrailLogsRole")) {
-                roleName = entry.getValue().path("Properties").path("RoleName").asText(null);
+                roleName = entry.getValue().path("Properties").path("RoleName");
             }
         }
         assertNotNull(roleName, "expected the CloudTrail logs role to carry an explicit RoleName");
-        assertTrue(roleName.endsWith("-CfcCloudTrailLogs"), roleName);
-        assertTrue(roleName.length() <= 64, "IAM role names are limited to 64 characters: " + roleName);
+        assertFalse(roleName.isMissingNode(), "expected the CloudTrail logs role to carry an explicit RoleName");
+        assertTrue(roleName.toString().contains("-CfcCloudTrailLogs\""), roleName.toString());
+        assertTrue(longestRoleName(roleName) <= 64,
+            "IAM role names are limited to 64 characters: " + roleName);
+    }
+
+    /** The longest a RoleName can resolve to: its literal text plus 14 characters for each region reference. */
+    private static int longestRoleName(JsonNode roleName) {
+        if (roleName.isTextual()) {
+            return roleName.asText().length();
+        }
+        int length = 0;
+        for (JsonNode part : roleName.path("Fn::Join").path(1)) {
+            length += part.isTextual() ? part.asText().length() : 14;
+        }
+        return length;
+    }
+
+    /**
+     * IAM role names are unique per account, so two stacks that share the start of their name, or the
+     * same stack name in two regions, must not get the same trail role name.
+     */
+    @Test
+    void cloudTrailLogsRoleNameDiffersByStackNameAndRegion() throws IOException {
+        String first = trailRoleName("SynthTestTrailRoleAlphaStackWithAVeryLongSharedPrefixOne");
+        String second = trailRoleName("SynthTestTrailRoleAlphaStackWithAVeryLongSharedPrefixTwo");
+
+        assertNotEquals(first, second, "stacks sharing the first characters of their name need distinct roles");
+        assertTrue(first.contains("AWS::Region") || first.matches(".*-[a-z]{2}(-[a-z]+)+-\\d-CfcCloudTrailLogs"),
+            "the name carries the region: " + first);
+    }
+
+    private String trailRoleName(String stackName) throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig(stackName);
+        config.securityProfile = SecurityProfile.STAGING;
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk-" + stackName));
+        JsonNode resources = MAPPER.readTree(result.templateFile().toFile()).path("Resources");
+        for (var entry : resources.properties()) {
+            if ("AWS::IAM::Role".equals(entry.getValue().path("Type").asText())
+                    && entry.getKey().contains("CloudTrailLogsRole")) {
+                return entry.getValue().path("Properties").path("RoleName").toString();
+            }
+        }
+        throw new AssertionError("no CloudTrail logs role in " + stackName);
     }
 
     /**
