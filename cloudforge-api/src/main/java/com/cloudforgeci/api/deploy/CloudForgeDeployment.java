@@ -67,6 +67,18 @@ public final class CloudForgeDeployment {
         };
     }
 
+    /**
+     * Whether a MiniStack deploy deletes the other stacks of the same application. A deployment with
+     * its own {@code subdomain} is an additional named instance reached on its own hostname, so it
+     * leaves the others in place; one without a subdomain replaces its predecessor.
+     */
+    static boolean replacesSameApplication(DeploymentRequest request) {
+        String subdomain = request.config().subdomain;
+        return request.options().replaceSameApplication()
+            && request.mode() == DeployMode.DEPLOY
+            && (subdomain == null || subdomain.isBlank());
+    }
+
     private static DeploymentResult deployMiniStack(
             DeploymentRequest request,
             LocalDeployPreflight.PreflightOutcome preflight) throws IOException {
@@ -78,7 +90,7 @@ public final class CloudForgeDeployment {
 
         String endpoint = MiniStackDeployer.resolveEndpoint();
         LocalSameApplicationStackReplacer.Result replaceResult = null;
-        if (request.options().replaceSameApplication() && request.mode() == DeployMode.DEPLOY) {
+        if (replacesSameApplication(request)) {
             try (MiniStackDeployer deployer = new MiniStackDeployer()) {
                 replaceResult = deployer.replaceSameApplicationStacks(
                     request.config().applicationId,
