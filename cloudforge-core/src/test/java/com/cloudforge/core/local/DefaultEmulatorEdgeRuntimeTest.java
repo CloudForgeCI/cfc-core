@@ -347,4 +347,35 @@ class DefaultEmulatorEdgeRuntimeTest {
         assertEquals(Map.of("grafana.cloudforge.localhost", "/_aws/elb/grafana"), prefixes,
             "jenkins' 8080 is a container port, not the published host port the prefix belongs to");
     }
+
+    @Test
+    void aTaskDeployedWithASubdomainKeepsItsOwnHostnameAndPathPrefix() {
+        DefaultEmulatorEdgeRuntime.UnpublishedTask task = new DefaultEmulatorEdgeRuntime.UnpublishedTask(
+            "ministack-ecs-ab12cd34-MS-jenkins2FargateContainer", 8080);
+
+        DefaultEmulatorEdgeRuntime.DirectRoute route = DefaultEmulatorEdgeRuntime.directRoute(task, List.of(
+            "CFC_LOCALSTACK_EDGE_HOSTNAME=jenkins2.cloudforge.localhost",
+            "JENKINS_OPTS=--httpPort=8080 --prefix=/_aws/elb/cfc-jenkins2"));
+
+        assertEquals("jenkins2.cloudforge.localhost", route.hostname());
+        assertEquals("/_aws/elb/cfc-jenkins2", route.pathPrefix());
+    }
+
+    @Test
+    void aTaskWithoutOverridesUsesTheSharedHostnameAndNoPrefix() {
+        DefaultEmulatorEdgeRuntime.DirectRoute route = DefaultEmulatorEdgeRuntime.directRoute(
+            new DefaultEmulatorEdgeRuntime.UnpublishedTask("ministack-ecs-ab12cd34-MS-jenkinsFargateContainer", 8080),
+            List.of("JAVA_OPTS=-Xmx512m"));
+
+        assertEquals("jenkins.cloudforge.localhost", route.hostname());
+        assertEquals(null, route.pathPrefix());
+    }
+
+    @Test
+    void theTaskAddressIsReadFromTheEmulatorNetworkOnly() {
+        String format = DefaultEmulatorEdgeRuntime.addressFormat("cfc-network");
+
+        assertTrue(format.contains("index .NetworkSettings.Networks \"cfc-network\""), format);
+        assertFalse(format.contains("range"), "an address on another attached network is not reachable from the edge");
+    }
 }

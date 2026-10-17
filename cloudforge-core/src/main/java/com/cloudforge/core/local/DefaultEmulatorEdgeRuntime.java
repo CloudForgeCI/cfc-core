@@ -860,15 +860,19 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
             parseDockerPortPublishes(portLines, overrides.edgeHostnameByContainerName());
         expandPlatformRoutes(routes);
         Map<String, String> upstreams = new LinkedHashMap<>();
+        Map<String, String> directPrefixes = new LinkedHashMap<>();
         for (UnpublishedTask task : parseUnpublishedMiniStackTasks(portLines)) {
-            String hostname = hostnameForContainer(task.containerName(), task.containerPort());
-            if (hostname == null || routes.containsKey(hostname)) {
+            DirectRoute direct = directRoute(task, inspectContainerEnv(task.containerName()));
+            if (direct.hostname() == null || routes.containsKey(direct.hostname())) {
                 continue;
             }
             String address = containerAddress(task.containerName());
             if (address != null) {
-                routes.put(hostname, task.containerPort());
-                upstreams.put(hostname, address + ":" + task.containerPort());
+                routes.put(direct.hostname(), task.containerPort());
+                upstreams.put(direct.hostname(), address + ":" + task.containerPort());
+                if (direct.pathPrefix() != null) {
+                    directPrefixes.put(direct.hostname(), direct.pathPrefix());
+                }
             }
         }
         for (Map.Entry<Integer, String> entry : CONTAINER_PORT_TO_HOST.entrySet()) {
@@ -880,6 +884,7 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
         }
         Map<String, String> pathPrefixes = pathPrefixesForPublishedPorts(
             routes, upstreams.keySet(), overrides.pathPrefixByHostPort());
+        pathPrefixes.putAll(directPrefixes);
         Files.writeString(
             confDir.resolve("cloudforge-apps.conf"),
             renderNginxConf(routes, pathPrefixes, upstreams),
@@ -892,17 +897,42 @@ public final class DefaultEmulatorEdgeRuntime implements EmulatorEdgeRuntime {
     private static String containerAddress(String containerName) {
         try {
             for (String line : DockerEmulatorSupport.capture(List.of("docker", "inspect", containerName,
-                    "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}"))) {
-                for (String token : line.trim().split("\\s+")) {
-                    if (!token.isBlank()) {
-                        return token;
-                    }
+                    "--format", addressFormat(LocalEmulatorDefaults.DOCKER_NETWORK)))) {
+                String address = line.trim();
+                if (!address.isEmpty()) {
+                    return address;
                 }
             }
         } catch (IOException e) {
             // the container went away between listing and inspecting; it gets no route
         }
         return null;
+    }
+
+    /**
+     * The {@code docker inspect} format for a container's address on one network. The edge runs on
+     * the emulator network, so an address on any other network the container is also attached to
+     * would not be reachable from it.
+     */
+    static String addressFormat(String network) {
+        return "{{with index .NetworkSettings.Networks \"" + network + "\"}}{{.IPAddress}}{{end}}";
+    }
+
+    /** The hostname and ALB path prefix a task reached directly over the Docker network is served under. */
+    record DirectRoute(String hostname, String pathPrefix) {
+    }
+
+    /**
+     * A task's own {@code CFC_LOCALSTACK_EDGE_HOSTNAME} (set when it was deployed with a subdomain)
+     * wins over the shared hostname for its application, so two stacks of one application get
+     * separate vhosts, and its own ALB path prefix is kept because there is no published host port
+     * to look the prefix up by.
+     */
+    static DirectRoute directRoute(UnpublishedTask task, List<String> env) {
+        String override = extractEdgeHostname(env);
+        String hostname = override != null && !override.isBlank()
+            ? override : hostnameForContainer(task.containerName(), task.containerPort());
+        return new DirectRoute(hostname, extractAlbPathPrefix(env));
     }
 
     /**
