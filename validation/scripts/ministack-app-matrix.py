@@ -68,9 +68,12 @@ ENV.pop("CFC_DEPLOYING", None)
 
 
 def aws(*args, timeout=60):
-    """Runs the AWS CLI against the emulator; returns parsed JSON, or None on any failure."""
-    result = subprocess.run(["aws", "--endpoint-url", ENDPOINT, *args, "--output", "json"],
-                            capture_output=True, text=True, env=ENV, timeout=timeout)
+    """Runs the AWS CLI against the emulator; returns parsed JSON, or None on any failure or timeout."""
+    try:
+        result = subprocess.run(["aws", "--endpoint-url", ENDPOINT, *args, "--output", "json"],
+                                capture_output=True, text=True, env=ENV, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
     if result.returncode != 0 or not result.stdout.strip():
         return None
     try:
@@ -160,6 +163,23 @@ def get_template(stack):
         return None
     body = data.get("TemplateBody")
     return json.loads(body) if isinstance(body, str) else body
+
+
+def stack_absent(stack):
+    """True when the emulator confirms the stack is gone, False when it is still there, None when it cannot say."""
+    try:
+        result = subprocess.run(["aws", "--endpoint-url", ENDPOINT, "cloudformation", "describe-stacks",
+                                 "--stack-name", stack, "--output", "json"],
+                                capture_output=True, text=True, env=ENV, timeout=60)
+    except subprocess.TimeoutExpired:
+        return None
+    if result.returncode != 0:
+        return True if "does not exist" in result.stderr else None
+    try:
+        stacks = json.loads(result.stdout).get("Stacks", [])
+    except ValueError:
+        return None
+    return all(s.get("StackStatus") == "DELETE_COMPLETE" for s in stacks)
 
 
 # --- live checks: resource type -> function(physical id) -> (ok, detail) ---------------------------------
@@ -324,59 +344,70 @@ def deploy_app(app, run_dir, preflight, option=None):
     record = {"app": app_id if not option else f"{app_id} {option[0]} {option[1]}",
               "database": app["database"], "status": "?", "detail": ""}
 
-    canonical, error = synthesize(context)
-    if canonical is not None:
-        (app_dir / "canonical.template.json").write_text(json.dumps(canonical, indent=2, sort_keys=True))
-    else:
-        record["canonicalError"] = error
-
-    env = {"MINISTACK_PREFLIGHT": preflight}
-    code, out = run_cli("deploy", context_path, work, DEPLOY_TIMEOUT, env)
-    lines = json_lines(out)
-    (app_dir / "deploy.json").write_text(json.dumps(lines, indent=2))
-    final = next((l for l in reversed(lines) if l.get("phase") == "deploy"), {})
-    record["cliExit"] = code
-    if final.get("status") == "complete":
-        record["status"] = "DEPLOYED"
-    else:
-        record["status"] = "BLOCKED" if "preflight" in out.lower() else "FAILED"
-        record["detail"] = (final.get("message") or "")[:400].replace("\n", " | ")
-
-    if record["status"] == "DEPLOYED":
-        time.sleep(SETTLE_SECONDS)
-        deployed = get_template(deployed_stack)
-        resources = (aws("cloudformation", "list-stack-resources", "--stack-name", deployed_stack) or {}).get(
-            "StackResourceSummaries", [])
-        (app_dir / "deployed.template.json").write_text(json.dumps(deployed, indent=2, sort_keys=True))
-        (app_dir / "stack-resources.json").write_text(json.dumps(resources, indent=2))
-        live = live_inventory(resources)
-        (app_dir / "live-inventory.json").write_text(json.dumps(live, indent=2))
-        comparison = compare(canonical, deployed, resources, live)
-        (app_dir / "comparison.json").write_text(json.dumps(comparison, indent=2))
-        record.update(comparison["counts"])
-        record["removedByAdapter"] = len(comparison["removedByAdapter"])
-        record["addedByAdapter"] = len(comparison["addedByAdapter"])
-        record["notCreated"] = len(comparison["notCreated"])
-        record["createdNotComplete"] = len(comparison["createdNotComplete"])
-        service = next((f for f in live if f["type"] == "AWS::ECS::Service"), None)
-        record["ecsService"] = service.get("detail", "") if service else ""
-        if option:
-            record["databases"] = "; ".join(database_instances())
-            record["health"] = "skipped"
+    try:
+        canonical, error = synthesize(context)
+        if canonical is not None:
+            (app_dir / "canonical.template.json").write_text(json.dumps(canonical, indent=2, sort_keys=True))
         else:
-            record.update(probe_health(deployed_stack, resources))
-    elif canonical is not None:
-        # Even without a deploy, show what the template would have needed.
-        (app_dir / "comparison.json").write_text(json.dumps({"canonicalResources": resources_of(canonical)}, indent=2))
+            record["canonicalError"] = error
 
-    # Always try to destroy, even after a failed deploy, so the next application starts clean.
-    run_cli("destroy", context_path, work, DESTROY_TIMEOUT)
-    leftover = (aws("cloudformation", "describe-stacks", "--stack-name", deployed_stack) or {}).get("Stacks", [])
-    record["stackRemoved"] = not any(s.get("StackStatus") != "DELETE_COMPLETE" for s in leftover)
-    subprocess.run("docker ps -a --format '{{.Names}}' | grep -E '^ministack-ecs-.*" + re.escape(stack) + "' | xargs -r docker rm -f",
-                   shell=True, capture_output=True)
-    shutil.rmtree(work, ignore_errors=True)
-    (app_dir / "summary.json").write_text(json.dumps(record, indent=2))
+        env = {"MINISTACK_PREFLIGHT": preflight}
+        code, out = run_cli("deploy", context_path, work, DEPLOY_TIMEOUT, env)
+        lines = json_lines(out)
+        (app_dir / "deploy.json").write_text(json.dumps(lines, indent=2))
+        final = next((l for l in reversed(lines) if l.get("phase") == "deploy"), {})
+        record["cliExit"] = code
+        if final.get("status") == "complete":
+            record["status"] = "DEPLOYED"
+        else:
+            record["status"] = "BLOCKED" if "preflight" in out.lower() else "FAILED"
+            record["detail"] = (final.get("message") or "")[:400].replace("\n", " | ")
+
+        if record["status"] == "DEPLOYED":
+            time.sleep(SETTLE_SECONDS)
+            deployed = get_template(deployed_stack)
+            resources = (aws("cloudformation", "list-stack-resources", "--stack-name", deployed_stack) or {}).get(
+                "StackResourceSummaries", [])
+            if deployed is not None:
+                (app_dir / "deployed.template.json").write_text(json.dumps(deployed, indent=2, sort_keys=True))
+            (app_dir / "stack-resources.json").write_text(json.dumps(resources, indent=2))
+            live = live_inventory(resources)
+            (app_dir / "live-inventory.json").write_text(json.dumps(live, indent=2))
+            if canonical is None or deployed is None:
+                # Without both templates every difference would be an invention of this script.
+                record["comparisonSkipped"] = ("the synthesized template is unavailable" if canonical is None
+                                               else "the deployed template could not be read")
+            else:
+                comparison = compare(canonical, deployed, resources, live)
+                (app_dir / "comparison.json").write_text(json.dumps(comparison, indent=2))
+                record.update(comparison["counts"])
+                record["removedByAdapter"] = len(comparison["removedByAdapter"])
+                record["addedByAdapter"] = len(comparison["addedByAdapter"])
+                record["notCreated"] = len(comparison["notCreated"])
+                record["createdNotComplete"] = len(comparison["createdNotComplete"])
+            service = next((f for f in live if f["type"] == "AWS::ECS::Service"), None)
+            record["ecsService"] = service.get("detail", "") if service else ""
+            if option:
+                record["databases"] = "; ".join(database_instances())
+                record["health"] = "skipped"
+            else:
+                record.update(probe_health(deployed_stack, resources))
+        elif canonical is not None:
+            # Even without a deploy, show what the template would have needed.
+            (app_dir / "comparison.json").write_text(json.dumps({"canonicalResources": resources_of(canonical)}, indent=2))
+
+    except Exception as failure:  # one application's error must not end the run
+        record["status"] = "ERROR"
+        record["detail"] = f"{type(failure).__name__}: {failure}"[:400]
+    finally:
+        # Always try to destroy, even after a failed deploy, so the next application starts clean.
+        run_cli("destroy", context_path, work, DESTROY_TIMEOUT)
+        absent = stack_absent(deployed_stack)
+        record["stackRemoved"] = "unknown" if absent is None else absent
+        subprocess.run("docker ps -a --format '{{.Names}}' | grep -E '^ministack-ecs-.*" + re.escape(stack) + "' | xargs -r docker rm -f",
+                       shell=True, capture_output=True)
+        shutil.rmtree(work, ignore_errors=True)
+        (app_dir / "summary.json").write_text(json.dumps(record, indent=2))
     return record
 
 
