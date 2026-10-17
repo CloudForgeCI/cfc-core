@@ -5,10 +5,12 @@ import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforgeci.api.interfaces.RuntimeConfiguration;
 import com.cloudforgeci.api.interfaces.Rule;
+import software.amazon.awscdk.Aws;
 import software.amazon.awscdk.services.acmpca.CertificateAuthority;
 import software.amazon.awscdk.services.acmpca.CfnCertificate;
 import software.amazon.awscdk.services.acmpca.CfnCertificateAuthority;
 import software.amazon.awscdk.services.acmpca.CfnCertificateAuthorityActivation;
+import software.amazon.awscdk.services.acmpca.CfnPermission;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.CertificateValidation;
 import software.amazon.awscdk.services.certificatemanager.PrivateCertificate;
@@ -278,6 +280,17 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
                 .build();
         caActivation.addDependency(rootCaCert);
 
+        // ACM can only issue from (and renew against) a private CA that grants it permission.
+        // Without this the certificate stays PENDING_VALIDATION indefinitely and the stack never
+        // finishes creating; this is the same grant the console's "activate renewal" setting adds.
+        CfnPermission acmPermission = CfnPermission.Builder.create(c, "PrivateCAAcmPermission")
+                .certificateAuthorityArn(privateCa.getAttrArn())
+                .principal("acm.amazonaws.com")
+                .actions(List.of("IssueCertificate", "GetCertificate", "ListPermissions"))
+                .sourceAccount(Aws.ACCOUNT_ID)
+                .build();
+        acmPermission.addDependency(caActivation);
+
         // Create a private certificate for the ALB DNS name
         // Note: PrivateCertificate requires the CA ARN
         PrivateCertificate privateCert = PrivateCertificate.Builder.create(c, "PrivateHttpsCert")
@@ -288,6 +301,7 @@ public final class FargateRuntimeConfiguration implements RuntimeConfiguration {
 
         // Ensure proper dependency ordering
         privateCert.getNode().addDependency(caActivation);
+        privateCert.getNode().addDependency(acmPermission);
         privateCert.applyRemovalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY);
 
         c.cert.set(privateCert);

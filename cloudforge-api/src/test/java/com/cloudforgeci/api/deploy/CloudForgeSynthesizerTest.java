@@ -7,6 +7,9 @@ import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -15,6 +18,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,6 +82,121 @@ class CloudForgeSynthesizerTest {
         String applicationUrl = outputs.path("ApplicationUrl").path("Value").asText();
         assertEquals("https://jenkins.example.com", applicationUrl,
             "expected the configured domain, not the ALB DNS name, got outputs: " + outputs);
+    }
+
+    /**
+     * The trail's CloudWatch Logs delivery role is created by the {@code Trail} construct itself,
+     * with a CloudFormation-generated name that truncates to a generic tail. Manager's deploy role
+     * matches the roles it may create by name, so this one needs the explicit, suffixed name, or
+     * a stack with CloudTrail fails to create it ({@code iam:CreateRole} denied) and cannot delete
+     * it on rollback.
+     */
+    @Test
+    void cloudTrailLogsRoleHasAnExplicitNameTheDeployRoleCanMatch() throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig("SynthTestTrailRole");
+        config.securityProfile = SecurityProfile.STAGING;
+
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk.out"));
+
+        JsonNode resources = MAPPER.readTree(result.templateFile().toFile()).path("Resources");
+        JsonNode roleName = null;
+        for (var entry : resources.properties()) {
+            if ("AWS::IAM::Role".equals(entry.getValue().path("Type").asText())
+                    && entry.getKey().contains("CloudTrailLogsRole")) {
+                roleName = entry.getValue().path("Properties").path("RoleName");
+            }
+        }
+        assertNotNull(roleName, "expected the CloudTrail logs role to carry an explicit RoleName");
+        assertFalse(roleName.isMissingNode(), "expected the CloudTrail logs role to carry an explicit RoleName");
+        assertTrue(roleName.toString().contains("-CfcCloudTrailLogs\""), roleName.toString());
+        assertTrue(longestRoleName(roleName) <= 64,
+            "IAM role names are limited to 64 characters: " + roleName);
+    }
+
+    /** The longest a RoleName can resolve to: its literal text plus 14 characters for each region reference. */
+    private static int longestRoleName(JsonNode roleName) {
+        if (roleName.isTextual()) {
+            return roleName.asText().length();
+        }
+        int length = 0;
+        for (JsonNode part : roleName.path("Fn::Join").path(1)) {
+            length += part.isTextual() ? part.asText().length() : 14;
+        }
+        return length;
+    }
+
+    /**
+     * IAM role names are unique per account, so two stacks that share the start of their name, or the
+     * same stack name in two regions, must not get the same trail role name.
+     */
+    @Test
+    void cloudTrailLogsRoleNameDiffersByStackNameAndRegion() throws IOException {
+        String first = trailRoleName("SynthTestTrailRoleAlphaStackWithAVeryLongSharedPrefixOne");
+        String second = trailRoleName("SynthTestTrailRoleAlphaStackWithAVeryLongSharedPrefixTwo");
+
+        assertNotEquals(first, second, "stacks sharing the first characters of their name need distinct roles");
+        assertTrue(first.contains("AWS::Region") || first.matches(".*-[a-z]{2}(-[a-z]+)+-\\d-CfcCloudTrailLogs"),
+            "the name carries the region: " + first);
+    }
+
+    private String trailRoleName(String stackName) throws IOException {
+        DeploymentConfig config = jenkinsFargateConfig(stackName);
+        config.securityProfile = SecurityProfile.STAGING;
+        CloudForgeSynthesizer.Result result =
+            CloudForgeSynthesizer.synthesize(config, tempDir.resolve("cdk-" + stackName));
+        JsonNode resources = MAPPER.readTree(result.templateFile().toFile()).path("Resources");
+        for (var entry : resources.properties()) {
+            if ("AWS::IAM::Role".equals(entry.getValue().path("Type").asText())
+                    && entry.getKey().contains("CloudTrailLogsRole")) {
+                return entry.getValue().path("Properties").path("RoleName").toString();
+            }
+        }
+        throw new AssertionError("no CloudTrail logs role in " + stackName);
+    }
+
+    /**
+     * With HTTPS and no domain, the ALB's certificate comes from a stack-owned Private CA. ACM can
+     * only issue from a CA that grants it permission; without {@code AWS::ACMPCA::Permission} the
+     * certificate sits in PENDING_VALIDATION and the stack never finishes creating.
+     */
+    @Test
+    void privateCaCertificateWaitsForAnAcmPermissionOnTheCa() throws IOException {
+        for (RuntimeType runtime : new RuntimeType[] {RuntimeType.FARGATE, RuntimeType.EC2}) {
+            DeploymentConfig config = jenkinsFargateConfig("SynthTestPrivateCa" + runtime);
+            config.runtime = runtime;
+            config.enableSsl = true;
+
+            CloudForgeSynthesizer.Result result = CloudForgeSynthesizer.synthesize(
+                config, tempDir.resolve("cdk-" + runtime));
+
+            JsonNode resources = MAPPER.readTree(result.templateFile().toFile()).path("Resources");
+            String permissionId = null;
+            JsonNode certificate = null;
+            for (var entry : resources.properties()) {
+                String type = entry.getValue().path("Type").asText();
+                if ("AWS::ACMPCA::Permission".equals(type)) {
+                    permissionId = entry.getKey();
+                    JsonNode props = entry.getValue().path("Properties");
+                    assertEquals("acm.amazonaws.com", props.path("Principal").asText(), runtime.toString());
+                    Set<String> actions = new HashSet<>();
+                    props.path("Actions").forEach(a -> actions.add(a.asText()));
+                    assertEquals(Set.of("IssueCertificate", "GetCertificate", "ListPermissions"),
+                        actions, runtime.toString());
+                } else if ("AWS::CertificateManager::Certificate".equals(type)
+                        && entry.getValue().path("Properties").has("CertificateAuthorityArn")) {
+                    certificate = entry.getValue();
+                }
+            }
+            assertNotNull(permissionId, runtime + ": expected an AWS::ACMPCA::Permission, got " + resources.properties().stream().map(Map.Entry::getKey).toList());
+            assertNotNull(certificate, runtime + ": expected a Private CA certificate");
+            boolean dependsOnPermission = false;
+            for (JsonNode dep : certificate.path("DependsOn")) {
+                dependsOnPermission |= permissionId.equals(dep.asText());
+            }
+            assertTrue(dependsOnPermission,
+                runtime + ": certificate must depend on " + permissionId + ", got " + certificate.path("DependsOn"));
+        }
     }
 
     private DeploymentConfig wordpressFargateConfig(String stackName) {

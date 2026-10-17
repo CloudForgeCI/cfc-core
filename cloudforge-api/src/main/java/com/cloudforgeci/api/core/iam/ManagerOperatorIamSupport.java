@@ -145,6 +145,12 @@ public final class ManagerOperatorIamSupport {
         "arn:aws:iam::*:role/*SystemContextExtendedTask*",
         "arn:aws:iam::*:role/*SystemContextStandardTask*",
         "arn:aws:iam::*:role/*SystemContextMinimalTask*",
+        // EC2-runtime instance role for each IAMProfile (Extended/Standard/MinimalIAMConfiguration):
+        // a stack-top-level construct like the task roles above, so "SystemContext...Ec2Role"
+        // survives name truncation.
+        "arn:aws:iam::*:role/*SystemContextExtendedEc2*",
+        "arn:aws:iam::*:role/*SystemContextStandardEc2*",
+        "arn:aws:iam::*:role/*SystemContextMinimalEc2*",
         // Role of CDK's singleton log-retention Lambda; same name shape in every app.
         "arn:aws:iam::*:role/*LogRetention*",
         // Role of CDK's singleton custom-resource provider (backs Custom::S3AutoDeleteObjects,
@@ -163,20 +169,11 @@ public final class ManagerOperatorIamSupport {
         "arn:aws:iam::*:role/*-CfcBackupSelection",
         // VPC Flow Log delivery role. FlowLogFactory gives it an explicit roleName for the same
         // reason; see FlowLogFactory#createFlowLogRole.
-        "arn:aws:iam::*:role/*-CfcFlowLog"
+        "arn:aws:iam::*:role/*-CfcFlowLog",
+        // CloudTrail's CloudWatch Logs delivery role. ComplianceFactory renames the role the Trail
+        // construct creates for itself; see ComplianceFactory#nameTrailLogsRole.
+        "arn:aws:iam::*:role/*-CfcCloudTrailLogs"
     );
-
-    // KNOWN GAP: CloudTrail's CloudWatch Logs delivery role, auto-created by ComplianceFactory's
-    // use of the high-level `Trail` L2 construct (`Trail.Builder...sendToCloudWatchLogs(true)`),
-    // is NOT covered by any pattern above and remains unmatchable the same way the RDS/Backup/
-    // FlowLog roles were before their fixes. Unlike those three, `Trail.Builder` has no
-    // `cloudWatchLogsRole`-style override -- there is no supported way to give this auto-created
-    // role an explicit, stable name from the L2 API. Closing this gap would mean dropping to the
-    // L1 `CfnTrail` construct (or reaching into the L2 Trail's internal child construct via
-    // `addPropertyOverride`, an unverified escape hatch) to assign an explicit RoleName, which is
-    // a larger, riskier change than the three fixes above and has not been attempted yet. Until
-    // then, a stack whose rollback needs to delete this specific role can still land in
-    // ROLLBACK_FAILED and need the same manual cleanup the fixes above now avoid for the others.
 
     /**
      * Direct-deploy IAM ({@code CFN_DEPLOY} capability, backing the {@code deploy:create}
@@ -287,7 +284,15 @@ public final class ManagerOperatorIamSupport {
                 "lambda:UntagResource",
                 "lambda:ListTags",
                 "lambda:InvokeFunction"))
-            .resources(List.of("arn:aws:lambda:*:*:function:*LogRetention*"))
+            .resources(List.of(
+                "arn:aws:lambda:*:*:function:*LogRetention*",
+                // The two other CDK singleton provider functions the same stacks create: S3
+                // auto-delete ("679f53fac002430cb0da5b7982bd2287" is CDK's fixed construct-id hash
+                // for the custom-resource provider; see IAM_ROLE_MANAGE_RESOURCES) and the
+                // AwsCustomResource handler. Both have roles covered above, so the functions
+                // must be creatable too.
+                "arn:aws:lambda:*:*:function:*CustomS3AutoDeleteObjectsCus*",
+                "arn:aws:lambda:*:*:function:*AWS679f53fac002430cb0da5b798*"))
             .build();
         // AwsDirectDeployer uploads the template to S3 before CreateStack/CreateChangeSet, which
         // needs its own grant. Scoped to the deployer's fixed bucket-name prefix.
@@ -318,6 +323,47 @@ public final class ManagerOperatorIamSupport {
             .actions(List.of("ssm:GetParameters"))
             .resources(List.of("arn:aws:ssm:*:*:parameter/cdk-bootstrap/hnb659fds/*"))
             .build();
+        // An EC2-runtime template takes its AMI from a public SSM parameter
+        // (/aws/service/ami-amazon-linux-latest/...) declared as an AWS::SSM::Parameter::Value<
+        // AWS::EC2::Image::Id> parameter, which CloudFormation resolves with the caller's own
+        // credentials, same as the CDK bootstrap-version parameter above. Scoped to the public
+        // AWS-published parameter namespace only.
+        PolicyStatement amiParameter = PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerDeployAmiParameter")
+            .actions(List.of("ssm:GetParameters", "ssm:GetParameter"))
+            .resources(List.of("arn:aws:ssm:*:*:parameter/aws/service/*"))
+            .build();
+        // The EC2 runtime also creates an AWS::IAM::InstanceProfile around its instance role. Like
+        // the roles above, profiles are scoped by name and not by tag: a rollback can delete a
+        // profile before its tags are visible to IAM. The launch template's profile has a logical
+        // id containing LtProfile, which CloudFormation carries into the physical name, so only
+        // profiles created for CloudForge EC2 launch templates match. Launching with a profile
+        // still needs iam:PassRole, which stays conditioned on the cloudforge:managed tag.
+        PolicyStatement instanceProfileManage = PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerDeployInstanceProfile")
+            .actions(List.of(
+                "iam:CreateInstanceProfile",
+                "iam:DeleteInstanceProfile",
+                "iam:GetInstanceProfile",
+                "iam:AddRoleToInstanceProfile",
+                "iam:RemoveRoleFromInstanceProfile",
+                "iam:TagInstanceProfile",
+                "iam:UntagInstanceProfile"))
+            .resources(List.of("arn:aws:iam::*:instance-profile/*LtProfile*"))
+            .build();
+        // A Backup vault is created with the account's AWS-managed Backup key, and creating it
+        // makes AWS Backup grant itself use of that key on the caller's behalf. Conditioned to
+        // use through AWS Backup, so these do not allow Manager's role to use any key directly.
+        PolicyStatement backupVaultKms = PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerDeployBackupKms")
+            .actions(List.of(
+                "kms:CreateGrant",
+                "kms:RetireGrant",
+                "kms:GenerateDataKey",
+                "kms:Decrypt"))
+            .resources(List.of("*"))
+            .conditions(Map.of("StringLike", Map.of("kms:ViaService", "backup.*.amazonaws.com")))
+            .build();
         // CloudFormation creates the stack's VPC/EFS/ALB/ECS-cluster resources under the
         // caller's identity, so Manager's role needs those service actions too. (PermissionMatrix
         // governs the deployed app's task role, not Manager's.)
@@ -340,6 +386,7 @@ public final class ManagerOperatorIamSupport {
             .resources(List.of("*"))
             .build();
         return List.of(create, update, passRole, templateBucket, cdkAssetBucket, cdkBootstrapParameter,
+            amiParameter, instanceProfileManage, backupVaultKms,
             changeSetLifecycle, iamRoleCreate, iamRoleManage, logRetentionFunctionManage,
             targetInfrastructureNetwork, targetInfrastructureComputeData);
     }
