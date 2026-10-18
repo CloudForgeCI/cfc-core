@@ -75,7 +75,7 @@ public class FargateCpuMemoryValidator implements FieldValidator {
 
     /** The memory sizes (MB) Fargate accepts with a CPU value, lowest first; empty for an unknown CPU. */
     public static List<Integer> validMemoryValues(int cpu) {
-        return VALID_COMBINATIONS.getOrDefault(cpu, List.of());
+        return List.copyOf(VALID_COMBINATIONS.getOrDefault(cpu, List.of()));
     }
 
     private static List<Integer> generateRange(int start, int end, int increment) {
