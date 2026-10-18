@@ -12,19 +12,31 @@ name: Publish Release Branch
 # partial failure, or a push that didn't change <version>, is a safe no-op).
 #
 # cloudforge-ministack and cloudforge-localstack each have no cut-release step of their own -- this job
-# is it, for both. Each repo's develop (its default branch) always carries a -SNAPSHOT version; this job
-# checks it out, strips "-SNAPSHOT" to get the release candidate, and if that exact version isn't on
-# Central yet, sets its checkout to that version, repoints its <parent> at cfc-core's latest ALREADY-
-# PUBLISHED release (never the in-progress version this job itself is about to cut -- that doesn't exist
-# anywhere yet when this runs, and Central deployments are immutable, so a pin corrected only after
-# cfc-core's own deploy would reach nothing real), and publishes it right here with these same secrets.
-# Runs before cfc-core's own build/publish below so the matching pin correction
-# (<cloudforge-ministack.version>/<cloudforge-localstack.version>) actually reaches cfc-core's own
-# published BOM, not just this ephemeral checkout. Checking first makes a re-run (after a partial
-# failure, or a push that didn't change anything) a safe no-op, same as the already-tagged check above
-# does for cfc-core's own version. Each repo's own sync-cloudforge-ministack-version.yml/
-# sync-cloudforge-localstack-version.yml (both develop-only, in that repo) still proposes the matching
-# pin-bump PR back onto this repo's own develop afterward, for the *next* release to pick up.
+# is it, for both. Each one's own pom.xml says so directly ("kept in lockstep with the parent's
+# version... stays released alongside cfc-core on the same version number") -- and it is not just
+# convention: cfc-core's own published BOM manages cloudforge-core's/cloudforge-api's versions as the
+# literal string ${project.version}, which Central's flatten step leaves UNRESOLVED (verified live
+# against the real 3.3.2 release's published pom); a consumer inheriting that entry resolves it against
+# its OWN version, not the parent's. So ministack/localstack's own <version> and their <parent> version
+# MUST be the exact same number as each other, or their cloudforge-core dependency resolves to a
+# version that was never published. (An earlier version of this job set them to two different numbers
+# -- its own develop version and cfc-core's previous release -- and broke exactly this way on a real
+# v3.3.3 release attempt; not a hypothetical.)
+#
+# This job therefore runs AFTER cfc-core's own build/publish below, builds each repo from its own
+# develop tip but with both its <version> and its <parent> version forced to THIS release's own
+# version (which only exists, even just in this runner's local .m2 -- enough, since Maven's deploy
+# goal always installs locally too -- once cfc-core's own deploy has actually run), and publishes it
+# with these same secrets if that exact version isn't on Central yet. Checking first makes a re-run
+# (after a partial failure, or a push that didn't change anything) a safe no-op, same as the
+# already-tagged check above does for cfc-core's own version.
+#
+# Running after cfc-core's own deploy means the pin step below cannot correct what cfc-core's own BOM
+# already published for THIS release (Central deployments are immutable) -- it only keeps this
+# ephemeral checkout consistent for the summary step. Each repo's own
+# sync-cloudforge-ministack-version.yml/sync-cloudforge-localstack-version.yml (both develop-only, in
+# that repo) still proposes the matching pin-bump PR back onto this repo's own develop afterward, which
+# a human merges before the *next* release is cut, so that release's own BOM picks it up correctly.
 #
 # Not published here (each is released from its own repository and cadence):
 #   - cloudforge-synth-service: its only Maven consumer is cloudforge-manager's test scope, which
@@ -253,6 +265,14 @@ jobs:
             echo "cloudforge-manager-deployment pin $PINNED is current (latest snapshot $LATEST_SNAPSHOT)."
           fi
 
+      - name: Build, sign, and publish cfc-core + cloudforge-core + cloudforge-api
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        # No re-test: build-test already validated this commit on Linux.
+        run: |
+          echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api..."
+          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+
       - name: Check out cloudforge-ministack's develop
         uses: actions/checkout@v4
         with:
@@ -267,85 +287,52 @@ jobs:
           ref: develop
           path: cloudforge-localstack
 
-      # Runs before cfc-core's own deploy below, not after: this release's own version does not exist
-      # anywhere yet at this point in the job, so each module's <parent> is repointed at cfc-core's
-      # latest ALREADY-PUBLISHED release instead (same "pin to an existing release, never to one still
-      # in flight" rule the cloudforge-manager-deployment.version swap above already follows) -- not
-      # the in-progress $VERSION this job is cutting. Running first also means the pin below reaches
-      # cfc-core's own published BOM, which a later run (after cfc-core's own deploy, when its version
-      # finally exists) could not do: Central deployments are immutable, so a pin edited after cfc-core
-      # already published would correct nothing real, only this ephemeral checkout.
-      - name: Publish cloudforge-ministack and cloudforge-localstack if their versions aren't on Central yet
+      # Must run after cfc-core's own deploy above: each module's <version> AND <parent> version are
+      # both forced to THIS release's own version (see this file's header for why they have to be the
+      # exact same number), which doesn't exist anywhere -- not even in this runner's local .m2 -- until
+      # that step has actually run.
+      - name: Publish cloudforge-ministack and cloudforge-localstack if this release's version isn't on Central yet
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          CFC_CORE_RELEASE=$(curl -fsSL "https://repo1.maven.org/maven2/com/cloudforgeci/cfc-core/maven-metadata.xml" \
-            | grep -o '<release>[^<]*</release>' | sed -E 's|</?release>||g')
-          if [ -z "$CFC_CORE_RELEASE" ]; then
-            echo "::error::Could not resolve cfc-core's latest published release from Central's maven-metadata.xml"
-            exit 1
-          fi
+          RELEASE_VERSION="${{ needs.check-version.outputs.version }}"
 
           for module in cloudforge-ministack cloudforge-localstack; do
-            # Each repo's own develop always carries a -SNAPSHOT version by design (neither has a
-            # separate cut-release step of its own) -- stripping the suffix is what turns its current
-            # tip into the release candidate this job checks for and, if missing, publishes.
-            SNAPSHOT_VERSION=$(mvn -q -B -f "$module/pom.xml" help:evaluate \
-              -Dexpression=project.version -DforceStdout)
-            MODULE_VERSION="${SNAPSHOT_VERSION%-SNAPSHOT}"
-            VAR_NAME=$(echo "${module}_VERSION" | tr 'a-z-' 'A-Z_')
-            echo "$VAR_NAME=$MODULE_VERSION" >> "$GITHUB_ENV"
-
             # Only a confirmed 404 means "safe to publish"; a transient network error, a timeout, or a
             # non-200/404 response from Central must not be read as absence -- that would risk a bad
             # double-publish decision instead of just failing loudly so a human looks at it.
             HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 5 \
-              "https://repo1.maven.org/maven2/com/cloudforgeci/$module/$MODULE_VERSION/$module-$MODULE_VERSION.pom")
+              "https://repo1.maven.org/maven2/com/cloudforgeci/$module/$RELEASE_VERSION/$module-$RELEASE_VERSION.pom")
             if [ "$HTTP_CODE" = "200" ]; then
-              echo "$module $MODULE_VERSION is already on Central -- nothing to publish."
+              echo "$module $RELEASE_VERSION is already on Central -- nothing to publish."
             elif [ "$HTTP_CODE" != "404" ]; then
-              echo "::error::Checking whether $module $MODULE_VERSION is already on Central returned HTTP $HTTP_CODE, not 200 or 404 -- not safe to decide whether to publish."
+              echo "::error::Checking whether $module $RELEASE_VERSION is already on Central returned HTTP $HTTP_CODE, not 200 or 404 -- not safe to decide whether to publish."
               exit 1
             else
-              echo "$module $MODULE_VERSION is not on Central yet -- publishing it against cfc-core $CFC_CORE_RELEASE."
-              mvn -q -B -f "$module/pom.xml" versions:set -DnewVersion="$MODULE_VERSION" -DgenerateBackupPoms=false
+              echo "$module $RELEASE_VERSION is not on Central yet -- publishing it as part of this release."
+              mvn -q -B -f "$module/pom.xml" versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
               # versions:update-parent silently no-ops on an exact -DparentVersion here (verified
               # live, against both a lower and an equal real release) rather than forcing it, so the
-              # parent's <version> is edited directly instead.
+              # parent's <version> is edited directly instead. Must equal the module's own version
+              # just set above -- see this file's header for why.
               python3 -c "
               import re
               p = '$module/pom.xml'
               s = open(p).read()
               new = re.sub(
                   r'(<parent>.*?<artifactId>cfc-core</artifactId>\s*\n\s*(?:<!--.*?-->\s*\n\s*)?<version>)[^<]+(</version>)',
-                  r'\g<1>$CFC_CORE_RELEASE\g<2>', s, count=1, flags=re.S)
+                  r'\g<1>$RELEASE_VERSION\g<2>', s, count=1, flags=re.S)
               assert new != s, 'parent version pattern did not match in ' + p
               open(p, 'w').write(new)
               "
               # The release profile's central-publishing-maven-plugin blocks this deploy call until
               # Central's own validation finishes (waitUntil=validated), not until the artifact is
               # fully searchable/downloadable on Central's CDN -- that part can still lag by minutes,
-              # same as it can for cfc-core's own artifacts published below (see this job's closing
-              # summary step).
+              # same as it can for cfc-core's own artifacts just published above (see this job's
+              # closing summary step).
               mvn -B -Prelease -f "$module/pom.xml" clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
             fi
           done
-
-      - name: Pin cloudforge-ministack.version and cloudforge-localstack.version to the versions just confirmed on Central
-        run: |
-          echo "Pinning cloudforge-ministack.version to $CLOUDFORGE_MINISTACK_VERSION and cloudforge-localstack.version to $CLOUDFORGE_LOCALSTACK_VERSION for this release build (never committed, same as the cloudforge-manager-deployment.version swap above)"
-          mvn -q -B versions:set-property -Dproperty=cloudforge-ministack.version \
-            -DnewVersion="$CLOUDFORGE_MINISTACK_VERSION" -DgenerateBackupPoms=false
-          mvn -q -B versions:set-property -Dproperty=cloudforge-localstack.version \
-            -DnewVersion="$CLOUDFORGE_LOCALSTACK_VERSION" -DgenerateBackupPoms=false
-
-      - name: Build, sign, and publish cfc-core + cloudforge-core + cloudforge-api
-        env:
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        # No re-test: build-test already validated this commit on Linux.
-        run: |
-          echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api..."
-          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Clean up credentials
         if: always()
@@ -369,7 +356,7 @@ jobs:
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ needs.check-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Modules:** cfc-core (BOM), cloudforge-core, cloudforge-api" >> $GITHUB_STEP_SUMMARY
-          echo "**cloudforge-ministack pin:** ${CLOUDFORGE_MINISTACK_VERSION:-unchanged}" >> $GITHUB_STEP_SUMMARY
-          echo "**cloudforge-localstack pin:** ${CLOUDFORGE_LOCALSTACK_VERSION:-unchanged}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Central Portal validates and auto-publishes asynchronously — check https://central.sonatype.com/publishing/deployments for final status; artifacts typically become searchable on Central within 15-30 minutes of a successful upload." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "cloudforge-ministack and cloudforge-localstack were each published at ${{ needs.check-version.outputs.version }} above if they weren't there already. This release's own BOM still pins whatever <cloudforge-ministack.version>/<cloudforge-localstack.version> was already committed on this branch (Central deployments are immutable, so that can't be corrected after the fact) -- check each repo's sync-cfc-core-version.yml / this repo's sync-cloudforge-ministack-version.yml / sync-cloudforge-localstack-version.yml for the pin-bump PR that lets the *next* release pick this one up." >> $GITHUB_STEP_SUMMARY
