@@ -1,10 +1,12 @@
 package com.cloudforgeci.api.core.iam;
 
+import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
@@ -38,7 +40,7 @@ class ManagerDeployIamSupportTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void deployStatementsReturnsTwelveStatementsForManager() {
+    void deployStatementsReturnsFifteenStatementsForManager() {
         TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
                 "ManagerDeployStatements", SecurityProfile.DEV, RuntimeType.FARGATE)
             .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
@@ -48,7 +50,7 @@ class ManagerDeployIamSupportTest {
             .createFargate();
 
         List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
-        assertEquals(12, statements.size());
+        assertEquals(15, statements.size());
     }
 
     /** DescribeChangeSet/ExecuteChangeSet/DeleteChangeSet can't share a tag condition with
@@ -158,6 +160,115 @@ class ManagerDeployIamSupportTest {
             .anyMatch(r -> r.contains("cdk-bootstrap/hnb659fds")));
     }
 
+    /** An EC2-runtime deploy (WordPress on EC2) rolled back before creating anything: CloudFormation
+     *  resolves the AMI's {@code AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>} parameter with
+     *  the deploying role's credentials, and the role had no {@code ec2:DescribeImages}. The role
+     *  had no EC2 compute actions at all -- launch templates, RunInstances -- and nothing for the
+     *  AMI parameter read, the instance profile, or the {@code SystemContext*Ec2Role} instance
+     *  role the EC2 runtime creates. */
+    @Test
+    void deployStatementsGrantEverythingTheEc2RuntimeNeedsToCreateItsInstances() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerDeployEc2Runtime", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
+        PolicyStatement network = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployTargetInfrastructureNetwork".equals(s.getSid()))
+            .findFirst().orElseThrow();
+        for (String action : List.of(
+                "ec2:DescribeImages", "ec2:DescribeLaunchTemplates", "ec2:DescribeLaunchTemplateVersions",
+                "ec2:CreateLaunchTemplate", "ec2:CreateLaunchTemplateVersion", "ec2:DeleteLaunchTemplate",
+                "ec2:RunInstances")) {
+            assertTrue(network.getActions().contains(action), "network statement should grant " + action);
+        }
+
+        PolicyStatement ami = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployAmiParameter".equals(s.getSid()))
+            .findFirst().orElseThrow();
+        assertTrue(ami.getActions().contains("ssm:GetParameters"));
+        assertEquals(List.of("arn:aws:ssm:*:*:parameter/aws/service/*"), ami.getResources(),
+            "only AWS's public parameter namespace, not every SSM parameter");
+
+        PolicyStatement profile = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployInstanceProfile".equals(s.getSid()))
+            .findFirst().orElseThrow();
+        assertTrue(profile.getActions().contains("iam:CreateInstanceProfile"));
+        assertTrue(profile.getActions().contains("iam:AddRoleToInstanceProfile"));
+        assertTrue(profile.getActions().contains("iam:DeleteInstanceProfile"));
+        assertEquals(List.of("arn:aws:iam::*:instance-profile/*LtProfile*"), profile.getResources(),
+            "only the profiles CloudForge's EC2 launch templates create, not every instance profile");
+
+        for (String sid : List.of("CloudForgeManagerDeployIamRoleCreate", "CloudForgeManagerDeployIamRoleManage")) {
+            PolicyStatement roles = statements.stream().filter(s -> sid.equals(s.getSid())).findFirst().orElseThrow();
+            for (String tier : List.of("Extended", "Standard", "Minimal")) {
+                assertTrue(roles.getResources().contains("arn:aws:iam::*:role/*SystemContext" + tier + "Ec2*"),
+                    sid + " should cover the " + tier + " EC2 instance role");
+            }
+        }
+    }
+
+    /** Creating a Backup vault was denied ("requires backup-storage and KMS permissions"). The KMS
+     *  grants are conditioned to AWS Backup so they cannot be used to decrypt with a key directly. */
+    @Test
+    void deployStatementsLetBackupCreateVaultsWithoutGrantingDirectKeyUse() {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+                "ManagerDeployBackupVault", SecurityProfile.DEV, RuntimeType.FARGATE)
+            .withApplicationId(ManagerOperatorIamSupport.APPLICATION_ID)
+            .createVpc()
+            .createAlb()
+            .createEfs()
+            .createFargate();
+
+        List<PolicyStatement> statements = ManagerOperatorIamSupport.deployStatements(builder.getSystemContext());
+        PolicyStatement kms = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployBackupKms".equals(s.getSid()))
+            .findFirst().orElseThrow();
+        for (String action : List.of("kms:CreateGrant", "kms:RetireGrant", "kms:GenerateDataKey", "kms:Decrypt")) {
+            assertTrue(kms.getActions().contains(action), action);
+        }
+        String json = kms.toJSON().toString();
+        assertTrue(json.contains("kms:ViaService") && json.contains("backup.*.amazonaws.com"),
+            "the key actions must only apply when used through AWS Backup: " + json);
+
+        // Not in the unconditioned target-infrastructure statements, where it would apply to every key.
+        for (String sid : List.of("CloudForgeManagerDeployTargetInfrastructureNetwork",
+                "CloudForgeManagerDeployTargetInfrastructureComputeData")) {
+            PolicyStatement half = statements.stream().filter(s -> sid.equals(s.getSid())).findFirst().orElseThrow();
+            assertFalse(half.getActions().contains("kms:Decrypt"), sid + " must not grant kms:Decrypt on every key");
+            assertFalse(half.getActions().contains("kms:CreateGrant"), sid + " must not grant kms:CreateGrant on every key");
+        }
+        PolicyStatement computeData = statements.stream()
+            .filter(s -> "CloudForgeManagerDeployTargetInfrastructureComputeData".equals(s.getSid()))
+            .findFirst().orElseThrow();
+        assertTrue(computeData.getActions().contains("backup-storage:MountCapsule"));
+    }
+
+    /** The compute-and-data and network halves are each attached as their own customer-managed
+     *  policy, which AWS caps at 6,144 characters (whitespace excluded). A new action family can
+     *  silently push one over, and the failure surfaces only at deploy time as a policy that
+     *  cannot be created. */
+    @Test
+    void eachTargetInfrastructureHalfStaysUnderTheManagedPolicySizeLimit() {
+        for (var half : List.of(
+                OperatorProvisioningPermissionMatrix.getNetworkPermissions(IAMProfile.EXTENDED),
+                OperatorProvisioningPermissionMatrix.getComputeAndDataPermissions(IAMProfile.EXTENDED, true))) {
+            String json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"CloudForgeManagerDeployTargetInfrastructureComputeData\","
+                + "\"Effect\":\"Allow\",\"Action\":" + toJsonArray(half) + ",\"Resource\":\"*\"}]}";
+            assertTrue(json.length() < 6144,
+                "a half of the target-infrastructure policy is " + json.length() + " characters, over AWS's 6,144 limit");
+        }
+    }
+
+    private static String toJsonArray(List<String> values) {
+        return values.stream().distinct().map(v -> "\"" + v + "\"")
+            .collect(Collectors.joining(",", "[", "]"));
+    }
+
     /** iam:PassRole alone isn't enough: CloudFormation creates and manages the deployed
      *  application's own IAM roles (task role, task execution role) using the deploying
      *  principal's own credentials, the same as every other resource type in the template. An
@@ -215,6 +326,9 @@ class ManagerDeployIamSupportTest {
         assertTrue(functionStatement.getActions().contains("lambda:CreateFunction"));
         assertTrue(functionStatement.getActions().contains("lambda:DeleteFunction"));
         assertTrue(functionStatement.getResources().contains("arn:aws:lambda:*:*:function:*LogRetention*"));
+        // The S3 auto-delete provider and AwsCustomResource handler are Lambda functions as well.
+        assertTrue(functionStatement.getResources().contains("arn:aws:lambda:*:*:function:*CustomS3AutoDeleteObjectsCus*"));
+        assertTrue(functionStatement.getResources().contains("arn:aws:lambda:*:*:function:*AWS679f53fac002430cb0da5b798*"));
     }
 
     /** The layer {@link PermissionMatrix} does not cover: Manager's role creating a target app's
