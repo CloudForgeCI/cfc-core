@@ -33,6 +33,17 @@ class MiniStackCfnResourceCatalogTest {
     }
 
     @Test
+    void policyAdaptsTheComplianceResourcesMiniStackCannotCreateAndSupportsTheRest() {
+        for (String type : MiniStackCfnResourceCatalog.REMOVED_COMPLIANCE_TYPES) {
+            assertEquals(MiniStackResourcePolicy.ADAPTED, MiniStackCfnResourceCatalog.policyFor(type), type);
+        }
+        for (String type : new String[] {"AWS::WAFv2::WebACL", "AWS::Backup::BackupVault", "AWS::Backup::BackupPlan"}) {
+            assertEquals(MiniStackResourcePolicy.SUPPORTED, MiniStackCfnResourceCatalog.policyFor(type), type);
+        }
+        assertEquals(MiniStackResourcePolicy.UNSUPPORTED, MiniStackCfnResourceCatalog.policyFor("AWS::Config::ConfigurationRecorder"));
+    }
+
+    @Test
     void policyMarksEfsAsAdapted() {
         assertEquals(MiniStackResourcePolicy.ADAPTED, MiniStackCfnResourceCatalog.policyFor("AWS::EFS::FileSystem"));
     }
