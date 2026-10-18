@@ -70,7 +70,7 @@
          may not exist yet at every sibling repo. Bump these only after confirming compatibility
          with the newer release, the same way any other dependency version bump here works. -->
     <cloudforge-localstack.version>3.2.17</cloudforge-localstack.version>
-    <cloudforge-ministack.version>3.2.17</cloudforge-ministack.version>
+    <cloudforge-ministack.version>3.3.3-SNAPSHOT</cloudforge-ministack.version>
 
     <!-- AWS CDK Versions -->
     <!-- Note: v2.197.0+ defaults to nodejs22.x for AwsCustomResource which isn't available in all regions -->
@@ -116,6 +116,18 @@
     <central.publishing.plugin.version>0.9.0</central.publishing.plugin.version>
     <flatten.plugin.version>1.7.3</flatten.plugin.version>
   </properties>
+
+  <!-- Maven does not check the Central Portal snapshots repository by default. Needed to resolve
+       cloudforge-ministack while ${cloudforge-ministack.version} is a -SNAPSHOT; remove this
+       once the property is back on a release. -->
+  <repositories>
+    <repository>
+      <id>central-snapshots</id>
+      <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+      <releases><enabled>false</enabled></releases>
+      <snapshots><enabled>true</enabled></snapshots>
+    </repository>
+  </repositories>
 
   <dependencyManagement>
     <dependencies>

@@ -13,7 +13,7 @@ public final class LocalEmulatorDefaults {
 
     public static final String MINISTACK_CONTAINER = "cfc-ministack";
     public static final String LOCALSTACK_CONTAINER = "cfc-localstack";
-    public static final String MINISTACK_IMAGE = "ministackorg/ministack:1.4.9";
+    public static final String MINISTACK_IMAGE = "ministackorg/ministack:1.5.27";
     public static final String LOCALSTACK_IMAGE = "localstack/localstack:latest";
     public static final String MINISTACK_HEALTH_PATH = "/_ministack/health";
     public static final String LOCALSTACK_HEALTH_PATH = "/_localstack/health";

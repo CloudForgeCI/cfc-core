@@ -15,9 +15,32 @@ class MiniStackCfnResourceCatalogTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
-    void policyMarksRdsAsUnsupported() {
-        assertEquals(MiniStackResourcePolicy.UNSUPPORTED, MiniStackCfnResourceCatalog.policyFor("AWS::RDS::DBInstance"));
-        assertEquals(MiniStackResourcePolicy.UNSUPPORTED, MiniStackCfnResourceCatalog.policyFor("AWS::RDS::DBParameterGroup"));
+    void policyAdaptsDatabaseInstancesAndStillBlocksClusters() {
+        assertEquals(MiniStackResourcePolicy.ADAPTED, MiniStackCfnResourceCatalog.policyFor("AWS::RDS::DBInstance"));
+        assertEquals(MiniStackResourcePolicy.SUPPORTED, MiniStackCfnResourceCatalog.policyFor("AWS::RDS::DBParameterGroup"));
+        assertEquals(MiniStackResourcePolicy.SUPPORTED, MiniStackCfnResourceCatalog.policyFor("AWS::RDS::DBSubnetGroup"));
+        assertEquals(MiniStackResourcePolicy.UNSUPPORTED, MiniStackCfnResourceCatalog.policyFor("AWS::RDS::DBCluster"));
+    }
+
+    @Test
+    void policyAdaptsTheTypesTheMiniStackAdapterRewritesOrCreatesAfterwards() {
+        for (String type : new String[] {"AWS::ACMPCA::CertificateAuthority", "AWS::ACMPCA::Permission",
+                "AWS::Cognito::UserPoolUser", "AWS::Cognito::UserPoolUserToGroupAttachment",
+                "AWS::Cognito::ManagedLoginBranding", "Custom::LogRetention"}) {
+            assertEquals(MiniStackResourcePolicy.ADAPTED, MiniStackCfnResourceCatalog.policyFor(type), type);
+        }
+        assertEquals(MiniStackResourcePolicy.SUPPORTED, MiniStackCfnResourceCatalog.policyFor("AWS::Cognito::UserPool"));
+    }
+
+    @Test
+    void policyAdaptsTheComplianceResourcesMiniStackCannotCreateAndSupportsTheRest() {
+        for (String type : MiniStackCfnResourceCatalog.REMOVED_COMPLIANCE_TYPES) {
+            assertEquals(MiniStackResourcePolicy.ADAPTED, MiniStackCfnResourceCatalog.policyFor(type), type);
+        }
+        for (String type : new String[] {"AWS::WAFv2::WebACL", "AWS::Backup::BackupVault", "AWS::Backup::BackupPlan"}) {
+            assertEquals(MiniStackResourcePolicy.SUPPORTED, MiniStackCfnResourceCatalog.policyFor(type), type);
+        }
+        assertEquals(MiniStackResourcePolicy.UNSUPPORTED, MiniStackCfnResourceCatalog.policyFor("AWS::Config::ConfigurationRecorder"));
     }
 
     @Test
@@ -29,7 +52,7 @@ class MiniStackCfnResourceCatalogTest {
     void unsupportedResourcesFindsRdsTypes() throws Exception {
         ObjectNode template = MAPPER.createObjectNode();
         ObjectNode resources = template.putObject("Resources");
-        resources.putObject("DbParams").put("Type", "AWS::RDS::DBParameterGroup");
+        resources.putObject("DbParams").put("Type", "AWS::RDS::DBCluster");
         resources.putObject("Alb").put("Type", "AWS::ElasticLoadBalancingV2::LoadBalancer");
 
         List<MiniStackCfnResourceCatalog.TemplateResourceRef> unsupported =
