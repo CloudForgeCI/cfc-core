@@ -143,44 +143,48 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run publish-release-branch.yml --ref "${{ steps.versions.outputs.release_branch }}"
 
-      # develop is a protected branch (required status checks) -- a direct push from this job's
-      # GITHUB_TOKEN is rejected outright ("GH006: Protected branch update failed"), confirmed by
-      # the first cut attempt (v3.3.0). A PR plus auto-merge is the same pattern
-      # cloudforge-manager-deployment's own ADO auto_release stage already uses for this exact
-      # problem on its own protected develop.
-      - name: Bump develop to the next SNAPSHOT
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Builds the bump commit with no admin credential anywhere in this step's environment --
+      # ADMIN_BYPASS_TOKEN is scoped to the next step only, which does nothing but push/PR/merge,
+      # so a compromised Maven plugin or build extension here has nothing to steal.
+      - name: Compute the develop bump commit
+        id: bump
         run: |
           BRANCH="chore/bump-develop-to-${{ steps.versions.outputs.next_develop }}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
           git checkout -b "$BRANCH"
           mvn -q -B versions:set -DnewVersion="${{ steps.versions.outputs.next_develop }}" -DprocessAllModules=true -DgenerateBackupPoms=false
           git add -A
           git commit -m "chore: bump develop to ${{ steps.versions.outputs.next_develop }} after cutting v${{ steps.versions.outputs.release_version }}"
-          git push origin "$BRANCH"
+
+      # develop is a protected branch requiring 6 status checks, enforced on direct pushes and PR
+      # merges alike -- confirmed against two independent real failures: this step's own plain
+      # `gh pr merge` ("GraphQL: 6 of 6 required status checks are expected") and
+      # sync-cloudforge-manager-deployment-version.yml's direct push ("GH006: Protected branch
+      # update failed"). enforce_admins is false on this branch, so an actual repo admin is exempt
+      # -- but GITHUB_TOKEN never carries that role, no matter what scopes its `permissions:` block
+      # grants, so nothing authenticated with it can ever merge here no matter how it's called.
+      # ADMIN_BYPASS_TOKEN is a PAT from a real CloudForgeCI admin account, which is what actually
+      # satisfies enforce_admins. Unlike GITHUB_TOKEN, a PAT-authenticated push/merge is not
+      # exempted from starting other workflows, so this merge triggers publish-snapshot.yml's own
+      # `push: branches: [develop]` trigger on its own -- no separate dispatch needed.
+      - name: Push and merge the develop bump
+        env:
+          GH_TOKEN: ${{ secrets.ADMIN_BYPASS_TOKEN }}
+        run: |
+          BRANCH="${{ steps.bump.outputs.branch }}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" "$BRANCH"
           gh pr create --base develop --head "$BRANCH" \
             --title "chore: bump develop to ${{ steps.versions.outputs.next_develop }}" \
             --body "Version bump following the v${{ steps.versions.outputs.release_version }} cut. Opened by cut-release.yml."
-          # Merged immediately, not with --auto. A PR opened with the workflow token does not trigger
-          # other workflows, so develop's required checks never report on it and auto-merge would wait
-          # forever. The GitHub Actions app is a bypass actor on develop's ruleset, which is what lets
-          # this merge go through. Fails loudly: the cut itself is already done, but a bump PR left open
-          # would leave develop on the released version.
-          if ! gh pr merge "$BRANCH" --squash --delete-branch; then
+          # Merged immediately, not with --auto: a PR opened by this token still gets no real CI
+          # status in time for an immediate merge attempt (the checks it eventually triggers
+          # haven't run yet at this point), so --auto would wait forever on checks the merge itself
+          # doesn't need to wait for. Fails loudly: the cut itself is already done, but a bump PR
+          # left open would leave develop on the released version.
+          if ! gh pr merge "$BRANCH" --squash --delete-branch --admin; then
             echo "::error::Opened the bump PR from $BRANCH but could not merge it. Merge it by hand so develop moves to ${{ steps.versions.outputs.next_develop }}."
             exit 1
           fi
-
-      # Same GITHUB_TOKEN limitation as above, plus this commit carries no [skip ci] on purpose
-      # now: develop's newly-bumped -SNAPSHOT version needs an actual Central publish so
-      # downstream builds can resolve it, which only publish-snapshot.yml's publish-snapshot job
-      # does. Dispatched against develop directly rather than chained after the bump PR's merge,
-      # since publish-snapshot.yml also runs on every ordinary push to develop -- the PR merge
-      # itself will trigger a second, redundant but harmless run.
-      - name: Trigger publish-snapshot.yml for the bumped develop version
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run publish-snapshot.yml --ref develop
 
       - name: Summary
         run: |
