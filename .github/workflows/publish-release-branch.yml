@@ -5,11 +5,14 @@ name: Publish Release Branch
 # only by backport-hotfix.yml (the only sanctioned way anything lands on one after the cut) -- see
 # those two workflows. develop itself only ever publishes snapshots; see publish-snapshot.yml.
 #
-# Every push to a release/v* branch runs build-test first (fail fast on Linux before burning
-# macOS minutes), then builds, signs, and publishes the branch's current <version> -- which is
-# always a real, non-SNAPSHOT version the moment the branch exists -- to Maven Central, guarded by
-# the same already-tagged check publish-maven-central.yml used to have (so a re-run after a
-# partial failure, or a push that didn't change <version>, is a safe no-op).
+# Every push to a release/v* branch builds, signs, and publishes the branch's current <version>
+# -- which is always a real, non-SNAPSHOT version the moment the branch exists -- to Maven
+# Central, guarded by the same already-tagged check publish-maven-central.yml used to have (so a
+# re-run after a partial failure, or a push that didn't change <version>, is a safe no-op).
+#
+# No build-test gate here: a release branch's content was already built and tested on develop
+# before cut-release.yml cut it, and release branches carry no required status checks of their
+# own -- this workflow goes straight to publishing.
 #
 # cloudforge-ministack and cloudforge-localstack each have no cut-release step of their own -- this job
 # is it, for both. Each one's own pom.xml says so directly ("kept in lockstep with the parent's
@@ -72,28 +75,9 @@ permissions:
   contents: write # to push the release tag on success
 
 jobs:
-  build-test:
-    name: Build & test
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Build and test
-        run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api -am clean verify
-
   check-version:
     name: Check if this version needs publishing
     runs-on: ubuntu-latest
-    needs: build-test
     outputs:
       version: ${{ steps.version.outputs.version }}
       should_publish: ${{ steps.decide.outputs.should_publish }}
@@ -268,7 +252,6 @@ jobs:
       - name: Build, sign, and publish cfc-core + cloudforge-core + cloudforge-api
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        # No re-test: build-test already validated this commit on Linux.
         run: |
           echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api..."
           mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
