@@ -12,9 +12,9 @@
     Reactor modules: cloudforge-core, cloudforge-api. cloudforge-ministack and
     cloudforge-localstack are managed BOM coordinates but not reactor modules — each lives in its
     own repo (CloudForgeCI/cloudforge-ministack, CloudForgeCI/cloudforge-localstack), declares
-    this pom as its Maven parent, and publishes independently on its own schedule; cloudforge-api's
-    dependency on each pins an explicit real release (see ${cloudforge-localstack.version}/
-    ${cloudforge-ministack.version}), not this pom's own in-progress version.
+    this pom as its Maven parent, and is published in lockstep with cfc-core's own releases (see
+    ${cloudforge-localstack.version}/${cloudforge-ministack.version}, and
+    publish-release-branch.yml, which is what actually publishes them).
     cloudforge-manager-deployment and cloudforge-manager are also not part of this
     BOM/reactor — split into their own private repos
     (CloudForgeCI/cloudforge-manager-deployment, CloudForgeCI/cloudforge-manager), each with a
@@ -55,22 +55,20 @@
          because a bare `mvn install`/`verify` here runs no tests, inverting the Maven default. -->
     <skipTests>true</skipTests>
 
-    <!-- Latest published cloudforge-manager-deployment SNAPSHOT. Kept current by
-         .github/workflows/sync-cloudforge-manager-deployment-version.yml, which polls the
-         Central snapshots metadata and opens a PR with the bump. Managing the version in this
-         BOM gives every consumer (cloudforge-manager and others) a single sync point; a BOM
-         entry is only a coordinate + version, so it does not tie that project's release cadence
-         to cfc-core's. -->
+    <!-- Latest published SNAPSHOT of each. Each is kept current by its own
+         .github/workflows/sync-<name>-version.yml, which polls Central's snapshot metadata and
+         commits the bump directly to develop -- never a PR, same as this one. Managing the
+         version in this BOM gives every consumer a single sync point; a BOM entry is only a
+         coordinate + version, so it does not tie that project's release cadence to cfc-core's.
+         A release build never ships one of these SNAPSHOTs (Central rejects it): see
+         publish-release-branch.yml, which swaps each to a real release just for that build,
+         never committing the swap -- cloudforge-manager-deployment to whatever it last published
+         on its own independent cadence, cloudforge-ministack/cloudforge-localstack to this same
+         release's own version, since both are published in lockstep with it as part of the same
+         run. -->
     <cloudforge-manager-deployment.version>3.2.11-SNAPSHOT</cloudforge-manager-deployment.version>
-
-    <!-- Explicit, deliberately-bumped pins for cloudforge-api's compile-scope dependency on these
-         two — NOT ${project.version}. Each publishes real (non-SNAPSHOT) releases to Central on
-         its own schedule; pinning to one of those instead of chasing this pom's own in-progress
-         version means cfc-core decides what it consumes, rather than depending on a version that
-         may not exist yet at every sibling repo. Bump these only after confirming compatibility
-         with the newer release, the same way any other dependency version bump here works. -->
-    <cloudforge-localstack.version>3.2.17</cloudforge-localstack.version>
-    <cloudforge-ministack.version>3.3.3-SNAPSHOT</cloudforge-ministack.version>
+    <cloudforge-ministack.version>3.3.8-SNAPSHOT</cloudforge-ministack.version>
+    <cloudforge-localstack.version>3.3.8-SNAPSHOT</cloudforge-localstack.version>
 
     <!-- AWS CDK Versions -->
     <!-- Note: v2.197.0+ defaults to nodejs22.x for AwsCustomResource which isn't available in all regions -->
@@ -118,8 +116,8 @@
   </properties>
 
   <!-- Maven does not check the Central Portal snapshots repository by default. Needed to resolve
-       cloudforge-ministack while ${cloudforge-ministack.version} is a -SNAPSHOT; remove this
-       once the property is back on a release. -->
+       cloudforge-ministack/cloudforge-localstack/cloudforge-manager-deployment, since all three
+       of their version properties above are always a -SNAPSHOT by design. -->
   <repositories>
     <repository>
       <id>central-snapshots</id>
@@ -136,14 +134,14 @@
 
         cloudforge-core            Shared contracts, DeploymentConfig, com.cloudforge.core.local
         cloudforge-api             CloudForgeDeployment, ApplicationSpecs, CMS, CDK factories
-        cloudforge-ministack       MiniStack adapter/deployer/pipeline (depends: core); released
-                                   from its own repo (CloudForgeCI/cloudforge-ministack) on its
-                                   own cadence, not a reactor module; version pinned explicitly
-                                   (see ${cloudforge-ministack.version}), not tied to this pom's
-        cloudforge-localstack      LocalStack adapter/deployer/pipeline (depends: core); released
-                                   from its own repo (CloudForgeCI/cloudforge-localstack) on its
-                                   own cadence, not a reactor module; version pinned explicitly
-                                   (see ${cloudforge-localstack.version}), not tied to this pom's
+        cloudforge-ministack       MiniStack adapter/deployer/pipeline (depends: core); lives in
+                                   its own repo (CloudForgeCI/cloudforge-ministack), not a reactor
+                                   module, but published in lockstep with cfc-core's own releases
+                                   (see ${cloudforge-ministack.version})
+        cloudforge-localstack      LocalStack adapter/deployer/pipeline (depends: core); lives in
+                                   its own repo (CloudForgeCI/cloudforge-localstack), not a reactor
+                                   module, but published in lockstep with cfc-core's own releases
+                                   (see ${cloudforge-localstack.version})
         cloudforge-manager-deployment   ApplicationSpec/deploy presets for CloudForge Manager
                                         (CloudForgeCI/cloudforge-manager-deployment); released
                                         from its own repo on its own cadence. Listed here as a
@@ -345,19 +343,17 @@
          cloudforge-synth-service all declare this pom as their Maven <parent>, resolved from the
          repository via an empty <relativePath/> (never from a local checkout), so they inherit
          its dependencyManagement and release profile without being reactor members.
-         cloudforge-ministack and cloudforge-localstack each publish real (non-SNAPSHOT) releases
-         to Maven Central on their own schedule, independent of cfc-core's. cloudforge-api still
-         depends on them (compile scope) despite not being a reactor sibling anymore, pinned to an
-         explicit, deliberately-bumped release (see their dependencyManagement entries below,
-         ${cloudforge-ministack.version}/${cloudforge-localstack.version}) rather than this pom's
-         own in-progress version — cfc-core decides what it consumes, instead of expecting either
-         sibling repo to have already republished to match whatever version cfc-core just became.
-         cloudforge-manager-deployment also publishes to Maven Central (see
-         .github/workflows/publish-maven-central.yml) but on its own independent version, not
-         locked to this pom's; cloudforge-synth-service does not publish to Central at all, since
-         its only Maven consumer is cloudforge-manager's test scope, which installs it from a
-         sibling checkout. cloudforge-manager is a standalone pom with no parent, released from
-         its own repository.
+         cloudforge-ministack and cloudforge-localstack are published to Maven Central in lockstep
+         with cfc-core's own releases (see publish-release-branch.yml), not on an independent
+         schedule. cloudforge-api still depends on them (compile scope) despite not being a
+         reactor sibling anymore (see their dependencyManagement entries below,
+         ${cloudforge-ministack.version}/${cloudforge-localstack.version}). cloudforge-manager-
+         deployment also publishes to Maven Central (see
+         .github/workflows/sync-cloudforge-manager-deployment-version.yml and
+         publish-release-branch.yml) but on its own independent cadence, not locked to this pom's;
+         cloudforge-synth-service does not publish to Central at all, since its only Maven
+         consumer is cloudforge-manager's test scope, which installs it from a sibling checkout.
+         cloudforge-manager is a standalone pom with no parent, released from its own repository.
 
          cfc-core's CI only tests cloudforge-api and cloudforge-core directly, resolving
          cloudforge-localstack and cloudforge-ministack as regular published dependencies like

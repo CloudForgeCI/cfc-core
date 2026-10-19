@@ -14,32 +14,32 @@ name: Publish Release Branch
 # before cut-release.yml cut it, and release branches carry no required status checks of their
 # own -- this workflow goes straight to publishing.
 #
-# cloudforge-ministack and cloudforge-localstack each have no cut-release step of their own -- this job
-# is it, for both. Each one's own pom.xml says so directly ("kept in lockstep with the parent's
+# cloudforge-ministack and cloudforge-localstack each have no cut-release step of their own -- this
+# job is it, for both. Each one's own pom.xml says so directly ("kept in lockstep with the parent's
 # version... stays released alongside cfc-core on the same version number") -- and it is not just
 # convention: cfc-core's own published BOM manages cloudforge-core's/cloudforge-api's versions as the
 # literal string ${project.version}, which Central's flatten step leaves UNRESOLVED (verified live
 # against the real 3.3.2 release's published pom); a consumer inheriting that entry resolves it against
 # its OWN version, not the parent's. So ministack/localstack's own <version> and their <parent> version
 # MUST be the exact same number as each other, or their cloudforge-core dependency resolves to a
-# version that was never published. (An earlier version of this job set them to two different numbers
-# -- its own develop version and cfc-core's previous release -- and broke exactly this way on a real
-# v3.3.3 release attempt; not a hypothetical.)
+# version that was never published.
 #
-# This job therefore runs AFTER cfc-core's own build/publish below, builds each repo from its own
-# develop tip but with both its <version> and its <parent> version forced to THIS release's own
-# version (which only exists, even just in this runner's local .m2 -- enough, since Maven's deploy
-# goal always installs locally too -- once cfc-core's own deploy has actually run), and publishes it
-# with these same secrets if that exact version isn't on Central yet. Checking first makes a re-run
-# (after a partial failure, or a push that didn't change anything) a safe no-op, same as the
-# already-tagged check above does for cfc-core's own version.
+# cfc-core (root BOM) and cloudforge-core depend on nothing in this job, so they publish for real
+# first, on their own. cloudforge-ministack and cloudforge-localstack publish next, each built from
+# its own develop tip with both its <version> and its <parent> version forced to THIS release's own
+# version, resolving cloudforge-core straight from Central like any other consumer -- and only if
+# that exact version isn't on Central yet (checking first makes a re-run a safe no-op, same as the
+# already-tagged check above does for cfc-core's own version). Only then does cfc-core's root pom
+# pin <cloudforge-ministack.version>/<cloudforge-localstack.version> to this same version and build
+# cloudforge-api, the one module that actually depends on cloudforge-ministack at compile time --
+# Central rejects a release dependency pinned to a SNAPSHOT, and this ordering is what guarantees a
+# real, compatible release always exists by the time that matters.
 #
-# Running after cfc-core's own deploy means the pin step below cannot correct what cfc-core's own BOM
-# already published for THIS release (Central deployments are immutable) -- it only keeps this
-# ephemeral checkout consistent for the summary step. Each repo's own
-# sync-cloudforge-ministack-version.yml/sync-cloudforge-localstack-version.yml (both develop-only, in
-# that repo) still proposes the matching pin-bump PR back onto this repo's own develop afterward, which
-# a human merges before the *next* release is cut, so that release's own BOM picks it up correctly.
+# cloudforge-ministack.version/cloudforge-localstack.version are committed on develop as a SNAPSHOT
+# always, same as cloudforge-manager-deployment.version, and never corrected there -- each repo's own
+# sync-cloudforge-ministack-version.yml/sync-cloudforge-localstack-version.yml keeps that SNAPSHOT
+# current, same pattern as sync-cloudforge-manager-deployment-version.yml. The swap in this job is
+# local to the runner, every release, never committed.
 #
 # Not published here (each is released from its own repository and cadence):
 #   - cloudforge-synth-service: its only Maven consumer is cloudforge-manager's test scope, which
@@ -249,28 +249,15 @@ jobs:
             echo "cloudforge-manager-deployment pin $PINNED is current (latest snapshot $LATEST_SNAPSHOT)."
           fi
 
-      - name: Build, sign, and publish cfc-core + cloudforge-core + cloudforge-api
+      # cfc-core (root BOM, packaging=pom) and cloudforge-core depend on nothing published in this
+      # job -- only cloudforge-api depends on cloudforge-ministack. Publishing these two for real
+      # now, before anything ministack/localstack-related, means the next step can resolve
+      # cloudforge-core straight from Central like any other consumer, with no local-only install
+      # step and no separate rebuild of it later.
+      - name: Build, sign, and publish cfc-core + cloudforge-core
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api..."
-          mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
-
-      # Diagnostic only, no fix attached to it: a local reproduction of this exact build produced
-      # a structurally complete bundle (every component's .pom present, correctly placed), so
-      # either the real runner's bundle differs from that reproduction in some way not yet
-      # identified, or the defect is server-side. Uploading the actual bytes sent to Central --
-      # not a reproduction -- is what settles which. Runs even when the step above fails: the
-      # bundle is written to disk before the upload-to-Central call, regardless of whether Central
-      # then accepts it.
-      - name: Upload the exact bundle sent to Central, for inspection
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: central-bundle-${{ needs.check-version.outputs.version }}
-          path: target/central-publishing/central-bundle.zip
-          retention-days: 7
-          if-no-files-found: warn
+        run: mvn -B -Prelease -pl .,cloudforge-core -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
       - name: Check out cloudforge-ministack's develop
         uses: actions/checkout@v4
@@ -286,10 +273,13 @@ jobs:
           ref: develop
           path: cloudforge-localstack
 
-      # Must run after cfc-core's own deploy above: each module's <version> AND <parent> version are
-      # both forced to THIS release's own version (see this file's header for why they have to be the
-      # exact same number), which doesn't exist anywhere -- not even in this runner's local .m2 -- until
-      # that step has actually run.
+      # Must run before cloudforge-api's own build below, not after: cloudforge-api depends on
+      # cloudforge-ministack at compile time, and Central rejects a release dependency pinned to a
+      # SNAPSHOT -- cfc-core's own cloudforge-ministack.version property can only be correct here
+      # if cloudforge-ministack at this exact version already exists for real. Each module's
+      # <version> AND <parent> version are both forced to THIS release's own version (see this
+      # file's header for why they have to be the exact same number), resolvable because
+      # cloudforge-core was just published for real above.
       - name: Publish cloudforge-ministack and cloudforge-localstack if this release's version isn't on Central yet
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -327,11 +317,42 @@ jobs:
               # The release profile's central-publishing-maven-plugin blocks this deploy call until
               # Central's own validation finishes (waitUntil=validated), not until the artifact is
               # fully searchable/downloadable on Central's CDN -- that part can still lag by minutes,
-              # same as it can for cfc-core's own artifacts just published above (see this job's
-              # closing summary step).
+              # same as it can for cfc-core's own artifacts published below.
               mvn -B -Prelease -f "$module/pom.xml" clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
             fi
           done
+
+      # Both properties go to the exact same value in one call (versions:set-property accepts a
+      # comma-separated -Dproperty list when -DnewVersion is shared) -- not one resolved
+      # separately from the other. cloudforge-ministack and cloudforge-localstack were each either
+      # already on Central at this version or just published above, so this release's own version
+      # is always correct for both. Never committed -- this runner's own checkout only.
+      - name: Pin cloudforge-ministack.version and cloudforge-localstack.version to this release's version
+        run: |
+          mvn -q -B versions:set-property \
+            -Dproperty=cloudforge-ministack.version,cloudforge-localstack.version \
+            -DnewVersion="${{ needs.check-version.outputs.version }}" -DgenerateBackupPoms=false
+
+      # The only one of the three cfc-core modules that depends on cloudforge-ministack, so the
+      # only one that had to wait for it to be published above. cfc-core and cloudforge-core are
+      # already real on Central by this point; this deploy resolves all of its dependencies --
+      # cloudforge-core, cloudforge-ministack, cloudforge-localstack -- the same way any other
+      # consumer would, nothing local or special-cased.
+      - name: Build, sign, and publish cloudforge-api
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: mvn -B -Prelease -pl cloudforge-api clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
+
+      # Diagnostic only, no fix attached to it: kept from the earlier investigation into the
+      # bundle-validation failures, left in place in case Central rejects a future bundle again.
+      - name: Upload the exact bundle sent to Central, for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-bundle-${{ needs.check-version.outputs.version }}
+          path: target/central-publishing/central-bundle.zip
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Clean up credentials
         if: always()
@@ -358,4 +379,4 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Central Portal validates and auto-publishes asynchronously — check https://central.sonatype.com/publishing/deployments for final status; artifacts typically become searchable on Central within 15-30 minutes of a successful upload." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "cloudforge-ministack and cloudforge-localstack were each published at ${{ needs.check-version.outputs.version }} above if they weren't there already. This release's own BOM still pins whatever <cloudforge-ministack.version>/<cloudforge-localstack.version> was already committed on this branch (Central deployments are immutable, so that can't be corrected after the fact) -- check each repo's sync-cfc-core-version.yml / this repo's sync-cloudforge-ministack-version.yml / sync-cloudforge-localstack-version.yml for the pin-bump PR that lets the *next* release pick this one up." >> $GITHUB_STEP_SUMMARY
+          echo "cloudforge-ministack and cloudforge-localstack were each published at ${{ needs.check-version.outputs.version }} above if they weren't there already, and this release's own BOM pins both to that same version (never committed -- develop's own <cloudforge-ministack.version>/<cloudforge-localstack.version> properties stay a SNAPSHOT, same as cloudforge-manager-deployment.version)." >> $GITHUB_STEP_SUMMARY
