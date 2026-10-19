@@ -70,7 +70,7 @@
          may not exist yet at every sibling repo. Bump these only after confirming compatibility
          with the newer release, the same way any other dependency version bump here works. -->
     <cloudforge-localstack.version>3.2.17</cloudforge-localstack.version>
-    <cloudforge-ministack.version>3.3.3-SNAPSHOT</cloudforge-ministack.version>
+    <cloudforge-ministack.version>3.2.17</cloudforge-ministack.version>
 
     <!-- AWS CDK Versions -->
     <!-- Note: v2.197.0+ defaults to nodejs22.x for AwsCustomResource which isn't available in all regions -->
