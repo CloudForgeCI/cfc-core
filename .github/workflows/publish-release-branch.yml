@@ -256,6 +256,22 @@ jobs:
           echo "Publishing cfc-core (root/BOM pom) + cloudforge-core + cloudforge-api..."
           mvn -B -Prelease -pl .,cloudforge-core,cloudforge-api -am clean deploy -DskipTests "-Dgpg.passphrase=$MAVEN_GPG_PASSPHRASE"
 
+      # Diagnostic only, no fix attached to it: a local reproduction of this exact build produced
+      # a structurally complete bundle (every component's .pom present, correctly placed), so
+      # either the real runner's bundle differs from that reproduction in some way not yet
+      # identified, or the defect is server-side. Uploading the actual bytes sent to Central --
+      # not a reproduction -- is what settles which. Runs even when the step above fails: the
+      # bundle is written to disk before the upload-to-Central call, regardless of whether Central
+      # then accepts it.
+      - name: Upload the exact bundle sent to Central, for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-bundle-${{ needs.check-version.outputs.version }}
+          path: target/central-publishing/central-bundle.zip
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Check out cloudforge-ministack's develop
         uses: actions/checkout@v4
         with:
