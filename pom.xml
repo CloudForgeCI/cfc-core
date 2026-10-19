@@ -119,7 +119,7 @@
        cloudforge-ministack/cloudforge-localstack/cloudforge-manager-deployment, since all three
        of their version properties above are always a -SNAPSHOT by design. updatePolicy=always:
        without it Maven caches a "not found" result for a whole day (the default), and that
-       negative cache persists across CI runs along with the rest of ~/.m2 -- one build that
+       negative cache persists across CI runs along with the rest of ~/.m2. One build that
        catches a sibling repo's snapshot mid-publish can then fail every build for the rest of
        the day even once that snapshot exists. -->
   <repositories>
