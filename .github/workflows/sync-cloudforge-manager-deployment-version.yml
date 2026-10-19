@@ -107,4 +107,8 @@ jobs:
           git add pom.xml
           git commit -m "chore(deps): sync cloudforge-manager-deployment.version=${DEPLOY_V} [skip ci]"
           git pull --rebase origin develop
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:develop
+          # actions/checkout@v4 leaves GITHUB_TOKEN in http.https://github.com/.extraheader, which
+          # git prefers over the credential embedded in the push URL below -- clearing it for just
+          # this invocation is what actually makes the PAT the one used, instead of silently
+          # falling back to GITHUB_TOKEN and failing the same required-check rejection again.
+          git -c http.https://github.com/.extraheader= push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:develop
