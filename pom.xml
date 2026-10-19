@@ -61,7 +61,7 @@
          BOM gives every consumer (cloudforge-manager and others) a single sync point; a BOM
          entry is only a coordinate + version, so it does not tie that project's release cadence
          to cfc-core's. -->
-    <cloudforge-manager-deployment.version>3.2.9-SNAPSHOT</cloudforge-manager-deployment.version>
+    <cloudforge-manager-deployment.version>3.2.11-SNAPSHOT</cloudforge-manager-deployment.version>
 
     <!-- Explicit, deliberately-bumped pins for cloudforge-api's compile-scope dependency on these
          two — NOT ${project.version}. Each publishes real (non-SNAPSHOT) releases to Central on
