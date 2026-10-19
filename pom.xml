@@ -56,16 +56,16 @@
     <skipTests>true</skipTests>
 
     <!-- Latest published SNAPSHOT of each. Each is kept current by its own
-         .github/workflows/sync-<name>-version.yml, which polls Central's snapshot metadata and
-         commits the bump directly to develop -- never a PR, same as this one. Managing the
+         .github/workflows/sync-(name)-version.yml, which polls Central's snapshot metadata and
+         commits the bump directly to develop, never a PR, same as this one. Managing the
          version in this BOM gives every consumer a single sync point; a BOM entry is only a
          coordinate + version, so it does not tie that project's release cadence to cfc-core's.
          A release build never ships one of these SNAPSHOTs (Central rejects it): see
          publish-release-branch.yml, which swaps each to a real release just for that build,
-         never committing the swap -- cloudforge-manager-deployment to whatever it last published
-         on its own independent cadence, cloudforge-ministack/cloudforge-localstack to this same
-         release's own version, since both are published in lockstep with it as part of the same
-         run. -->
+         never committing the swap. cloudforge-manager-deployment swaps to whatever it last
+         published on its own independent cadence; cloudforge-ministack/cloudforge-localstack
+         swap to this same release's own version, since both are published in lockstep with it
+         as part of the same run. -->
     <cloudforge-manager-deployment.version>3.2.11-SNAPSHOT</cloudforge-manager-deployment.version>
     <cloudforge-ministack.version>3.3.8-SNAPSHOT</cloudforge-ministack.version>
     <cloudforge-localstack.version>3.3.8-SNAPSHOT</cloudforge-localstack.version>
