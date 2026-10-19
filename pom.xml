@@ -67,8 +67,8 @@
          swap to this same release's own version, since both are published in lockstep with it
          as part of the same run. -->
     <cloudforge-manager-deployment.version>3.2.11-SNAPSHOT</cloudforge-manager-deployment.version>
-    <cloudforge-ministack.version>3.3.8-SNAPSHOT</cloudforge-ministack.version>
-    <cloudforge-localstack.version>3.3.8-SNAPSHOT</cloudforge-localstack.version>
+    <cloudforge-ministack.version>3.3.2-SNAPSHOT</cloudforge-ministack.version>
+    <cloudforge-localstack.version>3.3.2-SNAPSHOT</cloudforge-localstack.version>
 
     <!-- AWS CDK Versions -->
     <!-- Note: v2.197.0+ defaults to nodejs22.x for AwsCustomResource which isn't available in all regions -->
