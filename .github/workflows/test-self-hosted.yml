@@ -1,0 +1,11 @@
+name: Test Self-Hosted Dispatch
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    name: Ping self-hosted
+    runs-on: [self-hosted, mac-mini]
+    steps:
+      - run: echo "hello from $(hostname)"
