@@ -23,7 +23,7 @@
     <maven.compiler.target>25</maven.compiler.target>
     <!-- Matches the version cloudforge-localstack/cloudforge-ministack/cloudforge-manager each
          pin independently — no central AWS SDK BOM entry exists in the root pom yet. -->
-    <aws.sdk.version>2.25.0</aws.sdk.version>
+    <aws.sdk.version>2.56.0</aws.sdk.version>
   </properties>
 
   <dependencies>
