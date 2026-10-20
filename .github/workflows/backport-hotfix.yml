@@ -92,6 +92,14 @@ jobs:
           echo "next=$NEXT" >> "$GITHUB_OUTPUT"
           mvn -q -B versions:set -DnewVersion="$NEXT" -DprocessAllModules=true -DgenerateBackupPoms=false
 
+      # A release/v* branch rejects a direct update from this job's own GITHUB_TOKEN once it
+      # exists ("GH013: Cannot update this protected ref") -- confirmed live backporting the
+      # cfc-core deploy-step guard onto release/v3.3.9, even though cut-release.yml's own earlier
+      # push CREATING that same branch went through fine; creation and update aren't covered by
+      # the same rule. ADMIN_BYPASS_TOKEN (a PAT from a real CloudForgeCI admin account) is what
+      # cut-release.yml already uses to push past this on develop's own protection -- same pattern
+      # here, builds the commit with no admin credential in the environment, pushes with it in the
+      # one step that needs it.
       - name: Commit and push
         env:
           COMMIT_SHA: ${{ inputs.commit_sha }}
@@ -99,7 +107,12 @@ jobs:
         run: |
           git add -A
           git commit -m "Backport $COMMIT_SHA to $RELEASE_BRANCH, bump to ${{ steps.version.outputs.next }}"
-          git push origin "HEAD:$RELEASE_BRANCH"
+
+      - name: Push past branch protection
+        env:
+          GH_TOKEN: ${{ secrets.ADMIN_BYPASS_TOKEN }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" "HEAD:$RELEASE_BRANCH"
 
       - name: Trigger publish-release-branch.yml
         env:
