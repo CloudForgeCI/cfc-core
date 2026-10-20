@@ -243,7 +243,33 @@ jobs:
             echo "cloudforge-manager-deployment pin $PINNED is current (latest snapshot $LATEST_SNAPSHOT)."
           fi
 
+      # Same existence check the cloudforge-ministack/cloudforge-localstack loop below already
+      # does, applied here too: this step's own tag check only tells us v$VERSION wasn't tagged
+      # yet, which is also true the moment a partial failure happens AFTER this deploy succeeds but
+      # BEFORE the tag gets pushed (exactly what happened publishing v3.3.9 -- cfc-core/
+      # cloudforge-core/cloudforge-api deployed fine, the ministack/localstack loop below failed,
+      # and the run stopped before reaching the tag step). Re-running the whole job without this
+      # guard would try to redeploy an already-published, immutable version -- Central rejects that
+      # outright -- before ever reaching the modules that actually still need publishing.
+      - name: Check whether cfc-core is already on Central
+        id: cfc-core-check
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+          HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 5 \
+            "https://repo1.maven.org/maven2/com/cloudforgeci/cfc-core/$VERSION/cfc-core-$VERSION.pom")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "cfc-core $VERSION is already on Central -- nothing to publish."
+            echo "needs_publish=false" >> "$GITHUB_OUTPUT"
+          elif [ "$HTTP_CODE" != "404" ]; then
+            echo "::error::Checking whether cfc-core $VERSION is already on Central returned HTTP $HTTP_CODE, not 200 or 404 -- not safe to decide whether to publish."
+            exit 1
+          else
+            echo "cfc-core $VERSION is not on Central yet -- publishing it as part of this release."
+            echo "needs_publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build, sign, and publish cfc-core + cloudforge-core + cloudforge-api
+        if: steps.cfc-core-check.outputs.needs_publish == 'true'
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
