@@ -40,7 +40,10 @@ on:
 jobs:
   build-test:
     name: Build & test
-    runs-on: ubuntu-latest
+    # See codeql-analysis.yml's analyze job for why dependabot PRs route to the self-hosted
+    # runner. The publish-snapshot job below stays on macos-latest regardless of actor -- it's a
+    # trusted-deploy step (Central Portal credentials), not something to move for queue relief.
+    runs-on: ${{ github.actor == 'dependabot[bot]' && fromJSON('["self-hosted", "mac-mini"]') || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - name: Checkout code

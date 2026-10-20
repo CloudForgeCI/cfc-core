@@ -14,7 +14,8 @@ on:
 jobs:
   sbom-and-vulnerability-scan:
     name: SBOM Generation & Vulnerability Scanning
-    runs-on: ubuntu-latest
+    # See codeql-analysis.yml's analyze job for why dependabot PRs route to the self-hosted runner.
+    runs-on: ${{ github.actor == 'dependabot[bot]' && fromJSON('["self-hosted", "mac-mini"]') || 'ubuntu-latest' }}
 
     permissions:
       contents: write  # Required for SBOM submission to dependency graph
@@ -261,7 +262,8 @@ jobs:
 
   code-quality:
     name: Code Quality & Linting
-    runs-on: ubuntu-latest
+    # See codeql-analysis.yml's analyze job for why dependabot PRs route to the self-hosted runner.
+    runs-on: ${{ github.actor == 'dependabot[bot]' && fromJSON('["self-hosted", "mac-mini"]') || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout code
