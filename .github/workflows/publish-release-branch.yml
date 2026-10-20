@@ -14,32 +14,26 @@ name: Publish Release Branch
 # before cut-release.yml cut it, and release branches carry no required status checks of their
 # own -- this workflow goes straight to publishing.
 #
-# cloudforge-ministack and cloudforge-localstack each have no cut-release step of their own -- this job
-# is it, for both. Each one's own pom.xml says so directly ("kept in lockstep with the parent's
-# version... stays released alongside cfc-core on the same version number") -- and it is not just
-# convention: cfc-core's own published BOM manages cloudforge-core's/cloudforge-api's versions as the
-# literal string ${project.version}, which Central's flatten step leaves UNRESOLVED (verified live
-# against the real 3.3.2 release's published pom); a consumer inheriting that entry resolves it against
-# its OWN version, not the parent's. So ministack/localstack's own <version> and their <parent> version
-# MUST be the exact same number as each other, or their cloudforge-core dependency resolves to a
-# version that was never published. (An earlier version of this job set them to two different numbers
-# -- its own develop version and cfc-core's previous release -- and broke exactly this way on a real
-# v3.3.3 release attempt; not a hypothetical.)
+# cloudforge-ministack and cloudforge-localstack each have no cut-release step of their own -- this
+# job is it, for both. Neither is a Maven dependency of cfc-core's own reactor (that compile-time
+# coupling previously existed between cloudforge-api and both modules and caused a real,
+# unresolvable circular-dependency race across the three repos' release cadences; it was removed --
+# the local-emulator deploy dispatch that used it now lives in cloudforge-cli instead). cfc-core's
+# only remaining relationship to either is this publish step: each one's own pom.xml says directly
+# why its <version> and its <parent> version must be the exact same number as each other ("kept in
+# lockstep with the parent's version... stays released alongside cfc-core on the same version
+# number") -- cfc-core's own published BOM manages cloudforge-core's version as the literal string
+# ${project.version}, which Central's flatten step leaves UNRESOLVED (verified live against the
+# real 3.3.2 release's published pom); a consumer inheriting that entry resolves it against its OWN
+# version, not the parent's. Setting them to two different numbers (this job's own develop version
+# and cfc-core's previous release) broke exactly this way on a real v3.3.3 release attempt; not a
+# hypothetical.
 #
-# This job therefore runs AFTER cfc-core's own build/publish below, builds each repo from its own
-# develop tip but with both its <version> and its <parent> version forced to THIS release's own
-# version (which only exists, even just in this runner's local .m2 -- enough, since Maven's deploy
-# goal always installs locally too -- once cfc-core's own deploy has actually run), and publishes it
-# with these same secrets if that exact version isn't on Central yet. Checking first makes a re-run
-# (after a partial failure, or a push that didn't change anything) a safe no-op, same as the
-# already-tagged check above does for cfc-core's own version.
-#
-# Running after cfc-core's own deploy means the pin step below cannot correct what cfc-core's own BOM
-# already published for THIS release (Central deployments are immutable) -- it only keeps this
-# ephemeral checkout consistent for the summary step. Each repo's own
-# sync-cloudforge-ministack-version.yml/sync-cloudforge-localstack-version.yml (both develop-only, in
-# that repo) still proposes the matching pin-bump PR back onto this repo's own develop afterward, which
-# a human merges before the *next* release is cut, so that release's own BOM picks it up correctly.
+# This job builds each repo from its own develop tip with both its <version> and its <parent>
+# version forced to THIS release's own version, and publishes it with these same secrets if that
+# exact version isn't on Central yet. Checking first makes a re-run (after a partial failure, or a
+# push that didn't change anything) a safe no-op, same as the already-tagged check above does for
+# cfc-core's own version.
 #
 # Not published here (each is released from its own repository and cadence):
 #   - cloudforge-synth-service: its only Maven consumer is cloudforge-manager's test scope, which
@@ -358,4 +352,4 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Central Portal validates and auto-publishes asynchronously — check https://central.sonatype.com/publishing/deployments for final status; artifacts typically become searchable on Central within 15-30 minutes of a successful upload." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "cloudforge-ministack and cloudforge-localstack were each published at ${{ needs.check-version.outputs.version }} above if they weren't there already. This release's own BOM still pins whatever <cloudforge-ministack.version>/<cloudforge-localstack.version> was already committed on this branch (Central deployments are immutable, so that can't be corrected after the fact) -- check each repo's sync-cfc-core-version.yml / this repo's sync-cloudforge-ministack-version.yml / sync-cloudforge-localstack-version.yml for the pin-bump PR that lets the *next* release pick this one up." >> $GITHUB_STEP_SUMMARY
+          echo "cloudforge-ministack and cloudforge-localstack were each published at ${{ needs.check-version.outputs.version }} above if they weren't there already. cfc-core's own BOM has no dependency on either, so there's nothing to pin here -- their own repos' sync-cfc-core-version.yml keeps each one's <parent> on cfc-core's latest real release independently." >> $GITHUB_STEP_SUMMARY
