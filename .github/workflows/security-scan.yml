@@ -38,7 +38,7 @@ jobs:
         run: echo "date=$(date +'%Y-%U')" >> $GITHUB_OUTPUT
 
       - name: Cache Maven dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -46,7 +46,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Cache OWASP Dependency-Check NVD database
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.m2/dependency-check-data
           # Cache key based on year-week (YYYY-WW) - updates weekly for fresh CVE data 

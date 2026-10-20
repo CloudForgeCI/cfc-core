@@ -220,7 +220,7 @@ jobs:
 
       - name: Cache cfn-guard binary
         id: cache-cfn-guard
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /usr/local/bin/cfn-guard
           key: cfn-guard-v3.1.1-${{ runner.os }}-sha256-106db0d9
