@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # The Maven reactor (cfc-core, cloudforge-core, cloudforge-api).
+  # The Maven reactor (cfc-core, cloudforge-core, cloudforge-api) at the repo root.
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
@@ -17,6 +17,15 @@ updates:
   # GitHub Actions used across this repo's workflows.
   - package-ecosystem: "github-actions"
     directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # A standalone example project, not a reactor module (no <parent>, own <dependencyManagement>
+  # pinning cfc-core's BOM plus aws-cdk-lib/constructs directly) -- the root maven entry above
+  # doesn't reach it.
+  - package-ecosystem: "maven"
+    directory: "/docs/examples/cloudforge-sample"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
