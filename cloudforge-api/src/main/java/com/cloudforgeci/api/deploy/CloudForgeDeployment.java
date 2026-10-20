@@ -4,21 +4,11 @@ import com.cloudforge.core.config.DeploymentContextPreparer;
 import com.cloudforge.core.local.DeploymentTarget;
 import com.cloudforge.core.local.EmulatorEdgeLifecycle;
 import com.cloudforge.core.local.LocalDeployResult;
-import com.cloudforge.core.local.LocalDeploymentPipeline;
-import com.cloudforge.core.local.LocalDeploymentPipelineResult;
-import com.cloudforge.core.local.LocalDeploymentRequest;
 import com.cloudforge.core.local.LocalSameApplicationStackReplacer;
 import com.cloudforge.core.local.TemplateAdaptationResult;
 import com.cloudforgeci.api.deploy.aws.AwsDirectDeployer;
 import com.cloudforgeci.api.deploy.aws.AwsStackDeployResult;
 import com.cloudforgeci.api.deploy.aws.StackProgressListener;
-import com.cloudforgeci.localstack.LocalStackDeployer;
-import com.cloudforgeci.localstack.LocalStackDeploymentPipeline;
-import com.cloudforgeci.ministack.MiniStackDeployer;
-import com.cloudforgeci.ministack.MiniStackDeploymentPipeline;
-import com.cloudforgeci.ministack.MiniStackLocalRuntime;
-import com.cloudforgeci.ministack.MiniStackTemplateAdapter;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,16 +16,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Central deploy façade for MiniStack, LocalStack, and (as of the {@code deploy:create}/
- * {@code deploy:catalog} work) direct-to-AWS.
+ * Direct-to-AWS deploy façade (the {@code deploy:create}/{@code deploy:catalog} work). MiniStack
+ * and LocalStack deploys are dispatched by {@code cloudforge-cli} directly against those targets'
+ * own modules — cloudforge-api has no dependency on either, so this class only ever handles AWS.
  *
- * <p>The AWS case is deliberately the simplest of the three: no template adaptation (real ALB/
- * Route53 need no local port-remapping), no {@link LocalSameApplicationStackReplacer} (auto-
- * deleting a caller's other AWS stacks on redeploy is a MiniStack/LocalStack local-resource
- * convenience, not a safe default against real infrastructure — {@link DeployOptions
- * #replaceSameApplication()} is ignored for this target), no emulator-edge reconciliation. See
- * {@link AwsDirectDeployer} for the actual CloudFormation mechanics and the CloudForge stack
- * tagging every AWS deploy applies.</p>
+ * <p>The AWS case needs no template adaptation (real ALB/Route53 need no local port-remapping),
+ * no {@link LocalSameApplicationStackReplacer} (auto-deleting a caller's other AWS stacks on
+ * redeploy is a MiniStack/LocalStack local-resource convenience, not a safe default against real
+ * infrastructure — {@link DeployOptions#replaceSameApplication()} is ignored for this target), no
+ * emulator-edge reconciliation. See {@link AwsDirectDeployer} for the actual CloudFormation
+ * mechanics and the CloudForge stack tagging every AWS deploy applies.</p>
  */
 public final class CloudForgeDeployment {
 
@@ -48,11 +38,16 @@ public final class CloudForgeDeployment {
 
     /**
      * Same as {@link #deploy(DeploymentRequest)}, additionally reporting each CloudFormation
-     * stack event to {@code listener} as it happens for an {@link DeploymentTarget#AWS} request
-     * (ignored for MiniStack/LocalStack targets, which never call {@link AwsDirectDeployer}).
+     * stack event to {@code listener} as it happens. Only {@link DeploymentTarget#AWS} requests
+     * are supported here — see the class javadoc.
      */
     public static DeploymentResult deploy(DeploymentRequest request, StackProgressListener listener)
             throws IOException {
+        if (request.target() != DeploymentTarget.AWS) {
+            throw new UnsupportedOperationException(
+                "CloudForgeDeployment only handles AWS deploys; " + request.target()
+                    + " is dispatched by cloudforge-cli directly.");
+        }
         if (request.config().applicationSpec != null) {
             DeploymentContextPreparer.prepare(
                 request.config(),
@@ -64,149 +59,21 @@ public final class CloudForgeDeployment {
         if (preflight.ran() && !preflight.formattedWarnings().isBlank()) {
             System.out.println("\n" + preflight.formattedWarnings());
         }
-        return switch (request.target()) {
-            case MINISTACK -> deployMiniStack(request, preflight);
-            case LOCALSTACK -> deployLocalStack(request, preflight);
-            case AWS -> deployAws(request, preflight, listener);
-        };
+        return deployAws(request, preflight, listener);
     }
 
     /**
-     * Whether a MiniStack deploy deletes the other stacks of the same application. A deployment with
-     * its own {@code subdomain} is an additional named instance reached on its own hostname, so it
-     * leaves the others in place; one without a subdomain replaces its predecessor.
+     * Whether a local-emulator deploy deletes the other stacks of the same application. A
+     * deployment with its own {@code subdomain} is an additional named instance reached on its
+     * own hostname, so it leaves the others in place; one without a subdomain replaces its
+     * predecessor. Used by cloudforge-cli's MiniStack/LocalStack dispatch, not by this class's
+     * own (AWS-only) deploy path.
      */
-    static boolean replacesSameApplication(DeploymentRequest request) {
+    public static boolean replacesSameApplication(DeploymentRequest request) {
         String subdomain = request.config().subdomain;
         return request.options().replaceSameApplication()
             && request.mode() == DeployMode.DEPLOY
             && (subdomain == null || subdomain.isBlank());
-    }
-
-    /**
-     * Deploys to the region a deployment context names, like the AWS target; MiniStack has one stack list per
-     * region. {@code credentials}, when given, choose the account the way they do on AWS.
-     */
-    private static LocalDeploymentPipeline miniStackPipeline(AwsCredentialsProvider credentials) {
-        return LocalDeploymentPipeline.forRegion(
-            MiniStackTemplateAdapter.INSTANCE,
-            region -> miniStackDeployer(region, credentials),
-            MiniStackLocalRuntime.INSTANCE::reconcile);
-    }
-
-    /**
-     * A MiniStack deployer for {@code region}; a blank region uses {@code AWS_DEFAULT_REGION}, then us-east-1.
-     * Without {@code credentials} the account comes from {@code AWS_ACCESS_KEY_ID}.
-     */
-    static MiniStackDeployer miniStackDeployer(String region, AwsCredentialsProvider credentials) {
-        String effectiveRegion = region == null || region.isBlank()
-            ? System.getenv().getOrDefault("AWS_DEFAULT_REGION", "us-east-1") : region.trim();
-        return new MiniStackDeployer(MiniStackDeployer.resolveEndpoint(), effectiveRegion, credentials);
-    }
-
-    private static DeploymentResult deployMiniStack(
-            DeploymentRequest request,
-            LocalDeployPreflight.PreflightOutcome preflight) throws IOException {
-        LocalDeploymentRequest localRequest = LocalDeploymentRequest.forTarget(
-            DeploymentTarget.MINISTACK,
-            request.config().stackName,
-            request.canonicalTemplate(),
-            request.outputDirectory());
-
-        String endpoint = MiniStackDeployer.resolveEndpoint();
-        LocalSameApplicationStackReplacer.Result replaceResult = null;
-        if (replacesSameApplication(request)) {
-            try (MiniStackDeployer deployer = miniStackDeployer(request.config().region, request.options().credentialsOverride())) {
-                replaceResult = deployer.replaceSameApplicationStacks(
-                    request.config().applicationId,
-                    localRequest.localStackName(),
-                    request.options().catalogDirectory());
-            }
-        }
-
-        TemplateAdaptationResult adaptation = null;
-        LocalDeployResult deployment = null;
-        Map<String, String> outputs = Map.of();
-
-        switch (request.mode()) {
-            case DRY_RUN -> adaptation = MiniStackDeploymentPipeline.adapt(localRequest);
-            case DEPLOY -> {
-                LocalDeploymentPipelineResult pipelineResult =
-                    miniStackPipeline(request.options().credentialsOverride())
-                    .deploy(localRequest, request.config().region);
-                adaptation = pipelineResult.adaptation();
-                deployment = pipelineResult.deployment();
-                outputs = deployment.outputs();
-            }
-            case VERIFY -> {
-                try (MiniStackDeployer deployer = miniStackDeployer(request.config().region, request.options().credentialsOverride())) {
-                    outputs = deployer.verifyDeployment(localRequest.localStackName());
-                }
-            }
-        }
-
-        return finalizeResult(
-            request,
-            preflight,
-            localRequest.localStackName(),
-            endpoint,
-            localRequest.adaptationReport(),
-            adaptation,
-            deployment,
-            replaceResult,
-            outputs);
-    }
-
-    private static DeploymentResult deployLocalStack(
-            DeploymentRequest request,
-            LocalDeployPreflight.PreflightOutcome preflight) throws IOException {
-        LocalDeploymentRequest localRequest = LocalDeploymentRequest.forTarget(
-            DeploymentTarget.LOCALSTACK,
-            request.config().stackName,
-            request.canonicalTemplate(),
-            request.outputDirectory());
-
-        String endpoint = LocalStackDeployer.resolveEndpoint();
-        LocalSameApplicationStackReplacer.Result replaceResult = null;
-        if (request.options().replaceSameApplication() && request.mode() == DeployMode.DEPLOY) {
-            try (LocalStackDeployer deployer = new LocalStackDeployer()) {
-                replaceResult = deployer.replaceSameApplicationStacks(
-                    request.config().applicationId,
-                    localRequest.localStackName(),
-                    request.options().catalogDirectory());
-            }
-        }
-
-        TemplateAdaptationResult adaptation = null;
-        LocalDeployResult deployment = null;
-        Map<String, String> outputs = Map.of();
-
-        switch (request.mode()) {
-            case DRY_RUN -> adaptation = LocalStackDeploymentPipeline.adapt(localRequest);
-            case DEPLOY -> {
-                LocalDeploymentPipelineResult pipelineResult =
-                    LocalStackDeploymentPipeline.deploy(localRequest);
-                adaptation = pipelineResult.adaptation();
-                deployment = pipelineResult.deployment();
-                outputs = deployment.outputs();
-            }
-            case VERIFY -> {
-                try (LocalStackDeployer deployer = new LocalStackDeployer()) {
-                    outputs = deployer.verifyDeployment(localRequest.localStackName());
-                }
-            }
-        }
-
-        return finalizeResult(
-            request,
-            preflight,
-            localRequest.localStackName(),
-            endpoint,
-            localRequest.adaptationReport(),
-            adaptation,
-            deployment,
-            replaceResult,
-            outputs);
     }
 
     private static DeploymentResult deployAws(
@@ -276,7 +143,13 @@ public final class CloudForgeDeployment {
             false);
     }
 
-    private static DeploymentResult finalizeResult(
+    /**
+     * Shared result-assembly tail for a local-emulator (MiniStack/LocalStack) deploy: persists
+     * the deployment-contexts catalog, reconciles the emulator edge, and wraps everything into a
+     * {@link DeploymentResult}. Called by cloudforge-cli's own MiniStack/LocalStack dispatch,
+     * which has no access to this class's AWS-only deploy path otherwise.
+     */
+    public static DeploymentResult finalizeResult(
             DeploymentRequest request,
             LocalDeployPreflight.PreflightOutcome preflight,
             String localStackName,

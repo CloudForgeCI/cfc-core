@@ -42,7 +42,7 @@ import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.sts.StsClient;
 
-import com.cloudforgeci.localstack.LocalStackCdkAssetPublisher;
+import com.cloudforge.core.local.CdkAssetPublisher;
 
 import java.io.IOException;
 import java.net.URI;
@@ -77,7 +77,7 @@ import com.cloudforgeci.api.deploy.aws.StackProgressListener.StackProgressEvent;
  *
  * <p><b>Targets AWS by default, but redirects to a local emulator when Manager itself runs
  * inside one</b>, using the same {@code LOCALSTACK_ENDPOINT}/{@code AWS_ENDPOINT_URL} detection
- * as {@link com.cloudforgeci.localstack.LocalStackDeployer#resolveEndpoint()}. Without the
+ * as {@code LocalStackDeployer#resolveEndpoint()} (cloudforge-localstack). Without the
  * endpoint override, a Manager instance hosted on LocalStack would call the public
  * CloudFormation endpoint instead of the emulator.</p>
  *
@@ -208,7 +208,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
      * Returns the target account ID: LocalStack's fixed test account without a network call, or
      * the caller's account via {@code sts:GetCallerIdentity} on AWS. Used to substitute CDK's
      * {@code ${AWS::AccountId}} token in asset-manifest bucket names (see
-     * {@code LocalStackCdkAssetPublisher}). Called lazily from {@link #deploy} so that
+     * {@link CdkAssetPublisher}). Called lazily from {@link #deploy} so that
      * construction never reaches the network (relied on by
      * {@code realAwsConstructorDefaultsRegionWhenConfigOmitsIt}).
      */
@@ -334,7 +334,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
         // belongs to `cdk bootstrap`; creating a bare bucket with that name would block bootstrap
         // from creating a correctly configured one, so an unbootstrapped account instead gets an
         // IOException telling the user to run `cdk bootstrap`.
-        LocalStackCdkAssetPublisher.publish(
+        CdkAssetPublisher.publish(
             template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
 
         boolean exists = stackExists(physical) && stackIsDeployable(physical);
@@ -555,7 +555,7 @@ public final class AwsDirectDeployer implements AutoCloseable {
      */
     public AwsStackDeployResult previewChangeSet(String stackName, Path template) throws IOException {
         String physical = physicalStackName(stackName);
-        LocalStackCdkAssetPublisher.publish(
+        CdkAssetPublisher.publish(
             template.getParent(), stackName, s3, resolveAccountId(), localEmulatorTarget);
 
         boolean exists = stackExists(physical) && stackIsDeployable(physical);

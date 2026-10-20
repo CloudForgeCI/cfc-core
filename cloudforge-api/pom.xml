@@ -81,15 +81,6 @@
       <artifactId>route53</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
-    <!-- Local emulator pipelines (api orchestrates; mechanics stay in target modules) -->
-    <dependency>
-      <groupId>com.cloudforgeci</groupId>
-      <artifactId>cloudforge-ministack</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.cloudforgeci</groupId>
-      <artifactId>cloudforge-localstack</artifactId>
-    </dependency>
     <!-- JUnit 5 for testing (version and scope from parent BOM) -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>

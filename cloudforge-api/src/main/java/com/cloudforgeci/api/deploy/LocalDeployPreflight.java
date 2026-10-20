@@ -1,24 +1,20 @@
 package com.cloudforgeci.api.deploy;
 
-import com.cloudforge.core.config.DeploymentConfig;
-import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.local.DeploymentTarget;
-import com.cloudforge.core.local.LocalStackCapabilitySnapshot;
 import com.cloudforge.core.local.PreflightMessages;
 import com.cloudforge.core.local.PreflightMode;
 import com.cloudforge.core.local.PreflightResult;
-import com.cloudforgeci.localstack.LocalStackCapabilityProbe;
-import com.cloudforgeci.localstack.LocalStackDeployPreflight;
-import com.cloudforgeci.localstack.LocalStackDeployer;
-import com.cloudforgeci.ministack.MiniStackDeployPreflight;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Runs target-specific deploy preflight before local emulator pipelines execute.
+ * Runs AWS deploy preflight (trivially allowed) before {@link CloudForgeDeployment}'s own
+ * (AWS-only) deploy path executes. MiniStack/LocalStack preflight is run by cloudforge-cli's own
+ * dispatch, which has no access to this class's package-private pieces otherwise; {@link
+ * #modeFor(DeploymentTarget)} and {@link PreflightOutcome} are public and reused from there for
+ * the parts that aren't target-specific.
  */
 public final class LocalDeployPreflight {
 
@@ -36,27 +32,7 @@ public final class LocalDeployPreflight {
             return PreflightOutcome.skipped();
         }
 
-        DeploymentConfig config = request.config();
-        ApplicationSpec spec = config.applicationSpec;
-        Path canonical = request.canonicalTemplate();
-
-        String stackName = config.stackName;
-        PreflightResult result = switch (request.target()) {
-            case MINISTACK -> MiniStackDeployPreflight.validate(
-                config,
-                spec,
-                canonical,
-                java.net.URI.create(com.cloudforgeci.ministack.MiniStackDeployer.resolveEndpoint()),
-                stackName);
-            case LOCALSTACK -> {
-                LocalStackCapabilitySnapshot snapshot =
-                    LocalStackCapabilityProbe.probe(LocalStackDeployer.resolveEndpoint());
-                yield LocalStackDeployPreflight.validateForDeployment(
-                    config, spec, canonical, snapshot, stackName);
-            }
-            case AWS -> PreflightResult.allowed(request.target());
-        };
-
+        PreflightResult result = PreflightResult.allowed(request.target());
         return new PreflightOutcome(result, preflightMode, true);
     }
 
