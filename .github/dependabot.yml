@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # The Maven reactor (cfc-core, cloudforge-core, cloudforge-api).
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # docs/web (Docusaurus) — not a Maven module, has its own package-lock.json.
+  - package-ecosystem: "npm"
+    directory: "/docs/web"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # GitHub Actions used across this repo's workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
