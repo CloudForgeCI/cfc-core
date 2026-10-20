@@ -18,6 +18,11 @@ jobs:
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
+    # Skipped for dependabot[bot]: it's a Docker container action, which a macOS self-hosted
+    # runner can't execute at all (a hard GitHub Actions platform restriction, not a missing-tool
+    # gap) -- and a dependabot PR only ever touches a dependency manifest, never a shell script,
+    # so there's nothing here for it to check anyway.
+    if: github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
