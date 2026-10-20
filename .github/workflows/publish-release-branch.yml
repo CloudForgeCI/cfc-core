@@ -77,7 +77,7 @@ jobs:
       should_publish: ${{ steps.decide.outputs.should_publish }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # need full tag history
 
@@ -126,7 +126,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -293,14 +293,14 @@ jobs:
           if-no-files-found: warn
 
       - name: Check out cloudforge-ministack's develop
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: CloudForgeCI/cloudforge-ministack
           ref: develop
           path: cloudforge-ministack
 
       - name: Check out cloudforge-localstack's develop
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: CloudForgeCI/cloudforge-localstack
           ref: develop
