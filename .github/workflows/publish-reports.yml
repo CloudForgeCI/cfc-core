@@ -398,7 +398,7 @@ jobs:
       # leaves useful logs for the configs that did fail.
       - name: Upload synthesis test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: comprehensive-synth-logs
           path: |

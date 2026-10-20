@@ -158,7 +158,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quick-test-results-${{ github.run_number }}
           path: |
@@ -168,7 +168,7 @@ jobs:
 
       - name: Upload historical metrics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-metrics-history
           path: validation/test-results/deployment-reports/historical/deployment-metrics.csv
@@ -187,7 +187,7 @@ jobs:
 
       - name: Upload deployment dashboard
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-dashboard-${{ github.run_number }}
           path: |
@@ -248,7 +248,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: enhanced-test-results-${{ github.run_number }}
           path: |
@@ -276,7 +276,7 @@ jobs:
 
       - name: Upload performance report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: performance-report-${{ github.run_number }}
           path: validation/test-results/enhanced-synth-results/report.md
@@ -344,7 +344,7 @@ jobs:
 
       - name: Upload deployment reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-reports-${{ github.run_number }}
           path: |
@@ -354,7 +354,7 @@ jobs:
 
       - name: Upload historical metrics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-metrics-history
           path: validation/test-results/deployment-reports/historical/deployment-metrics.csv
@@ -409,7 +409,7 @@ jobs:
 
       - name: Upload deployment dashboard
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-dashboard-${{ github.run_number }}
           path: |
@@ -419,7 +419,7 @@ jobs:
 
       - name: Upload trends report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-trends-${{ github.run_number }}
           path: validation/test-results/deployment-reports/historical/trends.md
@@ -495,7 +495,7 @@ jobs:
 
       - name: Upload changeset reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: changeset-reports-${{ github.run_number }}
           path: |
@@ -505,7 +505,7 @@ jobs:
 
       - name: Upload changeset metrics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: changeset-metrics-history
           path: validation/test-results/changeset-reports/historical/changeset-metrics.csv
@@ -547,7 +547,7 @@ jobs:
 
       - name: Upload changeset trends
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: changeset-trends-${{ github.run_number }}
           path: validation/test-results/changeset-reports/historical/changeset-trends.md
@@ -604,7 +604,7 @@ jobs:
 
       - name: Upload validation results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: validation-results-${{ github.run_number }}
           path: |
@@ -1323,7 +1323,7 @@ jobs:
           echo "✅ Generated changeset validation dashboard"
 
       - name: Upload metrics dashboards as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: metrics-dashboards
           path: metrics-dashboards/

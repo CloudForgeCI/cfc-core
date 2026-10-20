@@ -177,7 +177,7 @@ jobs:
 
       - name: Upload results artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: localstack-compliance-results
           path: localstack-compliance-artifact/
@@ -263,7 +263,7 @@ jobs:
         # commit rather than racing a separate workflow's Pages publish.
 
       - name: Upload cfn-templates artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cfn-templates-for-localstack
           path: validation/scripts/validation-results/cfn-templates/
@@ -346,7 +346,7 @@ jobs:
 
       - name: Upload batch results artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: localstack-template-batch-${{ matrix.batch }}-results
           path: validation/scripts/validation-results/localstack-template-batch-${{ matrix.batch }}-results.tsv
@@ -377,7 +377,7 @@ jobs:
           column -t -s$'\t' localstack-template-sweep-results.tsv | head -30
 
       - name: Upload merged results artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: localstack-template-sweep-results
           path: localstack-template-sweep-results.tsv
