@@ -76,7 +76,7 @@
     <!-- jackson-annotations versions independently of core/databind (2.20, 2.21, 2.22, no
          patch suffix), so it can't share ${jackson.version} once that has one. -->
     <jackson-annotations.version>2.21</jackson-annotations.version>
-    <jakarta.validation.version>3.0.2</jakarta.validation.version>
+    <jakarta.validation.version>3.1.1</jakarta.validation.version>
     <!-- Not the 4.1.107.Final AWS SDK v2 2.25.0's own BOM pulls in transitively (via
          netty-nio-client): dependency-check's SBOM scan found 57-58 CVEs against that pinned
          version, several CRITICAL (DNS cache-poisoning via unvalidated CNAME/NS-record bailiwick,
