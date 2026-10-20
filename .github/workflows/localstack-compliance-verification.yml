@@ -324,7 +324,7 @@ jobs:
         run: mvn -B -pl cloudforge-core,cloudforge-api -am install -DskipTests
 
       - name: Download cfn-templates artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cfn-templates-for-localstack
           path: validation/scripts/validation-results/cfn-templates
@@ -360,7 +360,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all batch result artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: localstack-template-batch-*-results
           path: batch-results
