@@ -24,7 +24,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'java-kotlin' ]
+        # python: validation/scripts/*.py and the compliance tooling shell out, read deployment
+        # context JSON, and build CLI arguments from it -- real injection/path-traversal surface,
+        # not just the Java reactor.
+        language: [ 'java-kotlin', 'python' ]
 
     steps:
       - name: Checkout repository
