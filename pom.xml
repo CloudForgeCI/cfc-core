@@ -96,7 +96,7 @@
     <!-- Plugin Versions -->
     <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
     <maven.source.plugin.version>3.3.0</maven.source.plugin.version>
-    <maven.javadoc.plugin.version>3.7.0</maven.javadoc.plugin.version>
+    <maven.javadoc.plugin.version>3.12.0</maven.javadoc.plugin.version>
     <!-- See the maven-gpg-plugin entry in the release profile for why 3.2.8 is used. -->
     <maven.gpg.plugin.version>3.2.8</maven.gpg.plugin.version>
     <maven.deploy.plugin.version>3.1.1</maven.deploy.plugin.version>
@@ -364,7 +364,7 @@
             <plugin>
               <groupId>org.apache.maven.plugins</groupId>
               <artifactId>maven-javadoc-plugin</artifactId>
-              <version>3.7.0</version>
+              <version>3.12.0</version>
               <configuration>
                 <doclint>none</doclint>
                 <failOnError>false</failOnError>
