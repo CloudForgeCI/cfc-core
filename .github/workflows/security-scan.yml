@@ -165,7 +165,7 @@ jobs:
 
       - name: Upload Dependency-Check SARIF to GitHub Security
         if: always() && github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: target/dependency-check-report.sarif
           category: dependency-check
