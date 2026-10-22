@@ -11,6 +11,14 @@ on:
   workflow_dispatch:
     # Allow manual trigger
 
+# Fixed group name, not scoped by ref/branch: at most one run of this workflow across the whole
+# repo at a time, queued rather than cancelled. Multiple branches/PRs each syncing the NVD
+# database in parallel is what burned through the org's Actions spending limit and got every
+# in-flight job cancelled at once on 2026-10-22.
+concurrency:
+  group: security-scanning
+  cancel-in-progress: false
+
 jobs:
   sbom-and-vulnerability-scan:
     name: SBOM Generation & Vulnerability Scanning
