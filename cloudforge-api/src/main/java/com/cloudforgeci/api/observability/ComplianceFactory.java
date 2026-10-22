@@ -7,6 +7,7 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforgeci.api.core.rules.AuditManagerControl;
 import com.cloudforgeci.api.core.rules.AuditManagerControlRegistry;
+import com.cloudforgeci.api.core.iam.ManagerOperatorIamSupport;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
 import software.amazon.awscdk.Aws;
@@ -19,6 +20,8 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.auditmanager.CfnAssessment;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.cloudtrail.CfnTrail;
+import software.amazon.awscdk.services.cloudtrail.CfnEventDataStore;
+import software.amazon.awscdk.services.cloudtrail.CfnChannel;
 import software.amazon.awscdk.services.config.*;
 import software.amazon.awscdk.services.iam.CfnRole;
 import software.amazon.awscdk.services.iam.Role;
@@ -193,6 +196,14 @@ public class ComplianceFactory extends BaseFactory {
             createCloudTrail();
         } else {
             LOG.info("CloudTrail disabled for security profile: " + security);
+        }
+
+        // CloudTrail Lake custom-event ingestion for Manager's own self-issued OIDC sign-ins
+        // (ManagerSessionAuthenticationFilter) -- those have no underlying AWS API call for the
+        // Trail above to ever capture, regardless of CloudTrail configuration. Gated so this
+        // never attaches to a customer application's own stack.
+        if (ManagerOperatorIamSupport.isCloudForgeManager(ctx)) {
+            createManagerAuditTrailChannel();
         }
 
         // Check if AWS Audit Manager should be enabled (do this BEFORE Config infrastructure)
@@ -715,6 +726,47 @@ public class ComplianceFactory extends BaseFactory {
 
         // No action needed - CloudTrail already tracks all S3 buckets via wildcard configuration
         LOG.info("S3 data event logging already enabled for all buckets (including " + bucket.getBucketName() + ")");
+    }
+
+    /**
+     * CloudTrail Lake event data store + integration channel for custom application events --
+     * structurally separate from the {@code Trail} resource {@link #createCloudTrail()} creates
+     * (a Trail only ever captures AWS API calls it observed itself; it has no mechanism to accept
+     * an application-pushed event). Manager's own self-issued OIDC sign-ins
+     * (ManagerSessionAuthenticationFilter) have no underlying AWS API call at all for a Trail to
+     * capture, so this gives them a durable, tamper-evident destination instead.
+     *
+     * <p>Grants Manager's own task/instance role {@code cloudtrail-data:PutAuditEvents}, scoped to
+     * this channel's ARN -- the permission {@code CloudTrailDataClient.putAuditEvents()} needs on
+     * the cloudforge-manager side.
+     */
+    private void createManagerAuditTrailChannel() {
+        LOG.info("Creating CloudTrail Lake event data store + channel for Manager sign-in audit events");
+
+        CfnEventDataStore eventDataStore = CfnEventDataStore.Builder.create(this, "ManagerAuditTrailEventDataStore")
+            .name("cloudforge-manager-sign-in-audit-" + this.stackName)
+            .multiRegionEnabled(false)
+            .terminationProtectionEnabled(ctx.security == SecurityProfile.PRODUCTION)
+            .retentionPeriod(2557) // 7 years, matching this file's other long-retention compliance defaults
+            .build();
+
+        CfnChannel channel = CfnChannel.Builder.create(this, "ManagerAuditTrailChannel")
+            .name("cloudforge-manager-sign-in-audit-" + this.stackName)
+            .source("CloudForgeManager")
+            .destinations(List.of(CfnChannel.DestinationProperty.builder()
+                .location(eventDataStore.getAttrEventDataStoreArn())
+                .type("EVENT_DATA_STORE")
+                .build()))
+            .build();
+        channel.addDependency(eventDataStore);
+
+        PolicyStatement putAuditEvents = PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerAuditTrailPutEvents")
+            .actions(List.of("cloudtrail-data:PutAuditEvents"))
+            .resources(List.of(channel.getAttrChannelArn()))
+            .build();
+        ctx.fargateTaskRole.get().ifPresent(role -> role.addToPolicy(putAuditEvents));
+        ctx.ec2InstanceRole.get().ifPresent(role -> role.addToPolicy(putAuditEvents));
     }
 
     /**
