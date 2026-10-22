@@ -22,6 +22,14 @@ public final class ManagerEnvKeys {
      *  payment form (which requires a browser-trusted hosting page) is safe on this
      *  installation, or whether to fall back to a redirect-based purchase flow instead. */
     public static final String PUBLIC_TLS_TRUSTED = "CFC_MANAGER_PUBLIC_TLS_TRUSTED";
+    /** ARN of the Object-Lock S3 bucket {@code ComplianceFactory#createManagerAuditTrailChannel}
+     *  provisions for Manager's own stack only, injected directly into the container by {@code
+     *  ContainerFactory} once that bucket exists. Manager has no existing way to learn its own
+     *  stack name/region at runtime, so this is passed as a resolved ARN rather than something
+     *  Manager would need to look up itself (e.g. via SSM). Absent on any non-Manager application,
+     *  and on any Manager deployment target that doesn't run {@code ComplianceFactory} at all
+     *  (MiniStack/LocalStack) -- {@code SignInAuditService} degrades to DB-only writes when unset. */
+    public static final String AUDIT_TRAIL_BUCKET_ARN = "CFC_MANAGER_AUDIT_TRAIL_BUCKET_ARN";
     public static final String TARGET = "CFC_MANAGER_TARGET";
     /** Base URL of the {@code cloudforge-synth-service} sidecar (see {@code
      *  ManagerSynthesisService}, cloudforge-manager) — read directly by the sidecar HTTP client,

@@ -103,7 +103,7 @@ class ComplianceFactoryTest {
     }
 
     @Test
-    void managerAppGetsTheAuditTrailChannel() {
+    void managerAppGetsTheSignInAuditBucket() {
         // Given: a stack whose applicationId is cloudforge-manager (isCloudForgeManager(ctx) gate)
         App app = new App();
         Stack stack = new Stack(app, "TestManagerAuditTrail");
@@ -123,14 +123,12 @@ class ComplianceFactoryTest {
         ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
         assertDoesNotThrow(factory::create);
 
-        assertNotNull(factory.getNode().tryFindChild("ManagerAuditTrailEventDataStore"),
-            "Manager stacks should get a CloudTrail Lake event data store for sign-in audit events");
-        assertNotNull(factory.getNode().tryFindChild("ManagerAuditTrailChannel"),
-            "Manager stacks should get a CloudTrail Lake channel for sign-in audit events");
+        assertNotNull(factory.getNode().tryFindChild("ManagerSignInAuditBucket"),
+            "Manager stacks should get an Object Lock bucket for sign-in audit events");
     }
 
     @Test
-    void nonManagerAppNeverGetsTheAuditTrailChannel() {
+    void nonManagerAppNeverGetsTheSignInAuditBucket() {
         // Given: an ordinary application stack (no applicationId override)
         App app = new App();
         Stack stack = createTestStack(app, "TestNonManagerNoAuditTrail", SecurityProfile.PRODUCTION);
@@ -143,10 +141,8 @@ class ComplianceFactoryTest {
         ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
         assertDoesNotThrow(factory::create);
 
-        assertNull(factory.getNode().tryFindChild("ManagerAuditTrailEventDataStore"),
-            "Non-Manager applications must never get the Manager-only audit trail event data store");
-        assertNull(factory.getNode().tryFindChild("ManagerAuditTrailChannel"),
-            "Non-Manager applications must never get the Manager-only audit trail channel");
+        assertNull(factory.getNode().tryFindChild("ManagerSignInAuditBucket"),
+            "Non-Manager applications must never get the Manager-only sign-in audit bucket");
     }
 
     @Test

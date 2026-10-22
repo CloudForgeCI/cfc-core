@@ -25,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
  * Full-pipeline integration coverage for {@link ComplianceFactory#createManagerAuditTrailChannel}
  * -- unlike {@code ComplianceFactoryTest}'s construct-presence checks (which never populate a real
  * task role), this synthesizes a complete stack through {@link ApplicationFactory#createFargate}
- * so the {@code cloudtrail-data:PutAuditEvents} IAM grant actually has a role to attach to, and
- * asserts on the real synthesized template.
+ * so the {@code s3:PutObject} IAM grant actually has a role to attach to, and asserts on the real
+ * synthesized template.
  */
 class ManagerAuditTrailChannelIntegrationTest {
 
@@ -57,32 +57,48 @@ class ManagerAuditTrailChannelIntegrationTest {
     }
 
     @Test
-    void managerStackGrantsItsTaskRolePutAuditEvents() {
+    void managerStackGrantsItsTaskRolePutObjectOnTheAuditBucket() {
         Template template = synthesize("ManagerAuditTrailIntegration", new FakeManagerSpec());
 
-        template.resourceCountIs("AWS::CloudTrail::EventDataStore", 1);
-        template.resourceCountIs("AWS::CloudTrail::Channel", 1);
+        template.hasResourceProperties("AWS::S3::Bucket", Match.objectLike(Map.of(
+            "ObjectLockEnabled", true
+        )));
         template.hasResourceProperties("AWS::IAM::Policy", Match.objectLike(Map.of(
             "PolicyDocument", Match.objectLike(Map.of(
                 "Statement", Match.arrayWith(List.of(Match.objectLike(Map.of(
-                    "Action", "cloudtrail-data:PutAuditEvents"
+                    "Action", "s3:PutObject"
                 ))))
             ))
+        )));
+        template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike(Map.of(
+            "ContainerDefinitions", Match.arrayWith(List.of(Match.objectLike(Map.of(
+                "Environment", Match.arrayWith(List.of(Match.objectLike(Map.of(
+                    "Name", "CFC_MANAGER_AUDIT_TRAIL_BUCKET_ARN"
+                ))))
+            ))))
         )));
     }
 
     @Test
-    void nonManagerStackGetsNoChannelAndNoGrant() {
+    void nonManagerStackGetsNoAuditBucketAndNoGrant() {
         Template template = synthesize("NonManagerAuditTrailIntegration", new FakeOtherAppSpec());
 
-        template.resourceCountIs("AWS::CloudTrail::EventDataStore", 0);
-        template.resourceCountIs("AWS::CloudTrail::Channel", 0);
+        template.resourcePropertiesCountIs("AWS::S3::Bucket", Match.objectLike(Map.of(
+            "ObjectLockEnabled", true
+        )), 0);
         template.resourcePropertiesCountIs("AWS::IAM::Policy", Match.objectLike(Map.of(
             "PolicyDocument", Match.objectLike(Map.of(
                 "Statement", Match.arrayWith(List.of(Match.objectLike(Map.of(
-                    "Action", "cloudtrail-data:PutAuditEvents"
+                    "Action", "s3:PutObject"
                 ))))
             ))
+        )), 0);
+        template.resourcePropertiesCountIs("AWS::ECS::TaskDefinition", Match.objectLike(Map.of(
+            "ContainerDefinitions", Match.arrayWith(List.of(Match.objectLike(Map.of(
+                "Environment", Match.arrayWith(List.of(Match.objectLike(Map.of(
+                    "Name", "CFC_MANAGER_AUDIT_TRAIL_BUCKET_ARN"
+                ))))
+            ))))
         )), 0);
     }
 
