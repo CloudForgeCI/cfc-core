@@ -13,12 +13,13 @@ on:
 jobs:
   analyze:
     name: Analyze Java Code
-    # Dependabot's own PRs run on the org's self-hosted mac-mini runner instead of the shared
-    # GitHub-hosted pool -- a dependabot PR only ever contains a dependency-manifest bump it
-    # generated itself, lower-risk than an arbitrary human or fork PR, and routing that volume off
-    # the shared pool is the whole point (it was the single biggest source of queued jobs). Needs
-    # Maven + JDK 25 on the runner; both are installed there.
-    runs-on: ${{ github.actor == 'dependabot[bot]' && fromJSON('["self-hosted", "mac-mini"]') || 'ubuntu-latest' }}
+    # Stays on GitHub's own runners for every actor, including Dependabot -- the self-hosted
+    # mac-mini runner (ARM64 macOS) crashes codeql-action's and actions/checkout's post-job
+    # cleanup steps with "spawn Unknown system error -86" (EBADARCH), an architecture mismatch
+    # specific to running CodeQL there. Build & test / Code Quality & Linting / SBOM Generation
+    # route dependabot PRs to that runner just fine (see security-scan.yml/publish-snapshot.yml);
+    # CodeQL just doesn't work there.
+    runs-on: ubuntu-latest
     timeout-minutes: 360
 
     permissions:

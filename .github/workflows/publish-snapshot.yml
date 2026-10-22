@@ -65,6 +65,13 @@ jobs:
     # layer" when signing, independent of GnuPG build (system 2.4.4, Homebrew 2.5.x), plugin
     # version, key, homedir/pinentry/passphrase configuration, or running inside a container
     # (containers share the runner's kernel). macOS runners are not affected.
+    #
+    # Skipped entirely for Dependabot: a dependency-manifest bump has no need to publish a new
+    # SNAPSHOT, and GPG_PRIVATE_KEY resolves empty for a Dependabot-triggered run on this repo
+    # (confirmed: NVD_API_KEY resolves fine in the same PR's Security Scanning job, so secrets
+    # aren't blocked wholesale here -- this secret specifically doesn't come through), which
+    # otherwise fails with "gpg: no valid OpenPGP data found".
+    if: github.actor != 'dependabot[bot]'
     runs-on: macos-latest
     needs: build-test
     timeout-minutes: 30
