@@ -11,10 +11,18 @@ on:
   workflow_dispatch:
     # Allow manual trigger
 
-# Fixed group name, not scoped by ref/branch: at most one run of this workflow across the whole
-# repo at a time, queued rather than cancelled. Multiple branches/PRs each syncing the NVD
-# database in parallel is what burned through the org's Actions spending limit and got every
-# in-flight job cancelled at once on 2026-10-22.
+# Fixed group name, not scoped by ref/branch: at most one run of this workflow in progress across
+# the whole repo at a time. Multiple branches/PRs each syncing the NVD database in parallel is
+# what burned through the org's Actions spending limit and got every in-flight job cancelled at
+# once on 2026-10-22.
+#
+# cancel-in-progress: false keeps whichever run is already executing alive, but GitHub's
+# concurrency groups hold at most one *pending* run, not a FIFO queue: each new trigger that
+# arrives while a run is already pending cancels that pending run and takes its place, so only
+# the most recent of several triggers that land close together ever actually runs -- the rest are
+# dropped, not queued. That still bounds this repo to at most two jobs in any state (one running,
+# one pending) instead of four running at once, which is what matters here; a dropped PR check
+# just needs a manual rerun, same as today.
 concurrency:
   group: security-scanning
   cancel-in-progress: false
