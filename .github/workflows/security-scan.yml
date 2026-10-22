@@ -16,6 +16,10 @@ jobs:
     name: SBOM Generation & Vulnerability Scanning
     # See codeql-analysis.yml's analyze job for why dependabot PRs route to the self-hosted runner.
     runs-on: ${{ github.actor == 'dependabot[bot]' && fromJSON('["self-hosted", "mac-mini"]') || 'ubuntu-latest' }}
+    # Was unset (GitHub's 360-minute default) -- with the NVD sync step itself now capped at
+    # 90 minutes and saved immediately after, nothing else in this job should legitimately run
+    # anywhere near that long.
+    timeout-minutes: 120
 
     permissions:
       contents: write  # Required for SBOM submission to dependency graph
@@ -46,12 +50,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Cache OWASP Dependency-Check NVD database
-        uses: actions/cache@v4
+      - name: Restore OWASP Dependency-Check NVD database
+        id: nvd-cache-restore
+        uses: actions/cache/restore@v4
         with:
           path: ~/.m2/dependency-check-data
-          # Cache key based on year-week (YYYY-WW) - updates weekly for fresh CVE data 
-          # This prevents re-downloading the ~1GB NVD database on every run
+          # Cache key based on year-week (YYYY-WW) -- rotates weekly so each week's run saves a
+          # fresh snapshot, but restore-keys falls back to the most recent prior week whenever
+          # this week's exact key doesn't exist yet, so the NVD client only ever needs to apply
+          # an incremental update on top of it, never a full rebuild from nothing.
           key: ${{ runner.os }}-dependency-check-v12-${{ steps.date.outputs.date }}
           restore-keys: |
             ${{ runner.os }}-dependency-check-v12-
@@ -82,6 +89,15 @@ jobs:
           EOF
 
       - name: Initialize NVD Database (filtered for CVSS v3.x only)
+        # Bounded well below the job's own timeout, and non-fatal: a cold cache (first run under
+        # a new weekly key, or a bad NVD API day) can genuinely take a very long time to fully
+        # sync. Letting it run unbounded is what caused every run to blow the default 360-minute
+        # job timeout -- that kills the job before the cache-save step below ever runs, so the
+        # NVD data downloaded was never persisted and the next run started cold again too,
+        # forever. Capping this step and always saving whatever progress it made (even partial)
+        # breaks that cycle: each run's incremental progress compounds instead of being discarded.
+        timeout-minutes: 90
+        continue-on-error: true
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
@@ -106,6 +122,17 @@ jobs:
           mvn dependency-check:update-only -Psecurity-scan || {
             echo "Warning: NVD update failed, but continuing with available data"
           }
+
+      - name: Save OWASP Dependency-Check NVD database
+        # Runs regardless of whether the update step above finished, failed, or timed out --
+        # see that step's comment. dependency-check writes to its local DB incrementally as it
+        # processes NVD API pages, so even a partial/interrupted sync is real progress worth
+        # keeping for next run's restore-keys fallback to build on.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.m2/dependency-check-data
+          key: ${{ steps.nvd-cache-restore.outputs.cache-primary-key }}
 
       - name: Run OWASP Dependency-Check
         env:
