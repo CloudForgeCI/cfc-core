@@ -16,7 +16,7 @@ jobs:
     name: SBOM Generation & Vulnerability Scanning
     # See codeql-analysis.yml's analyze job for why dependabot PRs route to the self-hosted runner.
     runs-on: ${{ github.actor == 'dependabot[bot]' && fromJSON('["self-hosted", "mac-mini"]') || 'ubuntu-latest' }}
-    # Was unset (GitHub's 360-minute default) -- with the NVD sync step itself now capped at
+    # Was unset (GitHub's 360-minute default) - with the NVD sync step itself now capped at
     # 90 minutes and saved immediately after, nothing else in this job should legitimately run
     # anywhere near that long.
     timeout-minutes: 120
@@ -55,7 +55,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/.m2/dependency-check-data
-          # Cache key based on year-week (YYYY-WW) -- rotates weekly so each week's run saves a
+          # Cache key based on year-week (YYYY-WW) - rotates weekly so each week's run saves a
           # fresh snapshot, but restore-keys falls back to the most recent prior week whenever
           # this week's exact key doesn't exist yet, so the NVD client only ever needs to apply
           # an incremental update on top of it, never a full rebuild from nothing.
@@ -74,7 +74,7 @@ jobs:
           # (if any) never got past a partial sync, so bootstrap from the datafeed seed release
           # instead of resuming the slow/unreliable live NVD API from wherever it left off. If the
           # seed release is too old to cover dependency-check's current mandatory feed year, the
-          # update step below detects that itself and falls back to the live API -- see its
+          # update step below detects that itself and falls back to the live API - see its
           # comment.
           if [ "$size" -lt 52428800 ]; then
             echo "needs-bootstrap=true" >> "$GITHUB_OUTPUT"
@@ -86,7 +86,7 @@ jobs:
         if: steps.nvd-db-check.outputs.needs-bootstrap == 'true'
         run: |
           mkdir -p .github/nvd
-          # Plain curl against the public release-asset URL, not `gh release download` -- the
+          # Plain curl against the public release-asset URL, not `gh release download` - the
           # self-hosted mac-mini runner (dependabot-routed jobs) doesn't have gh installed, and
           # cfc-core is a public repo so these need no auth either way. See the release notes for
           # why these are assets, not a git commit:
@@ -128,7 +128,7 @@ jobs:
         # Bounded well below the job's own timeout, and non-fatal: a cold cache (first run under
         # a new weekly key, or a bad NVD API day) can genuinely take a very long time to fully
         # sync. Letting it run unbounded is what caused every run to blow the default 360-minute
-        # job timeout -- that kills the job before the cache-save step below ever runs, so the
+        # job timeout - that kills the job before the cache-save step below ever runs, so the
         # NVD data downloaded was never persisted and the next run started cold again too,
         # forever. Capping this step and always saving whatever progress it made (even partial)
         # breaks that cycle: each run's incremental progress compounds instead of being discarded.
@@ -153,7 +153,7 @@ jobs:
 
           # When the restored cache was too small to be useful (see the bootstrap-check step
           # above), seed the local database from the downloaded datafeed release instead of
-          # resuming the slow/unreliable live NVD API from wherever it left off -- see
+          # resuming the slow/unreliable live NVD API from wherever it left off - see
           # https://github.com/CloudForgeCI/cfc-core/releases/tag/nvd-seed-2026-10-23. This
           # import is local-file-only and takes well under a minute regardless of NVD's own
           # API/network health that day.
@@ -164,27 +164,31 @@ jobs:
           fi
 
           echo "Updating NVD database..."
-          need_live_update=true
+          live_update_args=""
           if [ -n "$DATAFEED_ARG" ]; then
             if mvn dependency-check:update-only -Psecurity-scan $DATAFEED_ARG; then
-              need_live_update=false
+              # The seed is only as fresh as whenever it was generated. dependency-check records
+              # that as the last check time too, which would otherwise make the next plain
+              # update-only skip checking the live API for up to nvdValidForHours - force this
+              # one past that so the scan reflects anything newer than the seed, not just the
+              # seed's own snapshot.
+              echo "Datafeed import succeeded - running a live catch-up update for anything newer than the seed"
+              live_update_args="-DnvdValidForHours=0"
             else
               # dependency-check requires a feed file for its current mandatory year (computed
               # in UTC+14, so this can roll over as early as Dec 31 UTC) and throws if the seed
               # release doesn't have one yet. Fall back to the live API, which handles any
               # current year natively, instead of leaving the database empty.
-              echo "Datafeed update failed -- falling back to the live NVD API"
+              echo "Datafeed update failed - falling back to the live NVD API"
             fi
           fi
 
-          if [ "$need_live_update" = "true" ]; then
-            mvn dependency-check:update-only -Psecurity-scan || {
-              echo "Warning: NVD update failed, but continuing with available data"
-            }
-          fi
+          mvn dependency-check:update-only -Psecurity-scan $live_update_args || {
+            echo "Warning: NVD update failed, but continuing with available data"
+          }
 
       - name: Save OWASP Dependency-Check NVD database
-        # Runs regardless of whether the update step above finished, failed, or timed out --
+        # Runs regardless of whether the update step above finished, failed, or timed out -
         # see that step's comment. dependency-check writes to its local DB incrementally as it
         # processes NVD API pages, so even a partial/interrupted sync is real progress worth
         # keeping for next run's restore-keys fallback to build on.

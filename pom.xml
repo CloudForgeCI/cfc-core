@@ -726,7 +726,7 @@
           <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
 
           <!-- NVD Database Configuration -->
-          <cveValidForHours>168</cveValidForHours>
+          <nvdValidForHours>168</nvdValidForHours>
           <autoUpdate>false</autoUpdate>
 
           <!-- Filter NVD data to avoid CVSS v4.0 parsing bugs in dependency-check -->
