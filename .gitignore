@@ -95,3 +95,9 @@ dependency-check-report.csv
 # checked out here for local development but are never tracked by cfc-core.
 /cloudforge-manager/
 /cloudforge-manager-deployment/
+
+# NVD datafeed seed files (.gz + .meta). Published as release assets on the nvd-seed-* tags
+# instead, never committed -- see that release's notes for why. This directory is a local-only
+# staging area a CI step downloads into at runtime; keep it out of git entirely so it can never
+# get swept in by an unrelated `git add`.
+/.github/nvd/

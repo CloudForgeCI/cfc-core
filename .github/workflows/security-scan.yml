@@ -63,6 +63,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-dependency-check-v12-
 
+      - name: Check whether the NVD database needs bootstrapping
+        id: nvd-db-check
+        run: |
+          db=~/.m2/dependency-check-data/odc.mv.db
+          size=$( [ -f "$db" ] && stat -f%z "$db" 2>/dev/null || stat -c%s "$db" 2>/dev/null || echo 0)
+          echo "Restored NVD database size: $size bytes"
+          # A fully-populated database is >200MB; anything far smaller means the restored cache
+          # (if any) never got past a partial sync, so bootstrap from the datafeed seed release
+          # instead of resuming the slow/unreliable live NVD API from wherever it left off.
+          if [ "$size" -lt 52428800 ]; then
+            echo "needs-bootstrap=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs-bootstrap=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download NVD datafeed seed
+        if: steps.nvd-db-check.outputs.needs-bootstrap == 'true'
+        run: |
+          mkdir -p .github/nvd
+          # Plain curl against the public release-asset URL, not `gh release download` -- the
+          # self-hosted mac-mini runner (dependabot-routed jobs) doesn't have gh installed, and
+          # cfc-core is a public repo so these need no auth either way. See the release notes for
+          # why these are assets, not a git commit:
+          # https://github.com/CloudForgeCI/cfc-core/releases/tag/nvd-seed-2026-10-23
+          base="https://github.com/CloudForgeCI/cfc-core/releases/download/nvd-seed-2026-10-23"
+          years="$(seq 2002 2026) modified"
+          for year in $years; do
+            for ext in json.gz meta; do
+              curl -fL -o ".github/nvd/nvdcve-2.0-${year}.${ext}" "${base}/nvdcve-2.0-${year}.${ext}"
+            done
+          done
+
       - name: Build project and generate SBOM
         run: |
           echo "Building project and generating SBOM..."
@@ -115,11 +147,20 @@ jobs:
             echo "No cache found - will perform initial download"
           fi
 
-          # Run a lightweight check to update the database
-          # Use check goal with high CVSS threshold so it doesn't fail on vulnerabilities
-          # The date filters in pom.xml will apply here (2020-2024 to avoid CVSS v4.0 bugs)
+          # When the restored cache was too small to be useful (see the bootstrap-check step
+          # above), seed the local database from the downloaded datafeed release instead of
+          # resuming the slow/unreliable live NVD API from wherever it left off -- see
+          # https://github.com/CloudForgeCI/cfc-core/releases/tag/nvd-seed-2026-10-23. This
+          # import is local-file-only and takes well under a minute regardless of NVD's own
+          # API/network health that day.
+          DATAFEED_ARG=""
+          if [ "${{ steps.nvd-db-check.outputs.needs-bootstrap }}" = "true" ]; then
+            echo "Bootstrapping NVD database from datafeed seed release..."
+            DATAFEED_ARG="-DnvdDatafeedUrl=file://${{ github.workspace }}/.github/nvd/nvdcve-2.0-{0}.json.gz"
+          fi
+
           echo "Updating NVD database..."
-          mvn dependency-check:update-only -Psecurity-scan || {
+          mvn dependency-check:update-only -Psecurity-scan $DATAFEED_ARG || {
             echo "Warning: NVD update failed, but continuing with available data"
           }
 
