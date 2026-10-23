@@ -690,8 +690,6 @@
         <configuration>
           <!-- Fail build if CVSS score is 7 or higher (High/Critical) -->
           <failBuildOnCVSS>7</failBuildOnCVSS>
-          <!-- Aggregate results from all modules -->
-          <aggregate>true</aggregate>
           <!-- Output formats: HTML, JSON, CSV, XML, SARIF -->
           <formats>
             <format>HTML</format>
@@ -726,14 +724,8 @@
           <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
 
           <!-- NVD Database Configuration -->
-          <cveValidForHours>168</cveValidForHours>
+          <nvdValidForHours>168</nvdValidForHours>
           <autoUpdate>false</autoUpdate>
-
-          <!-- Filter NVD data to avoid CVSS v4.0 parsing bugs in dependency-check -->
-          <!-- Only fetch CVEs from mid-2020 to mid-2024 (pre-CVSS 4.0 era) -->
-          <!-- This avoids the "SAFETY" enum parsing error -->
-          <nvdApiStartDate>2020-01-01T00:00:00:000 UTC</nvdApiStartDate>
-          <nvdApiEndDate>2024-06-01T00:00:00:000 UTC</nvdApiEndDate>
 
           <!-- Performance optimizations -->
           <centralAnalyzerUseCache>true</centralAnalyzerUseCache>
@@ -752,8 +744,8 @@
           <nodeAuditAnalyzerEnabled>false</nodeAuditAnalyzerEnabled>
           <yarnAuditAnalyzerEnabled>false</yarnAuditAnalyzerEnabled>
           <pnpmAuditAnalyzerEnabled>false</pnpmAuditAnalyzerEnabled>
-          <retirejmentsAnalyzerEnabled>false</retirejmentsAnalyzerEnabled>
-          <nodePackageAnalyzerEnabled>false</nodePackageAnalyzerEnabled>
+          <retireJsAnalyzerEnabled>false</retireJsAnalyzerEnabled>
+          <nodeAnalyzerEnabled>false</nodeAnalyzerEnabled>
 
           <!-- Disable Ruby/Python analyzers - not needed for Java project -->
           <rubygemsAnalyzerEnabled>false</rubygemsAnalyzerEnabled>
@@ -765,8 +757,8 @@
           <poetryAnalyzerEnabled>false</poetryAnalyzerEnabled>
 
           <!-- Disable Go/PHP/.NET analyzers - not needed for Java project -->
-          <golangDepAnalyzerEnabled>false</golangDepAnalyzerEnabled>
-          <golangModAnalyzerEnabled>false</golangModAnalyzerEnabled>
+          <golangDepEnabled>false</golangDepEnabled>
+          <golangModEnabled>false</golangModEnabled>
           <composerAnalyzerEnabled>false</composerAnalyzerEnabled>
           <nuspecAnalyzerEnabled>false</nuspecAnalyzerEnabled>
           <nugetconfAnalyzerEnabled>false</nugetconfAnalyzerEnabled>
@@ -779,7 +771,7 @@
           <!-- Disable autoconf/cmake/msbuild - not needed for Java/Maven project -->
           <autoconfAnalyzerEnabled>false</autoconfAnalyzerEnabled>
           <cmakeAnalyzerEnabled>false</cmakeAnalyzerEnabled>
-          <msbuildProjectAnalyzerEnabled>false</msbuildProjectAnalyzerEnabled>
+          <msbuildAnalyzerEnabled>false</msbuildAnalyzerEnabled>
 
           <!-- Disable archive analyzers that extract and scan nested JARs -->
           <!-- This dramatically reduces the number of files scanned -->
