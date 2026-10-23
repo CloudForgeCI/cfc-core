@@ -21,7 +21,7 @@
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <cloudforge.version>3.2.0</cloudforge.version>
+    <cloudforge.version>3.3.10</cloudforge.version>
   </properties>
 
   <dependencyManagement>
