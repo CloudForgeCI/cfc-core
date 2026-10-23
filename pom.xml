@@ -90,7 +90,7 @@
 
     <!-- Test Dependency Versions -->
     <jupiter.version>5.12.2</jupiter.version>
-    <hibernate.validator.version>8.0.1.Final</hibernate.validator.version>
+    <hibernate.validator.version>9.1.5.Final</hibernate.validator.version>
     <jakarta.el.version>4.0.2</jakarta.el.version>
 
     <!-- Plugin Versions -->
