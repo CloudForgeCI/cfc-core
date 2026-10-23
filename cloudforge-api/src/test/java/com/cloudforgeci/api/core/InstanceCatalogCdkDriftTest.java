@@ -28,7 +28,7 @@ class InstanceCatalogCdkDriftTest {
      * oversight. Move a family into {@link InstanceCatalog} once it has been deployed with.
      */
     private static final Set<String> NOT_OFFERED_YET = Set.of(
-        "c6i", "c7i", "m6i", "m7i", "r6i", "r7i", "m8g", "r8g");
+        "c6i", "c7i", "c8i", "m6i", "m7i", "m8i", "m8g", "m9g", "r6i", "r7i", "r8i", "r8g");
 
     private static final Pattern FAMILY = Pattern.compile("^([a-z])(\\d+)([a-z]*)$");
 
