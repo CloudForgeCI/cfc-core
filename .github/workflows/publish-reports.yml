@@ -315,7 +315,7 @@ jobs:
       # as metrics-dashboards below.
       - name: Download LocalStack compliance verification artifact
         id: download-localstack-results
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v27
         with:
           workflow: localstack-compliance-verification.yml
           name: localstack-compliance-results
@@ -331,7 +331,7 @@ jobs:
       # templates this dashboard's rows link to, not just the 13 representative configs above.
       - name: Download LocalStack template sweep artifact
         id: download-template-sweep
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v27
         with:
           workflow: localstack-compliance-verification.yml
           name: localstack-template-sweep-results
@@ -1320,7 +1320,7 @@ jobs:
 
       - name: Download metrics dashboards artifact
         id: download-metrics
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v27
         with:
           workflow: deployment-testing.yml
           name: metrics-dashboards
