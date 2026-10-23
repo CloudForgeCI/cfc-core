@@ -15,7 +15,7 @@ public final class DatabaseEngineCatalog {
     private static final Map<String, List<String>> MAJOR_VERSIONS = Map.of(
         "postgres", List.of("11", "12", "13", "14", "15", "16", "17", "18"),
         "mysql", List.of("5.7", "8.0", "8.4"),
-        "mariadb", List.of("10.6", "10.11", "11.4"));
+        "mariadb", List.of("10.6", "10.11", "11.4", "11.8"));
 
     private DatabaseEngineCatalog() {
     }
