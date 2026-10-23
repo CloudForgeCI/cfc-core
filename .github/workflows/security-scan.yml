@@ -69,9 +69,13 @@ jobs:
           db=~/.m2/dependency-check-data/odc.mv.db
           size=$( [ -f "$db" ] && stat -f%z "$db" 2>/dev/null || stat -c%s "$db" 2>/dev/null || echo 0)
           echo "Restored NVD database size: $size bytes"
+
           # A fully-populated database is >200MB; anything far smaller means the restored cache
           # (if any) never got past a partial sync, so bootstrap from the datafeed seed release
-          # instead of resuming the slow/unreliable live NVD API from wherever it left off.
+          # instead of resuming the slow/unreliable live NVD API from wherever it left off. If the
+          # seed release is too old to cover dependency-check's current mandatory feed year, the
+          # update step below detects that itself and falls back to the live API -- see its
+          # comment.
           if [ "$size" -lt 52428800 ]; then
             echo "needs-bootstrap=true" >> "$GITHUB_OUTPUT"
           else
@@ -160,9 +164,24 @@ jobs:
           fi
 
           echo "Updating NVD database..."
-          mvn dependency-check:update-only -Psecurity-scan $DATAFEED_ARG || {
-            echo "Warning: NVD update failed, but continuing with available data"
-          }
+          need_live_update=true
+          if [ -n "$DATAFEED_ARG" ]; then
+            if mvn dependency-check:update-only -Psecurity-scan $DATAFEED_ARG; then
+              need_live_update=false
+            else
+              # dependency-check requires a feed file for its current mandatory year (computed
+              # in UTC+14, so this can roll over as early as Dec 31 UTC) and throws if the seed
+              # release doesn't have one yet. Fall back to the live API, which handles any
+              # current year natively, instead of leaving the database empty.
+              echo "Datafeed update failed -- falling back to the live NVD API"
+            fi
+          fi
+
+          if [ "$need_live_update" = "true" ]; then
+            mvn dependency-check:update-only -Psecurity-scan || {
+              echo "Warning: NVD update failed, but continuing with available data"
+            }
+          fi
 
       - name: Save OWASP Dependency-Check NVD database
         # Runs regardless of whether the update step above finished, failed, or timed out --
