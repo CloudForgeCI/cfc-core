@@ -89,7 +89,7 @@
     <netty.version>4.1.138.Final</netty.version>
 
     <!-- Test Dependency Versions -->
-    <jupiter.version>5.12.2</jupiter.version>
+    <jupiter.version>6.1.3</jupiter.version>
     <hibernate.validator.version>8.0.1.Final</hibernate.validator.version>
     <jakarta.el.version>4.0.2</jakarta.el.version>
 
