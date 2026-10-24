@@ -54,7 +54,10 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: 'maven'
+          # No cache on the self-hosted runner -- it's a persistent machine, ~/.m2 already
+          # survives between jobs there, and the cache upload was eating into the repo's shared
+          # 10GB cache quota.
+          cache: ${{ github.actor == 'dependabot[bot]' && '' || 'maven' }}
 
       - name: Build and test
         run: mvn -B -Pci -pl .,cloudforge-core,cloudforge-api -am clean verify
