@@ -23,6 +23,10 @@ import io.github.cdklabs.cdknag.NagPackSuppression;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Locale;
 
 /**
  * ALB Factory using annotation-based context injection.
@@ -55,6 +59,9 @@ public class AlbFactory extends BaseFactory {
 
     @DeploymentContext("albAccessLogging")
     private Boolean albAccessLogging;
+
+    @DeploymentContext("albExplicitName")
+    private Boolean albExplicitName;
 
     @DeploymentContext("region")
     private String region;
@@ -208,12 +215,7 @@ public class AlbFactory extends BaseFactory {
             String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
             String albId = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + "Alb";
 
-            ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, albId)
-                    .vpc(vpc)
-                    .securityGroup(albSg)
-                    .internetFacing(true)
-                    .deletionProtection(shouldEnableDeletionProtection())
-                    .build();
+            ApplicationLoadBalancer alb = albBuilder(albId, appId, vpc, albSg).build();
 
             // Enable security compliance settings
             configureAlbSecurity(alb);
@@ -250,12 +252,7 @@ public class AlbFactory extends BaseFactory {
         String appId = applicationSpec != null ? applicationSpec.applicationId() : "app";
         String albId = Character.toUpperCase(appId.charAt(0)) + appId.substring(1) + "Alb";
 
-        ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, albId)
-                .vpc(vpc)
-                .securityGroup(albSg)
-                .internetFacing(true)
-                .deletionProtection(shouldEnableDeletionProtection())
-                .build();
+        ApplicationLoadBalancer alb = albBuilder(albId, appId, vpc, albSg).build();
 
         // Enable security compliance settings
         configureAlbSecurity(alb);
@@ -608,5 +605,54 @@ public class AlbFactory extends BaseFactory {
                         .messageBody(startupMessage)
                         .build()))
                 .build());
+    }
+
+    /**
+     * The ALB builder shared by both creation paths. Unless {@code albExplicitName} is false, the
+     * ALB gets an explicit lowercase name: a generated name carries mixed case into the DNS name,
+     * and Cognito callback URLs are case-sensitive.
+     */
+    private ApplicationLoadBalancer.Builder albBuilder(String albId, String appId, Vpc albVpc, SecurityGroup albSg) {
+        ApplicationLoadBalancer.Builder builder = ApplicationLoadBalancer.Builder.create(this, albId)
+                .vpc(albVpc)
+                .securityGroup(albSg)
+                .internetFacing(true)
+                .deletionProtection(shouldEnableDeletionProtection());
+        if (!Boolean.FALSE.equals(albExplicitName)) {
+            builder.loadBalancerName(loadBalancerName(stackName, appId));
+        }
+        return builder;
+    }
+
+    /**
+     * A lowercase ALB name for a stack and application: letters, digits and single hyphens, at
+     * most 32 characters, with a short hash of the full inputs so truncation cannot make two
+     * different stacks or applications collide.
+     */
+    static String loadBalancerName(String stack, String appId) {
+        String readable = sanitize(stack) + "-" + sanitize(appId);
+        String digest;
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256")
+                    .digest((stack + "/" + appId).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 4; i++) {
+                hex.append(String.format("%02x", hash[i]));
+            }
+            digest = hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("The JDK provides SHA-256", e);
+        }
+        int room = 32 - digest.length() - 1;
+        String head = readable.length() > room ? readable.substring(0, room) : readable;
+        head = head.replaceAll("-+$", "");
+        return (head.isEmpty() ? "alb" : head) + "-" + digest;
+    }
+
+    private static String sanitize(String value) {
+        String cleaned = (value == null ? "" : value).toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        return cleaned.isEmpty() ? "x" : cleaned;
     }
 }

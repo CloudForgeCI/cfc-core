@@ -155,15 +155,6 @@ public class CognitoAuthenticationFactory extends BaseFactory {
     @SystemContext("alb")
     private ApplicationLoadBalancer alb;
 
-    @SystemContext("cognitoUserPool")
-    private UserPool cognitoUserPool;
-
-    @SystemContext("cognitoUserPoolClient")
-    private UserPoolClient cognitoUserPoolClient;
-
-    @SystemContext("cognitoUserPoolDomain")
-    private UserPoolDomain cognitoUserPoolDomain;
-
     public CognitoAuthenticationFactory(Construct scope, String id) {
         super(scope, id);
     }
@@ -887,7 +878,8 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         // See: https://github.com/aws/aws-cdk/issues/11171
         if (alb != null) {
             // Lowercase the ALB DNS name for Cognito callback URL compatibility
-            String lowercaseDns = CfnStringUtils.toLowerCase(alb.getLoadBalancerDnsName());
+            String lowercaseDns = CfnStringUtils.lowercaseAlbDns(alb.getLoadBalancerDnsName(),
+                    !Boolean.FALSE.equals(cfc.albExplicitName()));
             String albUrl = Fn.join("", List.of("https://", lowercaseDns));
             LOG.info("Using ALB DNS name for callback URL with Private CA certificate (lowercased): " + albUrl);
             LOG.warning("NOTE: Private CA certificates are not trusted by browsers. Users will see certificate warnings.");

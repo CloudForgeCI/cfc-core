@@ -96,6 +96,7 @@ it into ACM and set `certificateArn`.
 | `wafEnabled` | boolean | profile | AWS WAF web ACL on the load balancer. |
 | `httpsStrictEnabled` | boolean | profile | With TLS enabled, serve HTTPS only (no HTTP listener on port 80). |
 | `albAccessLogging` | boolean | `false` | Load balancer access logs to S3. |
+| `albExplicitName` | boolean | `true` | Names the load balancer explicitly in lowercase so its DNS name, and the Cognito callback URL built from it, is lowercase. Changing it on an existing stack replaces the load balancer; set `false` to keep a generated name. |
 | `cloudfrontEnabled` | boolean | - | CloudFront distribution in front of the load balancer. |
 | `enableFlowlogs` | boolean | profile | VPC Flow Logs. |
 | `restrictSecurityGroupEgress` | boolean | `false` | Restrict egress to the VPC CIDR. Requires VPC endpoints for AWS services. |

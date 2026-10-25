@@ -133,9 +133,6 @@ public class ApplicationOidcFactory extends BaseFactory {
     @DeploymentContext("cognitoUserPoolClientId")
     private String cognitoUserPoolClientId;
 
-    @DeploymentContext("cognitoUserPoolClientSecret")
-    private String cognitoUserPoolClientSecret;
-
     // Note: CognitoAuthenticationFactory exports values to SystemContext Slots (cognitoUserPoolId, etc.)
     // We access these via ctx.cognitoUserPoolId.get() in buildCognitoConfiguration()
     // NOT via @SystemContext annotations, because injection happens in constructor
@@ -689,7 +686,8 @@ public class ApplicationOidcFactory extends BaseFactory {
             boolean useHttps = Boolean.TRUE.equals(enableSsl);
             String protocol = useHttps ? "https://" : "http://";
             // Lowercase the ALB DNS name for Cognito callback URL compatibility
-            String lowercaseDns = CfnStringUtils.toLowerCase(alb.getLoadBalancerDnsName());
+            String lowercaseDns = CfnStringUtils.lowercaseAlbDns(alb.getLoadBalancerDnsName(),
+                    !Boolean.FALSE.equals(cfc.albExplicitName()));
             String albUrl = Fn.join("", List.of(protocol, lowercaseDns));
             LOG.info("Using ALB DNS name for application URL (lowercased): " + albUrl);
             if (useHttps) {

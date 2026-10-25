@@ -10,6 +10,10 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 public class AlbFactoryTest {
 
   @Test
@@ -119,5 +123,48 @@ public class AlbFactoryTest {
     Template t = Template.fromStack(builder.getStack());
     // Verify that at least one security group was created
     t.resourceCountIs("AWS::EC2::SecurityGroup", 3);
+  }
+
+  @Test
+  void loadBalancerNameStaysWithinTheAlbLimits() {
+    for (String[] input : new String[][] {
+        {"my-stack", "jenkins"}, {"My_Stack.Prod", "WordPress"}, {"", ""}, {"---", "a"},
+        {"a-long-stack-name-that-exceeds-the-limit", "application-with-a-long-id"}}) {
+      String name = AlbFactory.loadBalancerName(input[0], input[1]);
+      assertTrue(name.length() <= 32, name + " is longer than 32 characters");
+      assertTrue(name.matches("[a-z0-9]+(-[a-z0-9]+)*"), name + " is not lowercase letters, digits and single hyphens");
+    }
+  }
+
+  @Test
+  void loadBalancerNameIsStableForTheSameInputs() {
+    assertEquals(AlbFactory.loadBalancerName("stack", "jenkins"), AlbFactory.loadBalancerName("stack", "jenkins"));
+  }
+
+  @Test
+  void loadBalancerNameDiffersWhenTheInputsOnlyDifferAfterTruncation() {
+    String shared = "a-long-stack-name-that-exceeds-the-limit";
+    assertNotEquals(AlbFactory.loadBalancerName(shared + "-one", "jenkins"),
+        AlbFactory.loadBalancerName(shared + "-two", "jenkins"));
+  }
+
+  @Test
+  void albIsNamedExplicitlyInLowercaseByDefault() {
+    TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbNamed", SecurityProfile.DEV, RuntimeType.FARGATE);
+    builder.createCompleteInfrastructure();
+    Template t = Template.fromStack(builder.getStack());
+    t.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", Map.of(
+      "Name", Match.stringLikeRegexp("^[a-z0-9]+(-[a-z0-9]+)*$")
+    ));
+  }
+
+  @Test
+  void albKeepsAGeneratedNameWhenExplicitNameIsOff() {
+    TestInfrastructureBuilder builder = new TestInfrastructureBuilder("AlbGenerated", SecurityProfile.DEV,
+        RuntimeType.FARGATE, Map.of("stackName", "AlbGenerated", "region", "us-east-1", "albExplicitName", false));
+    builder.createCompleteInfrastructure();
+    Template t = Template.fromStack(builder.getStack());
+    t.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer",
+        Match.not(Match.objectLike(Map.of("Name", Match.anyValue()))));
   }
 }

@@ -285,6 +285,20 @@ public class DeploymentConfig {
     )
     public Boolean albAccessLogging;
 
+    /**
+     * Give the ALB an explicit lowercase name so its DNS name is lowercase. Null means true.
+     * Changing the name replaces an existing ALB; set false to keep a generated name.
+     */
+    @ConfigField(
+        displayName = "ALB Explicit Name",
+        description = "Name the ALB explicitly in lowercase so Cognito callback URLs match its DNS name. "
+            + "On an existing stack, changing this replaces the ALB; set false to keep the generated name",
+        category = "network",
+        visibleWhen = "lbType == alb",
+        order = 55
+    )
+    public Boolean albExplicitName;
+
     /** Enable CloudFront CDN */
     @ConfigField(
         displayName = "Enable CloudFront",

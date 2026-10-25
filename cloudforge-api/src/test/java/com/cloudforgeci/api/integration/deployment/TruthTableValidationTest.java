@@ -2535,14 +2535,6 @@ class TruthTableValidationTest {
 
     // 12 tests
 
-    @org.junit.jupiter.api.Disabled("Deadlocks once the full module test suite has run enough prior CDK "
-        + "synths in the shared jsii-kernel fork -- thread dump shows the main thread genuinely blocked "
-        + "(not merely slow) in JsiiRuntime.readNextResponse() inside Template.fromStack(). Same class of "
-        + "issue as the -Xss8m bump on the surefire plugin config and the @Disabled above on "
-        + "testComplianceFrameworkIntegrationCsv; this is the largest single scenario set in the matrix "
-        + "(FARGATE, all 4 frameworks, 12 rows), which is likely why it's the one that tips over. A larger "
-        + "-Xss made no difference, so this isn't a JVM stack-size problem specifically. Re-enable once "
-        + "jsii kernel state accumulation across a long reused-fork run has a real fix.")
     @ParameterizedTest(name = "{0}")
     @CsvFileSource(
         resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_fargate_all_frameworks.csv",
